@@ -240,7 +240,7 @@
     <path d="M 1173.0,604.0 L 1268.0,604.0 L 1268.0,629.0 L 1293.0,629.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1373.0,654.0 L 1583.0,654.0 L 1583.0,624.0 L 1608.0,624.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1670.0,724.0 L 1670.0,749.0 L 1593.0,749.0 L 1593.0,631 A 7 7 0 0 1 1593.0,617 L 1593.0,541.0 L 1143.0,541.0 L 1143.0,586.0" fill="none" stroke="black" stroke-width="4" />
-    <path d="M 1083.0,622.0 L 1083.0,628 A 7 7 0 0 1 1083.0,642 L 1083.0,691.5 A 7 7 0 0 1 1083.0,705.5 L 1083.0,1066.0 L 1108.0,1066.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1083.0,622.0 L 1083.0,691.5 A 7 7 0 0 1 1083.0,705.5 L 1083.0,1066.0 L 1108.0,1066.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1228.0,1066.0 L 1293.0,1066.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1318.0,1106.4 L 1318.0,1258.4 L 1608.0,1258.4" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1632.5,1258.4 L 1958.0,1258.4" fill="none" stroke="black" stroke-width="4" />
@@ -248,12 +248,12 @@
     <path d="M 1620.0,1086.0 L 1958.0,1086.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1982.5,1086.0 L 2220.0,1086.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1614.0,1092.0 L 1614.0,1117.0 L 1933.0,1117.0 L 1933.0,1093 A 7 7 0 0 1 1933.0,1079 L 1933.0,841 A 7 7 0 0 1 1933.0,827 L 1933.0,620.5 L 1958.0,620.5" fill="none" stroke="black" stroke-width="4" />
-    <path d="M 2028.0,600.5 L 2053.0,600.5 L 2053.0,90.0 L 1278.0,90.0 L 1278.0,495 A 7 7 0 0 1 1278.0,509 L 1278.0,534 A 7 7 0 0 1 1278.0,548 L 1278.0,635.0 L 914.5,635.0 L 914.5,610.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 2028.0,600.5 L 2053.0,600.5 L 2053.0,90.0 L 1028.0,90.0 L 1028.0,495 A 7 7 0 0 1 1028.0,509 L 1028.0,597 A 7 7 0 0 1 1028.0,611 L 1028.0,635.0 L 914.5,635.0 L 914.5,610.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 354.0,324.5 L 504.0,324.5" fill="none" stroke="black" stroke-width="4" />
     <path d="M 516.5,324.5 L 718.5,324.5" fill="none" stroke="black" stroke-width="4" />
     <path d="M 743.0,324.5 L 908.5,324.5" fill="none" stroke="black" stroke-width="4" />
-    <path d="M 933.0,324.5 L 1028.0,324.5 L 1028.0,495 A 7 7 0 0 1 1028.0,509 L 1028.0,597 A 7 7 0 0 1 1028.0,611 L 1028.0,628 A 7 7 0 0 1 1028.0,642 L 1028.0,698.5 L 1333.0,698.5 L 1333.0,664.1" fill="none" stroke="black" stroke-width="4" />
-    <path d="M 1118.0,304.5 L 1198.0,304.5 L 1198.0,495 A 7 7 0 0 1 1198.0,509 L 1198.0,534 A 7 7 0 0 1 1198.0,548 L 1198.0,597 A 7 7 0 0 1 1198.0,611 L 1198.0,628 A 7 7 0 0 1 1198.0,642 L 1198.0,691.5 A 7 7 0 0 1 1198.0,705.5 L 1198.0,1048.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 933.0,324.5 L 958.0,324.5 L 958.0,495 A 7 7 0 0 1 958.0,509 L 958.0,597 A 7 7 0 0 1 958.0,611 L 958.0,628 A 7 7 0 0 1 958.0,642 L 958.0,698.5 L 1333.0,698.5 L 1333.0,664.1" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1118.0,304.5 L 1198.0,304.5 L 1198.0,495 A 7 7 0 0 1 1198.0,509 L 1198.0,534 A 7 7 0 0 1 1198.0,548 L 1198.0,597 A 7 7 0 0 1 1198.0,611 L 1198.0,691.5 A 7 7 0 0 1 1198.0,705.5 L 1198.0,1048.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 1138.0,1084.0 L 1138.0,1195.9 L 1083.0,1195.9 L 1083.0,1235.9 L 1108.0,1235.9" fill="none" stroke="black" stroke-width="4" />
     <path d="M 310.25,511.5 L 310.25,473.5" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 332.25,451.5 L 516.2,451.5 L 516.2,611.6" fill="none" stroke="black" stroke-width="1" />
@@ -343,8 +343,8 @@
     <text x="202.0" y="624.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">300-SG-301-CS</text>
     <rect x="805.2" y="587.0" width="86.6" height="13.0" fill="white" />
     <text x="848.5" y="593.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">200-SG-302-CS</text>
-    <rect x="1201.2" y="647.0" width="86.6" height="13.0" fill="white" />
-    <text x="1244.5" y="653.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-314-CS</text>
+    <rect x="1201.2" y="587.0" width="86.6" height="13.0" fill="white" />
+    <text x="1244.5" y="593.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-314-CS</text>
     <rect x="1416.7" y="647.5" width="86.6" height="13.0" fill="white" />
     <text x="1460.0" y="654.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-LT</text>
     <rect x="1324.7" y="534.5" width="86.6" height="13.0" fill="white" />
@@ -359,8 +359,8 @@
     <text x="1408.5" y="986.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-308-CS</text>
     <rect x="1926.5" y="837.5" width="13.0" height="86.6" fill="white" />
     <text x="1933.0" y="880.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1933.0, 880.8)">350-LG-316-CS</text>
-    <rect x="1622.2" y="83.5" width="86.6" height="13.0" fill="white" />
-    <text x="1665.5" y="90.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-310-CS</text>
+    <rect x="1497.2" y="83.5" width="86.6" height="13.0" fill="white" />
+    <text x="1540.5" y="90.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-310-CS</text>
     <rect x="388.8" y="318.0" width="80.4" height="13.0" fill="white" />
     <text x="429.0" y="324.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-FG-311-CS</text>
     <rect x="1191.5" y="701.9" width="13.0" height="92.8" fill="white" />
