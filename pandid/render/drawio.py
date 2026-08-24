@@ -820,6 +820,34 @@ _APPROXIMATIONS = {
     # the bare trapezoid, neither mark drawn.
     ("crushing_machine", "default"): _Approximation(
         None, "the trapezoid outline"),
+    # Evaporators. The vendored set has one evaporator and it is
+    # ``hex/thin_film``, a wiped-film column that is nothing like these
+    # bodies; there is no dished shell in it either, so the nearest
+    # built-in is a rectangle and what goes is the whole drawing -- the
+    # heads, and the element inside that says which machine this is. Each
+    # sentence names its own element, since that is the part a reader of
+    # the exported sheet is being told they have lost.
+    ("evaporator", "default"): _Approximation(
+        None, "the dished heads and the boxed heating element between the tubesheets"),
+    ("evaporator", "calandria"): _Approximation(
+        None, "the dished heads and the short tube bundle around its central downcomer"),
+    ("evaporator", "falling_film"): _Approximation(
+        None, "the dished heads, the long tube bundle and the distributor over it"),
+    ("evaporator", "climbing_film"): _Approximation(
+        None, "the dished heads and the long tube bundle"),
+    ("evaporator", "plate"): _Approximation(
+        None, "the dished heads and the plate pack between them"),
+    # Kilns. Nothing upstream draws a sloping shell, a windbox or a
+    # burden column, and naming a *stencil* that half-fits is the silent
+    # miss this table exists to avoid -- so all three fall back to a
+    # rectangle and say what that costs. The rotary kiln's sentence names
+    # the fall first because the fall is the symbol.
+    ("kiln", "default"): _Approximation(
+        None, "the shell's fall from feed end to discharge, its riding rings and its drive"),
+    ("kiln", "fluidized_bed"): _Approximation(
+        None, "the dished crown, the windbox cone and the distributor grid over it"),
+    ("kiln", "shaft"): _Approximation(
+        None, "the charging cone, the discharge cone and the calcining zone between them"),
     # ISO group 9, CENTRIFUGES. Same absence as group 11's: no crusher or
     # mill in the vendored set, and no centrifuge either, so the square
     # outline goes along with whichever mark says how the row separates.

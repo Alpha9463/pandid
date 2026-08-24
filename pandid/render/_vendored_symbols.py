@@ -1062,6 +1062,16 @@ def register_vendored(registry):
         gravity_fixed=True,
     ), 'gas_holder')
 
+    # draw.io vessels:Settling Tank (aspect=variable) -> thickener/default
+    registry.register('thickener', Symbol(
+        svg='<g id="sym_thickener"><path d="M 0.0 0.0 L 0.0 55.0 L 50.0 80.0 L 100.0 55.0 L 100.0 0.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=80.0,
+        ports={'feed': (0.0, 8.0), 'overflow': (100.0, 8.0), 'underflow': (50.0, 80.0)},
+        drawio_shape='mxgraph.pid.vessels.settling_tank',
+        # must not be turned: open rim over a raked cone; the solids settle into it
+        gravity_fixed=True,
+    ), 'default')
+
     # draw.io vessels:Reactor (aspect=variable) -> reactor/plain
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor_plain"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 67.69 L 40.0 67.69 M 0.0 27.69 L 40.0 27.69 M 8.0 27.69 L 0.0 35.69 M 24.0 27.69 L 0.0 51.69 M 32.0 27.69 L 0.0 59.69 M 40.0 27.69 L 0.0 67.69 M 40.0 35.69 L 8.0 67.69 M 40.0 51.69 L 24.0 67.69 M 40.0 59.69 L 32.0 67.69 M 16.0 27.69 L 0.0 43.69 M 40.0 43.69 L 16.0 67.69" fill="white" stroke="#111" stroke-width="2.0"/></g>',

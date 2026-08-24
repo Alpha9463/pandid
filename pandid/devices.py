@@ -55,10 +55,12 @@ from pandid.units import (
     Conveyor,
     Crusher,
     Dryer,
+    Evaporator,
     Feeder,
     Filter,
     Fitting,
     HeatExchanger,
+    Kiln,
     Mill,
     Pump,
     Reactor,
@@ -87,6 +89,13 @@ __all__ = [
     "PlateExchanger",
     "SpiralExchanger",
     "ThinFilmEvaporator",
+    "CalandriaEvaporator",
+    "FallingFilmEvaporator",
+    "ClimbingFilmEvaporator",
+    "PlateEvaporator",
+    "RotaryKiln",
+    "FluidizedBedCalciner",
+    "ShaftKiln",
     "Cyclone",
     "GravitySeparator",
     "ElectrostaticPrecipitator",
@@ -524,6 +533,195 @@ class ThinFilmEvaporator(HeatExchanger):
     jacket_out: Port
     product_in: Port
     product_out: Port
+
+
+class CalandriaEvaporator(Evaporator):
+    """Calandria (short-tube) evaporator: a short bundle with a central downcomer.
+
+    The sugar and salt workhorse, and the body most people picture when
+    they hear "evaporator": liquor rises through a short heated bundle
+    and falls back down the middle, so the machine circulates on its own
+    heat with nothing turning in it.
+    """
+
+    kind = "evaporator"
+    VARIANTS = ("default", "calandria")
+    VARIANT_ALIASES = {"default": "calandria"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("concentrate", "outlet", "liquid"),
+        ("heating_in", "inlet", "utility"),
+        ("condensate", "outlet", "utility"),
+    ]
+
+    feed: Port
+    vapor: Port
+    concentrate: Port
+    heating_in: Port
+    condensate: Port
+
+
+class FallingFilmEvaporator(Evaporator):
+    """Falling-film evaporator: liquor fed onto a distributor over long tubes.
+
+    The low-holdup, low-temperature-rise effect a multiple-effect train
+    is built from, and what heat-sensitive duties -- dairy, juice,
+    caustic liquor -- reach for. The distributor over the top tubesheet
+    is drawn because it is the machine's defining internal: a tube it
+    fails to wet dries out and fouls.
+    """
+
+    kind = "evaporator"
+    VARIANTS = ("default", "falling_film")
+    VARIANT_ALIASES = {"default": "falling_film"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("concentrate", "outlet", "liquid"),
+        ("heating_in", "inlet", "utility"),
+        ("condensate", "outlet", "utility"),
+    ]
+
+    feed: Port
+    vapor: Port
+    concentrate: Port
+    heating_in: Port
+    condensate: Port
+
+
+class ClimbingFilmEvaporator(Evaporator):
+    """Climbing-film evaporator: liquor fed into the foot of the tubes.
+
+    The same long-tube body as :class:`FallingFilmEvaporator` with the
+    feed at the other end: the liquor's own vapour carries it up the
+    tube wall as a film. Simpler, since there is no distributor to keep
+    even, and it needs a temperature difference to get the film started.
+    """
+
+    kind = "evaporator"
+    VARIANTS = ("default", "climbing_film")
+    VARIANT_ALIASES = {"default": "climbing_film"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("concentrate", "outlet", "liquid"),
+        ("heating_in", "inlet", "utility"),
+        ("condensate", "outlet", "utility"),
+    ]
+
+    feed: Port
+    vapor: Port
+    concentrate: Port
+    heating_in: Port
+    condensate: Port
+
+
+class PlateEvaporator(Evaporator):
+    """Plate evaporator: a gasketed or welded plate pack in place of a bundle.
+
+    Compact, low holdup, and dismantled for cleaning, which is what puts
+    it in food and pharmaceutical duty. No tubesheets: the plates are the
+    heating surface and they are clamped in a frame of their own.
+    """
+
+    kind = "evaporator"
+    VARIANTS = ("default", "plate")
+    VARIANT_ALIASES = {"default": "plate"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("concentrate", "outlet", "liquid"),
+        ("heating_in", "inlet", "utility"),
+        ("condensate", "outlet", "utility"),
+    ]
+
+    feed: Port
+    vapor: Port
+    concentrate: Port
+    heating_in: Port
+    condensate: Port
+
+
+class RotaryKiln(Kiln):
+    """Rotary kiln: a sloping shell, turning, fired down its length.
+
+    Cement, lime, alumina and every roasting duty there is, and what
+    ``Kiln`` draws when it is asked for by name. The fall from feed end
+    to discharge is what moves the charge, so the drawing may not be
+    turned; the riding rings are what tell the shell from a pipe.
+    """
+
+    kind = "kiln"
+    VARIANTS = ("default",)
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("offgas", "outlet", "vapor"),
+        ("fuel", "inlet", "feed"),
+        ("air", "inlet", "utility"),
+    ]
+
+    feed: Port
+    product: Port
+    offgas: Port
+    fuel: Port
+    air: Port
+
+
+class FluidizedBedCalciner(Kiln):
+    """Fluidised-bed or gas-suspension calciner: solids held in the gas that fires them.
+
+    What a refinery built this century calcines hydrate in, and what a
+    roaster does its work in. Product is drawn over a weir out of the
+    bed and the spent gas leaves the freeboard above it, which is the
+    nozzle a :class:`FluidizedBedDryer` standing in for one did not
+    have.
+    """
+
+    kind = "kiln"
+    VARIANTS = ("default", "fluidized_bed")
+    VARIANT_ALIASES = {"default": "fluidized_bed"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("offgas", "outlet", "vapor"),
+        ("fuel", "inlet", "feed"),
+        ("air", "inlet", "utility"),
+    ]
+
+    feed: Port
+    product: Port
+    offgas: Port
+    fuel: Port
+    air: Port
+
+
+class ShaftKiln(Kiln):
+    """Vertical shaft kiln: a column of burden, fired at its middle.
+
+    The lime kiln, and the counter-current machine every fuel argument
+    about calcination starts from: the charge preheats against the gas
+    leaving, calcines at the burners, and cools against the air entering
+    under it.
+    """
+
+    kind = "kiln"
+    VARIANTS = ("default", "shaft")
+    VARIANT_ALIASES = {"default": "shaft"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("offgas", "outlet", "vapor"),
+        ("fuel", "inlet", "feed"),
+        ("air", "inlet", "utility"),
+    ]
+
+    feed: Port
+    product: Port
+    offgas: Port
+    fuel: Port
+    air: Port
 
 
 class Cyclone(Separator):

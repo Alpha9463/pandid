@@ -256,6 +256,66 @@ DEVICES = {
     pair borrows the shell-and-tube names.
 """),
 
+    # --- Evaporators -------------------------------------------------------
+    #
+    # Named for the heating element, because that is what a process design
+    # picks and what a vendor quotes. ``ThinFilmEvaporator`` above is the
+    # exception that proves it: it is a ``hex`` and not an ``evaporator``
+    # because its own artwork is a jacketed wiped-film column with no vapour
+    # nozzle of its own, and it kept the kind it was vendored under.
+    ("evaporator", "calandria"): ("CalandriaEvaporator", """Calandria (short-tube) evaporator: a short bundle with a central downcomer.
+
+    The sugar and salt workhorse, and the body most people picture when
+    they hear "evaporator": liquor rises through a short heated bundle
+    and falls back down the middle, so the machine circulates on its own
+    heat with nothing turning in it.
+"""),
+    ("evaporator", "falling_film"): ("FallingFilmEvaporator", """Falling-film evaporator: liquor fed onto a distributor over long tubes.
+
+    The low-holdup, low-temperature-rise effect a multiple-effect train
+    is built from, and what heat-sensitive duties -- dairy, juice,
+    caustic liquor -- reach for. The distributor over the top tubesheet
+    is drawn because it is the machine's defining internal: a tube it
+    fails to wet dries out and fouls.
+"""),
+    ("evaporator", "climbing_film"): ("ClimbingFilmEvaporator", """Climbing-film evaporator: liquor fed into the foot of the tubes.
+
+    The same long-tube body as :class:`FallingFilmEvaporator` with the
+    feed at the other end: the liquor's own vapour carries it up the
+    tube wall as a film. Simpler, since there is no distributor to keep
+    even, and it needs a temperature difference to get the film started.
+"""),
+    ("evaporator", "plate"): ("PlateEvaporator", """Plate evaporator: a gasketed or welded plate pack in place of a bundle.
+
+    Compact, low holdup, and dismantled for cleaning, which is what puts
+    it in food and pharmaceutical duty. No tubesheets: the plates are the
+    heating surface and they are clamped in a frame of their own.
+"""),
+
+    # --- Kilns and calciners -----------------------------------------------
+    ("kiln", "default"): ("RotaryKiln", """Rotary kiln: a sloping shell, turning, fired down its length.
+
+    Cement, lime, alumina and every roasting duty there is, and what
+    ``Kiln`` draws when it is asked for by name. The fall from feed end
+    to discharge is what moves the charge, so the drawing may not be
+    turned; the riding rings are what tell the shell from a pipe.
+"""),
+    ("kiln", "fluidized_bed"): ("FluidizedBedCalciner", """Fluidised-bed or gas-suspension calciner: solids held in the gas that fires them.
+
+    What a refinery built this century calcines hydrate in, and what a
+    roaster does its work in. Product is drawn over a weir out of the
+    bed and the spent gas leaves the freeboard above it, which is the
+    nozzle a :class:`FluidizedBedDryer` standing in for one did not
+    have.
+"""),
+    ("kiln", "shaft"): ("ShaftKiln", """Vertical shaft kiln: a column of burden, fired at its middle.
+
+    The lime kiln, and the counter-current machine every fuel argument
+    about calcination starts from: the charge preheats against the gas
+    leaving, calcines at the burners, and cools against the air entering
+    under it.
+"""),
+
     # --- Separators --------------------------------------------------------
     #
     # Four of these are the mechanical separators, which sort by size, inertia
@@ -906,6 +966,15 @@ STAYS_ON_BASE = {
     ("feeder", "general"): "ISO item 19.1: the bare circle, no mechanism drawn",
     ("screening_device", "general"): "ISO item 7.1: the bare outline, no mechanism drawn",
     ("kneader", "default"): "Kneader's own drawing (ISO item 12.4 X8134)",
+    ("evaporator", "default"):
+        "the general row: two tubesheets around a boxed element, no element chosen",
+    # A thickener and a clarifier are one machine at two duties, so they are
+    # one drawing and one class: the word on the schedule changes with what
+    # the buyer is after -- the underflow or the overflow -- and nothing in
+    # the drawing does. What varies IS composed: Thickener(rake=) names the
+    # ISO group-28 stirrer on the shaft, and rake=None is the plain settling
+    # tank the vendored stencil is of.
+    ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",
     ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
     # Group 12's other two in-line mixers, beside ``fitting/static_mixer``
     # just above: mixing elements in the run, the same body style.

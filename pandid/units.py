@@ -49,8 +49,10 @@ __all__ = [
     "Heater",
     "Cooler",
     "CoolingTower",
+    "Evaporator",
     "Reactor",
     "Separator",
+    "Thickener",
     "Absorber",
     "Stripper",
     "DistillationColumn",
@@ -70,6 +72,7 @@ __all__ = [
     "Turbine",
     "Filter",
     "Dryer",
+    "Kiln",
     "CrushingMachine",
     "Crusher",
     "Mill",
@@ -3386,6 +3389,99 @@ class Dryer(Unit):
             self._add_port(*spec)
 
 
+class Kiln(Unit):
+    """Kiln or calciner: solids taken to temperature in a fire of their own.
+
+    **Not a :class:`Furnace` variant, and not a :class:`Dryer` one.** A
+    furnace heats a stream that passes through *tubes*: the fire never
+    touches it, and the flue gas is not a stream of the plant at all,
+    which is why :class:`Furnace` draws ``inlet``/``outlet``/``fuel`` and
+    nothing else. A kiln puts the solids **in** the combustion chamber,
+    changes them chemically there, and sends the spent gas on to a
+    cyclone, a preheater or a gas-cleaning train -- so its off-gas is a
+    tagged, numbered stream and its nozzle set is a different set::
+
+        kiln.feed      the raw solids
+        kiln.product   the calcined solids
+        kiln.offgas    the spent combustion gas, on a nozzle of its own
+        kiln.fuel      fuel to the burner
+        kiln.air       combustion or fluidising air
+
+    That is the test :mod:`pandid.devices` already applies -- a class is
+    one set of nozzles -- and it is what makes this a kind rather than a
+    fourth row under ``furnace``. Against :class:`Dryer` the same test
+    reads the other way round for a different reason: a drier's gas
+    *sweeps* moisture out of a solid it does not react with, and ISO item
+    10.7 X8044's rotary drier is a horizontal drum, not a shell laid on a
+    slope. ``examples/21_alumina_refinery`` drew a calciner as
+    ``Dryer(variant="fluidized_bed")`` until 0.1.4 and said so in its own
+    source: "product and gas leave the calciner on one nozzle because the
+    symbol has one".
+
+    Variants
+    --------
+    ::
+
+        Kiln("K-101")                            # rotary kiln
+        Kiln("CA-901", variant="fluidized_bed")  # fluidised-bed calciner
+        Kiln("K-301", variant="shaft")           # vertical shaft kiln
+
+    ``default`` is the rotary kiln, because an unqualified "kiln" is one
+    in cement, lime, alumina and every roasting duty there is.
+
+    Nothing is composed onto any of them, and that is an answer rather
+    than an omission. A kiln's riding rings, its drive and its firing
+    hood are not present-or-absent on the same machine -- a rotary kiln
+    without a drive is not a rotary kiln -- so none of them is a layer;
+    and none is a tabulated ISO group-26 to 29 part, so none *could* be
+    one (see :class:`~pandid.render.symbols.IsoPart`). They are drawn
+    into the body, with a dimension each, the way ISO group 9's rotors
+    and group 10's shelves are.
+
+    Every variant is drawn one way up and reported as ``gravity-turned``
+    by :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: a rotary
+    shell falls from feed to discharge, a fluidised bed rests on its
+    grid, and a shaft kiln is charged over the top. ISO 15519-1
+    §11.4.2's exception, three times over.
+    """
+
+    feed: Port
+    product: Port
+    offgas: Port
+    fuel: Port
+    air: Port
+
+    kind = "kiln"
+    #: A fixed point on the sheet, drawn where its train runs --
+    #: :class:`Furnace`'s rung and its reasoning. A calcination train is
+    #: built around the kiln, but its arrangement is a consequence of
+    #: what feeds it and what cleans its gas rather than a convention a
+    #: reader expects, which is what an 8 is for.
+    LAYOUT_CONFIDENCE = 4
+    #: ``offgas`` goes up and away while the product goes on: exactly
+    #: :class:`Separator`'s ``overflow``, and for the same reason -- the
+    #: gas really does leave the train, and what takes it is drawn clear
+    #: of what takes the solids.
+    #:
+    #: ``fuel`` and ``air`` are declared **empty**. Both are burners'
+    #: connections anchored on whichever wall the hood is drawn on, and
+    #: read as claims they would hang the fuel header and the combustion
+    #: air off the kiln that taps them -- :class:`Furnace`'s ``fuel``
+    #: measured that cost (#459).
+    #:
+    #: ``feed`` and ``product`` are already fixed west and east by every
+    #: one of the three drawings, so restating them would only lose the
+    #: mirror transform (#471).
+    PLACES = {"offgas": "NE", "fuel": None, "air": None}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("offgas", "outlet", "vapor"),
+        ("fuel", "inlet", "feed"),
+        ("air", "inlet", "utility"),
+    ]
+
+
 class Feeder(Unit):
     """Proportional or metering feeder, ISO 10628-2 group 19.
 
@@ -4693,6 +4789,288 @@ class CoolingTower(Unit):
         ("makeup", "inlet", "utility"),
         ("blowdown", "outlet", "liquid"),
     ]
+
+
+class Evaporator(Unit):
+    """Evaporator: liquor concentrated by boiling water off it.
+
+    **Not a :class:`HeatExchanger`, and the nozzles are why.** An
+    exchanger has two sides and four connections; an evaporator has a
+    heated side, a feed, a concentrate and -- the whole reason it is on
+    the sheet -- a **vapour** that is a stream of the plant, piped to the
+    next effect, to a condenser or to a barometric leg. The library drew
+    one as ``HeatExchanger(variant="kettle")`` until 0.1.4 and
+    ``examples/21_alumina_refinery`` said in its own source what that
+    cost: a kettle body "is the nearest drawing ISO has to an effect of a
+    falling-film train", which is a sentence about a substitution rather
+    than about a symbol.
+
+    Five nozzles, in two groups. ``feed``, ``vapor`` and ``concentrate``
+    are the process: liquor in, water out of the crown, strong liquor out
+    of the bottom. ``heating_in`` and ``condensate`` are the steam chest,
+    drawn on the shell walls between the two tubesheets -- named for what
+    lands on them, which is :class:`HeatExchanger`'s own principle, and
+    ``condensate`` rather than ``heating_out`` because what leaves a
+    steam chest is condensate whether the steam came from a boiler or
+    from the effect before this one.
+
+    **The chest is fed from the west and drained to the east**, which is
+    a fact about *trains* rather than about chests. A multiple-effect
+    train is drawn left to right and every effect is heated by the one
+    before it, so an effect's vapour leaves its crown going east and has
+    to arrive at the next effect's ``heating_in``. Drawn on the same wall
+    as the drain it would have to go round the body to get there.
+
+    Variants
+    --------
+    ::
+
+        Evaporator("EV-101")                            # element unspecified
+        Evaporator("EV-102", variant="calandria")       # short-tube
+        Evaporator("EV-103", variant="falling_film")
+        Evaporator("EV-104", variant="climbing_film")
+        Evaporator("EV-105", variant="plate")
+
+    ``default`` draws the two tubesheets around a plain boxed element,
+    which is what an early PFD knows: the duty is sized, the element is
+    not picked. ISO's own item 11.1 X8084 general crushing machine is the
+    same row for the same stage of design.
+
+    ``falling_film`` and ``climbing_film`` are one body drawn twice,
+    because the machines differ in where the liquor enters -- onto a
+    distributor over the tubes, or into the foot of them -- and that is a
+    nozzle rather than a marking. The distributor is drawn on the first
+    and not the second, since a climbing-film evaporator has none.
+
+    **There is no forced-circulation variant.** One is drawn on a real
+    sheet as three tagged items: this body, the circulating heater and
+    the pump between them, all three scheduled and sized separately. See
+    :meth:`~pandid.render.symbols.SymbolRegistry._register_evaporators`.
+
+    What holds it up
+    ----------------
+    ``supports=`` names one of the four ISO group-26 apparatus elements
+    to draw under the shell -- ``"leg"``, ``"bracket"``, ``"skirt"`` or
+    ``"ring"`` -- exactly as :class:`Vessel` takes it, and for the same
+    reason it is a keyword there rather than a variant: a support is
+    present or absent on the *same* machine, and which one a body stands
+    on says nothing about what the body does. A falling-film effect is a
+    tall shell that stands on a skirt::
+
+        Evaporator("EV-101", variant="falling_film", supports="skirt")
+
+    It is the one composition keyword this class takes. The heating
+    element cannot be a second, however much it looks like one: groups 26
+    to 29 draw no tube bundle, no calandria and no plate pack, and a part
+    that cannot name the Table 2 row it is has nothing to justify it (see
+    :class:`~pandid.render.symbols.IsoPart`). So the element is the
+    variant and the support is the layer, which is the split the
+    standard's own vocabulary makes rather than one this class invented.
+
+    Every variant is drawn one way up and reported as ``gravity-turned``
+    by :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: vapour
+    leaves the crown and concentrate the bottom, ISO 15519-1 §11.4.2's
+    exception for a symbol where gravity is a functionality.
+    """
+
+    feed: Port
+    vapor: Port
+    concentrate: Port
+    heating_in: Port
+    condensate: Port
+
+    kind = "evaporator"
+    #: A fixed point on the sheet, drawn where its train runs --
+    #: :class:`Separator`'s rung, and its reasoning. Not an 8: a
+    #: multiple-effect train's arrangement is a consequence of which
+    #: effect's vapour heats which, not a convention a reader brings to
+    #: the sheet.
+    LAYOUT_CONFIDENCE = 4
+    #: ``vapor`` is drawn off the crown, so read off the artwork it would
+    #: claim that whatever takes the vapour is drawn *above*. Nothing
+    #: about an evaporator says that: its vapour goes to the next effect
+    #: or to a condenser, and both are the next unit **along**. That is
+    #: :class:`Boiler`'s ``steam`` exactly, and the cost of getting it
+    #: wrong is :class:`Separator`'s measured one -- a train that climbs
+    #: into a staircase.
+    #:
+    #: ``concentrate`` leaves the bottom and carries on, so it goes down
+    #: and to the right, which keeps it out of the vapour's column.
+    #:
+    #: ``heating_in`` and ``condensate`` are the steam chest, and both
+    #: are declared **empty**: a bank of effects on one steam main should
+    #: not be able to drag the main east of the bank, nor the condensate
+    #: header with it (#459). Where a utility header runs is a fact about
+    #: the sheet. ``feed`` is already fixed west by the artwork and is
+    #: not restated, since a restatement would only lose the mirror
+    #: transform (#471).
+    PLACES = {"vapor": "E", "concentrate": "SE",
+              "heating_in": None, "condensate": None}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("concentrate", "outlet", "liquid"),
+        ("heating_in", "inlet", "utility"),
+        ("condensate", "outlet", "utility"),
+    ]
+    #: An evaporator stands on whatever it stands on, and nothing is
+    #: drawn under one nobody has said. :class:`Vessel`'s entry exactly.
+    COMPOSITION = {"supports": None}
+    #: See :attr:`Unit._FIXED_AT_CONSTRUCTION`: the overlay is built from
+    #: this in ``__init__`` and a later assignment would leave the
+    #: drawing disagreeing with the object.
+    _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
+
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        supports: str | None = None,
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
+        from pandid.render.iso_parts import support_overlays
+
+        self.supports = supports
+        _compose_onto(self, () if supports is None else support_overlays(supports))
+
+
+#: What a thickener's rake is drawn as when the author does not say.
+#: **ISO item 28.4 C2021, the cross-beam stirrer**: two beams threaded on
+#: a central shaft, which is what a rake mechanism is and the nearest of
+#: group 28's ten forms to one. A name and not a number, because the
+#: keyword takes the part's registry spelling the way
+#: :class:`Reactor`'s ``agitator`` does.
+DEFAULT_RAKE = "cross_beam"
+
+
+class Thickener(Unit):
+    """Thickener or clarifier: solids settled out of a slurry by gravity.
+
+    One machine under two words. A **thickener** is bought for the
+    underflow -- the thickened solids a filter or a pump is waiting for --
+    and a **clarifier** for the overflow, the clean liquor a plant is
+    allowed to discharge. Neither the duty nor the word changes the
+    drawing, so this is one class, named the way a minerals or water
+    schedule spells it first; :class:`~pandid.devices.Clarifier` does not
+    exist for the same reason
+    :class:`~pandid.devices.Screen` is not also spelled ``Sifter``.
+
+    Three connections, and they are the three a settling machine has::
+
+        thickener.feed        the slurry, into a launder at the rim
+        thickener.overflow    the clarified liquor, over the weir
+        thickener.underflow   the thickened solids, out of the cone
+
+    ``overflow``/``underflow`` and not ``vapor``/``liquid``: the pair
+    names the two *positions* the artwork draws, which is
+    :class:`Separator`'s own reading of the same two nozzles, and neither
+    name says which of the two is the product -- that is what the two
+    words in the first paragraph are for.
+
+    **This is not ``Separator(characteristic="gravity")``**, which is
+    what the library drew until 0.1.4. That is ISO item 8.3 X8031, a
+    separating vessel carrying the group-29 settling arrow: a tall,
+    hopper-bottomed drum, which is the shape of a dust collector and not
+    of a thickener. A thickener is wide and shallow with a raked floor,
+    and it has a rake -- which item 8.3 has nothing to draw.
+
+    The rake
+    --------
+    ``rake=`` names the ISO group-28 stirrer drawn on the central shaft.
+    It defaults to item 28.4 C2021's cross-beam, which is what a rake
+    is::
+
+        Thickener("TH-101")                     # raked, 28.4's cross-beam
+        Thickener("TH-102", rake="gate_paddle")
+        Thickener("TH-103", rake=None)          # a plain settling tank
+
+    ``rake=None`` is a real machine and not a bare body: a settling tank
+    or gravity settler with no mechanism in it, which is what small
+    duties and API separators use, and it is the drawing the vendored
+    stencil is of before anything is composed onto it.
+
+    **The drive is not drawn**, and that is deliberate. ISO's licence to
+    draw a motor inside another apparatus is item 1.27 X8006 and that row
+    alone -- a stirred vessel -- so a motor over this body would be an
+    apparatus inside an apparatus with nothing tabulated behind it. A
+    rake drive that has to appear on the sheet is drawn beside the
+    thickener and tagged. See
+    :func:`~pandid.render.iso_parts.rake_overlays`.
+
+    Drawn one way up, and reported as ``gravity-turned`` by
+    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: the weir is
+    at the rim and the cone is under the floor.
+    """
+
+    feed: Port
+    overflow: Port
+    underflow: Port
+
+    kind = "thickener"
+    #: A fixed point on the sheet, drawn where its train runs. A
+    #: counter-current decantation circuit is a row of these and the row
+    #: is the sheet's spine, but its arrangement follows the washing
+    #: sequence rather than a convention a reader expects, so 4 and not
+    #: 8 -- :class:`Separator`'s rung exactly.
+    LAYOUT_CONFIDENCE = 4
+    #: :class:`Separator`'s own entry for the same two nozzles, and for
+    #: the same reason: the clarified liquor leaves up and away while the
+    #: solids go down and on, so the two draws never land in one cell.
+    #: ``feed`` is already fixed west by the artwork and is not restated
+    #: (#471).
+    PLACES = {"overflow": "NE", "underflow": "SE"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("overflow", "outlet", "process"),
+        ("underflow", "outlet", "process"),
+    ]
+    #: A thickener has a rake unless it is told it has not, which is
+    #: :class:`Reactor`'s agitator rule with the sign the other way up:
+    #: a reactor works out whether to draw a stirrer from its body and
+    #: its internals, and a thickener has exactly one body and no
+    #: internals to weigh, so the default is a plain word rather than
+    #: :data:`_UNSTATED`.
+    COMPOSITION = {"rake": DEFAULT_RAKE}
+    #: See :attr:`Unit._FIXED_AT_CONSTRUCTION`.
+    _FIXED_AT_CONSTRUCTION = frozenset({"rake"})
+
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        rake: str | None = DEFAULT_RAKE,
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
+        from pandid.render.iso_parts import rake_overlays
+
+        self.rake = rake
+        _compose_onto(self, () if rake is None else rake_overlays(rake))
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:

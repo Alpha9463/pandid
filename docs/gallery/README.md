@@ -406,7 +406,7 @@ not a trip.
 ![Alumina refinery PFD](21_alumina_refinery.png)
 
 The Bayer process end to end, and the largest sheet here: twenty-eight tagged
-items and fifty-five streams, sized to its own drawing because a table that wide
+items and fifty-six streams, sized to its own drawing because a table that wide
 fits on no standard page. Bauxite is crushed in `CR-901` and ground in spent
 liquor in `ML-901`; the slurry is preheated against two stages of flash vapour,
 held in the desilication tank `TK-901`, pumped up and taken to 145 °C with live

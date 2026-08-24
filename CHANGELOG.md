@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
+  registry had no symbol for, and all three were being faked in a shipped
+  example with an apology in its source (#474). `examples/21_alumina_refinery`
+  drops all three workarounds.
+
+  **`Evaporator`** is five bodies on one shell -- `default` (two tubesheets
+  around a boxed element, for a duty sized before the element is picked),
+  `calandria`, `falling_film`, `climbing_film` and `plate` -- with five
+  nozzles: `feed`, `vapor`, `concentrate`, and a steam chest of `heating_in`
+  and `condensate`. Not a `HeatExchanger` variant, because the vapour is a
+  stream of the plant rather than boil-up returned to a tower, and that is a
+  nozzle an exchanger has not; `EV-901` was drawn as a kettle reboiler until
+  now. The chest is fed on the **west** wall and drained on the east, so a
+  multiple-effect train drawn left to right hands each effect's vapour to the
+  next one's `heating_in` without routing it round the body. There is no
+  forced-circulation body: one is drawn as this body plus its circulating
+  heater and pump, three tagged items, because that is what a real sheet
+  schedules.
+
+  **`Thickener`** is the settling machine every minerals plant and every water
+  and wastewater works is built around -- feed, `overflow` at the weir,
+  `underflow` out of the raked cone -- and the rake is composed onto it:
+  `rake=` names an ISO 10628-2 group-28 stirrer, defaulting to item 28.4
+  C2021's cross-beam, and `rake=None` leaves the plain settling tank. It
+  replaces `Separator(characteristic="gravity")`, which is item 8.3 X8031: a
+  tall hopper-bottomed drum, the shape of a dust collector, with nothing to
+  draw a rake with. A clarifier is the same machine at a different duty and is
+  this class.
+
+  **`Kiln`** is a kind rather than a `furnace` variant, and the nozzles are the
+  argument: a furnace heats a stream inside *tubes* and its flue gas is not a
+  stream of the plant, while a kiln puts the solids in the fire and sends the
+  spent gas on to a cyclone or a gas-cleaning train. So it draws `feed`,
+  `product`, `offgas`, `fuel` and `air`, and `offgas` is what a fluidised-bed
+  *drier* standing in for a calciner did not have. Three bodies: `default` (the
+  rotary kiln, since an unqualified kiln is one), `fluidized_bed` and `shaft`.
+
+  Nine drawings, taking the registry to 228. `RotaryKiln`,
+  `FluidizedBedCalciner`, `ShaftKiln`, `CalandriaEvaporator`,
+  `FallingFilmEvaporator`, `ClimbingFilmEvaporator` and `PlateEvaporator` are
+  the classes over them.
+- `Evaporator(supports=)`: the ISO group-26 element an evaporator stands on,
+  the keyword `Vessel` already takes. It is the one composition layer an
+  evaporator has, and deliberately: a heating element is not a tabulated
+  supplementary symbol, so it is the body rather than a part drawn in one.
 - `Separator(n_feeds=)`: a separator fed by more than one stream, spelled the
   way `Column` and `Reactor` already spell it (#452). A wash-water settler
   takes its wash beside the stream it is washing, a flare knock-out drum takes

@@ -1315,6 +1315,27 @@ KIND_MAP = {
     #   (a drawn nozzle wins). There is nothing else to weigh against it either:
     #   no head, no crown and no drawn level, so the vessel family's own reason
     #   for not turning would have to be invented for it as well.
+    # Thickener / clarifier: draw.io's "Settling Tank", 100 x 80, and the one
+    # shape in the whole set that is a thickener's own silhouette rather than
+    # something else pressed into the job. Walls from y 0 down to y 55, then a
+    # shallow floor falling to an apex at (50, 80) -- a wide, shallow tank with
+    # a raked cone under it, which is what a thickener is and what neither a
+    # separating vessel nor a conical-bottomed tank looks like.
+    #
+    # OPEN AT THE TOP, and that is why the three nozzles sit where they do. The
+    # box's top edge carries ink at exactly two points, the tops of the two
+    # walls, so nothing may be anchored across it: ``feed`` and ``overflow``
+    # take the two walls at y = 8, which is a launder entering one side and the
+    # clarified liquor leaving over a weir on the other, and ``underflow``
+    # takes the apex the rake ploughs the thickened solids into.
+    #
+    # No SCALE entry. vessels.xml is on the ~100-unit module every tank and
+    # vessel here is already vendored at, so this lands at 100 x 80 beside a
+    # 100 x 95,5 tank rather than at half its size -- checked against the
+    # neighbour rather than assumed.
+    ("thickener", "default"): ("vessels", "Settling Tank",
+                               {"feed": ("W", 8.0), "overflow": ("E", 8.0),
+                                "underflow": ("S", 50.0)}),
     # Reactor / separator styles. The straight wall spans y 7.69..87.69.
     ("reactor", "plain"):     ("vessels", "Reactor",
                                {"feed": ("SERIES", "W", 30, 14, 0.4),
@@ -1974,6 +1995,11 @@ GRAVITY_FIXED = {
     ("filter", "gas"):           "dust hopper under the bags",
     ("filter", "gas_fixed_bed"): "dust hopper under the bed",
     ("filter", "gas_belt"):      "dust hopper under the belt",
+    # A thickener separates by settling and nothing else: the clarified liquor
+    # goes over a weir at the rim and the solids are raked to a cone under the
+    # floor. Turned, the cone is a roof, the weir is at the bottom and the
+    # machine has no free surface to clarify at.
+    ("thickener", "default"): "open rim over a raked cone; the solids settle into it",
 }
 
 # Symbols whose artwork states a *direction of flow* that an axis flip would

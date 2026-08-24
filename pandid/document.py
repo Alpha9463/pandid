@@ -351,10 +351,10 @@ class StreamTableOptions:
 # ``include=`` names its rows explicitly and this rule stands aside.
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "column", "compressor", "conveyor", "cooler",
-    "cooling_tower", "crusher", "dryer", "ejector", "elevator", "feeder",
-    "filter", "flare", "furnace", "heater", "hex", "kneader", "mill", "pump",
-    "reactor", "screening_device", "separator", "stack", "tank", "turbine",
-    "vessel",
+    "cooling_tower", "crusher", "dryer", "ejector", "elevator", "evaporator",
+    "feeder", "filter", "flare", "furnace", "heater", "hex", "kiln", "kneader",
+    "mill", "pump", "reactor", "screening_device", "separator", "stack", "tank",
+    "thickener", "turbine", "vessel",
 })
 # ``boiler``, ``stack`` and ``flare`` are here and ``vent``/``funnel`` are
 # not, for the reason ``Stack``'s own docstring gives: those two are
@@ -386,6 +386,7 @@ _KIND_LABELS = {
     "crushing_machine": "Crushing/Grinding Machine",
     "dryer": "Dryer",
     "ejector": "Ejector",
+    "evaporator": "Evaporator",
     "elevator": "Bucket Elevator",
     "feed": "Feed",
     "feeder": "Feeder",
@@ -397,6 +398,7 @@ _KIND_LABELS = {
     "heater": "Heater",
     "hex": "Heat Exchanger",
     "instrument": "Instrument",
+    "kiln": "Kiln",
     "kneader": "Kneader",
     "mill": "Mill",
     "mixer": "Mixer",
@@ -405,6 +407,7 @@ _KIND_LABELS = {
     "reactor": "Reactor",
     "reducer": "Reducer",
     "screening_device": "Screen",
+    "thickener": "Thickener",
     "separator": "Separator",
     "splitter": "Splitter",
     "spray_nozzle": "Spray Nozzle",

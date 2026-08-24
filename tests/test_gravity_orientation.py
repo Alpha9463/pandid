@@ -277,6 +277,24 @@ GRAVITY_FIXED = {
     ("screening_device", "vibrating"),
     ("screening_device", "rotating_drum"),
     ("screening_device", "basket_reel"),
+    # The five evaporator bodies: vapour off the crown and concentrate out
+    # of the bottom, which is the drum family's own claim on the shell the
+    # evaporators are drawn from.
+    ("evaporator", "default"),
+    ("evaporator", "calandria"),
+    ("evaporator", "climbing_film"),
+    ("evaporator", "falling_film"),
+    ("evaporator", "plate"),
+    # The three kilns, each fixed by its own construction: a rotary shell
+    # FALLS from feed end to discharge and turned over it climbs; a
+    # fluidised bed rests on its grid with the freeboard above it; a shaft
+    # kiln is charged over the mouth and discharged out of the cone.
+    ("kiln", "default"),
+    ("kiln", "fluidized_bed"),
+    ("kiln", "shaft"),
+    # The thickener: an open rim to clarify at, and a raked cone under the
+    # floor for what settles. Turned, the cone is a roof.
+    ("thickener", "default"),
 }
 
 

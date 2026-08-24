@@ -3551,6 +3551,380 @@ _REEL_BODY = Symbol(
 )
 
 
+# ----------------------------------------------------------------
+# Evaporators and kilns.
+#
+# ISO 10628-2 tabulates neither, and the example that needed both said
+# so in its own source: a kettle reboiler stood in for an effect of a
+# falling-film train because a shell with a heated bundle in it and a
+# vapour space over the bundle is the nearest drawing the standard has,
+# and a fluidised-bed *drier* stood in for a calciner. Neither
+# substitution is a symbol; each is a caption doing work the drawing
+# does not.
+#
+# So both families below are pandid's own, and both are registered
+# WITHOUT a registration number -- the same footing as the pipe tee, the
+# mixer, the splitter and ``reactor/tubular``. A shape with no tabulated
+# row claims no row: a registration number is the identity of a standard
+# symbol (ISO 14617-1 3.6), and putting one on a drawing nobody
+# registered is the false identity :class:`IsoPart` exists to stop.
+#
+# What can be checked instead is stated in dimensions. Every feature
+# below has a constant of its own -- the fall of a kiln's shell, the
+# span of a calandria's tubes, the gap a falling-film distributor sits
+# at -- so a reader measures the drawing rather than taking its word.
+# ----------------------------------------------------------------
+
+#: The in-line detail weight, ISO 10628-1:2014 5.3.1 c), against an
+#: outline's 5.3.1 b). Repeated here rather than imported from
+#: :data:`pandid.render.iso_parts.PART_STROKE`, because that module
+#: imports *this* one -- the same reason :data:`_SCREEN_DASH` above
+#: repeats a group-27 pitch instead of reaching across for it.
+_DETAIL = 'fill="none" stroke="#111" stroke-width="1"'
+_OUTLINE = 'fill="white" stroke="#111" stroke-width="2"'
+
+
+#: The evaporator body, in drawing units: a dished head over a straight
+#: side over a dished bottom.
+#:
+#: 80 across, the width every upright body in this library is drawn at --
+#: the group-8 separators, the group-10 driers, the group-7 screens -- so
+#: an evaporator standing beside a flash drum reads as the same family of
+#: vessel. The head is 12 deep on a 40 half-width, the ratio the vendored
+#: dished-end vessels are drawn at. The straight side is 136, taller than
+#: a separator's, because the whole point of the body is that a heating
+#: element and a disengaging space are stacked in it rather than sharing
+#: one shell.
+_EVAP_W = 80.0
+_EVAP_HEAD = 12.0
+_EVAP_SHELL = 136.0
+_EVAP_H = 2 * _EVAP_HEAD + _EVAP_SHELL
+
+_EVAP_OUTLINE = (
+    f'<path d="M 0 {_EVAP_HEAD:g} '
+    f'A {_EVAP_W / 2:g} {_EVAP_HEAD:g} 0 0 1 {_EVAP_W:g} {_EVAP_HEAD:g} '
+    f'L {_EVAP_W:g} {_EVAP_HEAD + _EVAP_SHELL:g} '
+    f'A {_EVAP_W / 2:g} {_EVAP_HEAD:g} 0 0 1 0 {_EVAP_HEAD + _EVAP_SHELL:g} Z" '
+    f'{_OUTLINE}/>'
+)
+
+#: The band the heating element occupies on a **long-tube** body: the
+#: falling-film and climbing-film rows, and the general row that says
+#: there is a heating element without saying which. It runs from a third
+#: of the way down the shell to a fifth off the bottom, which leaves the
+#: disengaging space above it and the concentrate pool below it that both
+#: rows need.
+_EVAP_TUBE_TOP, _EVAP_TUBE_BOT = 60.0, 130.0
+
+#: The same band on a **short-tube** body, and short is the whole of what
+#: the word calandria says: 32 units of tube where the long-tube rows
+#: draw 70, on the same shell. Centred on the long band, so the two are
+#: read against each other.
+_EVAP_CALANDRIA_TOP, _EVAP_CALANDRIA_BOT = 79.0, 111.0
+
+#: How far inside its own tubesheet each steam-chest nozzle sits. One
+#: nozzle stub, so the connection is on the shell wall *between* the two
+#: sheets -- which is what makes the pair read as the chest's own rather
+#: than as two more process nozzles on the walls.
+#:
+#: **The two are on opposite walls**, steam in at the west and
+#: condensate out at the east, and that is about the train rather than
+#: about the chest. A multiple-effect train is drawn left to right and
+#: every effect is heated by the one before it: the vapour leaves an
+#: effect's crown and goes east, and it has to arrive at the next
+#: effect's **west** wall or the line goes round the body to reach it.
+#: Drawn both-east, ``examples/21_alumina_refinery``'s single effect
+#: sent its steam over the crown and across the vapour line leaving it.
+_EVAP_STEAM_INSET = 6.0
+
+#: Where the feed lands on a body fed **above** its heating element, and
+#: on one fed below it. A falling-film evaporator is fed onto the top
+#: tubesheet and a climbing-film one into the bottom of the same tubes:
+#: that is the whole difference between the two machines, and it is a
+#: nozzle rather than a mark, so it is the one thing here that moves.
+_EVAP_FEED_HIGH, _EVAP_FEED_LOW = 30.0, 140.0
+
+
+def _evap_tubesheets(top: float, bot: float) -> str:
+    """The two tubesheets, drawn wall to wall.
+
+    Wall to wall and not inset: a tubesheet is welded to the shell, and
+    one stopping short of it is a sheet the vapour would go round.
+    """
+    return (f'<path d="M 0 {top:g} L {_EVAP_W:g} {top:g} '
+            f'M 0 {bot:g} L {_EVAP_W:g} {bot:g}" {_DETAIL}/>')
+
+
+def _evap_tubes(top: float, bot: float, xs: "tuple[float, ...]") -> str:
+    """Tubes hung between the two tubesheets, at each x in ``xs``."""
+    return ('<path d="'
+            + " ".join(f"M {x:g} {top:g} L {x:g} {bot:g}" for x in xs)
+            + f'" {_DETAIL}/>')
+
+
+#: How far the general row's element stands off the shell walls. The
+#: general row draws the element as a **closed box** rather than as a bare
+#: pair of tubesheets: two lines with nothing between them read as a
+#: tray, which is a different machine, and the whole of what this row has
+#: to say is "there is a heating element here and it has not been
+#: chosen". A box says that; a pair of lines says something else.
+_EVAP_ELEMENT_INSET = 12.0
+_EVAP_ELEMENT = (
+    f'<rect x="{_EVAP_ELEMENT_INSET:g}" y="{_EVAP_TUBE_TOP:g}" '
+    f'width="{_EVAP_W - 2 * _EVAP_ELEMENT_INSET:g}" '
+    f'height="{_EVAP_TUBE_BOT - _EVAP_TUBE_TOP:g}" {_DETAIL}/>'
+)
+
+
+#: Where the long-tube rows draw their tubes: five on a 12-unit pitch,
+#: centred on the shell. Five and not fifty, for the reason a tray column
+#: is drawn with eight decks and not forty -- a count in a drawing is a
+#: picture of a bundle and never the bundle.
+_EVAP_TUBE_XS = (16.0, 28.0, 40.0, 52.0, 64.0)
+
+#: The short-tube row's own: three tubes either side of a central
+#: downcomer. The downcomer is the feature that makes a calandria
+#: circulate -- liquor rises through the heated tubes and falls back down
+#: the middle -- so it is drawn as its own pair of walls rather than left
+#: as a gap in the bundle, and it is drawn **twice the tube pitch
+#: across**: 16 units where the tubes are on 8. Drawn any narrower it is
+#: a seventh tube with a wide gap either side of it, which was the first
+#: attempt and is why the ratio is written down here.
+_EVAP_CALANDRIA_PITCH = 8.0
+_EVAP_CALANDRIA_XS = (8.0, 16.0, 24.0, 56.0, 64.0, 72.0)
+_EVAP_DOWNCOMER_XS = (32.0, 48.0)
+
+#: The falling-film row's own mark, and the only thing that tells its
+#: drawing from the climbing-film row's: the liquid distributor over the
+#: top tubesheet, a tray 8 units above it with three drops off it. A
+#: falling-film evaporator that does not wet every tube evenly dries one
+#: out and fouls it, so the distributor is the machine's defining
+#: internal rather than a detail of it.
+_EVAP_DISTRIBUTOR_GAP = 8.0
+_EVAP_DISTRIBUTOR_DROP = 5.0
+_EVAP_DISTRIBUTOR_XS = (24.0, 40.0, 56.0)
+_EVAP_DISTRIBUTOR = (
+    f'<path d="M 8 {_EVAP_TUBE_TOP - _EVAP_DISTRIBUTOR_GAP:g} '
+    f'L 72 {_EVAP_TUBE_TOP - _EVAP_DISTRIBUTOR_GAP:g}'
+    + "".join(
+        f' M {x:g} {_EVAP_TUBE_TOP - _EVAP_DISTRIBUTOR_GAP:g} '
+        f'L {x:g} {_EVAP_TUBE_TOP - _EVAP_DISTRIBUTOR_GAP + _EVAP_DISTRIBUTOR_DROP:g}'
+        for x in _EVAP_DISTRIBUTOR_XS)
+    + f'" {_DETAIL}/>'
+)
+
+#: The plate row's own: nine plates on an 8-unit pitch filling the shell
+#: wall to wall, and **no tubesheets**, because a plate pack has none.
+#: The plates are the heating surface and they are clamped in a frame of
+#: their own, which is why this row is built from its own strokes rather
+#: than from the tube helpers above.
+_EVAP_PLATE_XS = tuple(8.0 + 8.0 * i for i in range(9))
+_EVAP_PLATES = (
+    '<path d="'
+    + " ".join(f"M {x:g} {_EVAP_TUBE_TOP:g} L {x:g} {_EVAP_TUBE_BOT:g}"
+               for x in _EVAP_PLATE_XS)
+    + f'" {_DETAIL}/>'
+)
+
+
+def _evaporator(name: str, *detail: str,
+                band: "tuple[float, float]" = (_EVAP_TUBE_TOP, _EVAP_TUBE_BOT),
+                feed_y: float = _EVAP_FEED_HIGH) -> Symbol:
+    """One evaporator: the shared shell plus what tells it apart.
+
+    ``band`` is the heating element's own span down the shell, and the
+    two steam-chest nozzles are read off it rather than written down --
+    so a row that shortens its tubes takes the chest's connections with
+    them and cannot be left stating a chest the drawing does not have.
+
+    Every row is gravity-fixed. Vapour leaves the crown because vapour
+    rises and the concentrate leaves the bottom because it does not,
+    which is ISO 15519-1 11.4.2's exception for a symbol where gravity is
+    a functionality -- the claim :data:`_SEPARATING_VESSEL` and every
+    drum in the library already makes.
+    """
+    top, bot = band
+    return Symbol(
+        svg=f'<g id="sym_evaporator_{name}">{_EVAP_OUTLINE}' + "".join(detail) + "</g>",
+        width=_EVAP_W, height=_EVAP_H,
+        ports={
+            "feed": (0.0, feed_y),
+            "vapor": (_EVAP_W / 2, 0.0),
+            "concentrate": (_EVAP_W / 2, _EVAP_H),
+            "heating_in": (0.0, top + _EVAP_STEAM_INSET),
+            "condensate": (_EVAP_W, bot - _EVAP_STEAM_INSET),
+        },
+        gravity_fixed=True,
+    )
+
+
+#: The rotary kiln's shell, in drawing units.
+#:
+#: **The fall is the symbol.** A kiln moves its charge by turning a shell
+#: laid on a slope, so the slope is the one dimension the drawing cannot
+#: do without: 26 units of fall over 180 of length. That is far steeper
+#: than the two to four per cent a real kiln is set at, and deliberately
+#: so -- a pictogram drawn at three per cent is a horizontal cylinder,
+#: which is a rotary *drier* (ISO item 10.7 X8044) and not this.
+_KILN_W = 180.0
+_KILN_BORE = 28.0
+_KILN_FALL = 26.0
+_KILN_H = _KILN_BORE + _KILN_FALL
+
+
+def _kiln_top(x: float) -> float:
+    """The shell's upper wall at ``x``: the line the fall is drawn on.
+
+    Every mark and every nozzle on the shell is placed through this, so
+    changing :data:`_KILN_FALL` tilts the whole drawing and leaves
+    nothing behind at the old angle.
+    """
+    return _KILN_FALL * x / _KILN_W
+
+
+_KILN_OUTLINE = (
+    f'<path d="M 0 0 L {_KILN_W:g} {_KILN_FALL:g} '
+    f'L {_KILN_W:g} {_KILN_H:g} L 0 {_KILN_BORE:g} Z" {_OUTLINE}/>'
+)
+
+#: Where the two riding rings sit along the shell, and how far each
+#: stands proud of it. A kiln's whole weight runs on two or three tyres
+#: turning on trunnions, and they are what tells the shell from a pipe: a
+#: plain sloping cylinder is not obviously a machine that rotates.
+_KILN_RING_XS = (60.0, 130.0)
+_KILN_RING_PROUD = 5.0
+_KILN_RINGS = (
+    '<path d="'
+    + " ".join(
+        f"M {x:g} {_kiln_top(x) - _KILN_RING_PROUD:g} "
+        f"L {x:g} {_kiln_top(x) + _KILN_BORE + _KILN_RING_PROUD:g}"
+        for x in _KILN_RING_XS)
+    + f'" {_DETAIL}/>'
+)
+
+#: The girth gear and its pinion, drawn as a block under the shell: what
+#: turns it. 18 x 7, *between* the two rings rather than on one, which is
+#: where a kiln's drive station stands.
+_KILN_DRIVE_X, _KILN_DRIVE_W, _KILN_DRIVE_H = 95.0, 18.0, 7.0
+_KILN_DRIVE = (
+    f'<rect x="{_KILN_DRIVE_X - _KILN_DRIVE_W / 2:g}" '
+    f'y="{_kiln_top(_KILN_DRIVE_X) + _KILN_BORE:g}" '
+    f'width="{_KILN_DRIVE_W:g}" height="{_KILN_DRIVE_H:g}" {_DETAIL}/>'
+)
+
+#: Where each of the rotary kiln's five connections is drawn.
+#:
+#: Solids in at the high end and out at the low one, which is what the
+#: fall is for. The burner fires in at the discharge end, so the gas
+#: leaves at the feed end -- counter-current, which is what a fuel-fired
+#: kiln is, and is why ``offgas`` is at the opposite end of the shell
+#: from ``fuel``. Both firing connections are on the shell's underside at
+#: the discharge end, a nozzle pitch apart, where a burner pipe and its
+#: secondary-air duct enter the hood.
+_KILN_PORTS = {
+    "feed": (0.0, _KILN_BORE / 2),
+    "product": (_KILN_W, _KILN_FALL + _KILN_BORE / 2),
+    "offgas": (24.0, _kiln_top(24.0)),
+    "air": (140.0, _kiln_top(140.0) + _KILN_BORE),
+    "fuel": (160.0, _kiln_top(160.0) + _KILN_BORE),
+}
+
+#: The fluidised-bed calciner's body, in drawing units: a dished crown
+#: over a straight freeboard, with a windbox cone under it.
+#:
+#: **The grid is the symbol.** What makes this a fluidised bed and not a
+#: vertical vessel is the distributor plate the air is blown through,
+#: drawn where the shell walls stop and the windbox begins. Dashed,
+#: because it is perforated -- the same reading ISO gives item 27.5's
+#: sieve tray and item 7.1's screen mesh.
+#:
+#: The **bed itself is not drawn**. ISO registers that field of bubbles
+#: as item 27.7 (2604) and :mod:`pandid.render.iso_parts` already draws
+#: it, so redrawing it into this body would put a second copy of a
+#: registered part in the library. What is drawn here is the machine, and
+#: the machine is its grid.
+_FBC_W = 90.0
+_FBC_CROWN = 12.0
+_FBC_FREEBOARD = 98.0
+_FBC_CONE = 40.0
+_FBC_FLOOR = 30.0
+_FBC_H = _FBC_CROWN + _FBC_FREEBOARD + _FBC_CONE
+_FBC_GRID_Y = _FBC_CROWN + _FBC_FREEBOARD
+
+_FBC_OUTLINE = (
+    f'<path d="M 0 {_FBC_CROWN:g} '
+    f'A {_FBC_W / 2:g} {_FBC_CROWN:g} 0 0 1 {_FBC_W:g} {_FBC_CROWN:g} '
+    f'L {_FBC_W:g} {_FBC_GRID_Y:g} '
+    f'L {(_FBC_W + _FBC_FLOOR) / 2:g} {_FBC_H:g} '
+    f'L {(_FBC_W - _FBC_FLOOR) / 2:g} {_FBC_H:g} '
+    f'L 0 {_FBC_GRID_Y:g} Z" {_OUTLINE}/>'
+)
+_FBC_GRID = (
+    f'<line x1="0" y1="{_FBC_GRID_Y:g}" x2="{_FBC_W:g}" y2="{_FBC_GRID_Y:g}" '
+    f'{_DETAIL} {_SCREEN_DASH}/>'
+)
+
+#: The fluidised calciner's five connections. Solids in high on one wall
+#: and out over a weir low on the other, both above the grid, because
+#: both are in the bed; the spent gas off the crown, because it has left
+#: the bed and is what the freeboard is for; the fuel into the bed and
+#: the fluidising air into the windbox under it.
+_FBC_PORTS = {
+    "feed": (0.0, 40.0),
+    "product": (_FBC_W, 100.0),
+    "offgas": (_FBC_W / 2, 0.0),
+    "fuel": (0.0, 96.0),
+    "air": (_FBC_W / 2, _FBC_H),
+}
+
+#: The vertical shaft kiln's outline, in drawing units: a charging mouth,
+#: a shaft, and a discharge cone under it. 70 x 160, so it stands beside
+#: the 80-wide upright bodies as the narrower thing a shaft kiln is.
+#:
+#: Its two zone lines are the calcining zone. What a shaft kiln does is
+#: hold its charge at temperature between a preheating zone above and a
+#: cooling zone below, and those two boundaries are exactly where its
+#: burners and its cooling air enter -- so the lines and the nozzles are
+#: read off the same two numbers.
+#: The cone is 20 deep and the mouth 40 wide on a 70 x 160 box, which
+#: leaves 120 of straight wall: the shaft has to *dominate* the drawing,
+#: or the outline reads as a lozenge rather than as a column of burden
+#: with a charging cone on it. Drawn at 30 and 30 it did, which is why
+#: both numbers are stated here rather than left as whatever looked
+#: right.
+_SHAFT_W, _SHAFT_H = 70.0, 160.0
+_SHAFT_CONE = 20.0
+_SHAFT_MOUTH = 40.0
+_SHAFT_ZONE_TOP, _SHAFT_ZONE_BOT = 68.0, 104.0
+
+_SHAFT_OUTLINE = (
+    f'<path d="M {(_SHAFT_W - _SHAFT_MOUTH) / 2:g} 0 L 0 {_SHAFT_CONE:g} '
+    f'L 0 {_SHAFT_H - _SHAFT_CONE:g} '
+    f'L {(_SHAFT_W - _SHAFT_MOUTH) / 2:g} {_SHAFT_H:g} '
+    f'L {(_SHAFT_W + _SHAFT_MOUTH) / 2:g} {_SHAFT_H:g} '
+    f'L {_SHAFT_W:g} {_SHAFT_H - _SHAFT_CONE:g} '
+    f'L {_SHAFT_W:g} {_SHAFT_CONE:g} '
+    f'L {(_SHAFT_W + _SHAFT_MOUTH) / 2:g} 0 Z" {_OUTLINE}/>'
+)
+_SHAFT_ZONES = (
+    f'<path d="M 0 {_SHAFT_ZONE_TOP:g} L {_SHAFT_W:g} {_SHAFT_ZONE_TOP:g} '
+    f'M 0 {_SHAFT_ZONE_BOT:g} L {_SHAFT_W:g} {_SHAFT_ZONE_BOT:g}" {_DETAIL}/>'
+)
+
+#: The shaft kiln's five connections. Charged over the mouth and
+#: discharged out of the cone, which is the whole of how a shaft kiln
+#: moves its burden; the gas out of the shaft wall above the calcining
+#: zone, the fuel into that zone's own top, and the cooling air into the
+#: wall below it, counter-current to the burden as it always is.
+_SHAFT_PORTS = {
+    "feed": (_SHAFT_W / 2, 0.0),
+    "product": (_SHAFT_W / 2, _SHAFT_H),
+    "offgas": (0.0, 36.0),
+    "fuel": (_SHAFT_W, _SHAFT_ZONE_TOP + 12.0),
+    "air": (0.0, _SHAFT_ZONE_BOT + 14.0),
+}
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
@@ -4299,6 +4673,8 @@ class SymbolRegistry:
         self._register_feeders()
         self._register_mixers()
         self._register_screens()
+        self._register_evaporators()
+        self._register_kilns()
 
     def _register_composed(self):
         """The three drawings ISO composes and gives a number of its own.
@@ -4742,6 +5118,122 @@ class SymbolRegistry:
         self.register("screening_device", _screen(
             "rotating_drum", "X8029", _SCREEN_DRUM), "rotating_drum")
         self.register("screening_device", _REEL_BODY, "basket_reel")
+
+    def _register_evaporators(self):
+        """The five evaporator bodies, on one shell.
+
+        ISO 10628-2 has no evaporator group, so there is no table to
+        close and no row to measure against: what decides the set is
+        which machines a process engineer picks between when sizing an
+        evaporation duty, and which of those differences the *drawing*
+        can carry.
+
+        =================  =============================================
+        variant            what tells it from the others
+        =================  =============================================
+        ``default``        two tubesheets around a plain boxed element:
+                           an evaporator whose element is not yet chosen
+        ``calandria``      short tubes and a central downcomer
+        ``falling_film``   long tubes, fed onto a distributor over them
+        ``climbing_film``  the same long tubes, fed into the foot of them
+        ``plate``          a plate pack, and so no tubesheets at all
+        =================  =============================================
+
+        **``default`` is the general row**, and it is here for the
+        reason ISO's own item 11.1 X8084 general crushing machine is:
+        "an evaporator, element unspecified" is not a thing a finished
+        sheet says, but it is exactly what an early PFD says, and a
+        placeholder box is a worse answer than a body that draws only
+        what has been decided.
+
+        **Falling and climbing film are one body and two drawings.** The
+        machines differ in where the liquor enters and therefore in
+        which way the film runs, so the tubes are the same and the feed
+        nozzle is not: :data:`_EVAP_FEED_HIGH` against
+        :data:`_EVAP_FEED_LOW`. The distributor is the second half of
+        it, and it is a real difference rather than a marking -- a
+        climbing-film evaporator has none, because its liquor arrives
+        under the tubesheet and is carried up by its own vapour.
+
+        **There is no forced-circulation row, and that is a finding
+        rather than an omission.** A forced-circulation evaporator is
+        drawn on a real sheet as three tagged items -- this body, the
+        circulating heater, and the pump between them -- because all
+        three are scheduled, sized and maintained separately. Drawing
+        the loop into one symbol would put a pump and an exchanger
+        inside another apparatus, which is two units on one tag: the
+        same objection :data:`COMPOSED_APPARATUS` states, and the same
+        answer :class:`~pandid.units.Boiler` gives its burner.
+        """
+        self.register("evaporator", _evaporator(
+            "general", _evap_tubesheets(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT),
+            _EVAP_ELEMENT))
+        self.register("evaporator", _evaporator(
+            "calandria",
+            _evap_tubesheets(_EVAP_CALANDRIA_TOP, _EVAP_CALANDRIA_BOT),
+            _evap_tubes(_EVAP_CALANDRIA_TOP, _EVAP_CALANDRIA_BOT, _EVAP_CALANDRIA_XS),
+            _evap_tubes(_EVAP_CALANDRIA_TOP, _EVAP_CALANDRIA_BOT, _EVAP_DOWNCOMER_XS),
+            band=(_EVAP_CALANDRIA_TOP, _EVAP_CALANDRIA_BOT)), "calandria")
+        self.register("evaporator", _evaporator(
+            "falling_film",
+            _evap_tubesheets(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT),
+            _evap_tubes(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT, _EVAP_TUBE_XS),
+            _EVAP_DISTRIBUTOR), "falling_film")
+        self.register("evaporator", _evaporator(
+            "climbing_film",
+            _evap_tubesheets(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT),
+            _evap_tubes(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT, _EVAP_TUBE_XS),
+            feed_y=_EVAP_FEED_LOW), "climbing_film")
+        self.register("evaporator", _evaporator("plate", _EVAP_PLATES), "plate")
+
+    def _register_kilns(self):
+        """The three kiln bodies, and they share nothing but a nozzle set.
+
+        Unlike every family above, this one has no common outline,
+        because the three machines have no common shape: a rotary kiln
+        is a sloping shell on trunnions, a fluidised calciner is an
+        upright vessel on a windbox, and a shaft kiln is a column of
+        burden. What they share is what makes them one kind -- solids in,
+        calcined solids out, spent gas out on a nozzle of its own, and a
+        fire of their own to do it with.
+
+        ==================  ============================================
+        variant             body
+        ==================  ============================================
+        ``default``         rotary kiln: the sloping shell, its two
+                            riding rings and its drive
+        ``fluidized_bed``   fluidised-bed or gas-suspension calciner
+        ``shaft``           vertical shaft kiln
+        ==================  ============================================
+
+        ``default`` is the rotary kiln because an unqualified "kiln" is
+        one, in cement, lime, alumina and every roasting duty there is.
+        It is registered under that name rather than under ``rotary``
+        with an alias, so ``Kiln("K-101")`` draws a machine rather than
+        a placeholder and there is one drawing under one key.
+
+        All three are gravity-fixed, and each for its own reason. The
+        rotary shell **falls** from feed to discharge and turned over it
+        climbs; the calciner's bed rests on its grid and its freeboard is
+        above it; the shaft kiln is charged over the top and discharged
+        out of the bottom. Every one of them is ISO 15519-1 11.4.2's
+        exception rather than a preference about which way up to draw.
+        """
+        self.register("kiln", Symbol(
+            svg=f'<g id="sym_kiln">{_KILN_OUTLINE}{_KILN_RINGS}{_KILN_DRIVE}</g>',
+            width=_KILN_W, height=_KILN_H, ports=dict(_KILN_PORTS),
+            gravity_fixed=True,
+        ), "default")
+        self.register("kiln", Symbol(
+            svg=f'<g id="sym_kiln_fluidized_bed">{_FBC_OUTLINE}{_FBC_GRID}</g>',
+            width=_FBC_W, height=_FBC_H, ports=dict(_FBC_PORTS),
+            gravity_fixed=True,
+        ), "fluidized_bed")
+        self.register("kiln", Symbol(
+            svg=f'<g id="sym_kiln_shaft">{_SHAFT_OUTLINE}{_SHAFT_ZONES}</g>',
+            width=_SHAFT_W, height=_SHAFT_H, ports=dict(_SHAFT_PORTS),
+            gravity_fixed=True,
+        ), "shaft")
 
 
 default_registry = SymbolRegistry()

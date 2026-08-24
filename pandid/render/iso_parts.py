@@ -1046,6 +1046,50 @@ def support_overlays(name: str, registry=None) -> tuple:
             Overlay(26, name, 0.76, _SUPPORT_TOP, 0.10, _SUPPORT_DROP))
 
 
+#: Where a thickener's rake sits on the settling-tank body, as fractions
+#: of its box. Read off the body pandid draws rather than off a Table 2
+#: row, because there is no row: ISO 10628-2 has no thickener and no
+#: rake, and the body under this one is draw.io's "Settling Tank" -- a
+#: 100 x 80 box whose floor falls from the walls at y 55 to an apex at
+#: (50, 80).
+#:
+#: The arms therefore run x 20..80 and stop at y 62, which is **above
+#: the floor at their own outer ends** (the floor is at y 65 under x 20).
+#: A rake ploughs the floor and does not go through it, so those two
+#: numbers are the one thing this placement has to get right and they are
+#: read off the same slope the outline is drawn from.
+_RAKE_X, _RAKE_W, _RAKE_FOOT = 0.20, 0.60, 0.775
+
+
+def rake_overlays(name: str, registry=None) -> tuple:
+    """``name``'s stirrer, hung down the centre of a thickener.
+
+    **One overlay and no motor**, which is where this parts company with
+    :func:`agitator_overlays`. That helper draws item 20.6's electric
+    motor over the crown because ISO item 1.27 X8006 draws one there, and
+    :data:`~pandid.render.symbols.COMPOSED_APPARATUS` admits the motor
+    on the strength of that one tabulated row. There is no such row for a
+    thickener: a whole apparatus drawn inside another apparatus is two
+    units on one tag unless the standard itself composed them, and the
+    standard did not compose this. So the rake is drawn and its drive is
+    not -- an author who needs the drive on the sheet draws it beside the
+    thickener and tags it, which is the answer that dict already gives.
+
+    The **group-28 part is the rake**, and that is a claim worth being
+    exact about. ISO 10628-2 clause 5 has composing from groups 26 to 29
+    when the symbol wanted is not tabulated, and this one is not
+    tabulated: what a thickener has turning in it is a slow central
+    shaft carrying arms, which is what group 28 draws ten forms of. Item
+    28.4's cross-beam is the nearest of the ten and is what
+    :class:`~pandid.units.Thickener` asks for unless told otherwise; the
+    other nine are reachable because a rake is a real mechanism with real
+    variety and the standard has already drawn the vocabulary.
+    """
+    from pandid.render.symbols import Overlay
+    _part(28, name, registry)
+    return (Overlay(28, name, _RAKE_X, 0.0, _RAKE_W, _RAKE_FOOT),)
+
+
 #: The group-11 body's box, in grid modules. Read off every one of the
 #: twelve rows: top edge x 7..17, bottom edge x 9..15, y 4..10. The
 #: crusher and mill drawings in :mod:`pandid.render.symbols` are built at
