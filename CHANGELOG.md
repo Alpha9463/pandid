@@ -620,11 +620,12 @@ class hierarchy, or what it is called.
   average, so a cell is ruled to the string it has to hold.** `text_width()`
   charged every character 0.56 em (0.62 bold) — near enough the mean of
   Helvetica's ASCII to look calibrated, and a mean is no ruler. No real string
-  is the mean: `STREAM NUMBER` measured 17 per cent narrow, `PROCESS FLOW
-  DIAGRAM` 14, `Pump` 14, while `0.0441 kg/kg total` measured 34 per cent wide
-  and `Ethanol Purification A300` 28 — enough that the title band abbreviated a
-  title that fitted it, and `11_ethanol_pid` has read *Propylene Glycol Reacti…*
-  on a sheet with room for the word.
+  is the mean. Set regular, `STREAM NUMBER` measured 17 per cent narrow,
+  `PROCESS FLOW DIAGRAM` 14 and `Pump` 14; set bold, the same three measured 9,
+  6 and 11 narrow while `0.0441 kg/kg total` measured 34 per cent *wide* and
+  `Ethanol Purification A300` 28 — the last of those enough that the title band
+  abbreviated a title that fitted it, and `11_ethanol_pid` has been reading
+  *Propylene Glycol Reacti…* on a sheet with room for the whole word.
 
   Which face to measure was never open. pandid writes
   `font-family="sans-serif"` on every string; svglib registers that generic
