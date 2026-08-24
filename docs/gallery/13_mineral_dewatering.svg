@@ -716,12 +716,14 @@
     <text x="1510.0" y="990.4" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">ISSUED FOR REVIEW</text>
     <text x="1509.0" y="1003.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DRAWING No</text>
     <text x="1509.0" y="1016.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">PFD-401</text>
-    <line x1="1630.0" y1="995.4" x2="1630.0" y2="1021.0" stroke="black" stroke-width="0.5"/>
-    <text x="1635.0" y="1003.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DATE</text>
-    <text x="1635.0" y="1016.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">12/09/25</text>
-    <line x1="1705.6" y1="995.4" x2="1705.6" y2="1021.0" stroke="black" stroke-width="0.5"/>
-    <text x="1710.6" y="1003.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">REV</text>
-    <text x="1710.6" y="1016.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">C</text>
+    <line x1="1599.8" y1="995.4" x2="1599.8" y2="1021.0" stroke="black" stroke-width="0.5"/>
+    <text x="1604.8" y="1003.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">SCALE</text>
+    <line x1="1652.7" y1="995.4" x2="1652.7" y2="1021.0" stroke="black" stroke-width="0.5"/>
+    <text x="1657.7" y="1003.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DATE</text>
+    <text x="1657.7" y="1016.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">12/09/25</text>
+    <line x1="1725.8" y1="995.4" x2="1725.8" y2="1021.0" stroke="black" stroke-width="0.5"/>
+    <text x="1730.8" y="1003.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">REV</text>
+    <text x="1730.8" y="1016.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">C</text>
     <text x="1536.7" y="806.0" font-family="sans-serif" font-size="11.0" text-anchor="middle" font-weight="bold" fill="black">UTILITIES SUMMARY</text>
     <rect x="1317.4" y="812.0" width="116.3" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
     <text x="1322.4" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">Utility</text>

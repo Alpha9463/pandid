@@ -168,9 +168,16 @@ class TitleBlock:
 
     ``scale`` is the scale cell. Left blank, the sheet reports the ratio
     the renderer actually placed the drawing at, which is a real number
-    once ``page_size`` fixes the page; a drawing on a sheet sized to fit
-    it has no scale to state, so the cell is not ruled. Give the field a
-    value (``"NTS"``, ``"1:100"``) to state one regardless.
+    once ``page_size`` fixes the page and nothing at all on a sheet
+    sized to fit its drawing, which is at no scale to state. Give the
+    field a value (``"NTS"``, ``"1:100"``) to state one regardless.
+
+    The cell is **ruled either way**. A title block is a form and its
+    boxes belong to the form, so an unstated scale leaves an empty box
+    rather than removing one -- and the three cells beside it keep their
+    widths, which is what stops ``drawing_number`` being budgeted one
+    width by ``to_svg()`` and a narrower one by
+    ``to_svg(page_size=...)``.
     """
     title: str = ""
     subtitle: str = ""

@@ -109,12 +109,57 @@ def test_scale_is_drawn():
     assert "SCALE" in svg and "1:100" in svg
 
 
-def test_a_sheet_with_no_scale_to_state_rules_no_scale_cell():
-    # A drawing on a sheet sized to fit it is at no scale at all, and an empty
-    # cell headed SCALE says less than no cell.
+def test_a_sheet_with_no_scale_to_state_still_rules_the_scale_cell():
+    """A title block is a form: its boxes are ruled by the form and filled in by
+    the drawing, so the SCALE box is there whether or not there is a scale to
+    write in it.
+
+    It used to be dropped, and the room handed back to the three cells that
+    identify the drawing -- which made `drawing_number`'s budget depend on how
+    the sheet was asked for. See
+    `test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for`.
+    """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo Sheet")
-    assert "SCALE" not in fs.to_svg()
+    svg = fs.to_svg()
+    assert ">SCALE</text>" in svg
+    # Ruled and empty, not filled with something invented.
+    assert ">NTS</text>" not in svg and ">1:1</text>" not in svg
+
+
+def test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for():
+    """#370's core objective. The scale cell appears when the block states a
+    scale *or* when a page size lets the renderer state the ratio it fitted the
+    drawing at -- so the band used to rule three cells under `to_svg()` and four
+    under `to_svg(page_size=...)`, and `drawing_number` was budgeted 118 units
+    by one and 88 by the other. The same value fitted one call and was silently
+    abbreviated by the other, and no check that had not been told the page size
+    could say which."""
+    number = "PFD-111111111"
+
+    def drawn(**kw):
+        fs = _sheet()
+        fs.title_block = TitleBlock(title="Demo", drawing_number=number)
+        svg = fs.to_svg(border="zone", **kw)
+        cell = re.search(r">DRAWING No</text>\s*<text[^>]*>([^<]*)</text>", svg)
+        assert cell is not None, "the sheet ruled no DRAWING No cell"
+        return (
+            cell.group(1),
+            [w.message for w in fs.warnings if w.code == "text-truncated"],
+        )
+
+    loose, loose_found = drawn()
+    paged, paged_found = drawn(page_size="A3")
+    assert loose == paged
+    assert loose_found == paged_found
+    # And it is reported, not merely consistent.
+    assert len(paged_found) == 1
+    assert paged_found[0].startswith("drawing_number was truncated")
+
+    # ...and validate() says the same thing, with nothing rendered.
+    ahead = _sheet()
+    ahead.title_block = TitleBlock(title="Demo", drawing_number=number)
+    assert [i.message for i in ahead.validate() if i.code == "text-truncated"] == paged_found
 
 
 def test_scale_reports_the_ratio_the_drawing_was_fitted_at():
@@ -1570,33 +1615,133 @@ def test_a_whitespace_title_is_a_truncation_validate_reports():
     assert [w.message for w in drawn.warnings if w.code == "text-truncated"] == found
 
 
-#: unset, whitespace, and stated-but-unfittable, over every field of the block.
-_SEAM = [{f: v} for f in _FIELD_NAMES for v in ("   ", "\t \n ", _LONG)] + [
-    {},
-    {"title": "   ", "date": "  "},
-    {"revisions": [Revision("   ", "   ", "   ", "   ")]},
-    {"title": "   ", "drawn_by": _LONG, "revisions": [Revision("0", "2026-01-01", "Issued")]},
-]
+#: The three states a field can be in, and what the block is given for each.
+#: ``None`` is *unset* -- the key is not passed to ``TitleBlock`` at all.
+_STATES = [("unset", None), ("blank", "  \t "), ("overlong", None)]
 
 
-@pytest.mark.parametrize("kw", _SEAM, ids=lambda k: "+".join(k) or "unset")
-@pytest.mark.parametrize(
-    "name",
-    ["Ethanol Purification A300", "A Flowsheet Name Far Too Long For The Title Cell To Hold"],
-)
-def test_validate_reports_exactly_what_the_sheet_reports(kw, name):
-    """The guarantee the whole finding rests on: what `validate()` says before a
-    render is what the sheet says after one. Both defects this test was written
-    for were a fallback chosen by the caller rather than by the strip, so the
-    two answered different questions about the same block."""
-    ahead = _sheet(name=name)
-    ahead.title_block = TitleBlock(**kw)
-    predicted = sorted(
-        i.message for i in ahead.validate() if i.code.startswith(("text-", "title-block"))
+def _findings(fs):
+    return sorted(
+        (i.code, i.message) for i in fs.validate() if i.code.startswith(("text-", "title-block"))
     )
-    drawn = _sheet(name=name)
-    drawn.title_block = TitleBlock(**kw)
-    drawn.to_svg(border="zone")
-    assert predicted == sorted(
-        w.message for w in drawn.warnings if w.code.startswith(("text-", "title-block"))
+
+
+def _rendered(fs, how, **kw):
+    getattr(fs, how)(border="zone", **kw)
+    return sorted(
+        (w.code, w.message) for w in fs.warnings if w.code.startswith(("text-", "title-block"))
     )
+
+
+def _block(name="Ethanol A300", **kw):
+    fs = _sheet(name=name)
+    fs.title_block = TitleBlock(**kw)
+    return fs
+
+
+#: ``(id, kwargs, expected)`` where *expected* is the ``(code, name)`` pairs the
+#: block must produce, in full. An empty list is an assertion in its own right --
+#: that this block is silent -- and a populated one says which field, so a
+#: reporter quietly turned off fails here rather than passing on parity.
+def _seam_cases():
+    cases = []
+    for field, value, code, named in _FIELD_ANSWERS:
+        base = {} if field == "title" else {"title": "Demo"}
+        for state, _ in _STATES:
+            kw = dict(base)
+            if state == "blank":
+                kw[field] = "  \t "
+            elif state == "overlong":
+                kw[field] = value
+            cases.append((f"{field}-{state}", kw, [(code, named)] if state == "overlong" else []))
+    # The revision row, field by field, in the same three states.
+    for rf in ("rev", "date", "description", "by", "checked", "approved"):
+        for state, _ in _STATES:
+            rkw = {}
+            if state == "blank":
+                rkw[rf] = "  \t "
+            elif state == "overlong":
+                rkw[rf] = _LONG
+            expect = []
+            if state == "overlong":
+                # ``rev`` is drawn twice -- the grid column and the bottom
+                # band's REV cell, at two different widths -- so it is two
+                # findings, and they sort by message.
+                if rf == "rev":
+                    expect.append(("text-truncated", "revisions[0].rev -> rev"))
+                expect.append(("text-truncated", f"revisions[0].{rf}"))
+            cases.append(
+                (
+                    f"revisions.{rf}-{state}",
+                    {"title": "Demo", "revisions": [Revision(**rkw)]},
+                    expect,
+                )
+            )
+    # The two block-level losses that are not about width at all.
+    cases += [
+        (
+            "signatory-no-row",
+            {"title": "Demo", "drawn_by": "AA"},
+            [("title-block-signatory-undrawn", "the title block sets")],
+        ),
+        (
+            "signatory-overridden",
+            {
+                "title": "Demo",
+                "drawn_by": "AA",
+                "revisions": [Revision("0", "2026-01-01", "Issued", "BB")],
+            },
+            [("title-block-signatory-undrawn", "the title block sets")],
+        ),
+        (
+            "company-overflows",
+            {"title": "Demo", "company": "Wollongong " * 12},
+            [("title-block-company-overflows", "company=")],
+        ),
+        (
+            "all-quiet",
+            {
+                "title": "Demo",
+                "drawing_number": "PFD-1",
+                "company": "PANDID",
+                "revisions": [Revision("0", "2026-01-01", "Issued", "AA")],
+            },
+            [],
+        ),
+    ]
+    return cases
+
+
+_SEAM = _seam_cases()
+
+
+@pytest.mark.parametrize("case_id,kw,expected", _SEAM, ids=[c[0] for c in _SEAM])
+def test_every_state_of_every_field_reports_what_it_should(case_id, kw, expected):
+    """The positive half. Each block is asserted to produce *exactly* these
+    findings -- so a reporter quietly disconnected fails here, where a test that
+    only compared `validate()` against the render would pass with both silent.
+
+    Three states per field: unset, blank (whitespace, which is the blank it
+    means), and stated but too long for its cell. Only the third may speak.
+    """
+    got = _findings(_block(**kw))
+    assert [c for c, _m in got] == [c for c, _n in expected], got
+    for (_code, named), (_c, message) in zip(expected, got):
+        assert message.startswith(named), (named, message)
+
+
+@pytest.mark.parametrize("case_id,kw,expected", _SEAM, ids=[c[0] for c in _SEAM])
+@pytest.mark.parametrize("page", [None, "A3"])
+def test_validate_reports_exactly_what_both_backends_report(case_id, kw, expected, page):
+    """The parity half, over all three paths that measure the strip: the model
+    check, the SVG renderer and the draw.io exporter.
+
+    Parity alone would be satisfied by three silences, which is why it is paired
+    with the test above rather than standing as the guarantee on its own. And
+    both page states are swept, because the bottom band's cells used to be ruled
+    at one set of widths by `to_svg()` and another by `to_svg(page_size=...)`.
+    """
+    kwargs = {} if page is None else {"page_size": page}
+    predicted = _findings(_block(**kw))
+    assert predicted == _rendered(_block(**kw), "to_svg", **kwargs)
+    assert predicted == _rendered(_block(**kw), "to_drawio", **kwargs)

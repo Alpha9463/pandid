@@ -1338,11 +1338,35 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     # with the number and the revision index is common drafting practice
     # rather than a standard: ISO 7200 §4 puts scale outside the title
     # block, and ASME title-block content is Y14.100's concern, not
-    # Y14.1's. A sheet with no scale to state gives its room back to the
-    # three cells that identify the drawing.
-    # Three of these four cells draw a value the block did not state,
-    # and each names the field that did state it (see :data:`Reporter`).
-    rev_id = tb.revisions[-1].rev if tb.revisions else "0"
+    # Y14.1's.
+    #
+    # **Four cells, always, at fixed shares of the band.** A title block
+    # is a form: its boxes are ruled by the form and filled in by the
+    # drawing, and a real one carries a SCALE box whether or not there
+    # is a scale to write in it. This band used to rule three when there
+    # was none and hand the room back to the cells that identify the
+    # drawing, which sounds like a kindness and is the defect. The scale
+    # cell appears when the block states a scale *or* when a page size
+    # lets the renderer state the ratio it fitted the drawing at -- so
+    # ``drawing_number`` was budgeted 118 units under ``to_svg()`` and
+    # 88 under ``to_svg(page_size="A3")``. The same ``PFD-111111111``
+    # fits one call and is silently abbreviated by the other, and no
+    # check that had not been told the page size could say which.
+    #
+    # A fixed slot is what :data:`_SHEET_W` already does for the title,
+    # for the same reason and in nearly the same words: how much of a
+    # drawing number survives must not depend on how the sheet happened
+    # to be asked for. It is also what lets
+    # :func:`pandid.validate.model_issues` measure this band at all --
+    # every width here is a constant now, so the cell it measures is the
+    # cell the renderer draws.
+    #
+    # Three of the four draw a value the block did not state, and each
+    # names the field that did state it (see :data:`Reporter`).
+    # Through :func:`_field` like every other read: left raw, a revision
+    # whose ``rev`` was whitespace put four invisible characters in a
+    # 22-unit cell and had them reported as a truncation.
+    rev_id = _field(tb.revisions[-1], "rev") if tb.revisions else "0"
     rev_field = (f"revisions[{len(tb.revisions) - 1}].rev -> rev"
                  if tb.revisions else "rev")
     scale = _field(tb, "scale") or fit_scale
@@ -1355,11 +1379,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
          _field(tb, "drawing_number") or "—", "drawing_number"),
         (_INFO_W * 0.21, "SCALE", scale, scale_field),
         (_INFO_W * 0.29, "DATE", date, date_field),
-        (_INFO_W * 0.12, "REV", rev_id, rev_field)] if scale else [
-        (_INFO_W * 0.50, "DRAWING No",
-         _field(tb, "drawing_number") or "—", "drawing_number"),
-        (_INFO_W * 0.30, "DATE", date, date_field),
-        (_INFO_W * 0.20, "REV", rev_id, rev_field)]
+        (_INFO_W * 0.12, "REV", rev_id, rev_field)]
     cxr = ix
     for j, (seg_w, seg_label, seg_val, seg_field) in enumerate(cells):
         if j:
@@ -1367,10 +1387,15 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         bold = seg_label != "DATE"
         parts.append(("text", cxr + 5, band3 + 8, seg_label, _CAPTION,
                       "start", False, CAPTION_INK))
-        parts.append(("text", cxr + 5, bottom - 5,
-                      clip(seg_val, seg_w - 8, _VALUE_TYPE, bold,
-                           field=seg_field, report=report),
-                      _VALUE_TYPE, "start", bold, "black"))
+        # Measured either way, drawn only when there is something to
+        # draw: the scale box is ruled on a sheet with no scale to state
+        # (see the note above) and an empty ``<text>`` under its caption
+        # would be an element in every such file saying nothing.
+        drawn = clip(seg_val, seg_w - 8, _VALUE_TYPE, bold,
+                     field=seg_field, report=report)
+        if drawn:
+            parts.append(("text", cxr + 5, bottom - 5, drawn,
+                          _VALUE_TYPE, "start", bold, "black"))
         cxr += seg_w
     return Strip((x, y, w, h), rules, rev, parts)
 
@@ -1402,13 +1427,22 @@ def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
 
     ``fit_scale`` is the ratio the renderer settled on, which the scale
     cell reports for a block that states no scale of its own. A caller
-    with no render behind it cannot know it and passes none -- and the
-    one cell that then measures differently is the drawing number's,
-    which is ruled the wider of its two widths because the scale cell it
-    shares the band with is absent. So this can *miss* a drawing number
-    that a fitted sheet goes on to abbreviate; the render measures that
-    one itself and reports it, and the two findings are the same
-    sentence.
+    with no render behind it cannot know it and passes none, and that
+    changes **nothing about any other cell**: the bottom band is ruled
+    at four fixed shares whether or not there is a scale to write in the
+    scale box, so the drawing number is budgeted the same 88 units under
+    every call. It did not use to be -- the band gave the scale cell's
+    room back to the three cells that identify the drawing, and
+    ``drawing_number`` was measured against 118 units here and cut at 88
+    by a render with a page size, which is exactly the silent
+    abbreviation this module exists to report. The remedy was to stop
+    the width moving, not to describe the two of them.
+
+    The scale cell is the one cell whose *own* value this cannot
+    measure, and it is the only one nobody typed: what goes in it is a
+    ratio the dock settles from the page and the drawing, so it is the
+    render's to report and the render does. Every value the **author**
+    wrote is measured here, against the width it will be drawn in.
     """
     found: list[tuple[str, str, str, float, float]] = []
 

@@ -3156,6 +3156,13 @@ there is then no scale to state. Give it a value to state one regardless:
 fs.title_block = TitleBlock(title="Transfer and Relief U100", scale="NTS")
 ```
 
+The cell is ruled either way. A title block is a form and its boxes belong to
+the form, so an unstated scale leaves an empty box rather than removing one —
+and the three cells beside it (`DRAWING No`, `DATE`, `REV`) keep their widths.
+That is what stops `drawing_number` being budgeted 118 units by `to_svg()` and
+88 by `to_svg(page_size="A3")`, with the same value fitting one call and
+silently abbreviated by the other.
+
 #### When a field does not fit its cell
 
 The strip is fixed geometry, so a cell cannot be given more room. What each one

@@ -448,8 +448,8 @@ class hierarchy, or what it is called.
   cut a character earlier or later than they always had -- 30 characters fit a
   126-unit cell at 7,5 exactly, and the walk kept 29. That is `_total`'s
   complaint about `sum()` pointed at a different pair of numbers, and the answer
-  is the same one: measure and use the identical arithmetic. A sweep of 19 586
-  width/size/weight combinations holds both halves.
+  is the same one: measure and use the identical arithmetic. A sweep of 16 772
+  width/size/weight cases holds both halves.
 
   **`validate()` reports an over-long field before anything is drawn.** Every
   width the strip rules is a constant, so whether a value fits is settled by the
@@ -512,10 +512,31 @@ class hierarchy, or what it is called.
   questions about one block. The renderers and the validator now hand both
   fallbacks over unchosen.
 
-  What that buys is the guarantee the whole finding rests on, and it is now a
-  test rather than a claim: over every field of the block in all three states --
-  unset, whitespace, and stated but unfittable -- `validate()` reports word for
-  word what the rendered sheet reports.
+  What that buys is the guarantee the whole finding rests on: over every field
+  of the block in all three states -- unset, blank (whitespace, which is the
+  blank it means) and stated but unfittable -- `validate()` reports word for
+  word what the rendered sheet reports, and what `to_drawio()` reports. Each
+  case also asserts *which* findings it must produce, so three silences do not
+  satisfy it.
+
+  **The drawing number now has one budget, however the sheet is asked for.**
+  The bottom band is ruled at four fixed shares whether or not there is a scale
+  to write in the scale box. It used to rule three when there was none and hand
+  the room back to the cells that identify the drawing -- and the scale cell
+  appears when the block states a scale *or* when a page size lets the renderer
+  state the ratio it fitted the drawing at. So `drawing_number` was budgeted 118
+  units by `to_svg()` and 88 by `to_svg(page_size="A3")`: the same
+  `PFD-111111111` fitted one call and was silently abbreviated by the other, and
+  no check that had not been told the page size could say which. A fixed slot is
+  what `_SHEET_W` already does for the title, for the same reason -- and it is
+  what lets the model check measure this band at all, every width in it now
+  being a constant.
+
+  A title block is a form: its boxes are ruled by the form and filled in by the
+  drawing, so an unstated scale leaves an empty box rather than removing one.
+  Four shipped sheets gain a ruled SCALE box and their DRAWING No / DATE / REV
+  cells take the widths the other seventeen already had: `08_from_data`,
+  `13_mineral_dewatering`, `16_demineralised_water` and `21_alumina_refinery`.
 
   Those three cells carry **initials**, being the only signatory cells the strip
   rules, so `examples/03`, `08` and `09` now set `drawn_by="AA"` in place of
