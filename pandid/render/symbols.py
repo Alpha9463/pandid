@@ -154,7 +154,8 @@ FROM_START = "start"
 
 def spread(index: int, count: int, along: float, pitch: float,
            extent: float, at: float | None = None,
-           align: str = CENTRED) -> float:
+           align: str = CENTRED,
+           band: "tuple[float, float] | None" = None) -> float:
     """Where member ``index`` of ``count`` sits along a face ``along``
     long.
 
@@ -164,7 +165,7 @@ def spread(index: int, count: int, along: float, pitch: float,
     consistent between them.
 
     Members sit ``pitch`` apart, centred on ``at`` (the middle of the
-    face when it is ``None``). Past the point where that spacing would
+    band when it is ``None``). Past the point where that spacing would
     run them off the ends the whole run is squeezed into ``extent`` of
     the face instead, so the count a symbol was drawn for lands exactly
     where a fixed nozzle would and one more does not shove the others
@@ -175,19 +176,99 @@ def spread(index: int, count: int, along: float, pitch: float,
     lone member goes, so a symbol keeps the nozzle it was drawn with;
     the difference is only which way a second one pushes.
 
+    ``band`` is the stretch of face a member may be drawn on, ``(lo,
+    hi)`` in the same coordinate ``at`` is measured in, and defaults to
+    the whole face. **It is an outer limit**: the run is first squeezed
+    to fit inside it and then slid, by the least it can, until it is
+    inside it. So no member this returns is ever outside the band, at
+    any count, for any ``at``, any ``pitch``, either ``align`` and any
+    face length.
+
+    An outer limit and not usually the *binding* one. The span taken is
+    ``min(pitch * (count - 1), extent * along, hi - lo)``, and which of
+    the three wins is per symbol and per count: across the shipped
+    holdup bodies the band is tighter on thirty of the thirty-six walled
+    faces at the widest count and ``extent`` on the other six. What the
+    band adds is the part ``extent`` cannot state -- ``extent`` bounds
+    the run's *length* and never says where that length is laid down, so
+    a run centred on a nozzle drawn near the end of its wall walks
+    straight off the body however short it is. A tank fills low on its
+    shell, and the third inlet of ``21_alumina_refinery``'s M-901 was
+    8,9 units below the bottom of the tank (#488).
+
+    Sliding rather than re-centring is what keeps the drawing the symbol
+    asked for: a family whose band has room stays exactly where ``at``
+    and ``align`` put it, and only one that has run out of wall is
+    moved, by exactly the overhang and no more.
+
+    A band of **no length** contains everything and places nothing: every
+    member lands on the one coordinate it allows. That is a face with no
+    wall on it -- a dome crown, a cone apex, a dished head -- and it is
+    refused rather than drawn; see :func:`bandless_face`.
+
     :class:`PortSeries` is the declarative form of this, for a symbol
     that can name its family with one rule. :func:`block_symbol` calls
     it directly, because a block's family is split across up to four
     faces and one series cannot span two of them; see
     :class:`pandid.units.Block`.
     """
-    start = along / 2 if at is None else at
-    span = min(pitch * (count - 1), extent * along)
+    lo, hi = (0.0, along) if band is None else band
+    start = (lo + hi) / 2 if at is None else at
     if count < 2:
-        return start
-    if align == CENTRED:
-        start -= span / 2
-    return start + span * index / (count - 1)
+        return min(max(start, lo), hi)
+    span = min(pitch * (count - 1), extent * along, hi - lo)
+    first = start - span / 2 if align == CENTRED else start
+    first = min(max(first, lo), hi - span)
+    return first + span * index / (count - 1)
+
+
+def walled_faces(sym: "Symbol", role: str) -> list[str]:
+    """The faces ``role`` may be piped from that have room for more than
+    one nozzle: a band with length, rather than a point.
+
+    What a refusal offers instead, so the message names faces the artwork
+    really has room on rather than the whole menu.
+    """
+    return [face for face, band in ((f, sym.bands.get(f))
+                                    for f in sym.port_faces.get(role, {}))
+            if band is None or band[0] < band[1]]
+
+
+def bandless_face(who: str, face: str, at: float, members: "list[str]",
+                  offered: "list[str]") -> ValueError:
+    """The error for a family put on a face with no wall to spread it on.
+
+    A dished roof, a cone apex and a dished head touch their box at
+    exactly one point. One nozzle there is on the ink; a second one
+    beside it, at the same inset, is in mid-air over the roof -- which is
+    the defect :attr:`Symbol.bands` exists to stop, arriving on a curved
+    face instead of a flat one (#488). ``spread`` cannot help: every
+    member of a zero-length band lands on the same coordinate, and
+    contained is not placed.
+
+    So it is refused rather than drawn or squeezed, and the message says
+    which faces do have a wall. Built here and raised from two places --
+    :meth:`pandid.units._MultiPortVessel._check_face_room`, which catches
+    it where the author wrote it, and :func:`vessel_symbol`, which
+    catches every other route to the same declaration -- so both say the
+    same sentence about the same rule.
+    """
+    named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
+    verb = "are both" if len(members) == 2 else "are all"
+    cure = (
+        "Put them on "
+        + " or ".join(filter(None, [", ".join(offered[:-1]), *offered[-1:]]))
+        + ", or leave a single connection here"
+        if offered else
+        "No face of this drawing has a wall to spread a family along, so it "
+        "carries one connection per face and no more"
+    )
+    return ValueError(
+        f"{who}: {named} {verb} on the {face} face, whose artwork meets the box "
+        f"at the single point {at:g} along it -- a dished head, a cone apex or a "
+        f"domed roof. One nozzle sits on that point; a second beside it would be "
+        f"drawn in mid-air off the ink. {cure}"
+    )
 
 
 def _on_face(face: str, t: float, width: float, height: float) -> tuple[float, float]:
@@ -248,7 +329,8 @@ class PortSeries:
             and port_name[len(self.prefix):].isdigit())
 
     def placement(self, index: int, count: int, width: float, height: float,
-                  pin: float | None = None) -> tuple[float, float]:
+                  pin: float | None = None,
+                  band: "tuple[float, float] | None" = None) -> tuple[float, float]:
         """Symbol-space coordinate of member ``index`` of ``count``.
 
         ``pin`` overrides the even spread for this one member: a fraction
@@ -258,14 +340,34 @@ class PortSeries:
         :meth:`pandid.units.Unit._series_pin`, which :class:`Column`
         overrides for ``feed_stages=`` -- without a second placement
         mechanism standing next to this one.
+
+        ``band`` is :attr:`Symbol.bands`' entry for this series' face --
+        the stretch of it a nozzle may be drawn on -- passed in rather
+        than held here because it is a property of the *artwork* and one
+        band serves every family on a face. A caller with no symbol in
+        hand passes nothing and gets the whole face, which is what the
+        band defaults to; see :func:`spread`.
         """
         along = height if self.face in ("W", "E") else width
-        t = (pin * along if pin is not None
-             else spread(index, count, along, self.pitch, self.extent, self.at,
-                         self.align))
+        if pin is not None:
+            lo, hi = (0.0, along) if band is None else band
+            # Clamped, not trusted. ``pin`` is a *unit's* statement about
+            # one member -- a tray number, in ``Column(feed_stages=)`` --
+            # and the band is the *artwork's* statement about where any
+            # nozzle may go. A pin that leaves the wall is the same
+            # defect an unbounded spread was: a nozzle drawn off the ink,
+            # reached by a second route (#488). The band wins, because a
+            # tray that is not on the shell is not a place to weld a
+            # nozzle whatever the tray count says.
+            t = min(max(pin * along, lo), hi)
+        else:
+            t = spread(index, count, along, self.pitch, self.extent, self.at,
+                       self.align, band)
         return _on_face(self.face, t, width, height)
 
-    def reach(self, width: float, height: float) -> tuple[float, float, float]:
+    def reach(self, width: float, height: float,
+              band: "tuple[float, float] | None" = None
+              ) -> tuple[float, float, float]:
         """Where members can land: ``(face_coordinate, lo, hi)`` along
         the face.
 
@@ -280,13 +382,16 @@ class PortSeries:
         Read off :func:`spread` at the widest count rather than
         re-derived, so the band this reports and the points the family
         is actually drawn at cannot say different things about the same
-        ``align``.
+        ``align`` -- or about the same ``band``, which is the artwork's
+        limit on how far along the face a member may go and is handed in
+        the same way :meth:`placement` takes it.
         """
         along = height if self.face in ("W", "E") else width
         # Two members is enough: the run is already at its full span
         # wherever ``pitch`` has been squeezed to ``extent``, and the
         # ends are what a band is.
-        ends = [spread(i, 2, along, self.extent * along, self.extent, self.at, self.align)
+        ends = [spread(i, 2, along, self.extent * along, self.extent, self.at,
+                       self.align, band)
                 for i in (0, 1)]
         fixed = {"W": 0.0, "E": width, "N": 0.0, "S": height}[self.face]
         return fixed, min(ends), max(ends)
@@ -577,6 +682,31 @@ class Symbol:
     # A series is the sole authority for its own members; naming one in
     # ``ports`` as well is rejected below.
     port_series: tuple[PortSeries, ...] = ()
+    # The stretch of each face a *family* may put a nozzle on, keyed by
+    # face and measured along it (top to bottom on W/E, left to right on
+    # N/S), in this symbol's own coordinates:
+    #   {"W": (36.0, 85.0), "E": (36.0, 85.0), "S": (10.0, 90.0)}
+    # which is ``tank/default``'s: its shell runs y 25,46..95,46 under
+    # the dished roof and the band is that wall held ten and a half off
+    # each end, so a fill is never drawn into the roof knuckle or the
+    # floor weld. The floor itself is the S entry.
+    # A face named here is one whose artwork does not run the whole
+    # length of the box: a tank's shell stops where the roof springs and
+    # starts again where the floor is welded on, and a family spread
+    # over the box's own edge puts a nozzle on the dome, or past the
+    # bottom of the drawing entirely (#488). A face left out is a face
+    # a member may go anywhere on, which is the plain rectangular case
+    # and what every symbol drawn to its box wants.
+    #
+    # A property of the *drawing* and so of the face, not of the role:
+    # one wall carries the inlets and the outlets alike, and
+    # :func:`vessel_symbol` reads the same entry for both.
+    #
+    # Only the families read it -- a fixed nozzle is authored at a
+    # coordinate and is checked against the artwork by the invariant
+    # suite -- so declaring one changes nothing about a symbol whose
+    # ports are all fixed.
+    bands: dict[str, tuple[float, float]] = field(default_factory=dict)
     label_pos: str | None = None
     # Tells two definitions of one (kind, variant) apart when they are
     # not the same drawing. A conveyor is built to its belt run rather
@@ -781,6 +911,20 @@ class Symbol:
                     f"{self.symbol_id()}: the {series.prefix!r} series names face "
                     f"{series.face!r}; expected one of N, S, E, W"
                 )
+        for face, span in self.bands.items():
+            if face not in ("N", "S", "E", "W"):
+                raise ValueError(
+                    f"{self.symbol_id()}: bands names face {face!r}; expected one "
+                    f"of N, S, E, W"
+                )
+            lo, hi = span
+            along = self.height if face in ("W", "E") else self.width
+            if not 0.0 <= lo <= hi <= along:
+                raise ValueError(
+                    f"{self.symbol_id()}: bands[{face!r}] is {span}, which is not a "
+                    f"stretch of a {along:g}-long face measured from its start; a "
+                    f"family confined to it would be drawn off the box"
+                )
         menu: dict[str, dict[str, tuple[float, float]]] = {}
         for name, xy in self.ports.items():
             home = outward_dir(xy[0], xy[1], self.width, self.height)
@@ -863,7 +1007,8 @@ class Symbol:
                 seen.add(pair)
                 hits.append((pair[0], pair[1], p1))
         for series in self.port_series:
-            fixed, lo, hi = series.reach(self.width, self.height)
+            fixed, lo, hi = series.reach(self.width, self.height,
+                                         self.bands.get(series.face))
             member = f"{series.prefix}*"
             for name, xy in placements:
                 across, along = (xy[0], xy[1]) if series.face in ("W", "E") else (xy[1], xy[0])
@@ -1484,6 +1629,15 @@ def _face_point(face: str, t: float, inset: float, width: float, height: float
 #: primitive at the same tuning, for the opposite answer to running out
 #: of room that :func:`block_symbol` gives: a mixer's triangle cannot
 #: grow either, so it already squeezes.
+#:
+#: The *extent* is the tuning and :attr:`Symbol.bands` the guarantee,
+#: and they are different claims rather than a strong and a weak version
+#: of one: 0,7 of the box says how tightly a family may be pitched, and
+#: the band says where on the body it may be drawn at all. Whichever is
+#: tighter wins, and which that is varies -- the band on thirty of the
+#: thirty-six walled faces the registry declares, this on the other six
+#: (both flat-roofed tanks' floors, the conical-bottomed tank's roof and
+#: all three of the floating-roof tank's faces). See :func:`spread`.
 _VESSEL_PITCH = 20.0
 _VESSEL_EXTENT = 0.7
 
@@ -1524,6 +1678,17 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     single outlet land on precisely the coordinate the vendored artwork
     always anchored, and nothing drawn at that count moves.
 
+    **Confined to the wall the artwork drew.** The run is bounded by
+    :attr:`Symbol.bands`' entry for the face, which is the stretch of it
+    that is shell rather than roof, floor or head. Without it the family
+    was centred on ``t0`` and bounded by nothing: ``t0`` is where the
+    stencil drew a *single* nozzle and a tank fills low on its shell, so
+    a family straddling it hangs half of itself below the floor -- three
+    inlets on ``tank/default`` put the third 9,5 units under the bottom
+    of the drawing (#488). ``bands`` is the dimension that was missing,
+    and it is declared per symbol rather than worked out here from the
+    ``svg``.
+
     **The artwork itself never changes.** Unlike a block's rectangle or
     a conveyor's rollers, a tank's or a vessel's ``svg`` draws no mark at
     a nozzle -- only the vendored outline, the same whichever face a
@@ -1558,8 +1723,13 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
             )
         t0, inset = _face_local(face, *menu[face], base.width, base.height)
         along = base.height if face in ("W", "E") else base.width
+        band = base.bands.get(face)
+        if len(members) > 1 and band is not None and band[0] >= band[1]:
+            raise bandless_face(f"{kind}/{variant}", face, band[0], members,
+                                walled_faces(base, role))
         for i, name in enumerate(members):
-            t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT, at=t0)
+            t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
+                       at=t0, band=band)
             ports[name] = _face_point(face, t, inset, base.width, base.height)
     # A role with exactly one member keeps its *whole* menu -- the same
     # alternatives ``inlet``/``outlet`` always offered -- so a caller who
@@ -2208,6 +2378,32 @@ def _at_part_scale(svg: str, scale: float) -> str:
         lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
 
 
+def _shifted_bands(body: Symbol, ox: float, oy: float
+                   ) -> "dict[str, tuple[float, float]]":
+    """``body.bands``, moved onto the composed box.
+
+    A band is a pair of **absolute** coordinates along a face, so it
+    moves with the ink exactly as a nozzle does and by the same offset
+    -- ``oy`` down a W/E face, ``ox`` along an N/S one. Nothing is
+    re-scaled: :func:`_shifted_series` re-expresses ``extent`` because
+    ``extent`` is a *fraction* of the face and a grown box would make it
+    a longer stretch of wall, and a band names the wall outright.
+
+    Carried at all because a composition is drawn through
+    :func:`compose` and resolved through it -- ``Vessel(supports=...)``
+    is the documented way to stand a vessel on legs -- and a band that
+    did not survive that path would leave the guarantee true of a bare
+    vessel and false of a supported one, which is worse than not having
+    it. ``test_a_composed_body_keeps_the_wall_it_was_composed_from``
+    holds it.
+    """
+    if (ox, oy) == (0.0, 0.0):
+        return dict(body.bands)
+    return {face: (lo + (oy if face in ("W", "E") else ox),
+                   hi + (oy if face in ("W", "E") else ox))
+            for face, (lo, hi) in body.bands.items()}
+
+
 def _shifted_series(series: PortSeries, body: Symbol, ox: float, oy: float,
                     width: float, height: float) -> PortSeries:
     """``series``, moved and re-scaled onto the composed box.
@@ -2428,6 +2624,10 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         faceless_ports=body.faceless_ports,
         port_series=tuple(_shifted_series(s, body, ox, oy, width, height)
                           for s in body.port_series),
+        # Moved with the ink, exactly as the menu above is: a wall grows
+        # no longer because a motor was drawn over the crown, it only
+        # sits further down the composed box.
+        bands=_shifted_bands(body, ox, oy),
         label_pos=body.label_pos,
         # A definition per composition, on darkened()'s and expander()'s
         # rule. Digested rather than spelled out because a tray column is

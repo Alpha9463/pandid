@@ -759,6 +759,65 @@ class hierarchy, or what it is called.
   searched for across the document, because `Revision.rev` is drawn twice -- the
   grid's REV column and the bottom band's REV box -- and either copy alone
   answers a search of the whole sheet.
+
+
+- A **nozzle can no longer be drawn off the body it belongs to** (#488). A
+  tank's or a vessel's inlets and outlets are a family whose count and faces
+  are the unit's, so the drawing spreads them from the one nozzle the stencil
+  anchored. That nozzle is a point and says nothing about how much wall there
+  is either side of it, and nothing else did either: the run was centred on it
+  and bounded only by a fraction of the *box*. A tank fills low on its shell --
+  ten above the floor, deliberately, so a flammable liquid is not splash-filled
+  (#226) -- so a family straddling that nozzle hung half of itself below the
+  floor. `examples/21_alumina_refinery` shipped with M-901's and M-902's third
+  inlet 8,9px under the bottom of the tank, with the stream to it ending in
+  blank paper beside a symbol it never reached, and `validate()` was silent on
+  both.
+
+  `Symbol.bands` is the dimension that was missing: per face, the stretch of it
+  a connection may be drawn on -- the straight shell, held off the weld at each
+  end -- declared per symbol in `scripts/vendor_symbols.py` beside the nozzle
+  coordinates rather than worked out from the artwork at run time. **Every face
+  either family may be piped from names one**, on all eighteen holdup bodies.
+  A dished roof, a cone apex and a dished head meet their box at a single
+  point, and that is a band of no length rather than a missing band: one nozzle
+  sits on it and a second beside it would be drawn in mid-air over the roof, so
+  the second one is **refused** -- at construction, where the author wrote it,
+  and again in the call that builds the artwork. Three `inputs=["N"]` on a
+  dished-roof tank used to draw the outer two 2,65 units clear of the dome:
+  inside the box, off the drawing, and unreported.
+
+  `spread()` takes the band as an **outer limit**: the run is squeezed to fit
+  inside it and then slid, by the least it can, until it is inside it. So no
+  member of any family is ever outside its band, at any count, for any anchor,
+  any pitch and any body height, and the same call carries the mixer, splitter,
+  column, reactor and separator families. It is an outer limit rather than the
+  binding one -- the span is `min(pitch x (n-1), extent x along, hi - lo)`, and
+  `extent` is the tighter of the three on six of the thirty-six walled faces --
+  but it is the only one of them that says *where* a run may be laid down,
+  which is what `extent` could never state. Sliding rather than re-centring is
+  what keeps a family that has room exactly where it was.
+
+  The band travels with the ink: `compose()` carries and shifts it, so
+  `Vessel(supports=...)` keeps the wall its body declares, and a `pin=` that
+  overrides the spread for one member (`Column(feed_stages=)`) is clamped into
+  it too. A limit one route ignores is not a limit.
+
+  **Nothing drawn with one connection moves.** Every stencil's own nozzle is
+  inside its own band, so a lone inlet or outlet still lands on precisely the
+  coordinate it always did, on every face of every body. Two sheets change:
+  `10_ethanol_pfd`'s M-302 (two fills) and `21_alumina_refinery`'s M-901 and
+  M-902 (three each). All three are pinned by a nozzle, so the streams into
+  them do not move at all -- the tank body drops to cover the fills, taking its
+  outlet, vent, relief and drain with it. `21_alumina_refinery` also levels its
+  caustic make-up flag with the inlet it feeds, which the corrected geometry
+  made a 25px step.
+
+  `validate()` reports the class of defect under a new code,
+  `nozzle-off-body`: a nozzle the symbol places, drawn outside its own unit's
+  box. It is silent on everything this package can draw -- the geometry above
+  makes it so -- and is there for a symbol registered from outside it.
+
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on

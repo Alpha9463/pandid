@@ -109,6 +109,91 @@ def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
     fs.to_svg()  # must not raise
 
 
+# ---------------------------------------------------------------------------
+# A nozzle drawn off the body it belongs to (#488).
+#
+# 21_alumina_refinery shipped with M-901's third inlet 8,9px below the bottom of
+# the tank: the stream was drawn to it correctly and it was not on the drawing,
+# so the line ended in blank paper beside a symbol it never reached. validate()
+# said nothing, and that silence is the half of the defect that must not recur.
+#
+# Every symbol the library ships now keeps its nozzles on its own box by
+# construction, so the rule is silent on the whole corpus and the sheet below is
+# built with a symbol registered here, which is exactly the case it is left in
+# for: artwork a third party wrote.
+# ---------------------------------------------------------------------------
+
+
+class _StubbedTank(U.Unit):
+    kind = "off_body_test_unit"
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+@pytest.fixture
+def off_body_kind():
+    """A symbol whose outlet is drawn 30 units below its own box."""
+    from pandid.render.symbols import Symbol
+
+    default_registry.register(
+        _StubbedTank.kind,
+        Symbol(
+            svg='<g id="sym_off_body_test"><rect x="0" y="0" width="60" height="60" '
+            'fill="none" stroke="black" stroke-width="2"/></g>',
+            width=60.0,
+            height=60.0,
+            ports={"inlet": (0.0, 30.0), "outlet": (30.0, 90.0)},
+        ),
+    )
+    try:
+        yield _StubbedTank
+    finally:
+        del default_registry._symbols[(_StubbedTank.kind, "default")]
+
+
+def _sheet_with(kind):
+    fs = Flowsheet("off-body")
+    unit = fs.add(kind("X-1"))
+    fs.connect(fs.add(U.Feed("F")).outlet, unit.ports["inlet"])
+    fs.connect(unit.ports["outlet"], fs.add(U.Product("P")).inlet)
+    return fs
+
+
+def test_a_nozzle_drawn_off_its_own_body_is_reported(off_body_kind):
+    """The finding the shipped sheet never got: the nozzle, the point it is
+    drawn at, and the box it is outside of."""
+    fs = _sheet_with(off_body_kind)
+    fs.layout()
+    issues = [i for i in fs.validate() if i.code == "nozzle-off-body"]
+    assert [i.severity for i in issues] == ["error"]
+    assert "X-1.outlet" in issues[0].message
+    assert "outside X-1's own box" in issues[0].message
+    with pytest.raises(ValueError, match="nozzle-off-body"):
+        fs.to_svg()
+
+
+def test_a_nozzle_on_the_edge_of_its_body_is_not_off_it(off_body_kind):
+    """Every nozzle a well-drawn symbol has is *on* an edge of its box, so a
+    rule that cannot tell "on the edge" from "past it" reports the whole
+    registry."""
+    fs = _sheet_with(off_body_kind)
+    fs.layout()
+    issues = [i for i in fs.validate() if i.code == "nozzle-off-body"]
+    assert [i for i in issues if "X-1.inlet" in i.message] == []
+
+
+def test_the_shipped_corpus_draws_no_nozzle_off_a_body():
+    """A tank fed three ways, which is the arrangement that was wrong: the
+    nozzles are on the shell and the rule is silent."""
+    fs = Flowsheet("three-fills")
+    tank = U.Tank("TK-1", inputs=3)
+    fs.add(tank)
+    for i in (1, 2, 3):
+        fs.connect(fs.add(U.Feed(f"F-{i}")).outlet, tank.ports[f"in_{i}"])
+    fs.connect(tank.outlet, fs.add(U.Product("P")).inlet)
+    fs.layout()
+    assert [i for i in fs.validate() if i.code == "nozzle-off-body"] == []
+
+
 def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
     """The solvent enters above the feed tray: two real nozzles down the shell,
     not two streams landing on one point in the middle of the tower."""
