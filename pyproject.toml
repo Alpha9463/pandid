@@ -60,7 +60,15 @@ Issues = "https://github.com/Alpha9463/pandid/issues"
 # pypdfium2 is tagged py3-none-<platform>, so it carries PDFium with it and does
 # not wait for a new interpreter to be built for. That is the whole point of the
 # list -- see the module docstring for the binary cairosvg could not bring.
-pdf = ["svglib>=2.0", "reportlab>=4.4.3", "pypdfium2>=4", "pillow>=9"]
+#
+# The same four are what `fs.show()` needs for a window rather than a browser
+# (pandid.render.preview): the window itself is stdlib tkinter, and what it
+# cannot do is turn an SVG into pixels. Pillow is floored at 9.1 for
+# `Image.Resampling`, the enum the preview scales the sheet with; 9.0 spells it
+# as a bare `Image.LANCZOS` constant that Pillow's own type stubs no longer
+# declare, so the two spellings are a type error apart and the newer one is a
+# 2022 release.
+pdf = ["svglib>=2.0", "reportlab>=4.4.3", "pypdfium2>=4", "pillow>=9.1"]
 yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
 # hatchling is the build backend above; it is here as well so that the sdist
 # test in tests/test_packaging.py has something to build with instead of skipping.

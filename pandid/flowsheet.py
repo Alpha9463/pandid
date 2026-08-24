@@ -2301,17 +2301,41 @@ class Flowsheet:
         """IPython/Jupyter: display the diagram inline in a notebook."""
         return self.to_svg()
 
-    def show(self) -> None:
-        """Render, and open the result in the default web browser."""
-        import tempfile
-        import webbrowser
-        import os
-        
-        fd, temp_path = tempfile.mkstemp(suffix=".svg")
-        os.close(fd)
-        
-        self.render(temp_path)
-        webbrowser.open(f"file://{temp_path}")
+    def show(self, *, show_stream_table: bool = False,
+             border: str | None = None,
+             diagram: str | None = None, page_size: str | None = None,
+             connections: str | None = None,
+             jump_direction: str = "vertical", debug: bool | float = False,
+             check: bool = True) -> None:
+        """Render the flowsheet and put it on screen.
+
+        Every keyword :meth:`render` takes, this takes and means the
+        same thing by -- it is ``render()`` without the path, so a sheet
+        can be previewed with its stream table, on a given page size, as
+        a P&ID rather than a PFD, or with the coordinate overlay on.
+        ``tests/test_show.py`` holds the two signatures equal, so
+        a keyword added to ``render()`` and not to this raises there
+        rather than quietly leaving the drafting call behind again.
+
+        A **window** where there is one to be had, the way
+        ``matplotlib.pyplot.show`` gives one: the sheet drawn in a
+        resizable window, rescaled as the window is, and this call
+        blocks until it is closed. It needs a display and the optional
+        rasteriser (``pip install 'pandid[pdf]'``), since a window shows
+        pixels and the renderer's own output is SVG.
+
+        Without either, the sheet goes to the **browser** instead, which
+        is what this always did, and the reason it went there is printed
+        rather than left to be guessed at. A headless machine -- CI, a
+        container, SSH without X11 -- takes that path without hanging or
+        raising. See :mod:`pandid.render.preview`.
+        """
+        from pandid.render.preview import preview
+        preview(self.to_svg(
+            show_stream_table=show_stream_table, border=border,
+            diagram=diagram, page_size=page_size, connections=connections,
+            jump_direction=jump_direction, debug=debug, check=check,
+        ), title=self.name)
 
     def __repr__(self) -> str:
         return (
