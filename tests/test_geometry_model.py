@@ -309,6 +309,65 @@ def test_pinning_the_corner_afterwards_drops_the_relation():
     assert pinned_y(valve) == RUN_Y
 
 
+def test_a_written_sheet_carries_the_relation_and_not_its_consequence():
+    """The file boundary is a place the intent can be thrown away too.
+
+    ``to_dict`` used to write the derived corner and drop the nozzle it was
+    measured to, so a sheet written and read back was the defect again: the
+    relation survived in memory and died in the file. What is stored is what
+    has to be written.
+    """
+    fs, valve = _valve_on_a_run()
+    valve.pin(port="inlet", y=RUN_Y)
+    written = fs.to_dict()
+    pin = next(u["pin"] for u in written["units"] if u["name"] == "HV-1")
+    assert pin == {"y": RUN_Y, "port": "inlet"}
+
+    back = Flowsheet.from_dict(written)
+    read = next(u for u in back.units if u.name == "HV-1")
+    assert pinned_y(read, "inlet") == RUN_Y
+    read.pin(orientation=90)
+    assert pinned_y(read, "inlet") == RUN_Y
+
+
+def test_a_written_pin_reads_back_as_the_pin_that_was_written():
+    """``from_dict(to_dict(fs))`` is a fixed point for a port-pinned unit.
+
+    Both spellings: one nozzle for every stated axis, which is how ``pin()``
+    itself takes it, and the axis-by-axis mapping for the pin built out of
+    two calls that measured to different things.
+    """
+    for place in (lambda u: u.pin(port="in_1", x=300.0, y=100.0),
+                  lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0))):
+        fs = Flowsheet("written")
+        tank = fs.add(U.Tank("T-1"))
+        prod = fs.add(U.Product("P"))
+        fs.connect(tank.outlet, prod.inlet)
+        place(tank)
+
+        written = fs.to_dict()
+        assert Flowsheet.from_dict(written).to_dict() == written
+        assert Flowsheet.from_dict(written).units[0].pin_ == tank.pin_
+
+
+def test_a_pin_read_back_refuses_to_be_edited_in_place():
+    """``pin_`` is a read, and the same read whichever way the unit is pinned.
+
+    A port-pinned axis is derived on the way out, so an assignment to the
+    object handed back was silently dropped -- while the very same
+    assignment on a corner-pinned unit moved it. The same input honoured or
+    discarded depending on how the unit happened to be pinned is the defect
+    this whole change is about, so both are refused and ``pin()`` is the way
+    to place a unit.
+    """
+    fs, valve = _valve_on_a_run()
+    for place in (lambda: valve.pin(x=300.0), lambda: valve.pin(port="inlet", y=RUN_Y)):
+        place()
+        assert valve.pin_ is not None
+        with pytest.raises(AttributeError):
+            valve.pin_.x = 999.0  # type: ignore[misc]
+
+
 def _codes(fs):
     fs.layout()
     fs.route()

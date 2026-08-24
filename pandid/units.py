@@ -707,14 +707,14 @@ class Unit:
 
         from pandid.portgeom import port_offset
 
-        resolved = replace(pin)
+        corners = {}
         for axis, port_name in self._pin_ports.items():
             # ``pin`` carries the transform to answer for; the nozzle
             # coordinates sitting in its own ``x``/``y`` are not read,
             # since an offset is measured in a box at the origin.
             offset = port_offset(self, port_name, pin)[0 if axis == "x" else 1]
-            setattr(resolved, axis, getattr(pin, axis) - offset)
-        return resolved
+            corners[axis] = getattr(pin, axis) - offset
+        return replace(pin, **corners)
 
     @pin_.setter
     def pin_(self, value: Pin | None) -> None:
@@ -787,15 +787,19 @@ class Unit:
         # a corner read back through the property and written down again
         # would freeze this call's transform into a coordinate, which is
         # the whole of what this method exists not to do.
-        candidate = replace(self._pin if self._pin is not None else Pin())
+        # Accumulated and applied in one ``replace``: a :class:`Pin` is
+        # frozen, which is what makes handing one back out of
+        # :attr:`pin_` a read rather than a handle on the record.
+        fields: dict[str, Any] = {axis: value
+                                  for axis, value in (("col", col), ("row", row),
+                                                      ("x", x), ("y", y))
+                                  if value is not None}
         ports = dict(self._pin_ports)
-        for axis, value in (("col", col), ("row", row), ("x", x), ("y", y)):
-            if value is not None:
-                setattr(candidate, axis, value)
         if orientation is not _UNCHANGED:
-            candidate.orientation = normalize_orientation(orientation)
+            fields["orientation"] = normalize_orientation(orientation)
         if mirrored is not _UNCHANGED:
-            candidate.mirrored, candidate.mirror_y = normalize_mirror(mirrored)
+            fields["mirrored"], fields["mirror_y"] = normalize_mirror(mirrored)
+        candidate = replace(self._pin if self._pin is not None else Pin(), **fields)
         if port is _UNSTATED:
             # A flag stands for the line, not for a piece of plant, and
             # it has exactly one nozzle -- so the point worth naming is

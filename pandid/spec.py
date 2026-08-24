@@ -104,6 +104,7 @@ from pandid.flowsheet import (
     Flowsheet,
 )
 from pandid.loops import Loop
+from pandid.portgeom import pin_intent
 from pandid.ports import Port
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
@@ -344,7 +345,7 @@ _TOP_KEYS = {
 _RETIRED_KEYS = {
     "direction": "the layout engine only draws left to right, so it never did anything",
 }
-_PIN_KEYS = {"x", "y", "col", "row", "orientation", "mirrored"}
+_PIN_KEYS = {"x", "y", "col", "row", "orientation", "mirrored", "port"}
 _UNIT_KEYS = {
     "kind", "name", "variant", "description", "reference", "width", "height",
     "label_pos", "new_line_number", "pin", "port_faces",
@@ -802,15 +803,54 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
         kwargs["orientation"] = data["orientation"]
     if "mirrored" in data:
         kwargs["mirrored"] = data["mirrored"]
+    # Only over the axes this pin states: ``port: inlet`` names the
+    # nozzle for whichever of x/y is written, and a pin that writes only
+    # ``y`` has no ``x`` to measure to anything.
+    ports = {axis: name for axis, name in
+             _read_pin_ports(data.get("port"), f"{where}.port").items() if axis in kwargs}
+    for axis, name in ports.items():
+        # Through the same door ``port_faces`` uses, so a nozzle a
+        # pooled connection mints is found and a misspelt one is named
+        # against the key that misspelt it rather than raising a
+        # ``KeyError`` out of ``pin()``.
+        _find_port(unit, name, f"{where}.port.{axis}")
     try:
-        # ``port=None`` because a written pin is a resolved
-        # :class:`~pandid.geometry.Pin`, and a Pin stores a corner --
-        # including a flag's, which :meth:`~pandid.units.Unit.pin` would
-        # otherwise read back as its nozzle and move it by the offset
-        # the write took out.
-        unit.pin(port=None, **kwargs)
+        # Split by what each coordinate was measured to, because that is
+        # what ``pin()`` takes: one call per nozzle, and one for the
+        # axes that are the corner itself.
+        #
+        # ``port=None`` on that first call and never the default: a
+        # written coordinate carrying no ``port`` is a corner, including
+        # a flag's, which :meth:`~pandid.units.Unit.pin` would otherwise
+        # read back as its nozzle and move by an offset the write never
+        # took out. The transform and the grid ride with it, so a pin
+        # stating nothing but ``orientation`` still lands.
+        unit.pin(port=None,
+                 **{axis: value for axis, value in kwargs.items() if axis not in ports})
+        for nozzle in dict.fromkeys(ports.values()):
+            unit.pin(port=nozzle,
+                     **{axis: kwargs[axis] for axis, p in ports.items() if p == nozzle})
     except ValueError as e:
         raise _fail_from(e, where) from None
+
+
+def _read_pin_ports(entry: Any, where: str) -> dict[str, str]:
+    """``port:`` on a written pin, as ``{axis: nozzle}``.
+
+    Two spellings, because the ordinary pin measures both coordinates to
+    one nozzle and the exceptional one does not. ``port: inlet`` names
+    it for every coordinate the pin states -- the shape
+    :meth:`~pandid.units.Unit.pin` itself takes -- and
+    ``port: {y: inlet}`` names it per axis, which is the only way to
+    write a pin whose x is a corner and whose y is a nozzle.
+    """
+    if entry is None:
+        return {}
+    if isinstance(entry, str):
+        return {"x": entry, "y": entry}
+    axes = _mapping(entry, where)
+    _check_keys(axes, {"x", "y"}, where)
+    return {axis: _text(name, f"{where}.{axis}") for axis, name in axes.items()}
 
 
 def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
@@ -1346,10 +1386,31 @@ def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
 def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
     if unit.pin_ is not None:
         pin: dict[str, Any] = {}
-        for key in ("x", "y", "col", "row"):
+        # The coordinates as the author gave them, and the nozzle each
+        # was measured to. Writing ``pin_``'s corner instead -- which is
+        # what this did -- writes the *consequence* of a placement under
+        # one transform, so a sheet written and read back was the #294
+        # defect again, with the relation that survives a turn thrown
+        # away at the file boundary. A relation is what has to be
+        # written, exactly as it is what has to be stored.
+        intent = pin_intent(unit)
+        for key in ("x", "y"):
+            if key in intent:
+                pin[key] = intent[key][1]
+        for key in ("col", "row"):
             value = getattr(unit.pin_, key)
             if value is not None:
                 pin[key] = value
+        named = {axis: port for axis, (port, _) in intent.items() if port is not None}
+        if named:
+            # One nozzle for every stated axis is the ordinary case and
+            # is written as ``pin()`` takes it: ``port: inlet``. The
+            # axis-by-axis mapping is for the pin built out of two calls
+            # that named different nozzles, or only one of them, which
+            # no shorthand can say.
+            ports = set(named.values())
+            pin["port"] = (ports.pop() if len(ports) == 1 and len(named) == len(intent)
+                           else dict(sorted(named.items())))
         if unit.pin_.orientation:
             pin["orientation"] = int(unit.pin_.orientation)
         mirror = _MIRROR_NAMES.get((unit.pin_.mirrored, unit.pin_.mirror_y))

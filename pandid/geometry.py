@@ -60,7 +60,7 @@ def normalize_mirror(value) -> tuple[bool, bool]:
     return table[key]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Pin:
     """User-specified placement *intent* for a Unit.
 
@@ -71,6 +71,15 @@ class Pin:
     ``orientation`` is a clockwise quarter turn in degrees; ``mirrored``
     / ``mirror_y`` flip the symbol left↔right and top↔bottom
     respectively.
+
+    **Frozen**, because :attr:`pandid.units.Unit.pin_` is a *read*: a
+    port-pinned axis is stored as the nozzle it was measured to and the
+    corner is derived on the way out, so the object handed back is a
+    value rather than the record. Assigning to a field of it changed the
+    placement for a corner-pinned unit and was silently dropped for a
+    port-pinned one -- the same input honoured or discarded depending on
+    how the unit happened to be pinned. Refusing both says which way it
+    is. :meth:`~pandid.units.Unit.pin` is how a placement changes.
     """
     col: int | None = None
     row: int | None = None
