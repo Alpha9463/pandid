@@ -6594,9 +6594,10 @@ class Column(Unit):
     #: cycle breaker tore, and a return line is read for the pipe alone
     #: (:mod:`pandid.layout.claims`) -- ``PLACES`` never sees it. What is
     #: left is four connections, and switching both entries to the
-    #: ``N``/``S`` of the approved design moves the corpus by **one**
-    #: crossing, 240 to 241, measured with ``scripts/layout_quality.py``.
-    #: The consistency argument above is the whole of the case for them;
+    #: ``N``/``S`` of the approved design moves the corpus by **six**
+    #: crossings, 246 to 252, all of them on ``20_molecular_sieve_dryer``,
+    #: measured with ``scripts/layout_quality.py``. The consistency
+    #: argument above is the whole of the case for them;
     #: an earlier version of this comment claimed 50 crossings, which was
     #: measured against an engine that read a return's nozzles and is no
     #: longer true of anything.

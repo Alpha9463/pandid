@@ -147,8 +147,8 @@ LINE = 0.25
 #: identical pull at ``LINE`` -- it is the same arithmetic with the
 #: doubling hidden inside a loop, so a return held a loop together twice
 #: as stiffly as a silent forward run held its own two ends and nothing
-#: said so. Undoing the doubling instead takes the corpus from 240
-#: crossings to 321: a return is often the *only* run joining a loop's
+#: said so. Undoing the doubling instead takes the corpus from 246
+#: crossings to 309: a return is often the *only* run joining a loop's
 #: two halves, where a silent forward run nearly always has a stated
 #: claim somewhere beside it, and halved it lets the loop come apart. So
 #: the doubling stays, and is written down.

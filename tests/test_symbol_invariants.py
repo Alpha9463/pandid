@@ -3023,7 +3023,16 @@ def test_every_vendored_kind_is_named_in_the_module_docstring():
     """The registry's own account of its sources names every kind it draws
     from a draw.io stencil -- checked against the live registry rather than
     read, so vendoring a ninth forgotten kind fails this instead of just
-    leaving the docstring's list one short again."""
+    leaving the docstring's list one short again.
+
+    Matched on a word boundary against a whitespace-collapsed docstring, not
+    a bare ``in`` check: the prose wraps at eighty-odd columns and "heat
+    exchangers" has genuinely split across a line break before now, which a
+    contiguous-substring test would report as ``hex`` gone missing when
+    nothing about the sourcing actually changed.
+    """
+    import re
+
     import pandid.render.symbols as symbols_module
     from pandid.render._vendored_symbols import register_vendored
 
@@ -3033,14 +3042,24 @@ def test_every_vendored_kind_is_named_in_the_module_docstring():
     register_vendored(fresh)
     vendored_kinds = {kind for kind, _variant in fresh._symbols}
 
+    # First claim: the mechanism under test still does something, so a
+    # register_vendored() that quietly stopped registering anything fails
+    # here instead of leaving both checks below vacuously true over an
+    # empty set.
+    assert vendored_kinds, "register_vendored() registered no (kind, variant) at all"
+
     unmapped = vendored_kinds - _VENDORED_SOURCE_WORDS.keys()
     assert not unmapped, (
         f"{unmapped} draw from a vendored stencil and are not in "
         f"_VENDORED_SOURCE_WORDS above; add the word this test should look for"
     )
 
-    doc = symbols_module.__doc__ or ""
-    missing = [kind for kind in vendored_kinds if _VENDORED_SOURCE_WORDS[kind] not in doc]
+    doc = " ".join((symbols_module.__doc__ or "").split())
+    missing = [
+        kind
+        for kind in vendored_kinds
+        if not re.search(rf"\b{re.escape(_VENDORED_SOURCE_WORDS[kind])}\b", doc)
+    ]
     assert not missing, (
         f"{[_VENDORED_SOURCE_WORDS[k] for k in missing]} vendored but not named "
         f"in pandid/render/symbols.py's own module docstring"
