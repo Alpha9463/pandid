@@ -28,12 +28,21 @@ every golden is held to the example that draws it. A stale gallery still fails
 here -- against the drawing the example is known to draw, rather than against a
 third render of it.
 
+The two are compared without an exception of any kind, which took a change in
+``test_golden.py`` to be able to say. ``03`` and ``08`` leave ``TitleBlock.date``
+blank; the fixture used to pin it to a constant while ``scripts/gallery.py``
+stamped the sheet's issue date, so the two committed artefacts stood one cell
+apart for a reason that was about neither drawing, and this file had to hold a
+rule for telling that cell from a real one. ``test_golden._pin_the_issue_date``
+pins it the way the generator does instead, the two agree, and the rule is gone
+rather than written more carefully.
+
 What is no longer re-run is :func:`gallery.render`, and only its own two lines:
 the capture underneath it still runs over every example, since ``test_golden``'s
-pass over the examples goes through that same :func:`gallery.flowsheet`, and
-:func:`gallery._stamp` runs below. So a sheet regenerated through a broken
-``to_svg`` or ``normalize`` is caught on the run after the regeneration rather
-than on the one that broke it. That is the whole of what this trades away.
+pass over the examples goes through that same :func:`gallery.flowsheet`. So a
+sheet regenerated through a broken ``to_svg`` or ``normalize`` is caught on the
+run after the regeneration rather than on the one that broke it. That is the
+whole of what this trades away.
 
 **Why the whole gallery, on every push.** Comparing every sheet is two file reads
 apiece now, so neither cheaper design is worth the failure mode it brings.
@@ -43,11 +52,14 @@ than in the example; and it needs a diff base, which a shallow CI clone does not
 reliably have. Leaving it to a scheduled job means finding out after the merge.
 
 **Why the SVG is compared exactly and the PNG is not.** The SVG is deterministic:
-given the same code it is the same text, once ``<defs>`` ordering is canonicalised
-and the provenance block -- which names a version, and so moves at every release
--- is dropped. Both rules are :func:`test_golden._normalize`, imported rather
-than restated: comparing two files is worth only as much as the two sides having
-been canonicalised by the same rule. A PNG is a raster, and its bytes come out of
+given the same code it is the same text, once ``<defs>`` ordering is
+canonicalised -- :func:`test_golden._normalize`'s rule, imported rather than
+restated, since two files compared under two rules are not compared at all.
+``_normalize`` also empties the provenance block, and that half is *undone*
+here rather than inherited: see
+:func:`_with_the_provenance_the_renderer_writes`, which puts back what this
+version of the renderer writes, so a committed sheet still has to name the
+version it was drawn by. A PNG is a raster, and its bytes come out of
 whichever PDFium build and font substitution the machine that made it had, so
 comparing them across a five-interpreter Linux matrix against a file made on one
 developer's machine would be a flake and not a check. What is checked about the
@@ -63,6 +75,8 @@ import pathlib
 import struct
 
 import pytest
+
+from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN, _provenance
 
 from test_golden import SCENARIOS, _normalize
 
@@ -111,125 +125,52 @@ def _png_size(data: bytes) -> tuple[int, int]:
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_the_committed_sheet_is_the_drawing_its_golden_holds(stem, monkeypatch):
+def test_the_committed_sheet_is_the_drawing_its_golden_holds(stem):
     """A gallery that has drifted shows a reader a drawing nobody can produce."""
     path = GALLERY / f"{stem}.svg"
     if not path.exists():
         pytest.fail(f"docs/gallery/{stem}.svg is missing. Run\n\n{REGENERATE}", pytrace=False)
-    committed = _normalize(path.read_text(encoding="utf-8"))
-    golden = _normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8"))
-    if committed != golden:
-        golden = _reconciled(stem, golden, monkeypatch)
+    committed = gallery.normalize(path.read_text(encoding="utf-8"))
+    golden = _with_the_provenance_the_renderer_writes(
+        _normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8")), SCENARIOS[stem][0]()
+    )
     if committed != golden:
         pytest.fail(
             f"docs/gallery/{stem}.svg is not the drawing tests/golden/{stem}.svg holds.\n"
             f"The gallery is generated; regenerate it with\n\n{REGENERATE}\n"
             "and commit the result with the change that moved it. Neither file here is a "
             "render, so if tests/test_golden.py is failing as well, that is the one to read "
-            f"first -- and if the line below is the title block's date, examples/{stem}.py has "
-            "started stating one of its own: the fixture then has to state the same date, and "
-            "the stem has to leave test_golden._DATE_LEFT_TO_THE_RENDERER, which is masking it "
-            "there.\n\n" + _diff(committed, golden),
+            "first.\n\n" + _diff(committed, golden),
             pytrace=False,
         )
 
 
-def _reconciled(stem: str, golden: str, monkeypatch: pytest.MonkeyPatch) -> str:
-    """*golden*, re-dated where the two committed artefacts are entitled to differ.
+def _with_the_provenance_the_renderer_writes(golden: str, fs) -> str:
+    """*golden* with its emptied provenance block written back in.
 
-    ``03`` and ``08`` leave ``TitleBlock.date`` blank for ``SvgRenderer`` to fill
-    in with today's, which is a date no committed artefact can carry -- so both
-    of them pin it, and they pin it differently: the fixture in
-    ``test_golden.py`` to a constant, ``scripts/gallery.py`` to the newest
-    revision's date, the date the sheet was in fact issued at. Neither is wrong
-    and neither is drift; the example gives the two nothing to agree on. That
-    one cell is swapped so the rest of the sheet can still be compared exactly.
+    The two files reach this comparison in different states, and this is the
+    line where that is dealt with rather than normalised away. A committed
+    gallery sheet carries a full provenance block, version and all, because
+    ``scripts/gallery.py`` writes what the renderer emitted. A golden does not:
+    ``test_golden._normalize`` deletes the contents between the fences before the
+    fixture is written out, so that cutting a release is not a diff of
+    twenty-one fixtures -- ``test_a_version_bump_does_not_move_a_fixture`` is
+    that rule, checked.
 
-    It is swapped only while the example really does leave the field blank, and
-    that is *read off the example*, not assumed from a list of stems. The moment
-    an example states a date of its own, the date becomes a field of the drawing
-    like any other, the two artefacts do have something to agree on, and
-    swapping the cell would retire the only check left on it -- which is how a
-    value gets accepted, quietly replaced, and shipped. So the golden comes back
-    untouched and the mismatch is reported, with the message above saying where
-    the masking is.
+    Running ``_normalize`` over the gallery side as well would make the two
+    agree, and would also stop anything at all looking at the version a
+    committed sheet claims to have been drawn by. That is a real check: the
+    gallery *does* have to be regenerated at a release, and before #302 this
+    file was the only thing saying so. So the block is put back instead --
+    :func:`~pandid.render.svg._provenance` is the renderer's own, called on the
+    fixture whose golden this is, so what the committed sheet is held to is what
+    this version of the renderer writes for this sheet, down to the ``dc:title``.
     """
-    stated, drawn = _dates_either_side_of_the_stamp(stem, monkeypatch)
-    if stated:
-        return golden
-    pinned = SCENARIOS[stem][0]().title_block.date
-    cell = f">{pinned}<"
-    assert golden.count(cell) == 1, (
-        f"tests/golden/{stem}.svg does not carry the fixture's date {pinned!r} in exactly one cell"
-    )
-    return golden.replace(cell, f">{drawn}<")
-
-
-def _dates_either_side_of_the_stamp(stem: str, monkeypatch: pytest.MonkeyPatch) -> tuple[str, str]:
-    """What ``examples/NN.py`` puts in the date cell, and what the gallery draws.
-
-    :func:`gallery._stamp` fills a blank date and leaves a stated one alone, so
-    by the time :func:`gallery.flowsheet` hands the flowsheet back the two cases
-    are the same string and no longer tell apart -- which is the whole reason
-    the field is read here on the way in, through a stand-in that records it and
-    then defers to the real rule. Standing in for the length of one call is what
-    :func:`gallery.flowsheet` itself does to ``Flowsheet.render``, and for the
-    same reason: the value wanted is one nothing hands back.
-
-    Neither date is restated here. The first is the example's own, and the
-    second is whatever the generator's rule makes of it, so a change to either
-    moves this with it.
-    """
-    stated: list[str] = []
-    stamp = gallery._stamp
-
-    def record(fs):
-        stated.append(fs.title_block.date)
-        stamp(fs)
-
-    monkeypatch.setattr(gallery, "_stamp", record)
-    fs, _ = gallery.flowsheet(stem)
-    return stated[0], fs.title_block.date
-
-
-def test_a_date_the_example_states_is_compared_and_not_swapped_away(monkeypatch):
-    """The swap above is for a blank field, and only a blank field.
-
-    Written because it was not: the first version of :func:`_reconciled` blanked
-    the fixture's date and stamped it, which asserted what the example does
-    rather than reading it. Given ``03`` an explicit date, the gallery drew that
-    date, the golden was re-dated to it anyway, and a changed field of a real
-    drawing passed -- while the render comparison this file used to make caught
-    it. That is the failure this suite keeps finding: a value accepted, quietly
-    replaced, and the sheet shipped.
-
-    Two claims, and the first is what stops the second being vacuous: today's
-    ``03`` leaves its date blank, so the golden really is re-dated; an ``03``
-    that states its own is left alone, so the mismatch reaches the comparison.
-    The stand-in is put where the example is, not where the reading is -- it
-    builds the fixture's flowsheet, states a date on it and hands it to
-    :func:`gallery._stamp` exactly as :func:`gallery.flowsheet` does, so what is
-    being tested is still the reading.
-    """
-    stem = "03_distillation_train"
-    golden = _normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8"))
-    assert _reconciled(stem, golden, monkeypatch) != golden, (
-        "03 leaves its date to the renderer today"
-    )
-
-    build, kwargs = SCENARIOS[stem]
-
-    def states_its_own_date(name):
-        fs = build()
-        fs.title_block.date = "2099-12-31"
-        gallery._stamp(fs)  # fills nothing: the field is not blank
-        return fs, kwargs
-
-    monkeypatch.setattr(gallery, "flowsheet", states_its_own_date)
-    assert _reconciled(stem, golden, monkeypatch) == golden, (
-        "a date the example states is a field of the drawing and has to be compared, not "
-        "replaced with the one the gallery would have stamped"
-    )
+    block = _provenance(fs)
+    block = block[block.index(PROVENANCE_OPEN) :]
+    lines = golden.split("\n")
+    open_i, close_i = lines.index(PROVENANCE_OPEN), lines.index(PROVENANCE_CLOSE)
+    return "\n".join(lines[:open_i] + block + lines[close_i + 1 :])
 
 
 def _diff(committed: str, golden: str, context: int = 2) -> str:

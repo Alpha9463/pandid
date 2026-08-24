@@ -55,6 +55,30 @@ GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
 
 
+def _pin_the_issue_date(fs: Flowsheet) -> None:
+    """Fill the date ``03`` and ``08`` leave for the renderer, as the gallery does.
+
+    Those two examples leave ``TitleBlock.date`` blank and ``SvgRenderer`` puts
+    today's there, which is right for a sheet drawn today and impossible for one
+    committed to a repository -- so the fixture pins it. What it pins it *to*
+    matters, because ``docs/gallery/`` is a second committed drawing of the same
+    sheet and ``scripts/gallery.py`` has to pin the same field: a constant here
+    would leave the two artefacts permanently one cell apart, and
+    ``tests/test_gallery.py`` would then have to special-case a date it could not
+    tell from a real one. So this is ``gallery._stamp``'s rule -- the date at the
+    top of the sheet's own revision history, the date it was in fact issued at.
+
+    Restated in two lines rather than imported, because ``scripts/gallery.py`` is
+    a dev-only script loaded by path and every module that builds a scenario
+    would have to load it. The restatement is not taken on trust:
+    ``tests/test_gallery.py`` compares the two committed artefacts cell for cell
+    and is what fails the moment the two rules part.
+    """
+    tb = fs.title_block
+    assert tb is not None and tb.revisions, "a sheet with no revision history has no issue date"
+    tb.date = tb.revisions[-1].date
+
+
 # --- scenarios, one per example -----------------------------------------------
 
 
@@ -238,7 +262,9 @@ def _distillation_train() -> Flowsheet:
         }
     fs.stream_table_sections = [("Benzene", "Mass Fraction")]
 
-    # date is fixed (not left blank) so the golden never drifts with today's date.
+    # The date is pinned below rather than left blank, so the golden does not
+    # drift with today's; see _pin_the_issue_date for why it is pinned to that
+    # particular date and not to a constant.
     fs.title_block = TitleBlock(
         title="Aromatics Recovery A100",
         subtitle="Process Flow Diagram 1",
@@ -253,7 +279,6 @@ def _distillation_train() -> Flowsheet:
         drawn_by="A. Anderson",
         checked_by="J. Smith",
         approved_by="R. Lee",
-        date="2026-01-01",
         revisions=[
             Revision("A", "2026-06-01", "Issued for internal review", "AA"),
             Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
@@ -262,6 +287,7 @@ def _distillation_train() -> Flowsheet:
             Revision("E", "2026-08-01", "Reflux drums raised", "AA", "JS", "RL"),
         ],
     )
+    _pin_the_issue_date(fs)
     fs.add_annotation(equipment_list(fs, align="top-right"))
     fs.add_annotation(
         notes(
@@ -507,7 +533,7 @@ def _from_data() -> Flowsheet:
     Importing the module does not render anything -- the example guards that
     behind ``__main__`` -- but it does leave the title block's date blank for
     SvgRenderer to fill in with today's, which would move the golden every day.
-    That one field is pinned here.
+    That one field is pinned here; see :func:`_pin_the_issue_date`.
     """
     import copy
     import importlib.util
@@ -525,8 +551,9 @@ def _from_data() -> Flowsheet:
         sys.path.remove(str(examples))
 
     data = copy.deepcopy(module.SPEC)
-    data["title_block"]["date"] = "2026-01-01"
-    return Flowsheet.from_dict(data)
+    fs = Flowsheet.from_dict(data)
+    _pin_the_issue_date(fs)
+    return fs
 
 
 def _line_numbers() -> Flowsheet:
@@ -4416,20 +4443,19 @@ def _example_capture():
     return module
 
 
-# The two examples that leave ``TitleBlock.date`` blank, which ``SvgRenderer``
-# fills in with ``datetime.now()``. That is right for a sheet drawn today and
-# impossible for one committed to a repository, so both the fixture and the
-# gallery pin it -- and they pin it *differently*: the fixture to a constant
-# (2026-01-01), the gallery to the newest revision's date, which is the date the
-# sheet was in fact issued at. Neither is wrong and there is no drift here; the
-# field simply has no value in the example for the two to agree on.
+# Nothing about the date is excused here any more, and the two lines that used to
+# be are the reason the note is worth keeping. ``03`` and ``08`` leave
+# ``TitleBlock.date`` blank, so this test used to overwrite whatever the example
+# produced with the fixture's constant before comparing -- which meant that if one
+# of those two examples ever *stated* a date, the stated one was thrown away and
+# the sheet passed. It was a mask over one field of two named drawings, and
+# ``tests/test_gallery.py`` was the only thing left looking at that field.
 #
-# So the guard takes the fixture's, since the fixture's golden is what it is
-# comparing against. It is read off the fixture rather than written out again
-# here, so the constant still lives in exactly one place. Everything else on the
-# sheet is compared as the example draws it, this one field included the moment
-# an example starts stating its own date.
-_DATE_LEFT_TO_THE_RENDERER = ("03_distillation_train", "08_from_data")
+# :func:`_pin_the_issue_date` removes the need for it: the fixture now pins the
+# blank date to exactly what ``gallery._stamp`` puts there, so the example's own
+# render already agrees with the golden and nothing has to be substituted. A date
+# an example states is now compared like every other cell on the sheet -- see
+# ``test_a_date_the_example_states_is_compared`` below.
 
 
 @pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
@@ -4437,8 +4463,6 @@ def test_the_example_draws_the_same_sheet_as_its_fixture(name):
     if UPDATE:
         pytest.skip("the goldens are being rewritten from the fixtures; compare on the next run")
     fs, kwargs = _example_capture().flowsheet(name)
-    if name in _DATE_LEFT_TO_THE_RENDERER:
-        fs.title_block.date = SCENARIOS[name][0]().title_block.date
     drawn = _normalize(fs.to_svg(**kwargs))
     golden = _normalize((GOLDEN_DIR / f"{name}.svg").read_text(encoding="utf-8"))
     if drawn != golden:
@@ -4450,6 +4474,35 @@ def test_the_example_draws_the_same_sheet_as_its_fixture(name):
             + _diff_message(name, golden, drawn),
             pytrace=False,
         )
+
+
+def test_a_date_the_example_states_is_compared():
+    """The date cell of ``03`` is compared, not excused.
+
+    This test is here because it was not. The comparison above used to overwrite
+    the date on the two sheets that leave it blank, so an ``03`` that started
+    stating one had the stated date thrown away and passed -- and the only other
+    check on that cell, ``tests/test_gallery.py``'s render comparison, was
+    retired in the same change that noticed. A field of a real drawing was
+    accepted, quietly replaced, and shipped.
+
+    Two claims, and the first is what stops the second being vacuous: ``03``
+    leaves the field blank today and the sheet it draws is the golden, so
+    nothing is being excused; give it a date and the sheet stops being the
+    golden. One example is enough -- the substitution that used to happen was
+    the same for both.
+    """
+    name = "03_distillation_train"
+    fs, kwargs = _example_capture().flowsheet(name)
+    golden = _normalize((GOLDEN_DIR / f"{name}.svg").read_text(encoding="utf-8"))
+    assert _normalize(fs.to_svg(**kwargs)) == golden, (
+        "03 leaves its date to the renderer, and the fixture pins what the renderer is given"
+    )
+
+    fs.title_block.date = "2099-12-31"
+    assert _normalize(fs.to_svg(**kwargs)) != golden, (
+        "a date the example states is a cell of the drawing and has to be compared like one"
+    )
 
 
 def test_every_example_has_a_fixture():
