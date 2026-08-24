@@ -1414,7 +1414,8 @@ class DrawioRenderer:
         # (:meth:`~pandid.flowsheet.Flowsheet.to_drawio`).
         self._findings: list = []
 
-    def _report(self, field: str, text: str, drawn: str) -> None:
+    def _report(self, field: str, text: str, drawn: str,
+                room: float, need: float) -> None:
         """A cell that could not hold what it was given
         (:data:`~pandid.render.furniture.Reporter`).
 
@@ -1423,7 +1424,7 @@ class DrawioRenderer:
         cell widths, so which file was exported must not change what the
         author is told about it.
         """
-        self._findings.append(fit_issue(field, text, drawn))
+        self._findings.append(fit_issue(field, text, drawn, room, need))
 
     # --------------------------------------------------- document
 
@@ -2629,15 +2630,21 @@ class DrawioRenderer:
         # the frame was grown around it.
         fit = _Fit.identity() if free is None else _Fit(
             *_fitted(inner, free))
-        # What the title strip's own three variable fields are filled
-        # from, all three of them the sheet's answer rather than this
-        # file's: the drawing name a blank title falls back to, today's
-        # date where the block states none, and the ratio the dock has
-        # just settled the drawing at.
-        block = fs.title_block
-        name = (getattr(block, "title", "") or fs.name) if block is not None else fs.name
-        date = (getattr(block, "date", "") if block is not None else "") or \
-            datetime.now().strftime("%Y-%m-%d")
+        # What the title strip's own three variable fields fall back to,
+        # all three of them the sheet's answer rather than this file's:
+        # the drawing name a block with no title takes, today's date
+        # where it states none, and the ratio the dock has just settled
+        # the drawing at.
+        #
+        # Handed over *unchosen*. Picking between these and the block's
+        # own values is the strip's, because it can only be done after a
+        # field of nothing but spaces has been read as the blank it
+        # means -- and a caller that picked first handed on a whitespace
+        # title with the flowsheet name it should have fallen back to
+        # already thrown away, and a whitespace date with today's. The
+        # block is not read here at all any more, for that reason.
+        name = fs.name
+        date = datetime.now().strftime("%Y-%m-%d")
         scale = "" if free is None else _scale_text(fit.scale)
         out: list[str] = []
         for n, (obj, x, y, w, h) in enumerate(placed):

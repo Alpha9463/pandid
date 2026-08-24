@@ -258,9 +258,9 @@ def _distillation_train() -> Flowsheet:
         sheet="1",
         of_sheets="3",
         scale="NTS",
-        drawn_by="A. Anderson",
-        checked_by="J. Smith",
-        approved_by="R. Lee",
+        drawn_by="AA",
+        checked_by="JS",
+        approved_by="RL",
         date="2026-08-01",
         revisions=[
             Revision("A", "2026-06-01", "Issued for internal review", "AA"),
@@ -601,8 +601,8 @@ def _line_numbers() -> Flowsheet:
         sheet="1",
         of_sheets="1",
         scale="NTS",
-        drawn_by="A. Anderson",
-        checked_by="J. Smith",
+        drawn_by="AA",
+        checked_by="JS",
         date="2026-07-15",
         revisions=[
             Revision("A", "2026-06-20", "Issued for internal review", "AA"),

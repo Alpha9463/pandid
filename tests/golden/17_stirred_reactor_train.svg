@@ -135,7 +135,7 @@
     <text x="1261.4" y="1058.5" font-family="sans-serif" font-size="8.0" text-anchor="middle" font-weight="bold" fill="black">PANDID</text>
     <line x1="1311.4" y1="1050.5" x2="1563.4" y2="1050.5" stroke="black" stroke-width="0.75"/>
     <line x1="1311.4" y1="1072.9" x2="1563.4" y2="1072.9" stroke="black" stroke-width="0.75"/>
-    <text x="1317.4" y="1033.5" font-family="sans-serif" font-size="12.5" text-anchor="start" font-weight="bold" fill="black">Propylene Glycol Reacti…</text>
+    <text x="1317.4" y="1033.5" font-family="sans-serif" font-size="12.0" text-anchor="start" font-weight="bold" fill="black">Propylene Glycol Reaction</text>
     <text x="1317.4" y="1044.5" font-family="sans-serif" font-size="10.5" text-anchor="start" fill="black">A200 Process &amp; Instrumentation Diagram 1</text>
     <text x="1558.4" y="1029.5" font-family="sans-serif" font-size="7.5" text-anchor="end" fill="#666">SHEET 1 of 1</text>
     <text x="1317.4" y="1058.5" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">STATUS</text>

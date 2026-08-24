@@ -20,9 +20,11 @@ anchor).
 
 from __future__ import annotations
 
+import dataclasses
+import math
 import string
 import unicodedata
-from typing import Callable, NamedTuple
+from typing import Any, Callable, NamedTuple
 
 from pandid.render.escape import escaped
 
@@ -35,13 +37,31 @@ _ADV_BOLD = 0.62
 FONT = "sans-serif"
 
 # How a cell says it could not hold what it was given: the field it
-# draws, the text it was asked for, and the text it actually drew (the
-# same string when nothing was trimmed). An ellipsis tells whoever reads
-# the sheet that a value was abbreviated and tells the program that
-# supplied it nothing at all, and that program is the one that can
-# shorten the field or ask for a bigger sheet. Every fixed-width cell
-# here measures first and reports through one of these.
-Reporter = Callable[[str, str, str], None]
+# draws, the text it was asked for, the text it actually drew (the same
+# string when nothing was trimmed), the room the cell has and the width
+# the text needed, the last two in drawing units. An ellipsis tells
+# whoever reads the sheet that a value was abbreviated and tells the
+# program that supplied it nothing at all, and that program is the one
+# that can shorten the field or ask for a bigger sheet. Every
+# fixed-width cell here measures first and reports through one of these.
+#
+# The two widths are carried because a finding without them is not
+# actionable: "the title was truncated" leaves an author guessing how
+# much has to come out, and "needs 194 of the 187 units its cell has"
+# says it. ``route-detour`` states its two lengths and their ratio for
+# the same reason.
+#
+# **The field is the one the author edits, not the cell that drew it**,
+# and where the two differ it is spelled ``source -> cell``. Half the
+# strip's cells draw a value some *other* field supplied: a blank
+# ``title`` draws the flowsheet's name, a blank ``scale`` draws the
+# ratio the sheet was fitted at, a blank ``date`` draws today's, the REV
+# cell draws the newest revision's ``rev``, and the newest revision's
+# blank signatory cells draw the block's ``drawn_by``/``checked_by``/
+# ``approved_by``. Naming the cell in those cases sends the author to a
+# field they never set -- the mistake ``of_sheets`` reported as ``sheet``
+# was, one function away.
+Reporter = Callable[[str, str, str, float, float], None]
 
 
 def script_counts(s: str) -> "tuple[int, int, int]":
@@ -101,6 +121,23 @@ def text_width(s, size: float, bold: bool = False) -> float:
     narrow, wide, zero = script_counts(s)
     if not wide and not zero:
         return len(s) * size * adv
+    return _width(narrow, wide, size, adv)
+
+
+def _width(narrow: int, wide: int, size: float, adv: float) -> float:
+    """What *narrow* narrow and *wide* wide codepoints measure, set at
+    *size* with advance fraction *adv*.
+
+    One expression with two callers: :func:`text_width`, which measures
+    a whole string, and :func:`clip`, which walks the counts forward to
+    find where to cut one. Written down once because the two have to
+    agree *bit for bit* -- a cut computed by summing per-character
+    widths lands a rounding away from the same string measured whole,
+    which is :func:`_total`'s complaint about ``sum()`` pointed at a
+    different pair of numbers. Given the same counts this returns the
+    same float, so the prefix ``clip`` keeps is a prefix ``text_width``
+    agrees fits.
+    """
     return narrow * size * adv + wide * size
 
 
@@ -137,14 +174,56 @@ def clip(s, room: float, size: float, bold: bool = False, *,
     value longer than its cell would run across the rule and into the
     value beside it and no amount of growing can help. A draftsman
     abbreviates.
+
+    **How many characters survive is decided the way the width is
+    measured** -- and :func:`text_width` measures two ways, so this cuts
+    two ways, on the same test.
+
+    A string of narrow codepoints alone measures ``len(s) * size * adv``,
+    a closed form, and the cut is that form inverted: the count of
+    characters the room holds, less one for the ellipsis. Every sheet
+    this package has drawn was cut by that arithmetic, and it is exact
+    -- one division, no accumulated error -- so a value that fills its
+    cell to the last unit keeps the last character that fits.
+
+    Anything with a CJK or fullwidth codepoint in it (a full em) or a
+    combining mark (nothing at all) has no such closed form, and there
+    the counts are walked forward through :func:`_width` -- the same
+    expression, given the same counts, so the prefix kept is a prefix
+    ``text_width`` agrees fits.
+
+    **Both ends used to be the Latin one.** The cut counted characters
+    at the Latin advance while the decision to cut at all was
+    ``text_width``'s, so the two disagreed by the ratio between the two
+    rates: a fullwidth title kept 28 characters measuring 290 units for
+    a 187-unit cell and was drawn straight through the sheet count
+    beside it, on every page size. Making *both* ends walk was the
+    obvious repair and the wrong one -- summing per-character widths
+    lands a rounding away from the same characters measured whole, so
+    seventy Latin room/size pairs in a sweep of the strip's own type
+    sizes cut a character earlier or later than they always had. That is
+    :func:`_total`'s complaint, and the answer here is the same one:
+    measure and use the identical arithmetic.
     """
     s = str(s)
-    if text_width(s, size, bold) <= room:
+    need = text_width(s, size, bold)
+    if need <= room:
         return s
-    per = size * (_ADV_BOLD if bold else _ADV)
-    drawn = s[: max(0, int(room / per) - 1)].rstrip() + "…"
+    adv = _ADV_BOLD if bold else _ADV
+    _narrow, wide, zero = script_counts(s)
+    if not wide and not zero:
+        keep = max(0, int(room / (size * adv)) - 1)
+    else:
+        budget, keep, n, w = room - text_width("…", size, bold), 0, 0, 0
+        for ch in s:
+            dn, dw, _dz = script_counts(ch)
+            n, w = n + dn, w + dw
+            if _width(n, w, size, adv) > budget:
+                break
+            keep += 1
+    drawn = s[:keep].rstrip() + "…"
     if report is not None:
-        report(field, s, drawn)
+        report(field, s, drawn, room, need)
     return drawn
 
 
@@ -159,9 +238,67 @@ def check_fit(s, room: float, size: float, bold: bool = False, *,
     reported instead of hidden.
     """
     s = str(s)
-    if report is not None and text_width(s, size, bold) > room:
-        report(field, s, s)
+    need = text_width(s, size, bold)
+    if report is not None and need > room:
+        report(field, s, s, room, need)
     return s
+
+
+def report_once(report: "Reporter") -> "Reporter":
+    """*report*, with each distinct finding passed on only once.
+
+    One strip can put one value in more than one place. The company cell
+    stacks its name over several lines, so a name repeating a word too
+    wide to break -- a group of companies, a joint venture -- reported
+    that word once per line, and the author read two findings about one
+    thing they can do once.
+
+    Wrapped around the whole layout rather than at each of the three
+    places findings are collected (the two backends and
+    :func:`title_strip_fit`), because three de-duplications are three
+    chances to disagree about what counts as the same finding. The key
+    is the whole tuple, so two revisions that abbreviate the same
+    initials are still two findings: their fields differ, and they are
+    two rows the author edits separately.
+    """
+    seen: set[tuple[str, str, str, float, float]] = set()
+
+    def once(field: str, text: str, drawn: str,
+             room: float, need: float) -> None:
+        key = (field, text, drawn, room, need)
+        if key not in seen:
+            seen.add(key)
+            report(field, text, drawn, room, need)
+
+    return once
+
+
+def fit_size(s, room: float, size: float, floor: float,
+             bold: bool = False) -> float:
+    """The largest type size at or under *size* that draws *s* inside
+    *room*, and never under *floor*.
+
+    The third answer to a value too long for its cell, and the only one
+    that keeps all of it and stays inside the rule. Lettering a long
+    value smaller is what a draughtsman does to a value that is *read*
+    -- the drawing title, set in display type well above everything else
+    on the strip. It is not what they do to a drawing number or a date,
+    which are matched character by character against another document
+    and are set at the strip's own reading size already, with nothing to
+    give back. So this is offered rather than applied: the caller says
+    which cell has size to spare and what its floor is, and the cells
+    that have none never ask.
+
+    :func:`text_width` is linear in the size, so the size that exactly
+    fills the cell is ``size * room / need``. That is rounded *down* to
+    the tenth :func:`_text` writes into the file, so the size measured
+    here is the size the consumer sets and the fit is not a rounding
+    away from a clipped glyph.
+    """
+    need = text_width(s, size, bold)
+    if need <= room or need <= 0 or room <= 0:
+        return size
+    return max(floor, math.floor(size * room / need * 10) / 10)
 
 
 def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=None):
@@ -246,7 +383,11 @@ def draw_annotation(ann, x: float, y: float, *,
         inner = max(body_w, text_width(ann.title, size + 1, bold=True))
         if ann.width < inner + 2 * pad:
             over = _overflowing_text(ann, size, body_w)
-            report(f"annotation {ann.title!r} (width={ann.width:g})", over, over)
+            # The box's own ``width`` is the room and the width it would
+            # have measured to is the need, so the two numbers in the
+            # finding are the two numbers the author edits between.
+            report(f"annotation {ann.title!r} (width={ann.width:g})", over, over,
+                   ann.width, inner + 2 * pad)
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
          f'fill="white" stroke="black" stroke-width="{_BOX_RULE:g}"/>']
     if ann.title:
@@ -791,6 +932,13 @@ _REV_COLS = (("REV", 22, "rev"), ("DATE", 50, "date"),
              ("CHK'D", 32, "checked"), ("APP'D", 32, "approved"))
 # Gutter between a revision cell's rule and its text, left and right.
 _REV_PAD = 3.0
+#: Which block-level field fills a revision column the newest row leaves
+#: blank. Those three columns are the only place on the sheet the strip
+#: letters a signatory, so a block-level name is drawn there or nowhere;
+#: :func:`pandid.validate.model_issues` reads this table to say which of
+#: the three the sheet is dropping and why.
+_BACKFILL = {"by": "drawn_by", "checked": "checked_by",
+             "approved": "approved_by"}
 # The title / status / drawing-number bands, which every sheet carries.
 _BODY_H = 80.0
 # The sheet count is drawn top-right of the title band, on the same line
@@ -829,9 +977,211 @@ _VALUE_TYPE = 11.0     # a status, a drawing number, a scale, a date, a rev
 CAPTION_INK = "#666"
 
 
+#: Baseline-to-baseline spacing of the company cell's wrapped lines.
+_COMPANY_LEAD = 12.0
+
+
+def _field(obj, name: str) -> str:
+    """A title-block field as the strip reads it: what the author
+    stated, stripped, and blank only where they stated nothing.
+
+    A field of nothing but spaces is *truthy*, so it defeated every
+    fallback the block has. ``tb.title or name`` drew three spaces
+    instead of the flowsheet's name; ``tb.status or "\u2014"`` and the
+    drawing number's dash likewise; a whitespace ``client`` or
+    ``project`` ruled an empty row and made the whole strip taller; a
+    whitespace ``scale`` turned the four-cell bottom band on with
+    nothing to put in it; and a whitespace ``company`` was accepted,
+    wrapped to no lines and drawn nowhere. Six of the block's fields
+    answered differently from the blank they mean, and none of them said
+    so -- the same class of silent wrong answer as the rest of this
+    strip, arrived at through truthiness rather than through width.
+
+    Read *here* and not normalised on the dataclass because a block is
+    edited after it is built -- ``fs.title_block.title = ...`` is the
+    documented way to shorten a field and re-render -- and a
+    ``__post_init__`` sees only what it was constructed with. Reading
+    through one function also keeps :func:`measure_title_strip` and
+    :func:`title_strip_layout` from disagreeing about whether a row
+    exists, which is what would make the strip's own height wrong.
+
+    This answers *what the author stated*, which is what decides which
+    field a finding names and whether a signatory is the block's to
+    backfill. What a cell **draws** is :func:`_stated`, one layer up:
+    the same read, with the block's own default behind it.
+
+    **Unset, not falsey.** The question this asks is whether the author
+    put anything in the field, and truthiness only answers that for
+    strings. Every field here is annotated ``str`` and nothing enforces
+    it, so ``TitleBlock(sheet=1, of_sheets=3)`` is a perfectly ordinary
+    thing to type and has always worked -- ``str(1)`` is ``"1"``. But
+    ``sheet=0`` is falsey, so a truthy read discarded it as blank, and
+    then :func:`_stated` filled the cell with the field's default: an
+    author who stated sheet **0** was issued sheet **1**. That is this
+    module's own subject committed by the code meant to fix it -- a
+    stated value silently changed to a different stated value, which is
+    worse than the blank it was guarding, because blank at least meant
+    *unset*.
+
+    So the test is ``is None`` and everything else is drawn as written.
+    Refusing a non-string at the door was the other defensible answer
+    and is not the one taken: it would break ``sheet=1``, which reads
+    naturally, works today, and has nothing to do with the defect.
+
+    :func:`pandid.document._clean` strips a location reference's parts
+    for the reason this strips a drawing field: whitespace at the ends
+    of either has nothing it could draw.
+    """
+    value = getattr(obj, name, None)
+    return "" if value is None else str(value).strip()
+
+
+#: :func:`_class_defaults` per class, since the answer is a property of
+#: the class and the question is asked once per cell per render.
+_DEFAULTS: "dict[type, dict[str, str]]" = {}
+
+
+def _class_defaults(cls: "type[Any]") -> "dict[str, str]":
+    """Every plain-string default the dataclass *cls* states, by field
+    name. A field built by a factory (``revisions``) has no such default
+    and is not listed, which is how the block's one list field leaves
+    itself out without being named here.
+
+    A class that is not a dataclass at all states nothing, for
+    :func:`_field`'s reason: the strip reads whatever it is handed and
+    draws a blank where there is nothing to draw, rather than raising
+    over the shape of the object.
+    """
+    known = _DEFAULTS.get(cls)
+    if known is None:
+        known = _DEFAULTS[cls] = (
+            {f.name: f.default for f in dataclasses.fields(cls)
+             if isinstance(f.default, str)}
+            if dataclasses.is_dataclass(cls) else {})
+    return known
+
+
+def _stated(obj, name: str) -> str:
+    """The value a strip cell **draws** for a field: what the author
+    wrote (:func:`_field`), and where that is blank, the default the
+    field's own dataclass states for it.
+
+    Every field of :class:`~pandid.document.TitleBlock` defaults to the
+    empty string bar two. ``sheet`` and ``of_sheets`` default to
+    ``"1"``, because a drawing with no set behind it is sheet 1 of 1 and
+    the block says so in its own signature. Left blank they drew
+    ``SHEET  of 1`` -- and a count with half of it missing is what the
+    slot's own note calls *a different sheet*. Nothing reported it
+    either: the string as a whole is well inside its 55 units, so no
+    cell was over its room and there was nothing for :func:`check_fit`
+    to say. Accepted, drawn meaningless, and issued.
+
+    The fallback is **read off the dataclass** rather than written here
+    so that the two cannot say different things. An author reads ``sheet:
+    str = "1"`` on the block; that is what an unset field draws, and it
+    is now what a blank one draws too. It also settles the next field
+    somebody gives a default to on the day it is added rather than the
+    day a cell is noticed drawing half of it.
+
+    Read here and not in ``__post_init__`` for :func:`_field`'s reason:
+    ``fs.title_block.sheet = "  "`` after the block is built has to
+    answer the same way, and a dataclass hook sees only construction.
+    """
+    return _field(obj, name) or _class_defaults(type(obj)).get(name, "")
+
+
+def company_lines(company: str) -> list[str]:
+    """The company name broken into the lines its cell stacks.
+
+    The company cell is the one on the strip that *wraps*, because a
+    company name is several words and the cell is a hundred units wide.
+    It is also the one where breaking mid-word is not available: a
+    hyphen the author did not write invents a name, so a single word
+    wider than the cell is drawn whole and reported (:func:`check_fit`)
+    rather than split.
+
+    A function rather than four lines inside the layout because
+    :func:`pandid.validate.model_issues` has to count the lines to know
+    whether they still fit the strip's depth, and a second wrapper
+    written to answer that would be a second opinion about where the
+    breaks fall.
+    """
+    line, lines = "", []
+    for word in company.split():
+        trial = (line + " " + word).strip()
+        if text_width(trial, _COMPANY_TYPE, bold=True) > _COMPANY_W - 10 and line:
+            lines.append(line)
+            line = word
+        else:
+            line = trial
+    if line:
+        lines.append(line)
+    return lines
+
+
+def company_overflow(tb) -> "tuple[int, float, float] | None":
+    """``(line count, room, need)`` when the company name wraps to more
+    lines than the strip is deep, or ``None``.
+
+    The cell is centred on the strip's depth, so a name that wraps to
+    more lines than fit does not stop at the rule: it runs *out of the
+    strip*, over the drawing above and off the sheet below, and the
+    per-line width check above sees nothing wrong because every line is
+    within its width. It is the one way this block loses a value in a
+    direction the rest of the strip cannot.
+
+    The depth is the strip's own, since the company cell is ruled the
+    full height of it (:func:`measure_title_strip`), so a block with a
+    revision history or a client line has more room than a bare one.
+    """
+    lines = company_lines(_stated(tb, "company"))
+    _, room = measure_title_strip(tb)
+    need = len(lines) * _COMPANY_LEAD
+    return (len(lines), room, need) if need > room else None
+
+
+def undrawn_signatories(tb) -> "list[tuple[str, str, str]]":
+    """``(field, value, displaced_by)`` for every block-level signatory
+    the strip does not letter anywhere.
+
+    ``drawn_by``/``checked_by``/``approved_by`` fill the BY / CHK'D /
+    APP'D cells of the *newest* revision row (:data:`_BACKFILL`), which
+    is the only place on the sheet those three columns exist. So a
+    block-level name is drawn in that row or it is drawn nowhere, and it
+    goes undrawn two ways: there is no revision at all, and
+    ``displaced_by`` is empty; or the newest revision states a signatory
+    of its own, which is the more specific claim and keeps the cell.
+    A row stating the *same* name displaces nothing -- the value is on
+    the sheet, and which field put it there is nobody's problem.
+
+    Here rather than in :mod:`pandid.validate` because it is the same
+    question :func:`title_strip_layout` answers when it fills the row,
+    asked of the same fields through the same :func:`_field`. Derived a
+    second time in the validator, the two disagreed the moment one of
+    them learned that a whitespace ``by`` is not a value: the strip
+    backfilled the row and the validator reported an override that had
+    not happened.
+    """
+    out: list[tuple[str, str, str]] = []
+    newest = tb.revisions[-1] if tb.revisions else None
+    for column, block in _BACKFILL.items():
+        value = _field(tb, block)
+        if not value:
+            continue
+        if newest is None:
+            out.append((block, value, ""))
+            continue
+        row = _field(newest, column)
+        if row and row != value:
+            out.append((block, value,
+                        f"revisions[{len(tb.revisions) - 1}].{column}={row!r}"))
+    return out
+
+
 def _header_lines(tb) -> list[tuple[str, str]]:
     return [(label, value) for label, value
-            in (("CLIENT", tb.client), ("PROJECT", tb.project)) if value]
+            in (("CLIENT", _stated(tb, "client")),
+                ("PROJECT", _stated(tb, "project"))) if value]
 
 
 def measure_title_strip(tb) -> tuple[float, float]:
@@ -901,42 +1251,77 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
     The strip is fixed geometry -- ISO 15519-1 §5.2.2 splits the title
     block in two and fixes both halves, where it sits to ISO 5457 and
-    how big it is and what goes in it to ISO 7200 --
-    so a value too long for its cell cannot be given more room and is
-    abbreviated instead. ``report`` is how each such
-    cell says which field it abbreviated and what it was given; see
-    :data:`Reporter`. The clipping happens **here** and not in either
+    how big it is and what goes in it to ISO 7200 -- so a value too long
+    for its cell cannot be given more room. What each cell does about
+    that is a property of the field it draws, and there are three
+    answers:
+
+    * the drawing **title** is lettered smaller until it fits
+      (:func:`fit_size`), because it alone is set above the strip's
+      reading size and is read straight through;
+    * the **company** cell wraps between words, and the sheet count is
+      drawn whole, because half of either reads as a different company
+      or a different sheet (:func:`check_fit`);
+    * everything else is abbreviated to an ellipsis (:func:`clip`),
+      which is what a draughtsman does and what the cell beside it makes
+      necessary.
+
+    ``report`` is how each such cell says which field it could not hold,
+    what it was given, what it drew and the two widths; see
+    :data:`Reporter`. The measuring happens **here** and not in either
     stroker, so the two backends abbreviate the same field to the same
-    string.
+    string and report it in the same words.
     """
+    # *name* and *date* are what the two cells fall back to, not what
+    # they draw: the block's own values win, and the choice is made
+    # here because it has to be made *after* whitespace is read as the
+    # blank it means. A caller that chose first handed on a whitespace
+    # title with the flowsheet name it should have fallen back to
+    # already thrown away, and a whitespace date with today's.
+    name, date = str(name or "").strip(), str(date or "").strip()
+    date = _stated(tb, "date") or date
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
     rx = x + _REV_W
     cx2 = rx + _COMPANY_W
     rules = [("rule", vx, y, vx, bottom, 1.5) for vx in (rx, cx2)]
+    if report is not None:
+        report = report_once(report)
 
     # --- Revision grid (left): heading at the foot, revisions above
-    def rev_cells(vals, bold=False, where=""):
+    def rev_cells(cells, bold=False):
+        """One row of the grid, each cell clipped to its own column.
+
+        *cells* is a ``(value, field)`` pair per column, the field
+        naming what the author would edit; an empty field is the
+        library's own lettering and is not reported on.
+        """
         return [clip(v, cw - 2 * _REV_PAD, _REV_TYPE, bold,
-                     field=f"{where}.{attr}", report=report if where else None)
-                for (_, cw, attr), v in zip(_REV_COLS, vals)]
+                     field=f, report=report if f else None)
+                for (_, cw, _attr), (v, f) in zip(_REV_COLS, cells)]
 
     header_y = bottom - _REV_ROW
-    headings = rev_cells([c[0] for c in _REV_COLS], bold=True)
+    headings = rev_cells([(c[0], "") for c in _REV_COLS], bold=True)
     # Clipped newest first, which is the order the strip used to draw
     # them in and so the order a caller watching ``report`` already
     # sees; stored oldest first, which is the order they are read in.
     newest_first = []
     for idx, rv in enumerate(reversed(tb.revisions)):
         newest = idx == 0
-        # The block-level drawn/checked/approved fields backfill the
-        # newest row's signatories when that revision leaves them blank.
-        by = rv.by or (tb.drawn_by if newest else "")
-        chk = rv.checked or (tb.checked_by if newest else "")
-        app = rv.approved or (tb.approved_by if newest else "")
-        newest_first.append(rev_cells(
-            [rv.rev, rv.date, rv.description, by, chk, app],
-            where=f"revisions[{len(tb.revisions) - 1 - idx}]"))
+        i = len(tb.revisions) - 1 - idx
+        row = []
+        for _heading, _cw, attr in _REV_COLS:
+            cell, value = f"revisions[{i}].{attr}", _stated(rv, attr)
+            # The block-level drawn/checked/approved fields backfill the
+            # newest row's signatories when that revision leaves them
+            # blank -- so the value in the cell is sometimes the block's
+            # and the finding has to name whichever field supplied it.
+            block = _BACKFILL.get(attr, "")
+            if newest and not value and block and _field(tb, block):
+                row.append((_stated(tb, block), f"{block} -> {cell}"))
+            else:
+                row.append((value, cell))
+        newest_first.append(rev_cells(row))
     rev = RevGrid(x, y, _REV_W, h,
                   tuple((heading, cw) for heading, (_, cw, _a)
                         in zip(headings, _REV_COLS)),
@@ -945,18 +1330,9 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     parts: list[tuple] = []
 
     # Company / logo cell (middle) -------------------------------
-    if tb.company:
-        words, line, lines = tb.company.split(), "", []
-        for wd in words:
-            trial = (line + " " + wd).strip()
-            if text_width(trial, _COMPANY_TYPE, bold=True) > _COMPANY_W - 10 and line:
-                lines.append(line)
-                line = wd
-            else:
-                line = trial
-        if line:
-            lines.append(line)
-        cy = y + h / 2 - (len(lines) - 1) * 6
+    if _stated(tb, "company"):
+        lines = company_lines(_stated(tb, "company"))
+        cy = y + h / 2 - (len(lines) - 1) * _COMPANY_LEAD / 2
         for ln in lines:
             # A word too long for the cell has no break point the
             # wrapper may use: hyphenating a company name invents one,
@@ -965,7 +1341,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                           check_fit(ln, _COMPANY_W - 10, _COMPANY_TYPE, True,
                                     field="company", report=report),
                           _COMPANY_TYPE, "middle", True, "black"))
-            cy += 12
+            cy += _COMPANY_LEAD
 
     # --- Info block (right): client/project, title, status, dwg/rev
     ix = cx2
@@ -988,44 +1364,108 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     for ly in ([top] if header else []) + [band2, band3]:
         parts.append(("rule", ix, ly, x + w, ly, 0.75))
     # title + subtitle, with sheet count tucked top-right of the title
-    # band
-    sheets = f"SHEET {tb.sheet} of {tb.of_sheets}"
+    # band. Both halves through :func:`_stated`, which is what keeps the
+    # count whole: blank, each falls back to the ``"1"`` the block's own
+    # signature states, so the cell reads SHEET 1 of 1 rather than
+    # ``SHEET  of 1``. A half-count is the one thing this slot must not
+    # draw -- see :data:`_SHEET_W` -- and it is not a width finding,
+    # since the short string fits its room easily.
+    sheets = f"SHEET {_stated(tb, 'sheet')} of {_stated(tb, 'of_sheets')}"
+    # The drawing title is the one value on the strip lettered *above*
+    # the strip's reading size, so it is the one with size to give back
+    # before it has meaning to give up -- and it is read straight
+    # through, where a drawing number or a date is matched character by
+    # character against another document. A draughtsman letters a long
+    # title smaller; nobody abbreviates it. So it is set down to fit,
+    # and only abbreviated below the floor.
+    #
+    # The floor is the subtitle's size, because a title lettered under
+    # it would read as the subordinate line of the two and the band
+    # would say the wrong thing about the drawing. The baseline does not
+    # move with the size: a set of sheets is scanned down the same line,
+    # and it is the lettering that varies with the title's length, not
+    # where the title sits.
+    #
+    # A block that states no title of its own draws the flowsheet's
+    # name, so the finding names *that* -- an author told "title was
+    # truncated" about a field they never set goes looking in the wrong
+    # place. Same for the three cells below it; see :data:`Reporter`.
+    title = _stated(tb, "title") or name
+    title_type = fit_size(title, _TITLE_W, _TITLE_TYPE, _SUBTITLE_TYPE, True)
     parts.append(("text", ix + 6, top + 15,
-                  clip(tb.title or name, _TITLE_W, _TITLE_TYPE, True,
-                       field="title", report=report),
-                  _TITLE_TYPE, "start", True, "black"))
-    if tb.subtitle:
+                  clip(title, _TITLE_W, title_type, True,
+                       field=("title" if _field(tb, "title")
+                              else "Flowsheet name -> title"),
+                       report=report),
+                  title_type, "start", True, "black"))
+    if _stated(tb, "subtitle"):
         parts.append(("text", ix + 6, band2 - 6,
-                      clip(tb.subtitle, _INFO_W - 12, _SUBTITLE_TYPE,
+                      clip(_stated(tb, "subtitle"), _INFO_W - 12, _SUBTITLE_TYPE,
                            field="subtitle", report=report),
                       _SUBTITLE_TYPE, "start", False, "black"))
+    # One cell drawn from two fields, so the finding names both: which
+    # of the two is the long one is visible in the string it quotes, and
+    # a cell that named only ``sheet`` sent an author who had set
+    # ``of_sheets`` to look at the wrong field.
     parts.append(("text", x + w - 5, top + 11,
-                  check_fit(sheets, _SHEET_W, _REV_TYPE, field="sheet",
-                            report=report),
+                  check_fit(sheets, _SHEET_W, _REV_TYPE,
+                            field="sheet/of_sheets", report=report),
                   _REV_TYPE, "end", False, CAPTION_INK))
     # status (tiny label at cell top, value below)
     parts.append(("text", ix + 6, band2 + 8, "STATUS", _CAPTION,
                   "start", False, CAPTION_INK))
     parts.append(("text", ix + 6, band3 - 5,
-                  clip(tb.status or "—", _INFO_W - 12, _VALUE_TYPE, True,
+                  clip(_stated(tb, "status") or "—", _INFO_W - 12,
+                       _VALUE_TYPE, True,
                        field="status", report=report),
                   _VALUE_TYPE, "start", True, "black"))
     # Bottom band: DRAWING No | SCALE | DATE | REV. Keeping the scale
     # with the number and the revision index is common drafting practice
     # rather than a standard: ISO 7200 §4 puts scale outside the title
     # block, and ASME title-block content is Y14.100's concern, not
-    # Y14.1's. A sheet with no scale to state gives its room back to the
-    # three cells that identify the drawing.
-    rev_id = tb.revisions[-1].rev if tb.revisions else "0"
-    scale = tb.scale or fit_scale
+    # Y14.1's.
+    #
+    # **Four cells, always, at fixed shares of the band.** A title block
+    # is a form: its boxes are ruled by the form and filled in by the
+    # drawing, and a real one carries a SCALE box whether or not there
+    # is a scale to write in it. This band used to rule three when there
+    # was none and hand the room back to the cells that identify the
+    # drawing, which sounds like a kindness and is the defect. The scale
+    # cell appears when the block states a scale *or* when a page size
+    # lets the renderer state the ratio it fitted the drawing at -- so
+    # ``drawing_number`` was budgeted 118 units under ``to_svg()`` and
+    # 88 under ``to_svg(page_size="A3")``. The same ``PFD-111111111``
+    # fits one call and is silently abbreviated by the other, and no
+    # check that had not been told the page size could say which.
+    #
+    # A fixed slot is what :data:`_SHEET_W` already does for the title,
+    # for the same reason and in nearly the same words: how much of a
+    # drawing number survives must not depend on how the sheet happened
+    # to be asked for. It is also what lets
+    # :func:`pandid.validate.model_issues` measure this band at all --
+    # every width here is a constant now, so the cell it measures is the
+    # cell the renderer draws.
+    #
+    # Three of the four draw a value the block did not state, and each
+    # names the field that did state it (see :data:`Reporter`).
+    # Through :func:`_stated` like every other read: left raw, a
+    # revision whose ``rev`` was whitespace put four invisible
+    # characters in a 22-unit cell and had them reported as a
+    # truncation.
+    rev_id = _stated(tb.revisions[-1], "rev") if tb.revisions else "0"
+    rev_field = (f"revisions[{len(tb.revisions) - 1}].rev -> rev"
+                 if tb.revisions else "rev")
+    scale = _stated(tb, "scale") or fit_scale
+    scale_field = ("scale" if _field(tb, "scale")
+                   else "the fitted scale -> scale")
+    date_field = ("date" if _field(tb, "date")
+                  else "today's date -> date")
     cells: list[tuple[float, str, str, str]] = [
-        (_INFO_W * 0.38, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
-        (_INFO_W * 0.21, "SCALE", scale, "scale"),
-        (_INFO_W * 0.29, "DATE", date, "date"),
-        (_INFO_W * 0.12, "REV", rev_id, "rev")] if scale else [
-        (_INFO_W * 0.50, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
-        (_INFO_W * 0.30, "DATE", date, "date"),
-        (_INFO_W * 0.20, "REV", rev_id, "rev")]
+        (_INFO_W * 0.38, "DRAWING No",
+         _stated(tb, "drawing_number") or "—", "drawing_number"),
+        (_INFO_W * 0.21, "SCALE", scale, scale_field),
+        (_INFO_W * 0.29, "DATE", date, date_field),
+        (_INFO_W * 0.12, "REV", rev_id, rev_field)]
     cxr = ix
     for j, (seg_w, seg_label, seg_val, seg_field) in enumerate(cells):
         if j:
@@ -1033,12 +1473,71 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         bold = seg_label != "DATE"
         parts.append(("text", cxr + 5, band3 + 8, seg_label, _CAPTION,
                       "start", False, CAPTION_INK))
-        parts.append(("text", cxr + 5, bottom - 5,
-                      clip(seg_val, seg_w - 8, _VALUE_TYPE, bold,
-                           field=seg_field, report=report),
-                      _VALUE_TYPE, "start", bold, "black"))
+        # Measured either way, drawn only when there is something to
+        # draw: the scale box is ruled on a sheet with no scale to state
+        # (see the note above) and an empty ``<text>`` under its caption
+        # would be an element in every such file saying nothing.
+        drawn = clip(seg_val, seg_w - 8, _VALUE_TYPE, bold,
+                     field=seg_field, report=report)
+        if drawn:
+            parts.append(("text", cxr + 5, bottom - 5, drawn,
+                          _VALUE_TYPE, "start", bold, "black"))
         cxr += seg_w
     return Strip((x, y, w, h), rules, rev, parts)
+
+
+def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
+                    ) -> "list[tuple[str, str, str, float, float]]":
+    """Every cell of the strip that cannot hold what it was given, as
+    :data:`Reporter` tuples, without drawing anything.
+
+    ``name`` and ``date`` are what the title and date cells fall back to
+    where the block states neither -- the flowsheet's name and today's
+    date -- and are passed *unchosen*, exactly as the two renderers pass
+    them, so that this and the sheet answer alike. Choosing first is
+    what made a whitespace title a truncation the render reported and
+    this did not.
+
+    Whether a value fits is a fact about the *model*: every width the
+    strip rules is a constant in this module, so the answer does not
+    depend on the page size, on the drawing, or on anything layout or
+    routing settles. That is what lets
+    :func:`pandid.validate.model_issues` report an over-long title block
+    on a sheet that has never been rendered -- the point of the finding
+    being to reach the author *before* the sheet is issued, not to
+    describe one that already was.
+
+    It is the same measurement and not a second opinion about it: the
+    layout is run with a collecting reporter and its ink thrown away,
+    so a cell width can never be stated in two places and drift.
+
+    ``fit_scale`` is the ratio the renderer settled on, which the scale
+    cell reports for a block that states no scale of its own. A caller
+    with no render behind it cannot know it and passes none, and that
+    changes **nothing about any other cell**: the bottom band is ruled
+    at four fixed shares whether or not there is a scale to write in the
+    scale box, so the drawing number is budgeted the same 88 units under
+    every call. It did not use to be -- the band gave the scale cell's
+    room back to the three cells that identify the drawing, and
+    ``drawing_number`` was measured against 118 units here and cut at 88
+    by a render with a page size, which is exactly the silent
+    abbreviation this module exists to report. The remedy was to stop
+    the width moving, not to describe the two of them.
+
+    The scale cell is the one cell whose *own* value this cannot
+    measure, and it is the only one nobody typed: what goes in it is a
+    ratio the dock settles from the page and the drawing, so it is the
+    render's to report and the render does. Every value the **author**
+    wrote is measured here, against the width it will be drawn in.
+    """
+    found: list[tuple[str, str, str, float, float]] = []
+
+    def collect(field: str, text: str, drawn: str,
+                room: float, need: float) -> None:
+        found.append((field, text, drawn, room, need))
+
+    title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale, report=collect)
+    return found
 
 
 def _strip_part(part) -> str:

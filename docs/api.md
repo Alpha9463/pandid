@@ -3147,7 +3147,7 @@ fs.title_block = TitleBlock(
     company="PANDID",   # logo / company cell
     status="ISSUED FOR REVIEW",               # issue-status cell
     sheet="1", of_sheets="3", scale="NTS",
-    drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",
+    drawn_by="AA", checked_by="JS", approved_by="RL",   # initials: see below
     date="",                                  # blank fills in with today's date
     revisions=[
         Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
@@ -3158,7 +3158,15 @@ fs.title_block = TitleBlock(
 
 In `Revision(rev, date, description, by, checked, approved)` the last two are
 optional per row and stay blank when omitted. The block-level
-`drawn_by`/`checked_by`/`approved_by` backfill the newest row. Leaving
+`drawn_by`/`checked_by`/`approved_by` backfill the newest row — which is the
+only place on the sheet those three columns exist, so they carry **initials**,
+and a block-level value the row does not use is drawn nowhere at all. Both ways
+that happens are reported as `title-block-signatory-undrawn`: a block that sets
+them and lists no revisions has no row to fill, and a newest revision that
+states a signatory of its own keeps the cell (the row is the more specific
+claim) and leaves the block's value on no sheet. A row stating the *same* name
+is silent — the value is drawn, and which field put it there is nobody's
+problem. Leaving
 `TitleBlock.date` empty makes the renderer stamp the current date, so a
 committed drawing changes day to day. Set it explicitly if you need reproducible
 output.
@@ -3180,26 +3188,102 @@ there is then no scale to state. Give it a value to state one regardless:
 fs.title_block = TitleBlock(title="Transfer and Relief U100", scale="NTS")
 ```
 
-The strip is fixed geometry, so a value too long for its cell is trimmed with an
-ellipsis rather than run across the rule into the cell beside it. The render
-says which field it trimmed, on `fs.warnings`, naming the field and quoting the
-value in full — `to_drawio()` as well as `to_svg()`, in the same words, since
-both measure one strip with one set of cell widths:
+The cell is ruled either way. A title block is a form and its boxes belong to
+the form, so an unstated scale leaves an empty box rather than removing one —
+and the three cells beside it (`DRAWING No`, `DATE`, `REV`) keep their widths.
+That is what stops `drawing_number` being budgeted 118 units by `to_svg()` and
+88 by `to_svg(page_size="A3")`, with the same value fitting one call and
+silently abbreviated by the other.
+
+#### When a field does not fit its cell
+
+The strip is fixed geometry, so a cell cannot be given more room. What each one
+does about a value too long for it is a property of the field it draws, and
+there are three answers.
+
+**The title is lettered smaller.** It is the only value on the strip set above
+the strip's reading size, and it is read straight through rather than matched
+character by character against another document — so it gives up size before it
+gives up words, down to the subtitle's size and no further:
 
 ```python
-fs.title_block = TitleBlock(title="Ethanol Purification A300")
-fs.to_svg(page_size="A3", border="zone")
-for w in fs.warnings:
-    print(w)
-# [warning] text-truncated: title was truncated to fit its cell:
-#     'Ethanol Purification A300' drawn as 'Ethanol Purification A3…'
+fs.title_block = TitleBlock(title="Propylene Glycol Reaction")
+fs.to_svg(page_size="A3", border="zone")   # drawn whole, at 12.0 instead of 12.5
 ```
 
-A cell with nothing worth trimming is drawn in full and reported as
-`text-overruns-cell` instead: the company name, whose only break points are
-between words, and the `SHEET n of m` count, half of which reads as a different
-sheet. Both codes are rebuilt on every render, so shortening the field and
-rendering again clears the finding.
+**The company name wraps, and the sheet count is drawn whole.** Half a company
+name reads as a different company and half a sheet count as a different sheet,
+so neither is abbreviated: `company` breaks between words (never inside one, a
+hyphen nobody wrote being a different name again) and the count is drawn across
+its rule and reported.
+
+**Everything else is abbreviated with an ellipsis**, which is what a draughtsman
+does and what the cell immediately beside it makes necessary.
+
+Whichever it is, the finding names the field, quotes the value in full, and
+gives the width the value needs, the width the cell has and the ratio between
+them:
+
+```python
+fs.title_block = TitleBlock(title="Ethanol Purification and Dehydration Area A300")
+for w in fs.validate():          # no render needed: the cell widths are constants
+    print(w)
+# [warning] text-truncated: title was truncated to fit its cell:
+#     'Ethanol Purification and Dehydration Area A300' needs 299 of the 187
+#     units its cell has (1.6x), drawn as 'Ethanol Purification and De…'
+```
+
+**The name is the field you would edit, not the cell that drew it**, and where
+the two differ it is spelled `source -> cell`. Half the strip's cells draw a
+value some other field supplied — a blank `title` draws the flowsheet's name, a
+blank `scale` the ratio the sheet was fitted at, a blank `date` today's, the REV
+cell the newest revision's `rev`, and the newest revision's blank signatory
+cells the block's `drawn_by`/`checked_by`/`approved_by` — so a finding naming
+the cell would send you to a field you never set:
+
+```
+Flowsheet name -> title was truncated to fit its cell: …
+drawn_by -> revisions[0].by was truncated to fit its cell: …
+```
+
+The `SHEET n of m` cell is the reverse case, one cell from two fields, and is
+named `sheet/of_sheets`.
+
+A field of nothing but spaces is the blank it means. Whitespace is *truthy*, so
+`title="   "` used to defeat the fallback to the flowsheet's name, `status="  "`
+the em dash, `date="  "` today's date, and `client=" "` ruled an empty row and
+made the whole strip taller; all of them now behave exactly as leaving the field
+unset does. The DATE cell in particular is never blank on an issued sheet: state
+a date and it is drawn, state nothing — or nothing but spaces — and the day the
+sheet was rendered is.
+
+`sheet` and `of_sheets` are the two fields that default to something other than
+blank, and a blank one draws that default. `TitleBlock(sheet="")` is sheet 1 of
+1, not `SHEET  of 1`: half a count names no sheet, and it is short enough that
+no width check would ever have said so.
+
+A value you *did* state is drawn as stated, whatever its type. The fields are
+annotated `str` and nothing enforces it, so `TitleBlock(sheet=1, of_sheets=3)`
+works and always has — and so does `sheet=0`, which is a sheet number rather
+than a blank field. Only an unset or empty field takes a fallback.
+
+And `validate()` reports exactly what the sheet reports, for every field, in
+every state: unset, whitespace, a value the cell holds and one it cannot. The
+two read one strip through one function, so a finding you get before rendering
+is the finding the drawing makes — and a value the cell *can* hold is on both
+rendered sheets, which is the half agreement alone would not give you.
+
+`validate()` answers before anything is drawn, and every render asks the same
+question again and replaces the answer — `to_drawio()` as well as `to_svg()`, in
+the same words, since all three measure one strip with one set of cell widths.
+So shortening the field and rendering again clears the finding.
+
+Two fields can be lost without any cell overrunning, and both are reported too.
+A `company` name long enough to wrap past the depth of the strip is drawn out
+through the top and the bottom of it (`title-block-company-overflows`), and
+`drawn_by`/`checked_by`/`approved_by` on a block with no `revisions` are drawn
+nowhere at all, since the only BY / CHK'D / APP'D cells on the sheet belong to a
+revision row (`title-block-signatory-undrawn`).
 
 ### `Annotation` and `TableBox`
 
@@ -3432,6 +3516,10 @@ the sheet that came out.
 | `symbol-kind-unknown` | warning | a unit whose `kind` no symbol is registered for. It is drawn as a blank 60×60 box with no ports, which is what a `Unit` subclass from outside the package legitimately gets — and also what a misspelt `kind` gets. One finding per kind, with the nearest registered name |
 | `label-overruns-symbol` | warning | a `Block` given a `width` of its own too narrow for the name it letters inside the box, so the name is drawn out through both sides. A block left to size itself always fits |
 | `symbol-out-of-aspect` | warning | a `width`/`height` of a different shape from the symbol's own box, on a drawing that carries a **round** mark — today that is ISO item 20.6's drive motor, on a stirred vessel. The composition works the motor's size out from the body's box, so at any other shape it is drawn as an oval. A shell with no round mark on it may be any shape you like; see [Sizing a stirred vessel](#sizing-a-stirred-vessel) |
+| `text-truncated` | warning | a title-block field, or a revision row's, abbreviated to an ellipsis because its cell could not hold it. The message names the field, quotes the value in full, and gives the width the value needs, the width the cell has and the ratio; see [`TitleBlock` and `Revision`](#titleblock-and-revision) |
+| `text-overruns-cell` | warning | the same, for a cell with nothing worth abbreviating, which draws the value whole and across its rule: the `SHEET n of m` count, a single unbreakable word in `company`, and an `Annotation` given a `width` narrower than its own rows |
+| `title-block-company-overflows` | warning | a `company` name that wraps to more lines than the strip is deep, so it is drawn out through the top and the bottom of the block. The cell breaks between words and never inside one, so this is the one field the block can lose downwards |
+| `title-block-signatory-undrawn` | warning | a `drawn_by`/`checked_by`/`approved_by` the sheet does not draw. Those three fill the newest revision row's BY / CHK'D / APP'D cells and have nowhere else to go, so a block with no `revisions` has no row for them, and a newest revision stating a signatory of its own keeps the cell. One finding per cause; a row stating the same name is silent |
 | `drawio-approximated` | warning | `to_drawio()` only: a symbol draw.io has no stencil for, exported as a built-in stand-in that does not draw all of it. The message names the unit and what the stand-in loses; see [Editing the sheet by hand](#editing-the-sheet-by-hand) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
@@ -3451,8 +3539,16 @@ The findings split in two, and a render makes them at two different moments:
    `pin-not-finite`, `pin-out-of-bounds`, `symbol-kind-unknown`,
    `gravity-turned`, `symbol-out-of-aspect`, `letter-sequence`,
    `nozzle-unconnected`, `stream-name-reused`, `boundary-flow-missing`,
-   `stream-table-missing` and `deprecated`. Every one of these is a
-   property of what you wrote down.
+   `stream-table-missing`, `text-truncated`, `text-overruns-cell`,
+   `title-block-company-overflows`, `title-block-signatory-undrawn` and
+   `deprecated`. Every one of these is a property of what you wrote down.
+   The four title-block ones are there because every width the strip
+   rules is a constant: whether a value fits is settled by the block
+   alone, so `validate()` answers it on a sheet that has never been
+   rendered. A render measures the same strip again and replaces those
+   findings with its own, which describe the sheet that came out — the
+   one cell that can differ is the drawing number's, which shares its
+   band with the scale cell only once a `page_size` has fixed the page.
 2. `layout()` and `route()`.
 3. **Geometric checks**, over the frames and routes those produced:
    `unit-overlap`, `coincident-ports`, `nozzles-crowded`,

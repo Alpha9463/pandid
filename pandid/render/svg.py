@@ -2426,22 +2426,34 @@ def _scale_text(s: float) -> str:
 _FIT_CODES = ("text-truncated", "text-overruns-cell")
 
 
-def fit_issue(field: str, text: str, drawn: str) -> Issue:
+def fit_issue(field: str, text: str, drawn: str,
+              room: float, need: float) -> Issue:
     """One :data:`_FIT_CODES` finding, from what a cell was given and
     what it drew.
 
     The shape :data:`~pandid.render.furniture.Reporter` reports in, made
     into an :class:`~pandid.validate.Issue` here rather than in each
     backend: the draw.io exporter measures the same title strip with the
-    same functions, so the sentence a reader gets must not depend on
-    which file they exported.
+    same functions, and :func:`pandid.validate.model_issues` measures it
+    with no file at all, so the sentence a reader gets must not depend
+    on which of the three asked.
+
+    The two widths are the actionable half of the finding, stated the
+    way ``route-detour`` states its two lengths: how much room the cell
+    has, how much the value wanted, and the ratio between them, which is
+    what says whether a word has to come out or a whole phrase.
     """
+    # A box given ``width=0`` has no ratio to state, so the ratio is
+    # dropped rather than the finding.
+    span = (f"needs {need:.0f} of the {room:.0f} units its cell has"
+            + (f" ({need / room:.1f}x)" if room > 0 else ""))
     if drawn != text:
         return Issue("warning", "text-truncated",
                      f"{field} was truncated to fit its cell: "
-                     f"{text!r} drawn as {drawn!r}")
+                     f"{text!r} {span}, drawn as {drawn!r}")
     return Issue("warning", "text-overruns-cell",
-                 f"{field} is wider than the cell it is drawn in: {text!r}")
+                 f"{field} is wider than the cell it is drawn in: "
+                 f"{text!r} {span}")
 
 
 def _too_small(sheet: _Sheet, need_w: float, need_h: float,
@@ -2506,12 +2518,23 @@ def _sheet_title(fs: "Flowsheet") -> str:
     title the drawing is *issued* under, and what is lettered on it --
     and the flowsheet's own name otherwise. Either can be empty, and an
     empty accessible name is worse than none, so the caller drops
-    ``<title>`` rather than emitting a blank one.
+    ``<title>`` rather than emitting a blank one -- and a title of
+    nothing but spaces is one of those, being *truthy* and announced by
+    a screen reader as silence. Both are stripped to the blank they
+    mean, so the fallback to the flowsheet's name happens for either.
+
+    Read through the strip's own :func:`~pandid.render.furniture._field`
+    rather than restated here. Which of the two names the document is
+    *this* function's decision -- the accessible name is not title-strip
+    ink and does not follow the strip's fallbacks -- but what counts as
+    the author having stated a title is one question, and asked twice it
+    was answered twice: a copy of the read here kept the truthy test
+    after the strip stopped using it, so ``title=0`` would have been
+    lettered on the sheet and dropped from the document's name.
     """
     tb = fs.title_block
-    if tb is not None and tb.title:
-        return tb.title
-    return fs.name or ""
+    title = F._field(tb, "title") if tb is not None else ""
+    return title or str(fs.name or "").strip()
 
 
 def _provenance(fs: "Flowsheet") -> list[str]:
@@ -2642,8 +2665,9 @@ class SvgRenderer:
         free = None  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
 
-        def report(field: str, text: str, drawn: str) -> None:
-            fit_issues.append(fit_issue(field, text, drawn))
+        def report(field: str, text: str, drawn: str,
+                   room: float, need: float) -> None:
+            fit_issues.append(fit_issue(field, text, drawn, room, need))
 
         # Furniture belongs to the sheet, not to the border: a title
         # block or a docked box is drawn because it was supplied. A zone
@@ -2828,8 +2852,8 @@ class SvgRenderer:
         strip = fs.title_block is not None or border == "zone"
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
-        date = tb.date or datetime.now().strftime("%Y-%m-%d")
-        name = tb.title or fs.name
+        date = datetime.now().strftime("%Y-%m-%d")
+        name = fs.name
 
         items = [(a, a.align, *measure(a))
                  for a in getattr(fs, "annotations", []) or []]

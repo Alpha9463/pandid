@@ -166,11 +166,27 @@ class TitleBlock:
     so the pair is drawn. Either may be left blank and the line for it
     is not ruled.
 
+    ``sheet`` and ``of_sheets`` are the two halves of the ``SHEET n of
+    m`` count in the title band, and they are the only two fields that
+    default to something other than blank: a drawing with no set behind
+    it is sheet 1 of 1. **A blank half draws that default**, on both
+    backends and however the block is edited, because half a count reads
+    as a different sheet -- ``SHEET  of 1`` names no sheet at all, and
+    is short enough that no width check would ever have spoken up about
+    it.
+
     ``scale`` is the scale cell. Left blank, the sheet reports the ratio
     the renderer actually placed the drawing at, which is a real number
-    once ``page_size`` fixes the page; a drawing on a sheet sized to fit
-    it has no scale to state, so the cell is not ruled. Give the field a
-    value (``"NTS"``, ``"1:100"``) to state one regardless.
+    once ``page_size`` fixes the page and nothing at all on a sheet
+    sized to fit its drawing, which is at no scale to state. Give the
+    field a value (``"NTS"``, ``"1:100"``) to state one regardless.
+
+    The cell is **ruled either way**. A title block is a form and its
+    boxes belong to the form, so an unstated scale leaves an empty box
+    rather than removing one -- and the three cells beside it keep their
+    widths, which is what stops ``drawing_number`` being budgeted one
+    width by ``to_svg()`` and a narrower one by
+    ``to_svg(page_size=...)``.
     """
     title: str = ""
     subtitle: str = ""

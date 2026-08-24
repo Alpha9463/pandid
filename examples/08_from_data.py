@@ -128,7 +128,7 @@ SPEC = {
         "company": "PANDID",
         "status": "ISSUED FOR REVIEW",
         "sheet": "1", "of_sheets": "2",
-        "drawn_by": "A. Anderson", "checked_by": "J. Smith", "approved_by": "R. Lee",
+        "drawn_by": "AA", "checked_by": "JS", "approved_by": "RL",
         "revisions": [
             {"rev": "A", "date": "2026-05-18", "description": "Issued for internal review",
              "by": "AA"},

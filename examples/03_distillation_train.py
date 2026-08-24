@@ -198,7 +198,10 @@ def main():
         company="PANDID",
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="3", scale="NTS",
-        drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",
+        # The initials the revision rows carry: these three fill the newest
+        # row's BY / CHK'D / APP'D cells, which is the only place the strip
+        # letters a signatory, so a fuller name here is one the sheet cannot draw.
+        drawn_by="AA", checked_by="JS", approved_by="RL",
         revisions=[
             Revision("A", "2026-06-01", "Issued for internal review", "AA"),
             Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),

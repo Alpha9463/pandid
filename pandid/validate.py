@@ -802,6 +802,113 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"the series clear of the names already in use with "
             f"Flowsheet(stream_number_start=...)"))
 
+    # --- a title-block cell that cannot hold what it was given ---
+    # The strip is fixed geometry (ISO 5457 for where it sits, ISO 7200
+    # for what goes in it), so a value longer than its cell is lettered
+    # smaller, abbreviated, or drawn across the rule -- one of the three,
+    # field by field, and the choice is
+    # :func:`~pandid.render.furniture.title_strip_layout`'s. Whichever it
+    # is, the author has to hear about it: an accepted value silently
+    # altered and then issued is what this whole module exists to stop,
+    # and a drawing number is exactly the field an ellipsis turns into
+    # somebody else's document.
+    #
+    # Asked *here*, in the model half, because every width the strip
+    # rules is a constant: the answer needs no page size, no layout and
+    # no routing, so `validate()` can give it before a render exists
+    # rather than only describing one that already happened. The two
+    # renderers ask the same function while they draw and replace these
+    # with their own -- see ``_FIT_CODES`` in :mod:`pandid.render.svg` --
+    # so the finding is made once however many ways the sheet comes out.
+    if fs.title_block is not None:
+        from datetime import datetime
+
+        from pandid.render.furniture import (company_overflow,
+                                             title_strip_fit,
+                                             undrawn_signatories)
+        from pandid.render.svg import fit_issue
+
+        tb = fs.title_block
+        # The two fallbacks handed over *unchosen*, exactly as both
+        # renderers hand them over: the strip picks between the block's
+        # value and these, and it picks after reading whitespace as the
+        # blank it means. Choosing here instead is what made a title of
+        # spaces a truncation the sheet reported and this did not -- the
+        # finding has to describe the sheet that will be drawn, and the
+        # only way to be sure of that is to ask it the same question.
+        warnings.extend(fit_issue(*found) for found in title_strip_fit(
+            tb, fs.name, datetime.now().strftime("%Y-%m-%d")))
+
+        # --- a company name that wraps out through the strip ---
+        # The one cell of the strip that answers a long value by
+        # *growing*, and the one that can therefore lose it in a
+        # direction the width checks above cannot see: every wrapped
+        # line is inside its own cell, and the stack of them is not
+        # inside the strip. Centred on the depth, so it runs out of both
+        # ends at once -- over the drawing above and off the sheet
+        # below.
+        over = company_overflow(tb)
+        if over is not None:
+            rows, room, need = over
+            warnings.append(Issue(
+                "warning", "title-block-company-overflows",
+                f"company={tb.company!r} wraps to {rows} lines and needs "
+                f"{need:.0f} of the {room:.0f} units the strip is deep "
+                f"({need / room:.1f}x), so it is drawn out through the top and "
+                f"the bottom of the block. The cell breaks between words and "
+                f"never inside one: shorten the name, or state the trading name "
+                f"the drawing office puts on a sheet"))
+
+        # --- a signatory the strip does not letter ---
+        # ``drawn_by``/``checked_by``/``approved_by`` are *backfills*:
+        # the strip letters them into the BY/CHK'D/APP'D cells of the
+        # newest revision row, which is the only place on the sheet
+        # those three columns exist. Which of them the strip does not
+        # letter is :func:`~pandid.render.furniture.
+        # undrawn_signatories`, asked rather than worked out again --
+        # it is the same question the strip answers when it fills the
+        # row. It goes undrawn two ways:
+        #
+        # * there is no revision at all, so there is no row to fill; or
+        # * the newest revision states a signatory of its own, which is
+        #   the more specific claim and wins the cell.
+        #
+        # Both end with the sheet issuing without the creator or the
+        # approver ISO 7200 4.3 makes mandatory data fields, so both are
+        # reported, and separately: the cure differs. A row that states
+        # the *same* name is not reported -- the value is on the sheet,
+        # and which field put it there is nobody's problem.
+        #
+        # Reported rather than drawn: ruling a row for a revision the
+        # drawing office never raised would put a revision history on
+        # the sheet to carry two initials, and the revision is the thing
+        # being signed for.
+        unfilled = [f"{field}={value!r}"
+                    for field, value, displaced in undrawn_signatories(tb)
+                    if not displaced]
+        overridden = [f"{field}={value!r} ({displaced} is drawn)"
+                      for field, value, displaced in undrawn_signatories(tb)
+                      if displaced]
+        if unfilled:
+            warnings.append(Issue(
+                "warning", "title-block-signatory-undrawn",
+                f"the title block sets {_and(unfilled)}, and the sheet draws "
+                f"{'none of them' if len(unfilled) > 1 else 'it nowhere'}. "
+                f"Those fields fill the BY / CHK'D / APP'D cells of the newest "
+                f"revision row, and a block with no revisions has no row for "
+                f"them to fill. Add the revision they signed, "
+                f"revisions=[Revision('0', '<date>', '<description>')], or "
+                f"name them on it directly with Revision(..., by=, checked=, "
+                f"approved=)"))
+        if overridden:
+            warnings.append(Issue(
+                "warning", "title-block-signatory-undrawn",
+                f"the title block sets {_and(overridden)}, so the sheet draws "
+                f"the revision's name and not the block's. The row is the more "
+                f"specific claim and keeps the cell; what is left is a "
+                f"block-level value on no sheet. Drop it, or take the name off "
+                f"the revision and let the block fill the row"))
+
     # --- an ingoing or outgoing material with nothing to report ---
     # ISO 10628-1:2014 4.3.2, *Process flow diagram*, lists what a PFD
     # must carry at a minimum. Item d) is the name of each ingoing and

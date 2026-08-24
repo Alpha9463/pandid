@@ -113,8 +113,8 @@ def main():
         sheet="1",
         of_sheets="1",
         scale="NTS",
-        drawn_by="A. Anderson",
-        checked_by="J. Smith",
+        drawn_by="AA",
+        checked_by="JS",
         # Fixed rather than left blank: left blank, the renderer fills
         # in today's date and the sheet moves by a day on every re-
         # render.

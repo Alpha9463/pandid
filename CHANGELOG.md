@@ -433,6 +433,188 @@ class hierarchy, or what it is called.
   days after its last revision. `test_the_generator_leaves_a_date_the_sheet_states_alone`
   now asks that question directly.
 
+- **A title block that does not fit its box is no longer settled quietly**
+  (#370). Every cell of the strip measured its value and abbreviated it, and
+  every one of those decisions reached the author only as ink: `validate()` said
+  nothing, and the finding a render did make named the field and quoted the
+  value without saying by how much it missed. Four things change.
+
+  **The drawing title is lettered smaller rather than abbreviated.** It is the
+  only value on the strip set above the strip's reading size, and the only one
+  read straight through instead of matched character by character against
+  another document -- so it has size to give back before it has meaning to give
+  up. It is set down to whatever fits, floored at the subtitle's size so the
+  band cannot say the wrong thing about which line is the title, and abbreviated
+  only below that. `examples/17_stirred_reactor_train` is the shipped sheet this
+  moves: *Propylene Glycol Reaction* was being issued as *Propylene Glycol
+  Reacti…*, and is now drawn whole at 12,0 in place of 12,5.
+
+  **How much of a value survives is decided the way its width is measured** --
+  and `text_width` measures two ways, so `clip` now cuts two ways, on the same
+  test. The cut used to be `int(room / (size * _ADV)) - 1` for everything:
+  characters at the *Latin* advance, while the decision to cut at all was
+  `text_width`'s, which charges a CJK or fullwidth codepoint a full em and a
+  combining mark nothing. The two disagreed by the ratio between those rates, so
+  a fullwidth title kept 28 characters measuring 290 units for a 187-unit cell
+  and was drawn straight through the sheet count beside it, on every page size
+  from A4 to A0.
+
+  A string of narrow codepoints alone measures `len(s) * size * adv`, a closed
+  form, and keeps the cut that inverts it -- exact, and the arithmetic every
+  sheet this package has drawn was cut by. Anything with a wide codepoint or a
+  combining mark in it has no such closed form and is walked forward through the
+  one expression `text_width` evaluates, so the prefix kept is a prefix
+  `text_width` agrees fits.
+
+  **Making *both* ends walk was the obvious repair and the wrong one.** Summing
+  per-character widths lands a rounding away from the same characters measured
+  whole, so seventy room/size pairs over a sweep of the strip's own type sizes
+  cut a character earlier or later than they always had -- 30 characters fit a
+  126-unit cell at 7,5 exactly, and the walk kept 29. That is `_total`'s
+  complaint about `sum()` pointed at a different pair of numbers, and the answer
+  is the same one: measure and use the identical arithmetic. A sweep of 16 772
+  width/size/weight cases holds both halves.
+
+  **`validate()` reports an over-long field before anything is drawn.** Every
+  width the strip rules is a constant, so whether a value fits is settled by the
+  block alone; the check now runs in the model half, where it can reach the
+  author rather than describe a sheet that has already been issued. A render
+  measures the same strip and replaces the findings with its own.
+
+  **The finding says by how much, and names the field you would edit.**
+  `text-truncated` and `text-overruns-cell` now give the width the value needs,
+  the width the cell has and the ratio between them, the way `route-detour`
+  states its two lengths -- so the author reads how much has to come out instead
+  of guessing.
+
+  And the name is the *source*, not the cell, spelled `source -> cell` where the
+  two differ. Half the strip's cells draw a value some other field supplied, and
+  every one of them named the cell: a blank `title` drew the flowsheet's name and
+  reported `title`, a blank `scale` the fitted ratio, a blank `date` today's, the
+  REV cell the newest revision's `rev`, and a backfilled `drawn_by` reported
+  `revisions[0].by`. Each sent the author to a field they had never set. The
+  `SHEET n of m` cell is the reverse case -- one cell, two fields -- and is named
+  `sheet/of_sheets` rather than `sheet`.
+
+  **One thing to fix is one finding.** The company cell stacks its name over
+  several lines, so a group of companies repeating a word too wide to break
+  reported that word once per line. Findings are de-duplicated over the whole
+  layout, in one place rather than at each of the three that collect them.
+
+  **Two fields could be lost without any cell overrunning, and both now say
+  so.** A `company` name that wraps to more lines than the strip is deep was
+  drawn out through the top and the bottom of the block in silence
+  (`title-block-company-overflows`). And `drawn_by`/`checked_by`/`approved_by`
+  fill the newest revision row's BY / CHK'D / APP'D cells and have nowhere else
+  to go, so they went undrawn two ways -- a block with no revisions has no row
+  for them, and a newest revision that states a signatory of its own keeps the
+  cell. Both are `title-block-signatory-undrawn`, one finding per cause; a row
+  stating the *same* name is silent, since the value is on the sheet and which
+  field put it there is nobody's problem. Two of ISO 7200's mandatory data
+  fields, accepted and dropped.
+
+  **A field of nothing but spaces is the blank it means.** Whitespace is
+  *truthy*, so it defeated every fallback the block has: `title="   "` drew
+  three spaces instead of the flowsheet's name, `status` and `drawing_number`
+  lost their em dash, a whitespace `scale` turned the four-cell bottom band on
+  with nothing to put in it, a whitespace `client` or `project` ruled an empty
+  row and made the whole strip *taller*, and a whitespace `company` was
+  accepted, wrapped to no lines and drawn nowhere. Six of the block's fields
+  answered differently from the blank they mean, and the SVG's `<title>` -- the
+  document's accessible name -- was emitted as spaces where the code that drops
+  an empty one could not see it. All of them are read through one function now,
+  at the read rather than on the dataclass, since `fs.title_block.title = ...`
+  is the documented way to shorten a field and re-render.
+
+  That is #494's reproduction too, which found the same defect from the other
+  side: `TitleBlock(date="   ")` left `tb.date == "   "` and drew a visually
+  blank DATE cell on an issued sheet. The block is still exactly what the author
+  typed -- the normalising is done at the read, not on the dataclass -- and it
+  is the cell that stops being blank.
+
+  **And a blank half of the sheet count takes the block's own default.**
+  `sheet` and `of_sheets` are the only two fields of `TitleBlock` that default
+  to something other than blank -- a drawing with no set behind it is sheet 1 of
+  1 -- and left blank they drew `SHEET  of 1`, a count naming no sheet, on both
+  backends and with nothing reported: the string as a whole sits well inside its
+  55 units, so no cell was over its room and there was nothing for a width check
+  to say. Half a sheet count reads as a *different sheet*, which is why that
+  slot draws a long count whole rather than abbreviating it, and an empty half
+  is the same loss with none of the ink. The fallback is read off the dataclass
+  rather than written into the strip, so what an author sees in the block's
+  signature is what a blank field draws, and the next field given a default is
+  settled the day it is added.
+
+  **And a value the author stated is drawn as stated, whatever its type.**
+  Every field of the block is annotated `str` and nothing enforces it, so
+  `TitleBlock(sheet=1, of_sheets=3)` is an ordinary thing to type and has always
+  worked -- `str(1)` is `"1"`. Reading a field for *truthiness* rather than for
+  whether it was set broke that for the falsey half: `sheet=0` was discarded as
+  blank and then filled in with the field's default, so an author who stated
+  sheet 0 was issued sheet **1**. That is this entry's own subject committed by
+  the fallback above -- one stated value silently changed to another, which is
+  worse than the blank the fallback exists for, because blank at least meant
+  unset. The read now asks whether the field is `None`, and everything else is
+  drawn as written. Refusing a non-string at the door was the other defensible
+  answer and is not the one taken: it would break `sheet=1`, which reads
+  naturally, works today and has nothing to do with the defect. The SVG's
+  accessible document name asks the same question through the same function
+  rather than keeping a second copy of the test, which is how it came to be the
+  one read still deciding by truthiness.
+
+  **Both fallbacks are the strip's, and are chosen after that read.** A blank
+  title draws the flowsheet's name and a blank date today's, and both choices
+  used to be made by each of the three callers, on the raw value -- so
+  whitespace passed them and *then* normalised to nothing, with the value it
+  should have fallen back to already thrown away. A `date` of spaces issued a
+  sheet with an empty DATE cell, and a `title` of spaces was a truncation the
+  drawing reported and `validate()` did not, the two having answered different
+  questions about one block. The renderers and the validator now hand both
+  fallbacks over unchosen.
+
+  What that buys is the guarantee the whole finding rests on: over every field
+  of the block in all three states -- unset, blank (whitespace, which is the
+  blank it means) and stated but unfittable -- `validate()` reports word for
+  word what the rendered sheet reports, and what `to_drawio()` reports. Each
+  case also asserts *which* findings it must produce, so three silences do not
+  satisfy it.
+
+  **The drawing number now has one budget, however the sheet is asked for.**
+  The bottom band is ruled at four fixed shares whether or not there is a scale
+  to write in the scale box. It used to rule three when there was none and hand
+  the room back to the cells that identify the drawing -- and the scale cell
+  appears when the block states a scale *or* when a page size lets the renderer
+  state the ratio it fitted the drawing at. So `drawing_number` was budgeted 118
+  units by `to_svg()` and 88 by `to_svg(page_size="A3")`: the same
+  `PFD-111111111` fitted one call and was silently abbreviated by the other, and
+  no check that had not been told the page size could say which. A fixed slot is
+  what `_SHEET_W` already does for the title, for the same reason -- and it is
+  what lets the model check measure this band at all, every width in it now
+  being a constant.
+
+  A title block is a form: its boxes are ruled by the form and filled in by the
+  drawing, so an unstated scale leaves an empty box rather than removing one.
+  Four shipped sheets gain a ruled SCALE box and their DRAWING No / DATE / REV
+  cells take the widths the other seventeen already had: `08_from_data`,
+  `13_mineral_dewatering`, `16_demineralised_water` and `21_alumina_refinery`.
+
+  Those three cells carry **initials**, being the only signatory cells the strip
+  rules, so `examples/03`, `08` and `09` now set `drawn_by="AA"` in place of
+  `drawn_by="A. Anderson"`. The full names were never drawn -- the revision rows
+  state their own -- and would have been abbreviated to `A. An…` had those rows
+  left the cells free. No drawing changes.
+
+  The sweep behind it covers all fourteen scalar fields of `TitleBlock` and all
+  six of `Revision`, and it takes that list from `dataclasses.fields` rather
+  than writing it out: a field added to the block is swept the day it appears.
+  Each field is swept in four states -- unset, blank, a value its cell holds and
+  one it cannot -- and the third asserts the value reaches *both* rendered
+  files, in **every cell ruled for it**. A cell that draws nothing overruns no
+  room, so it is silent, so the validator and the two renderers agree about it
+  perfectly; that is where `SHEET  of 1` lived. Counted per cell rather than
+  searched for across the document, because `Revision.rev` is drawn twice -- the
+  grid's REV column and the bottom band's REV box -- and either copy alone
+  answers a search of the whole sheet.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on
