@@ -79,8 +79,11 @@ The flowsheets are rebuilt inline in `test_golden.py` rather than by running
 effect a test suite shouldn't have) and `03`'s and `08`'s `TitleBlock`s leave
 `date` empty, which `SvgRenderer` fills in with `datetime.now()`. The fixture
 sets an explicit fixed date instead, per the "prefer a fixture over regexing
-it out" rule for anything that varies run to run. `10` and `11` state their own
-dates, so those two need no pinning.
+it out" rule for anything that varies run to run. It sets the date the sheet's
+own newest revision states — the date it was issued at, and the value
+`scripts/gallery.py` stamps into that same blank field — so the two committed
+artefacts made from those examples date them alike rather than one cell apart.
+`10` and `11` state their own dates, so those two need no pinning.
 
 Each golden is nevertheless compared against **both** copies. A rebuilt fixture
 is a copy, and a copy drifts: #230 corrected real people's initials in
@@ -91,8 +94,7 @@ imports each example with `Flowsheet.render` replaced (reusing the capture in
 `scripts/gallery.py`, so nothing is written anywhere), renders what the example
 was about to draw, and compares it against this same file. If it fails, one of
 the two copies is wrong: fix that one, and do not regenerate the golden until
-they agree. The only field it does not take from the example is the blank `date`
-on `03` and `08`, which it pins to the fixture's value for the reason above.
+they agree. Every field is taken from the example; there is none it excepts.
 
 Comparisons run on *normalized* text (see `_normalize` in `test_golden.py`),
 which canonicalizes two things and leaves every other line to compare verbatim,

@@ -37,7 +37,13 @@ committed artefact and a freshness check that could never compare exactly.
 :func:`_stamp` fills that field, before the render, with the newest revision's
 date: the date the sheet was in fact issued at, taken from the sheet's own
 revision history rather than from a constant kept in step by hand.
-``tests/test_golden.py`` pins the same field for the same reason.
+``tests/test_golden.py`` pins the same field, to the same value, so the golden
+and the gallery sheet made from one example are the same drawing rather than two
+that differ in one cell;
+``test_no_fixture_dates_a_sheet_differently_from_the_generator`` holds them to
+it. Only a *blank* field is filled: a date the author stated is theirs, and
+replacing it would ship a drawing dated a day nobody typed
+(``test_the_generator_leaves_a_date_the_sheet_states_alone``).
 """
 
 import argparse

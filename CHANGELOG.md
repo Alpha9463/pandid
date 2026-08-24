@@ -381,6 +381,34 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- The **two committed sheets made from one example no longer disagree about the
+  date that example leaves blank** (#491). `03_distillation_train` and
+  `08_from_data` state no `TitleBlock.date`, so `SvgRenderer` fills the cell with
+  `datetime.now()` — right for a sheet drawn today, impossible for one committed
+  to a repository. Both artefacts made from them therefore pinned that field, and
+  they pinned it *differently*: `tests/golden/` to the arbitrary constant
+  `2026-01-01`, `docs/gallery/` to the newest revision's date. The two sheets
+  stood permanently one cell apart, and the cost was not the cell — it was that
+  `test_the_example_draws_the_same_sheet_as_its_fixture` had to carry
+  `_DATE_LEFT_TO_THE_RENDERER`, a list of which sheets were allowed to differ in
+  which field, stated across all twenty-one scenarios to describe two.
+
+  The fixtures now pin what the generator derives: the date of the sheet's own
+  newest revision, which is the date it was issued at (`03` → `2026-08-01`,
+  `08` → `2026-07-02`, both read off the revision rows those sheets already
+  draw). The exception is deleted, not merely unused, and the two goldens move by
+  the one DATE line each — which now agrees with the REV cell beside it.
+  `test_no_fixture_dates_a_sheet_differently_from_the_generator` asserts the
+  invariant over every scenario rather than the two, so an example that *starts*
+  leaving its date blank is caught when it is written.
+
+  `scripts/gallery.py`'s substitution still fills only a **blank** field; a date
+  an author stated is theirs. That was measured rather than assumed: made
+  unconditional, an overwriting `_stamp` is caught by exactly one of the
+  twenty-one sheets, and only because `11_ethanol_pid` happens to be dated five
+  days after its last revision. `test_the_generator_leaves_a_date_the_sheet_states_alone`
+  now asks that question directly.
+
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on
