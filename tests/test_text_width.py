@@ -118,6 +118,10 @@ FLAT_RATE_ERROR = [
     ("STREAM NUMBER", False, -17),
     ("PROCESS FLOW DIAGRAM", False, -14),
     ("Pump", False, -14),
+    ("MMMMMMMM", False, -33),
+    ("Mass Flow (kg/h)", False, +18),
+    ("0.0441 kg/kg total", False, +28),
+    ("Ethanol Purification A300", False, +25),
     ("Fermentation and Beer Stripping Section", False, +21),
 ]
 
