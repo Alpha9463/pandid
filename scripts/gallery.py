@@ -5,9 +5,11 @@ The gallery is the first thing a reader sees and the last generated artefact
 that had nothing holding it to its source. It drifted: `04_control_loop.svg` sat
 on `main` for a dozen rendering PRs showing a drawing the package had stopped
 producing. This script is the one command that rebuilds it, and
-`tests/test_gallery.py` is what fails when the committed copy is not what it
-emits -- the same pairing `scripts/vendor_symbols.py` and `scripts/gen_devices.py`
-already have with their own generated files.
+`tests/test_gallery.py` is what fails when the committed copy stops being the
+drawing its golden holds -- the same pairing `scripts/vendor_symbols.py` and
+`scripts/gen_devices.py` already have with their own generated files, with the
+render behind it left to `tests/test_golden.py` rather than run a third time
+(#302).
 
 Run:  python scripts/gallery.py
 

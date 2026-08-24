@@ -10,9 +10,10 @@ These are **generated, not hand-drawn**. One command rebuilds all of them:
 python scripts/gallery.py
 ```
 
-`tests/test_gallery.py` renders every example and compares, so a sheet left
-stale fails the suite instead of sitting on `main` showing a drawing the package
-has stopped producing.
+`tests/test_gallery.py` checks every sheet here against the regression fixture
+for the same drawing in `tests/golden/`, so a sheet left stale fails the suite
+instead of sitting on `main` showing a drawing the package has stopped
+producing.
 
 The generator draws each sheet under its example's stem. Run an example yourself
 and it writes its own name into `examples/` (gitignored) instead:

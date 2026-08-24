@@ -388,10 +388,10 @@ them by `scripts/gallery.py`, as `docs/gallery/README.md` describes:
 python scripts/gallery.py
 ```
 
-`tests/test_gallery.py` holds the committed sheets to a fresh render, the same
-way `_vendored_symbols.py` and `pandid/devices.py` are held to their generators,
-so a rendering change that moves a sheet turns the suite red until the gallery
-is rebuilt and committed with it. If you add an example, run that command and
+`tests/test_gallery.py` holds the committed sheets to the goldens in
+`tests/golden/`, and `tests/test_golden.py` holds those to a fresh render of
+every example, so a rendering change that moves a sheet turns the suite red
+until the gallery is rebuilt and committed with it. If you add an example, run that command and
 commit its two files in the same PR, add a section for it to
 `docs/gallery/README.md`, and consider adding the scenario to
 `tests/test_golden.py`.

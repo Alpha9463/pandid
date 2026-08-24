@@ -1,4 +1,4 @@
-"""``docs/gallery/``: the committed sheets, against the examples they came from.
+"""``docs/gallery/``: the committed sheets, against the goldens of the same drawings.
 
 The gallery is generated -- twenty-one examples rendered to SVG and rasterised to
 PNG by ``scripts/gallery.py`` -- and until this file existed nothing held it to
@@ -11,19 +11,43 @@ re-rasterise is coming"; what was missing was anything that noticed it had not.
 That is the same gap ``_vendored_symbols.py`` had before #150 and ``docs/api.md``
 had before #179, and this is the same answer: regenerate and compare.
 
-**Why the whole gallery, on every push.** Rendering all twenty-one sheets costs
-about 5 s, four fifths of it example 11 and most of the rest example 14 --
-measured, not assumed. That is small
-enough that the two cheaper designs both cost more than they save. Checking only
-the sheets whose example changed would have let this very drift through, since
-the change that stales a sheet is often in ``pandid/`` rather than in the
-example; and it needs a diff base, which a shallow CI clone does not reliably
-have. Leaving it to a scheduled job means finding out after the merge.
+**Why the golden and not a fresh render.** The sheet under ``docs/gallery/`` and
+the one under ``tests/golden/`` are the same drawing out of the same example, so
+re-rendering every example here asserted a third time what ``tests/test_golden.py``
+already asserts twice: that ``examples/NN.py`` draws what is committed. #302
+measured what the third copy cost -- rewording one SVG comment, a change that
+moves no geometry at all, failed 64 tests, of which 43 carried all of the
+information. So this compares the two *committed* artefacts to each other and
+leaves the renderer to ``test_golden.py``, which renders every example already,
+and does it twice: from its own fixture and from the example.
+
+The two corpora are one corpus, which is what makes that sound:
+``test_golden.test_every_example_has_a_fixture`` asserts its scenarios are
+exactly :func:`gallery.sheets`, so every sheet here has a golden behind it and
+every golden is held to the example that draws it. A stale gallery still fails
+here -- against the drawing the example is known to draw, rather than against a
+third render of it.
+
+What is no longer re-run is :func:`gallery.render`, and only its own two lines:
+the capture underneath it still runs over every example, since ``test_golden``'s
+pass over the examples goes through that same :func:`gallery.flowsheet`, and
+:func:`gallery._stamp` runs below. So a sheet regenerated through a broken
+``to_svg`` or ``normalize`` is caught on the run after the regeneration rather
+than on the one that broke it. That is the whole of what this trades away.
+
+**Why the whole gallery, on every push.** Comparing every sheet is two file reads
+apiece now, so neither cheaper design is worth the failure mode it brings.
+Checking only the sheets whose example changed would have let this very drift
+through, since the change that stales a sheet is often in ``pandid/`` rather
+than in the example; and it needs a diff base, which a shallow CI clone does not
+reliably have. Leaving it to a scheduled job means finding out after the merge.
 
 **Why the SVG is compared exactly and the PNG is not.** The SVG is deterministic:
-given the same code it is the same text, once ``<defs>`` ordering is
-canonicalised (:func:`gallery.normalize`, the rule ``tests/test_golden.py``
-applies for the same reason). A PNG is a raster, and its bytes come out of
+given the same code it is the same text, once ``<defs>`` ordering is canonicalised
+and the provenance block -- which names a version, and so moves at every release
+-- is dropped. Both rules are :func:`test_golden._normalize`, imported rather
+than restated: comparing two files is worth only as much as the two sides having
+been canonicalised by the same rule. A PNG is a raster, and its bytes come out of
 whichever PDFium build and font substitution the machine that made it had, so
 comparing them across a five-interpreter Linux matrix against a file made on one
 developer's machine would be a flake and not a check. What is checked about the
@@ -40,8 +64,11 @@ import struct
 
 import pytest
 
+from test_golden import _DATE_LEFT_TO_THE_RENDERER, SCENARIOS, _normalize
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GALLERY = ROOT / "docs" / "gallery"
+GOLDEN = ROOT / "tests" / "golden"
 EXAMPLES = ROOT / "examples"
 
 
@@ -65,17 +92,6 @@ SHEETS = gallery.sheets()
 REGENERATE = "    python scripts/gallery.py\n"
 
 
-@pytest.fixture(scope="module")
-def rendered():
-    """Every example rendered once, keyed by sheet name.
-
-    Module-scoped because the corpus is the expensive part of this file and
-    every test below wants all of it: rendered per-test it would be twenty
-    renders a test rather than twenty in total.
-    """
-    return {stem: gallery.render(stem) for stem in SHEETS}
-
-
 def _png_size(data: bytes) -> tuple[int, int]:
     """A PNG's pixel dimensions, out of its IHDR.
 
@@ -90,36 +106,69 @@ def _png_size(data: bytes) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------
-# The committed sheets, against a fresh render of the examples
+# The committed sheets, against the goldens of the same drawings
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_the_committed_sheet_is_what_the_example_draws_today(rendered, stem):
+def test_the_committed_sheet_is_the_drawing_its_golden_holds(stem):
     """A gallery that has drifted shows a reader a drawing nobody can produce."""
     path = GALLERY / f"{stem}.svg"
     if not path.exists():
         pytest.fail(f"docs/gallery/{stem}.svg is missing. Run\n\n{REGENERATE}", pytrace=False)
-    committed = gallery.normalize(path.read_text(encoding="utf-8"))
-    fresh = rendered[stem]
-    if committed != fresh:
+    committed = _normalize(path.read_text(encoding="utf-8"))
+    golden = _normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8"))
+    if stem in _DATE_LEFT_TO_THE_RENDERER:
+        golden = _dated_as_the_gallery_dates_it(stem, golden)
+    if committed != golden:
         pytest.fail(
-            f"docs/gallery/{stem}.svg is not what examples/{stem}.py draws today.\n"
+            f"docs/gallery/{stem}.svg is not the drawing tests/golden/{stem}.svg holds.\n"
             f"The gallery is generated; regenerate it with\n\n{REGENERATE}\n"
-            "and commit the result with the change that moved it.\n\n" + _diff(committed, fresh),
+            "and commit the result with the change that moved it. Neither file here is a "
+            "render, so if tests/test_golden.py is failing as well, that is the one to read "
+            "first.\n\n" + _diff(committed, golden),
             pytrace=False,
         )
 
 
-def _diff(committed: str, fresh: str, context: int = 2) -> str:
+def _dated_as_the_gallery_dates_it(stem: str, golden: str) -> str:
+    """*golden*'s text with its pinned date cell replaced by the gallery's.
+
+    ``03`` and ``08`` leave ``TitleBlock.date`` blank for ``SvgRenderer`` to fill
+    in with today's, which is a date no committed artefact can carry -- so both
+    of them pin it, and they pin it differently: the fixture in
+    ``test_golden.py`` to a constant, ``scripts/gallery.py`` to the newest
+    revision's date, the date the sheet was in fact issued at. Neither is wrong
+    and neither is drift; the example gives the two nothing to agree on. It is
+    the one field on which the two committed artefacts are expected to differ.
+
+    Both dates come off the fixture, and the second comes off it through
+    :func:`gallery._stamp` -- the generator's own rule, run here rather than
+    restated, so a change to how the gallery dates a sheet moves this with it.
+    The swap is one cell and is checked to be: every other line still has to
+    match, and a golden that no longer carries that date fails here rather than
+    quietly comparing unchanged.
+    """
+    fs = SCENARIOS[stem][0]()
+    pinned = fs.title_block.date
+    fs.title_block.date = ""  # back to what the example leaves for the renderer
+    gallery._stamp(fs)
+    cell = f">{pinned}<"
+    assert golden.count(cell) == 1, (
+        f"tests/golden/{stem}.svg does not carry the fixture's date {pinned} in exactly one cell"
+    )
+    return golden.replace(cell, f">{fs.title_block.date}<")
+
+
+def _diff(committed: str, golden: str, context: int = 2) -> str:
     """First divergence with a little context -- not a 70 KB dump."""
-    old, new = committed.split("\n"), fresh.split("\n")
+    old, new = committed.split("\n"), golden.split("\n")
     total = max(len(old), len(new))
     row = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
     out = [f"first divergence at line {row + 1} of {total}:"]
     for k in range(max(0, row - context), min(total, row + context + 1)):
         mark = ">>" if k == row else "  "
-        for label, lines in (("committed", old), ("rendered ", new)):
+        for label, lines in (("gallery", old), ("golden ", new)):
             out.append(f"{mark} [{k + 1}] {label}: {lines[k] if k < len(lines) else '<no line>'}")
     return "\n".join(out)
 
@@ -231,17 +280,19 @@ def test_an_example_shows_the_drawio_export():
 
 
 @pytest.mark.parametrize("stem", _exporters(), ids=_exporters())
-def test_the_export_is_not_counted_as_a_second_sheet(rendered, stem):
+def test_the_export_is_not_counted_as_a_second_sheet(stem):
     """:func:`gallery.flowsheet` refuses an example that draws two sheets, and an
     example that exports calls ``render()`` twice. What the second call writes is
     the same drawing in a second format, so it is passed over and the count goes
     on meaning what it says for a file that really does draw two.
 
-    The ``rendered`` fixture is the check: it runs ``flowsheet(stem)``, which
-    raises ``SystemExit`` if the ``.drawio`` write is counted as a sheet."""
+    The call below is the check: it raises ``SystemExit`` if the ``.drawio``
+    write is counted as a sheet. It builds the flowsheet and stops there --
+    nothing in this file renders one."""
     source = (EXAMPLES / f"{stem}.py").read_text(encoding="utf-8")
     assert source.count(".render(") >= 2, "an exporting example writes its sheet as well"
-    assert rendered[stem], "and the generator still gets exactly one sheet out of it"
+    fs, _ = gallery.flowsheet(stem)
+    assert fs.units, "and the generator still gets the example's own flowsheet out of it"
 
 
 # ---------------------------------------------------------------------------
