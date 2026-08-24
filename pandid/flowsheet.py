@@ -6,9 +6,10 @@ one-stream-per-port rule.
 """
 
 from __future__ import annotations
+from contextlib import contextmanager
 from pathlib import Path
 from string import Formatter
-from typing import Any, Callable, TYPE_CHECKING, TypeVar
+from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
 
 # A runtime import and not a TYPE_CHECKING one: every flowsheet builds
 # its own StreamTableOptions. pandid.document imports nothing from this
@@ -65,6 +66,61 @@ DEFAULT_LOOP_NUMBER_START = 101
 #: set of its own: see :data:`~pandid.render.svg._INLINE_BODIES`, a
 #: strict subset of this one.
 INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
+
+#: The kinds of container an attribute can hold that a render could
+#: mutate *in place* rather than rebind. Restoring one means putting its
+#: contents back into the object that was there, not hanging a new
+#: object with the right contents off the same name: a caller holding a
+#: reference to ``fs.warnings`` has to keep seeing the same list.
+_CONTAINERS = (list, dict, set)
+
+
+def _snapshot(obj) -> dict:
+    """Every attribute of *obj*, with the contents of any container it
+    holds, in a form :func:`_restore` can put back exactly.
+
+    Wholesale over fields on purpose. The alternative -- remembering
+    which attributes a render writes -- is a guard that goes stale the
+    day something writes a new one, and that is precisely how stream
+    numbering came to survive a refused render: the check that was
+    supposed to catch it looked at frames and routes, because those were
+    the two fields anybody had thought of.
+    """
+    return {k: (v, v.copy() if isinstance(v, _CONTAINERS) else None)
+            for k, v in vars(obj).items()}
+
+
+def _restore(obj, saved: dict) -> None:
+    """Put *obj* back exactly as :func:`_snapshot` found it, **without
+    replacing any object anybody else may be holding**.
+
+    A container is emptied and refilled rather than swapped out, and the
+    attribute is then pointed back at that same container. Deep-copying
+    the flowsheet and assigning the copy back would be simpler and is
+    wrong: ``fs.add()`` hands the caller the unit it added, so a
+    flowsheet whose ``units`` had been replaced by copies would leave
+    every name in the author's script pointing at an orphan.
+    """
+    obj.__dict__.clear()
+    for k, (value, contents) in saved.items():
+        if contents is not None:
+            if isinstance(value, list):
+                value[:] = contents
+            else:
+                value.clear()
+                value.update(contents)
+        obj.__dict__[k] = value
+
+
+#: What :meth:`Flowsheet.render` writes, keyed by the extension that
+#: selects it. The empty string is a path with no extension at all,
+#: which is drawn as SVG.
+#:
+#: A set rather than a chain of ``elif``\ s because the question "is
+#: this a format we write?" is asked *before* the sheet is laid out and
+#: answered again when the bytes are produced, and the two must not be
+#: able to disagree about it.
+_OUTPUT_FORMATS = frozenset({"", ".svg", ".pdf", ".png", ".drawio"})
 
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
@@ -1673,7 +1729,70 @@ class Flowsheet:
                 + "\n".join(f"  {e}" for e in errors)
             )
 
-    def _prepare_to_draw(self, *, diagram: str | None, check: bool) -> None:
+    @contextmanager
+    def _unchanged_if_it_raises(self):
+        """Run a render, and leave this flowsheet exactly as it was found
+        if the render does not produce a file.
+
+        **The invariant three reviews arrived at, stated once.** A render
+        writes to the sheet on its way to drawing it: it numbers the
+        streams, empties ``warnings`` and fills it again, lays every unit
+        out and routes every line, and caches all of that for the next
+        render to reuse. A render that then raises has done that work for
+        a file nobody has, and what it left behind is not neutral -- an
+        author who renders, reads a warning, renders again with a typo'd
+        page size and gets an exception should not find the warning they
+        were reading gone, or the sheet numbered from a start they set
+        for the render that failed.
+
+        Fixing that by hand, mutation by mutation, is what the last two
+        rounds of this branch did, and each time the next thing anybody
+        thought to check turned out to have been missed: the geometry was
+        guarded and ``warnings`` was not, then ``warnings`` was guarded
+        before the argument check and not before the model check, then
+        both were guarded and the stream numbering was not. So the guard
+        is wholesale (:func:`_snapshot`) rather than a list of the
+        mutations known today, and the test behind it compares the whole
+        flowsheet rather than the fields somebody remembered.
+
+        **Installed as high as the call goes**, which is the only frame
+        from which "did not produce a file" is decidable. Around
+        :meth:`to_svg`/:meth:`to_drawio` alone it guarded everything
+        except the step that sentence is about: both hand back a
+        *string*, and the conversion and the write happen in
+        :meth:`render` after those guards have let go. A disk full, a
+        read-only directory, a path that is really a directory -- each
+        an ordinary way for a render to fail -- therefore left the sheet
+        numbered, laid out, routed and rewarned for a file nobody has,
+        which is the exact state this exists to prevent. So
+        :meth:`render` and :meth:`show` carry it around their whole
+        bodies too, from the extension check to the last
+        ``write_bytes``.
+
+        The two nest, and are meant to. The inner guard restores to its
+        own entry state and the outer to what the caller handed us; the
+        outer restore then finds most fields already right and puts back
+        what is there, since :func:`_restore` writes values rather than
+        comparing them. Nesting is what makes the placement a free
+        choice: a stage that needs its own rollback can have one without
+        anybody having to work out whether some caller already has it
+        covered.
+
+        Only on the way out through an exception. A render that succeeds
+        keeps every bit of what it did, including the cached geometry
+        that makes the second render of one sheet cheap.
+        """
+        saved = [(obj, _snapshot(obj))
+                 for obj in (self, *self.units, *self.streams)]
+        try:
+            yield
+        except BaseException:
+            for obj, state in saved:
+                _restore(obj, state)
+            raise
+
+    def _prepare_to_draw(self, *, diagram: str | None, check: bool,
+                         **arguments) -> None:
         """Bring the sheet to the state a renderer can draw it from.
 
         The order is the contract :meth:`to_svg`, :meth:`to_drawio` and
@@ -1682,23 +1801,42 @@ class Flowsheet:
 
         1. number the streams, so any finding quotes the name that will
            actually be drawn;
-        2. **check the model** -- :func:`pandid.validate.model_issues`,
+        2. **check the arguments** --
+           :func:`pandid.render.svg.check_render_arguments`: the page
+           named, the border, the diagram, the hop direction, the joint
+           marks, and everything the stream table's own sheet can refuse;
+        3. **check the model** -- :func:`pandid.validate.model_issues`,
            the findings that need no geometry: a pin that is not a
            number, a symbol gravity fixes given a quarter turn, a tag
            out of sequence, a counted nozzle with nothing piped to it, a
            counted name already taken;
-        3. resolve the geometry, laying out and routing;
-        4. **check the geometry** --
+        4. resolve the geometry, laying out and routing;
+        5. **check the geometry** --
            :func:`pandid.validate.geometry_issues`: overlaps, coincident
            nozzles, crossings, detours, elevations.
 
-        Step 2 precedes step 3 because a model the validator rejects is
-        a model the engine cannot lay out or route either, and the
-        engine has no way to say so. ``pin(x=nan)`` is the case that
-        named this method: ``pin-not-finite`` describes it exactly, and
-        every render reached the router first, which was handed that
+        Steps 2 and 3 precede step 4 because a model the validator
+        rejects is a model the engine cannot lay out or route either,
+        and the engine has no way to say so. ``pin(x=nan)`` is the case
+        that named this method: ``pin-not-finite`` describes it exactly,
+        and every render reached the router first, which was handed that
         coordinate and did not come back. The finding was made for a
         drawing nobody could obtain.
+
+        Step 2 is there for the second half of the same rule: laying out
+        and routing **writes to the flowsheet**, so a render that raises
+        after it has left the model changed on its way to failing. An
+        argument the renderer would have refused is refused before that
+        happens, and a rejected call therefore leaves the sheet exactly
+        as it found it. ``**arguments`` is whatever the render was
+        given, passed through rather than restated field by field: this
+        method has no opinion about any of them and adding one to a
+        render call must not mean adding it here as well.
+
+        It runs whatever ``check`` says. ``check=False`` turns off
+        *validation* -- the findings about the drawing -- and an
+        argument the renderer cannot honour is not a finding about a
+        drawing; it is the reason there is not going to be one.
 
         Errors raise from whichever half found them, so a model error
         raises before any geometry exists. Warnings from both halves
@@ -1711,20 +1849,34 @@ class Flowsheet:
         here either way, so an empty list after a ``check=False`` render
         means nothing was found rather than nothing was looked for.
         """
-        from pandid.render.svg import draws_arrowheads
+        from pandid.render.svg import check_render_arguments, draws_arrowheads
         from pandid.validate import geometry_issues, model_issues
 
-        # ``warnings`` describes *this* render. Emptied at the top rather
-        # than assigned at the bottom, because only the `check` branch
-        # assigns it and the renderers append to it afterwards, so a
-        # `check=False` render used to answer with the last checked
-        # render's findings and a caller could not tell that list from an
-        # honestly empty one.
-        self.warnings = []
         # Before the model check, not after: `stream-name-reused` reads
         # the names, and `new_line_number` set after the last connect()
         # regroups the runs and so changes them.
         self.renumber_streams()
+        # After the numbering and before the geometry. After, because
+        # the stream table is measured from the names that will be
+        # drawn, so a page it will not fit is judged against the drawn
+        # widths; before, because nothing this refuses may cost the
+        # author a laid-out sheet.
+        check_render_arguments(self, diagram=diagram, **arguments)
+        # ``warnings`` describes *this* render. Emptied before the
+        # findings are gathered rather than assigned at the bottom,
+        # because only the `check` branch assigns it and the renderers
+        # append to it afterwards, so a `check=False` render used to
+        # answer with the last checked render's findings and a caller
+        # could not tell that list from an honestly empty one.
+        #
+        # **After the argument check, though**, and that order is the
+        # whole of a second defect: emptied first, a render refused for
+        # a misspelled page size erased the findings of the last render
+        # that *succeeded*. An author reads a real warning, renders
+        # again with a typo, and the warning they were reading is gone
+        # -- data loss rather than noise. A render that does not happen
+        # leaves this list exactly as it found it.
+        self.warnings = []
         found: list = []
         if check:
             found = model_issues(self, arrows=draws_arrowheads(diagram))
@@ -2078,7 +2230,7 @@ class Flowsheet:
         from pandid.validate import validate as _validate
         return _validate(self, arrows=draws_arrowheads(diagram))
 
-    def to_svg(self, *, show_stream_table: bool = False,
+    def to_svg(self, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
@@ -2087,6 +2239,13 @@ class Flowsheet:
         """Render to an SVG string, running ``layout()`` and ``route()``
         first if they have not been run yet, or if anything changed
         since they were.
+
+        ``show_stream_table`` says where the stream property table goes:
+        ``True`` docks it at the foot of this diagram, and ``"sheet"``
+        makes it a **drawing of its own** -- border, title strip,
+        drawing number, and the table for a body, with no diagram on it
+        at all. That is one file either way, so a set with both is two
+        calls with two paths; see :meth:`render`.
 
         ``border`` rules the sheet: ``"zone"`` for the zone-ruled
         drawing frame, ``"none"`` (the default) for a plain edge. The
@@ -2142,19 +2301,29 @@ class Flowsheet:
         :class:`ValueError` on an *error*; *warnings* from both are
         collected on ``self.warnings``. See :meth:`_prepare_to_draw`.
         """
-        self._prepare_to_draw(diagram=diagram, check=check)
-        from pandid.render.svg import SvgRenderer
-        return SvgRenderer().render(
-            self, show_stream_table=show_stream_table,
-            border=border, diagram=diagram, page_size=page_size,
-            connections=connections, jump_direction=jump_direction, debug=debug
-        )
+        # Around the whole call and not just the preparation: a render
+        # that raises leaves this sheet as it found it, whichever of the
+        # two stages raised. `render()` installs the same guard around
+        # itself, since what it does with the string this returns can
+        # fail too; the two nest by design. See
+        # :meth:`_unchanged_if_it_raises`.
+        with self._unchanged_if_it_raises():
+            self._prepare_to_draw(
+                diagram=diagram, check=check, show_stream_table=show_stream_table,
+                border=border, page_size=page_size, connections=connections,
+                jump_direction=jump_direction, debug=debug)
+            from pandid.render.svg import SvgRenderer
+            return SvgRenderer().render(
+                self, show_stream_table=show_stream_table,
+                border=border, diagram=diagram, page_size=page_size,
+                connections=connections, jump_direction=jump_direction, debug=debug
+            )
 
     def to_drawio(self, *, diagram: str | None = None,
                   page_size: str | None = None, border: str | None = None,
                   connections: str | None = None,
                   jump_direction: str = "vertical",
-                  show_stream_table: bool = False, check: bool = True) -> str:
+                  show_stream_table: bool | Literal["sheet"] = False, check: bool = True) -> str:
         """Render to a draw.io (``.drawio``) document string, running
         ``layout()`` and ``route()`` first if they have not been run
         yet, or if anything changed since they were.
@@ -2217,20 +2386,30 @@ class Flowsheet:
         material stream, one row per property, and the section headings
         ``stream_table_sections`` asks for. It comes out as a real
         draw.io table too, ruled across and down the way the sheet rules
-        it.
+        it. ``"sheet"`` exports the table's **own sheet** instead, the
+        same drawing the SVG backend renders for it -- border, title
+        strip, and the table wrapped into blocks -- with every block a
+        draw.io table a reader can edit.
 
         The debug overlay has no counterpart here and :meth:`render`
         refuses it for a ``.drawio`` path rather than ignoring it.
         """
-        self._prepare_to_draw(diagram=diagram, check=check)
-        from pandid.render.drawio import DrawioRenderer
-        return DrawioRenderer().render(self, diagram=diagram,
-                                       page_size=page_size, border=border,
-                                       connections=connections,
-                                       jump_direction=jump_direction,
-                                       show_stream_table=show_stream_table)
+        # No ``debug``: a .drawio document has no coordinate overlay to
+        # draw, and ``render()`` refuses the argument for that path
+        # rather than letting it reach here at all.
+        with self._unchanged_if_it_raises():
+            self._prepare_to_draw(
+                diagram=diagram, check=check, show_stream_table=show_stream_table,
+                border=border, page_size=page_size, connections=connections,
+                jump_direction=jump_direction)
+            from pandid.render.drawio import DrawioRenderer
+            return DrawioRenderer().render(self, diagram=diagram,
+                                           page_size=page_size, border=border,
+                                           connections=connections,
+                                           jump_direction=jump_direction,
+                                           show_stream_table=show_stream_table)
 
-    def render(self, path: str | Path, *, show_stream_table: bool = False,
+    def render(self, path: str | Path, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
@@ -2248,12 +2427,32 @@ class Flowsheet:
           through draw.io's own exporter the way to Visio. See
           :meth:`to_drawio`.
 
+        A call that writes no file changes nothing. That covers the
+        refusals -- an unsupported extension, an unknown option, a page
+        too small, a model the validator rejects -- and it covers the
+        write itself: a full disk or a directory that cannot be written
+        to leaves the flowsheet exactly as it was handed over, with no
+        cached geometry, no renumbered streams and ``warnings`` as it
+        found them. See :meth:`_unchanged_if_it_raises`.
+
         Args:
             path: Output file path; its extension selects the format.
-            show_stream_table: Draw a property table of all streams at
-                the bottom. How that table is drawn -- its type size,
-                and how narrow its columns may be ruled -- is
-                ``fs.stream_table``; see
+            show_stream_table: Where the property table of all streams
+                goes. ``True`` draws it at the foot of the diagram;
+                ``"sheet"`` writes the **table's own sheet** to this
+                path instead -- a full drawing with a border, a title
+                strip and a drawing number of its own, whose body is the
+                table alone, wrapped into stacked blocks when the
+                streams do not fit across the page. One call still
+                writes one file, so a set with both is::
+
+                    fs.render("pfd.svg", page_size="A1")
+                    fs.render("stream_table.svg", page_size="A1",
+                              show_stream_table="sheet")
+
+                How the table is drawn -- its type size, how narrow its
+                columns may be ruled, and what its own sheet is called
+                and numbered -- is ``fs.stream_table``; see
                 :class:`~pandid.document.StreamTableOptions`.
             border: ``"none"`` or ``"zone"`` (the zone-ruled frame).
             diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled
@@ -2277,60 +2476,81 @@ class Flowsheet:
                 after; errors raise from either, warnings collect on
                 ``warnings``. See :meth:`_prepare_to_draw`.
         """
-        ext = Path(path).suffix.lower()
-        if ext == ".drawio":
-            # Refused rather than ignored: a caller who asked for
-            # something and got a file without it has been told
-            # something false about the file they now hold. The overlay
-            # is scaffolding for whoever is writing a placement and
-            # deliberately not part of the drawing, so exporting it
-            # would put it into an editable model as ordinary cells a
-            # reader would have to delete by hand.
-            #
-            # ``given != default`` and not ``is not False``: ``debug``
-            # takes a number as well as a flag, and ``debug=0`` is not a
-            # request for an overlay.
-            sheet_only = [
-                name for name, given, default in (
-                    ("debug", debug, False),
-                ) if given != default
-            ]
-            if sheet_only:
+        # The whole of it, and not merely the two calls it makes.
+        # `to_svg()` and `to_drawio()` install this guard around
+        # themselves, but they hand back a *string*: the conversion and
+        # the write happen out here, after those guards have let go. A
+        # disk-full or a read-only directory on the last line is an
+        # ordinary failure of a render, and it used to leave the sheet
+        # numbered, laid out, routed and rewarned for a file nobody
+        # has -- which is exactly what this guard exists to prevent, one
+        # frame too low to prevent it. Nesting is intended and harmless:
+        # the inner guard restores to its own entry state, this one to
+        # what the caller handed us.
+        with self._unchanged_if_it_raises():
+            ext = Path(path).suffix.lower()
+            # Before anything else, and for the reason
+            # `check_render_arguments` runs before the geometry: the
+            # extension is a fact about the *path*, knowable with no drawing
+            # in hand, and it used to be checked after `to_svg()` had laid
+            # the sheet out and routed it. A misspelled suffix therefore
+            # raised having installed a Frame on every unit and a Route on
+            # every stream, which the next render then reused -- the same
+            # poisoning an unknown page size caused, through another door.
+            if ext not in _OUTPUT_FORMATS:
                 raise ValueError(
-                    f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
-                    f"a .drawio file has no counterpart for: the coordinate "
-                    f"overlay is scaffolding rather than drawing. Render the "
-                    f"sheet to .svg/.pdf/.png, or drop these arguments"
+                    f"Unsupported output format {ext!r}; use "
+                    f"{', '.join(sorted(f for f in _OUTPUT_FORMATS if f))}"
                 )
-            Path(path).write_text(
-                self.to_drawio(diagram=diagram, page_size=page_size,
-                               border=border, connections=connections,
-                               jump_direction=jump_direction,
-                               show_stream_table=show_stream_table,
-                               check=check), encoding="utf-8")
-            return
+            if ext == ".drawio":
+                # Refused rather than ignored: a caller who asked for
+                # something and got a file without it has been told
+                # something false about the file they now hold. The overlay
+                # is scaffolding for whoever is writing a placement and
+                # deliberately not part of the drawing, so exporting it
+                # would put it into an editable model as ordinary cells a
+                # reader would have to delete by hand.
+                #
+                # ``given != default`` and not ``is not False``: ``debug``
+                # takes a number as well as a flag, and ``debug=0`` is not a
+                # request for an overlay.
+                sheet_only = [
+                    name for name, given, default in (
+                        ("debug", debug, False),
+                    ) if given != default
+                ]
+                if sheet_only:
+                    raise ValueError(
+                        f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
+                        f"a .drawio file has no counterpart for: the coordinate "
+                        f"overlay is scaffolding rather than drawing. Render the "
+                        f"sheet to .svg/.pdf/.png, or drop these arguments"
+                    )
+                Path(path).write_text(
+                    self.to_drawio(diagram=diagram, page_size=page_size,
+                                   border=border, connections=connections,
+                                   jump_direction=jump_direction,
+                                   show_stream_table=show_stream_table,
+                                   check=check), encoding="utf-8")
+                return
 
-        svg = self.to_svg(
-            show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, debug=debug, check=check,
-        )
-        if ext in ("", ".svg"):
-            Path(path).write_text(svg, encoding="utf-8")
-        elif ext in (".pdf", ".png"):
-            from pandid.render import export
-            data = export.to_pdf(svg) if ext == ".pdf" else export.to_png(svg)
-            Path(path).write_bytes(data)
-        else:
-            raise ValueError(
-                f"Unsupported output format {ext!r}; use .svg, .pdf, .png, or .drawio"
+            svg = self.to_svg(
+                show_stream_table=show_stream_table, border=border,
+                diagram=diagram, page_size=page_size, connections=connections,
+                jump_direction=jump_direction, debug=debug, check=check,
             )
+            if ext in ("", ".svg"):
+                Path(path).write_text(svg, encoding="utf-8")
+            else:  # .pdf / .png; anything else was refused before the render
+                from pandid.render import export
+                data = export.to_pdf(svg) if ext == ".pdf" else export.to_png(svg)
+                Path(path).write_bytes(data)
 
     def _repr_svg_(self) -> str:
         """IPython/Jupyter: display the diagram inline in a notebook."""
         return self.to_svg()
 
-    def show(self, *, show_stream_table: bool = False,
+    def show(self, *, show_stream_table: bool | Literal["sheet"] = False,
              border: str | None = None,
              diagram: str | None = None, page_size: str | None = None,
              connections: str | None = None,
@@ -2358,13 +2578,23 @@ class Flowsheet:
         rather than left to be guessed at. A headless machine -- CI, a
         container, SSH without X11 -- takes that path without hanging or
         raising. See :mod:`pandid.render.preview`.
+
+        A preview that cannot be shown changes nothing, on the same
+        terms :meth:`render` states for a file that cannot be written.
         """
-        from pandid.render.preview import preview
-        preview(self.to_svg(
-            show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, debug=debug, check=check,
-        ), title=self.name)
+        # `render()`'s hole through the other door. `to_svg()` guards
+        # itself and then lets go, and `preview()` runs after that: it
+        # rasterises, writes a temporary file and asks for a window, and
+        # `tkinter.Tk()` on a machine whose display is named but not
+        # reachable raises straight out of here. A preview nobody saw
+        # leaves nothing behind, for the reason a file nobody has does.
+        with self._unchanged_if_it_raises():
+            from pandid.render.preview import preview
+            preview(self.to_svg(
+                show_stream_table=show_stream_table, border=border,
+                diagram=diagram, page_size=page_size, connections=connections,
+                jump_direction=jump_direction, debug=debug, check=check,
+            ), title=self.name)
 
     def __repr__(self) -> str:
         return (

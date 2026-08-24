@@ -83,7 +83,7 @@ neither stands in for the other.
 | `title_block` | `TitleBlock \| None` | drawn whenever it is set |
 | `annotations` | `list` | sheet furniture boxes, drawn whenever they are added |
 | `stream_table_sections` | `list[tuple[str, str]]` | `(before_key, header_label)` |
-| `stream_table` | `pandid.document.StreamTableOptions` | how that table is drawn; see [Sizing the table](#sizing-the-table) |
+| `stream_table` | `pandid.document.StreamTableOptions` | how that table is drawn, and what its own sheet is called; see [Sizing the table](#sizing-the-table) and [The table on its own sheet](#the-table-on-its-own-sheet) |
 
 ### Building the topology
 
@@ -221,7 +221,7 @@ to_dict() -> dict                # JSON-safe topology
 ```
 
 ```text
-to_svg(*, show_stream_table: bool = False,
+to_svg(*, show_stream_table: bool | "sheet" = False,
        border: str | None = None,
        diagram: str | None = None,
        page_size: str | None = None,
@@ -242,7 +242,7 @@ to_drawio(*, diagram: str | None = None,
           border: str | None = None,
           connections: str | None = None,
           jump_direction: str = "vertical",
-          show_stream_table: bool = False,
+          show_stream_table: bool | "sheet" = False,
           check: bool = True) -> str
 ```
 Returns a draw.io / diagrams.net document, on the same terms. See
@@ -257,8 +257,9 @@ Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `pdf` extra
 (`pip install 'pandid[pdf]'`) and raise `ImportError` naming the missing package
 without it; `.drawio` writes the editable draw.io document. Any other extension
-raises `ValueError`. The PDF is vector, drawn at the sheet's physical size, and
-the PNG is rasterised from that same PDF.
+raises `ValueError` **before the sheet is laid out**, so a misspelled suffix
+costs nothing and leaves no resolved geometry behind. The PDF is vector, drawn
+at the sheet's physical size, and the PNG is rasterised from that same PDF.
 
 ```text
 show(*, show_stream_table=False, border=None, diagram=None, page_size=None,
@@ -293,10 +294,10 @@ per process, overwritten by each `show()` and swept on the way out.
 | `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the zone-lettered drawing frame (A.. top down, 1.. left to right, so A1 is the top-left corner). Anything else raises `ValueError` |
 | `diagram` | `"pfd"` (the default), `"p&id"` | which drawing this is. A P&ID draws its process lines without arrowheads |
 | `connections` | `"none"` (the default), `"flanged"`, `"flanged-at-nozzles"` | `"flanged"` marks the double tick at every equipment nozzle *and* both sides of every valve and in-line fitting; `"flanged-at-nozzles"` marks the nozzles alone. A P&ID only; a PFD draws none whatever this says. See [Flanged connections](#flanged-connections) |
-| `show_stream_table` | `bool` | draws the stream property table (one column per stream that has properties, plus every feed and product); see [Stream properties and the table](#stream-properties-and-the-table) |
+| `show_stream_table` | `False` (the default), `True`, `"sheet"` | `True` draws the stream property table under the drawing (one column per stream that has properties, plus every feed and product); `"sheet"` draws the table as a sheet of its own instead, with no diagram on it. See [Stream properties and the table](#stream-properties-and-the-table) |
 | `check` | `bool` | validate; errors raise, warnings collect. The model-only checks run before the sheet is laid out, the geometric ones after — see [When the checks run](#when-the-checks-run) |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
-| `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop |
+| `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop. Anything else raises `ValueError`, whether or not this sheet has a crossing to hop |
 | `debug` | `False` (the default), `True`, a number | draws the [coordinate overlay](#the-coordinate-overlay). `True` uses a 50-unit grid; a number sets the spacing |
 
 ### The coordinate overlay
@@ -2551,11 +2552,80 @@ narrow table; a table it does nothing for is one whose widest cell was already
 doing the ruling. A width that is neither a number nor `"auto"`, or a negative
 one, raises `ValueError`.
 
-The three are fields on one object rather than three names on `Flowsheet`
-because a table option describes the sheet rather than the file — it means the
-same thing to `to_drawio()` as to `to_svg()` — and because the next one will be
-a field on the same object rather than a tenth keyword on `render()`. They come
-through the spec as `stream_table:`.
+These are fields on one object rather than names on `Flowsheet` because a table
+option describes the sheet rather than the file — it means the same thing to
+`to_drawio()` as to `to_svg()` — and because the next one is a field on the same
+object rather than a tenth keyword on `render()`. They come through the spec as
+`stream_table:`.
+
+#### The table on its own sheet
+
+A wide table fights the diagram for the page. `show_stream_table="sheet"` gives
+it a sheet of its own: a full drawing, with a zone border, a title strip and a
+drawing number, whose body is the table alone.
+
+```python
+fs.render("pfd.svg", page_size="A1", border="zone")
+fs.render("stream_table.svg", page_size="A1", show_stream_table="sheet")
+```
+
+One call still writes one file, so a set with both sheets is two calls with two
+paths — and you name each file. Every output path draws it: `.svg`, `.pdf`,
+`.png`, `.drawio`, `to_svg()`, `to_drawio()` and `show()`.
+
+**It wraps.** More streams than fit across the page come out as blocks stacked
+one above the other, each repeating the `Stream Number` heading row and every
+section header, and all ruled to one measurement so a property row tracks from
+block to block. How many streams a block holds is read off the page: the same
+table wraps into two blocks on A4 and none on A2. What is measured is the width
+the blocks are *ruled* at, section heading included — the fewest blocks whose
+finished width fits the page — so a table is never refused for not fitting when
+a partition that fits exists. Without a `page_size` there is no width to wrap
+against and the table comes out in one block, on a sheet grown to fit it.
+
+The blocks are evened out rather than filled and left a stub: twenty-one streams
+that fit twelve across are drawn eleven and ten. A table sheet is set at the
+reading size whatever its column count, and whether or not a page was named,
+since wrapping is how it makes room — the page decides how the table is cut up
+rather than how it is lettered. `fs.stream_table.font_size` still overrules
+that, and is what brings a table too *deep* for its page back onto it.
+
+The sheet says which drawing it belongs to:
+
+```python
+fs.stream_table.sheet_subtitle = "Stream Table"   # the default
+fs.stream_table.sheet_drawing_number = "PFD-303"  # default: the diagram's, with "-ST"
+```
+
+Everything else on the strip — client, project, company, status, date, the
+revision rows — is the diagram's, because it is a sheet of the same issue. The
+title cell keeps the drawing's title and the subtitle says which sheet this is,
+so `PFD-301` titled *Ethanol Purification A300 / Process Flow Diagram 1* files
+its table as `PFD-301-ST`, *Ethanol Purification A300 / Stream Table*. The scale
+cell is not ruled: a table is not drawn to scale.
+
+**Two sheets, two numbers.** A `sheet_drawing_number` equal to the diagram's is
+refused — that is the collision the suffix exists to prevent, typed in by hand,
+and there is no filable set on the other side of it. A flowsheet with no drawing
+number to derive from still draws its table sheet, unnumbered, and says so as the
+`table-sheet-unnumbered` warning on `fs.warnings`: nothing here can invent a
+number, since a drawing number is a filing identity issued by the office that
+owns the set, and one made up from the flowsheet's name would be worse than a
+blank because it would look issued.
+
+The border is the zone frame unless you say otherwise, since this is a formal
+drawing rather than a table on paper. Annotation boxes are not repeated here —
+an equipment list belongs to the diagram it schedules. `debug=` is refused,
+there being no diagram to draw a coordinate overlay under, and a flowsheet with
+nothing to tabulate raises rather than writing an empty sheet.
+
+**A render that does not happen changes nothing.** Every refusal — an unknown
+option, an unsupported extension, a page too small, a model the validator
+rejects — leaves the flowsheet exactly as it was found: no resolved geometry for
+the next render to reuse, no renumbered streams, and `fs.warnings` untouched,
+neither added to nor erased nor replaced with an equal list. So does a render
+that was drawn but never landed, such as a full disk or a directory you cannot
+write to. Only a render that produces a file changes anything.
 
 ---
 
@@ -4052,7 +4122,7 @@ streams:
   - {from: [LIC-101, sig_out], to: [FV-101, actuator], kind: electric}
 
 stream_table_sections: [[Ethanol, Mass Fraction]]
-stream_table: {font_size: 8}
+stream_table: {font_size: 8, sheet_drawing_number: PFD-203}
 
 title_block:
   title: Utilities U200
@@ -4216,7 +4286,7 @@ not on PATH. It is a shell over the API above and adds nothing to it.
 
 ```text
 pandid draw SPEC [-o OUT] [--page-size SIZE] [--border {none,zone}]
-                 [--diagram {pfd,p&id}] [--stream-table]
+                 [--diagram {pfd,p&id}] [--stream-table [sheet]]
                  [--jump-direction {vertical,horizontal}]
 pandid validate SPEC
 pandid symbols [--kind KIND]
@@ -4239,7 +4309,7 @@ under the same name with `.svg`.
 | `--page-size A3` | `page_size="A3"` |
 | `--border zone` | `border="zone"` |
 | `--diagram 'p&id'` | `diagram="p&id"` |
-| `--stream-table` | `show_stream_table=True` |
+| `--stream-table`, `--stream-table sheet` | `show_stream_table=True`, `show_stream_table="sheet"` |
 | `--jump-direction horizontal` | `jump_direction="horizontal"` |
 | `--debug`, `--debug 100` | `debug=True`, `debug=100` |
 

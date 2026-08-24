@@ -200,10 +200,10 @@
           <mxGeometry x="0" y="0" width="40" height="40" as="geometry" />
         </mxCell>
         <mxCell id="q0" value="LAH" style="text;html=1;strokeColor=none;fillColor=none;labelBackgroundColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;fontColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="476" y="412.3" width="24.16" height="18.4" as="geometry" />
+          <mxGeometry x="476" y="412.3" width="27.34" height="18.4" as="geometry" />
         </mxCell>
         <mxCell id="q1" value="LAL" style="text;html=1;strokeColor=none;fillColor=none;labelBackgroundColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;fontColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="476" y="433.3" width="24.16" height="18.4" as="geometry" />
+          <mxGeometry x="476" y="433.3" width="25.35" height="18.4" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

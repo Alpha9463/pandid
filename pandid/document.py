@@ -24,7 +24,7 @@ sheet, whichever border is drawn.
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
 
 # --------------------------------------------------------------
@@ -329,10 +329,17 @@ class StreamTableOptions:
     costs none of that, an option is a field rather than a fifth
     signature change, and validation of the group has somewhere to live.
 
-    The three compose. :attr:`font_size` scales both width floors, since
-    both are stated at the type size they were chosen against; so a
-    table sized down keeps its proportions, and a table sized down *and*
-    ``"auto"``-ruled has no floor left to scale.
+    The three sizing fields compose. :attr:`font_size` scales both width
+    floors, since both are stated at the type size they were chosen
+    against; so a table sized down keeps its proportions, and a table
+    sized down *and* ``"auto"``-ruled has no floor left to scale.
+
+    The last two say who the table's own sheet is, and are read only by
+    a render that asks for one (``show_stream_table="sheet"``). They are
+    here rather than on :class:`TitleBlock` because a flowsheet has one
+    title block and that one is the *diagram's*: the table sheet's is
+    derived from it (:func:`table_sheet_block`), and what a derivation
+    needs is the two fields it cannot work out for itself.
 
     :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections` is *not*
     here, deliberately. It is content and not a setting -- the heading
@@ -391,6 +398,123 @@ class StreamTableOptions:
     #: a table that gains nothing from it is a table whose widest cell
     #: was already doing the ruling.
     column_width: float | Literal["auto"] = 52.0
+
+    #: What the table's own sheet is called, drawn in the strip's
+    #: **subtitle** cell. The title cell above it keeps the diagram's
+    #: title, which is what tells a reader the two sheets are one
+    #: drawing set: ``Ethanol Purification A300`` over ``Stream Table``,
+    #: where the diagram reads ``Ethanol Purification A300`` over
+    #: ``Process Flow Diagram 1``.
+    #:
+    #: Read only by a render that puts the table on its own sheet
+    #: (``show_stream_table="sheet"``); a table docked at the foot of a
+    #: diagram has no title block of its own.
+    sheet_subtitle: str = "Stream Table"
+
+    #: The drawing number the table's own sheet carries. Blank derives
+    #: one: the diagram's number with :data:`TABLE_SHEET_SUFFIX` after
+    #: it, so ``PFD-301`` numbers its table sheet ``PFD-301-ST``.
+    #:
+    #: **Derived, because two drawings cannot share one number**, and
+    #: stated here when the drawing office's own numbering says
+    #: otherwise -- a set that files the table as the next sheet in the
+    #: series types ``fs.stream_table.sheet_drawing_number = "PFD-303"``.
+    #: A suffix can be derived from what the flowsheet already carries
+    #: and the next free number in a series cannot: nothing here knows
+    #: what else that series has issued.
+    #:
+    #: Stating the **diagram's own** number here raises: that is the
+    #: collision the derivation exists to prevent, and a derivation
+    #: guarantees uniqueness only while nobody overrules it. Leaving
+    #: both this and the diagram's number blank draws the table sheet
+    #: unnumbered and reports it
+    #: (:data:`~pandid.render.svg.TABLE_SHEET_UNNUMBERED`); a number
+    #: invented from the flowsheet's name would be worse than the blank,
+    #: because it would look issued.
+    sheet_drawing_number: str = ""
+
+
+#: What a derived table-sheet drawing number puts after the diagram's.
+TABLE_SHEET_SUFFIX = "-ST"
+
+
+def table_sheet_block(block: "TitleBlock | None",
+                      options: StreamTableOptions) -> TitleBlock:
+    """The title block the stream table's own sheet carries.
+
+    The diagram's, with two cells changed. Everything else is copied
+    across unread -- company, client, project, status, revisions, the
+    date, the initials -- because the table sheet is a sheet of the same
+    issue by the same office on the same day, and a table sheet that
+    named a different client would be a different document.
+
+    The two that change are the two that say *which drawing this is*:
+    the subtitle, which is what the sheet is called
+    (:attr:`~StreamTableOptions.sheet_subtitle`), and the drawing
+    number, which cannot be the diagram's
+    (:attr:`~StreamTableOptions.sheet_drawing_number`).
+
+    A flowsheet with no title block at all still gets one here: a table
+    sheet is a drawing in its own right and a drawing without a title
+    block is a table on blank paper. It comes out carrying the subtitle
+    and nothing else, which is what there is to say.
+
+    The revision *list* is the diagram's own object rather than a copy
+    of it. Both sheets are issued at the same revision, and this block
+    is derived afresh on every render, so a copy would be a second list
+    to keep in step for no gain.
+
+    Raises :class:`ValueError` if the number stated for the table sheet
+    is the diagram's own. **A derivation cannot promise uniqueness on
+    its own**: the suffix guarantees it only while nobody overrules the
+    suffix, and ``sheet_drawing_number = "PFD-301"`` on a ``PFD-301``
+    diagram is two documents filed under one number -- the failure the
+    derivation exists to prevent, typed in by hand. It is refused rather
+    than warned about because the author stated it outright and there is
+    no reading of it that produces a filable set.
+    """
+    diagram = TitleBlock() if block is None else block
+    number = diagram.drawing_number
+    stated = options.sheet_drawing_number
+    if stated and _same_number(stated, number):
+        raise ValueError(
+            f"fs.stream_table.sheet_drawing_number={stated!r} is the diagram's "
+            f"own drawing number. The table sheet is a second document and "
+            f"cannot be filed under the first one's number: give it a number of "
+            f"its own, or leave the field blank to derive "
+            f"{number}{TABLE_SHEET_SUFFIX}"
+        )
+    return replace(
+        diagram,
+        subtitle=options.sheet_subtitle,
+        drawing_number=(stated
+                        or (f"{number}{TABLE_SHEET_SUFFIX}" if number else "")),
+    )
+
+
+def _same_number(a: str, b: str) -> bool:
+    """Are these one drawing number said twice?
+
+    Surrounding space is stripped and the rest is **case-folded**,
+    because a drawing register does not file ``PFD-301`` and
+    ``pfd-301 `` as two drawings and neither does the person looking for
+    one. Two numbers that differ only that way are the collision this is
+    looking for, not an escape from it.
+
+    ``str.casefold`` is aggressive by design and does more than lower the
+    case: it also folds the compatibility forms, so the ``ﬃ`` ligature
+    equals ``ffi`` and ``ß`` equals ``ss``. That is stated because it is
+    more than "case", and it is *kept* because it is the same judgement
+    one step further -- two numbers a reader could not tell apart are
+    one number, and nobody files a drawing under a ligature to
+    distinguish it from the same letters typed out.
+
+    What is deliberately **not** folded is anything that changes what a
+    reader sees: interior spaces (``PFD 301`` is not ``PFD301``), a
+    trailing full stop, or a zero-width character, all of which stay
+    distinct. Only the outer whitespace and the letter case come out.
+    """
+    return a.strip().casefold() == b.strip().casefold()
 
 
 # --------------------------------------------------------------

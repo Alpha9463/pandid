@@ -113,9 +113,11 @@ _DASH = "4,4"
 # where a label goes ---------------------------------------------
 # Rough advance width of the sans-serif above, as a fraction of the type
 # size, and how far a line of it reaches above and below its baseline.
-# The same 0.56 :mod:`pandid.render.furniture` measures its boxes at.
-# Approximate on purpose: reserving a hair too much paper only ever
-# pushes a label somewhere emptier.
+# Approximate on purpose, and left approximate where
+# :mod:`pandid.render.furniture` went to the face's own advances: this
+# reserves paper for an overlay nobody prints, and a hair too much of it
+# only ever pushes a debug label somewhere emptier. Nothing here decides
+# whether a drawing fits its page.
 _ADV = 0.56
 _ASC, _DESC = 0.75, 0.2
 

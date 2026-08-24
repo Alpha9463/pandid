@@ -28,13 +28,78 @@ from typing import Any, Callable, NamedTuple
 
 from pandid.render.escape import escaped
 
-# Rough advance width of the sans-serif the renderer uses, as a fraction
-# of the font size. Slightly generous so auto-sized boxes never clip
-# their text.
-_ADV = 0.56
-_ADV_BOLD = 0.62
-
 FONT = "sans-serif"
+
+# The advance widths ``FONT`` is really set in, in thousandths of the
+# type size, for the two bands the face encodes: ASCII 32..126 and
+# Latin-1 160..255.
+#
+# **Not a model of the lettering -- the lettering's own numbers.** Which
+# face ``sans-serif`` resolves to is not open here: this package's own
+# ``.pdf``/``.png`` path goes through svglib, which registers the
+# generic family onto ReportLab's ``Helvetica`` and ``Helvetica-Bold``
+# (``svglib.fonts.register_default_fonts``), and
+# :mod:`pandid.render.export` already writes that down and draws its
+# baselines from it (``_FACES``, ``_HELVETICA_EM``). A viewer resolves
+# the same family to Arial or Liberation Sans, both cut to Helvetica's
+# advance widths on purpose. (DejaVu Sans is the common resolution that
+# is not; it is wider, so a sheet ruled against these numbers has room
+# to spare in it, which is the direction to be wrong in.)
+#
+# So the numbers below are the Adobe Core-14 AFM advances, and
+# ``tests/test_text_width.py`` checks them character by character
+# against ReportLab itself wherever the ``pdf`` extra is installed --
+# the table is data, and data that nothing checks is data that drifts.
+_ADVANCE = (
+    (  # Helvetica, 32..126
+        278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556,
+        1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556,
+        333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
+        556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+    ),
+    (  # Helvetica, 160..255
+        278, 333, 556, 556, 556, 556, 260, 556, 333, 737, 370, 556, 584, 333, 737, 333,
+        400, 584, 333, 333, 333, 556, 537, 278, 333, 333, 365, 556, 834, 834, 834, 611,
+        667, 667, 667, 667, 667, 667, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278,
+        722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611,
+        556, 556, 556, 556, 556, 556, 889, 500, 556, 556, 556, 556, 278, 278, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 584, 611, 556, 556, 556, 556, 500, 556, 500,
+    ),
+)
+_ADVANCE_BOLD = (
+    (  # Helvetica-Bold, 32..126
+        278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611,
+        975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778,
+        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556,
+        333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611,
+        611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
+    ),
+    (  # Helvetica-Bold, 160..255
+        278, 333, 556, 556, 556, 556, 280, 556, 333, 737, 370, 556, 584, 333, 737, 333,
+        400, 584, 333, 333, 333, 611, 556, 278, 333, 333, 365, 556, 834, 834, 834, 611,
+        722, 722, 722, 722, 722, 722, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278,
+        722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611,
+        556, 556, 556, 556, 556, 556, 889, 556, 556, 556, 556, 556, 278, 278, 278, 278,
+        611, 611, 611, 611, 611, 611, 611, 584, 611, 611, 611, 611, 611, 556, 611, 556,
+    ),
+)
+
+# What a *narrow* codepoint the table does not carry is charged, in the
+# same thousandths: Greek, Cyrillic, and everything else Unicode calls
+# Ambiguous or Neutral outside Latin-1, none of which Helvetica encodes
+# and none of which this renderer can therefore have a real advance for.
+# These two are the flat rates every character was charged before the
+# table existed -- a little over the face's own ASCII mean (527 and 551)
+# and so wrong in the direction that leaves paper spare. Kept at their
+# old values on purpose: a codepoint that had no metric before still has
+# none, and nothing about it should move because Latin text stopped
+# guessing. A wide codepoint is charged a full em and a combining mark
+# nothing; see :func:`script_counts`.
+_ADV = 560
+_ADV_BOLD = 620
 
 # How a cell says it could not hold what it was given: the field it
 # draws, the text it was asked for, the text it actually drew (the same
@@ -66,17 +131,24 @@ Reporter = Callable[[str, str, str, float, float], None]
 
 def script_counts(s: str) -> "tuple[int, int, int]":
     """How many of *s*'s codepoints draw narrow, draw a full em wide, or
-    draw nothing of their own -- the one classification every width
-    estimate in the renderer measures a string by, so a CJK tag and a
-    combining mark are never charged the Latin rate that only ``_ADV``
-    was ever measured against.
+    draw nothing of their own -- the classification the renderer's
+    per-character width rules measure a string by, so a CJK tag and a
+    combining mark are never charged the Latin rate the rest of the
+    sheet's lettering is charged at.
+
+    :func:`text_width` no longer needs the narrow count: Latin-1 has a
+    real advance per character now, and this answers only for what the
+    face does not encode. The equipment-tag halo
+    (:func:`pandid.render.svg._unit_label_box`) and a labelled block's
+    own box (:func:`pandid.render.symbols.label_span`) still measure
+    through here, at per-character rates of their own.
 
     :func:`unicodedata.east_asian_width` sorts a codepoint into five
     classes. *W*ide and *F*ullwidth -- CJK ideographs, fullwidth forms --
     draw close to a full em, same as the font's own point size. *H*alfwidth
     and *Na*rrow -- Latin letters, digits, halfwidth kana -- draw at the
-    fraction ``_ADV``/``_ADV_BOLD`` was measured against a real PDF at
-    (see :func:`text_width`). *A*mbiguous -- Greek, Cyrillic, most
+    per-character rate its caller was tuned to (see :func:`text_width`
+    and ``_ADV``). *A*mbiguous -- Greek, Cyrillic, most
     symbols, a character that is narrow set among Latin and wide set
     among CJK -- has no surrounding text here to decide it by, so it
     takes the standard's own default for that case (UAX #11, East Asian
@@ -106,39 +178,56 @@ def script_counts(s: str) -> "tuple[int, int, int]":
 
 
 def text_width(s, size: float, bold: bool = False) -> float:
-    """Estimated drawn width of *s* set at *size*, without padding.
+    """Drawn width of *s* set at *size*, without padding.
 
-    ``_ADV``/``_ADV_BOLD`` are measured against a real PDF rendering of
-    this renderer's Latin lettering (see the module's callers) and are
-    accurate to within a few percent -- good enough that a
-    codepoint-only count (``len(s) * size * _ADV``) is exactly what a
-    Latin, digit or punctuation string still gets, unchanged, below.
-    A wide (CJK/fullwidth) codepoint is charged a full em instead, and
-    a combining mark nothing at all; see :func:`script_counts`.
+    **Glyph by glyph, off the face's own advance widths**
+    (:data:`_ADVANCE`), because a per-character average is not a ruler.
+    It was one: every character was charged the same 0,56 em (0,62
+    bold), which is near enough the mean of Helvetica's ASCII to look
+    calibrated and is wrong by a third on either side of it for real
+    drawing text. ``STREAM NUMBER`` came out 17 per cent narrow,
+    ``PROCESS FLOW DIAGRAM`` 14, ``Pump`` 14, ``iiii`` 150 per cent
+    wide; a section heading of capitals ran through and out of the rules
+    of the cell that had been ruled to hold it. The error was known and
+    absorbed rather than fixed -- ``_CELL_PAD`` in
+    :mod:`pandid.render.drawio` is fat by exactly the eleven per cent
+    that mean under-charges ``HPSSH`` by, and says so.
+
+    It matters more than a fat pad because a width here is not only how
+    big a box is drawn. A stream table's own sheet asks *does this fit
+    the page* and refuses the render when it does not
+    (:func:`_partition`), so an average that reads a third under is a
+    page called big enough for a drawing that runs off it, and a page
+    called too small for one that would have fitted. A box can be
+    generous. A fit cannot be approximate.
+
+    Outside the two bands the table carries, the old flat rate still
+    answers, a wide (CJK/fullwidth) codepoint is charged a full em, and
+    a combining mark nothing at all; see :func:`script_counts` and
+    ``_ADV``.
+
+    Summed in thousandths and scaled once at the end rather than
+    multiplied per character, for the reason :func:`_total` adds by
+    hand: the sum is exact in integers, so the answer depends on the
+    string and the size and not on the order the characters came in.
     """
     s = str(s)
-    adv = _ADV_BOLD if bold else _ADV
-    narrow, wide, zero = script_counts(s)
-    if not wide and not zero:
-        return len(s) * size * adv
-    return _width(narrow, wide, size, adv)
-
-
-def _width(narrow: int, wide: int, size: float, adv: float) -> float:
-    """What *narrow* narrow and *wide* wide codepoints measure, set at
-    *size* with advance fraction *adv*.
-
-    One expression with two callers: :func:`text_width`, which measures
-    a whole string, and :func:`clip`, which walks the counts forward to
-    find where to cut one. Written down once because the two have to
-    agree *bit for bit* -- a cut computed by summing per-character
-    widths lands a rounding away from the same string measured whole,
-    which is :func:`_total`'s complaint about ``sum()`` pointed at a
-    different pair of numbers. Given the same counts this returns the
-    same float, so the prefix ``clip`` keeps is a prefix ``text_width``
-    agrees fits.
-    """
-    return narrow * size * adv + wide * size
+    table = _ADVANCE_BOLD if bold else _ADVANCE
+    flat = _ADV_BOLD if bold else _ADV
+    thousandths = 0
+    for ch in s:
+        c = ord(ch)
+        if 0x20 <= c <= 0x7E:
+            thousandths += table[0][c - 0x20]
+        elif 0xA0 <= c <= 0xFF:
+            thousandths += table[1][c - 0xA0]
+        elif unicodedata.category(ch) in ("Mn", "Me"):
+            continue
+        elif unicodedata.east_asian_width(ch) in ("W", "F"):
+            thousandths += 1000
+        else:
+            thousandths += flat
+    return thousandths * size / 1000
 
 
 def _total(values) -> float:
@@ -175,53 +264,59 @@ def clip(s, room: float, size: float, bold: bool = False, *,
     value beside it and no amount of growing can help. A draftsman
     abbreviates.
 
-    **How many characters survive is decided the way the width is
-    measured** -- and :func:`text_width` measures two ways, so this cuts
-    two ways, on the same test.
+    **Where to cut is measured, and measured the way the width is.**
 
-    A string of narrow codepoints alone measures ``len(s) * size * adv``,
-    a closed form, and the cut is that form inverted: the count of
-    characters the room holds, less one for the ellipsis. Every sheet
-    this package has drawn was cut by that arithmetic, and it is exact
-    -- one division, no accumulated error -- so a value that fills its
-    cell to the last unit keeps the last character that fits.
+    Two bugs met here, one from each side, and they have one answer. The
+    cut used to be ``int(room / (size * adv)) - 1`` characters -- how
+    many would fit if every character were the average one -- which is a
+    count and not a width, so it cut a line of capitals too late and a
+    line of narrow letters far too early, and left the ellipsis it then
+    appended unpaid for. And because the *decision* to cut was
+    :func:`text_width`'s while the cut itself counted at the Latin rate,
+    the two disagreed by the ratio between those rates: a fullwidth
+    title kept 28 characters measuring 290 units for a 187-unit cell and
+    was drawn straight through the sheet count beside it, on every page
+    size.
 
-    Anything with a CJK or fullwidth codepoint in it (a full em) or a
-    combining mark (nothing at all) has no such closed form, and there
-    the counts are walked forward through :func:`_width` -- the same
-    expression, given the same counts, so the prefix kept is a prefix
-    ``text_width`` agrees fits.
+    There is no closed form left to invert -- a character's advance is
+    its own now (:data:`_ADVANCE`) rather than one rate for the whole
+    alphabet -- so the string is grown a character at a time against
+    :func:`text_width` itself, with the ellipsis charged for first. Both
+    ends are the same function rather than two readings of one rate, and
+    the prefix this keeps is a prefix ``text_width`` agrees fits.
 
-    **Both ends used to be the Latin one.** The cut counted characters
-    at the Latin advance while the decision to cut at all was
-    ``text_width``'s, so the two disagreed by the ratio between the two
-    rates: a fullwidth title kept 28 characters measuring 290 units for
-    a 187-unit cell and was drawn straight through the sheet count
-    beside it, on every page size. Making *both* ends walk was the
-    obvious repair and the wrong one -- summing per-character widths
-    lands a rounding away from the same characters measured whole, so
-    seventy Latin room/size pairs in a sweep of the strip's own type
-    sizes cut a character earlier or later than they always had. That is
-    :func:`_total`'s complaint, and the answer here is the same one:
-    measure and use the identical arithmetic.
+    The earlier objection to walking -- that summing per-character
+    widths lands a rounding away from the same characters measured
+    whole, which is :func:`_total`'s complaint pointed at another pair
+    of numbers -- does not arise, because nothing is summed in floats.
+    ``text_width`` adds integer thousandths and scales once at the end,
+    so a prefix and the whole string are added the same way and cannot
+    disagree in the last bit.
+
+    Short strings, and only the ones that did not fit in the first
+    place.
     """
     s = str(s)
     need = text_width(s, size, bold)
     if need <= room:
         return s
-    adv = _ADV_BOLD if bold else _ADV
-    _narrow, wide, zero = script_counts(s)
-    if not wide and not zero:
-        keep = max(0, int(room / (size * adv)) - 1)
-    else:
-        budget, keep, n, w = room - text_width("…", size, bold), 0, 0, 0
-        for ch in s:
-            dn, dw, _dz = script_counts(ch)
-            n, w = n + dn, w + dw
-            if _width(n, w, size, adv) > budget:
-                break
-            keep += 1
-    drawn = s[:keep].rstrip() + "…"
+    ellipsis = "…"
+    # Each candidate is measured **with its ellipsis on**, against the
+    # room itself. Not `room - text_width(ellipsis)`: that subtraction
+    # is the one float operation in the walk, and it rounds -- an `i`
+    # at 8.0 in 40 units of room comes to exactly 40 with the ellipsis,
+    # and `40.0 - 4.48` is 35.519999999999996, so the character that
+    # fits exactly was thrown away. Measuring the whole candidate is one
+    # call to `text_width`, which sums integer thousandths and scales
+    # once, so nothing rounds anywhere and the cut is the longest that
+    # fits. It also leaves `room` untouched for the finding to quote
+    # back: an author told their cell has 180 units when it is ruled 187
+    # has been told the wrong number about their own sheet.
+    kept = 0
+    while (kept < len(s)
+           and text_width(s[:kept + 1] + ellipsis, size, bold) <= room):
+        kept += 1
+    drawn = s[:kept].rstrip() + ellipsis
     if report is not None:
         report(field, s, drawn, room, need)
     return drawn
@@ -749,6 +844,81 @@ def _table_streams(fs) -> list:
     return [run[0] for run in _table_runs(fs)]
 
 
+class _Measured(NamedTuple):
+    """What the stream table measures to, before it is a grid of cells.
+
+    The split exists because the table is now laid out two ways from one
+    measurement: whole, docked at the foot of a diagram
+    (:func:`stream_table_layout`), and cut into blocks on a sheet of its
+    own (:func:`stream_table_sheet`). Every number here is settled over
+    the *whole* table -- one type size, one row depth, one width for
+    every stream column -- so a table read across two blocks is read
+    across one ruling.
+
+    ``span`` is what a section heading needs, which is a constraint on
+    the total width rather than on any column, so it is carried
+    unresolved: how much of it the label column has to take up depends
+    on how many stream columns stand beside it, and that is the one
+    thing the two layouts disagree about. See :func:`_section_span`.
+    """
+    streams: list
+    cells: list
+    disp: list
+    heading: str
+    size: float
+    row_h: float
+    label_w: float
+    name_w: float
+    span: float
+
+
+def _section_span(m: "_Measured", columns: int) -> float:
+    """The label column's width once a section heading has to fit over
+    *columns* stream columns beside it.
+
+    A section header spans the whole table, so it is the total width it
+    constrains rather than any one column; the row label column is the
+    only one free to take up the slack.
+    """
+    return max(m.label_w, m.span - m.name_w * columns)
+
+
+def _stream_rows(m: "_Measured", streams: list, cells: list,
+                 label_w: float) -> list[list[StreamCell]]:
+    """The table's cells, row by row, for the *streams* given.
+
+    The whole table passes all of them and a block of a table sheet
+    passes its own slice, which is what makes each block carry the
+    heading row again: the row is built here, from whatever columns this
+    block has, rather than being copied off a table that was built once.
+    """
+    rows: list[list[StreamCell]] = [
+        [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
+        + [StreamCell(s.name, m.name_w, _STREAM_HEAD_FILL, True, "middle")
+           for s in streams]]
+    for kind, key in m.disp:
+        if kind == "section":
+            rows.append([StreamCell(key, label_w + m.name_w * len(streams),
+                                    _STREAM_SECTION_FILL, True, "start")])
+            continue
+        rows.append(
+            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
+            + [StreamCell(_stream_cell_text(c, key), m.name_w,
+                          _STREAM_VALUE_FILL, False, "middle")
+               for c in cells])
+    return rows
+
+
+def _stream_table(m: "_Measured", streams: list, cells: list,
+                  label_w: float) -> StreamTable:
+    """One ruled table over the columns given: the whole thing, or one
+    block of a table sheet."""
+    rows = _stream_rows(m, streams, cells, label_w)
+    return StreamTable(rows, m.size, m.row_h,
+                       label_w + m.name_w * len(streams),
+                       m.row_h * len(rows))
+
+
 def stream_table_layout(fs) -> "StreamTable | None":
     """Where every cell of the stream table goes and what is in it, or
     ``None`` for a flowsheet with nothing to tabulate.
@@ -759,11 +929,31 @@ def stream_table_layout(fs) -> "StreamTable | None":
     here to abbreviate into. A stream table that cannot show ``0.0441
     kg/kg total`` is not a stream table.
 
+    This is the table drawn **on** a diagram, in one block, however wide
+    that comes to. :func:`stream_table_sheet` is the same table given a
+    sheet of its own, where the page it has to fit is known and the
+    columns are cut into blocks against it.
+    """
+    m = _measure(fs)
+    if m is None:
+        return None
+    return _stream_table(m, m.streams, m.cells,
+                         _section_span(m, len(m.streams)))
+
+
+def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
+    """Measure the table, or ``None`` for a flowsheet with nothing to
+    tabulate.
+
     Nothing to tabulate is answered twice, and the second is the one
     that matters: no stream gets a column (:func:`_table_streams`), or
     no stream states a property, which leaves the columns that did get
     one with no row to fill. Both are a grid of headings over nothing,
     and a heading is not a stream table either.
+
+    ``own_sheet`` says the table is the body of a sheet of its own
+    rather than a block docked at the foot of a diagram, which changes
+    one thing and only one: the type size nobody stated. See below.
     """
     runs = _table_runs(fs)
     if not runs:
@@ -798,7 +988,25 @@ def stream_table_layout(fs) -> "StreamTable | None":
             f"number of drawing units, or None to let the table pick one from "
             f"how many columns it has"
         )
-    if asked is None:
+    if asked is None and own_sheet:
+        # A table on its own sheet has nothing to shrink *for*. The rule
+        # below trades type size for width because a table drawn beside
+        # a diagram has one row of columns and no way to make more room;
+        # a table sheet makes room by wrapping, so shrinking as well
+        # would letter a twenty-column sheet at 8 units to fit a page it
+        # already fits. The author's own `font_size` still rules, and is
+        # how a table too *deep* for its page is brought back onto it.
+        #
+        # **Whether or not a page was named**, which is why this reads
+        # `own_sheet` and not "did it wrap". A sheet grown to its
+        # contents does not wrap -- there is no width to wrap against --
+        # but sizing it off the column count instead would letter the
+        # same twenty-one streams at 9.05 unpaged and 10.5 on A2: two
+        # different drawings of one table, differing for a reason
+        # nothing on either sheet shows. One rule for the sheet, and the
+        # page decides how it is cut up rather than how it is lettered.
+        size, row_h, ruled = _BASE_SIZE, _ROW_H, 1.0
+    elif asked is None:
         # As it always was: 10.5 while the columns fit, then shrunk so
         # that a long value still sits inside a column already at its
         # minimum width. That last clause is why the minimums do not
@@ -863,33 +1071,205 @@ def stream_table_layout(fs) -> "StreamTable | None":
                      default=0.0) + _STREAM_GUTTER,
                  max((text_width(v, size) for v in values), default=0.0)
                  + _STREAM_GUTTER)
-    # A section header spans the whole table, so it is the total width
-    # it constrains rather than any one column; the row label column is
-    # the only one free to take up the slack.
+    # What a section header needs, left unresolved: it spans the whole
+    # table, so it is the total width it constrains rather than any one
+    # column, and how much of that the label column has to take up
+    # depends on how many stream columns stand beside it. See
+    # :func:`_section_span`.
     sections = [label for kind, label in disp if kind == "section"]
     span = max((text_width(t, size, bold=True) for t in sections),
                default=0.0) + _STREAM_GUTTER
-    label_w = max(label_w, span - name_w * n)
-
-    rows: list[list[StreamCell]] = [
-        [StreamCell(heading, label_w, _STREAM_HEAD_FILL, True, "start")]
-        + [StreamCell(s.name, name_w, _STREAM_HEAD_FILL, True, "middle")
-           for s in streams]]
-    for kind, key in disp:
-        if kind == "section":
-            rows.append([StreamCell(key, label_w + name_w * n,
-                                    _STREAM_SECTION_FILL, True, "start")])
-            continue
-        rows.append(
-            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
-            + [StreamCell(_stream_cell_text(c, key), name_w,
-                          _STREAM_VALUE_FILL, False, "middle")
-               for c in cells])
-    return StreamTable(rows, size, row_h, label_w + name_w * n,
-                       row_h * len(rows))
+    return _Measured(streams, cells, disp, heading, size, row_h,
+                     label_w, name_w, span)
 
 
-def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
+#: How many rows deep the white space between two blocks of a table
+#: sheet is. One row rather than a fixed number of units, so the gap
+#: follows the type: a table sized down to fit its page does not keep a
+#: gap ruled for lettering half again as big.
+_BLOCK_ROWS = 1.0
+
+
+class TableSheet(NamedTuple):
+    """The stream table as the body of a sheet of its own: the same
+    table, cut into blocks stacked one above the other.
+
+    ``w`` is the widest block and ``h`` the whole stack, gaps included,
+    which is what the sheet is sized against. The blocks are drawn
+    flush left with one another rather than each centred on its own
+    width: a reader tracks a property row from one block to the next
+    down the left-hand column, and a ragged left edge is what stops
+    them. See :meth:`at`.
+    """
+    blocks: list
+    gap: float
+    w: float
+    h: float
+
+    def at(self, left: float, top: float):
+        """Each block with the corner it is drawn from, given the corner
+        the stack is drawn from. Both backends place blocks through
+        this, so neither owns the stacking."""
+        y = top
+        for i, block in enumerate(self.blocks):
+            yield i, block, left, y
+            y += block.h + self.gap
+
+
+def _blocks_of(n: int, count: int) -> list:
+    """*n* columns shared out over *count* blocks, as evenly as they go:
+    ``n // count`` each, and the ``n % count`` left over handed one
+    apiece to the blocks at the front.
+
+    The blocks come out one column apart at worst -- twenty-one over
+    three is 7/7/7, over two is 11/10, ten over four is 3/3/2/2 --
+    because two blocks of nearly a page each read as one table where a
+    full block beside a stub reads as an afterthought.
+
+    It used to promise that and not do it. Filling ``ceil(n / count)``
+    columns into each block and letting the last take the remainder
+    gives ten over four as **3/3/3/1**, three columns apart, and ten
+    over six as five blocks rather than six -- a count the caller asked
+    about and never got an answer for. Both mattered, because
+    :func:`_partition` chooses by *measuring* what this returns: the
+    stub in 3/3/3/1 is the narrowest block, the shared label column is
+    widened against the narrowest block to carry a section heading
+    (:func:`_section_span`), and so a partition that fits was measured
+    as one that does not and rejected. The malformed shape was not a
+    tidiness complaint; it was the search's own input, wrong.
+    """
+    count = min(count, n)  # an empty block is not a block
+    per, extra = divmod(n, count)
+    blocks, start = [], 0
+    for i in range(count):
+        stop = start + per + (1 if i < extra else 0)
+        blocks.append(list(range(start, stop)))
+        start = stop
+    return blocks
+
+
+def _partition(m: "_Measured", n: int, room: "float | None") -> list:
+    """How the stream columns are cut into blocks for a page *room* units
+    wide, or one block for a sheet with no page to fit.
+
+    **Measured on the width the blocks are actually ruled at**, which is
+    the whole of this function's reason for being separate. A block is
+    as wide as its stream columns *plus the label column*, and the label
+    column is widened to carry a section heading across the narrowest
+    block (:func:`_section_span`) -- so the width cannot be known until
+    the partition is chosen, and a capacity worked out before the
+    widening is a capacity the finished table can exceed.
+
+    That is not hypothetical: twenty-one streams under a long section
+    heading were cut 11/10 from a capacity of eleven, then ruled wider
+    than the A4 they were cut for, and the page was reported too small
+    for a table that fits it three blocks of seven. The sheet was
+    refused for not fitting when a partition that fits existed, which is
+    the feature failing at its job rather than a bookkeeping slip.
+
+    So the count is searched rather than divided out: the **fewest**
+    blocks whose ruled width fits, fewest because fewer blocks are wider
+    blocks and a shorter sheet, and every count is asked with the width
+    it would really be drawn at.
+
+    What the search promises against the division it replaced is one
+    thing and not two. It **never returns more blocks**: if the
+    division's own count fitted, the loop reaches that count and returns
+    there at the latest, so the answer is that count or fewer. It does
+    *not* promise the same count. The division works out a capacity by
+    ``(room - label_w) // name_w``, and floor division on floats is not
+    the floor of the quotient -- where the room is an exact multiple of
+    a column the subtraction can round below it, and a page that holds
+    seven columns is read as holding six and the table is wrapped that
+    did not need wrapping. An earlier draft of this function claimed the
+    two were arithmetically identical wherever no section heading
+    widened anything; a sweep of the no-heading cases found the claim
+    false, in the direction of the search being right and the division
+    wrong. It is a correction, and it is stated as one.
+
+    A table that fits at no count at all falls back to one column per
+    block, the narrowest a table can be ruled: it is then a page too
+    small however it is cut, which the sheet reports in those words
+    rather than this function guessing at.
+    """
+    if room is None:
+        return [list(range(n))]
+    for count in range(1, n + 1):
+        chunks = _blocks_of(n, count)
+        width = (_section_span(m, min(len(c) for c in chunks))
+                 + m.name_w * max(len(c) for c in chunks))
+        if width <= room:
+            return chunks
+    return _blocks_of(n, n)
+
+
+def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
+    """The stream table laid out for a sheet of its own, wrapped into as
+    many blocks as *room* units of page width takes.
+
+    ``room`` is the width the sheet has for the table, or ``None`` for a
+    sheet with no fixed page, which has no width to wrap against and
+    takes the table in one block. **The count comes from the page and
+    never from a constant**: how many streams fit across is a fact about
+    this table's columns on this paper, and a fixed "twelve per block"
+    would wrap a sheet that did not need it and overrun one that did.
+
+    The *ruling* does not depend on the page in the same way. Type size,
+    row depth and column widths are the sheet's own whether or not one
+    was named (:func:`_measure`), so an unpaged table sheet is the paged
+    one with the cutting left out.
+
+    The columns are then shared out **evenly** rather than filled to the
+    brim and left with a remainder: twenty-one streams that fit twelve
+    across come out as eleven and ten, not twelve and nine, because two
+    blocks of nearly a page each read as one table and a stub of three
+    columns reads as an afterthought.
+
+    Every block carries the heading row again (:func:`_stream_rows`),
+    and every block is ruled to one measurement -- one type size, one
+    row depth, one stream-column width, one label column -- so the
+    second block is read exactly as the first.
+
+    Returns ``None`` for a flowsheet with nothing to tabulate, the same
+    answer :func:`stream_table_layout` gives and for the same reasons.
+    """
+    m = _measure(fs, own_sheet=True)
+    if m is None:
+        return None
+    n = len(m.streams)
+    chunks = _partition(m, n, room)
+    # The label column is widened for a section heading against the
+    # *smallest* block, so the heading fits in every block and one
+    # ruling still answers for all of them.
+    label_w = _section_span(m, min(len(c) for c in chunks))
+    blocks = [_stream_table(m, [m.streams[i] for i in c],
+                            [m.cells[i] for i in c], label_w)
+              for c in chunks]
+    gap = m.row_h * _BLOCK_ROWS
+    return TableSheet(blocks, gap, max(b.w for b in blocks),
+                      _total(b.h for b in blocks) + gap * (len(blocks) - 1))
+
+
+def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
+    """The corner the block stack is drawn from, given the region a
+    fixed page left for it (``None`` for a sheet grown to its contents,
+    which starts the stack at the origin the frame was grown around).
+
+    Centred across the page and hard against the top of it. Centred
+    because a table is the whole body of this sheet and a body hugging
+    one margin reads as a drawing that lost its left half; at the top
+    because a table is read from its first row down, and floating the
+    stack in the middle of the page puts a gap between the frame and
+    the heading that a reader takes for a missing block.
+    """
+    if free is None:
+        return (0.0, 0.0)
+    fx, fy, fw, _fh = free
+    return (fx + (fw - table.w) / 2, fy)
+
+
+def draw_stream_table(table: StreamTable, left: float, top: float, *,
+                      group: str = "stream_table") -> list[str]:
     """Draw the table with its top-left corner at (``left``, ``top``).
 
     The geometry is :func:`stream_table_layout`'s; this strokes it,
@@ -898,8 +1278,12 @@ def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
     a stream table really is a grid, read across for one property and
     down for one stream -- at the weight a grid beside a drawing is
     ruled at rather than the weight a box around one is.
+
+    ``group`` names the group the cells go in. A sheet carrying blocks
+    of one table has to number them: two elements under one id is not a
+    document, and the id is how a reader of the file finds the table.
     """
-    out = ['<g id="stream_table">']
+    out = [f'<g id="{group}">']
     y = top
     for row in table.rows:
         x = left

@@ -83,49 +83,49 @@
     <line x1="2412.0" y1="1201.7" x2="2428.0" y2="1201.7" stroke="black" stroke-width="0.75"/>
     <text x="-68.0" y="1301.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
     <text x="2420.0" y="1301.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
-    <rect x="-60.0" y="-147.0" width="270.2" height="211.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="75.1" y="-130.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
-    <line x1="-60.0" y1="-124.0" x2="210.2" y2="-124.0" stroke="black" stroke-width="1"/>
+    <rect x="-60.0" y="-147.0" width="256.2" height="211.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="68.1" y="-130.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
+    <line x1="-60.0" y1="-124.0" x2="196.2" y2="-124.0" stroke="black" stroke-width="1"/>
     <text x="-51.0" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CS</text>
-    <text x="-14.4" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Carbon Steel A106-B</text>
+    <text x="-4.8" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Carbon Steel A106-B</text>
     <text x="-51.0" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">LT</text>
-    <text x="-14.4" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Low Temperature Carbon Steel A333-6</text>
+    <text x="-4.8" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Low Temperature Carbon Steel A333-6</text>
     <text x="-51.0" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SS</text>
-    <text x="-14.4" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Stainless Steel 316L</text>
+    <text x="-4.8" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Stainless Steel 316L</text>
     <text x="-51.0" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SG</text>
-    <text x="-14.4" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Synthesis Gas</text>
+    <text x="-4.8" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Synthesis Gas</text>
     <text x="-51.0" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">LG</text>
-    <text x="-14.4" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Loop Gas</text>
+    <text x="-4.8" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Loop Gas</text>
     <text x="-51.0" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">PG</text>
-    <text x="-14.4" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Purge Gas</text>
+    <text x="-4.8" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Purge Gas</text>
     <text x="-51.0" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CM</text>
-    <text x="-14.4" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol</text>
+    <text x="-4.8" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol</text>
     <text x="-51.0" y="16.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FGSH</text>
-    <text x="-14.4" y="16.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Fuel Gas Supply Header</text>
+    <text x="-4.8" y="16.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Fuel Gas Supply Header</text>
     <text x="-51.0" y="34.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CWSH</text>
-    <text x="-14.4" y="34.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Supply Header</text>
+    <text x="-4.8" y="34.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Supply Header</text>
     <text x="-51.0" y="52.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CWRH</text>
-    <text x="-14.4" y="52.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Return Header</text>
-    <rect x="2197.2" y="-147.0" width="214.8" height="157.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="2304.6" y="-130.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="2197.2" y1="-124.0" x2="2412.0" y2="-124.0" stroke="black" stroke-width="1"/>
-    <text x="2206.2" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-301</text>
-    <text x="2249.0" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Gas Compressor</text>
-    <text x="2206.2" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-301</text>
-    <text x="2249.0" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Feed / Effluent Exchanger</text>
-    <text x="2206.2" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">H-301</text>
-    <text x="2249.0" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Converter Fired Heater</text>
-    <text x="2206.2" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">R-301</text>
-    <text x="2249.0" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Methanol Converter</text>
-    <text x="2206.2" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-302</text>
-    <text x="2249.0" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Condenser</text>
-    <text x="2206.2" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-301</text>
-    <text x="2249.0" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol Separator</text>
-    <text x="2206.2" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-302</text>
-    <text x="2249.0" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Recycle Gas Compressor</text>
-    <rect x="-60.0" y="1309.4" width="578.6" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="229.3" y="1326.4" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
-    <line x1="-60.0" y1="1332.4" x2="518.6" y2="1332.4" stroke="black" stroke-width="1"/>
+    <text x="-4.8" y="52.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Return Header</text>
+    <rect x="2222.4" y="-147.0" width="189.6" height="157.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="2317.2" y="-130.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
+    <line x1="2222.4" y1="-124.0" x2="2412.0" y2="-124.0" stroke="black" stroke-width="1"/>
+    <text x="2231.4" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-301</text>
+    <text x="2273.4" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Gas Compressor</text>
+    <text x="2231.4" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-301</text>
+    <text x="2273.4" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Feed / Effluent Exchanger</text>
+    <text x="2231.4" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">H-301</text>
+    <text x="2273.4" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Converter Fired Heater</text>
+    <text x="2231.4" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">R-301</text>
+    <text x="2273.4" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Methanol Converter</text>
+    <text x="2231.4" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-302</text>
+    <text x="2273.4" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Condenser</text>
+    <text x="2231.4" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-301</text>
+    <text x="2273.4" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol Separator</text>
+    <text x="2231.4" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-302</text>
+    <text x="2273.4" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Recycle Gas Compressor</text>
+    <rect x="-60.0" y="1309.4" width="479.0" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="179.5" y="1326.4" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
+    <line x1="-60.0" y1="1332.4" x2="419.0" y2="1332.4" stroke="black" stroke-width="1"/>
     <text x="-51.0" y="1346.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: converter high bed temperature. TT-307 is its own measurement, independent of TIC-302.</text>
     <text x="-51.0" y="1364.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">H-301 flue gas and combustion air are on P&amp;ID-302.</text>
     <text x="-51.0" y="1382.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Per-pass conversion is 5 to 7 %; the recycle ratio is 5:1 on molar flow.</text>

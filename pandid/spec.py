@@ -1156,6 +1156,10 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
     "leave it alone". Whether a stated floor is a *usable* one is the
     layout's question, exactly as it is for ``font_size``: this reader
     settles the kind of the value and the sheet settles its sense.
+
+    The two that name the table's own sheet are plain text, and a blank
+    ``sheet_drawing_number`` is the field's own default -- the number is
+    derived from the diagram's -- so it reads back as itself.
     """
     data = _mapping(entry, where)
     _check_keys(data, {f.name for f in dataclass_fields(StreamTableOptions)}, where)
@@ -1166,6 +1170,9 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
         options.label_width = _column_width(data["label_width"], f"{where}.label_width")
     if "column_width" in data:
         options.column_width = _column_width(data["column_width"], f"{where}.column_width")
+    for key in ("sheet_subtitle", "sheet_drawing_number"):
+        if key in data:
+            setattr(options, key, _text(data[key], f"{where}.{key}"))
     return options
 
 

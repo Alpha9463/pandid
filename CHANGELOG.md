@@ -76,6 +76,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group of byte-identical shapes upstream ships is recorded, so a
   re-vendor that brings in a new one has to be looked at, and no group
   may reach the registry with two members still identical.
+- **`show_stream_table="sheet"`: the stream table gets a sheet of its own
+  (#481).**
+
+  ```python
+  fs.render("pfd.svg", page_size="A1", border="zone")
+  fs.render("stream_table.svg", page_size="A1", show_stream_table="sheet")
+  ```
+
+  A full drawing rather than a table on blank paper: zone border, title strip,
+  revision rows and a drawing number of its own, with the table for a body and
+  no diagram on it. Every output path draws it -- `.svg`, `.pdf`, `.png`,
+  `.drawio`, `to_svg()`, `to_drawio()`, `show()` and `pandid draw
+  --stream-table sheet`.
+
+  **It wraps, and the count comes from the page.** More streams than fit across
+  come out as blocks stacked one above the other, each repeating the `Stream
+  Number` heading row and every section header, all ruled to one measurement so
+  a property row tracks from block to block. Twenty-one streams are two blocks
+  on A4 and one on A2, from the same table: a fixed "twelve per block" would
+  wrap a sheet that did not need it and overrun one that did. The columns are
+  shared out evenly rather than filled to the brim -- eleven and ten, not twelve
+  and nine -- because a stub of three columns reads as an afterthought. Without
+  a `page_size` there is no width to wrap against and the table comes out whole,
+  on a sheet grown to fit it.
+
+  A table sheet is set at the reading size whatever its column count, and
+  whether or not a page was named: the docked table shrinks above eighteen
+  columns because it has one row of columns and no other way to make room, and a
+  table sheet makes room by wrapping. Sizing the unpaged sheet off its column
+  count instead would letter the same twenty-one streams at 9.05 with no page
+  and 10.5 on A2 -- two drawings of one table, differing for a reason nothing on
+  either sheet shows. The page decides how the table is cut up, not how it is
+  lettered. `fs.stream_table.font_size` still overrules the size, and is what
+  brings a table too *deep* for its page back onto it.
+
+  **A value on the keyword that already asks for the table**, not a tenth
+  keyword on four signatures and not a flag that makes one call write two files.
+  Which sheet this file is, is a property of the *call* -- so #473's precedent
+  for `fs.stream_table` does not reach it -- and one call still writes one file,
+  so a set with both sheets is two calls with two paths and you name each file.
+  `debug` grew from a flag into `bool | float` in these same signatures for the
+  same reason: the question had a third answer rather than a second question.
+
+  **Which drawing the table belongs to** is on the strip. The title cell keeps
+  the diagram's title and the subtitle says which sheet this is, so `PFD-301`
+  titled *Ethanol Purification A300 / Process Flow Diagram 1* files its table as
+  `PFD-301-ST`, *Ethanol Purification A300 / Stream Table*; client, project,
+  company, status, date and the revision rows are the diagram's, this being a
+  sheet of the same issue. Both derived cells can be stated:
+  `fs.stream_table.sheet_subtitle` and `fs.stream_table.sheet_drawing_number`,
+  which round-trip through the spec with the rest of `stream_table:`. The number
+  is *derived* because two drawings cannot share one, and *stated* because
+  nothing here knows the next free number in a drawing office's series. A stated
+  number equal to the diagram's is **refused**: a derivation guarantees
+  uniqueness only while nobody overrules the derivation. A flowsheet with no
+  number to derive from draws its table sheet unnumbered and reports
+  `table-sheet-unnumbered` on `fs.warnings` -- soft, for the reason
+  `boundary-flow-missing` is soft, since a drawing number is a filing identity
+  nobody but the author has and an invented one would be worse than a blank.
+
+  The scale cell is not ruled -- a table is not drawn to scale. `debug=` is
+  refused rather than ignored, there being no diagram to draw a coordinate
+  overlay under, and a flowsheet with nothing to tabulate raises rather than
+  writing an empty sheet. Every one of those refusals happens **before the sheet
+  is laid out or routed**, so a rejected render leaves the flowsheet exactly as
+  it found it. Every shipped sheet is byte-identical: nothing changes unless the
+  option is used.
 - **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
   registry had no symbol for, and all three were being faked in a shipped
   example with an apology in its source (#474). `examples/21_alumina_refinery`
@@ -549,6 +616,89 @@ class hierarchy, or what it is called.
   the way the drawing does. The overlay half of this had been wrong since
   compositions landed; nothing in the corpus turns one, which is why it
   went unseen.
+- **Text is measured at the face's own advance widths instead of one flat
+  average, so a cell is ruled to the string it has to hold.** `text_width()`
+  charged every character 0.56 em (0.62 bold) — near enough the mean of
+  Helvetica's ASCII to look calibrated, and a mean is no ruler. No real string
+  is the mean. Set regular, `STREAM NUMBER` measured 17 per cent narrow,
+  `PROCESS FLOW DIAGRAM` 14 and `Pump` 14; set bold, the same three measured 9,
+  6 and 11 narrow while `0.0441 kg/kg total` measured 34 per cent *wide* and
+  `Ethanol Purification A300` 28 — the last of those enough that the title band
+  abbreviated a title that fitted it, and `11_ethanol_pid` has been reading
+  *Propylene Glycol Reacti…* on a sheet with room for the whole word.
+
+  Which face to measure was never open. pandid writes
+  `font-family="sans-serif"` on every string; svglib registers that generic
+  family onto ReportLab's `Helvetica` and `Helvetica-Bold`, which is the
+  `/BaseFont /Helvetica` an exported PDF carries and what
+  `pandid.render.export` already writes down to place its baselines. A viewer
+  resolves the same family to Arial or Liberation Sans, both cut to Helvetica's
+  advances on purpose. So the Adobe Core-14 advances are carried here as data,
+  and `tests/test_text_width.py` checks all 382 of them against ReportLab
+  character by character wherever the `pdf` extra is installed. Outside the two
+  bands the face encodes, the old flat rate still answers, a CJK codepoint is
+  still charged a full em and a combining mark still nothing.
+
+  Two things the estimate had quietly shaped go with it. `clip()` chose where to
+  abbreviate by `int(room / average advance) - 1` characters — a count of
+  average characters and not a width, which cut a line of capitals too late and
+  never paid for the ellipsis it appended; it measures now, so what comes back
+  fits the cell it was cut for. And `_CELL_PAD` in the draw.io exporter had four
+  of its twelve units covering the shortfall rather than clearing a rule, which
+  its own comment said; the pad stays, the comment no longer describes a bug.
+
+  **Thirteen of the twenty-one goldens move**, and `docs/gallery/` and the
+  draw.io samples with them: an auto-sized box is ruled to what its text draws,
+  so most get slightly narrower and the one truncated title comes back whole.
+  Nothing about a drawing's *content* changes.
+
+- **A stream table's columns are shared out evenly at every block count, not
+  only at the counts that divide.** `_blocks_of` promised blocks one column
+  apart at worst and filled `ceil(n / count)` into each instead, leaving the
+  remainder to the last: ten over four came out 3/3/3/1, three apart, and ten
+  over six came out as *five* blocks — a count the caller asked about and never
+  got an answer for. The only case the tests exercised was 21 over 3, the one
+  shape the bug cannot appear in.
+
+  It is not a tidiness complaint, because the table sheet's search chooses by
+  measuring what this returns. The shared label column is widened against the
+  *narrowest* block so one ruling answers for all of them, so a one-column stub
+  widens it by everything the columns it should have had would have covered:
+  3/3/3/1 is measured a whole stream column wider than the 3/3/2/2 holding the
+  same ten streams. A page that fits four blocks was told it did not, and the
+  search went past four and returned five — a taller sheet of narrower blocks,
+  for a partition that was never measured.
+
+- **The table sheet's block search no longer claims to be the arithmetic it
+  replaced.** It was described as identical to `(room - label_w) // name_w`
+  wherever no section heading widened anything, so that no sheet which fitted
+  before could move. Floor division on floats is not the floor of the quotient:
+  where the room is a label column plus a whole number of stream columns, taking
+  the label column off again need not come back to a whole number of them, and
+  the page is read as holding one column fewer than it does. Five streams whose
+  page has room for all five were wrapped into two blocks. The search measures
+  the partition it would actually rule and does not wrap it, so the new answer
+  is the better one — and it is now stated as a correction. What is claimed is
+  the part that holds by construction: the search never returns *more* blocks
+  than the division did, because if the division's own count fitted, the loop
+  reached it.
+
+- **A render that could not be written no longer mutates the flowsheet.** The
+  rollback that undoes a refused render was installed inside `to_svg()` and
+  `to_drawio()`, and both of those hand back a *string*: `render()` converts it
+  and writes the file **after** those guards have let go. So the one failure the
+  invariant is named for — a render that produced no file — was the one it did
+  not cover. A full disk or a directory you cannot write to, on the last line of
+  `render()`, left the sheet renumbered, laid out, routed and rewarned, and
+  `fs.warnings` replaced with a different list object, for a file nobody has.
+
+  `render()` and `show()` now carry the guard around their whole bodies, from
+  the extension check through the final `write_text`/`write_bytes` — `show()`
+  for the same reason, since `preview()` rasterises, writes a temporary file and
+  asks for a window long after `to_svg()` has finished. The guards nest, and are
+  meant to: the inner one restores to its own entry state, the outer to what the
+  caller handed over.
+
 - The **two committed sheets made from one example no longer disagree about the
   date that example leaves blank** (#491). `03_distillation_train` and
   `08_from_data` state no `TitleBlock.date`, so `SvgRenderer` fills the cell with
@@ -818,6 +968,74 @@ class hierarchy, or what it is called.
   box. It is silent on everything this package can draw -- the geometry above
   makes it so -- and is there for a symbol registered from outside it.
 
+- **An unknown `jump_direction` is refused instead of drawing a sheet with no
+  hops on it.** The value was read where the hops are drawn, as `==
+  "vertical"` and `== "horizontal"`, so a misspelling matched neither branch
+  and the sheet came out with every crossing drawn straight through -- which is
+  what a *joined* pair of lines looks like -- and said nothing. It is now
+  checked against its two spellings on every render, whether or not the sheet
+  has a crossing to hop, since a sheet with none draws the same picture for
+  every spelling and so is exactly the sheet that cannot catch the typo by its
+  result. An unknown `connections` is checked on the same terms and now reaches
+  a `.drawio` export of the stream table sheet, which returned before the check.
+- **A backend no longer accepts and drops a keyword it does not know.** Both
+  renderers end their signature with `**opts`, because `Renderer` is a protocol
+  a future backend has to answer; what that spelling must not mean is *accepted
+  and silently discarded*. `DrawioRenderer().render(fs, debug=True)` returned a
+  57-kilobyte document with no coordinate overlay in it and no complaint, a
+  `.drawio` file having no overlay to draw. Unknown keywords are now refused by
+  name, which makes the whole class impossible rather than fixing it one
+  argument at a time, and a test holds every keyword the entry points forward
+  against the set its backend actually names.
+- **An unsupported output extension is refused before the sheet is laid out.**
+  It was checked after `to_svg()` had already run, so `fs.render("x.unsupported")`
+  raised having installed a `Frame` on every unit and a `Route` on every stream
+  for the next render to reuse -- the same cache poisoning an unknown page size
+  caused, through another door. The extension is a fact about the *path*, so it
+  is now answered before any geometry exists.
+- **A refused render no longer touches `fs.warnings`.** Two halves. Measuring
+  the stream table *reports* -- `stream-table-section-unused` is written during
+  the measurement -- so a prevalidation that then raised left a finding about a
+  sheet nobody has; the prevalidation now restores the list whatever happens.
+  And `warnings` was emptied *before* the arguments were checked, so a render
+  refused for a misspelled page size erased the findings of the last render that
+  succeeded: an author reads a real warning, renders again with a typo, and the
+  warning they were reading is gone. That is data loss rather than noise, and
+  the clearing now happens after the arguments are known to be good.
+- **A render that does not produce a file no longer changes the flowsheet at
+  all.** Every argument a render can refuse -- the page size, the border, the
+  diagram, the hop direction, the joint marks, the output extension -- is
+  checked before the sheet is laid out or routed, rather than inside the
+  renderer after both; and whatever a refused render did get as far as doing is
+  undone on the way out. Laying a sheet out and routing it writes a `Frame` onto
+  every unit and a `Route` onto every stream and caches both, numbering rewrites
+  every stream's name, and `warnings` is emptied and refilled -- so a render
+  that failed on a typo used to leave behind geometry the next render reused,
+  streams renumbered from a start set for the call that failed, and the findings
+  of the last render that *succeeded* erased.
+
+  Guarded wholesale rather than mutation by mutation, because three rounds of
+  naming the mutations found a fourth each time: the geometry was guarded and
+  `warnings` was not, then `warnings` was guarded ahead of the argument check
+  and not ahead of the model check, then both were guarded and the stream
+  numbering was not. `Flowsheet` now snapshots itself and everything on it and
+  restores it on the way out through any exception -- in place, so a caller
+  holding a unit `fs.add()` returned still holds the unit the flowsheet has --
+  and the test behind it compares the *whole* flowsheet rather than the fields
+  somebody remembered to look at. `check=False` does not turn any of this off:
+  it turns off validation, and an argument the renderer cannot honour is not a
+  finding about a drawing, it is the reason there is not going to be one.
+- **A stream table is no longer refused for not fitting a page a partition of it
+  fits.** How many blocks to cut the columns into was worked out from the label
+  column's width *before* a section heading widened that column, and never
+  revisited -- so twenty-one streams under a long heading were cut eleven and
+  ten, ruled 1023.0 wide on the 1022.5 an A4 sheet has, and reported as a page
+  too small, while three blocks of seven fit it at 971.0. The count is now
+  searched rather than divided out: the fewest blocks whose *ruled* width fits,
+  every count asked with the width it would really be drawn at. Where no section
+  heading widens anything the answer is arithmetically identical to the division
+  it replaces, so no sheet that fitted before moves; a table that fits at no
+  count at all is still a page too small, and still says so.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on

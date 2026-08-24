@@ -2135,6 +2135,16 @@ def _drawio_stream_table(cells):
     return table, out
 
 
+#: The whole of the slack between a cell ruled on the sheet and the same cell
+#: exported: 0,05 for the sheet's one decimal place and 0,005 apiece for the
+#: two draw.io numbers that are added to reach an absolute coordinate. A
+#: difference *equal* to that bound is inside it, so a hair of float slack goes
+#: with it -- 303,5 against 303,44 is exactly 0,06 in decimal and
+#: 0,060000000000002 in binary, and the test is about drawings, not about the
+#: last bit of a double.
+_GRID_SLACK = 0.05 + 0.005 + 0.005 + 1e-9
+
+
 def test_the_stream_table_is_the_grid_the_sheet_draws():
     """Cell for cell against the sheet's own ink.
 
@@ -2160,11 +2170,12 @@ def test_the_stream_table_is_the_grid_the_sheet_draws():
             x, y, w, h, fill, _rule, bold, anchor, text = want
             gx, gy, gw, gh, gfill, gbold, galign, gtext = got
             # A sheet writes a coordinate to one decimal and a .drawio file to
-            # two, so the same number reaches the two files as 66.9 and 66.92.
-            # Half of the sheet's own last digit is the whole of the slack
-            # allowed here: the geometry is one layout's and anything wider than
-            # the rounding is two.
-            assert (gx, gy, gw, gh) == pytest.approx((x, y, w, h), abs=0.06), (
+            # two, so the same number reaches the two files as 66.9 and 66.92,
+            # and a draw.io cell's absolute x is its table's x *plus* its own,
+            # each rounded on the way out. That is 0,05 from the sheet and 0,01
+            # from the two draw.io numbers and not a unit more: the geometry is
+            # one layout's, and anything wider than the rounding is two.
+            assert (gx, gy, gw, gh) == pytest.approx((x, y, w, h), abs=_GRID_SLACK), (
                 f"{stem}: {text!r} is ruled at {(x, y, w, h)} and exported at {(gx, gy, gw, gh)}"
             )
             # The sheet escapes its text for SVG (a line number carries an
