@@ -573,6 +573,186 @@ def test_the_stated_size_reaches_the_drawio_export_too():
     assert "fontSize=8" in fs.to_drawio(show_stream_table=True)
 
 
+# --- the two width floors -----------------------------------------------------
+
+
+def _widths(fs) -> tuple[float, float]:
+    """(row-label column, stream column) as the layout rules them."""
+    table = _layout(fs)
+    return table.rows[0][0].w, table.rows[0][1].w
+
+
+def _with(fs: Flowsheet, **options: object) -> Flowsheet:
+    """*fs* with these stream-table options set on it."""
+    for key, value in options.items():
+        setattr(fs.stream_table, key, value)
+    return fs
+
+
+def _fits(text: str, size: float = 10.5, bold: bool = False) -> float:
+    """What a column holding exactly *text* is ruled at, gutter included."""
+    from pandid.render.furniture import _STREAM_GUTTER, text_width
+
+    return text_width(text, size, bold=bold) + _STREAM_GUTTER
+
+
+def _one_long_value() -> Flowsheet:
+    """Three short-named streams, one of which reports a value far wider
+    than anything else in the table.
+
+    The awkward case the uniform rule is for: fitting each column to its
+    own contents would rule S2 wide and S1 and S3 narrow.
+    """
+    fs = Flowsheet("t")
+    feed = fs.add(U.Feed("F"))
+    pump = fs.add(U.Pump("P-101"))
+    hex_ = fs.add(U.HeatExchanger("E-101"))
+    prod = fs.add(U.Product("P"))
+    s1 = fs.connect(feed.outlet, pump.suction)
+    s2 = fs.connect(pump.discharge, hex_.tube_in)
+    s3 = fs.connect(hex_.tube_out, prod.inlet)
+    s1.properties = {"P": "1 bar"}
+    s2.properties = {"P": "1013.25 mbara"}
+    s3.properties = {"P": "2 bar"}
+    return fs
+
+
+def test_the_floors_are_where_they_always_were():
+    fs = _two_and_two()
+    assert (fs.stream_table.label_width, fs.stream_table.column_width) == (122.0, 52.0)
+    assert _widths(fs) == (122.0, 52.0)
+
+
+def test_auto_drops_the_floor_and_rules_the_column_to_its_content():
+    fs = _two_and_two()
+    fs.stream_table.label_width = "auto"
+    fs.stream_table.column_width = "auto"
+    label, name = _widths(fs)
+    # The row-label column holds "Stream Number", which is wider than the
+    # one property name; a stream column holds "S1" and "25 C".
+    assert label == pytest.approx(_fits("Stream Number", bold=True))
+    assert name == pytest.approx(_fits("25 C"))
+    assert label < 122.0 and name < 52.0
+
+
+def test_each_floor_is_dropped_on_its_own():
+    """Two fields and not one switch: a sheet with long row labels and
+    two-character stream names wants the second dropped and the first left
+    exactly where it is."""
+    label_only, name_only = _two_and_two(), _two_and_two()
+    label_only.stream_table.label_width = "auto"
+    name_only.stream_table.column_width = "auto"
+    assert _widths(label_only) == (pytest.approx(_fits("Stream Number", bold=True)), 52.0)
+    assert _widths(name_only) == (122.0, pytest.approx(_fits("25 C")))
+
+
+def test_a_number_is_a_floor_and_not_a_width():
+    """Which is the whole of what these two fields are. A number below what
+    the column holds changes nothing -- the column is measured either way --
+    and a number above it is the way to buy a wide one."""
+    fs = _two_and_two()
+    fs.stream_table.label_width = 10.0
+    fs.stream_table.column_width = 10.0
+    assert _widths(fs) == _widths(_with(_two_and_two(), label_width="auto", column_width="auto"))
+    wide = _with(_two_and_two(), label_width=300.0, column_width=90.0)
+    assert _widths(wide) == (300.0, 90.0)
+
+
+def test_auto_rules_every_stream_column_at_the_widest_cell_in_the_table():
+    """Uniform and not fitted. A stream table is read down for one stream
+    and across for one property, so columns that did not line up would be a
+    worse drawing than wide ones -- and ``"auto"`` is therefore not a
+    promise of a narrow table, only of one with no slack in it."""
+    fs = _with(_one_long_value(), column_width="auto")
+    table = _layout(fs)
+    widths = {c.w for row in table.rows for c in row[1:]}
+    assert len(widths) == 1
+    assert widths.pop() == pytest.approx(_fits("1013.25 mbara"))
+
+
+def test_a_column_is_never_ruled_narrower_than_its_own_heading():
+    """The headings are measured with the values rather than beside them,
+    so the one long name rules the columns exactly as the one long value
+    does. A column too narrow for the stream number over it would be a
+    defect however much slack it saved."""
+    fs = _one_long_value()
+    for stream, name in zip(fs.streams, ("HPS-308-100-80-CS", "S2", "S3")):
+        stream.name = name
+    fs.stream_table.column_width = "auto"
+    table = _layout(fs)
+    assert table.rows[0][1].w == pytest.approx(_fits("HPS-308-100-80-CS", bold=True))
+
+
+def test_a_section_heading_still_widens_the_row_label_column_under_auto():
+    """A section heading spans the whole table, so it is content the table
+    has to hold and not slack ``"auto"`` may take out. The row-label column
+    is the only one free to take it up, exactly as at the default."""
+    fs = _with(_two_and_two(), label_width="auto", column_width="auto")
+    plain = _layout(fs).w
+    fs.stream_table_sections = [
+        ("Temperature", "Conditions at the Battery Limit, as Tendered and Guaranteed")
+    ]
+    label, name = _widths(fs)
+    assert label > plain - name * 3  # the label column took up the slack
+    assert label + name * 3 == pytest.approx(
+        _fits("Conditions at the Battery Limit, as Tendered and Guaranteed", bold=True)
+    )
+
+
+def test_a_stated_floor_follows_the_stated_type_size():
+    """Both floors are stated at 10.5, which is what lets them scale with
+    ``font_size``. A field that scaled only while it held its own default
+    would be a field an author cannot reason about, so 122.0 set by hand is
+    the 122.0 that was there."""
+    by_hand = _with(_two_and_two(), label_width=122.0, column_width=52.0, font_size=7.0)
+    left_alone = _with(_two_and_two(), font_size=7.0)
+    assert _widths(by_hand) == _widths(left_alone)
+    assert _widths(by_hand) == (pytest.approx(122.0 * 7.0 / 10.5), pytest.approx(52.0 * 7.0 / 10.5))
+
+
+def test_auto_composes_with_the_stated_type_size():
+    """Nothing left to scale, and the content measured at the size it is
+    drawn at: the table shrinks on both counts."""
+    big = _with(_two_and_two(), column_width="auto")
+    small = _with(_two_and_two(), column_width="auto", font_size=7.0)
+    assert _widths(small)[1] == pytest.approx(_fits("25 C", 7.0))
+    assert _layout(small).w < _layout(big).w
+
+
+@pytest.mark.parametrize("field", ["label_width", "column_width"])
+@pytest.mark.parametrize("value", ["fit", "", -1, None, True])
+def test_a_width_that_is_not_one_is_refused(field, value):
+    fs = _with(_two_and_two(), **{field: value})
+    with pytest.raises(ValueError, match=field):
+        _layout(fs)
+
+
+def test_the_widths_reach_the_drawio_export_too():
+    """The exporter states its own cell inset, so a table ruled to its
+    content has to come out of it the width the sheet ruled it -- not merely
+    a table that looked right in SVG. Both backends take the columns from
+    the one layout, so the .drawio carries the measured widths themselves."""
+    from pandid.render.drawio import _num
+
+    fs = _with(_two_and_two(), label_width="auto", column_width="auto")
+    label, name = _widths(fs)
+    xml = fs.to_drawio(show_stream_table=True)
+    assert f'width="{_num(label)}"' in xml
+    assert f'width="{_num(name)}"' in xml
+    assert f'width="{_num(label + name * 3)}"' in xml  # three tabulated columns
+
+
+def test_a_content_ruled_cell_still_clears_the_drawio_text_inset():
+    """The gutter is the clearance between a rule and a glyph and does not
+    scale, so it is what makes an ``"auto"`` table safe in the editable
+    model: draw.io insets a cell's own label before the sheet's pad is added,
+    and the gutter has to cover both sides of that."""
+    from pandid.render.drawio import _TEXT_INSET
+    from pandid.render.furniture import _STREAM_PAD, _STREAM_GUTTER
+
+    assert _STREAM_GUTTER >= _STREAM_PAD + _TEXT_INSET
+
+
 def test_a_sheet_that_states_no_property_draws_no_table():
     """Every column empty is the same finding writ large: a grid of
     headings over nothing is not a stream table."""

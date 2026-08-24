@@ -214,6 +214,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stream_table_sections` stays where it is: it is content -- the heading text
   the table draws -- and belongs beside `title_block` and `annotations`, not
   among the drafting choices.
+- **`fs.stream_table.label_width` and `.column_width`: the table's two width
+  floors can be raised, lowered or dropped (#477).**
+
+  ```python
+  fs.stream_table.column_width = "auto"     # rule the stream columns to content
+  ```
+
+  Every column was already measured from its contents and only *held up* by a
+  floor -- 122 drawing units for the row-label column, 52 for a stream column.
+  Those two numbers are a legibility judgement, they stay the default, and they
+  are worth their width on the sheet they were chosen for and nothing at all on
+  the sheet whose values carry their units. So they are now fields: a number is
+  the floor exactly as before, and `"auto"` drops it. On
+  `examples/13_mineral_dewatering.py` that takes the table from 1370 to 1182
+  drawing units, and on `21_alumina_refinery.py` from 2982 to 2593.
+
+  **The stream columns stay one width**, which is the decision the issue left
+  open. A stream table is read down for one stream and across for one property,
+  so `"auto"` measures every stream name and every value in the table and rules
+  every column at the widest of them, rather than fitting each to its own cell:
+  columns that did not line up would be a worse drawing than wide ones. The
+  headings are in that measurement rather than beside it, so no column is ever
+  ruled narrower than the stream number over it. `"auto"` is therefore never
+  wider than the floor it drops but is not a promise of a narrow table -- one
+  `1013.25 mbara` among three-figure values rules every column at it, and a
+  table `"auto"` does nothing for is one whose widest cell was already ruling.
+
+  Both compose with `font_size`, which scales them as it scales the row height:
+  both are stated at the type size they were chosen against, so 122.0 set by
+  hand is the 122.0 that was there. The gutter between a rule and a glyph is
+  untouched and does not scale, which is what keeps a content-ruled table safe
+  in the `.drawio` export, where a cell insets its own label before the sheet's
+  pad is added. All 21 shipped sheets are byte-identical.
 
 ### Changed
 

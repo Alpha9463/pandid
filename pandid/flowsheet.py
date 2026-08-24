@@ -380,10 +380,11 @@ class Flowsheet:
         # table draws -- which is why it is here beside `title_block`
         # and `annotations` and not on `stream_table` below.
         self.stream_table_sections: list[tuple[str, str]] = []
-        # How that table is drawn: its type size today, and whatever is
-        # asked of it next. An object rather than an attribute apiece,
-        # so the second option is a field on it and not another name on
-        # this class; see pandid.document.StreamTableOptions.
+        # How that table is drawn: its type size and its two column
+        # width floors today, and whatever is asked of it next. An
+        # object rather than an attribute apiece, so each new option is
+        # a field on it and not another name on this class; see
+        # pandid.document.StreamTableOptions.
         self.stream_table = StreamTableOptions()
 
     def _invalidate_layout(self) -> None:
@@ -2236,8 +2237,9 @@ class Flowsheet:
         Args:
             path: Output file path; its extension selects the format.
             show_stream_table: Draw a property table of all streams at
-                the bottom. How that table is drawn -- its type size --
-                is ``fs.stream_table``; see
+                the bottom. How that table is drawn -- its type size,
+                and how narrow its columns may be ruled -- is
+                ``fs.stream_table``; see
                 :class:`~pandid.document.StreamTableOptions`.
             border: ``"none"`` or ``"zone"`` (the zone-ruled frame).
             diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled

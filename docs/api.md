@@ -2464,20 +2464,16 @@ s.properties = {"Flow (kg/h)": ""}   # nothing to report, and the column says so
 #### Sizing the table
 
 ```python
-fs.stream_table.font_size = 8.0     # default: None, sized from the column count
+fs.stream_table.font_size    = 8.0      # default: None, sized from the column count
+fs.stream_table.label_width  = 122.0    # default: the row-label column's floor
+fs.stream_table.column_width = 52.0     # default: every stream column's floor
 ```
 
 Left alone, the table is set at 10.5 up to 18 columns and shrinks from there. A
 size stated here **rules the table and not only its lettering**: the row height
-and the minimum column widths follow it in proportion, so a table that overruns
-an A3 sheet has a remedy short of a bigger page. A size that is not a positive
-number raises `ValueError`.
-
-It is one field on an object rather than a bare `fs.stream_table_font_size`
-because the next table option will be a field on the same object rather than a
-tenth keyword on `render()`, and because a table option describes the sheet
-rather than the file — it means the same thing to `to_drawio()` as to
-`to_svg()`. It comes through the spec as `stream_table:`.
+and the two column-width floors follow it in proportion, so a table that
+overruns an A3 sheet has a remedy short of a bigger page. A size that is not a
+positive number raises `ValueError`.
 
 Every column is ruled wide enough for everything drawn in it: the row labels,
 the stream number or line number heading the column, the values under it, and
@@ -2486,6 +2482,30 @@ layout rather than a fixed budget, so a long row label or a value carrying its
 units widens the table rather than running into the cell beside it. On a fixed
 `page_size` that can make the table the thing that will not fit, which raises
 and says so.
+
+The two widths are **floors on that measurement, not widths**. The defaults keep
+a table of two-character names and three-figure values from being ruled too
+narrow to read across; a bigger number buys a wider column, and `"auto"` drops
+the floor and rules the column to its content:
+
+```python
+fs.stream_table.column_width = "auto"   # no slack in the stream columns
+```
+
+The stream columns are one width, always — a stream table is read down for one
+stream and across for one property — so `"auto"` measures every stream name and
+every value in the table and rules every column at the widest of them. One
+`1013.25 mbara` among three-figure values therefore rules all of them at it.
+`"auto"` is never wider than the floor it drops, but it is not a promise of a
+narrow table; a table it does nothing for is one whose widest cell was already
+doing the ruling. A width that is neither a number nor `"auto"`, or a negative
+one, raises `ValueError`.
+
+The three are fields on one object rather than three names on `Flowsheet`
+because a table option describes the sheet rather than the file — it means the
+same thing to `to_drawio()` as to `to_svg()` — and because the next one will be
+a field on the same object rather than a tenth keyword on `render()`. They come
+through the spec as `stream_table:`.
 
 ---
 
