@@ -34,20 +34,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   device in the run — and now passes a real `T-701` on its way to the
   condensate header.
 
-  The draw.io export has no stencil to name, so it stands the body in
-  with a built-in ellipse and reports what that costs, the way the other
-  hand-drawn in-line devices already do.
+  The draw.io export has no stencil to name, so it is a stand-in — and
+  the stand-in draws what it can. A single built-in over the cell would
+  have been an oval half again too wide with both leads inside it, so
+  the cell carries three pieces instead: the body ellipse and a line for
+  each lead, placed by the symbol's own dimensions so the two backends
+  cannot drift. What is left is the mark, and that is what the export
+  reports losing.
+- **`_Approximation(pieces=…)`**: a draw.io stand-in may now be several
+  built-ins with a rectangle each, in fractions of the cell, rather than
+  one shape stretched over the whole of it. `inscribed=` already drew a
+  second outline filling the same box, which is right for a square with
+  a diamond in it and wrong for anything whose parts sit at different
+  places along the cell.
+- **`drawio-approximated` now also reports a reproportioned body.** A
+  symbol that may not be distorted is centred on the sheet and
+  letterboxed, and no draw.io built-in can be told to keep its shape, so
+  an author who sizes one to a box of another shape gets a drawing the
+  two backends disagree about. That was silent. It now says so, and only
+  when it happens.
 - **`tests/test_symbol_identity.py`**: no two registered drawings may be
-  byte-identical unless they are literally the same `Symbol` object
-  registered twice, which is how a deliberate alias is spelled
-  (`centrifuge/default` and `centrifuge/decanter`; `instrument/logic` and
-  `instrument/sis`). A duplicate that is not an alias is a placeholder,
-  and a placeholder draws someone else's equipment without saying so.
+  byte-identical unless the library *says* they are the one drawing —
+  either the same `Symbol` object under two keys (`centrifuge/default`
+  and `centrifuge/decanter`; `instrument/logic` and `instrument/sis`) or
+  one vendored stencil under two names (a bare `Valve` is a gate valve;
+  a bare `Separator` is the drum a bare `Vessel` is). Anything else is
+  two drawings that merely happen to match, which is what a placeholder
+  is. The comparison ignores the `id` a symbol carries to be `<use>`d
+  by, since that follows the variant spelling and would otherwise hide
+  every duplicate behind the very names that duplicate it.
+
+  A duplicate needs two drawings, and the original defect was one
+  placeholder mapped on its own — so a second guard asks what each
+  drawing *is*: a registered drawing is never a bare rectangle
+  coincident with its own box, which is what an unconverted placeholder
+  looks like at any size. `block/default` is the one drawing that is
+  legitimately its own box and is named.
+
   The vendored stencil files are checked at their own level too: every
   group of byte-identical shapes upstream ships is recorded, so a
   re-vendor that brings in a new one has to be looked at, and no group
-  may reach the registry with two members still identical. No
-  allow-list — nothing pandid registers today draws a lie.
+  may reach the registry with two members still identical.
 - **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
   registry had no symbol for, and all three were being faked in a shipped
   example with an apology in its source (#474). `examples/21_alumina_refinery`

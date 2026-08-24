@@ -34,27 +34,34 @@ import collections
 import hashlib
 import importlib.util
 import pathlib
+import re
 import xml.etree.ElementTree as ET
 from typing import Any, Iterator
 
 import pytest
 
+from pandid.render.svg import _affine
 from pandid.render.symbols import Symbol, default_registry
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def _vendor_symbols() -> Any:
-    """``scripts/vendor_symbols.py``, imported by path.
+def _script(name: str) -> Any:
+    """One of the dev-only generator scripts, imported by path.
 
-    The generators are dev-only and not part of the package, so they are
-    not importable as one. Same approach as
-    ``tests/test_symbol_invariants._script``; kept local rather than
-    imported across test modules, which would make one file's collection
-    depend on another's.
+    They are not part of the package and not importable as one. Same
+    approach as ``tests/test_symbol_invariants._script``; kept local
+    rather than imported across test modules, which would make one
+    file's collection depend on another's.
+
+    By path rather than by putting ``scripts/`` on ``sys.path`` and
+    importing: a plain ``import`` of a directory added at run time is a
+    name a type checker cannot resolve, and these tests are held to
+    checking clean.
     """
-    path = ROOT / "scripts" / "vendor_symbols.py"
-    spec = importlib.util.spec_from_file_location("_pandid_script_vendor", path)
+    spec = importlib.util.spec_from_file_location(
+        f"_pandid_script_{name}", ROOT / "scripts" / f"{name}.py"
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -121,14 +128,93 @@ def _shapes(path: pathlib.Path) -> "Iterator[tuple[str, ET.Element]]":
         yield shape.get("name", "?"), shape
 
 
-def _artwork(symbol: Symbol) -> str:
-    """The bytes that decide what a reader sees: the drawing and its box.
+#: Attributes that name a drawing rather than draw it.
+#:
+#: Every symbol wraps its ink in ``<g id="sym_...">`` so the renderer has
+#: a ``<defs>`` key to ``<use>``, and that id follows the *variant
+#: spelling*. Hashing it would mean two identical drawings under two
+#: device names hashed apart purely because they are under two device
+#: names -- which is precisely the case this file exists to catch, so it
+#: is precisely the attribute that must not be in the hash.
+_NAMING_ONLY = re.compile(r'\s(?:id|class)="[^"]*"')
 
-    Not the whole Symbol. Two drawings that differ only in a port name or
-    an ``iso_reg`` are still the same ink on the page, which is exactly
-    the confusion a placeholder causes.
+
+def _drawn(svg: str) -> "list[tuple[ET.Element, float]]":
+    """Every painted element in *svg*, with the uniform scale over it.
+
+    ``<g>`` is structure, not ink: the vendored symbols wrap their
+    artwork in ``<g transform="scale(0.25)">`` and the reader sees
+    through it. So the tree is flattened and each element carries the
+    scale that reaches it, which is what lets a drawing be measured
+    against its own box whether or not it was drawn at that box size.
     """
-    return f"{symbol.width}x{symbol.height}|{symbol.svg}"
+    out: "list[tuple[ET.Element, float]]" = []
+
+    def walk(node: "ET.Element", scale: float) -> None:
+        for child in node:
+            if child.tag == "g":
+                sx, sy, _tx, _ty = _affine(child.get("transform", ""))
+                walk(child, scale * (abs(sx) + abs(sy)) / 2)
+            else:
+                out.append((child, scale))
+
+    walk(ET.fromstring(svg), 1.0)
+    return out
+
+
+def _artwork(symbol: Symbol) -> str:
+    """The ink, and the box it is drawn in -- and nothing that only names it.
+
+    Not the whole ``Symbol``: two drawings that differ in a port name or
+    an ``iso_reg`` are still the same ink on the page, which is exactly
+    the confusion a placeholder causes. And not the raw markup either --
+    see :data:`_NAMING_ONLY`.
+    """
+    return f"{symbol.width}x{symbol.height}|{_NAMING_ONLY.sub('', symbol.svg)}"
+
+
+#: The one registered drawing that is legitimately nothing but its own box.
+#:
+#: A block flow diagram block **is** a rectangle: the stage is drawn as a
+#: box and what identifies it is the lettering inside, which the renderer
+#: puts there rather than the symbol. So it is the single exception
+#: :func:`test_no_registered_drawing_is_a_bare_box` allows, and it is
+#: named here rather than inferred, so that a second drawing arriving in
+#: this state has to be argued for.
+BARE_BOX_BY_DESIGN = {("block", "default")}
+
+
+def _is_bare_box(symbol: Symbol) -> bool:
+    """Is the whole of this drawing one rectangle, coincident with its box?
+
+    That is what a placeholder converts to, and what it looks like at any
+    size: the draw.io "Steam Trap" is a 50 x 50 ``<rect>`` with an empty
+    foreground, which comes through this library's converter as a single
+    rect filling the symbol's box -- 12.5 x 12.5 once ``piping.xml``'s
+    own 0.25 is applied, and 60 x 60 for
+    ``SymbolRegistry._generic_symbol``. Comparing against either one of
+    those *artworks* catches only that one size, which is why this asks
+    the question structurally instead.
+
+    Deliberately narrow. Sixty-two shipped drawings are a single
+    ``<path>`` and every one of them says something -- a vessel's shell,
+    a valve's bowtie -- so "one element" is not the test. "One element,
+    and it is the bounding box" is: a drawing that traces only the extent
+    it was given has nothing in it a reader could read.
+    """
+    drawn = _drawn(symbol.svg)
+    if len(drawn) != 1:
+        return False
+    element, scale = drawn[0]
+    if element.tag != "rect":
+        return False
+    span = 0.01 * max(symbol.width, symbol.height)
+    return (
+        abs(float(element.get("x", 0)) * scale) <= span
+        and abs(float(element.get("y", 0)) * scale) <= span
+        and abs(float(element.get("width", 0)) * scale - symbol.width) <= span
+        and abs(float(element.get("height", 0)) * scale - symbol.height) <= span
+    )
 
 
 def test_the_vendored_stencils_hold_exactly_the_duplicate_groups_recorded_here():
@@ -139,7 +225,7 @@ def test_the_vendored_stencils_hold_exactly_the_duplicate_groups_recorded_here()
     unremarked -- and then be available for someone to map in KIND_MAP,
     which is #367 happening a second time.
     """
-    stencils = _vendor_symbols().STENCILS
+    stencils = _script("vendor_symbols").STENCILS
     found: "dict[str, tuple[tuple[str, ...], ...]]" = {}
     for path in sorted(pathlib.Path(stencils).glob("*.xml")):
         groups: "dict[str, list[str]]" = collections.defaultdict(list)
@@ -176,7 +262,7 @@ def test_no_duplicate_group_reaches_the_registry_undistinguished():
     ball valve as vendored, and a different drawing by the time it is
     registered.
     """
-    vendor = _vendor_symbols()
+    vendor = _script("vendor_symbols")
     registered: "dict[tuple[str, str], list[str]]" = collections.defaultdict(list)
     for (kind, variant), entry in vendor.KIND_MAP.items():
         if isinstance(entry, tuple):
@@ -204,15 +290,31 @@ def test_no_two_registered_drawings_are_byte_identical():
 
     Every registered ``(kind, variant)`` is a drawing a user can ask for by
     name, and two names resolving to the same ink means one of them is
-    drawing the other one's equipment.
+    drawing the other one's equipment -- unless the library *said* they
+    were the same drawing. There are two ways of saying it, and both are
+    a statement in the data rather than a coincidence in the output:
 
-    The one legitimate exception is an **alias**: one ``Symbol`` object
-    deliberately registered under two keys, so that ``Centrifuge(...)`` and
-    ``variant="decanter"`` cannot drift apart, and ``instrument/sis`` and
-    ``instrument/logic`` stay the one square-and-diamond. That is identity,
-    not coincidence, so it is tested as identity -- ``is``, not ``==``. A
-    second drawing that merely *happens* to match another still fails, and
-    that is the case a placeholder is in.
+    1. **One ``Symbol`` object under two keys.** ``Centrifuge(...)`` and
+       ``variant="decanter"`` are the one drawing, and so are
+       ``instrument/sis`` and ``instrument/logic``; registering the same
+       object twice is what stops them drifting apart.
+    2. **One vendored stencil under two names.** A bare ``Valve`` is a
+       gate valve, a bare ``Separator`` is the same drum a bare ``Vessel``
+       is, and each pair maps to one shape in
+       ``scripts/vendor_symbols.KIND_MAP``. The generator emits a
+       ``Symbol`` per entry, so these are separate objects -- but they
+       carry the same :attr:`~pandid.render.symbols.Symbol.drawio_shape`,
+       and that key is derived from the stencil itself. Two drawings that
+       name one stencil are one drawing by construction.
+
+    Anything else is two drawings that merely *happen* to match, which is
+    exactly what a placeholder is: draw.io's "Steam Trap" and its
+    "Desuper Heater" are byte-identical and are two different shapes with
+    two different keys, so vendoring both would fail here.
+
+    No allow-list. Every collision in the shipped registry is declared by
+    one of the two rules above, and a drawing that cannot say which is a
+    drawing nobody has decided about.
     """
     symbols = default_registry._symbols
     by_artwork: "dict[str, list[tuple[str, str]]]" = collections.defaultdict(list)
@@ -223,38 +325,73 @@ def test_no_two_registered_drawings_are_byte_identical():
     for keys in by_artwork.values():
         if len(keys) == 1:
             continue
-        first = symbols[keys[0]]
-        if all(symbols[key] is first for key in keys):
-            continue  # a deliberate alias: one object, two names
+        drawings = [symbols[key] for key in keys]
+        if all(drawing is drawings[0] for drawing in drawings):
+            continue  # one object, two names
+        stencils = {drawing.drawio_shape for drawing in drawings}
+        if len(stencils) == 1 and drawings[0].drawio_shape:
+            continue  # one vendored stencil, two names
         offenders.append(", ".join(f"{kind}/{variant}" for kind, variant in sorted(keys)))
 
     assert offenders == [], (
-        "these registered drawings are byte-identical without being the same Symbol "
-        "object, so the library ships one drawing under two device names and a sheet "
-        "asking for either gets the same picture: "
+        "these registered drawings are byte-identical, and nothing in the "
+        "library says they are meant to be the one drawing -- they are neither "
+        "the same Symbol object nor the same vendored stencil. So the library "
+        "ships one picture under two device names and a sheet asking for either "
+        "gets the other one's equipment: "
         + "; ".join(sorted(offenders))
-        + ". If they are meant to be one drawing, register the one object twice the "
-        "way centrifuge/default and instrument/logic do, so they cannot drift; if "
-        "they are meant to be two, one of them has no artwork yet and must not be "
-        "registered until it does (#367)."
+        + ". If they are meant to be one drawing, register the one object twice "
+        "the way centrifuge/default does; if they are meant to be two, one of "
+        "them has no artwork yet and must not be registered until it does "
+        "(#367)."
     )
 
 
 @pytest.mark.parametrize("kind,variant", sorted(default_registry._symbols))
-def test_no_registered_drawing_is_the_generic_box(kind: str, variant: str):
-    """A registered drawing is never the empty fallback.
+def test_no_registered_drawing_is_a_bare_box(kind: str, variant: str):
+    """A registered drawing always draws something.
 
-    ``SymbolRegistry._generic_symbol`` is the plain square drawn for a unit
-    kind from outside this package, and it is the *right* answer there. It
-    is never the right answer for a kind pandid ships: registering it would
-    be the same silent substitution #367 is about, reached from the other
-    direction -- and it is what vendoring draw.io's "Steam Trap" would have
-    produced, since that shape converts to exactly an empty box.
+    This is #367's defect reached from the direction that actually
+    happens. The duplicate guards above need **two** drawings to compare;
+    a placeholder mapped on its own has nothing to collide with, and that
+    was the original defect -- the draw.io "Steam Trap" registered alone
+    would have drawn an empty box under a device name and nothing would
+    have said so.
+
+    So this asks what the drawing *is* rather than what it equals. A kind
+    with no artwork must stay unregistered, so that asking for it is
+    refused (``SymbolRegistry.get`` raises) rather than answered with a
+    blank -- which is the difference between a gap and a lie.
     """
-    generic = _artwork(default_registry._generic_symbol())
-    symbol = default_registry.get(kind, variant)
-    assert _artwork(symbol) != generic, (
-        f"{kind}/{variant} is registered as the generic empty box, which draws "
-        f"nothing and says nothing. A kind with no artwork must stay unregistered, "
-        f"so that asking for it is refused rather than answered with a blank."
+    if (kind, variant) in BARE_BOX_BY_DESIGN:
+        return
+    assert not _is_bare_box(default_registry.get(kind, variant)), (
+        f"{kind}/{variant} draws nothing but its own bounding box, which says "
+        f"nothing about what the equipment is. That is what an unconverted "
+        f"placeholder stencil looks like (#367). Either draw it, or leave it "
+        f"unregistered so that asking for it is refused; if it really is a plain "
+        f"box, name it in BARE_BOX_BY_DESIGN with the reason."
     )
+
+
+def test_the_bare_box_guard_still_has_a_placeholder_to_catch():
+    """The guard above is only worth having if it fires, and what it has
+    to fire on is not hypothetical: it is a shape sitting in the vendored
+    data today.
+
+    So the placeholder is put through the real converter and asked. This
+    is the non-vacuity proof kept in the suite rather than done once by
+    hand -- if the converter ever started producing something with ink in
+    it, or ``_is_bare_box`` stopped recognising a blank, this says so.
+    """
+    vendor = _script("vendor_symbols")
+    index = dict(_shapes(pathlib.Path(vendor.STENCILS) / "piping.xml"))
+    body, width, height, *_rest = _script("mxgraph_to_svg").convert_shape(index["Steam Trap"])
+    placeholder = Symbol(svg=f"<g>{body}</g>", width=width, height=height)
+    assert _is_bare_box(placeholder), (
+        "the draw.io Steam Trap no longer converts to a bare box, so the guard "
+        "that catches a placeholder registered on its own is no longer known "
+        "to catch anything. Check what it draws now."
+    )
+    # And the drawing pandid ships instead is not one.
+    assert not _is_bare_box(default_registry.get("fitting", "steam_trap"))

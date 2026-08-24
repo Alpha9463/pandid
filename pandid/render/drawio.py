@@ -202,8 +202,8 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _FIT_CODES, _furniture_name,
                                draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
-from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
-                                   wears_arrowhead)
+from pandid.render.symbols import (ARROWHEAD, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
+                                   closed_marking, fail_marking, wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -592,6 +592,36 @@ class _Fit(NamedTuple):
         return self.scale * v
 
 
+class _Piece(NamedTuple):
+    """One built-in placed *inside* a stand-in's cell, in fractions of it.
+
+    :attr:`_Approximation.inscribed` draws a second outline filling the
+    same box, which is the whole answer for a square with a diamond in
+    it. It is not the answer for a drawing whose parts sit at different
+    places along the cell: a steam trap is a body 4 M across with a 1 M
+    run each side of it, so an ``ellipse`` over the whole cell draws an
+    oval a module and a half too wide and swallows both leads.
+
+    So a stand-in may instead be a *list* of built-ins with a rectangle
+    each, stated in fractions of the cell exactly as
+    :class:`~pandid.render.symbols.Overlay` states a part's -- and
+    converted by the same arithmetic, in :meth:`DrawioRenderer._pieces`.
+    The parent cell then draws nothing itself and is the box the
+    connection points are fractions of, which is what keeps a stream
+    landing where it was routed.
+
+    ``shape`` is a built-in, never a stencil key, for
+    :class:`_Approximation`'s own reason. ``None`` is draw.io's
+    rectangle, which is a real answer for a piece that is one.
+    """
+
+    shape: "str | None"
+    x: float
+    y: float
+    w: float
+    h: float
+
+
 class _Approximation(NamedTuple):
     """A draw.io built-in standing in for a symbol draw.io has no
     stencil for.
@@ -639,7 +669,19 @@ class _Approximation(NamedTuple):
     weight: float = _EQUIPMENT_STROKE
     keys: tuple = ()
     inscribed: "str | None" = None
+    pieces: "tuple[_Piece, ...]" = ()
 
+
+#: How far a cell's proportions may drift from its symbol's before the
+#: export says the drawing is being reproportioned
+#: (:meth:`DrawioRenderer._report_reshape`).
+#:
+#: A ratio, not a length, and loose on purpose: the layout engine sizes a
+#: box in drawing units and rounds, so a symbol placed "at its own size"
+#: arrives a hair off square and a strict comparison would report every
+#: balloon on the sheet. One part in a thousand is far tighter than any
+#: reproportioning a reader could see and far looser than that rounding.
+_ASPECT_SLACK = 1e-3
 
 #: The code every ``lost`` sentence is reported under.
 #:
@@ -954,15 +996,40 @@ _APPROXIMATIONS = {
     # ISO 10628-2 item 24.15 (2181), the steam trap. draw.io has a shape
     # called "Steam Trap" and it is an empty rectangle byte-identical to
     # the same file's "Desuper Heater", so there is no stencil to name
-    # here -- see the block in ``scripts/vendor_symbols.py``. The
-    # built-in ellipse gets the body's outline right, which is more than
-    # the default rectangle would, and what it cannot draw is the mark
-    # inside: the whole of what tells this row from a plain circle. So
-    # the loss is stated rather than left to be noticed.
+    # here -- see the block in ``scripts/vendor_symbols.py``.
+    #
+    # Three pieces rather than one shape, because the drawing is not one
+    # shape: a body 4 M across with a 1 M run each side of it. A single
+    # ``ellipse`` over the cell would draw an oval a module and a half
+    # too wide and swallow both leads, and would then be a stand-in whose
+    # own sentence understated it -- the body outline is the part a
+    # reader would take on trust. The fractions are the symbol's own
+    # dimensions divided by its width, so the two backends draw the body
+    # and the leads at one set of numbers and cannot drift.
+    #
+    # ``line`` is mxGraph's own ``mxLine``, which paints a single stroke
+    # across its box at mid-height; it turns only for ``direction`` north
+    # or south, and nothing here sets one. So a lead is a box as tall as
+    # the body with the run drawn through its middle, which puts the ink
+    # on the centre line both nozzles sit on.
+    #
+    # What is genuinely not drawable is the mark, and that is the whole
+    # of ``lost``: no built-in draws a chord across an ellipse, and none
+    # fills one side of it.
     ("fitting", "steam_trap"): _Approximation(
-        "ellipse",
+        None,
         "the 45-degree diameter across the body and the discharge half filled below it",
-        weight=_TRIM_STROKE),
+        # Transparent, like every stand-in here that is not a balloon:
+        # the drawn body fills white, and so do the two in-line mixers'
+        # boxes, and neither is exported opaque. See
+        # ``test_only_the_balloons_are_drawn_opaque``.
+        weight=_TRIM_STROKE,
+        pieces=(
+            _Piece("line", 0.0, 0.0, TRAP_LEAD / TRAP_W, 1.0),
+            _Piece("ellipse", TRAP_LEAD / TRAP_W, 0.0, TRAP_BODY_D / TRAP_W, 1.0),
+            _Piece("line", (TRAP_LEAD + TRAP_BODY_D) / TRAP_W, 0.0,
+                   TRAP_LEAD / TRAP_W, 1.0),
+        )),
     # Item 12.4, the kneader: the casing and the wave its blades draw.
     ("kneader", "default"): _Approximation(
         None, "the casing and the wave the blades draw across it"),
@@ -1789,6 +1856,13 @@ class DrawioRenderer:
             # `_generic_symbol`'s 60-unit box, ruled at the same weight
             # everything else is.
             return keys + [f"strokeColor={_INK}", f"fillColor={_NO_FILL}", weight]
+        if approx.pieces:
+            # The drawing is in the pieces (:meth:`_pieces`), so the cell
+            # itself draws nothing: left visible it would rule a box
+            # round a symbol that has none. It stays a real vertex --
+            # this is what the connection points are fractions of, and
+            # what a reader drags -- and only its ink is taken away.
+            return keys + ["strokeColor=none", f"fillColor={_NO_FILL}"]
         return keys + [*approx.keys, f"strokeColor={approx.stroke}",
                        f"fillColor={approx.fill}",
                        f"strokeWidth={fit.length(approx.weight):g}"]
@@ -1975,8 +2049,10 @@ class DrawioRenderer:
         else's line is.
 
         A symbol that is **two outlines** gets a second cell, inscribed
-        in the first: see :meth:`_inscribed`. A **composed** symbol gets
-        one cell per supplementary part: see :meth:`_overlay_cells`.
+        in the first: see :meth:`_inscribed`. A symbol whose parts sit at
+        different places along the cell gets one cell per part: see
+        :meth:`_pieces`. A **composed** symbol gets one cell per
+        supplementary part: see :meth:`_overlay_cells`.
         """
         sym = self.registry.for_unit(u)
         approx = self._approximation(u, sym)
@@ -1988,6 +2064,7 @@ class DrawioRenderer:
                 "warning", APPROXIMATED,
                 f"{u.name} has no draw.io stencil and is exported as a stand-in, "
                 f"which loses {approx.lost}"))
+        self._report_reshape(u, sym, approx)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
@@ -2005,8 +2082,85 @@ class DrawioRenderer:
             *body,
             '        </mxCell>',
             *self._inscribed(cid, approx, x1 - x0, y1 - y0, fit),
+            *self._pieces(cid, approx, x1 - x0, y1 - y0, fit),
             *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.name),
         ]
+
+    def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
+        """Say so when draw.io will stretch a drawing the sheet holds still.
+
+        :attr:`~pandid.render.symbols.Symbol.stretchable` is a *stencil*
+        attribute, and for every vendored reference it is true -- the
+        module docstring says the box is then the whole of the mapping,
+        and a test pins that every referenced stencil is ``variable``.
+        A **stand-in** has no such attribute to carry: draw.io scales a
+        built-in into whatever cell it is given, and there is no way to
+        ask an ``ellipse`` to stay a circle.
+
+        So for the twelve symbols that may not be distorted, the two
+        backends part company the moment an author sizes one to a box of
+        another shape: :func:`~pandid.portgeom.ink_box` centres the
+        artwork on the sheet and leaves the letterbox blank, and draw.io
+        stretches it to the cell. That is a real divergence and it used
+        to be silent, which is the one thing this backend promises not to
+        be. It is reported rather than repaired because repairing it
+        means handing draw.io the letterboxed rectangle instead of the
+        unit's box, and a cell that is not the unit's box is a different
+        change with its own consequences for every port fraction on it.
+
+        Silent in the ordinary case, which is the point: a symbol drawn
+        at its own proportions has nothing to report.
+        """
+        if approx is None or sym.stretchable:
+            return
+        x0, y0, x1, y1 = self._cell_box(u)
+        w, h = x1 - x0, y1 - y0
+        if not (w > 0 and h > 0 and sym.width > 0 and sym.height > 0):
+            return
+        # Same aspect, same drawing: a uniform scale is not a distortion.
+        if abs(w / h - sym.width / sym.height) <= _ASPECT_SLACK:
+            return
+        self._findings.append(Issue(
+            "warning", APPROXIMATED,
+            f"{u.name} is drawn to a box of {w:g} x {h:g} and its symbol keeps its "
+            f"shape, so the sheet centres the drawing and leaves the rest blank; "
+            f"draw.io has no stand-in that can refuse to be stretched, so the "
+            f"export fills the cell instead and the drawing comes out reproportioned"))
+
+    @staticmethod
+    def _pieces(cid: str, approx: "_Approximation | None",
+                w: float, h: float, fit: "_Fit") -> list[str]:
+        """A stand-in that is several built-ins, one cell each.
+
+        See :class:`_Piece` for why. The arithmetic is
+        :meth:`_overlay_cells`', because the convention is the same one:
+        a rectangle in fractions of the parent's box, and a child's
+        geometry is already relative to its parent's.
+
+        ``connectable=0`` and ``movable=0`` for the reasons
+        :meth:`_inscribed` gives -- a piece is *part of* the symbol, and
+        a stream belongs on the parent's connection points rather than
+        on a lead the parent happens to be drawn with.
+        """
+        if approx is None or not approx.pieces:
+            return []
+        out: list[str] = []
+        for i, piece in enumerate(approx.pieces):
+            keys = [] if piece.shape is None else [f"shape={piece.shape}"]
+            style = ";".join([
+                "html=1", "rounded=0", *keys,
+                f"strokeColor={approx.stroke}", f"fillColor={approx.fill}",
+                f"strokeWidth={fit.length(approx.weight):g}",
+                "connectable=0", "movable=0"]) + ";"
+            out += [
+                f'        <mxCell id="{cid}-s{i}" value="" style={_attr(style)} '
+                f'vertex="1" parent="{cid}">',
+                f'          <mxGeometry x="{_num(piece.x * w)}" '
+                f'y="{_num(piece.y * h)}" width="{_num(piece.w * w)}" '
+                f'height="{_num(piece.h * h)}" as="geometry" />',
+                '        </mxCell>',
+            ]
+        return out
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
                        fit: "_Fit", owner: str = "") -> list[str]:

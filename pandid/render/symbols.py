@@ -3376,7 +3376,7 @@ _KNEADER = Symbol(
 #: circle 4 M across, centred on a grid node, with the run on its own
 #: horizontal diameter. Every other length here is a dimension of its
 #: own rather than a fraction of this one.
-_TRAP_BODY_D = 40.0
+TRAP_BODY_D = 40.0
 
 #: The run drawn each side of the body, in drawing units: 1 M.
 #:
@@ -3386,12 +3386,12 @@ _TRAP_BODY_D = 40.0
 #: port off ink draws a stream that stops short of its device, which
 #: ``tests/test_symbol_invariants`` refuses -- so the same 1 M is drawn
 #: as real line from the box edge to the body.
-_TRAP_LEAD = 10.0
+TRAP_LEAD = 10.0
 
-_TRAP_W = _TRAP_LEAD + _TRAP_BODY_D + _TRAP_LEAD
-_TRAP_H = _TRAP_BODY_D
-_TRAP_R = _TRAP_BODY_D / 2
-_TRAP_CX = _TRAP_LEAD + _TRAP_R
+TRAP_W = TRAP_LEAD + TRAP_BODY_D + TRAP_LEAD
+_TRAP_H = TRAP_BODY_D
+_TRAP_R = TRAP_BODY_D / 2
+_TRAP_CX = TRAP_LEAD + _TRAP_R
 _TRAP_CY = _TRAP_H / 2
 
 #: Half the inclined diameter, resolved onto each axis.
@@ -3404,12 +3404,12 @@ _TRAP_SEAT = _TRAP_R / math.sqrt(2)
 
 #: The two nozzles, on the body's own horizontal diameter, at the ends
 #: of the leads above.
-_TRAP_PORTS = {"inlet": (0.0, _TRAP_CY), "outlet": (_TRAP_W, _TRAP_CY)}
+_TRAP_PORTS = {"inlet": (0.0, _TRAP_CY), "outlet": (TRAP_W, _TRAP_CY)}
 
 #: Layer 1, the run: the line into the body and the line out of it.
 _TRAP_RUN = (
-    f'<path d="M 0 {_TRAP_CY:g} L {_TRAP_LEAD:g} {_TRAP_CY:g} '
-    f'M {_TRAP_LEAD + _TRAP_BODY_D:g} {_TRAP_CY:g} L {_TRAP_W:g} {_TRAP_CY:g}" '
+    f'<path d="M 0 {_TRAP_CY:g} L {TRAP_LEAD:g} {_TRAP_CY:g} '
+    f'M {TRAP_LEAD + TRAP_BODY_D:g} {_TRAP_CY:g} L {TRAP_W:g} {_TRAP_CY:g}" '
     f'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
@@ -3445,7 +3445,7 @@ _STEAM_TRAP = Symbol(
     svg='<g id="sym_fitting_steam_trap">'
         + _TRAP_RUN + _TRAP_BODY + _TRAP_DISCHARGE
         + '</g>',
-    width=_TRAP_W, height=_TRAP_H,
+    width=TRAP_W, height=_TRAP_H,
     ports=dict(_TRAP_PORTS),
     # The roundness carries the meaning: the mark is a diameter at 45
     # degrees, and a body stretched to a box of another shape is an
