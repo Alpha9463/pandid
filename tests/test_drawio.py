@@ -188,10 +188,16 @@ def test_a_symbol_with_no_stencil_is_an_approximation_that_was_written_down(entr
 def test_a_shape_key_survives_being_written_into_a_style(entry):
     """A draw.io style is ``key=value`` pairs split on ``;``.
 
-    Forty-eight of the vendored shape names carry punctuation upstream put
-    there -- "Tank (Dished Roof)", "Rotary Drum Drier, Tumbling Drier",
-    "Y-Type Strainer" -- and all of it travels into the key, because draw.io
-    builds its own key by the same rule and looks the result up exactly. Commas,
+    49 of the 136 distinct ``drawio_shape`` keys the registry files its symbols
+    under carry punctuation upstream put there -- "Tank (Dished Roof)", "Rotary
+    Drum Drier, Tumbling Drier", "Y-Type Strainer" -- and all of it travels into
+    the key, because draw.io builds its own key by the same rule and looks the
+    result up exactly. Counted over the distinct keys, which is what
+    ``pandid.render.drawio``'s own module docstring counts, and not over this
+    test's parameters: ``DRAWINGS`` walks the closed and turned drawings too and
+    so reaches several keys twice. Per character it is 38 keys with a ``(``, 38
+    with a ``)``, 16 with a comma and 13 with a hyphen, and none at all with an
+    ampersand or a slash. Commas,
     parentheses and hyphens are all safe in a style value. A ``;`` or an ``=``
     would not be: one would end the key early and the other would split it, and
     what draw.io would then fail to resolve is a name that never appears
@@ -2624,10 +2630,22 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
     exporter seeded `stream_numbers` with an empty list of plates where the
     sheet seeds it with every equipment tag it has already laid down, so the
     search was offered paper the sheet had already spent and took it --
-    `AE-302-300-80-SS` over `HV-301A`, `FB-301-200-160-SS` over `XV-301`,
-    seventeen numbers over four sheets. And a number on a vertical run was
-    written flat where the sheet turns it, so its lettering ran across the
-    corridor it was reserved a slot *along*.
+    `AE-302-300-80-SS` over `HV-301A`, `FB-301-200-160-SS` over `XV-301`. And a
+    number on a vertical run was written flat where the sheet turns it, so its
+    lettering ran across the corridor it was reserved a slot *along*.
+
+    How many that is depends on which boxes are measured, so both are written
+    down rather than one being quoted as if it were the number. Run the
+    empty-plate mutation and measure it the way
+    :class:`pandid.render.drawio._Tags` states it -- each number's own reserved
+    halo against the plates the tag pass laid down -- and it is seventeen over
+    five sheets: nine on 11, four on 14, two on 20 and one each on 09 and 13.
+    Measure it the way *this* test does -- the label box draw.io will lay out,
+    parsed back out of the emitted XML, against the tag labels and symbol boxes
+    in that same file -- and it is thirteen over four sheets: seven on 11, four
+    on 14 and one each on 09 and 13. Those are not the same boxes, so they are
+    not the same count. What both agree on is the assertion below: seeding `[]`
+    strikes tags and seeding the plates strikes none.
 
     Parsed back out of the emitted XML and measured, because a renderer that
     believes it stepped a label aside is not evidence of anything: draw.io's own

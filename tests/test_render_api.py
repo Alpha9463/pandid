@@ -935,6 +935,14 @@ def test_every_render_keyword_is_named_in_its_own_docstring():
     keyword's name. The docstring is also collapsed to single spaces first,
     so a name is not missed only because the prose describing it happened to
     wrap onto the next line.
+
+    **What this cannot see**, said plainly so nobody leans on it further than
+    it goes: it reads the signature and the prose, never the body. A keyword
+    that is accepted, documented and then ignored passes here, and so does one
+    whose docstring sentence says something false about it. The claim it does
+    make is narrow and real -- it fails on the revision before this branch,
+    where ``connections`` was on both signatures and in neither docstring --
+    and that is the whole of it.
     """
     import inspect
     import re

@@ -418,17 +418,36 @@ _CROWDED = {
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_the_overlay_writes_where_the_sheet_left_it_room(name):
-    """No overlay label under a halo, and no two of them on top of each other.
+    """Every label the sheet owes, written, and none of them buried: not under a
+    halo and not under another one of them.
 
-    One sweep for both, because they are one defect: a label that has not been
-    told where the plates and the other labels are lands on whichever it meets
-    first. The obstacles are read out of the drawn SVG rather than off the
-    placement code, for the reason ``test_halo_invariants`` reads them there --
-    what the invariant is about is what lands on the paper.
+    One sweep for the last two, because they are one defect: a label that has
+    not been told where the plates and the other labels are lands on whichever
+    it meets first. The obstacles are read out of the drawn SVG rather than off
+    the placement code, for the reason ``test_halo_invariants`` reads them there
+    -- what the invariant is about is what lands on the paper.
+
+    The count is checked first, and it is not decoration. "None of them is
+    buried" is satisfied by writing none of them: replacing
+    ``pandid.render.debug._settle`` with ``lambda labels, bounds: ([], [])``
+    passed this on all 22 sheets, ``_CROWDED`` and all, because zero labels
+    trivially overlap nothing. So the placement pass now has to hand back
+    everything the label pass handed it. The expected number is *derived* --
+    one anchor label per placed unit and one port label per nozzle, which is
+    what :func:`pandid.render.debug._labels` builds -- and not a pinned table,
+    so a sheet that gains a unit moves it without anyone editing a constant.
+    What that does not check is the label pass itself: a ``_labels`` that
+    stopped building anchors would move both sides together. It is the
+    placement pass this file is about.
     """
     fs, kwargs = CORPUS[name]()
     svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS}, debug=True)
     halos, labels = _halos(svg), _placed(svg)
+    expected = sum(1 + len(u.ports) for u in fs.units if u.frame is not None)
+    assert len(labels) == expected, (
+        f"{name}: the overlay wrote {len(labels)} labels where the sheet has "
+        f"{expected} to write -- one per placed unit and one per nozzle"
+    )
     buried = [
         text
         for i, (box, text) in enumerate(labels)
