@@ -247,6 +247,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   untouched and does not scale, which is what keeps a content-ruled table safe
   in the `.drawio` export, where a cell insets its own label before the sheet's
   pad is added. All 21 shipped sheets are byte-identical.
+- **The types the reference names are on the package** (#441): `Port`,
+  `Stream`, `Pin`, `Frame`, `Route`, `Loop`, `ControlLoop`, `ValveStation`,
+  `Issue`, `TitleBlock`, `Revision`, `Annotation` and `TableBox`. `docs/api.md`
+  named `ControlLoop` as a return type three times and none of the thirteen
+  could be imported from `pandid`, so a reader who followed the reference
+  exactly wrote `from pandid import ControlLoop` and got an `ImportError` --
+  the documentation describing an API the package did not have. Every one is a
+  type a reader is *handed*: `connect()` returns a `Stream`, `add_loop()` a
+  `Loop`, `validate()` a `list[Issue]`, and a package shipping `py.typed` is
+  asking to be annotated against.
+
+  The rule the reference now follows, and `tests/test_documented_types.py`
+  enforces: **a type the documentation names bare is importable from `pandid`,
+  and a type that is not is named with the module it lives in.** Nine are on
+  the second footing rather than the first, because they are machinery a reader
+  never types -- `pandid.state.State` (reserved for a balance engine),
+  `pandid.document.StreamTableOptions` (every flowsheet has one; nothing
+  constructs it), `pandid.render.symbols.Symbol`, `PortSeries` and
+  `SymbolRegistry` (reached with `default_registry`, which is not a type, on
+  the import line the custom-equipment section already shows -- and keeping the
+  renderer out of `import pandid` keeps the topology layer's import free of
+  it), and the four layout and routing extension points. Nothing is removed or
+  renamed, so every existing spelling -- `pandid.loops.ControlLoop`,
+  `from pandid.document import TitleBlock` -- still imports.
 
 ### Changed
 
