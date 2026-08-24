@@ -821,13 +821,15 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         from pandid.render.svg import fit_issue
 
         tb = fs.title_block
-        # The renderer's own fallbacks, because the finding has to
-        # describe the sheet that will be drawn rather than the fields
-        # as typed: a blank ``title`` is drawn as the flowsheet's name
-        # and a blank ``date`` as today's.
+        # The two fallbacks handed over *unchosen*, exactly as both
+        # renderers hand them over: the strip picks between the block's
+        # value and these, and it picks after reading whitespace as the
+        # blank it means. Choosing here instead is what made a title of
+        # spaces a truncation the sheet reported and this did not -- the
+        # finding has to describe the sheet that will be drawn, and the
+        # only way to be sure of that is to ask it the same question.
         warnings.extend(fit_issue(*found) for found in title_strip_fit(
-            tb, tb.title or fs.name,
-            tb.date or datetime.now().strftime("%Y-%m-%d")))
+            tb, fs.name, datetime.now().strftime("%Y-%m-%d")))
 
         # --- a company name that wraps out through the strip ---
         # The one cell of the strip that answers a long value by

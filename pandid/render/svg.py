@@ -2843,7 +2843,7 @@ class SvgRenderer:
         strip = fs.title_block is not None or border == "zone"
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
-        date = tb.date or datetime.now().strftime("%Y-%m-%d")
+        date = datetime.now().strftime("%Y-%m-%d")
         name = fs.name
 
         items = [(a, a.align, *measure(a))

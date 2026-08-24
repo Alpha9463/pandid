@@ -1192,7 +1192,14 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     stroker, so the two backends abbreviate the same field to the same
     string and report it in the same words.
     """
+    # *name* and *date* are what the two cells fall back to, not what
+    # they draw: the block's own values win, and the choice is made
+    # here because it has to be made *after* whitespace is read as the
+    # blank it means. A caller that chose first handed on a whitespace
+    # title with the flowsheet name it should have fallen back to
+    # already thrown away, and a whitespace date with today's.
     name, date = str(name or "").strip(), str(date or "").strip()
+    date = _field(tb, "date") or date
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
     rx = x + _REV_W
@@ -1341,7 +1348,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     scale = _field(tb, "scale") or fit_scale
     scale_field = ("scale" if _field(tb, "scale")
                    else "the fitted scale -> scale")
-    date_field = ("date" if date and date == _field(tb, "date")
+    date_field = ("date" if _field(tb, "date")
                   else "today's date -> date")
     cells: list[tuple[float, str, str, str]] = [
         (_INFO_W * 0.38, "DRAWING No",
@@ -1372,6 +1379,13 @@ def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
                     ) -> "list[tuple[str, str, str, float, float]]":
     """Every cell of the strip that cannot hold what it was given, as
     :data:`Reporter` tuples, without drawing anything.
+
+    ``name`` and ``date`` are what the title and date cells fall back to
+    where the block states neither -- the flowsheet's name and today's
+    date -- and are passed *unchosen*, exactly as the two renderers pass
+    them, so that this and the sheet answer alike. Choosing first is
+    what made a whitespace title a truncation the render reported and
+    this did not.
 
     Whether a value fits is a fact about the *model*: every width the
     strip rules is a constant in this module, so the answer does not

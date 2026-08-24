@@ -2630,18 +2630,21 @@ class DrawioRenderer:
         # the frame was grown around it.
         fit = _Fit.identity() if free is None else _Fit(
             *_fitted(inner, free))
-        # What the title strip's own three variable fields are filled
-        # from, all three of them the sheet's answer rather than this
-        # file's: the drawing name a blank title falls back to, today's
-        # date where the block states none, and the ratio the dock has
-        # just settled the drawing at. The title fallback itself is the
-        # strip's, not applied here as well -- it reads the block, and a
-        # caller that pre-empted it handed on a whitespace title with the
-        # name it should have fallen back to already thrown away.
-        block = fs.title_block
+        # What the title strip's own three variable fields fall back to,
+        # all three of them the sheet's answer rather than this file's:
+        # the drawing name a block with no title takes, today's date
+        # where it states none, and the ratio the dock has just settled
+        # the drawing at.
+        #
+        # Handed over *unchosen*. Picking between these and the block's
+        # own values is the strip's, because it can only be done after a
+        # field of nothing but spaces has been read as the blank it
+        # means -- and a caller that picked first handed on a whitespace
+        # title with the flowsheet name it should have fallen back to
+        # already thrown away, and a whitespace date with today's. The
+        # block is not read here at all any more, for that reason.
         name = fs.name
-        date = (getattr(block, "date", "") if block is not None else "") or \
-            datetime.now().strftime("%Y-%m-%d")
+        date = datetime.now().strftime("%Y-%m-%d")
         scale = "" if free is None else _scale_text(fit.scale)
         out: list[str] = []
         for n, (obj, x, y, w, h) in enumerate(placed):

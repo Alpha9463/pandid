@@ -1208,6 +1208,11 @@ _FIELD_ANSWERS = [
 ]
 
 
+#: Every field of the block, for the sweeps that vary the *value* rather
+#: than the answer. Taken off _FIELD_ANSWERS so the two cannot drift.
+_FIELD_NAMES = [f for f, _v, _c, _n in _FIELD_ANSWERS] + ["drawn_by", "checked_by", "approved_by"]
+
+
 @pytest.mark.parametrize("field,value,code,named", _FIELD_ANSWERS)
 def test_every_title_block_field_reports_a_value_it_cannot_hold(field, value, code, named):
     """The sweep, kept: no field of the block takes an over-long value and says
@@ -1522,3 +1527,76 @@ def test_a_whitespace_revision_field_is_the_blank_it_means():
     # The block backfills, because a whitespace row value is not a value.
     assert ">AA</text>" in svg
     assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
+
+
+@pytest.mark.parametrize("stated", ["", "   ", "\t\n "])
+def test_the_date_cell_is_never_blank_on_an_issued_sheet(stated):
+    """A date of nothing but spaces is the blank it means -- and the blank it
+    means is today's date, not an empty cell. The fallback used to be chosen by
+    the renderer, on the raw value, so whitespace passed it and then normalised
+    to nothing with the day it should have fallen back to already discarded."""
+    import datetime
+
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", date=stated)
+    svg = fs.to_svg(border="zone", page_size="A3")
+    cell = re.search(r'fill="#666">DATE</text>\s*<text[^>]*fill="black">([^<]*)</text>', svg)
+    assert cell is not None, "the sheet ruled no DATE cell"
+    assert cell.group(1) == datetime.datetime.now().strftime("%Y-%m-%d")
+
+
+def test_a_stated_date_still_wins_the_cell():
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", date="2026-01-02")
+    svg = fs.to_svg(border="zone", page_size="A3")
+    cell = re.search(r'fill="#666">DATE</text>\s*<text[^>]*fill="black">([^<]*)</text>', svg)
+    assert cell is not None and cell.group(1) == "2026-01-02"
+
+
+def test_a_whitespace_title_is_a_truncation_validate_reports():
+    """The render draws the flowsheet's name in place of a title of spaces, and
+    abbreviates it -- so validate() has to say so too. It did not: it chose the
+    fallback itself, on the raw value, and a truthy `"   "` won."""
+    long_name = "A Flowsheet Name Far Too Long For The Title Cell To Hold"
+    fs = _sheet(name=long_name)
+    fs.title_block = TitleBlock(title="   ")
+    found = [i.message for i in fs.validate() if i.code == "text-truncated"]
+    assert len(found) == 1
+    assert found[0].startswith("Flowsheet name -> title was truncated")
+    # And it is the finding the sheet itself makes, word for word.
+    drawn = _sheet(name=long_name)
+    drawn.title_block = TitleBlock(title="   ")
+    drawn.to_svg(border="zone")
+    assert [w.message for w in drawn.warnings if w.code == "text-truncated"] == found
+
+
+#: unset, whitespace, and stated-but-unfittable, over every field of the block.
+_SEAM = [{f: v} for f in _FIELD_NAMES for v in ("   ", "\t \n ", _LONG)] + [
+    {},
+    {"title": "   ", "date": "  "},
+    {"revisions": [Revision("   ", "   ", "   ", "   ")]},
+    {"title": "   ", "drawn_by": _LONG, "revisions": [Revision("0", "2026-01-01", "Issued")]},
+]
+
+
+@pytest.mark.parametrize("kw", _SEAM, ids=lambda k: "+".join(k) or "unset")
+@pytest.mark.parametrize(
+    "name",
+    ["Ethanol Purification A300", "A Flowsheet Name Far Too Long For The Title Cell To Hold"],
+)
+def test_validate_reports_exactly_what_the_sheet_reports(kw, name):
+    """The guarantee the whole finding rests on: what `validate()` says before a
+    render is what the sheet says after one. Both defects this test was written
+    for were a fallback chosen by the caller rather than by the strip, so the
+    two answered different questions about the same block."""
+    ahead = _sheet(name=name)
+    ahead.title_block = TitleBlock(**kw)
+    predicted = sorted(
+        i.message for i in ahead.validate() if i.code.startswith(("text-", "title-block"))
+    )
+    drawn = _sheet(name=name)
+    drawn.title_block = TitleBlock(**kw)
+    drawn.to_svg(border="zone")
+    assert predicted == sorted(
+        w.message for w in drawn.warnings if w.code.startswith(("text-", "title-block"))
+    )

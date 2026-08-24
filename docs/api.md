@@ -3212,8 +3212,16 @@ named `sheet/of_sheets`.
 
 A field of nothing but spaces is the blank it means. Whitespace is *truthy*, so
 `title="   "` used to defeat the fallback to the flowsheet's name, `status="  "`
-the em dash, and `client=" "` ruled an empty row and made the whole strip
-taller; all of them now behave exactly as leaving the field unset does.
+the em dash, `date="  "` today's date, and `client=" "` ruled an empty row and
+made the whole strip taller; all of them now behave exactly as leaving the field
+unset does. The DATE cell in particular is never blank on an issued sheet: state
+a date and it is drawn, state nothing — or nothing but spaces — and the day the
+sheet was rendered is.
+
+And `validate()` reports exactly what the sheet reports, for every field, in all
+three states: unset, whitespace, and stated but too long for its cell. The two
+read one strip through one function, so a finding you get before rendering is
+the finding the drawing makes.
 
 `validate()` answers before anything is drawn, and every render asks the same
 question again and replaces the answer — `to_drawio()` as well as `to_svg()`, in

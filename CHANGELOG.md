@@ -502,6 +502,21 @@ class hierarchy, or what it is called.
   at the read rather than on the dataclass, since `fs.title_block.title = ...`
   is the documented way to shorten a field and re-render.
 
+  **Both fallbacks are the strip's, and are chosen after that read.** A blank
+  title draws the flowsheet's name and a blank date today's, and both choices
+  used to be made by each of the three callers, on the raw value -- so
+  whitespace passed them and *then* normalised to nothing, with the value it
+  should have fallen back to already thrown away. A `date` of spaces issued a
+  sheet with an empty DATE cell, and a `title` of spaces was a truncation the
+  drawing reported and `validate()` did not, the two having answered different
+  questions about one block. The renderers and the validator now hand both
+  fallbacks over unchosen.
+
+  What that buys is the guarantee the whole finding rests on, and it is now a
+  test rather than a claim: over every field of the block in all three states --
+  unset, whitespace, and stated but unfittable -- `validate()` reports word for
+  word what the rendered sheet reports.
+
   Those three cells carry **initials**, being the only signatory cells the strip
   rules, so `examples/03`, `08` and `09` now set `drawn_by="AA"` in place of
   `drawn_by="A. Anderson"`. The full names were never drawn -- the revision rows
