@@ -846,7 +846,7 @@ def stream_table_layout(fs) -> "StreamTable | None":
                          _section_span(m, len(m.streams)))
 
 
-def _measure(fs, *, wrapped: bool = False) -> "_Measured | None":
+def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
     """Measure the table, or ``None`` for a flowsheet with nothing to
     tabulate.
 
@@ -856,9 +856,9 @@ def _measure(fs, *, wrapped: bool = False) -> "_Measured | None":
     one with no row to fill. Both are a grid of headings over nothing,
     and a heading is not a stream table either.
 
-    ``wrapped`` says the table is going to be cut into blocks, which
-    changes one thing and only one: the type size nobody stated. See
-    below.
+    ``own_sheet`` says the table is the body of a sheet of its own
+    rather than a block docked at the foot of a diagram, which changes
+    one thing and only one: the type size nobody stated. See below.
     """
     runs = _table_runs(fs)
     if not runs:
@@ -893,14 +893,23 @@ def _measure(fs, *, wrapped: bool = False) -> "_Measured | None":
             f"number of drawing units, or None to let the table pick one from "
             f"how many columns it has"
         )
-    if asked is None and wrapped:
-        # A table cut into blocks has nothing to shrink *for*. The rule
+    if asked is None and own_sheet:
+        # A table on its own sheet has nothing to shrink *for*. The rule
         # below trades type size for width because a table drawn beside
         # a diagram has one row of columns and no way to make more room;
         # a table sheet makes room by wrapping, so shrinking as well
         # would letter a twenty-column sheet at 8 units to fit a page it
         # already fits. The author's own `font_size` still rules, and is
         # how a table too *deep* for its page is brought back onto it.
+        #
+        # **Whether or not a page was named**, which is why this reads
+        # `own_sheet` and not "did it wrap". A sheet grown to its
+        # contents does not wrap -- there is no width to wrap against --
+        # but sizing it off the column count instead would letter the
+        # same twenty-one streams at 9.05 unpaged and 10.5 on A2: two
+        # different drawings of one table, differing for a reason
+        # nothing on either sheet shows. One rule for the sheet, and the
+        # page decides how it is cut up rather than how it is lettered.
         size, row_h, ruled = _BASE_SIZE, _ROW_H, 1.0
     elif asked is None:
         # As it always was: 10.5 while the columns fit, then shrunk so
@@ -1023,6 +1032,11 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     this table's columns on this paper, and a fixed "twelve per block"
     would wrap a sheet that did not need it and overrun one that did.
 
+    The *ruling* does not depend on the page in the same way. Type size,
+    row depth and column widths are the sheet's own whether or not one
+    was named (:func:`_measure`), so an unpaged table sheet is the paged
+    one with the cutting left out.
+
     The columns are then shared out **evenly** rather than filled to the
     brim and left with a remainder: twenty-one streams that fit twelve
     across come out as eleven and ten, not twelve and nine, because two
@@ -1037,7 +1051,7 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     Returns ``None`` for a flowsheet with nothing to tabulate, the same
     answer :func:`stream_table_layout` gives and for the same reasons.
     """
-    m = _measure(fs, wrapped=room is not None)
+    m = _measure(fs, own_sheet=True)
     if m is None:
         return None
     n = len(m.streams)

@@ -1673,7 +1673,8 @@ class Flowsheet:
                 + "\n".join(f"  {e}" for e in errors)
             )
 
-    def _prepare_to_draw(self, *, diagram: str | None, check: bool) -> None:
+    def _prepare_to_draw(self, *, diagram: str | None, check: bool,
+                         **arguments) -> None:
         """Bring the sheet to the state a renderer can draw it from.
 
         The order is the contract :meth:`to_svg`, :meth:`to_drawio` and
@@ -1682,23 +1683,42 @@ class Flowsheet:
 
         1. number the streams, so any finding quotes the name that will
            actually be drawn;
-        2. **check the model** -- :func:`pandid.validate.model_issues`,
+        2. **check the arguments** --
+           :func:`pandid.render.svg.check_render_arguments`: the page
+           named, the border, the diagram, the hop direction, the joint
+           marks, and everything the stream table's own sheet can refuse;
+        3. **check the model** -- :func:`pandid.validate.model_issues`,
            the findings that need no geometry: a pin that is not a
            number, a symbol gravity fixes given a quarter turn, a tag
            out of sequence, a counted nozzle with nothing piped to it, a
            counted name already taken;
-        3. resolve the geometry, laying out and routing;
-        4. **check the geometry** --
+        4. resolve the geometry, laying out and routing;
+        5. **check the geometry** --
            :func:`pandid.validate.geometry_issues`: overlaps, coincident
            nozzles, crossings, detours, elevations.
 
-        Step 2 precedes step 3 because a model the validator rejects is
-        a model the engine cannot lay out or route either, and the
-        engine has no way to say so. ``pin(x=nan)`` is the case that
-        named this method: ``pin-not-finite`` describes it exactly, and
-        every render reached the router first, which was handed that
+        Steps 2 and 3 precede step 4 because a model the validator
+        rejects is a model the engine cannot lay out or route either,
+        and the engine has no way to say so. ``pin(x=nan)`` is the case
+        that named this method: ``pin-not-finite`` describes it exactly,
+        and every render reached the router first, which was handed that
         coordinate and did not come back. The finding was made for a
         drawing nobody could obtain.
+
+        Step 2 is there for the second half of the same rule: laying out
+        and routing **writes to the flowsheet**, so a render that raises
+        after it has left the model changed on its way to failing. An
+        argument the renderer would have refused is refused before that
+        happens, and a rejected call therefore leaves the sheet exactly
+        as it found it. ``**arguments`` is whatever the render was
+        given, passed through rather than restated field by field: this
+        method has no opinion about any of them and adding one to a
+        render call must not mean adding it here as well.
+
+        It runs whatever ``check`` says. ``check=False`` turns off
+        *validation* -- the findings about the drawing -- and an
+        argument the renderer cannot honour is not a finding about a
+        drawing; it is the reason there is not going to be one.
 
         Errors raise from whichever half found them, so a model error
         raises before any geometry exists. Warnings from both halves
@@ -1711,7 +1731,7 @@ class Flowsheet:
         here either way, so an empty list after a ``check=False`` render
         means nothing was found rather than nothing was looked for.
         """
-        from pandid.render.svg import draws_arrowheads
+        from pandid.render.svg import check_render_arguments, draws_arrowheads
         from pandid.validate import geometry_issues, model_issues
 
         # ``warnings`` describes *this* render. Emptied at the top rather
@@ -1725,6 +1745,12 @@ class Flowsheet:
         # the names, and `new_line_number` set after the last connect()
         # regroups the runs and so changes them.
         self.renumber_streams()
+        # After the numbering and before the geometry. After, because
+        # the stream table is measured from the names that will be
+        # drawn, so a page it will not fit is judged against the drawn
+        # widths; before, because nothing this refuses may cost the
+        # author a laid-out sheet.
+        check_render_arguments(self, diagram=diagram, **arguments)
         found: list = []
         if check:
             found = model_issues(self, arrows=draws_arrowheads(diagram))
@@ -2149,7 +2175,10 @@ class Flowsheet:
         :class:`ValueError` on an *error*; *warnings* from both are
         collected on ``self.warnings``. See :meth:`_prepare_to_draw`.
         """
-        self._prepare_to_draw(diagram=diagram, check=check)
+        self._prepare_to_draw(
+            diagram=diagram, check=check, show_stream_table=show_stream_table,
+            border=border, page_size=page_size, connections=connections,
+            jump_direction=jump_direction, debug=debug)
         from pandid.render.svg import SvgRenderer
         return SvgRenderer().render(
             self, show_stream_table=show_stream_table,
@@ -2232,7 +2261,13 @@ class Flowsheet:
         The debug overlay has no counterpart here and :meth:`render`
         refuses it for a ``.drawio`` path rather than ignoring it.
         """
-        self._prepare_to_draw(diagram=diagram, check=check)
+        # No ``debug``: a .drawio document has no coordinate overlay to
+        # draw, and ``render()`` refuses the argument for that path
+        # rather than letting it reach here at all.
+        self._prepare_to_draw(
+            diagram=diagram, check=check, show_stream_table=show_stream_table,
+            border=border, page_size=page_size, connections=connections,
+            jump_direction=jump_direction)
         from pandid.render.drawio import DrawioRenderer
         return DrawioRenderer().render(self, diagram=diagram,
                                        page_size=page_size, border=border,

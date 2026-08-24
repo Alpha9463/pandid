@@ -194,7 +194,7 @@ from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import escaped, writable
-from pandid.render.svg import (_DIAMOND_BALLOONS, _FIT_CODES, _furniture_name,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _RENDER_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _too_small,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH,
                                fit_issue, HOP_R,
@@ -723,7 +723,7 @@ HOP_DROPPED = "drawio-hop-dropped"
 #: The codes this backend puts on ``fs.warnings`` itself, as against the
 #: validator's findings about the diagram. Replaced rather than added to
 #: on each export, the way ``SvgRenderer.render`` replaces its own.
-_EXPORT_CODES = (*_FIT_CODES, APPROXIMATED, HOP_DROPPED)
+_EXPORT_CODES = (*_RENDER_CODES, APPROXIMATED, HOP_DROPPED)
 
 
 #: Every symbol this library draws itself, and what draw.io is asked for
@@ -1586,10 +1586,22 @@ class DrawioRenderer:
         The debug overlay remains refused. It is scaffolding for whoever
         is writing a placement rather than part of the drawing.
         """
-        from pandid.render.svg import _page, _resolve_sheet, wants_table_sheet
+        from pandid.render.svg import (
+            _page, _resolve_sheet, check_render_arguments, wants_table_sheet)
 
         arrows = draws_arrowheads(diagram)
         self._findings = []
+        # Before anything branches, and for the reason the sheet asks it
+        # before it lays a drawing out: an argument this export cannot
+        # honour is refused whether or not this particular document
+        # would have shown it. The table sheet returns below without
+        # ever reaching `sheet_connections`, so an unknown `connections`
+        # was accepted here and marked nothing -- the same swallowing
+        # `jump_direction` had on every sheet.
+        check_render_arguments(
+            fs, show_stream_table=show_stream_table, border=border,
+            diagram=diagram, page_size=page_size, connections=connections,
+            jump_direction=jump_direction)
         table_sheet = wants_table_sheet(show_stream_table)
         if not table_sheet:
             for u in fs.units:
@@ -1673,6 +1685,10 @@ class DrawioRenderer:
         from pandid.render.svg import table_sheet_plan
 
         plan = table_sheet_plan(fs, sheet)
+        # What the sheet has to report about itself joins what the
+        # export found, so the two backends put the same sentence on
+        # ``fs.warnings`` for the same drawing.
+        self._findings.extend(plan.findings)
         body = list(self._border(plan.frame, border))
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
             body += _stream_table(f"st{i}", part, bx, by)

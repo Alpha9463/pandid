@@ -2560,6 +2560,34 @@ def check_connections(value) -> None:
             )
 
 
+#: Which of two crossing lines is the one that hops the other.
+JUMP_DIRECTIONS = ("vertical", "horizontal")
+
+
+def check_jump_direction(value) -> None:
+    """Reject a hop direction that is neither of the two, naming them.
+
+    Every other sheet option this module takes is checked against its
+    own closed set; this one was not, and the reason it went unnoticed
+    is the reason it matters. ``jump_direction`` is read where the hops
+    are *drawn*, as ``== "vertical"`` and ``== "horizontal"``, so a
+    misspelling is not a value the renderer rejects -- it is a value
+    that matches neither branch, and the sheet quietly comes out with no
+    hops at all. A drawing where two crossing lines are drawn straight
+    through each other says the lines are joined, and nobody was told.
+
+    Checked whatever the sheet turns out to hold, and that is the point
+    of a separate function: a sheet with nothing crossing on it draws
+    the same picture for every spelling, so the one render that could
+    have caught the typo by its result is the render that cannot.
+    """
+    if value not in JUMP_DIRECTIONS:
+        raise ValueError(
+            f"Unknown jump_direction {value!r}; use one of "
+            f"{', '.join(JUMP_DIRECTIONS)}."
+        )
+
+
 def sheet_connections(diagram: "str | None",
                       connections: "str | None") -> "str | None":
     """The joint a sheet marks by default, or ``None`` if it marks none.
@@ -2629,11 +2657,20 @@ def _scale_text(s: float) -> str:
 # for it, as against the validator's findings about the diagram.
 _FIT_CODES = ("text-truncated", "text-overruns-cell")
 
-#: Every code the *renderer* puts on ``fs.warnings`` itself, as
-#: against the validator's findings about the model. Replaced rather
-#: than added to on each render, so a sheet redrawn after a fix stops
-#: reporting what the last one found.
-_RENDER_CODES = _FIT_CODES + ("crossing-unmarked",)
+#: The stream table's own sheet, carrying no drawing number. Two sheets
+#: of one set are told apart by their numbers, and this one has none to
+#: derive: see :func:`table_sheet_plan`.
+TABLE_SHEET_UNNUMBERED = "table-sheet-unnumbered"
+
+#: Every code the *renderer* puts on ``fs.warnings`` itself, as against
+#: the validator's findings about the model. Replaced rather than added
+#: to on each render, so a sheet redrawn after a fix stops reporting
+#: what the last one found -- as true of a table sheet that has since
+#: been given a number as of a crossing that has since been marked. The
+#: draw.io exporter extends this with what only an export can find
+#: (:data:`~pandid.render.drawio._EXPORT_CODES`).
+_RENDER_CODES = _FIT_CODES + ("crossing-unmarked", TABLE_SHEET_UNNUMBERED)
+
 
 
 def fit_issue(field: str, text: str, drawn: str,
@@ -2854,6 +2891,13 @@ class TableSheetPlan(NamedTuple):
     block stack is drawn from; ``block``/``name``/``date`` are what the
     title strip says and ``strip`` the rectangle it says it in;
     ``frame`` is the drawing frame the border is ruled on.
+
+    ``findings`` is what this sheet has to report about itself, for
+    whichever backend drew it to put on ``fs.warnings``. It is carried
+    here rather than raised because the plan is worked out twice -- once
+    before the model is laid out, to refuse a render that cannot happen,
+    and once to draw from -- and a warning emitted from the first of
+    those would be a warning about a file that was never written.
     """
     table: "F.TableSheet"
     block: "TitleBlock"
@@ -2863,6 +2907,7 @@ class TableSheetPlan(NamedTuple):
     frame: "tuple[float, float, float, float]"
     left: float
     top: float
+    findings: list
 
 
 def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
@@ -2900,7 +2945,7 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
     Raises :class:`ValueError` for a flowsheet with nothing to tabulate,
     and the page's own "too small" for a table the paper cannot hold.
     """
-    from pandid.document import table_sheet_block
+    from pandid.document import TABLE_SHEET_SUFFIX, table_sheet_block
 
     # What the page leaves the table to wrap into: the frame, less the
     # clearance the dock keeps between the frame and whatever it frames.
@@ -2945,8 +2990,97 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
     _obj, sx, sy, sw, sh = placed[0]
     left, top = F.table_sheet_origin(table, free)
     date = block.date or datetime.now().strftime("%Y-%m-%d")
+    findings = []
+    if not block.drawing_number:
+        # There is nothing to derive a number from, so the sheet is
+        # drawn unnumbered and says so. **Drawn, not refused**: a
+        # flowsheet is not obliged to carry a title block anywhere else
+        # in this library, and refusing here would make the simplest
+        # possible table sheet -- build a flowsheet, render its table --
+        # the one that raises. But an unnumbered sheet is a real defect
+        # rather than a style: it is the sheet's own identity missing,
+        # and the two documents this call is one of can then only be
+        # told apart by their titles.
+        #
+        # Soft rather than hard for the reason `boundary-flow-missing`
+        # is soft: the sheet draws, and what is absent is a number
+        # nobody but the author has. Nothing here can invent one -- a
+        # drawing number is a filing identity issued by the office that
+        # owns the set, and a number made up from the flowsheet's name
+        # would be worse than a blank, because it would look issued.
+        findings.append(Issue(
+            "warning", TABLE_SHEET_UNNUMBERED,
+            f"the stream table sheet for {fs.name!r} carries no drawing "
+            f"number, so nothing on it says which drawing it belongs to but "
+            f"its title. Give the diagram one -- "
+            f"fs.title_block = TitleBlock(drawing_number='PFD-301') -- and the "
+            f"table sheet takes it with {TABLE_SHEET_SUFFIX!r} after it, or "
+            f"number the table sheet alone with "
+            f"fs.stream_table.sheet_drawing_number"))
     return TableSheetPlan(table, block, block.title or fs.name, date,
-                          (sx, sy, sw, sh), frame, left, top)
+                          (sx, sy, sw, sh), frame, left, top, findings)
+
+
+def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
+                           border: "str | None" = None,
+                           diagram: "str | None" = None,
+                           page_size: "str | None" = None,
+                           connections: "str | None" = None,
+                           jump_direction: str = "vertical",
+                           debug: "bool | float" = False) -> None:
+    """Everything a render can refuse about the arguments it was given,
+    asked **before the sheet is laid out or routed**.
+
+    Laying a sheet out and routing it writes a ``Frame`` onto every unit
+    and a ``Route`` onto every stream. A render that raises after that
+    has changed the flowsheet on its way to failing: the author fixes
+    the typo, renders again, and the second render reuses geometry the
+    first one resolved -- and if the argument that raised was one that
+    *decides* geometry, the sheet they finally get was laid out for the
+    call that failed. The rule this restores is
+    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`'s own, and the
+    reason ``pin-not-finite`` is checked before the router sees it: a
+    render that cannot happen must not have happened halfway.
+
+    So every one of these is a question about the *arguments* and the
+    *model*, answerable with no geometry at all -- which page was named,
+    how it is spelled, whether the table has anything in it, whether it
+    fits the paper. The renderers ask the same questions again where
+    they use the answers; asking twice is cheap (this measures strings)
+    and is what lets a backend be called directly without losing a
+    check.
+
+    ``jump_direction`` and ``connections`` are checked here **whether or
+    not this sheet can show them**. That is the whole of their fix: a
+    sheet with nothing crossing on it, or with no process line at all,
+    draws the same picture for every spelling, so leaving the check to
+    the drawing means the option is validated on the sheets that did not
+    need validating and swallowed on the ones that did.
+    """
+    from pandid.render import debug as _debug
+
+    grid = _debug.resolve_spacing(debug)
+    check_jump_direction(jump_direction)
+    _, kind = _resolve_sheet(border, diagram)
+    sheet_connections(kind, connections)
+    page = _page(page_size)
+    if not wants_table_sheet(show_stream_table):
+        return
+    if grid is not None:
+        # Refused rather than ignored, as a .drawio render refuses it:
+        # the overlay draws the coordinates a ``pin()`` takes, and there
+        # is nothing pinned on this sheet for it to be about.
+        raise ValueError(
+            "debug draws the coordinate overlay under a *diagram*, and "
+            "show_stream_table='sheet' draws no diagram. Render the diagram "
+            "to see the overlay, or drop debug=")
+    # The plan is the check: a flowsheet with nothing to tabulate, a
+    # page too small for the table, a table sheet numbered as the
+    # diagram it belongs to. Its answer is thrown away and worked out
+    # again to draw from, exactly as `title_strip_fit` runs the strip's
+    # own layout and discards the ink -- one measurement, so what is
+    # refused here is what would have been drawn there.
+    table_sheet_plan(fs, page)
 
 
 class SvgRenderer:
@@ -3010,6 +3144,17 @@ class SvgRenderer:
         # refused before a whole sheet has been built rather than after.
         grid = _debug.resolve_spacing(debug)
         table_sheet = wants_table_sheet(show_stream_table)
+        # Asked again here, and asked of the arguments this backend was
+        # handed. `Flowsheet` asks before it lays the sheet out, which is
+        # what keeps a refused render from having moved anything; a
+        # caller holding a renderer directly has skipped that, and a
+        # check that only the entry point ran is a check the backend
+        # does not have. Both calls are the same function, so there is
+        # one rule and two places that insist on it.
+        check_render_arguments(
+            fs, show_stream_table=show_stream_table, border=border,
+            diagram=diagram, page_size=page_size, connections=connections,
+            jump_direction=jump_direction, debug=debug)
         # A table sheet is a formal drawing rather than a table on
         # paper, so it rules the frame the reference sets do; the
         # diagram's own default stays the plain edge. Stated `border`
@@ -3021,27 +3166,6 @@ class SvgRenderer:
         joints = sheet_connections(diagram, connections)
         sheet = _page(page_size)
         if table_sheet:
-            if grid is not None:
-                # Refused rather than ignored, as a .drawio render
-                # refuses it: the overlay draws the coordinates a
-                # ``pin()`` takes, and there is nothing pinned on this
-                # sheet for it to be about.
-                #
-                # `connections` and `jump_direction` are *not* refused
-                # with it, and the difference is not squeamishness.
-                # Those two say how a process line is drawn where one is
-                # drawn, and a sheet they do not apply to already
-                # ignores them -- a PFD marks no joints whatever
-                # `connections` says, and nothing hops on a sheet whose
-                # lines do not cross. A sheet with no lines at all is
-                # that same sheet, so an author rendering both sheets
-                # from one dict of options is not stopped at this one.
-                # The overlay has no such precedent: asked for, it is
-                # always drawn.
-                raise ValueError(
-                    "debug draws the coordinate overlay under a *diagram*, and "
-                    "show_stream_table='sheet' draws no diagram. Render the "
-                    "diagram to see the overlay, or drop debug=")
             return self._table_sheet(fs, sheet, border)
 
         # 1. Diagram bounding box: union of every unit's drawn box and
@@ -3313,8 +3437,9 @@ class SvgRenderer:
             outer = F.sheet_rect(*plan.frame)
         ox, oy, ow, oh = outer
         OUT = F.OUTER_MARGIN
-        fs.warnings = [w for w in fs.warnings
-                       if getattr(w, "code", "") not in _FIT_CODES] + fit_issues
+        fs.warnings = ([w for w in fs.warnings
+                        if getattr(w, "code", "") not in _RENDER_CODES]
+                       + plan.findings + fit_issues)
         return _document(
             fs, sheet, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT),
             ["    " + item for item in furniture],

@@ -422,6 +422,15 @@ class StreamTableOptions:
     #: A suffix can be derived from what the flowsheet already carries
     #: and the next free number in a series cannot: nothing here knows
     #: what else that series has issued.
+    #:
+    #: Stating the **diagram's own** number here raises: that is the
+    #: collision the derivation exists to prevent, and a derivation
+    #: guarantees uniqueness only while nobody overrules it. Leaving
+    #: both this and the diagram's number blank draws the table sheet
+    #: unnumbered and reports it
+    #: (:data:`~pandid.render.svg.TABLE_SHEET_UNNUMBERED`); a number
+    #: invented from the flowsheet's name would be worse than the blank,
+    #: because it would look issued.
     sheet_drawing_number: str = ""
 
 
@@ -454,15 +463,45 @@ def table_sheet_block(block: "TitleBlock | None",
     of it. Both sheets are issued at the same revision, and this block
     is derived afresh on every render, so a copy would be a second list
     to keep in step for no gain.
+
+    Raises :class:`ValueError` if the number stated for the table sheet
+    is the diagram's own. **A derivation cannot promise uniqueness on
+    its own**: the suffix guarantees it only while nobody overrules the
+    suffix, and ``sheet_drawing_number = "PFD-301"`` on a ``PFD-301``
+    diagram is two documents filed under one number -- the failure the
+    derivation exists to prevent, typed in by hand. It is refused rather
+    than warned about because the author stated it outright and there is
+    no reading of it that produces a filable set.
     """
     diagram = TitleBlock() if block is None else block
     number = diagram.drawing_number
+    stated = options.sheet_drawing_number
+    if stated and _same_number(stated, number):
+        raise ValueError(
+            f"fs.stream_table.sheet_drawing_number={stated!r} is the diagram's "
+            f"own drawing number. The table sheet is a second document and "
+            f"cannot be filed under the first one's number: give it a number of "
+            f"its own, or leave the field blank to derive "
+            f"{number}{TABLE_SHEET_SUFFIX}"
+        )
     return replace(
         diagram,
         subtitle=options.sheet_subtitle,
-        drawing_number=(options.sheet_drawing_number
+        drawing_number=(stated
                         or (f"{number}{TABLE_SHEET_SUFFIX}" if number else "")),
     )
+
+
+def _same_number(a: str, b: str) -> bool:
+    """Are these one drawing number said twice?
+
+    Compared with the surrounding space and the letter case taken out,
+    because a drawing register does not file ``PFD-301`` and ``pfd-301 ``
+    as two drawings and neither does the person looking for one. Two
+    numbers that differ only that way are the collision this is looking
+    for, not an escape from it.
+    """
+    return a.strip().casefold() == b.strip().casefold()
 
 
 # --------------------------------------------------------------

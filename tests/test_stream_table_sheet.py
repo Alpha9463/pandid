@@ -440,3 +440,218 @@ def test_the_option_reaches_the_drafting_call(monkeypatch):
     fs = _sheet(streams=21)
     fs.show(show_stream_table="sheet", page_size="A4")
     assert seen["svg"] == _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
+
+
+# --- one number apiece -------------------------------------------------------
+
+
+def test_a_table_sheet_numbered_as_its_diagram_is_refused():
+    """The suffix guarantees two numbers only while nobody overrules it. Stated
+    outright, the collision the derivation exists to prevent is typed in by
+    hand, and there is no reading of it that produces a filable set."""
+    fs = _sheet(streams=3)
+    fs.stream_table.sheet_drawing_number = "PFD-1001"
+    with pytest.raises(ValueError, match="the diagram's own drawing number"):
+        fs.to_svg(show_stream_table="sheet", page_size="A3")
+
+
+@pytest.mark.parametrize("stated", ["pfd-1001", "  PFD-1001 "])
+def test_one_number_said_a_different_way_is_still_the_same_number(stated):
+    """A drawing register does not file 'PFD-301' and 'pfd-301 ' as two
+    drawings, and neither does the person looking for one."""
+    fs = _sheet(streams=3)
+    fs.stream_table.sheet_drawing_number = stated
+    with pytest.raises(ValueError, match="the diagram's own drawing number"):
+        fs.to_svg(show_stream_table="sheet", page_size="A3")
+
+
+def test_a_number_of_its_own_is_accepted():
+    fs = _sheet(streams=3)
+    fs.stream_table.sheet_drawing_number = "PFD-1003"
+    assert "PFD-1003" in fs.to_svg(show_stream_table="sheet", page_size="A3")
+
+
+def _unnumbered(fs) -> list:
+    return [w for w in fs.warnings if w.code == "table-sheet-unnumbered"]
+
+
+def test_a_table_sheet_with_no_number_to_derive_says_so():
+    """Drawn, not refused: a flowsheet is not obliged to carry a title block
+    anywhere else in this library. But an unnumbered sheet is the sheet's own
+    identity missing, so it is a finding rather than a silence."""
+    fs = _sheet(streams=3)
+    fs.title_block = None
+    svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert _blocks(svg), "the sheet is still drawn"
+    found = _unnumbered(fs)
+    assert len(found) == 1
+    assert "drawing number" in found[0].message
+    assert found[0].severity == "warning"
+
+
+def test_a_title_block_carrying_no_number_says_so_too():
+    """The finding is about the number, not about the block: a title block with
+    every other cell filled in still leaves the sheet unfiled."""
+    fs = _sheet(streams=3)
+    fs.title_block = TitleBlock(title="Aromatics Recovery A100", company="Pandid")
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert _unnumbered(fs)
+
+
+def test_numbering_it_either_way_silences_the_finding():
+    fs = _sheet(streams=3)
+    fs.title_block = None
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert _unnumbered(fs)
+    # The same render again, with the table sheet numbered on its own: the
+    # stale finding goes with it rather than accumulating.
+    fs.stream_table.sheet_drawing_number = "PFD-1003"
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert not _unnumbered(fs)
+
+
+def test_the_diagram_sheet_is_never_unnumbered_by_this():
+    """The finding belongs to the table sheet. A diagram with no title block is
+    a drawing this library has always been happy to make."""
+    fs = _sheet(streams=3)
+    fs.title_block = None
+    fs.to_svg(page_size="A3", border="zone")
+    assert not _unnumbered(fs)
+
+
+def test_the_drawio_export_reports_it_in_the_same_words():
+    fs = _sheet(streams=3)
+    fs.title_block = None
+    fs.to_drawio(show_stream_table="sheet", page_size="A3")
+    exported = _unnumbered(fs)
+    other = _sheet(streams=3)
+    other.title_block = None
+    other.to_svg(show_stream_table="sheet", page_size="A3")
+    assert exported, "the export has to find it too, not merely agree about nothing"
+    assert [w.message for w in exported] == [w.message for w in _unnumbered(other)]
+
+
+# --- a refused render has not drawn half a sheet -----------------------------
+
+
+def _unresolved(fs) -> bool:
+    """Nothing has been laid out or routed on this flowsheet."""
+    return all(u.frame is None for u in fs.units) and all(s.route is None for s in fs.streams)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"show_stream_table": "own sheet"},
+        {"show_stream_table": "sheet", "page_size": "A9"},
+        {"show_stream_table": "sheet", "page_size": "A4", "debug": True},
+        {"show_stream_table": "sheet", "page_size": "A3", "jump_direction": "sideways"},
+        {"show_stream_table": "sheet", "page_size": "A3", "connections": "welded"},
+        {"show_stream_table": "sheet", "page_size": "A3", "border": "hatched"},
+        {"jump_direction": "sideways"},
+        {"connections": "welded"},
+    ],
+)
+def test_a_render_that_cannot_happen_has_not_happened_halfway(kwargs):
+    """Laying a sheet out and routing it writes a Frame onto every unit and a
+    Route onto every stream. A render that raises after that has changed the
+    flowsheet on its way to failing, and the geometry the author's *next*
+    render reuses was resolved for the call that did not produce a file."""
+    fs = _sheet(streams=3)
+    assert _unresolved(fs), "the fixture must not lay itself out"
+    with pytest.raises(ValueError):
+        fs.to_svg(**cast(Any, kwargs))
+    assert _unresolved(fs), "a refused render left the flowsheet laid out"
+
+
+def test_the_table_sheet_s_own_refusals_come_before_the_geometry():
+    """Nothing to tabulate, and a page too small for the table: both are facts
+    about the model and the paper, so neither needs a sheet laid out to find."""
+    bare = Flowsheet("bare")
+    pump = bare.add(U.Pump("P-101")).pin(x=100, y=100)
+    tank = bare.add(U.Tank("T-101")).pin(x=300, y=100)
+    bare.connect(pump.discharge, tank.inlet)
+    with pytest.raises(ValueError, match="nothing to tabulate"):
+        bare.to_svg(show_stream_table="sheet", page_size="A3")
+    assert _unresolved(bare)
+
+    deep = _sheet(streams=6)
+    for run in deep._named_runs().values():
+        run[0].properties = {f"Component {n}": f"{n / 100:.2f}" for n in range(40)}
+    with pytest.raises(ValueError, match="stream table"):
+        deep.to_svg(show_stream_table="sheet", page_size="A4")
+    assert _unresolved(deep)
+
+
+def test_a_duplicate_number_is_refused_before_the_geometry():
+    fs = _sheet(streams=3)
+    fs.stream_table.sheet_drawing_number = "PFD-1001"
+    with pytest.raises(ValueError, match="drawing number"):
+        fs.to_drawio(show_stream_table="sheet", page_size="A3")
+    assert _unresolved(fs)
+
+
+# --- an option that applies to nothing is still an option --------------------
+
+
+@pytest.mark.parametrize(
+    "kwargs,match",
+    [
+        ({"jump_direction": "sideways"}, "jump_direction"),
+        ({"connections": "welded"}, "connections"),
+    ],
+)
+@pytest.mark.parametrize("table", [False, True, "sheet"])
+def test_an_unknown_sheet_option_is_refused_whatever_the_sheet_holds(kwargs, match, table):
+    """The hole this closes: ``jump_direction`` is read where the hops are
+    *drawn*, as ``== "vertical"``, so a misspelling matched neither branch and
+    the sheet came out with no hops and no complaint. A table sheet draws no
+    process line at all, which made it the sheet where every such option was
+    swallowed."""
+    fs = _sheet(streams=3)
+    for render in (fs.to_svg, fs.to_drawio):
+        with pytest.raises(ValueError, match=match):
+            render(show_stream_table=cast(Any, table), page_size="A3", **cast(Any, kwargs))
+
+
+def test_a_valid_option_this_sheet_cannot_show_is_still_accepted():
+    """The distinction being drawn: ``connections`` on a sheet with no joints to
+    mark is a well-formed request this drawing has no answer to, and a PFD has
+    always accepted it and marked nothing."""
+    fs = _sheet(streams=3)
+    assert fs.to_svg(show_stream_table="sheet", page_size="A3", connections="flanged")
+    assert fs.to_svg(show_stream_table="sheet", page_size="A3", jump_direction="horizontal")
+
+
+# --- one ruling, page or no page ---------------------------------------------
+
+
+def test_the_ruling_does_not_depend_on_whether_a_page_was_named():
+    """A sheet grown to its contents does not wrap -- there is no width to wrap
+    against -- but it is lettered and ruled as the paged sheet is. Sized off the
+    column count instead, the same twenty-one streams came out at 9.05 unpaged
+    and 10.5 on A2: two drawings of one table, differing for a reason nothing on
+    either sheet shows."""
+    fs = _sheet(streams=21)
+    unpaged = F.stream_table_sheet(fs, None)
+    paged = F.stream_table_sheet(fs, 4000.0)
+    assert unpaged is not None and paged is not None
+    assert len(unpaged.blocks) == len(paged.blocks) == 1
+    assert unpaged.blocks[0].size == paged.blocks[0].size == F._BASE_SIZE
+    assert unpaged.blocks[0].row_h == paged.blocks[0].row_h
+    assert unpaged.w == paged.w and unpaged.h == paged.h
+
+
+def test_the_unpaged_sheet_is_the_paged_one_with_the_cutting_left_out():
+    """Down to the drawn cells: one block of the wrapped sheet is ruled exactly
+    as the unpaged sheet's single block is."""
+    fs = _sheet(streams=21)
+    unpaged = F.stream_table_sheet(fs, None)
+    wrapped = F.stream_table_sheet(fs, 900.0)
+    assert unpaged is not None and wrapped is not None
+    assert len(wrapped.blocks) > 1
+    assert wrapped.blocks[0].size == unpaged.blocks[0].size
+    assert wrapped.blocks[0].row_h == unpaged.blocks[0].row_h
+    # Same label column and same stream column, cut into fewer of them.
+    assert wrapped.blocks[0].rows[0][0].w == unpaged.blocks[0].rows[0][0].w
+    assert wrapped.blocks[0].rows[0][1].w == unpaged.blocks[0].rows[0][1].w

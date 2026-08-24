@@ -101,11 +101,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a `page_size` there is no width to wrap against and the table comes out whole,
   on a sheet grown to fit it.
 
-  A table sheet is set at the reading size whatever its column count: the docked
-  table shrinks above eighteen columns because it has one row of columns and no
-  other way to make room, and a table sheet makes room by wrapping.
-  `fs.stream_table.font_size` still overrules that, and is what brings a table
-  too *deep* for its page back onto it.
+  A table sheet is set at the reading size whatever its column count, and
+  whether or not a page was named: the docked table shrinks above eighteen
+  columns because it has one row of columns and no other way to make room, and a
+  table sheet makes room by wrapping. Sizing the unpaged sheet off its column
+  count instead would letter the same twenty-one streams at 9.05 with no page
+  and 10.5 on A2 -- two drawings of one table, differing for a reason nothing on
+  either sheet shows. The page decides how the table is cut up, not how it is
+  lettered. `fs.stream_table.font_size` still overrules the size, and is what
+  brings a table too *deep* for its page back onto it.
 
   **A value on the keyword that already asks for the table**, not a tenth
   keyword on four signatures and not a flag that makes one call write two files.
@@ -124,14 +128,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fs.stream_table.sheet_subtitle` and `fs.stream_table.sheet_drawing_number`,
   which round-trip through the spec with the rest of `stream_table:`. The number
   is *derived* because two drawings cannot share one, and *stated* because
-  nothing here knows the next free number in a drawing office's series.
+  nothing here knows the next free number in a drawing office's series. A stated
+  number equal to the diagram's is **refused**: a derivation guarantees
+  uniqueness only while nobody overrules the derivation. A flowsheet with no
+  number to derive from draws its table sheet unnumbered and reports
+  `table-sheet-unnumbered` on `fs.warnings` -- soft, for the reason
+  `boundary-flow-missing` is soft, since a drawing number is a filing identity
+  nobody but the author has and an invented one would be worse than a blank.
 
   The scale cell is not ruled -- a table is not drawn to scale. `debug=` is
   refused rather than ignored, there being no diagram to draw a coordinate
   overlay under, and a flowsheet with nothing to tabulate raises rather than
-  writing an empty sheet. Every shipped sheet is byte-identical: nothing changes
-  unless the option is used.
-
+  writing an empty sheet. Every one of those refusals happens **before the sheet
+  is laid out or routed**, so a rejected render leaves the flowsheet exactly as
+  it found it. Every shipped sheet is byte-identical: nothing changes unless the
+  option is used.
 - **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
   registry had no symbol for, and all three were being faked in a shipped
   example with an apology in its source (#474). `examples/21_alumina_refinery`
@@ -874,6 +885,26 @@ class hierarchy, or what it is called.
   box. It is silent on everything this package can draw -- the geometry above
   makes it so -- and is there for a symbol registered from outside it.
 
+- **An unknown `jump_direction` is refused instead of drawing a sheet with no
+  hops on it.** The value was read where the hops are drawn, as `==
+  "vertical"` and `== "horizontal"`, so a misspelling matched neither branch
+  and the sheet came out with every crossing drawn straight through -- which is
+  what a *joined* pair of lines looks like -- and said nothing. It is now
+  checked against its two spellings on every render, whether or not the sheet
+  has a crossing to hop, since a sheet with none draws the same picture for
+  every spelling and so is exactly the sheet that cannot catch the typo by its
+  result. An unknown `connections` is checked on the same terms and now reaches
+  a `.drawio` export of the stream table sheet, which returned before the check.
+- **A render that raises no longer leaves the flowsheet laid out.** Every
+  argument a render can refuse -- the page size, the border, the diagram, the
+  hop direction, the joint marks -- is now checked in
+  `Flowsheet._prepare_to_draw` between numbering the streams and resolving the
+  geometry, rather than inside the renderer after both. Laying a sheet out and
+  routing it writes a `Frame` onto every unit and a `Route` onto every stream,
+  and those are cached: a render that failed on a typo left geometry behind that
+  the next render reused. `check=False` does not turn this off -- it turns off
+  validation, and an argument the renderer cannot honour is not a finding about
+  a drawing, it is the reason there is not going to be one.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on

@@ -296,7 +296,7 @@ per process, overwritten by each `show()` and swept on the way out.
 | `show_stream_table` | `False` (the default), `True`, `"sheet"` | `True` draws the stream property table under the drawing (one column per stream that has properties, plus every feed and product); `"sheet"` draws the table as a sheet of its own instead, with no diagram on it. See [Stream properties and the table](#stream-properties-and-the-table) |
 | `check` | `bool` | validate; errors raise, warnings collect. The model-only checks run before the sheet is laid out, the geometric ones after — see [When the checks run](#when-the-checks-run) |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
-| `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop |
+| `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop. Anything else raises `ValueError`, whether or not this sheet has a crossing to hop |
 | `debug` | `False` (the default), `True`, a number | draws the [coordinate overlay](#the-coordinate-overlay). `True` uses a 50-unit grid; a number sets the spacing |
 
 ### The coordinate overlay
@@ -2582,9 +2582,10 @@ to fit it.
 
 The blocks are evened out rather than filled and left a stub: twenty-one streams
 that fit twelve across are drawn eleven and ten. A table sheet is set at the
-reading size whatever its column count, since wrapping is how it makes room;
-`fs.stream_table.font_size` still overrules that, and is what brings a table too
-*deep* for its page back onto it.
+reading size whatever its column count, and whether or not a page was named,
+since wrapping is how it makes room — the page decides how the table is cut up
+rather than how it is lettered. `fs.stream_table.font_size` still overrules
+that, and is what brings a table too *deep* for its page back onto it.
 
 The sheet says which drawing it belongs to:
 
@@ -2600,11 +2601,24 @@ so `PFD-301` titled *Ethanol Purification A300 / Process Flow Diagram 1* files
 its table as `PFD-301-ST`, *Ethanol Purification A300 / Stream Table*. The scale
 cell is not ruled: a table is not drawn to scale.
 
+**Two sheets, two numbers.** A `sheet_drawing_number` equal to the diagram's is
+refused — that is the collision the suffix exists to prevent, typed in by hand,
+and there is no filable set on the other side of it. A flowsheet with no drawing
+number to derive from still draws its table sheet, unnumbered, and says so as the
+`table-sheet-unnumbered` warning on `fs.warnings`: nothing here can invent a
+number, since a drawing number is a filing identity issued by the office that
+owns the set, and one made up from the flowsheet's name would be worse than a
+blank because it would look issued.
+
 The border is the zone frame unless you say otherwise, since this is a formal
 drawing rather than a table on paper. Annotation boxes are not repeated here —
 an equipment list belongs to the diagram it schedules. `debug=` is refused,
 there being no diagram to draw a coordinate overlay under, and a flowsheet with
 nothing to tabulate raises rather than writing an empty sheet.
+
+Everything a table sheet can refuse, it refuses **before the sheet is laid out
+or routed**, so a call that raises leaves the flowsheet exactly as it found it
+and the next render is not reusing geometry resolved for a call that failed.
 
 ---
 
