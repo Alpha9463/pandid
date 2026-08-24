@@ -123,6 +123,25 @@ def _restore(obj, saved: dict) -> None:
 _OUTPUT_FORMATS = frozenset({"", ".svg", ".pdf", ".png", ".drawio"})
 
 
+def _inferred_kind(src: "Port", dst: "Port") -> str:
+    """The kind a run between these two nozzles means when the author
+    named none.
+
+    Both ends an :data:`_ENERGY_ROLES` nozzle -- a ``utility_in``,
+    ``utility_out``, a reactor's ``duty`` -- and the run is a duty
+    rather than a pipe. Everything else is material.
+
+    Split out because two callers must agree on it and there must not be
+    two answers: :meth:`Flowsheet._resolve_connection` applies it, and
+    :func:`pandid.spec.to_dict` has to know what a reader would infer so
+    that it can write the kind down whenever the author's answer differs
+    from it. Reads the ports **as named**, which is exact: a pool member
+    has its siblings' role.
+    """
+    return ("energy" if src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES
+            else "material")
+
+
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
     """Assemble a line number from the components the author set.
 
@@ -221,6 +240,35 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
         f"({', '.join(port.name for port in signals)}); name the one this line "
         f"runs to"
     )
+
+
+def _port_bearers(*ends: "Port | Unit") -> "tuple[Any, ...]":
+    """The units at the ends of a :meth:`Flowsheet.connect` call and
+    every port they carry, for :meth:`Flowsheet._unchanged_if_it_raises`
+    to put back.
+
+    Taken from the ends **as the caller spelled them** and before
+    anything is resolved, because the guard has to be standing before
+    the first write and the resolution is what does the writing. Either
+    end may be a unit standing in for its one signal connection
+    (:func:`_signal_end`), so both spellings answer the same unit.
+
+    Every port and not just the two the line will take: ``another_port``
+    mints a fresh pool member onto the unit, and the ports around the
+    minted one are what say which numbers the pool has used.
+
+    Anything that is neither a port nor a unit contributes nothing --
+    :func:`_signal_end` refuses it, and refuses it before any write.
+    """
+    from pandid.ports import Port
+    from pandid.units import Unit
+
+    units: "list[Unit]" = []
+    for end in ends:
+        owner = end.owner if isinstance(end, Port) else end
+        if isinstance(owner, Unit) and not any(owner is u for u in units):
+            units.append(owner)
+    return (*units, *(port for unit in units for port in unit.ports.values()))
 
 
 def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
@@ -1421,7 +1469,8 @@ class Flowsheet:
         self.components.append(component)
         return component
 
-    def connect(self, src: "Port | Unit", dst: "Port | Unit", *, kind: str = "material",
+    def connect(self, src: "Port | Unit", dst: "Port | Unit", *,
+                kind: str | None = None,
                 name: str | None = None, draw_as_recycle: bool = False,
                 size: str | float | None = None, schedule: str | float | None = None,
                 service: str | float | None = None,
@@ -1438,15 +1487,22 @@ class Flowsheet:
         instrument's ``pv`` and ``sig_in``/``sig_out``) and a process
         kind between two process nozzles.
 
-        Wherever *kind* is ``"material"`` a run between two
-        :data:`_ENERGY_ROLES` nozzles -- both ends a ``utility_in``,
-        ``utility_out`` or the like, rather than a ``"process"`` port --
-        is silently promoted to ``"energy"``. Note *wherever* and not
-        "left at the default": the check reads the value and nothing
-        else, so ``kind="material"`` typed out in full is promoted too,
-        which is #493 and is a defect rather than the design. The
-        inference is wanted; accepting a contrary answer and changing
-        it is not. The promotion also moves where the run numbers:
+        **Left unnamed**, ``kind`` is read off the two nozzles by
+        :func:`_inferred_kind`: both ends an :data:`_ENERGY_ROLES`
+        nozzle -- a ``utility_in``, a ``utility_out``, a reactor's
+        ``duty``, rather than a ``"process"`` port -- and the run is a
+        duty and comes out ``"energy"``; anything else comes out
+        ``"material"``. That inference is the whole reason the default
+        is ``None`` and not ``"material"``: a kind the author *states*
+        is the answer, and the sheet is drawn from it. Cooling-water
+        piping between two ``utility`` nozzles is water in a pipe, and
+        ``kind="material"`` says so and is honoured; ``kind="energy"``
+        between two process nozzles is honoured the same way, from the
+        other side. Neither is quietly changed into the other. Reading
+        the value rather than asking whether it was given is #493, and
+        was a defect rather than the design.
+
+        The kind also decides where the run numbers:
         :meth:`renumber_streams` numbers every energy stream after
         every material one, so the same duty draws as a ``material``
         stream off a boundary flag and an ``energy`` one between two
@@ -1480,9 +1536,46 @@ class Flowsheet:
         ``diagram="p&id"`` sheet; see :meth:`render`.
 
         Raises :class:`ValueError` if any validation rule is violated.
-        Every rule is checked before the first write, so a rejected
-        ``connect()`` leaves both nozzles free and the sheet's streams
-        untouched; see :meth:`_resolve_connection`.
+        **A refused call leaves this flowsheet exactly as it found it**:
+        no stream appended, both nozzles free, no pool member minted,
+        every other line's name and sequence as they were. Most of the
+        rules are checked before the first write and never get near one
+        (:meth:`_resolve_connection`), but the numbering at the foot of
+        this method cannot be: it runs on the sheet *with* the new
+        stream on it, and a ``line_numbering_scheme`` that names nothing
+        this line carries raises from there -- #451, which left the run
+        drawn, nameless, with both nozzles taken and a corrected retry
+        refused. So the whole body carries
+        :meth:`_unchanged_if_it_raises` rather than the checks alone.
+        """
+        # Wholesale rather than a list of the writes below, because the
+        # writes below are not the whole of it: `_number_appended` and
+        # `renumber_streams` rename other lines and fill their
+        # sequences, and `another_port` mints a nozzle onto a unit. See
+        # `_unchanged_if_it_raises` for why the guard is not a list of
+        # remembered fields, and for why naming the objects here is not
+        # the same compromise -- `self` reaches every stream and unit
+        # through its own containers, and the two units named here are
+        # the only ones `connect()` can write an attribute onto.
+        with self._unchanged_if_it_raises((self, *_port_bearers(src, dst))):
+            return self._connect(
+                src, dst, kind=kind, name=name,
+                draw_as_recycle=draw_as_recycle, size=size, schedule=schedule,
+                service=service, sequence=sequence, spec=spec,
+                insulation=insulation, ends=ends)
+
+    def _connect(self, src: "Port | Unit", dst: "Port | Unit", *,
+                 kind: str | None, name: str | None, draw_as_recycle: bool,
+                 size: "str | float | None", schedule: "str | float | None",
+                 service: "str | float | None", sequence: "str | float | None",
+                 spec: "str | float | None", insulation: "str | float | None",
+                 ends: "str | tuple[str, str] | None") -> Stream:
+        """The body of :meth:`connect`, with the rollback stripped off.
+
+        Split out rather than wrapped in place so that :meth:`connect`
+        reads as the two statements it now is -- name what a refusal has
+        to put back, then do the work -- instead of a hundred lines
+        indented under a ``with``. Nothing else moved.
         """
         src, dst, kind = self._resolve_connection(src, dst, kind=kind, ends=ends)
         # Everything from here writes. `another_port` MINTS on a pool,
@@ -1523,12 +1616,20 @@ class Flowsheet:
         return stream
 
     def _resolve_connection(
-        self, src: "Port | Unit", dst: "Port | Unit", *, kind: str,
+        self, src: "Port | Unit", dst: "Port | Unit", *, kind: str | None,
         ends: "str | tuple[str, str] | None" = None,
         pending: "Sequence[Unit]" = (),
     ) -> "tuple[Port, Port, str]":
         """The two nozzles a :meth:`connect` call means, and its kind,
         with every refusal made and nothing written.
+
+        ``kind`` is the argument as the author gave it, ``None`` for one
+        they did not give at all, and telling those two apart is the
+        whole of this method's dealing with it: an unstated kind is read
+        off the nozzles by :func:`_inferred_kind` and a stated one is
+        handed back unchanged. Reading the *value* instead -- promoting
+        whatever said ``"material"`` -- overruled an author who typed
+        ``kind="material"`` on two utility nozzles, which is #493.
 
         Answers the ports **as named**, not the pool members they may be
         swapped for: taking a fresh member mints one, and a preflight
@@ -1545,7 +1646,20 @@ class Flowsheet:
         if ends is not None:
             from pandid.render.svg import check_connections
             check_connections(ends)
-        if kind not in STREAM_KINDS:
+        # Whether the author stated one, kept apart from what it says.
+        # Everything below this line works on a kind that is a member of
+        # STREAM_KINDS; only the return at the foot of the method cares
+        # which of the two it came from.
+        stated = kind is not None
+        if kind is None:
+            # Stood in so that the checks between here and the nozzles
+            # -- `_signal_end` and `_check_signal_pairing`, both of
+            # which read the kind -- have one to read. A run whose two
+            # ends turn out to be energy nozzles is corrected at the
+            # foot of the method, which is the first point at which the
+            # roles are known.
+            kind = "material"
+        elif kind not in STREAM_KINDS:
             raise ValueError(
                 f"Stream kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}"
             )
@@ -1605,11 +1719,15 @@ class Flowsheet:
                 raise ValueError(
                     f"port {port.owner.name}.{port.name} is already connected"
                 )
-        # Read off the ports as named, which is exact: a pool member has
-        # its siblings' role, so the swap below cannot change the answer.
-        if kind == "material" and src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES:
-            kind = "energy"
-        return src, dst, kind
+        # The inference, and only where the author left the question
+        # open. A kind they stated is the answer -- cooling water
+        # between two `utility` nozzles is `kind="material"` and stays
+        # material, a duty between two process nozzles is
+        # `kind="energy"` and stays energy -- because a value accepted
+        # and then changed is worse than either honouring it or refusing
+        # it, and there is nothing wrong with either of those two lines
+        # to refuse. See #493.
+        return src, dst, _inferred_kind(src, dst) if not stated else kind
 
     @classmethod
     def from_dict(cls, spec: dict) -> "Flowsheet":
@@ -1737,9 +1855,10 @@ class Flowsheet:
             )
 
     @contextmanager
-    def _unchanged_if_it_raises(self):
-        """Run a render, and leave this flowsheet exactly as it was found
-        if the render does not produce a file.
+    def _unchanged_if_it_raises(self, objects: "Sequence[Any] | None" = None):
+        """Run an operation, and leave the objects it writes to exactly
+        as it found them if the operation raises -- by default this whole
+        flowsheet, which is what a render needs.
 
         **The invariant three reviews arrived at, stated once.** A render
         writes to the sheet on its way to drawing it: it numbers the
@@ -1788,9 +1907,34 @@ class Flowsheet:
         Only on the way out through an exception. A render that succeeds
         keeps every bit of what it did, including the cached geometry
         that makes the second render of one sheet cheap.
+
+        **What ``objects`` is for.** #451 asks for the same invariant of
+        :meth:`connect`, which runs per line rather than per render, and
+        the default set is a snapshot per unit and per stream on the
+        sheet -- 18 s to build 1600 streams, which is the quadratic
+        build #285 removed put straight back. So a caller that can say
+        what it writes to says it, and pays for that alone:
+        :meth:`connect` names the sheet and the two units at the ends of
+        the line, :meth:`_name_group` the segments of the run it is
+        naming, :meth:`_number_tail` the lines numbered behind the
+        process runs. Building 1600 streams goes from 8 ms to 58 ms
+        rather than to 18 s, and the guarded set of each is still every
+        field of every object in it.
+
+        Naming the objects is not the compromise the field list was. A
+        field list goes stale when a new field is written; an object
+        list goes stale only when an operation reaches an object it did
+        not before, which is a change to what the operation *is*.
+
+        **One sequence and not ``*objects``.** An empty list has to mean
+        "nothing to put back" and no argument at all has to mean "the
+        whole sheet", and ``*objects`` cannot tell those apart:
+        ``_unchanged_if_it_raises(*self._tail)`` on a sheet carrying no
+        duty line reads as the second and quietly buys the 18 s.
         """
         saved = [(obj, _snapshot(obj))
-                 for obj in (self, *self.units, *self.streams)]
+                 for obj in ((self, *self.units, *self.streams)
+                             if objects is None else objects)]
         try:
             yield
         except BaseException:
@@ -2034,7 +2178,21 @@ class Flowsheet:
         is free text; :func:`pandid.validate.validate` reports that as
         ``stream-name-reused``, which is the only place the two readings
         of a shared name can be told apart.
+
+        All or nothing. Naming can raise -- a ``line_numbering_scheme``
+        that names no component the carrier of some group holds, or a
+        ``stream_naming_scheme`` of the author's own that does -- and a
+        pass that stopped at the fifth group would leave four groups
+        renumbered against a sheet nobody asked to renumber. The guard
+        is the whole sheet here because the pass is, so it costs what
+        the pass costs; see :meth:`_unchanged_if_it_raises`.
         """
+        with self._unchanged_if_it_raises():
+            self._renumber_streams()
+
+    def _renumber_streams(self) -> None:
+        """The body of :meth:`renumber_streams`, with the rollback
+        stripped off."""
         groups = self._stream_groups()
         names = []
         for place, group in enumerate(groups, 1):
@@ -2119,8 +2277,14 @@ class Flowsheet:
 
         if joined:
             where = joined[0]
-            group = groups[where]
-            group.append(stream)
+            # A new list rather than `group.append(stream)`. The group
+            # lists are what `_unchanged_if_it_raises` puts back when
+            # the naming below raises, and it puts back the contents of
+            # `self._groups` -- so a group that is *replaced* is
+            # restored and one that is *appended to in place* is not.
+            # Replacing costs a copy of one run, which is a handful of
+            # segments; see #451.
+            groups[where] = group = [*groups[where], stream]
             index[id(stream)] = where
             # Named from the group's own segments rather than from the
             # cached name, so a run whose new segment carries a line
@@ -2181,7 +2345,22 @@ class Flowsheet:
 
         *place* is 1-based and is the group's position in the sequence,
         not an index into anything.
+
+        All or nothing over the group. The sequences go in before the
+        name is worked out -- they have to, since a
+        ``line_numbering_scheme`` naming ``{sequence}`` reads one back
+        off the carrier -- and working out the name is the step that can
+        raise. Without the guard a refused ``connect()`` left the
+        segments beside the new one carrying sequences from a numbering
+        that never finished (#451). It costs a snapshot per segment of
+        one run.
         """
+        with self._unchanged_if_it_raises(group):
+            return self._name_group_now(group, place)
+
+    def _name_group_now(self, group: "list[Stream]", place: int) -> str:
+        """The body of :meth:`_name_group`, with the rollback stripped
+        off."""
         # One count, two starts. `place` is the group's position and
         # both numbers are read off it, each from its own offset,
         # because a line sequence and a stream number are different
@@ -2226,11 +2405,17 @@ class Flowsheet:
         one more run means one more place used, and everything behind
         them moves -- and a filter would have made that a scan of the
         whole sheet, which is the cost this is here to avoid.
+
+        All or nothing over the tail, on the same terms as
+        :meth:`_name_group`: each line is named individually, so a
+        naming scheme that raises on the third duty would otherwise
+        leave the first two renamed by a pass that never finished.
         """
-        for s in sorted(self._tail, key=lambda s: s.kind != "energy"):
-            if s.auto_named:
-                used += 1
-                self._name_group([s], used)
+        with self._unchanged_if_it_raises(self._tail):
+            for s in sorted(self._tail, key=lambda s: s.kind != "energy"):
+                if s.auto_named:
+                    used += 1
+                    self._name_group([s], used)
         return used
 
     def validate(self, *, diagram: str | None = None) -> list:

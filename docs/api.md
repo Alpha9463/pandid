@@ -124,7 +124,7 @@ raise.
 
 ```text
 connect(src: Port | Unit, dst: Port | Unit, *,
-        kind: str = "material",
+        kind: str | None = None,
         name: str | None = None,
         draw_as_recycle: bool = False,
         size=None, schedule=None, service=None, sequence=None, spec=None,
@@ -133,6 +133,11 @@ connect(src: Port | Unit, dst: Port | Unit, *,
 ```
 Creates the stream. Both units must already be on this flowsheet, and neither
 port may already carry a stream. Each of those raises `ValueError`.
+
+**A refused `connect()` leaves the flowsheet exactly as it found it** — no
+stream appended, both nozzles free, no line renamed or renumbered — whichever
+rule refused it, including the line number, which is settled only once the run
+is on the sheet.
 
 On a **process** connection `src` must be an outlet and `dst` an inlet; fluid
 enters a nozzle or leaves it. A **signal** connection has no such rule — the
@@ -152,9 +157,20 @@ Process piping always names its nozzle, since which nozzle a pipe runs to is the
 whole question; a `"material"` kind with a bare unit at either end raises.
 
 `kind` is one of `"material"`, `"energy"`, `"electric"`, `"pneumatic"`,
-`"data"`, `"software"` or `"capillary"`. Anything else raises. A `"material"`
-connection between two energy/utility-role ports is silently promoted to
-`"energy"`.
+`"data"`, `"software"` or `"capillary"`. Anything else raises.
+
+**Leave it out and the two nozzles answer it.** A run between two
+energy/utility-role ports — a `utility_in`, a `utility_out`, a reactor's
+`duty` — is a duty and comes out `"energy"`; everything else comes out
+`"material"`. Say it and your answer is the one drawn, in both directions:
+cooling water between two `utility` nozzles is water in a pipe, so
+`kind="material"` there stays material, and `kind="energy"` between two
+process nozzles stays energy. Neither is quietly turned into the other.
+
+```python
+fs.connect(cooler.utility_out, heater.utility_in)                   # energy
+fs.connect(cooler.utility_out, heater.utility_in, kind="material")  # material
+```
 
 `kind` also has to agree with what the two ports are. A **signal connection**
 (role `signal`: `Valve.actuator` and an instrument's `pv`, `sig_in`, `sig_out`)
@@ -4482,8 +4498,9 @@ kind's symbol, which is worth doing deliberately or not at all.
   constructed, listing the eight. Two of them change behaviour: `signal` makes
   the port a signal connection, which joins another signal connection and takes a
   signal `kind` (see [`connect()`](#building-the-topology)), and `energy` or
-  `utility` at both ends promotes a `material` connection to `energy`. The rest
-  state what the nozzle carries and are not otherwise interpreted.
+  `utility` at both ends is what a `connect()` that names no `kind` reads as
+  `energy`. The rest state what the nozzle carries and are not otherwise
+  interpreted.
 
 Ports are built in declaration order, once, when the unit is constructed. The
 nearest `PORTS` declaration in the class hierarchy is the whole list, so

@@ -601,6 +601,57 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- **`connect(kind=...)` states the kind; it is no longer overruled** (#493).
+  A run between two energy/utility nozzles was promoted to `"energy"` wherever
+  the kind read `"material"` -- which is what an author who says nothing gets,
+  and also what an author who types `kind="material"` gets, so the rule could
+  not tell "I did not say" from "I said the opposite". Cooling-water piping
+  between two `utility` nozzles is water in a pipe, and typing so came back
+  `energy` with no warning, on a sheet drawn from the altered value and
+  numbered in the energy series rather than the process one.
+
+  The default is now `None` -- *unstated* -- and the inference runs only there.
+  A stated kind is honoured in both directions: `kind="material"` between two
+  utility nozzles stays material, and `kind="energy"` between two process
+  nozzles stays energy. Neither is refused, because there is nothing wrong with
+  either line: the first is a pipe carrying a utility and the second is a duty
+  drawn between process equipment.
+
+  `to_dict` now writes `kind` down whenever it differs from what a reader would
+  *infer* from the two nozzles, rather than whenever it differs from the word
+  `"material"`. Without that a material line between two utility nozzles came
+  back from its own spec as an energy one, which is the same defect one file
+  further on.
+
+- **A refused `connect()` leaves the flowsheet exactly as it found it** (#451).
+  The numbering at the foot of `connect()` runs *after* the stream is appended
+  and both nozzles are taken, and it raises: a `line_numbering_scheme` naming
+  nothing the new line carries, or naming something that is not a line-number
+  component at all. The author got an exception **and** a changed flowsheet --
+  the run drawn and nameless, both nozzles gone, and a corrected retry between
+  the same pair answering `port Feed.outlet is already connected`.
+
+  `Flowsheet._unchanged_if_it_raises` is the rollback -- the one #481 built for
+  `render()`, not a second mechanism -- and it puts back each guarded object's
+  whole `__dict__` rather than a list of the fields somebody remembered,
+  because a list of fields is what goes stale and each earlier round of this
+  family of bugs was found by the next thing nobody had thought of. It now
+  takes the objects it is to put back, so a caller that runs per line rather
+  than per render pays for what it writes to: `connect()` names the sheet and
+  the two units at the ends of the line, and `renumber_streams()`,
+  `_number_tail` and `_name_group` name what each of them writes, so every one
+  of them is all-or-nothing and each costs what its own pass costs. Building a
+  1600-stream sheet goes from 8 ms to 58 ms -- the sheet's own lists copied
+  once per `connect()` -- where guarding the whole sheet per line would have
+  taken it to 18 s, against the 3,3 s the full numbering pass #285 removed took
+  over the same sheet.
+
+  The tests compare whole flowsheets by `pickle` rather than the two fields
+  anybody thinks to name, and cover the rejected line number, the unusable
+  scheme, the pool member `another_port` had already minted, the run the
+  refused segment would have joined, the duty lines numbered behind the process
+  runs, and the full renumbering pass.
+
 - A **main flow line is drawn twice the weight of the equipment it enters**
   (#490). ISO 10628-1 5.3.1 states three line widths in the ratio 4:2:1, and
   the renderer had collapsed the first two into one number: a process run and
