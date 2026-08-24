@@ -51,6 +51,7 @@ from pandid.render.drawio import (
     DrawioRenderer,
 )
 from pandid.render.svg import (
+    CROSSING_STYLES,
     HOP_R,
     _class_weight,
     _LEADER_HEAD,
@@ -2970,7 +2971,7 @@ def _drawio_hops(edges):
     return out
 
 
-def _sheet_hops(fs, fit, direction="vertical"):
+def _sheet_hops(fs, fit, direction="vertical", style="arc"):
     """Every hop the *sheet* draws, by ``SvgRenderer._draw_streams``' own rule.
 
     A vertical segment inside a horizontal one hops it, or the reverse under
@@ -2983,7 +2984,14 @@ def _sheet_hops(fs, fit, direction="vertical"):
     no room for one and is drawn flat. Plain strict containment was the rule
     until a hop was found drawn on the corner beside a crossing; see
     ``tests/test_render.py::test_a_hop_has_room_for_its_own_arc``.
+
+    ``style`` is the sheet's ``crossing_style``. The interruption takes the
+    same span of run as the arc, so it marks exactly the same crossings and
+    the set is the same one; ``"plain"`` marks none, and a sheet that marks
+    none must not have a jump exported anywhere.
     """
+    if style == "plain":
+        return set()
     hor, ver = [], []
     for n, s in enumerate(fs.streams):
         points = stream_polyline(s)
@@ -3004,8 +3012,9 @@ def _sheet_hops(fs, fit, direction="vertical"):
     return out
 
 
+@pytest.mark.parametrize("style", CROSSING_STYLES, ids=CROSSING_STYLES)
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(stem):
+def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(stem, style):
     """#241, measured rather than looked at.
 
     The export drew no jump anywhere -- `grep -c jumpStyle` on a committed
@@ -3028,15 +3037,20 @@ def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(stem):
     warning, and a sheet that loses none must raise none.
     """
     fs, kwargs = gallery.flowsheet(stem)
-    fs.to_svg(**kwargs)
+    fs.to_svg(**kwargs, crossing_style=style)
     root = ET.fromstring(
-        fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
+        fs.to_drawio(
+            **{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS}, crossing_style=style
+        )
     ).find("diagram/mxGraphModel/root")
     edges, fit = _edge_lines(fs, kwargs, root)
-    drawn, sheet = _drawio_hops(edges), _sheet_hops(fs, fit)
+    drawn, sheet = _drawio_hops(edges), _sheet_hops(fs, fit, style=style)
     assert drawn <= sheet, (
-        f"{stem}: draw.io hops {sorted(drawn - sheet)}, which the sheet does not "
-        f"-- a hop the wrong way round says the wrong pipe passes over"
+        f"{stem}: draw.io hops {sorted(drawn - sheet)} at crossing_style="
+        f"{style!r}, which the sheet does not -- a hop the wrong way round "
+        f"says the wrong pipe passes over, and one on a sheet drawing no "
+        f"mark at all says there is a crossing mark where the drawing has "
+        f"none"
     )
     assert len(sheet - drawn) == len([w for w in fs.warnings if w.code == HOP_DROPPED]), (
         f"{stem}: {len(sheet - drawn)} crossing(s) exported flat, "

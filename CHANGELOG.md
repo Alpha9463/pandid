@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`crossing_style`**: which mark two crossing lines carry is now the
+  author's choice, because the documents do not agree on one (#499).
+  ISO 10628-1 5.3.4 interrupts one of the two lines; ISO 15519-1 12.5
+  Figure 31 draws both straight through, as does every one of the 393
+  interior crossings on the reference sheets; and the semicircular
+  bridge pandid draws is in neither. So `crossing_style="arc"` (the
+  default, and unchanged — every golden, gallery sheet and draw.io
+  sample regenerates byte for byte), `"gap"` for the interruption, or
+  `"plain"` for the bare crossing. `render()`, `to_svg()`,
+  `to_drawio()`, `show()` and `pandid draw --crossing-style` all take
+  it, and an unknown spelling is refused by `check_render_arguments`
+  beside `jump_direction`'s, before the sheet is laid out and whether or
+  not this sheet has a crossing to mark.
+
+  It sits beside `jump_direction`, which stays what it was: that one
+  picks *which* of the two lines carries the mark, this one picks what
+  the mark is. `"plain"` marks neither, so it has nothing to pick.
+
+  **The interruption costs run.** The break comes out of the line
+  rather than being laid over it, so a crossing near a corner leaves a
+  short leg — measured on the shipped examples at the radius #490
+  settled, three of the eighty-four resulting pieces keep a straight leg
+  under 1 mm, 0,15 mm at the worst. It is offered with that stated
+  rather than withheld; the arc meets the same wall from the other side
+  (it drops 1 of the 50 crossings), and both are the router putting
+  crossings within a few units of a corner, which is #498.
+
+  It is a property of the sheet and not of a line. A drawing that
+  marked some crossings and not others would teach its reader a
+  convention and then break it, which is worse than either convention.
+
+  `crossing-unmarked` follows the style: the crossing the corpus cannot
+  mark is reported as an *interruption* that would not fit when the
+  sheet is drawn with `"gap"`, and not reported at all under `"plain"`,
+  which drew every crossing exactly as it said it would.
+
 - **`SteamTrap`**: the drawing every steam system needs at each low point
   and each drip leg, and the one in-line device the library had no way to
   draw (#367). ISO 10628-2 Table 2 item 24.15, registered 2181, which is

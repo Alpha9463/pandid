@@ -37,6 +37,7 @@ from pathlib import Path
 
 from pandid import __version__, spec, units
 from pandid.flowsheet import Flowsheet
+from pandid.render.svg import CROSSING_STYLES
 from pandid.render.svg import TABLE_SHEET
 
 EXIT_OK = 0
@@ -126,6 +127,7 @@ def _draw(args: argparse.Namespace) -> int:
         connections=args.connections,
         show_stream_table=args.stream_table,
         jump_direction=args.jump_direction,
+        crossing_style=args.crossing_style,
         debug=args.debug if args.debug is not None else False,
     )
     sheet = f"{args.page_size.upper()}, " if args.page_size else ""
@@ -311,7 +313,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     draw.add_argument(
         "--jump-direction", choices=("vertical", "horizontal"), default="vertical",
-        help="which of two crossing lines gets the semicircle hop (default: vertical)",
+        help="which of two crossing lines carries the crossing mark "
+             "(default: vertical)",
+    )
+    # ``choices`` from the renderer's own tuple rather than a copy: the
+    # shell and the API refuse the same words, and a fourth style added
+    # to one is offered by the other without an edit here.
+    draw.add_argument(
+        "--crossing-style", choices=CROSSING_STYLES, default="arc",
+        help="what that mark is: 'arc' bridges the crossed line, 'gap' "
+             "interrupts the marking one (ISO 10628-1 5.3.4) at the cost of "
+             "eating the run either side of it, 'plain' draws both lines "
+             "straight through (ISO 15519-1 12.5) (default: arc)",
     )
     # Every other render option is reachable from here, and a debugging
     # view is if anything more use from a shell than from a script: it

@@ -165,6 +165,39 @@ _TAP_DASH = "5,4"
 _HOP_CLEARANCE = 3.0
 HOP_R = _HOP_CLEARANCE + LineWeight.MAIN_FLOW.width
 
+#: How a crossing of two unconnected runs is marked. **The author's
+#: choice**, because the documents on disk do not agree on one --
+#: :data:`HOP_R`'s note above sets out the reading, and #499 settled it
+#: as a choice rather than a fix.
+#:
+#: * ``"arc"`` -- the semicircular bridge, and the default, so that no
+#:   drawing already issued changes. It is in no standard this project
+#:   holds and on none of the reference sheets; it is a drafting
+#:   convention this library brought with it.
+#: * ``"gap"`` -- the interruption ISO 10628-1 5.3.4 prescribes. Drawn
+#:   over the same ``2 * HOP_R`` of run the arc spans, because no clause
+#:   dimensions it and matching the arc's footprint is the one choice
+#:   that invents no number and moves nothing else on the sheet. **It
+#:   costs run**: the break comes out of the line rather than being laid
+#:   over it, so a crossing near a corner leaves a short leg. Measured
+#:   on this corpus at this radius: of the 84 resulting pieces of run,
+#:   3 keep a straight leg under 1 mm -- 0,15 mm at the worst, on
+#:   ``11_ethanol_pid`` -- and the shortest whole piece is 1,5 mm. The
+#:   arc meets the same wall from the other side (it drops 1 of 50
+#:   crossings), and both are the router putting crossings within a few
+#:   units of a corner, which is #498.
+#: * ``"plain"`` -- both lines continuous, as ISO 15519-1 12.5 Figure 31
+#:   draws a crossing and as all 393 interior crossings on the reference
+#:   sheets are drawn. A junction is then told from a crossing by the
+#:   *junction* carrying a mark, which is the other way round from the
+#:   two above.
+#:
+#: The choice is the **sheet's** and not the line's: a drawing that
+#: marked some crossings one way and some another would teach its reader
+#: a convention and then break it, which is worse than either. See
+#: :func:`check_crossing_style`.
+CROSSING_STYLES = ("arc", "gap", "plain")
+
 # --- stream-label placement -------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on*
 # the pipe where the run leaves pipe showing at each end: the ARROWHEAD
@@ -912,15 +945,25 @@ _LEADER_HEAD = ARROWHEAD / 2
 CROSSING_UNMARKED = "crossing-unmarked"
 
 
-def unmarked_crossings(fs, jump_direction: str = "vertical") -> list:
+def unmarked_crossings(fs, jump_direction: str = "vertical",
+                       crossing_style: str = "arc") -> list:
     """Every crossing of two unconnected runs the sheet draws **bare**.
 
     A crossing is marked by breaking one of the two runs over the other
-    with a semicircle of :data:`HOP_R` (:meth:`SvgRenderer._draw_streams`),
-    and the run that carries it needs that much of itself either side of
-    the crossing for the arc to sit on rather than overhang. Where it has
-    less, no mark is drawn and the two runs are laid down straight
-    through each other.
+    across :data:`HOP_R` either side of it
+    (:meth:`SvgRenderer._draw_streams`), and the run that carries the
+    mark needs that much of itself either side of the crossing for the
+    mark to sit on rather than overhang. Where it has less, no mark is
+    drawn and the two runs are laid down straight through each other.
+
+    **One answer for two of the three styles.** The arc and the
+    interruption occupy the same ``2 * HOP_R`` of run, so a crossing has
+    the room for one exactly when it has the room for the other, and
+    :data:`CROSSING_STYLES` changes only the noun in the sentence
+    :func:`_crossing_issues` writes. ``"plain"`` returns nothing: a
+    sheet that marks no crossing anywhere drew every one of them the way
+    it said it would, and a finding against each would be a finding
+    against the option rather than against the drawing.
 
     **That is not a neutral fallback on this sheet.** A drawing on which
     every other crossing carries an arc has taught its reader that a
@@ -945,6 +988,8 @@ def unmarked_crossings(fs, jump_direction: str = "vertical") -> list:
     is older than #490 and the count on the shipped corpus is 2 of 53.
     Giving those two the room is the router's to do, and is #498.
     """
+    if crossing_style == "plain":
+        return []
     segments = []
     for stream in fs.streams:
         points = stream_polyline(stream)
@@ -969,20 +1014,31 @@ def unmarked_crossings(fs, jump_direction: str = "vertical") -> list:
     return out
 
 
-def _crossing_issues(fs, jump_direction: str = "vertical") -> list:
-    """:func:`unmarked_crossings`, worded for the reader of the sheet."""
+def _crossing_issues(fs, jump_direction: str = "vertical",
+                     crossing_style: str = "arc") -> list:
+    """:func:`unmarked_crossings`, worded for the reader of the sheet.
+
+    The mark is named as the sheet drew it, and the cure has gained a
+    second half since #499: where the router has left no room, drawing
+    every crossing plain is the honest answer, and it is the one that
+    keeps the sheet reading by a single convention throughout.
+    """
+    mark = "arc" if crossing_style == "arc" else "interruption"
     issues = []
-    for marked, crossed, x, y in unmarked_crossings(fs, jump_direction):
+    for marked, crossed, x, y in unmarked_crossings(fs, jump_direction,
+                                                    crossing_style):
         a = marked.name or marked.kind
         b = crossed.name or crossed.kind
         issues.append(Issue(
             "warning", CROSSING_UNMARKED,
             f"{a} crosses {b} at ({x:g}, {y:g}) and the crossing is drawn "
             f"bare: {a} has under {HOP_R:g}px of itself either side of the "
-            f"point, which is what the arc marking a crossing needs to sit "
-            f"on. Every other crossing on this sheet carries that arc, so a "
+            f"point, which is what the {mark} marking a crossing needs to sit "
+            f"on. Every other crossing on this sheet carries that mark, so a "
             f"reader may take this one for a junction. Pin one of the two "
-            f"runs with via() to move the crossing clear of the corner"))
+            f"runs with via() to move the crossing clear of the corner, or "
+            f"draw the sheet with crossing_style='plain' so every crossing "
+            f"on it reads the same way"))
     return issues
 
 
@@ -3261,6 +3317,31 @@ def check_jump_direction(value) -> None:
         )
 
 
+def check_crossing_style(value) -> None:
+    """Reject a crossing mark this library cannot draw, naming the ones
+    it can.
+
+    :func:`check_jump_direction` beside it, one question further on, and
+    for exactly the same reason: ``crossing_style`` is read where the
+    marks are *drawn*, so a misspelling would not be a value the
+    renderer rejects but one that matches no branch -- and the sheet
+    would come out drawn some other way with nobody told. An author who
+    typed ``"break"`` and got the arc has a drawing they did not ask for
+    and would find out from a reader.
+
+    Checked whatever the sheet turns out to hold, and that is why it
+    lives here rather than in ``_draw_streams``: a sheet with nothing
+    crossing on it draws the same picture for every spelling, so the one
+    render that could have caught the typo by its result is the render
+    that cannot.
+    """
+    if value not in CROSSING_STYLES:
+        raise ValueError(
+            f"Unknown crossing_style {value!r}; use one of "
+            f"{', '.join(repr(name) for name in CROSSING_STYLES)}."
+        )
+
+
 def sheet_connections(diagram: "str | None",
                       connections: "str | None") -> "str | None":
     """The joint a sheet marks by default, or ``None`` if it marks none.
@@ -3732,6 +3813,7 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
                            page_size: "str | None" = None,
                            connections: "str | None" = None,
                            jump_direction: str = "vertical",
+                           crossing_style: str = "arc",
                            debug: "bool | float" = False) -> None:
     """Everything a render can refuse about the arguments it was given,
     asked **before the sheet is laid out or routed**.
@@ -3755,8 +3837,8 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
     and is what lets a backend be called directly without losing a
     check.
 
-    ``jump_direction`` and ``connections`` are checked here **whether or
-    not this sheet can show them**. That is the whole of their fix: a
+    ``jump_direction``, ``crossing_style`` and ``connections`` are
+    checked here **whether or not this sheet can show them**. That is the whole of their fix: a
     sheet with nothing crossing on it, or with no process line at all,
     draws the same picture for every spelling, so leaving the check to
     the drawing means the option is validated on the sheets that did not
@@ -3766,6 +3848,7 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
 
     grid = _debug.resolve_spacing(debug)
     check_jump_direction(jump_direction)
+    check_crossing_style(crossing_style)
     _, kind = _resolve_sheet(border, diagram)
     sheet_connections(kind, connections)
     page = _page(page_size)
@@ -3821,6 +3904,7 @@ class SvgRenderer:
         self.registry = registry or default_registry
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
+               crossing_style: str = "arc",
                show_stream_table: "bool | str" = False,
                border: "str | None" = None, diagram: "str | None" = None,
                page_size: "str | None" = None, connections: "str | None" = None,
@@ -3833,8 +3917,12 @@ class SvgRenderer:
         fs : Flowsheet
             The flowsheet to render.
         jump_direction : str
-            Which crossing lines get a semicircle bump: ``"vertical"``
-            or ``"horizontal"``.
+            Which of two crossing lines carries the crossing mark:
+            ``"vertical"`` or ``"horizontal"``.
+        crossing_style : str
+            What that mark is: ``"arc"`` (the default), ``"gap"`` or
+            ``"plain"``. See :data:`CROSSING_STYLES`. Any other spelling
+            raises rather than being folded to the default.
         show_stream_table : bool | str
             ``True`` docks the stream property table at the foot of the
             diagram; ``"sheet"`` draws the table as a sheet of its own
@@ -3885,7 +3973,8 @@ class SvgRenderer:
         check_render_arguments(
             fs, show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, debug=debug)
+            jump_direction=jump_direction, crossing_style=crossing_style,
+            debug=debug)
         # A table sheet is a formal drawing rather than a table on
         # paper, so it rules the frame the reference sets do; the
         # diagram's own default stays the plain edge. Stated `border`
@@ -3977,7 +4066,8 @@ class SvgRenderer:
         # replaced the same way: it depends on ``jump_direction``, which
         # is this render's option and not a property of the model, so
         # the validator cannot know it (:func:`unmarked_crossings`).
-        render_issues = fit_issues + _crossing_issues(fs, jump_direction)
+        render_issues = fit_issues + _crossing_issues(fs, jump_direction,
+                                                      crossing_style)
         fs.warnings = [w for w in fs.warnings
                        if getattr(w, "code", "") not in _RENDER_CODES
                        and getattr(w, "code", "") not in _LABEL_CODES] + render_issues
@@ -4010,7 +4100,7 @@ class SvgRenderer:
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints,
                                         quadrants))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
-                                          plates, joints))
+                                          plates, joints, crossing_style))
         # Instrumentation goes on over the lines: an impulse line runs
         # from the tap to the balloon, and the balloon's opaque body
         # then knocks out both it and any process line an in-line
@@ -4876,8 +4966,28 @@ class SvgRenderer:
         return arrows and wears_arrowhead(s, self.registry)
 
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True,
-                      plates=None, joints=None):
+                      plates=None, joints=None, crossing_style="arc"):
         """Draw every run, and the numbers written on and beside them.
+
+        ``crossing_style`` is the mark a crossing of two unconnected
+        runs carries and ``jump_direction`` is which of the two carries
+        it; see :data:`CROSSING_STYLES`. All three are the same two path
+        commands over the same ``2 * HOP_R`` of run -- the arc sweeps
+        across it, the interruption lifts the pen over it, and
+        ``"plain"`` writes neither and leaves the ``L`` that was going
+        to be written anyway. So a crossing has the room for one exactly
+        when it has the room for the others, and
+        :func:`unmarked_crossings` needs no third answer.
+
+        **Where the numbers go does not follow the style.** :func:`_ink`
+        reserves a :func:`hop_box` for every crossing whichever mark the
+        sheet draws, so a sheet redrawn in another convention keeps its
+        line numbers exactly where the arc left them. On ``"gap"`` and
+        ``"plain"`` that reserves the semicircle's paper for a mark that
+        does not cover it -- reserving paper that is clear, which is the
+        direction :func:`hop_box` already says it prefers to err in, and
+        the alternative is a change of convention that also moves every
+        number near a crossing.
 
         ``joints`` is the sheet's :func:`sheet_connections` answer --
         the joint every line takes unless it says otherwise, or ``None``
@@ -4903,8 +5013,29 @@ class SvgRenderer:
         # the segment that carries it, already in the order that segment
         # is drawn in. See :func:`stream_hops`.
         hops: dict[tuple[int, int], list[_Hop]] = {}
-        for hop in stream_hops(fs, jump_direction):
-            hops.setdefault((hop.stream, hop.seg), []).append(hop)
+        if crossing_style != "plain":
+            for hop in stream_hops(fs, jump_direction):
+                hops.setdefault((hop.stream, hop.seg), []).append(hop)
+
+        # The crossing mark, as the one path command that differs
+        # between the three styles. Everything before it -- which
+        # segments cross which, which of the two carries the mark, and
+        # the ``L`` up to the near side of the crossing -- is the same
+        # for all three, so this is the whole of what the option
+        # changes.
+        #
+        # ``M`` and not a second path element: the interruption is a
+        # break in *this* run and the run continues after it, so it is a
+        # second subpath of the same ``d``. That keeps ``marker-end`` on
+        # the run's far end, where it attaches to the last subpath, and
+        # keeps one line one element for anything reading the file back.
+
+        def cross(far: str) -> str:
+            """The command that gets the run from one side of a crossing
+            to the other, given the far side as ``"x,y"``."""
+            if crossing_style == "arc":
+                return f"A {HOP_R:g} {HOP_R:g} 0 0 1 {far}"
+            return f"M {far}"
 
         lines = ['  <g id="streams">']
         for n, (s, points) in enumerate(stream_geoms):
@@ -4930,11 +5061,12 @@ class SvgRenderer:
             for i in range(len(points) - 1):
                 x1, y1 = points[i]
                 x2, y2 = points[i + 1]
-                # The arc's two feet stand `HOP_R` back along the run
-                # either side of the crossing, and it leaves the run on
-                # `side`. Sweep flag 1 throughout, which is what makes
-                # `side` follow the direction of travel; `stream_hops`
-                # is where that is worked out and written down. `:g`
+                # The two feet stand `HOP_R` back along the run either
+                # side of the crossing, and the mark between them is
+                # `cross`'s one command -- the arc leaving the run on
+                # `side` with sweep flag 1 throughout, which is what
+                # makes `side` follow the direction of travel, or the
+                # `M` that lifts the pen over the same span. `:g`
                 # because HOP_R is a clearance plus a pen width and so
                 # is no longer a whole number.
                 for hop in hops.get((n, i), ()):
@@ -4942,12 +5074,12 @@ class SvgRenderer:
                         foot = HOP_R if y1 < y2 else -HOP_R
                         d_parts.extend([
                             f"L {x1},{hop.y - foot:g}",
-                            f"A {HOP_R:g} {HOP_R:g} 0 0 1 {x1},{hop.y + foot:g}"])
+                            cross(f"{x1},{hop.y + foot:g}")])
                     else:
                         foot = HOP_R if x1 < x2 else -HOP_R
                         d_parts.extend([
                             f"L {hop.x - foot:g},{y1}",
-                            f"A {HOP_R:g} {HOP_R:g} 0 0 1 {hop.x + foot:g},{y1}"])
+                            cross(f"{hop.x + foot:g},{y1}")])
                 d_parts.append(f"L {x2},{y2}")
             d_str = " ".join(d_parts)
 
