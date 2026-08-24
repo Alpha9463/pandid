@@ -495,11 +495,24 @@ def table_sheet_block(block: "TitleBlock | None",
 def _same_number(a: str, b: str) -> bool:
     """Are these one drawing number said twice?
 
-    Compared with the surrounding space and the letter case taken out,
-    because a drawing register does not file ``PFD-301`` and ``pfd-301 ``
-    as two drawings and neither does the person looking for one. Two
-    numbers that differ only that way are the collision this is looking
-    for, not an escape from it.
+    Surrounding space is stripped and the rest is **case-folded**,
+    because a drawing register does not file ``PFD-301`` and
+    ``pfd-301 `` as two drawings and neither does the person looking for
+    one. Two numbers that differ only that way are the collision this is
+    looking for, not an escape from it.
+
+    ``str.casefold`` is aggressive by design and does more than lower the
+    case: it also folds the compatibility forms, so the ``ﬃ`` ligature
+    equals ``ffi`` and ``ß`` equals ``ss``. That is stated because it is
+    more than "case", and it is *kept* because it is the same judgement
+    one step further -- two numbers a reader could not tell apart are
+    one number, and nobody files a drawing under a ligature to
+    distinguish it from the same letters typed out.
+
+    What is deliberately **not** folded is anything that changes what a
+    reader sees: interior spaces (``PFD 301`` is not ``PFD301``), a
+    trailing full stop, or a zero-width character, all of which stay
+    distinct. Only the outer whitespace and the letter case come out.
     """
     return a.strip().casefold() == b.strip().casefold()
 

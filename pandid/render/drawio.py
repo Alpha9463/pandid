@@ -1587,8 +1587,16 @@ class DrawioRenderer:
         is writing a placement rather than part of the drawing.
         """
         from pandid.render.svg import (
-            _page, _resolve_sheet, check_render_arguments, wants_table_sheet)
+            _page, _resolve_sheet, check_render_arguments,
+            reject_unknown_options, wants_table_sheet)
 
+        # `debug` is not a keyword this signature names, so it arrives in
+        # `**opts` and used to be dropped: a .drawio document has no
+        # coordinate overlay to draw, and returning one silently without
+        # it told the caller nothing. `Flowsheet.render` refuses the
+        # argument for this path in so many words; a backend called
+        # directly gets the general answer.
+        reject_unknown_options("DrawioRenderer.render()", opts)
         arrows = draws_arrowheads(diagram)
         self._findings = []
         # Before anything branches, and for the reason the sheet asks it

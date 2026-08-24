@@ -10,6 +10,7 @@ emit.
 """
 
 import importlib.util
+import inspect
 import re
 import xml.etree.ElementTree as ET
 from typing import Any, cast
@@ -19,7 +20,8 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.document import Revision, TitleBlock
 from pandid.render import furniture as F
-from pandid.render.svg import _page, table_sheet_plan
+from pandid.render.drawio import DrawioRenderer
+from pandid.render.svg import SvgRenderer, _page, table_sheet_plan
 
 _HAS_PDF_EXTRA = all(
     importlib.util.find_spec(m) is not None for m in ("svglib", "reportlab", "pypdfium2", "PIL")
@@ -655,3 +657,199 @@ def test_the_unpaged_sheet_is_the_paged_one_with_the_cutting_left_out():
     # Same label column and same stream column, cut into fewer of them.
     assert wrapped.blocks[0].rows[0][0].w == unpaged.blocks[0].rows[0][0].w
     assert wrapped.blocks[0].rows[0][1].w == unpaged.blocks[0].rows[0][1].w
+
+
+# --- a backend cannot swallow an argument it does not know -------------------
+
+
+def test_a_backend_refuses_the_keywords_it_does_not_take():
+    """`**opts` is on both renderers because `Renderer` is a protocol a future
+    backend has to answer. What it must not mean is accepted and dropped: the
+    draw.io exporter took `debug=True` and returned a document with no overlay
+    in it and no complaint, because a .drawio file has no overlay to draw and
+    nothing said so."""
+    fs = _sheet(streams=3)
+    fs.route()
+    for renderer in (SvgRenderer(), DrawioRenderer()):
+        with pytest.raises(ValueError, match="does not take"):
+            renderer.render(fs, page_size="A3", nonsense=True)
+
+
+def test_the_drawio_backend_refuses_the_overlay_when_called_directly():
+    """The defect this closes, in the words the reviewer found it in."""
+    fs = _sheet(streams=3)
+    fs.route()
+    with pytest.raises(ValueError, match="debug"):
+        DrawioRenderer().render(fs, show_stream_table="sheet", page_size="A3", debug=True)
+
+
+def test_every_keyword_the_entry_points_pass_is_one_its_backend_names():
+    """The guard that keeps the door shut. Refusing unknown keywords only helps
+    while the entry points send nothing unknown, so the two lists are held
+    against each other here rather than discovered by a raise in the field."""
+    for entry, backend in (
+        (Flowsheet.to_svg, SvgRenderer.render),
+        (Flowsheet.to_drawio, DrawioRenderer.render),
+    ):
+        passed = set(inspect.signature(entry).parameters) - {"self", "check"}
+        named = set(inspect.signature(backend).parameters) - {"self", "fs", "opts"}
+        assert passed <= named, f"{backend.__qualname__} would swallow {passed - named}"
+
+
+# --- an unsupported extension is a fact about the path ----------------------
+
+
+def test_an_unsupported_extension_is_refused_before_the_geometry(tmp_path):
+    """Same poisoning as an unknown page size, through another door: the check
+    sat after `to_svg()`, so a misspelled suffix raised having installed a
+    Frame on every unit and a Route on every stream."""
+    fs = _sheet(streams=3)
+    assert _unresolved(fs)
+    with pytest.raises(ValueError, match="Unsupported output format"):
+        fs.render(tmp_path / "sheet.unsupported", check=False)
+    assert _unresolved(fs), "a refused render left the flowsheet laid out"
+
+
+def test_the_supported_extensions_still_write(tmp_path):
+    """The guard against fixing the leak by narrowing the door."""
+    fs = _sheet(streams=3)
+    for name in ("sheet.svg", "sheet", "sheet.drawio"):
+        out = tmp_path / name
+        fs.render(out)
+        assert out.stat().st_size > 0
+
+
+# --- a refused render leaves fs.warnings exactly as it found them ------------
+
+
+def _with_an_unused_section(streams: int = 3) -> Flowsheet:
+    """A sheet whose `stream_table_sections` names a property no stream sets,
+    which is a warning the *measurement* raises rather than the drawing."""
+    fs = _sheet(streams=streams)
+    fs.stream_table_sections = [("Nothing Sets This", "Mass Fraction")]
+    return fs
+
+
+def test_a_refused_render_adds_no_finding_of_its_own():
+    """Prevalidation measures the table, and measuring reports. A finding left
+    behind by a render that then raised is a finding about a sheet nobody has."""
+    fs = _with_an_unused_section()
+    fs.stream_table.sheet_drawing_number = "PFD-1001"  # refused: the diagram's
+    with pytest.raises(ValueError, match="drawing number"):
+        fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert fs.warnings == []
+
+
+def test_a_refused_render_erases_no_finding_from_the_last_one():
+    """The worse half: `warnings` was emptied before the arguments were
+    checked, so a typo'd page size deleted the findings of the render that
+    succeeded. An author reads a real warning, renders again with a typo, and
+    the warning they were reading is gone."""
+    fs = _with_an_unused_section()
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    kept = [w.code for w in fs.warnings]
+    assert "stream-table-section-unused" in kept, "the fixture must warn about something"
+    with pytest.raises(ValueError):
+        fs.to_svg(show_stream_table="sheet", page_size="A9")
+    assert [w.code for w in fs.warnings] == kept
+
+
+def test_a_successful_render_still_replaces_the_last_one_s_findings():
+    """The guard against fixing that by never clearing: `warnings` describes
+    the render in hand, so a finding that has been fixed must stop being
+    reported."""
+    fs = _with_an_unused_section()
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert any(w.code == "stream-table-section-unused" for w in fs.warnings)
+    fs.stream_table_sections = []
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert not any(w.code == "stream-table-section-unused" for w in fs.warnings)
+
+
+# --- what "the same number" means --------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "stated,collides",
+    [
+        ("PFD-1001", True),  # itself
+        ("pfd-1001", True),  # letter case
+        ("  PFD-1001\t", True),  # surrounding space, of any kind
+        (" PFD-1001 ", True),  # ...including NBSP and em space
+        ("PFD 1001", False),  # an interior space is a different number
+        ("PFD-1001.", False),  # so is a trailing stop
+        ("PFD-1001​", False),  # so is a zero-width character
+        ("PFD-1002", False),
+    ],
+)
+def test_which_numbers_count_as_the_diagram_s_own(stated, collides):
+    """`casefold` strips the outer space and the letter case, and folds the
+    compatibility forms with them -- more than "case", and kept, because two
+    numbers a reader cannot tell apart are one number. What is *not* folded is
+    anything that changes what a reader sees."""
+    fs = _sheet(streams=3)
+    fs.stream_table.sheet_drawing_number = stated
+    if collides:
+        with pytest.raises(ValueError, match="the diagram's own drawing number"):
+            fs.to_svg(show_stream_table="sheet", page_size="A3")
+    else:
+        assert fs.to_svg(show_stream_table="sheet", page_size="A3")
+
+
+def test_a_ligature_is_the_same_number_as_the_letters_it_stands_for():
+    """The one case where the folding reaches past case, stated so the
+    behaviour is a decision rather than a side effect."""
+    fs = _sheet(streams=3)
+    fs.title_block = TitleBlock(title="Ligatures", drawing_number="PFD-FFI")
+    fs.stream_table.sheet_drawing_number = "PFD-ﬃ"
+    with pytest.raises(ValueError, match="the diagram's own drawing number"):
+        fs.to_svg(show_stream_table="sheet", page_size="A3")
+
+
+# --- a valid option this sheet cannot show changes nothing about it ----------
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"connections": "flanged"},
+        {"connections": "flanged-at-nozzles"},
+        {"connections": "none"},
+        {"jump_direction": "horizontal"},
+    ],
+)
+def test_an_option_a_table_sheet_cannot_show_leaves_the_drawing_identical(kwargs):
+    """The distinction this PR draws, tested rather than asserted: an *invalid*
+    option is refused, and a *valid* one that this sheet has nothing to apply
+    to is accepted and changes not one byte. `connections` marks joints on
+    process lines and `jump_direction` hops one line over another; a table
+    sheet draws neither, so both must come out where they went in."""
+    for render in ("to_svg", "to_drawio"):
+        plain = getattr(_sheet(streams=21), render)(
+            show_stream_table="sheet", page_size="A4", diagram="p&id"
+        )
+        stated = getattr(_sheet(streams=21), render)(
+            show_stream_table="sheet", page_size="A4", diagram="p&id", **cast(Any, kwargs)
+        )
+        assert stated == plain, f"{kwargs} moved ink on a {render} table sheet"
+
+
+def test_the_same_option_does_change_a_diagram_that_can_show_it():
+    """The other half, so the test above cannot pass by the option being
+    ignored everywhere: on a P&ID with a nozzle to mark, `connections` draws.
+
+    A pump rather than this file's feed-to-product fixture, because a boundary
+    flag is not a joint and there is nothing to flange between two of them."""
+
+    def build() -> Flowsheet:
+        fs = Flowsheet("joints")
+        feed = fs.add(U.Feed("F")).pin(x=100, y=100)
+        pump = fs.add(U.Pump("P-101")).pin(x=280, y=100)
+        out = fs.add(U.Product("P")).pin(x=460, y=100)
+        fs.connect(feed.outlet, pump.suction)
+        fs.connect(pump.discharge, out.inlet)
+        return fs
+
+    plain = build().to_svg(page_size="A3", diagram="p&id")
+    marked = build().to_svg(page_size="A3", diagram="p&id", connections="flanged")
+    assert marked != plain

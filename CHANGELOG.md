@@ -895,6 +895,30 @@ class hierarchy, or what it is called.
   every spelling and so is exactly the sheet that cannot catch the typo by its
   result. An unknown `connections` is checked on the same terms and now reaches
   a `.drawio` export of the stream table sheet, which returned before the check.
+- **A backend no longer accepts and drops a keyword it does not know.** Both
+  renderers end their signature with `**opts`, because `Renderer` is a protocol
+  a future backend has to answer; what that spelling must not mean is *accepted
+  and silently discarded*. `DrawioRenderer().render(fs, debug=True)` returned a
+  57-kilobyte document with no coordinate overlay in it and no complaint, a
+  `.drawio` file having no overlay to draw. Unknown keywords are now refused by
+  name, which makes the whole class impossible rather than fixing it one
+  argument at a time, and a test holds every keyword the entry points forward
+  against the set its backend actually names.
+- **An unsupported output extension is refused before the sheet is laid out.**
+  It was checked after `to_svg()` had already run, so `fs.render("x.unsupported")`
+  raised having installed a `Frame` on every unit and a `Route` on every stream
+  for the next render to reuse -- the same cache poisoning an unknown page size
+  caused, through another door. The extension is a fact about the *path*, so it
+  is now answered before any geometry exists.
+- **A refused render no longer touches `fs.warnings`.** Two halves. Measuring
+  the stream table *reports* -- `stream-table-section-unused` is written during
+  the measurement -- so a prevalidation that then raised left a finding about a
+  sheet nobody has; the prevalidation now restores the list whatever happens.
+  And `warnings` was emptied *before* the arguments were checked, so a render
+  refused for a misspelled page size erased the findings of the last render that
+  succeeded: an author reads a real warning, renders again with a typo, and the
+  warning they were reading is gone. That is data loss rather than noise, and
+  the clearing now happens after the arguments are known to be good.
 - **A render that raises no longer leaves the flowsheet laid out.** Every
   argument a render can refuse -- the page size, the border, the diagram, the
   hop direction, the joint marks -- is now checked in

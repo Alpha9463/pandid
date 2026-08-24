@@ -3021,6 +3021,38 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
                           (sx, sy, sw, sh), frame, left, top, findings)
 
 
+def reject_unknown_options(where: str, opts: dict) -> None:
+    """Refuse the keywords a backend does not know, naming them.
+
+    Both renderers end their signature with ``**opts``, because
+    :class:`~pandid.render.Renderer` is a protocol every backend has to
+    answer and a future one will take arguments these two never heard
+    of. What that spelling must not mean is **accepted and dropped**: an
+    argument a backend swallows is a caller told something false about
+    the file they now hold, and it is silent in exactly the case that
+    matters -- ``DrawioRenderer().render(fs, debug=True)`` returned a
+    57-kilobyte document with no overlay in it and no complaint, because
+    a ``.drawio`` file has no overlay to draw and nothing said so.
+
+    Raised for the whole set rather than the first one, for the reason
+    :meth:`~pandid.flowsheet.Flowsheet._raise_on_errors` names every
+    error it found: an author who misspelled two keywords should not
+    meet them one render at a time.
+
+    A closed door rather than a longer list of arguments to remember to
+    forward. The defect this closes was one argument going unchecked;
+    the fix is that an *unknown* argument cannot go unchecked, so the
+    next keyword added to a render call cannot repeat it.
+    """
+    if opts:
+        raise ValueError(
+            f"{where} was given {', '.join(sorted(opts))}, which it does not "
+            f"take. A render argument this backend does not know is an "
+            f"argument it would have dropped, and a file that quietly lacks "
+            f"what was asked for is worse than a refused one."
+        )
+
+
 def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
                            border: "str | None" = None,
                            diagram: "str | None" = None,
@@ -3080,7 +3112,25 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
     # again to draw from, exactly as `title_strip_fit` runs the strip's
     # own layout and discards the ink -- one measurement, so what is
     # refused here is what would have been drawn there.
-    table_sheet_plan(fs, page)
+    #
+    # Discarding the answer is not enough: measuring the table *reports*
+    # (:func:`~pandid.render.furniture._report_unused_sections` writes a
+    # `stream-table-section-unused` finding onto ``fs.warnings``), and a
+    # finding left behind by a render that then raised is a finding
+    # about a sheet nobody has. So the list is put back exactly as it
+    # was, in a ``finally`` because the interesting case is the one that
+    # raises. The render that follows measures again and reports then,
+    # which is when there is a drawing for the finding to be about.
+    #
+    # Restored wholesale rather than by undoing what this call is known
+    # to write: what a measurement reports is the measurement's
+    # business, and a guard that named today's findings would go stale
+    # the day another one is added.
+    was = list(fs.warnings)
+    try:
+        table_sheet_plan(fs, page)
+    finally:
+        fs.warnings = was
 
 
 class SvgRenderer:
@@ -3142,6 +3192,7 @@ class SvgRenderer:
         from pandid.render import debug as _debug
         # Resolved first, so a spacing the overlay cannot draw is
         # refused before a whole sheet has been built rather than after.
+        reject_unknown_options("SvgRenderer.render()", opts)
         grid = _debug.resolve_spacing(debug)
         table_sheet = wants_table_sheet(show_stream_table)
         # Asked again here, and asked of the arguments this backend was

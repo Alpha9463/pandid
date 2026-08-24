@@ -66,6 +66,16 @@ DEFAULT_LOOP_NUMBER_START = 101
 #: strict subset of this one.
 INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
 
+#: What :meth:`Flowsheet.render` writes, keyed by the extension that
+#: selects it. The empty string is a path with no extension at all,
+#: which is drawn as SVG.
+#:
+#: A set rather than a chain of ``elif``\ s because the question "is
+#: this a format we write?" is asked *before* the sheet is laid out and
+#: answered again when the bytes are produced, and the two must not be
+#: able to disagree about it.
+_OUTPUT_FORMATS = frozenset({"", ".svg", ".pdf", ".png", ".drawio"})
+
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
     """Assemble a line number from the components the author set.
@@ -1734,13 +1744,6 @@ class Flowsheet:
         from pandid.render.svg import check_render_arguments, draws_arrowheads
         from pandid.validate import geometry_issues, model_issues
 
-        # ``warnings`` describes *this* render. Emptied at the top rather
-        # than assigned at the bottom, because only the `check` branch
-        # assigns it and the renderers append to it afterwards, so a
-        # `check=False` render used to answer with the last checked
-        # render's findings and a caller could not tell that list from an
-        # honestly empty one.
-        self.warnings = []
         # Before the model check, not after: `stream-name-reused` reads
         # the names, and `new_line_number` set after the last connect()
         # regroups the runs and so changes them.
@@ -1751,6 +1754,21 @@ class Flowsheet:
         # widths; before, because nothing this refuses may cost the
         # author a laid-out sheet.
         check_render_arguments(self, diagram=diagram, **arguments)
+        # ``warnings`` describes *this* render. Emptied before the
+        # findings are gathered rather than assigned at the bottom,
+        # because only the `check` branch assigns it and the renderers
+        # append to it afterwards, so a `check=False` render used to
+        # answer with the last checked render's findings and a caller
+        # could not tell that list from an honestly empty one.
+        #
+        # **After the argument check, though**, and that order is the
+        # whole of a second defect: emptied first, a render refused for
+        # a misspelled page size erased the findings of the last render
+        # that *succeeded*. An author reads a real warning, renders
+        # again with a typo, and the warning they were reading is gone
+        # -- data loss rather than noise. A render that does not happen
+        # leaves this list exactly as it found it.
+        self.warnings = []
         found: list = []
         if check:
             found = model_issues(self, arrows=draws_arrowheads(diagram))
@@ -2335,6 +2353,19 @@ class Flowsheet:
                 ``warnings``. See :meth:`_prepare_to_draw`.
         """
         ext = Path(path).suffix.lower()
+        # Before anything else, and for the reason
+        # `check_render_arguments` runs before the geometry: the
+        # extension is a fact about the *path*, knowable with no drawing
+        # in hand, and it used to be checked after `to_svg()` had laid
+        # the sheet out and routed it. A misspelled suffix therefore
+        # raised having installed a Frame on every unit and a Route on
+        # every stream, which the next render then reused -- the same
+        # poisoning an unknown page size caused, through another door.
+        if ext not in _OUTPUT_FORMATS:
+            raise ValueError(
+                f"Unsupported output format {ext!r}; use "
+                f"{', '.join(sorted(f for f in _OUTPUT_FORMATS if f))}"
+            )
         if ext == ".drawio":
             # Refused rather than ignored: a caller who asked for
             # something and got a file without it has been told
@@ -2374,14 +2405,10 @@ class Flowsheet:
         )
         if ext in ("", ".svg"):
             Path(path).write_text(svg, encoding="utf-8")
-        elif ext in (".pdf", ".png"):
+        else:  # .pdf / .png; anything else was refused before the render
             from pandid.render import export
             data = export.to_pdf(svg) if ext == ".pdf" else export.to_png(svg)
             Path(path).write_bytes(data)
-        else:
-            raise ValueError(
-                f"Unsupported output format {ext!r}; use .svg, .pdf, .png, or .drawio"
-            )
 
     def _repr_svg_(self) -> str:
         """IPython/Jupyter: display the diagram inline in a notebook."""

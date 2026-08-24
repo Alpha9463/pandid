@@ -257,8 +257,9 @@ Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `pdf` extra
 (`pip install 'pandid[pdf]'`) and raise `ImportError` naming the missing package
 without it; `.drawio` writes the editable draw.io document. Any other extension
-raises `ValueError`. The PDF is vector, drawn at the sheet's physical size, and
-the PNG is rasterised from that same PDF.
+raises `ValueError` **before the sheet is laid out**, so a misspelled suffix
+costs nothing and leaves no resolved geometry behind. The PDF is vector, drawn
+at the sheet's physical size, and the PNG is rasterised from that same PDF.
 
 ```text
 show(*, show_stream_table=False, border=None, diagram=None, page_size=None,
@@ -2617,8 +2618,9 @@ there being no diagram to draw a coordinate overlay under, and a flowsheet with
 nothing to tabulate raises rather than writing an empty sheet.
 
 Everything a table sheet can refuse, it refuses **before the sheet is laid out
-or routed**, so a call that raises leaves the flowsheet exactly as it found it
-and the next render is not reusing geometry resolved for a call that failed.
+or routed**, so a call that raises leaves the flowsheet exactly as it found it —
+no resolved geometry for the next render to reuse, and `fs.warnings` untouched,
+neither added to nor erased. A render that does not happen changes nothing.
 
 ---
 
