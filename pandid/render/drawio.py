@@ -1175,10 +1175,12 @@ _PART_APPROXIMATIONS = {
     (29, "electromagnetic"): _Approximation(
         "line", "the three turns standing on the coil's baseline"),
     # 29.4 to 29.14, the eleven marks that say how a machine crushes.
-    # Nine of them are combinations of lines, circles and an X that no
-    # built-in draws, so they take draw.io's default rectangle and what
-    # it gives is the mark's extent -- the same answer 27.7's field of
-    # dots takes, and for the same reason.
+    # Seven of the eleven -- counted as the entries below with
+    # ``shape=None`` -- are combinations of lines, circles and an X that
+    # no built-in draws, so they take draw.io's default rectangle and
+    # what it gives is the mark's extent, the same answer 27.7's field
+    # of dots takes and for the same reason. The other four name a
+    # built-in that draws part of the mark.
     (29, "disc"): _Approximation(
         None, "the shaft, its two plates and the arms between them; "
               "the box is the rotor's extent"),
@@ -3111,8 +3113,11 @@ class DrawioRenderer:
 #: right-hand edge of the document), so the paper the search reserved
 #: for it is 13 units across by however long the string is; written flat
 #: the label occupies the **transpose** of that. Two of the sixteen
-#: numbers on ``11_ethanol_pid`` and eight of the twenty-four on
-#: ``13_mineral_dewatering`` are vertical.
+#: numbers on ``11_ethanol_pid`` and seven of the twenty-four on
+#: ``13_mineral_dewatering`` are vertical -- counted as
+#: :attr:`~pandid.render.svg.StreamNumber.vertical` over what
+#: :func:`~pandid.render.svg.stream_numbers` returns for each sheet,
+#: which is 69 of the corpus's 286 line numbers in all.
 #:
 #: Unlike the two above it does reach an edge label:
 #: ``mxText.getTextRotation`` defers to ``mxShape.getTextRotation``,
