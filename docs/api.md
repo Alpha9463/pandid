@@ -313,7 +313,7 @@ per process, overwritten by each `show()` and swept on the way out.
 | Option | Values | Effect |
 |---|---|---|
 | `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the zone-lettered drawing frame (A.. top down, 1.. left to right, so A1 is the top-left corner). Anything else raises `ValueError` |
-| `diagram` | `"pfd"` (the default), `"p&id"` | which drawing this is. A P&ID draws its process lines without arrowheads |
+| `diagram` | `"pfd"` (the default), `"p&id"`, `"bfd"` | which drawing this is. A P&ID draws its process lines without arrowheads; a `"bfd"` is a block flow diagram, which heads its lines as a PFD does but answers ISO 10628-1 §4.2 for what it has to carry |
 | `connections` | `"none"` (the default), `"flanged"`, `"flanged-at-nozzles"` | `"flanged"` marks the double tick at every equipment nozzle *and* both sides of every valve and in-line fitting; `"flanged-at-nozzles"` marks the nozzles alone. A P&ID only; a PFD draws none whatever this says. See [Flanged connections](#flanged-connections) |
 | `show_stream_table` | `False` (the default), `True`, `"sheet"` | `True` draws the stream property table under the drawing (one column per stream that has properties, plus every feed and product); `"sheet"` draws the table as a sheet of its own instead, with no diagram on it. See [Stream properties and the table](#stream-properties-and-the-table) |
 | `check` | `bool` | validate; errors raise, warnings collect. The model-only checks run before the sheet is laid out, the geometric ones after — see [When the checks run](#when-the-checks-run) |
@@ -3716,10 +3716,22 @@ and `message`.
 `validate(diagram=…)` takes the drawing the findings are about, spelled as
 [`to_svg()`](#rendering) takes it. Almost nothing depends on it — a flowsheet is
 a flowsheet either way — but `nozzles-crowded` is about arrowheads, and a P&ID
-draws none, and `stream-table-missing` answers a clause that governs a process
-flow diagram and not a P&ID. It defaults to `"pfd"`; `render()` passes
-whichever drawing it is making, so the warnings left on `fs.warnings` are about
-the sheet that came out.
+draws none, and `stream-table-missing` answers ISO 10628-1 §4.3.2 d), which
+governs a process flow diagram and neither of the other two.
+
+**Left unsaid, it is the drawing this sheet was last rendered as**, and `"pfd"`
+on a sheet nothing has drawn yet — the same thing `fs.warnings` already means.
+So a script that renders and then prints its findings says which drawing it is
+once:
+
+```python
+fs.render("sheet.svg", diagram="p&id")
+for issue in fs.validate():        # about the P&ID that was just drawn
+    print(f"  {issue}")
+```
+
+Naming one at the call still wins, so you can ask what a model would report as
+some other drawing without rendering it as one.
 
 | Code | Severity | Meaning |
 |---|---|---|
@@ -3739,7 +3751,7 @@ the sheet that came out.
 | `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `n_draws=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
 | `stream-name-reused` | warning | auto-numbering picked a name another stream already answers to, so the two share one stream-table column and one of them is not tabulated at all. Only a *counted* name is reported: a run drawn in several `connect()` calls shares its name on purpose. See [Stream numbering](#stream-numbering) |
 | `boundary-flow-missing` | warning | a stream with a `Feed` or a `Product` at one end states no property, on a sheet whose other streams state theirs. ISO 10628-1:2014 §4.3.2 d) makes the flow rates or quantities of ingoing and outgoing materials something a PFD shall contain, so the stream table keeps the empty column rather than dropping it the way it drops an empty internal one. A blank value is a report and is not flagged; see [Which streams get a column](#which-streams-get-a-column) |
-| `stream-table-missing` | warning | a PFD with a `Feed` or a `Product` and no stream anywhere on the sheet stating a property, so §4.3.2 d) is unmet and nothing says so the way `boundary-flow-missing` does for a sheet that has at least started. Not made for a P&ID, which answers to §4.4.2 instead; see [Which streams get a column](#which-streams-get-a-column) |
+| `stream-table-missing` | warning | a PFD with a `Feed` or a `Product` and no stream anywhere on the sheet stating a property, so §4.3.2 d) is unmet and nothing says so the way `boundary-flow-missing` does for a sheet that has at least started. Not made for a P&ID, which answers §4.4.2 instead, nor for a `diagram="bfd"`, which answers §4.2 — its minimum content is §4.2.2 and the flow rate is listed a clause later, under §4.2.3; see [Which streams get a column](#which-streams-get-a-column) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 | `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 | `symbol-kind-unknown` | warning | a unit whose `kind` no symbol is registered for. It is drawn as a blank 60×60 box with no ports, which is what a `Unit` subclass from outside the package legitimately gets — and also what a misspelt `kind` gets. One finding per kind, with the nearest registered name |
@@ -4435,10 +4447,10 @@ not on PATH. It is a shell over the API above and adds nothing to it.
 
 ```text
 pandid draw SPEC [-o OUT] [--page-size SIZE] [--border {none,zone}]
-                 [--diagram {pfd,p&id}] [--stream-table [sheet]]
+                 [--diagram {pfd,p&id,bfd}] [--stream-table [sheet]]
                  [--jump-direction {vertical,horizontal}]
                  [--crossing-style {arc,gap,plain}]
-pandid validate SPEC
+pandid validate SPEC [--diagram {pfd,p&id,bfd}]
 pandid symbols [--kind KIND]
 ```
 
@@ -4458,7 +4470,7 @@ under the same name with `.svg`.
 |---|---|
 | `--page-size A3` | `page_size="A3"` |
 | `--border zone` | `border="zone"` |
-| `--diagram 'p&id'` | `diagram="p&id"` |
+| `--diagram 'p&id'`, `--diagram bfd` | `diagram="p&id"`, `diagram="bfd"` |
 | `--stream-table`, `--stream-table sheet` | `show_stream_table=True`, `show_stream_table="sheet"` |
 | `--jump-direction horizontal` | `jump_direction="horizontal"` |
 | `--crossing-style gap` | `crossing_style="gap"` |

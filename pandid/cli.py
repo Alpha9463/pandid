@@ -257,9 +257,16 @@ def _diagram_option(command: argparse.ArgumentParser, help: str) -> None:
     could not be told judged every spec as a PFD and reported a defect in
     ink the drawing does not contain.
 
+    ``bfd`` is the third, and the same argument the other way round: a
+    block flow diagram heads its lines and answers ISO 10628-1 4.2, so
+    ``stream-table-missing`` -- which is made under 4.3.2 d) -- is not a
+    finding about one. A spec drawn from blocks had no way to say so and
+    was judged as a PFD.
+
     Declared once so the spelling and the default cannot drift apart.
     """
-    command.add_argument("--diagram", choices=("pfd", "p&id"), default="pfd", help=help)
+    command.add_argument("--diagram", choices=("pfd", "p&id", "bfd"), default="pfd",
+                         help=help)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -290,7 +297,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _diagram_option(
         draw,
         "which drawing this is; a P&ID draws its process lines without "
-        "arrowheads (default: pfd)",
+        "arrowheads, and 'bfd' is a block flow diagram (default: pfd)",
     )
     draw.add_argument(
         "--connections", choices=("none", "flanged", "flanged-at-nozzles"),
@@ -349,7 +356,7 @@ def _build_parser() -> argparse.ArgumentParser:
         validate,
         "which drawing the findings are about; a P&ID draws no arrowheads, so "
         "nozzles pitched inside the heads they would carry on a PFD are not a "
-        "defect on one (default: pfd)",
+        "defect on one, and a 'bfd' owes no stream table (default: pfd)",
     )
     validate.set_defaults(run=_validate)
 

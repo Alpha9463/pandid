@@ -17,6 +17,15 @@ its walls need.
 
 **`order_on`**, the only way to say where a connection sits on a wall.
 
+**The sheet says what it is.** `diagram="bfd"` is the drawing declaring
+its own kind, and it is what keeps `validate()` honest here: a block flow
+diagram answers ISO 10628-1 4.2, so the flow rate a process flow diagram
+must state under 4.3.2 d) is not something this sheet is short of. Left
+unsaid, the sheet was checked as a PFD and reported for a stream table
+its own clause never asked it for -- and a genuine boundary balance here
+would need plant-scale ammonia stoichiometry a block-level drawing does
+not model.
+
 **Why it is pinned.** The layout engine does not yet know that a
 connection on the north face wants its source *above* it, so a BFD left
 to lay itself out sends those streams up and over the sheet.
@@ -72,7 +81,7 @@ def main():
     fs.connect(refrigeration.out_2, synthesis.in_2)      # recycle, bottom to bottom
     fs.connect(synthesis.out_2, purge.inlet)
 
-    fs.render(out("block_flow_diagram.svg"))
+    fs.render(out("block_flow_diagram.svg"), diagram="bfd")
     print("Generated block_flow_diagram.svg")
 
 

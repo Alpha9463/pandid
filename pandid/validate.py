@@ -363,7 +363,7 @@ def _crowded(heads: list[tuple[float, str]], floor: float
     return next((p for p in pairs if _TOL < p[0] < floor), None)
 
 
-def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
+def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     """The findings that read the model alone (errors first).
 
     Nothing here touches a :class:`~pandid.geometry.Frame` or a
@@ -380,11 +380,22 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     about it. The check still prefers the frame where there is one,
     since that is the placement that got drawn.
 
-    ``arrows`` is :func:`~pandid.render.svg.draws_arrowheads` on the
-    diagram this is about, and is true by default because so is the
-    diagram it defaults to. One finding reads it: ``stream-table-missing``
-    answers ISO 10628-1 4.3.2, a *process flow diagram*'s clause, and is
-    silent on a sheet drawn as a P&ID, which answers to 4.4.2 instead.
+    ``tabulates`` is
+    :func:`~pandid.render.svg.tabulates_boundary_flows` on the diagram
+    this is about, and is true by default because so is the diagram it
+    defaults to. One finding reads it: ``stream-table-missing`` answers
+    ISO 10628-1 4.3.2 d), a *process flow diagram*'s clause, and is
+    silent on the two kinds of sheet that clause does not reach -- a
+    P&ID, which answers 4.4.2, and a block flow diagram, which answers
+    4.2 and carries a flow rate under 4.2.3 rather than under its own
+    minimum content at 4.2.2.
+
+    Not ``arrows``, which is what this argument used to be. A P&ID both
+    draws no arrowhead and owes no stream table, so one boolean carried
+    both facts for as long as there were two kinds of sheet; a BFD draws
+    the arrowhead and owes no stream table, and parts them. Nothing here
+    reads ``arrows`` -- :func:`geometry_issues` is where that question
+    is still asked.
     """
     from difflib import get_close_matches
 
@@ -975,10 +986,20 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # short of it whether or not the author ever opened the stream
         # table's door.
         #
-        # A P&ID answers a different clause, 4.4.2, which does not ask for
-        # this, so the check reads ``arrows``: true exactly when the sheet
-        # this render is for is a PFD (see
-        # :func:`~pandid.render.svg.draws_arrowheads`).
+        # The other two kinds of sheet answer other clauses, so the check
+        # reads ``tabulates``: true exactly when the sheet this render is
+        # for is a PFD (see
+        # :func:`~pandid.render.svg.tabulates_boundary_flows`). A P&ID
+        # answers 4.4.2. A block flow diagram answers 4.2, and its
+        # minimum content is 4.2.2 -- the flow rate is listed under
+        # 4.2.3, the clause of what a block diagram *may* also carry, so
+        # a BFD without one is short of nothing.
+        #
+        # That is not the same question as ``arrows`` and used to be
+        # asked as if it were. A BFD heads its lines (4.2.2 c)) and owes
+        # no rate, which no single boolean can say: read as ``arrows``,
+        # ``12_block_flow_diagram`` was reported for a stream table its
+        # own clause never asked it for.
         #
         # One finding for the sheet and not one per line: unlike the check
         # above, there is no other column here to contrast an empty one
@@ -988,7 +1009,7 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # Soft, not hard, for the same reason the check above is: the
         # sheet draws either way, and what is missing is data nobody but
         # the author has.
-        if arrows:
+        if tabulates:
             crossed = list(dict.fromkeys(
                 name for name, segments in runs.items()
                 if any(isinstance(p.owner, units._Boundary)
@@ -1019,10 +1040,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     laid out is told nothing about placements nothing has attempted.
 
     ``arrows`` says whether the drawing being checked puts an arrowhead
-    on the end of a process line, which a PFD does and a P&ID does not.
-    It is a property of the *render* rather than of the flowsheet, and
-    it is a boolean rather than a diagram name so that the spelling of
-    that name stays one question, asked in
+    on the end of a process line, which a PFD and a block flow diagram
+    do and a P&ID does not. It is a property of the *render* rather than
+    of the flowsheet, and it is a boolean rather than a diagram name so
+    that the spelling of that name stays one question, asked in
     :func:`pandid.render.svg.draws_arrowheads`.
     :meth:`pandid.flowsheet.Flowsheet.validate` resolves it.
     """
@@ -1610,7 +1631,8 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
     return out
 
 
-def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
+def validate(fs: "Flowsheet", *, arrows: bool = True,
+             tabulates: bool = True) -> list["Issue"]:
     """Return all validation issues for the flowsheet (errors first).
 
     Both halves -- :func:`model_issues` and :func:`geometry_issues` --
@@ -1619,11 +1641,13 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     different moments; see
     :meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`.
 
-    ``arrows`` is :func:`geometry_issues`' argument, passed straight
-    through, and :func:`model_issues`' -- the one finding that reads it
-    there answers a clause that governs a PFD and not a P&ID, the same
-    fact ``arrows`` already carries.
+    ``arrows`` is :func:`geometry_issues`' argument and ``tabulates`` is
+    :func:`model_issues`', both passed straight through. Two facts about
+    one drawing and not one fact twice: see
+    :func:`~pandid.render.svg.tabulates_boundary_flows`.
+    :meth:`pandid.flowsheet.Flowsheet.validate` resolves both from a
+    single diagram name, which is the spelling a caller has.
     """
-    found = model_issues(fs, arrows=arrows) + geometry_issues(fs, arrows=arrows)
+    found = model_issues(fs, tabulates=tabulates) + geometry_issues(fs, arrows=arrows)
     return ([i for i in found if i.severity == "error"]
             + [i for i in found if i.severity == "warning"])

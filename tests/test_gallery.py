@@ -128,6 +128,137 @@ def _diff(committed: str, fresh: str, context: int = 2) -> str:
 
 
 # ---------------------------------------------------------------------------
+# What an example prints about itself, against what its sheet reports
+# ---------------------------------------------------------------------------
+# Seven examples end in
+#
+#     for issue in fs.validate():
+#         print(f"  {issue}")
+#
+# and an example is the thing a reader copies. Those seven used to call
+# `validate()` without the `diagram=` their own `render()` was given, so a
+# sheet drawn as a P&ID printed `stream-table-missing` -- a finding made
+# under ISO 10628-1 4.3.2 d), which is a process flow diagram's clause and
+# not that sheet's -- while `scripts/gallery.py`, rendering the very same
+# flowsheet, reported nothing.
+#
+# The mechanical cure was to spell `diagram=` out a second time in every
+# example, and having to keep two calls in step **was the bug**: the same
+# argument written twice is what drifted. `validate()` reads the last
+# render instead, and this is what holds it there -- across the whole
+# corpus rather than across the seven that happen to print today, so an
+# example that takes the print up later is covered before it is written.
+
+
+@pytest.fixture(scope="module")
+def checked():
+    """Every example built, drawn as it draws itself, and kept.
+
+    :func:`gallery.render` throws the flowsheet away and keeps the SVG;
+    these tests want the opposite. Module-scoped for the reason `rendered`
+    is: the renders are the cost, and every test below wants all of them.
+    """
+    out = {}
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        out[stem] = (fs, kwargs)
+    return out
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_what_an_example_prints_is_what_its_own_sheet_reports(checked, stem):
+    """Two halves of one statement, and the second is the one that bites.
+
+    **The bare call is the diagram-aware call.** Whatever the example
+    passed to `render()`, a `validate()` that names nothing answers about
+    that drawing, so the two can no longer be written apart.
+
+    **And what it prints is genuinely on the sheet.** `fs.warnings` is
+    what the render itself found, so a finding printed but not on that
+    list is a finding about some other drawing -- which is exactly what
+    the five P&ID examples used to print. The converse is allowed and is
+    not drift: `crossing-unmarked` and the title-block fit codes are the
+    *renderer's* findings, made from options the validator is never
+    handed, so the sheet may report what a bare `validate()` cannot.
+    """
+    fs, kwargs = checked[stem]
+    printed = [str(i) for i in fs.validate()]
+    assert printed == [str(i) for i in fs.validate(diagram=kwargs.get("diagram"))]
+
+    reported = [str(w) for w in fs.warnings]
+    assert [f for f in printed if f not in reported] == []
+
+
+def test_the_corpus_still_holds_a_sheet_the_diagram_changes_the_answer_for(checked):
+    """Keeps the test above from passing because there is nothing to catch.
+
+    Every assertion in it is trivially true on a corpus of nothing but
+    PFDs, and the corpus was one sheet away from that: `12` was the last
+    example to raise `stream-table-missing`, and declaring it a BFD is what
+    stopped it. So this pins that at least one shipped sheet still reports
+    something different from what the same model reports as a plain PFD.
+    """
+    moved = [
+        stem
+        for stem, (fs, _) in checked.items()
+        if [str(i) for i in fs.validate()] != [str(i) for i in fs.validate(diagram="pfd")]
+    ]
+    assert moved, "no shipped example is validated as anything but a PFD"
+
+
+#: What the shipped corpus reports: every finding on ``fs.warnings`` after
+#: an example draws itself, per sheet, sorted. A stem absent from this
+#: table reports nothing at all, which is the state fourteen of the
+#: twenty-one are in.
+#:
+#: Written down because until it was, nothing noticed a finding arriving
+#: on a reference sheet or leaving one. ``12_block_flow_diagram`` was the
+#: last example to raise ``stream-table-missing``, made under ISO
+#: 10628-1 4.3.2 d) -- a *process flow diagram*'s clause, on a sheet that
+#: is a block flow diagram and answers 4.2. The
+#: examples are the documentation, and a finding nobody is holding to a
+#: number is one that accumulates silently until the check stops meaning
+#: anything.
+#:
+#: So this is meant to be edited, and only ever deliberately: a validator
+#: change that moves what a shipped sheet reports has to say which sheet
+#: and why, in the same commit that moves it.
+CORPUS_FINDINGS = {
+    "08_from_data": ["lines-crowded", "nozzles-crowded"],
+    "10_ethanol_pfd": ["nozzles-crowded"],
+    "11_ethanol_pid": ["lines-crowded"],
+    "15_condensing_turbine": ["lines-crowded"],
+    "18_fixed_bed_recycle": ["lines-crowded", "lines-crowded"],
+    "19_absorber_stripper": ["crossing-unmarked"],
+    "21_alumina_refinery": ["nozzles-crowded", "nozzles-crowded"],
+}
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_the_sheet_reports_what_the_corpus_says_it_reports(checked, stem):
+    fs, _ = checked[stem]
+    found = sorted(w.code for w in fs.warnings)
+    expected = sorted(CORPUS_FINDINGS.get(stem, []))
+    if found != expected:
+        pytest.fail(
+            f"examples/{stem}.py now reports {found}, and CORPUS_FINDINGS says "
+            f"{expected}.\n"
+            f"If the change is intended, edit CORPUS_FINDINGS in "
+            f"this file in the same commit and say per sheet what moved and "
+            f"why. If it is not, the validator change that moved it is "
+            f"reporting something new about a reference drawing.",
+            pytrace=False,
+        )
+
+
+def test_the_corpus_table_names_no_sheet_the_gallery_does_not_have():
+    """A stem that has been renamed or retired must not leave an entry
+    behind that no test can ever reach."""
+    assert set(CORPUS_FINDINGS) <= set(SHEETS)
+
+
+# ---------------------------------------------------------------------------
 # The rasters, against the sheets they were made from
 # ---------------------------------------------------------------------------
 

@@ -3174,11 +3174,20 @@ def _page(page_size: "str | None") -> "_Sheet | None":
 # zone frame as readily as a P&ID does.
 _BORDERS = ("none", "zone")
 # Which drawing this is, a statement about the conventions it is read
-# by. It decides whether a process line carries an arrowhead.
-_DIAGRAMS = ("pfd", "p&id")
+# by -- and about which clause of ISO 10628-1 governs what it has to
+# carry. Two questions read it: :func:`draws_arrowheads` and
+# :func:`tabulates_boundary_flows`.
+#
+# One value per clause of 10628-1 4: a block flow diagram answers 4.2, a
+# process flow diagram 4.3, a P&ID 4.4. Three kinds and not two, because
+# ``12_block_flow_diagram`` is a BFD drawn with ``Block`` and had no way
+# to say so, so it was checked against 4.3.2 -- a clause that does not
+# reach it -- and reported for a stream table its own clause never asked
+# for.
+_DIAGRAMS = ("pfd", "p&id", "bfd")
 # One accepted spelling per value, plus whatever the caller can
 # reasonably be expected to type for it.
-_ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd"}
+_ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd", "bfd": "bfd"}
 
 
 def _canon(value: str) -> str:
@@ -3213,7 +3222,8 @@ def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, s
     kind = _canon(diagram)
     if kind not in _DIAGRAMS:
         raise ValueError(
-            f"Unknown diagram {diagram!r}; use 'p&id' (also spelled 'pid') or 'pfd'."
+            f"Unknown diagram {diagram!r}; use 'pfd', "
+            f"'p&id' (also spelled 'pid') or 'bfd'."
         )
     return border, kind
 
@@ -3263,6 +3273,15 @@ def draws_arrowheads(diagram: "str | None") -> bool:
     direction is read off the equipment and the line list, so an
     arrowhead at the end of every run is a PFD convention.
 
+    A block flow diagram heads its lines, which is why this is a
+    question about the P&ID alone and not about "is this a PFD". ISO
+    10628-1:2014 4.2.2 c) is the item that puts flow direction among a
+    block diagram's minimum content, and a rectangle with a name in it
+    carries the direction nowhere else.
+    :func:`tabulates_boundary_flows` is the other question this name
+    is read for, and the two answer differently on a BFD -- which is
+    the whole reason there are two of them.
+
     Public, and asked rather than open-coded, because two callers need
     the answer and only one is the renderer.
     :func:`pandid.validate.validate` reports nozzles pitched inside the
@@ -3272,6 +3291,31 @@ def draws_arrowheads(diagram: "str | None") -> bool:
     in the spelling :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it.
     """
     return _resolve_sheet(None, diagram)[1] != "p&id"
+
+
+def tabulates_boundary_flows(diagram: "str | None") -> bool:
+    """Must this kind of drawing state the *rate* of what crosses its edge?
+
+    True for a process flow diagram alone. ISO 10628-1:2014 4.3.2 d) is
+    where that sits in a PFD's minimum content; a P&ID answers 4.4.2
+    instead, and a block flow diagram answers 4.2, whose minimum content
+    is 4.2.2 -- the flow rates are listed a clause later, under 4.2.3,
+    which is the *additional* information a block diagram may also
+    carry.
+
+    So the finding that reads this, ``stream-table-missing``, is silent
+    on both of the other two, and for two different reasons: it is not
+    the P&ID's clause, and on the BFD it is not a *shall*.
+
+    Public and asked rather than open-coded for the reason
+    :func:`draws_arrowheads` is, and separate from it because the two
+    part company exactly here: a BFD draws the arrowhead and owes no
+    flow rate. Read as one boolean, ``12_block_flow_diagram`` could only
+    be a sheet that tabulates or a sheet without arrows, and it is
+    neither. Takes the argument in the spelling
+    :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it.
+    """
+    return _resolve_sheet(None, diagram)[1] == "pfd"
 
 
 def check_connections(value) -> None:
@@ -3935,9 +3979,10 @@ class SvgRenderer:
             sheet rules the zone frame unless told otherwise: it is a
             drawing in its own right rather than a table on paper.
         diagram : str | None
-            Which drawing this is: ``"pfd"`` (the default) or
-            ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process
-            lines without arrowheads.
+            Which drawing this is: ``"pfd"`` (the default), ``"p&id"``,
+            also spelled ``"pid"``, or ``"bfd"``. A P&ID draws its
+            process lines without arrowheads; the other two head
+            theirs.
         page_size : str | None
             Standard paper size (``"A4"`` through ``"A0"``), drawn at
             exactly that size, with the furniture docked to the sheet

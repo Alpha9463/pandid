@@ -239,7 +239,23 @@ def test_a_pid_draws_its_process_lines_without_arrowheads(kwargs):
     assert not _MARKER_DEF.search(svg)  # ...and nothing left defining one
 
 
-@pytest.mark.parametrize("kwargs", [{}, {"diagram": "pfd"}, {"border": "zone"}])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},
+        {"diagram": "pfd"},
+        {"border": "zone"},
+        # A block flow diagram heads its lines exactly as a PFD does. ISO
+        # 10628-1:2014 4.2.2 c) is the item that puts flow direction among
+        # a block diagram's minimum content, and a named rectangle carries
+        # it nowhere else. The BFD is here because it is the sheet on which
+        # "draws arrowheads" and "owes a stream table" part company -- see
+        # ``test_validate.py``'s ``stream-table-missing`` section, which
+        # holds the other half of that.
+        {"diagram": "bfd"},
+        {"diagram": "BFD"},  # ...however an engineer capitalises it
+    ],
+)
 def test_a_sheet_that_is_not_a_pid_keeps_its_arrowheads(kwargs):
     # Including a PFD ruled with the engineering frame: the border is furniture
     # and says nothing about which drawing is on the sheet.
@@ -281,7 +297,7 @@ def test_a_pid_reaches_render_as_well_as_to_svg(tmp_path):
 @pytest.mark.parametrize(
     "kwargs,expected",
     [
-        ({"diagram": "isometric"}, ["'p&id'", "'pid'", "'pfd'"]),
+        ({"diagram": "isometric"}, ["'p&id'", "'pid'", "'pfd'", "'bfd'"]),
         ({"border": "isometric"}, ["none", "zone"]),
     ],
 )
