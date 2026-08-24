@@ -28,13 +28,78 @@ from typing import Any, Callable, NamedTuple
 
 from pandid.render.escape import escaped
 
-# Rough advance width of the sans-serif the renderer uses, as a fraction
-# of the font size. Slightly generous so auto-sized boxes never clip
-# their text.
-_ADV = 0.56
-_ADV_BOLD = 0.62
-
 FONT = "sans-serif"
+
+# The advance widths ``FONT`` is really set in, in thousandths of the
+# type size, for the two bands the face encodes: ASCII 32..126 and
+# Latin-1 160..255.
+#
+# **Not a model of the lettering -- the lettering's own numbers.** Which
+# face ``sans-serif`` resolves to is not open here: this package's own
+# ``.pdf``/``.png`` path goes through svglib, which registers the
+# generic family onto ReportLab's ``Helvetica`` and ``Helvetica-Bold``
+# (``svglib.fonts.register_default_fonts``), and
+# :mod:`pandid.render.export` already writes that down and draws its
+# baselines from it (``_FACES``, ``_HELVETICA_EM``). A viewer resolves
+# the same family to Arial or Liberation Sans, both cut to Helvetica's
+# advance widths on purpose. (DejaVu Sans is the common resolution that
+# is not; it is wider, so a sheet ruled against these numbers has room
+# to spare in it, which is the direction to be wrong in.)
+#
+# So the numbers below are the Adobe Core-14 AFM advances, and
+# ``tests/test_text_width.py`` checks them character by character
+# against ReportLab itself wherever the ``pdf`` extra is installed --
+# the table is data, and data that nothing checks is data that drifts.
+_ADVANCE = (
+    (  # Helvetica, 32..126
+        278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556,
+        1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556,
+        333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
+        556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+    ),
+    (  # Helvetica, 160..255
+        278, 333, 556, 556, 556, 556, 260, 556, 333, 737, 370, 556, 584, 333, 737, 333,
+        400, 584, 333, 333, 333, 556, 537, 278, 333, 333, 365, 556, 834, 834, 834, 611,
+        667, 667, 667, 667, 667, 667, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278,
+        722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611,
+        556, 556, 556, 556, 556, 556, 889, 500, 556, 556, 556, 556, 278, 278, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 584, 611, 556, 556, 556, 556, 500, 556, 500,
+    ),
+)
+_ADVANCE_BOLD = (
+    (  # Helvetica-Bold, 32..126
+        278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278,
+        556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611,
+        975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778,
+        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556,
+        333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611,
+        611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
+    ),
+    (  # Helvetica-Bold, 160..255
+        278, 333, 556, 556, 556, 556, 280, 556, 333, 737, 370, 556, 584, 333, 737, 333,
+        400, 584, 333, 333, 333, 611, 556, 278, 333, 333, 365, 556, 834, 834, 834, 611,
+        722, 722, 722, 722, 722, 722, 1000, 722, 667, 667, 667, 667, 278, 278, 278, 278,
+        722, 722, 778, 778, 778, 778, 778, 584, 778, 722, 722, 722, 722, 667, 667, 611,
+        556, 556, 556, 556, 556, 556, 889, 556, 556, 556, 556, 556, 278, 278, 278, 278,
+        611, 611, 611, 611, 611, 611, 611, 584, 611, 611, 611, 611, 611, 556, 611, 556,
+    ),
+)
+
+# What a *narrow* codepoint the table does not carry is charged, in the
+# same thousandths: Greek, Cyrillic, and everything else Unicode calls
+# Ambiguous or Neutral outside Latin-1, none of which Helvetica encodes
+# and none of which this renderer can therefore have a real advance for.
+# These two are the flat rates every character was charged before the
+# table existed -- a little over the face's own ASCII mean (527 and 551)
+# and so wrong in the direction that leaves paper spare. Kept at their
+# old values on purpose: a codepoint that had no metric before still has
+# none, and nothing about it should move because Latin text stopped
+# guessing. A wide codepoint is charged a full em and a combining mark
+# nothing; see :func:`script_counts`.
+_ADV = 560
+_ADV_BOLD = 620
 
 # How a cell says it could not hold what it was given: the field it
 # draws, the text it was asked for, the text it actually drew (the same
@@ -66,17 +131,24 @@ Reporter = Callable[[str, str, str, float, float], None]
 
 def script_counts(s: str) -> "tuple[int, int, int]":
     """How many of *s*'s codepoints draw narrow, draw a full em wide, or
-    draw nothing of their own -- the one classification every width
-    estimate in the renderer measures a string by, so a CJK tag and a
-    combining mark are never charged the Latin rate that only ``_ADV``
-    was ever measured against.
+    draw nothing of their own -- the classification the renderer's
+    per-character width rules measure a string by, so a CJK tag and a
+    combining mark are never charged the Latin rate the rest of the
+    sheet's lettering is charged at.
+
+    :func:`text_width` no longer needs the narrow count: Latin-1 has a
+    real advance per character now, and this answers only for what the
+    face does not encode. The equipment-tag halo
+    (:func:`pandid.render.svg._unit_label_box`) and a labelled block's
+    own box (:func:`pandid.render.symbols.label_span`) still measure
+    through here, at per-character rates of their own.
 
     :func:`unicodedata.east_asian_width` sorts a codepoint into five
     classes. *W*ide and *F*ullwidth -- CJK ideographs, fullwidth forms --
     draw close to a full em, same as the font's own point size. *H*alfwidth
     and *Na*rrow -- Latin letters, digits, halfwidth kana -- draw at the
-    fraction ``_ADV``/``_ADV_BOLD`` was measured against a real PDF at
-    (see :func:`text_width`). *A*mbiguous -- Greek, Cyrillic, most
+    per-character rate its caller was tuned to (see :func:`text_width`
+    and ``_ADV``). *A*mbiguous -- Greek, Cyrillic, most
     symbols, a character that is narrow set among Latin and wide set
     among CJK -- has no surrounding text here to decide it by, so it
     takes the standard's own default for that case (UAX #11, East Asian
@@ -106,39 +178,56 @@ def script_counts(s: str) -> "tuple[int, int, int]":
 
 
 def text_width(s, size: float, bold: bool = False) -> float:
-    """Estimated drawn width of *s* set at *size*, without padding.
+    """Drawn width of *s* set at *size*, without padding.
 
-    ``_ADV``/``_ADV_BOLD`` are measured against a real PDF rendering of
-    this renderer's Latin lettering (see the module's callers) and are
-    accurate to within a few percent -- good enough that a
-    codepoint-only count (``len(s) * size * _ADV``) is exactly what a
-    Latin, digit or punctuation string still gets, unchanged, below.
-    A wide (CJK/fullwidth) codepoint is charged a full em instead, and
-    a combining mark nothing at all; see :func:`script_counts`.
+    **Glyph by glyph, off the face's own advance widths**
+    (:data:`_ADVANCE`), because a per-character average is not a ruler.
+    It was one: every character was charged the same 0,56 em (0,62
+    bold), which is near enough the mean of Helvetica's ASCII to look
+    calibrated and is wrong by a third on either side of it for real
+    drawing text. ``STREAM NUMBER`` came out 17 per cent narrow,
+    ``PROCESS FLOW DIAGRAM`` 14, ``Pump`` 14, ``iiii`` 150 per cent
+    wide; a section heading of capitals ran through and out of the rules
+    of the cell that had been ruled to hold it. The error was known and
+    absorbed rather than fixed -- ``_CELL_PAD`` in
+    :mod:`pandid.render.drawio` is fat by exactly the eleven per cent
+    that mean under-charges ``HPSSH`` by, and says so.
+
+    It matters more than a fat pad because a width here is not only how
+    big a box is drawn. A stream table's own sheet asks *does this fit
+    the page* and refuses the render when it does not
+    (:func:`_partition`), so an average that reads a third under is a
+    page called big enough for a drawing that runs off it, and a page
+    called too small for one that would have fitted. A box can be
+    generous. A fit cannot be approximate.
+
+    Outside the two bands the table carries, the old flat rate still
+    answers, a wide (CJK/fullwidth) codepoint is charged a full em, and
+    a combining mark nothing at all; see :func:`script_counts` and
+    ``_ADV``.
+
+    Summed in thousandths and scaled once at the end rather than
+    multiplied per character, for the reason :func:`_total` adds by
+    hand: the sum is exact in integers, so the answer depends on the
+    string and the size and not on the order the characters came in.
     """
     s = str(s)
-    adv = _ADV_BOLD if bold else _ADV
-    narrow, wide, zero = script_counts(s)
-    if not wide and not zero:
-        return len(s) * size * adv
-    return _width(narrow, wide, size, adv)
-
-
-def _width(narrow: int, wide: int, size: float, adv: float) -> float:
-    """What *narrow* narrow and *wide* wide codepoints measure, set at
-    *size* with advance fraction *adv*.
-
-    One expression with two callers: :func:`text_width`, which measures
-    a whole string, and :func:`clip`, which walks the counts forward to
-    find where to cut one. Written down once because the two have to
-    agree *bit for bit* -- a cut computed by summing per-character
-    widths lands a rounding away from the same string measured whole,
-    which is :func:`_total`'s complaint about ``sum()`` pointed at a
-    different pair of numbers. Given the same counts this returns the
-    same float, so the prefix ``clip`` keeps is a prefix ``text_width``
-    agrees fits.
-    """
-    return narrow * size * adv + wide * size
+    table = _ADVANCE_BOLD if bold else _ADVANCE
+    flat = _ADV_BOLD if bold else _ADV
+    thousandths = 0
+    for ch in s:
+        c = ord(ch)
+        if 0x20 <= c <= 0x7E:
+            thousandths += table[0][c - 0x20]
+        elif 0xA0 <= c <= 0xFF:
+            thousandths += table[1][c - 0xA0]
+        elif unicodedata.category(ch) in ("Mn", "Me"):
+            continue
+        elif unicodedata.east_asian_width(ch) in ("W", "F"):
+            thousandths += 1000
+        else:
+            thousandths += flat
+    return thousandths * size / 1000
 
 
 def _total(values) -> float:
@@ -175,53 +264,59 @@ def clip(s, room: float, size: float, bold: bool = False, *,
     value beside it and no amount of growing can help. A draftsman
     abbreviates.
 
-    **How many characters survive is decided the way the width is
-    measured** -- and :func:`text_width` measures two ways, so this cuts
-    two ways, on the same test.
+    **Where to cut is measured, and measured the way the width is.**
 
-    A string of narrow codepoints alone measures ``len(s) * size * adv``,
-    a closed form, and the cut is that form inverted: the count of
-    characters the room holds, less one for the ellipsis. Every sheet
-    this package has drawn was cut by that arithmetic, and it is exact
-    -- one division, no accumulated error -- so a value that fills its
-    cell to the last unit keeps the last character that fits.
+    Two bugs met here, one from each side, and they have one answer. The
+    cut used to be ``int(room / (size * adv)) - 1`` characters -- how
+    many would fit if every character were the average one -- which is a
+    count and not a width, so it cut a line of capitals too late and a
+    line of narrow letters far too early, and left the ellipsis it then
+    appended unpaid for. And because the *decision* to cut was
+    :func:`text_width`'s while the cut itself counted at the Latin rate,
+    the two disagreed by the ratio between those rates: a fullwidth
+    title kept 28 characters measuring 290 units for a 187-unit cell and
+    was drawn straight through the sheet count beside it, on every page
+    size.
 
-    Anything with a CJK or fullwidth codepoint in it (a full em) or a
-    combining mark (nothing at all) has no such closed form, and there
-    the counts are walked forward through :func:`_width` -- the same
-    expression, given the same counts, so the prefix kept is a prefix
-    ``text_width`` agrees fits.
+    There is no closed form left to invert -- a character's advance is
+    its own now (:data:`_ADVANCE`) rather than one rate for the whole
+    alphabet -- so the string is grown a character at a time against
+    :func:`text_width` itself, with the ellipsis charged for first. Both
+    ends are the same function rather than two readings of one rate, and
+    the prefix this keeps is a prefix ``text_width`` agrees fits.
 
-    **Both ends used to be the Latin one.** The cut counted characters
-    at the Latin advance while the decision to cut at all was
-    ``text_width``'s, so the two disagreed by the ratio between the two
-    rates: a fullwidth title kept 28 characters measuring 290 units for
-    a 187-unit cell and was drawn straight through the sheet count
-    beside it, on every page size. Making *both* ends walk was the
-    obvious repair and the wrong one -- summing per-character widths
-    lands a rounding away from the same characters measured whole, so
-    seventy Latin room/size pairs in a sweep of the strip's own type
-    sizes cut a character earlier or later than they always had. That is
-    :func:`_total`'s complaint, and the answer here is the same one:
-    measure and use the identical arithmetic.
+    The earlier objection to walking -- that summing per-character
+    widths lands a rounding away from the same characters measured
+    whole, which is :func:`_total`'s complaint pointed at another pair
+    of numbers -- does not arise, because nothing is summed in floats.
+    ``text_width`` adds integer thousandths and scales once at the end,
+    so a prefix and the whole string are added the same way and cannot
+    disagree in the last bit.
+
+    Short strings, and only the ones that did not fit in the first
+    place.
     """
     s = str(s)
     need = text_width(s, size, bold)
     if need <= room:
         return s
-    adv = _ADV_BOLD if bold else _ADV
-    _narrow, wide, zero = script_counts(s)
-    if not wide and not zero:
-        keep = max(0, int(room / (size * adv)) - 1)
-    else:
-        budget, keep, n, w = room - text_width("…", size, bold), 0, 0, 0
-        for ch in s:
-            dn, dw, _dz = script_counts(ch)
-            n, w = n + dn, w + dw
-            if _width(n, w, size, adv) > budget:
-                break
-            keep += 1
-    drawn = s[:keep].rstrip() + "…"
+    ellipsis = "…"
+    # Each candidate is measured **with its ellipsis on**, against the
+    # room itself. Not `room - text_width(ellipsis)`: that subtraction
+    # is the one float operation in the walk, and it rounds -- an `i`
+    # at 8.0 in 40 units of room comes to exactly 40 with the ellipsis,
+    # and `40.0 - 4.48` is 35.519999999999996, so the character that
+    # fits exactly was thrown away. Measuring the whole candidate is one
+    # call to `text_width`, which sums integer thousandths and scales
+    # once, so nothing rounds anywhere and the cut is the longest that
+    # fits. It also leaves `room` untouched for the finding to quote
+    # back: an author told their cell has 180 units when it is ruled 187
+    # has been told the wrong number about their own sheet.
+    kept = 0
+    while (kept < len(s)
+           and text_width(s[:kept + 1] + ellipsis, size, bold) <= room):
+        kept += 1
+    drawn = s[:kept].rstrip() + ellipsis
     if report is not None:
         report(field, s, drawn, room, need)
     return drawn
@@ -1022,15 +1117,35 @@ class TableSheet(NamedTuple):
 
 
 def _blocks_of(n: int, count: int) -> list:
-    """*n* columns shared out over *count* blocks, as evenly as they go.
+    """*n* columns shared out over *count* blocks, as evenly as they go:
+    ``n // count`` each, and the ``n % count`` left over handed one
+    apiece to the blocks at the front.
 
     The blocks come out one column apart at worst -- twenty-one over
-    three is 7/7/7 and over two is 11/10 -- because two blocks of nearly
-    a page each read as one table where a full block beside a stub of
-    three reads as an afterthought.
+    three is 7/7/7, over two is 11/10, ten over four is 3/3/2/2 --
+    because two blocks of nearly a page each read as one table where a
+    full block beside a stub reads as an afterthought.
+
+    It used to promise that and not do it. Filling ``ceil(n / count)``
+    columns into each block and letting the last take the remainder
+    gives ten over four as **3/3/3/1**, three columns apart, and ten
+    over six as five blocks rather than six -- a count the caller asked
+    about and never got an answer for. Both mattered, because
+    :func:`_partition` chooses by *measuring* what this returns: the
+    stub in 3/3/3/1 is the narrowest block, the shared label column is
+    widened against the narrowest block to carry a section heading
+    (:func:`_section_span`), and so a partition that fits was measured
+    as one that does not and rejected. The malformed shape was not a
+    tidiness complaint; it was the search's own input, wrong.
     """
-    per = (n + count - 1) // count
-    return [list(range(i, min(i + per, n))) for i in range(0, n, per)]
+    count = min(count, n)  # an empty block is not a block
+    per, extra = divmod(n, count)
+    blocks, start = [], 0
+    for i in range(count):
+        stop = start + per + (1 if i < extra else 0)
+        blocks.append(list(range(start, stop)))
+        start = stop
+    return blocks
 
 
 def _partition(m: "_Measured", n: int, room: "float | None") -> list:
@@ -1046,19 +1161,31 @@ def _partition(m: "_Measured", n: int, room: "float | None") -> list:
     widening is a capacity the finished table can exceed.
 
     That is not hypothetical: twenty-one streams under a long section
-    heading were cut 11/10 from a capacity of eleven, then ruled 1023.0
-    wide on the 1022.5 an A4 sheet has, and the page was reported too
-    small for a table that fits it three blocks of seven at 971.0. The
-    sheet was refused for not fitting when a partition that fits
-    existed, which is the feature failing at its job rather than a
-    bookkeeping slip.
+    heading were cut 11/10 from a capacity of eleven, then ruled wider
+    than the A4 they were cut for, and the page was reported too small
+    for a table that fits it three blocks of seven. The sheet was
+    refused for not fitting when a partition that fits existed, which is
+    the feature failing at its job rather than a bookkeeping slip.
 
     So the count is searched rather than divided out: the **fewest**
     blocks whose ruled width fits, fewest because fewer blocks are wider
     blocks and a shorter sheet, and every count is asked with the width
-    it would really be drawn at. Where no section heading widens
-    anything the answer is arithmetically identical to the division it
-    replaces, so no sheet that fitted before moves.
+    it would really be drawn at.
+
+    What the search promises against the division it replaced is one
+    thing and not two. It **never returns more blocks**: if the
+    division's own count fitted, the loop reaches that count and returns
+    there at the latest, so the answer is that count or fewer. It does
+    *not* promise the same count. The division works out a capacity by
+    ``(room - label_w) // name_w``, and floor division on floats is not
+    the floor of the quotient -- where the room is an exact multiple of
+    a column the subtraction can round below it, and a page that holds
+    seven columns is read as holding six and the table is wrapped that
+    did not need wrapping. An earlier draft of this function claimed the
+    two were arithmetically identical wherever no section heading
+    widened anything; a sweep of the no-heading cases found the claim
+    false, in the direction of the search being right and the division
+    wrong. It is a correction, and it is stated as one.
 
     A table that fits at no count at all falls back to one column per
     block, the narrowest a table can be ruled: it is then a page too

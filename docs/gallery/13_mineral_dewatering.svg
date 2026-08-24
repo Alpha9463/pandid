@@ -92,33 +92,33 @@
     <line x1="1756.0" y1="862.2" x2="1772.0" y2="862.2" stroke="black" stroke-width="0.75"/>
     <text x="-292.0" y="944.6" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
     <text x="1764.0" y="944.6" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
-    <rect x="622.4" y="-249.0" width="227.1" height="247.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <rect x="633.3" y="-249.0" width="205.5" height="247.0" fill="white" stroke="black" stroke-width="1.5"/>
     <text x="736.0" y="-232.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="622.4" y1="-226.0" x2="849.6" y2="-226.0" stroke="black" stroke-width="1"/>
-    <text x="631.4" y="-212.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">TK-401</text>
-    <text x="680.4" y="-212.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flocculant Make-up Tank</text>
-    <text x="631.4" y="-194.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-402</text>
-    <text x="680.4" y="-194.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flocculant Dosing Pump</text>
-    <text x="631.4" y="-176.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">TH-401</text>
-    <text x="680.4" y="-176.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Concentrate Thickener</text>
-    <text x="631.4" y="-158.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-401</text>
-    <text x="680.4" y="-158.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Thickener Underflow Pump</text>
-    <text x="631.4" y="-140.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FL-401</text>
-    <text x="680.4" y="-140.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Concentrate Belt Filter</text>
-    <text x="631.4" y="-122.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CV-401</text>
-    <text x="680.4" y="-122.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Filter Cake Conveyor</text>
-    <text x="631.4" y="-104.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FH-401</text>
-    <text x="680.4" y="-104.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Dryer Air Heater</text>
-    <text x="631.4" y="-86.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">DR-401</text>
-    <text x="680.4" y="-86.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Concentrate Rotary Dryer</text>
-    <text x="631.4" y="-68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CY-401</text>
-    <text x="680.4" y="-68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Recovery Cyclone</text>
-    <text x="631.4" y="-50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">MS-401</text>
-    <text x="680.4" y="-50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Magnetic Separator</text>
-    <text x="631.4" y="-32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SC-401</text>
-    <text x="680.4" y="-32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Dryer Exhaust Scrubber</text>
-    <text x="631.4" y="-14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">BL-401</text>
-    <text x="680.4" y="-14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Dryer Exhaust Fan</text>
+    <line x1="633.3" y1="-226.0" x2="838.7" y2="-226.0" stroke="black" stroke-width="1"/>
+    <text x="642.3" y="-212.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">TK-401</text>
+    <text x="692.8" y="-212.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flocculant Make-up Tank</text>
+    <text x="642.3" y="-194.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-402</text>
+    <text x="692.8" y="-194.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flocculant Dosing Pump</text>
+    <text x="642.3" y="-176.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">TH-401</text>
+    <text x="692.8" y="-176.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Concentrate Thickener</text>
+    <text x="642.3" y="-158.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-401</text>
+    <text x="692.8" y="-158.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Thickener Underflow Pump</text>
+    <text x="642.3" y="-140.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FL-401</text>
+    <text x="692.8" y="-140.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Concentrate Belt Filter</text>
+    <text x="642.3" y="-122.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CV-401</text>
+    <text x="692.8" y="-122.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Filter Cake Conveyor</text>
+    <text x="642.3" y="-104.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FH-401</text>
+    <text x="692.8" y="-104.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Dryer Air Heater</text>
+    <text x="642.3" y="-86.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">DR-401</text>
+    <text x="692.8" y="-86.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Concentrate Rotary Dryer</text>
+    <text x="642.3" y="-68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CY-401</text>
+    <text x="692.8" y="-68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Recovery Cyclone</text>
+    <text x="642.3" y="-50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">MS-401</text>
+    <text x="692.8" y="-50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Magnetic Separator</text>
+    <text x="642.3" y="-32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SC-401</text>
+    <text x="692.8" y="-32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Dryer Exhaust Scrubber</text>
+    <text x="642.3" y="-14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">BL-401</text>
+    <text x="692.8" y="-14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Dryer Exhaust Fan</text>
     <g id="stream_table">
       <rect x="-284.0" y="841.0" width="122.0" height="15.0" fill="#eee" stroke="black" stroke-width="0.75"/>
       <text x="-279.0" y="851.2" font-family="sans-serif" font-size="8.0" font-weight="bold" text-anchor="start">Stream Number</text>
@@ -724,67 +724,67 @@
     <line x1="1725.8" y1="995.4" x2="1725.8" y2="1021.0" stroke="black" stroke-width="0.5"/>
     <text x="1730.8" y="1003.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">REV</text>
     <text x="1730.8" y="1016.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">C</text>
-    <text x="1536.7" y="806.0" font-family="sans-serif" font-size="11.0" text-anchor="middle" font-weight="bold" fill="black">UTILITIES SUMMARY</text>
-    <rect x="1317.4" y="812.0" width="116.3" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
-    <text x="1322.4" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">Utility</text>
-    <rect x="1433.7" y="812.0" width="68.6" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
-    <text x="1438.7" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">Unit No.</text>
-    <rect x="1502.2" y="812.0" width="75.4" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
-    <text x="1572.6" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="end" font-weight="bold" fill="black">Duty (kW)</text>
-    <rect x="1577.6" y="812.0" width="89.0" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
-    <text x="1661.6" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="end" font-weight="bold" fill="black">Flow (kg/s)</text>
-    <rect x="1666.6" y="812.0" width="41.3" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
-    <text x="1687.3" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" font-weight="bold" fill="black">T_in</text>
-    <rect x="1707.9" y="812.0" width="48.1" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
-    <text x="1731.9" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" font-weight="bold" fill="black">T_out</text>
-    <rect x="1317.4" y="835.0" width="116.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1322.4" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Natural Gas</text>
-    <rect x="1433.7" y="835.0" width="68.6" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1438.7" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FH-401</text>
-    <rect x="1502.2" y="835.0" width="75.4" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1572.6" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">5972</text>
-    <rect x="1577.6" y="835.0" width="89.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1661.6" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">0.119</text>
-    <rect x="1666.6" y="835.0" width="41.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1687.3" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">15 C</text>
-    <rect x="1707.9" y="835.0" width="48.1" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1731.9" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">-</text>
-    <rect x="1317.4" y="858.0" width="116.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1322.4" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Ambient Air</text>
-    <rect x="1433.7" y="858.0" width="68.6" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1438.7" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FH-401</text>
-    <rect x="1502.2" y="858.0" width="75.4" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1572.6" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">-</text>
-    <rect x="1577.6" y="858.0" width="89.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1661.6" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">8.47</text>
-    <rect x="1666.6" y="858.0" width="41.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1687.3" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">15 C</text>
-    <rect x="1707.9" y="858.0" width="48.1" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1731.9" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">650 C</text>
-    <rect x="1317.4" y="881.0" width="116.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1322.4" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Raw Water</text>
-    <rect x="1433.7" y="881.0" width="68.6" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1438.7" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">TK-401</text>
-    <rect x="1502.2" y="881.0" width="75.4" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1572.6" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">-</text>
-    <rect x="1577.6" y="881.0" width="89.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1661.6" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">0.175</text>
-    <rect x="1666.6" y="881.0" width="41.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1687.3" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">20 C</text>
-    <rect x="1707.9" y="881.0" width="48.1" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1731.9" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">-</text>
-    <rect x="1317.4" y="904.0" width="116.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1322.4" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Scrubbing Water</text>
-    <rect x="1433.7" y="904.0" width="68.6" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1438.7" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">SC-401</text>
-    <rect x="1502.2" y="904.0" width="75.4" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1572.6" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">-1638</text>
-    <rect x="1577.6" y="904.0" width="89.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1661.6" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">11.53</text>
-    <rect x="1666.6" y="904.0" width="41.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1687.3" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">28 C</text>
-    <rect x="1707.9" y="904.0" width="48.1" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
-    <text x="1731.9" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">62 C</text>
+    <text x="1567.9" y="806.0" font-family="sans-serif" font-size="11.0" text-anchor="middle" font-weight="bold" fill="black">UTILITIES SUMMARY</text>
+    <rect x="1379.9" y="812.0" width="102.0" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
+    <text x="1384.9" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">Utility</text>
+    <rect x="1481.9" y="812.0" width="56.2" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
+    <text x="1486.9" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">Unit No.</text>
+    <rect x="1538.0" y="812.0" width="65.3" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
+    <text x="1598.4" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="end" font-weight="bold" fill="black">Duty (kW)</text>
+    <rect x="1603.4" y="812.0" width="71.5" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
+    <text x="1669.8" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="end" font-weight="bold" fill="black">Flow (kg/s)</text>
+    <rect x="1674.8" y="812.0" width="37.2" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
+    <text x="1693.4" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" font-weight="bold" fill="black">T_in</text>
+    <rect x="1712.1" y="812.0" width="43.9" height="23.0" fill="#eee" stroke="black" stroke-width="0.75"/>
+    <text x="1734.0" y="827.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" font-weight="bold" fill="black">T_out</text>
+    <rect x="1379.9" y="835.0" width="102.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1384.9" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Natural Gas</text>
+    <rect x="1481.9" y="835.0" width="56.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1486.9" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FH-401</text>
+    <rect x="1538.0" y="835.0" width="65.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1598.4" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">5972</text>
+    <rect x="1603.4" y="835.0" width="71.5" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1669.8" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">0.119</text>
+    <rect x="1674.8" y="835.0" width="37.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1693.4" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">15 C</text>
+    <rect x="1712.1" y="835.0" width="43.9" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1734.0" y="850.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">-</text>
+    <rect x="1379.9" y="858.0" width="102.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1384.9" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Ambient Air</text>
+    <rect x="1481.9" y="858.0" width="56.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1486.9" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FH-401</text>
+    <rect x="1538.0" y="858.0" width="65.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1598.4" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">-</text>
+    <rect x="1603.4" y="858.0" width="71.5" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1669.8" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">8.47</text>
+    <rect x="1674.8" y="858.0" width="37.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1693.4" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">15 C</text>
+    <rect x="1712.1" y="858.0" width="43.9" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1734.0" y="873.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">650 C</text>
+    <rect x="1379.9" y="881.0" width="102.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1384.9" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Raw Water</text>
+    <rect x="1481.9" y="881.0" width="56.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1486.9" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">TK-401</text>
+    <rect x="1538.0" y="881.0" width="65.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1598.4" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">-</text>
+    <rect x="1603.4" y="881.0" width="71.5" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1669.8" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">0.175</text>
+    <rect x="1674.8" y="881.0" width="37.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1693.4" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">20 C</text>
+    <rect x="1712.1" y="881.0" width="43.9" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1734.0" y="896.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">-</text>
+    <rect x="1379.9" y="904.0" width="102.0" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1384.9" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Scrubbing Water</text>
+    <rect x="1481.9" y="904.0" width="56.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1486.9" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">SC-401</text>
+    <rect x="1538.0" y="904.0" width="65.3" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1598.4" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">-1638</text>
+    <rect x="1603.4" y="904.0" width="71.5" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1669.8" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="end" fill="black">11.53</text>
+    <rect x="1674.8" y="904.0" width="37.2" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1693.4" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">28 C</text>
+    <rect x="1712.1" y="904.0" width="43.9" height="23.0" fill="white" stroke="black" stroke-width="0.75"/>
+    <text x="1734.0" y="919.2" font-family="sans-serif" font-size="11.0" text-anchor="middle" fill="black">62 C</text>
   <defs>
     <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />

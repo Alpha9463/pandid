@@ -138,7 +138,7 @@ def test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for():
     by one and 88 by the other. The same value fitted one call and was silently
     abbreviated by the other, and no check that had not been told the page size
     could say which."""
-    number = "PFD-111111111"
+    number = "PFD-A100-0001-REV"
 
     def drawn(**kw):
         fs = _sheet()
@@ -1024,15 +1024,38 @@ def test_an_abbreviated_title_names_the_field_and_the_text_it_cut():
     fs = _sheet()
     fs.title_block = TitleBlock(drawing_number="PFD-1", title=long_title)
     svg = fs.to_svg(page_size="A3", border="zone")
-    assert "Ethanol Purification and De…" in svg  # the strip cannot grow
+    assert "Ethanol Purification and Dehydratio…" in svg  # the strip cannot grow
     cut = [w for w in fs.warnings if w.code == "text-truncated"]
     assert cut, "an abbreviated title must not be silent"
     assert len(cut) == 1 and "title" in cut[0].message
     assert long_title in cut[0].message
     # The two widths and the ratio: what the author edits between. The need is
     # measured at the smallest size the title is allowed down to, since that is
-    # the width the text still has to come out of.
-    assert "needs 299 of the 187 units its cell has (1.6x)" in cut[0].message
+    # the width the text still has to come out of. The cell is still the 187
+    # units it is ruled; only the need moved, because the ruler moved.
+    assert "needs 239 of the 187 units its cell has (1.3x)" in cut[0].message
+
+
+def test_what_survives_an_abbreviation_fits_the_cell_it_was_cut_for():
+    """A cut string that still overruns is the cut having achieved nothing.
+
+    Where to cut used to be ``int(room / average advance) - 1`` characters,
+    which is a count of average characters and not a width: a caps-heavy value
+    was cut too late and still ran over its rule, and the ellipsis it was given
+    was never paid for at all. It is measured now, ellipsis included.
+    """
+    from pandid.render.furniture import _TITLE_TYPE, _TITLE_W, clip, text_width
+
+    titles = [
+        "Ethanol Purification and Dehydration Area A300",
+        "M" * 40,
+        "i" * 40,
+        "PROCESS FLOW DIAGRAM SHEET 1 OF 3",
+    ]
+    for title in titles:
+        drawn = clip(title, _TITLE_W, _TITLE_TYPE, True)
+        assert text_width(drawn, _TITLE_TYPE, True) <= _TITLE_W, drawn
+        assert drawn.endswith("…") == (text_width(title, _TITLE_TYPE, True) > _TITLE_W)
 
 
 def test_a_title_that_fits_says_nothing():
@@ -1141,8 +1164,15 @@ def test_a_long_title_is_lettered_smaller_rather_than_abbreviated():
     these three were abbreviated before #370, one of them the title of the
     library's own shipped example."""
     for title, drawn_at in (
-        ("Propylene Glycol Reaction", "12.0"),
-        ("Ethanol Purification A300", "12.0"),
+        ("Propylene Glycol Reaction U200", "12.1"),
+        ("Transfer and Relief System U100", "12.0"),
+        ("Aromatics Recovery A100 Sheet 1", "11.5"),
+        # ...and the two this test was written around, which no longer need
+        # even the first step down: they were only ever over their cell
+        # because every character was charged one average advance. The
+        # library's own shipped example is one of them.
+        ("Propylene Glycol Reaction", "12.5"),
+        ("Ethanol Purification A300", "12.5"),
         ("Transfer and Relief U100", "12.5"),
     ):
         fs = _sheet()
@@ -1163,7 +1193,7 @@ def test_the_title_is_never_lettered_under_its_subtitle():
         subtitle="Piping and Instrumentation Diagram",
     )
     svg = fs.to_svg(border="zone")
-    assert "Ethanol Purification and De…" in svg
+    assert "Ethanol Purification and Dehydratio…" in svg
     title_sizes = re.findall(r'font-size="([\d.]+)" text-anchor="start" font-weight="bold"', svg)
     assert "10.5" in title_sizes  # the subtitle's size, and no smaller
 
@@ -1604,13 +1634,21 @@ def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
     assert text_width(drawn, size, True) <= _TITLE_W
 
 
-def test_a_latin_title_is_cut_exactly_where_it_always_was():
-    """The measured cut has to agree with the counted one on the corpus the
-    counted one was right for, or every shipped sheet moves."""
+def test_a_latin_title_is_cut_where_the_face_says_and_not_where_a_mean_said():
+    """A Latin title is cut later than it used to be, and that is the fix.
+
+    The counted cut charged every character 0,62 em, which over-measures
+    ordinary mixed-case lettering by about a quarter, so three characters that
+    fit the cell were thrown away on every sheet drawn. What survives is what
+    the face actually sets inside 187 units.
+    """
+    from pandid.render.furniture import _TITLE_W, _SUBTITLE_TYPE, text_width
+
     fs = _sheet()
     fs.title_block = TitleBlock(title="Ethanol Purification and Dehydration Area A300")
     svg = fs.to_svg(border="zone")
-    assert "Ethanol Purification and De…" in svg
+    assert "Ethanol Purification and Dehydratio…" in svg
+    assert text_width("Ethanol Purification and Dehydratio…", _SUBTITLE_TYPE, True) <= _TITLE_W
 
 
 # --- one thing to fix is one finding ------------------------------------------
@@ -1706,41 +1744,38 @@ def test_a_signatory_the_sheet_does_draw_is_silent(revision):
 # --- the cut is the arithmetic the width was measured by ----------------------
 
 
+#: One glyph per script the cut has to answer for: a Latin capital that is
+#: the widest the face cuts (0,944 em, against the 0,62 a mean charged it), a
+#: Latin lower-case that is among the narrowest (0,278), and a fullwidth form
+#: that is a whole em. The first is where the closed form was worst.
+CUT_SCRIPTS = ["W", "i", "Ｗ"]
+
+
+@pytest.mark.parametrize("glyph", CUT_SCRIPTS)
 @pytest.mark.parametrize("bold", [False, True])
 @pytest.mark.parametrize("size", [6.5, 7.5, 8.0, 9.0, 10.5, 11.0, 12.5])
-def test_a_narrow_script_is_cut_by_the_shipped_arithmetic(size, bold):
-    """`text_width` measures an all-narrow string with a closed form, and the
-    cut is that form inverted -- the arithmetic every sheet this package has
-    drawn was cut by.
+def test_a_cut_string_fits_its_cell_and_one_more_character_would_not(size, bold, glyph):
+    """The whole contract, for every script, at every width the strip rules.
 
-    Repairing the fullwidth defect by walking *both* ends was the obvious fix
-    and the wrong one: summing per-character widths lands a rounding away from
-    the same characters measured whole, and seventy room/size pairs over this
-    sweep cut a character earlier or later than they always had. `room=126` at
-    7.5 was one of them -- 30 characters fit it exactly, and the walk kept 29.
+    This replaces a pair of tests that asserted it of fullwidth text and
+    asserted the *arithmetic* of narrow text instead: `len(drawn) - 1 ==
+    int(room / (size * 0,62)) - 1`, the closed form inverted. That form is
+    exact arithmetic on the wrong metric, and a run of `W` is where it was
+    furthest wrong -- the face sets one at 0,944 em, so a cut made at 0,62
+    kept half as much again as the cell could hold and drew it through the
+    rule. Asserting the property rather than the formula says what the cell
+    has to do without saying how, and it is strictly the stronger claim: the
+    cut fits, and it is the longest cut that does.
     """
-    from pandid.render.furniture import _ADV, _ADV_BOLD, clip
-
-    per = size * (_ADV_BOLD if bold else _ADV)
-    room = 1.0
-    while room <= 300.0:
-        drawn = clip("W" * 400, room, size, bold)
-        assert len(drawn) - 1 == max(0, int(room / per) - 1), (room, size, bold)
-        room = round(room + 0.5, 3)
-
-
-@pytest.mark.parametrize("bold", [False, True])
-@pytest.mark.parametrize("size", [6.5, 7.5, 8.0, 9.0, 10.5, 11.0, 12.5])
-def test_a_wide_script_is_never_cut_wider_than_its_cell(size, bold):
-    """The other half of the same guarantee: what a fullwidth cell keeps is a
-    prefix `text_width` agrees fits, at every width the strip rules."""
     from pandid.render.furniture import clip, text_width
 
     room = 1.0
     while room <= 300.0:
-        drawn = clip("Ｗ" * 400, room, size, bold)
+        drawn = clip(glyph * 400, room, size, bold)
         if room > text_width("…", size, bold):
             assert text_width(drawn, size, bold) <= room, (room, size, bold)
+            # ...and maximal: one more of the same glyph would not have fitted.
+            assert text_width(drawn[:-1] + glyph + "…", size, bold) > room, (room, size, bold)
         room = round(room + 0.5, 3)
 
 

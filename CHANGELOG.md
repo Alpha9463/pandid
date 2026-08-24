@@ -616,6 +616,73 @@ class hierarchy, or what it is called.
   the way the drawing does. The overlay half of this had been wrong since
   compositions landed; nothing in the corpus turns one, which is why it
   went unseen.
+- **Text is measured at the face's own advance widths instead of one flat
+  average, so a cell is ruled to the string it has to hold.** `text_width()`
+  charged every character 0.56 em (0.62 bold) — near enough the mean of
+  Helvetica's ASCII to look calibrated, and a mean is no ruler. No real string
+  is the mean: `STREAM NUMBER` measured 17 per cent narrow, `PROCESS FLOW
+  DIAGRAM` 14, `Pump` 14, while `0.0441 kg/kg total` measured 34 per cent wide
+  and `Ethanol Purification A300` 28 — enough that the title band abbreviated a
+  title that fitted it, and `11_ethanol_pid` has read *Propylene Glycol Reacti…*
+  on a sheet with room for the word.
+
+  Which face to measure was never open. pandid writes
+  `font-family="sans-serif"` on every string; svglib registers that generic
+  family onto ReportLab's `Helvetica` and `Helvetica-Bold`, which is the
+  `/BaseFont /Helvetica` an exported PDF carries and what
+  `pandid.render.export` already writes down to place its baselines. A viewer
+  resolves the same family to Arial or Liberation Sans, both cut to Helvetica's
+  advances on purpose. So the Adobe Core-14 advances are carried here as data,
+  and `tests/test_text_width.py` checks all 382 of them against ReportLab
+  character by character wherever the `pdf` extra is installed. Outside the two
+  bands the face encodes, the old flat rate still answers, a CJK codepoint is
+  still charged a full em and a combining mark still nothing.
+
+  Two things the estimate had quietly shaped go with it. `clip()` chose where to
+  abbreviate by `int(room / average advance) - 1` characters — a count of
+  average characters and not a width, which cut a line of capitals too late and
+  never paid for the ellipsis it appended; it measures now, so what comes back
+  fits the cell it was cut for. And `_CELL_PAD` in the draw.io exporter had four
+  of its twelve units covering the shortfall rather than clearing a rule, which
+  its own comment said; the pad stays, the comment no longer describes a bug.
+
+  **Thirteen of the twenty-one goldens move**, and `docs/gallery/` and the
+  draw.io samples with them: an auto-sized box is ruled to what its text draws,
+  so most get slightly narrower and the one truncated title comes back whole.
+  Nothing about a drawing's *content* changes.
+
+- **A stream table's columns are shared out evenly at every block count, not
+  only at the counts that divide.** `_blocks_of` promised blocks one column
+  apart at worst and filled `ceil(n / count)` into each instead, leaving the
+  remainder to the last: ten over four came out 3/3/3/1, three apart, and ten
+  over six came out as *five* blocks — a count the caller asked about and never
+  got an answer for. The only case the tests exercised was 21 over 3, the one
+  shape the bug cannot appear in.
+
+  It is not a tidiness complaint, because the table sheet's search chooses by
+  measuring what this returns. The shared label column is widened against the
+  *narrowest* block so one ruling answers for all of them, so a one-column stub
+  widens it by everything the columns it should have had would have covered:
+  3/3/3/1 is measured a whole stream column wider than the 3/3/2/2 holding the
+  same ten streams. A page that fits four blocks was told it did not, and the
+  search went past four and returned five — a taller sheet of narrower blocks,
+  for a partition that was never measured.
+
+- **The table sheet's block search no longer claims to be the arithmetic it
+  replaced.** It was described as identical to `(room - label_w) // name_w`
+  wherever no section heading widened anything, so that no sheet which fitted
+  before could move. Floor division on floats is not the floor of the quotient:
+  where the room is a label column plus a whole number of stream columns, taking
+  the label column off again need not come back to a whole number of them, and
+  the page is read as holding one column fewer than it does. Five streams whose
+  page has room for all five were wrapped into two blocks. The search measures
+  the partition it would actually rule and does not wrap it, so the new answer
+  is the better one — and it is now stated as a correction. What is claimed is
+  the part that holds by construction: the search never returns *more* blocks
+  than the division did, because if the division's own count fitted, the loop
+  reached it.
+
+
 - The **two committed sheets made from one example no longer disagree about the
   date that example leaves blank** (#491). `03_distillation_train` and
   `08_from_data` state no `TitleBlock.date`, so `SvgRenderer` fills the cell with

@@ -79,6 +79,35 @@ def _texts(block: str) -> list[str]:
     return re.findall(r"<text[^>]*>([^<]*)</text>", block)
 
 
+def _lettering(block: str) -> list[tuple[float, str, float, bool, str]]:
+    """Every cell of a block paired with the string drawn in it:
+    ``(cell width, text, type size, bold, anchor)``.
+
+    Read back off the markup rather than off the layout, and parsed rather
+    than pattern-matched, so that what is measured is what a reader's viewer
+    is handed -- entities and all. ``draw_stream_table`` emits a rect and then
+    its text, so the pairing is the document order.
+    """
+    root = ET.fromstring(block)
+    out: list[tuple[float, str, float, bool, str]] = []
+    width: float | None = None
+    for el in root:
+        if el.tag == "rect":
+            width = float(el.attrib["width"])
+        elif el.tag == "text" and width is not None:
+            out.append(
+                (
+                    width,
+                    el.text or "",
+                    float(el.attrib["font-size"]),
+                    el.attrib.get("font-weight") == "bold",
+                    el.attrib.get("text-anchor", "start"),
+                )
+            )
+            width = None
+    return out
+
+
 def _zone_letters(svg: str) -> list[str]:
     """The row letters ruled in the border band, which is the one thing on a
     table sheet lettered at the zone size. Every row is lettered twice, on the
@@ -183,11 +212,22 @@ def test_a_flowsheet_with_no_title_block_still_gets_a_sheet_that_can_be_filed():
 
 
 def test_a_table_sheet_states_no_scale():
-    """A table is not drawn to scale, so the cell is not ruled at all -- unlike
-    a fitted diagram, which reports the ratio it was placed at."""
+    """A table is not drawn to scale, so the box is ruled and left empty --
+    unlike a fitted diagram, which reports the ratio it was placed at.
+
+    The box itself stays: #370 settled that the bottom band rules four cells at
+    fixed shares whether or not there is a scale to write in one, because a
+    band that hands its room back changes what `drawing_number` is budgeted
+    from one call to the next. A table sheet is filed by a number of its own
+    and needs that budget as much as the diagram does.
+    """
     fs = _sheet(streams=3)
-    assert "SCALE" in fs.to_svg(page_size="A3", border="zone")
-    assert "SCALE" not in fs.to_svg(show_stream_table="sheet", page_size="A3")
+    svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert ">SCALE</text>" in svg  # the box is ruled...
+    # ...and nothing is written in it: the caption is followed by the rule
+    # closing the cell, not by a value.
+    after = svg.split(">SCALE</text>", 1)[1].lstrip()
+    assert after.startswith("<line"), after[:120]
 
 
 # --- wrapping ----------------------------------------------------------------
@@ -278,9 +318,9 @@ def test_a_stated_font_size_still_rules_the_table_sheet():
     for its page is brought back onto it: smaller type buys columns per block,
     and columns per block cost blocks."""
     fs = _sheet(streams=21)
-    ruled = F.stream_table_sheet(fs, 700.0)
+    ruled = F.stream_table_sheet(fs, 500.0)
     fs.stream_table.font_size = 7.0
-    smaller = F.stream_table_sheet(fs, 700.0)
+    smaller = F.stream_table_sheet(fs, 500.0)
     assert ruled is not None and smaller is not None
     assert smaller.blocks[0].size == 7.0
     assert len(smaller.blocks) < len(ruled.blocks)
@@ -1002,22 +1042,76 @@ def test_a_refused_render_keeps_the_very_list_object_fs_warnings_had(kwargs):
     assert fs.warnings is held
 
 
+def test_a_table_sheet_reports_a_cell_that_cannot_hold_its_value():
+    """The table sheet's title strip reports through the same reporter the
+    diagram's does, and has to take the same arguments.
+
+    #370 widened `Reporter` to carry the two widths a finding quotes -- how
+    much room the cell has and how much the value wanted. This sheet builds its
+    own reporter, and a reporter still built to the old three-argument shape
+    does not fail a check or draw a wrong sheet: it raises `TypeError` out of
+    the middle of a render, the first time a value on a table sheet is too long
+    for its cell. Nothing else on this sheet exercises it, because every other
+    fixture here states values that fit.
+    """
+    fs = _sheet(streams=3)
+    # The subtitle is the cell that says *which sheet this is*, and it is the
+    # table sheet's own -- the one value here no caller can pre-check for it,
+    # so it is clipped by `draw_title_strip` and reaches that reporter and no
+    # other. `drawing_number` would not do: the plan checks that one itself and
+    # the finding arrives through `plan.findings`, never touching this closure.
+    fs.stream_table.sheet_subtitle = (
+        "Stream Table for the Aromatics Recovery Unit A100, Sheet 1 of 1"
+    )
+    svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert svg.startswith("<?xml")
+    cut = [w for w in fs.warnings if w.code == "text-truncated"]
+    assert cut, "a value the strip had to abbreviate must not be silent"
+    assert any("subtitle" in w.message for w in cut)
+    # ...and the finding carries the two widths, which is what the wider
+    # reporter exists to pass through.
+    assert any("units its cell has" in w.message for w in cut)
+
+
 # --- a partition that fits is found ------------------------------------------
 
 
-def _long_section(streams: int = 21, width: int = 147) -> Flowsheet:
-    """A table whose section heading is far wider than any block of it, so the
-    label column is widened after the columns have been shared out."""
+#: The room an A4 sheet leaves the table: the page less the two margins, the
+#: two zone bands and the clearance the dock keeps. Stated here because three
+#: tests below reason about what fits in it.
+A4_ROOM = 1122.5196850393702 - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER
+
+
+def _long_section(streams: int = 21, width: int = 101) -> Flowsheet:
+    """A table whose section heading is wider than any *block* of it fits, so
+    the label column is widened after the columns have been shared out -- but
+    not wider than the page, so a partition that fits exists.
+
+    ``width`` is a count of capital W, the widest glyph Helvetica cuts (0,944
+    em against the 0,278 of an ``i``): a heading of them is the case a ruler
+    charging every character one average rate is furthest wrong about. At 101
+    the heading is ruled 1015.1 wide, which leaves this fitting A4 three blocks
+    of seven and nothing fewer -- see
+    ``test_the_widest_partition_that_fits_is_the_one_chosen`` for the
+    arithmetic.
+    """
     fs = _sheet(streams=streams, rows=1)
     fs.stream_table_sections = [("Temperature (C)", "W" * width)]
     return fs
 
 
+def _ruled_width(m, chunks: list) -> float:
+    """What *chunks* would really be ruled to, together: the shared label
+    column once the narrowest block has to carry the section heading, plus the
+    stream columns of the widest."""
+    return F._section_span(m, min(len(c) for c in chunks)) + m.name_w * max(len(c) for c in chunks)
+
+
 def test_a_table_that_fits_in_more_blocks_is_drawn_rather_than_refused():
     """The defect: capacity was worked out *before* the section heading widened
     the shared label column, and never revisited. Twenty-one streams were cut
-    11/10 from a capacity of eleven, ruled 1023.0 wide on the 1022.5 an A4 has,
-    and the page was called too small -- while 7/7/7 fits it at 971.0."""
+    11/10 from a capacity of eleven, ruled wider than the A4 they were cut for,
+    and the page was called too small -- while 7/7/7 fits it."""
     svg = _long_section().to_svg(show_stream_table="sheet", page_size="A4")
     blocks = _blocks(svg)
     assert len(blocks) == 3
@@ -1036,23 +1130,58 @@ def test_the_partition_that_fits_really_fits():
             assert vy <= y and y + h <= vy + vh
 
 
+@pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
+def test_no_lettering_on_the_table_sheet_runs_outside_its_own_rule():
+    """The cells fitting the sheet is not the same claim as the *ink* fitting
+    the cells, and the second is the one that failed. A section heading of
+    capitals was measured at a flat 0,62 em a character where Helvetica Bold
+    sets a ``W`` at 0,944, so the cell was ruled a third short of the string it
+    had been ruled to hold and the heading drew through and past it -- on a
+    sheet every rectangle of which was inside the frame.
+
+    So this measures the drawing with the ruler that will *draw* it:
+    ReportLab, the face svglib resolves pandid's ``sans-serif`` onto. Measuring
+    it with pandid's own arithmetic is what agreed with the defect.
+    """
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    svg = _long_section().to_svg(show_stream_table="sheet", page_size="A4")
+    checked: list[str] = []
+    for block in _blocks(svg):
+        for width, body, size, bold, anchor in _lettering(block):
+            drawn = stringWidth(body, "Helvetica-Bold" if bold else "Helvetica", size)
+            room = width - (2 * F._STREAM_PAD if anchor == "start" else 0.0)
+            assert drawn <= room, f"{body!r} draws {drawn:.1f} in {room:.1f} of cell"
+            checked.append(body)
+    # ...and the string that used to run out of its cell was one of them, in
+    # every block, rather than a sheet of short values passing on their own.
+    assert checked.count("W" * 101) == 3
+    assert len(checked) > 40
+
+
 def test_the_widest_partition_that_fits_is_the_one_chosen():
     """Fewest blocks, because fewer blocks are wider blocks and a shorter
     sheet. Three is the fewest that fits here, so two must not be offered and
-    four must not be chosen over three."""
+    four must not be chosen over three.
+
+    The arithmetic, since it is worth being able to read: the heading is ruled
+    1015.1 and a stream column 52.0, and where the heading is what widens the
+    label column a block comes to the heading's own width plus one column for
+    every column the biggest block has over the smallest. So 7/7/7 is ruled at
+    the heading exactly, and 11/10 at the heading plus a column, which is more
+    than the 1022.5 an A4 leaves.
+    """
     fs = _long_section()
-    room = 1122.52 - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER
-    table = F.stream_table_sheet(fs, room)
+    table = F.stream_table_sheet(fs, A4_ROOM)
     assert table is not None
     assert len(table.blocks) == 3
-    assert table.w <= room
-    # ...and the count below it genuinely does not fit, so this is the floor
-    # rather than a coincidence.
+    assert table.w <= A4_ROOM
+    # ...and every count below it genuinely does not fit, so three is the
+    # floor rather than a coincidence.
     m = F._measure(fs, own_sheet=True)
     assert m is not None
-    two = F._blocks_of(len(m.streams), 2)
-    wider = F._section_span(m, min(len(c) for c in two)) + m.name_w * max(len(c) for c in two)
-    assert wider > room
+    assert _ruled_width(m, F._blocks_of(21, 2)) > A4_ROOM
+    assert _ruled_width(m, F._blocks_of(21, 1)) > A4_ROOM
 
 
 def test_a_table_no_partition_can_fit_is_still_refused():
@@ -1063,16 +1192,136 @@ def test_a_table_no_partition_can_fit_is_still_refused():
         _long_section(width=400).to_svg(show_stream_table="sheet", page_size="A4")
 
 
-def test_the_search_agrees_with_the_arithmetic_it_replaced():
-    """Where no section heading widens anything, the fewest-blocks-that-fit
-    search is the division it replaced, exactly -- so no sheet that fitted
-    before moves."""
-    fs = _sheet(streams=21)
+# --- the columns are shared out evenly, at every count ------------------------
+
+
+@pytest.mark.parametrize("n", range(1, 26))
+def test_blocks_are_shared_out_within_one_column_at_every_count(n):
+    """``_blocks_of``'s whole contract, held at every count rather than at the
+    one count that divides evenly.
+
+    It promised blocks a column apart at worst and did not deliver: filling
+    ``ceil(n / count)`` into each block and leaving the last with the remainder
+    gives ten over four as 3/3/3/1, three apart, and ten over six as *five*
+    blocks -- a count the caller asked about and never got an answer for. The
+    only case the old test exercised was 21 over 3, which is the one shape the
+    bug cannot appear in.
+    """
+    for count in range(1, n + 1):
+        blocks = F._blocks_of(n, count)
+        sizes = [len(b) for b in blocks]
+        assert len(blocks) == count, sizes
+        assert max(sizes) - min(sizes) <= 1, sizes
+        assert sum(sizes) == n
+        # the columns themselves, in sheet order, each in exactly one block
+        assert [i for b in blocks for i in b] == list(range(n))
+
+
+def test_the_instance_the_review_named():
+    """Kept by name, so the case that was reported is the case that is run."""
+    assert [len(b) for b in F._blocks_of(10, 4)] == [3, 3, 2, 2]
+    assert [len(b) for b in F._blocks_of(10, 6)] == [2, 2, 2, 2, 1, 1]
+
+
+def test_a_stub_block_no_longer_widens_the_label_column_into_a_refusal():
+    """Why the malformed shape was not a tidiness complaint.
+
+    The label column is widened against the *narrowest* block, so that one
+    ruling answers for all of them -- which means a one-column stub widens it
+    by everything the columns it should have had would have covered. 3/3/3/1 is
+    measured two stream columns wider than the 3/3/2/2 holding the same ten
+    streams, so a page that fits four blocks was told it did not, and the
+    search went on and returned five: a taller sheet of narrower blocks, for a
+    partition that was never measured.
+    """
+    fs = _sheet(streams=10, rows=1)
+    fs.stream_table_sections = [("Temperature (C)", "Trace Components and Contaminants (mg/kg)")]
     m = F._measure(fs, own_sheet=True)
     assert m is not None
-    n = len(m.streams)
-    for room in (300.0, 500.0, 700.0, 900.0, 1200.0, 4000.0):
-        per = max(1, int((room - m.label_w) // m.name_w))
-        count = (n + per - 1) // per
-        expected = F._blocks_of(n, count)
-        assert F._partition(m, n, room) == expected, room
+
+    balanced = F._blocks_of(10, 4)
+    assert [len(b) for b in balanced] == [3, 3, 2, 2]
+    stub = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+    # Both blocks are three columns at their widest, so the whole difference
+    # is what the narrowest block does not cover: a stub of one leaves the
+    # shared label column a stream column wider than a block of two does.
+    assert _ruled_width(m, stub) == pytest.approx(_ruled_width(m, balanced) + m.name_w)
+
+    # A page with exactly the room the balanced four need: the stub does not
+    # fit it, nor does any count below four, so four is what a search that
+    # measures the right shape returns.
+    room = _ruled_width(m, balanced)
+    assert _ruled_width(m, stub) > room
+    assert _ruled_width(m, F._blocks_of(10, 3)) > room
+    assert [len(b) for b in F._partition(m, 10, room)] == [3, 3, 2, 2]
+    # ...and five, which the stub's measurement drove it to, was never needed:
+    # it fits, so a search handed the stub's width went straight past four to
+    # it and drew a taller sheet of narrower blocks for no reason on the page.
+    assert _ruled_width(m, F._blocks_of(10, 5)) < room
+
+
+# --- what the search promises against the division it replaced ----------------
+
+
+def _division_count(m, n: int, room: float) -> int:
+    """The count the arithmetic this search replaced worked out: how many
+    columns fit beside the label column, and how many blocks that takes."""
+    per = max(1, int((room - m.label_w) // m.name_w))
+    return (n + per - 1) // per
+
+
+def test_the_search_never_chooses_more_blocks_than_the_division_it_replaced():
+    """The claim that survives, and the only one made.
+
+    It holds by construction rather than by sweep: the loop asks every count
+    from one upwards and stops at the first that fits, so where the division's
+    own partition fitted, the loop reached that count and returned there at the
+    latest. The sweep is here to catch the day the loop stops asking every
+    count.
+    """
+    for rows in (1, 4):
+        for n in (5, 7, 10, 13, 21):
+            fs = _sheet(streams=n, rows=rows)
+            m = F._measure(fs, own_sheet=True)
+            assert m is not None
+            for step in range(140):
+                room = 150.0 + step * 12.5
+                divided = F._blocks_of(n, _division_count(m, n, room))
+                if _ruled_width(m, divided) > room:
+                    continue  # the division's own partition did not fit
+                assert len(F._partition(m, n, room)) <= len(divided), (n, room)
+
+
+def test_the_search_is_not_the_division_and_is_not_claimed_to_be():
+    """The claim that does *not* survive, kept as a case that kills it.
+
+    An earlier round of this branch said the search was arithmetically
+    identical to the division wherever no section heading widened anything, so
+    that no sheet which fitted before could move. It is not identical, and the
+    reason is that the two ask different questions. The division works out a
+    *capacity* -- ``(room - label_w) // name_w``, how many columns the page has
+    room for -- in floating point, where a room that is exactly a label column
+    plus five stream columns does not come back to five stream columns when the
+    label column is taken off it again. It reads four, and wraps a table into
+    two blocks that fits in one. The search asks whether the partition it would
+    actually rule fits, gets the same width it would draw, and does not wrap it.
+
+    So this is a correction rather than a compatibility break, and it is stated
+    as one. The surviving claim is the test above: never *more* blocks than the
+    division chose.
+    """
+    fs = _sheet(streams=5, rows=1)
+    fs.stream_table_sections = []
+    for stream in fs.streams:
+        # The value :func:`stream_table_layout` names as the reason a stream
+        # table has no room to abbreviate in. It rules a column 96.887 wide,
+        # which is what makes the room below inexact.
+        stream.properties = {"Total Flow (kg/h)": "0.0441 kg/kg total"}
+    m = F._measure(fs, own_sheet=True)
+    assert m is not None
+
+    whole = [list(range(5))]
+    room = _ruled_width(m, whole)  # exactly the room one block of five needs
+    assert (room - m.label_w) // m.name_w == 4.0  # ...which the division reads as four
+    assert _division_count(m, 5, room) == 2  # so it cuts the table in two
+    assert [len(b) for b in F._partition(m, 5, room)] == [5]  # and this does not

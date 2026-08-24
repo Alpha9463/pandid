@@ -3471,14 +3471,21 @@ class SvgRenderer:
         The geometry is :func:`table_sheet_plan`'s, which the draw.io
         exporter asks for the same sheet; this strokes it.
 
-        The scale cell states nothing. A table is not drawn to scale,
-        and the cell is not ruled at all where there is no ratio to
-        report (see :func:`~pandid.render.furniture.title_strip_layout`).
+        The scale cell is **ruled and left empty**. A table is not
+        drawn to scale, so there is no ratio to write in the box -- but
+        the box is the form's and not the drawing's, and #370 settled
+        that it is ruled whether or not a sheet has a scale to state,
+        because a band that gives its room back changes what
+        ``drawing_number`` is budgeted. That argument does not stop at
+        the diagram: a table sheet is a sheet of the same issue, filed
+        by the same number, and its number has to survive the same
+        width. See :func:`~pandid.render.furniture.title_strip_layout`.
         """
         fit_issues: list[Issue] = []
 
-        def report(field: str, text: str, drawn: str) -> None:
-            fit_issues.append(fit_issue(field, text, drawn))
+        def report(field: str, text: str, drawn: str,
+                   room: float, need: float) -> None:
+            fit_issues.append(fit_issue(field, text, drawn, room, need))
 
         plan = table_sheet_plan(fs, sheet)
         furniture: list[str] = []

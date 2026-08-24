@@ -79,49 +79,49 @@
     <line x1="1990.0" y1="828.1" x2="2006.0" y2="828.1" stroke="black" stroke-width="0.75"/>
     <text x="82.0" y="912.6" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
     <text x="1998.0" y="912.6" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
-    <rect x="90.0" y="-149.0" width="171.7" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="175.8" y="-132.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
-    <line x1="90.0" y1="-126.0" x2="261.7" y2="-126.0" stroke="black" stroke-width="1"/>
+    <rect x="90.0" y="-149.0" width="162.6" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="171.3" y="-132.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
+    <line x1="90.0" y1="-126.0" x2="252.6" y2="-126.0" stroke="black" stroke-width="1"/>
     <text x="99.0" y="-112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">PFD</text>
-    <text x="129.5" y="-112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Process Flow Diagram</text>
+    <text x="133.0" y="-112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Process Flow Diagram</text>
     <text x="99.0" y="-94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FV</text>
-    <text x="129.5" y="-94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flow Control Valve</text>
+    <text x="133.0" y="-94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flow Control Valve</text>
     <text x="99.0" y="-76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">NTS</text>
-    <text x="129.5" y="-76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Not To Scale</text>
-    <rect x="1762.9" y="-149.0" width="227.1" height="229.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="1876.4" y="-132.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="1762.9" y1="-126.0" x2="1990.0" y2="-126.0" stroke="black" stroke-width="1"/>
-    <text x="1771.9" y="-112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-100</text>
-    <text x="1833.2" y="-112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Feed Preheater</text>
-    <text x="1771.9" y="-94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-100</text>
-    <text x="1833.2" y="-94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Light Ends Column</text>
-    <text x="1771.9" y="-76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-101</text>
-    <text x="1833.2" y="-76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Overhead Condenser</text>
-    <text x="1771.9" y="-58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-101</text>
-    <text x="1833.2" y="-58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Reflux Drum</text>
-    <text x="1771.9" y="-40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-102</text>
-    <text x="1833.2" y="-40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Kettle Reboiler</text>
-    <text x="1771.9" y="-22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-100A/B</text>
-    <text x="1833.2" y="-22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Bottoms Pump</text>
-    <text x="1771.9" y="-4.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-200</text>
-    <text x="1833.2" y="-4.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Column</text>
-    <text x="1771.9" y="14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-201</text>
-    <text x="1833.2" y="14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Overhead Condenser</text>
-    <text x="1771.9" y="32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-201</text>
-    <text x="1833.2" y="32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Reflux Drum</text>
-    <text x="1771.9" y="50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-202</text>
-    <text x="1833.2" y="50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Kettle Reboiler</text>
-    <text x="1771.9" y="68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-200A/B</text>
-    <text x="1833.2" y="68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Bottoms Pump</text>
-    <rect x="1682.8" y="94.0" width="307.2" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="1836.4" y="111.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">NOTES</text>
-    <line x1="1682.8" y1="117.0" x2="1990.0" y2="117.0" stroke="black" stroke-width="1"/>
-    <text x="1691.8" y="131.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">1.</text>
-    <text x="1716.1" y="131.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Sampling point on every product line.</text>
-    <text x="1691.8" y="149.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">2.</text>
-    <text x="1716.1" y="149.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">All instruments field-mounted unless noted.</text>
-    <text x="1691.8" y="167.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">3.</text>
-    <text x="1716.1" y="167.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Recycle valve FV-200 fails open.</text>
+    <text x="133.0" y="-76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Not To Scale</text>
+    <rect x="1776.0" y="-149.0" width="214.0" height="229.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="1883.0" y="-132.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
+    <line x1="1776.0" y1="-126.0" x2="1990.0" y2="-126.0" stroke="black" stroke-width="1"/>
+    <text x="1785.0" y="-112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-100</text>
+    <text x="1844.0" y="-112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Feed Preheater</text>
+    <text x="1785.0" y="-94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-100</text>
+    <text x="1844.0" y="-94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Light Ends Column</text>
+    <text x="1785.0" y="-76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-101</text>
+    <text x="1844.0" y="-76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Overhead Condenser</text>
+    <text x="1785.0" y="-58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-101</text>
+    <text x="1844.0" y="-58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Reflux Drum</text>
+    <text x="1785.0" y="-40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-102</text>
+    <text x="1844.0" y="-40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Kettle Reboiler</text>
+    <text x="1785.0" y="-22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-100A/B</text>
+    <text x="1844.0" y="-22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-100 Bottoms Pump</text>
+    <text x="1785.0" y="-4.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-200</text>
+    <text x="1844.0" y="-4.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Column</text>
+    <text x="1785.0" y="14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-201</text>
+    <text x="1844.0" y="14.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Overhead Condenser</text>
+    <text x="1785.0" y="32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-201</text>
+    <text x="1844.0" y="32.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Reflux Drum</text>
+    <text x="1785.0" y="50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-202</text>
+    <text x="1844.0" y="50.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Kettle Reboiler</text>
+    <text x="1785.0" y="68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-200A/B</text>
+    <text x="1844.0" y="68.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-200 Bottoms Pump</text>
+    <rect x="1740.5" y="94.0" width="249.5" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="1865.3" y="111.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">NOTES</text>
+    <line x1="1740.5" y1="117.0" x2="1990.0" y2="117.0" stroke="black" stroke-width="1"/>
+    <text x="1749.5" y="131.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">1.</text>
+    <text x="1770.7" y="131.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Sampling point on every product line.</text>
+    <text x="1749.5" y="149.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">2.</text>
+    <text x="1770.7" y="149.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">All instruments field-mounted unless noted.</text>
+    <text x="1749.5" y="167.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">3.</text>
+    <text x="1770.7" y="167.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Recycle valve FV-200 fails open.</text>
     <g id="stream_table">
       <rect x="90.0" y="886.0" width="122.0" height="15.0" fill="#eee" stroke="black" stroke-width="0.75"/>
       <text x="95.0" y="896.5" font-family="sans-serif" font-size="9.0" font-weight="bold" text-anchor="start">Stream Number</text>
