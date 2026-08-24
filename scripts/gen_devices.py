@@ -760,6 +760,23 @@ DEVICES = {
     A change of shape, not a mark added to one, so a blind is never
     shown in a position by inference.
 """),
+    ("fitting", "steam_trap"): ("SteamTrap", """Steam trap: drains condensate from a steam line and holds the steam.
+
+    ISO 10628-2 Table 2 item 24.15, registered 2181. Drawn as the row
+    draws it: a body with a diameter across it at 45 degrees and the
+    discharge half below that filled.
+
+    A class rather than a style of :class:`~pandid.units.Fitting`, for
+    the reason :class:`FlowElement` is one: a trap is what an equipment
+    or a valve schedule lists, sized and typed and bought as its own
+    item, while a strainer body and a flanged joint are the same shape
+    of thing to the drawing. Every steam main has one at each low point
+    and each drip leg, and until now this library had no way to draw one
+    at all.
+
+    Two faces on a line, like any fitting: the trap takes the condensate
+    in and passes it to the return header or to drain.
+"""),
     ("fitting", "venturi"): ("FlowElement", """Primary flow element: the device in the run an FE balloon reads.
 
     One class over the twelve the stencil set draws, because to the

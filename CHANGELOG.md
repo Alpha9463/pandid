@@ -9,6 +9,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`SteamTrap`**: the drawing every steam system needs at each low point
+  and each drip leg, and the one in-line device the library had no way to
+  draw (#367). ISO 10628-2 Table 2 item 24.15, registered 2181, which is
+  where the standard files it, in its fittings group. Drawn as that row
+  draws it: a body
+  4 M across, a full diameter at 45 degrees from its lower left to its
+  upper right, and the half below that line filled — the contrast being
+  the whole of what tells it from a plain circle. Reachable as
+  `SteamTrap("T-701")` or as `Fitting(variant="steam_trap")`, and it
+  takes the registry to 229.
+
+  Hand-drawn rather than vendored, and the reason is the interesting
+  part. The draw.io P&ID set ships a shape called *Steam Trap* which is
+  an empty 50 × 50 rectangle **byte-identical to the same file's
+  *Desuper Heater***, so mapping it would have registered one blank box
+  under two device names. `scripts/vendor_symbols.py` refused it on
+  those grounds and recorded why; this supplies the artwork the refusal
+  was waiting for.
+
+  `examples/15_condensing_turbine` drops the workaround the issue named.
+  Its separator drain went straight off the sheet as
+  `Product("Steam Trap Drain")` — a boundary flag standing in for a
+  device in the run — and now passes a real `T-701` on its way to the
+  condensate header.
+
+  The draw.io export has no stencil to name, so it is a stand-in — and
+  the stand-in draws what it can. A single built-in over the cell would
+  have been an oval half again too wide with both leads inside it, so
+  the cell carries three pieces instead: the body ellipse and a line for
+  each lead, placed by the symbol's own dimensions so the two backends
+  cannot drift. What is left is the mark, and that is what the export
+  reports losing.
+- **`_Approximation(pieces=…)`**: a draw.io stand-in may now be several
+  built-ins with a rectangle each, in fractions of the cell, rather than
+  one shape stretched over the whole of it. `inscribed=` already drew a
+  second outline filling the same box, which is right for a square with
+  a diamond in it and wrong for anything whose parts sit at different
+  places along the cell.
+- **`drawio-approximated` now also reports a reproportioned body.** A
+  symbol that may not be distorted is centred on the sheet and
+  letterboxed, and no draw.io built-in can be told to keep its shape, so
+  an author who sizes one to a box of another shape gets a drawing the
+  two backends disagree about. That was silent. It now says so, and only
+  when it happens — a quarter turn swaps the cell's width and height and
+  is not a resize, which the comparison now allows for.
+- **`tests/test_symbol_identity.py`**: no two registered drawings may be
+  byte-identical unless the library *says* they are the one drawing —
+  either the same `Symbol` object under two keys (`centrifuge/default`
+  and `centrifuge/decanter`; `instrument/logic` and `instrument/sis`) or
+  one vendored stencil under two names (a bare `Valve` is a gate valve;
+  a bare `Separator` is the drum a bare `Vessel` is). Anything else is
+  two drawings that merely happen to match, which is what a placeholder
+  is. The comparison ignores the `id` a symbol carries to be `<use>`d
+  by, since that follows the variant spelling and would otherwise hide
+  every duplicate behind the very names that duplicate it.
+
+  A duplicate needs two drawings, and the original defect was one
+  placeholder mapped on its own — so a second guard asks what each
+  drawing *is*: a registered drawing is never a bare rectangle
+  coincident with its own box, which is what an unconverted placeholder
+  looks like at any size. `block/default` is the one drawing that is
+  legitimately its own box and is named.
+
+  The vendored stencil files are checked at their own level too: every
+  group of byte-identical shapes upstream ships is recorded, so a
+  re-vendor that brings in a new one has to be looked at, and no group
+  may reach the registry with two members still identical.
 - **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
   registry had no symbol for, and all three were being faked in a shipped
   example with an apology in its source (#474). `examples/21_alumina_refinery`
@@ -405,6 +472,20 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- **draw.io child cells now turn with the symbol they are part of.** A
+  parent cell's `direction` says how *its own* shape paints; mxGraph does
+  not carry it into a child's geometry. So every drawing this exporter
+  builds as a parent plus children came apart when it was laid on its
+  side: a composed reactor drew an upright agitator across a vessel lying
+  the other way, and a steam trap drew its body and both leads as tall
+  slivers side by side, with the ink meeting neither nozzle. Both the
+  `pieces=` stand-ins and the ISO supplementary `overlays` now place each
+  child through `portgeom.symbol_to_box` — the same map the nozzles and
+  the SVG artwork already use, so a part cannot drift from the port it is
+  drawn under — and restate the parent's quarter turn so the shape paints
+  the way the drawing does. The overlay half of this had been wrong since
+  compositions landed; nothing in the corpus turns one, which is why it
+  went unseen.
 - The **two committed sheets made from one example no longer disagree about the
   date that example leaves blank** (#491). `03_distillation_train` and
   `08_from_data` state no `TitleBlock.date`, so `SvgRenderer` fills the cell with

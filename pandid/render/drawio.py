@@ -184,7 +184,7 @@ import math
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
-from pandid.portgeom import port_point, unit_box
+from pandid.portgeom import _xform, port_point, symbol_to_box, unit_box
 # ISO 10628-1 5.3.1 c)'s in-line detail band, half the outline weight
 # below: imported rather than repeated, since the sheet draws a part and
 # its body at exactly that ratio and an export at another one is a second
@@ -202,8 +202,8 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _FIT_CODES, _furniture_name,
                                draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
-from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
-                                   wears_arrowhead)
+from pandid.render.symbols import (ARROWHEAD, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
+                                   closed_marking, fail_marking, wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -553,6 +553,49 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
 _DIRECTION = {90: "south", 180: "west", 270: "north"}
 
 
+def _placed_rect(frame, x: float, y: float, w: float, h: float
+                 ) -> "tuple[float, float, float, float]":
+    """One child rectangle, stated in symbol fractions, in the placed cell.
+
+    A parent's ``direction`` and its flips say how *its own shape* paints
+    inside its bounds. mxGraph does not carry them into a child's
+    geometry -- a child is positioned by its own numbers, relative to the
+    parent's origin and nothing else -- so a child that is a piece **of
+    the drawing** rather than a shape beside it has to be turned here or
+    the symbol comes apart the moment it is laid on its side.
+
+    Both corners go through :func:`~pandid.portgeom.symbol_to_box`, which
+    is the map the nozzles and the SVG artwork are already placed by, so
+    a part cannot drift from the port it is drawn under. The unit square
+    is used as the symbol's box, because these rectangles are fractions
+    of it; a quarter turn comes back with its axes swapped, which is what
+    the cell did too.
+
+    :meth:`DrawioRenderer._inscribed` needs none of this: it fills the
+    whole box whatever shape the box is.
+    """
+    rot, mirror_x, mirror_y = _xform(frame)
+    corners = [symbol_to_box(px, py, 1.0, 1.0, rot, mirror_x, mirror_y)[:2]
+               for px, py in ((x, y), (x + w, y + h))]
+    xs = sorted(point[0] for point in corners)
+    ys = sorted(point[1] for point in corners)
+    return xs[0], ys[0], xs[1] - xs[0], ys[1] - ys[0]
+
+
+def _turn_keys(frame) -> list[str]:
+    """The quarter turn, restated for a child cell.
+
+    The child's *geometry* is turned by :func:`_placed_rect`; this is the
+    other half, which is how the shape paints inside it. ``mxLine`` draws
+    across its box horizontally and turns only for ``direction`` north or
+    south, and an agitator's stencil has a top and a bottom. It is the
+    parent's own direction rather than a fresh decision: the whole
+    drawing turns together.
+    """
+    rot, _mirror_x, _mirror_y = _xform(frame)
+    return [] if rot not in _DIRECTION else [f"direction={_DIRECTION[rot]}"]
+
+
 class _Fit(NamedTuple):
     """Where the drawing sits on the paper, and how big.
 
@@ -590,6 +633,36 @@ class _Fit(NamedTuple):
         it.
         """
         return self.scale * v
+
+
+class _Piece(NamedTuple):
+    """One built-in placed *inside* a stand-in's cell, in fractions of it.
+
+    :attr:`_Approximation.inscribed` draws a second outline filling the
+    same box, which is the whole answer for a square with a diamond in
+    it. It is not the answer for a drawing whose parts sit at different
+    places along the cell: a steam trap is a body 4 M across with a 1 M
+    run each side of it, so an ``ellipse`` over the whole cell draws an
+    oval a module and a half too wide and swallows both leads.
+
+    So a stand-in may instead be a *list* of built-ins with a rectangle
+    each, stated in fractions of the cell exactly as
+    :class:`~pandid.render.symbols.Overlay` states a part's -- and
+    converted by the same arithmetic, in :meth:`DrawioRenderer._pieces`.
+    The parent cell then draws nothing itself and is the box the
+    connection points are fractions of, which is what keeps a stream
+    landing where it was routed.
+
+    ``shape`` is a built-in, never a stencil key, for
+    :class:`_Approximation`'s own reason. ``None`` is draw.io's
+    rectangle, which is a real answer for a piece that is one.
+    """
+
+    shape: "str | None"
+    x: float
+    y: float
+    w: float
+    h: float
 
 
 class _Approximation(NamedTuple):
@@ -639,7 +712,19 @@ class _Approximation(NamedTuple):
     weight: float = _EQUIPMENT_STROKE
     keys: tuple = ()
     inscribed: "str | None" = None
+    pieces: "tuple[_Piece, ...]" = ()
 
+
+#: How far a cell's proportions may drift from its symbol's before the
+#: export says the drawing is being reproportioned
+#: (:meth:`DrawioRenderer._report_reshape`).
+#:
+#: A ratio, not a length, and loose on purpose: the layout engine sizes a
+#: box in drawing units and rounds, so a symbol placed "at its own size"
+#: arrives a hair off square and a strict comparison would report every
+#: balloon on the sheet. One part in a thousand is far tighter than any
+#: reproportioning a reader could see and far looser than that rounding.
+_ASPECT_SLACK = 1e-3
 
 #: The code every ``lost`` sentence is reported under.
 #:
@@ -951,6 +1036,43 @@ _APPROXIMATIONS = {
         weight=_TRIM_STROKE),
     ("fitting", "mixing_path"): _Approximation(
         None, "the box and the three mixing elements in it", weight=_TRIM_STROKE),
+    # ISO 10628-2 item 24.15 (2181), the steam trap. draw.io has a shape
+    # called "Steam Trap" and it is an empty rectangle byte-identical to
+    # the same file's "Desuper Heater", so there is no stencil to name
+    # here -- see the block in ``scripts/vendor_symbols.py``.
+    #
+    # Three pieces rather than one shape, because the drawing is not one
+    # shape: a body 4 M across with a 1 M run each side of it. A single
+    # ``ellipse`` over the cell would draw an oval a module and a half
+    # too wide and swallow both leads, and would then be a stand-in whose
+    # own sentence understated it -- the body outline is the part a
+    # reader would take on trust. The fractions are the symbol's own
+    # dimensions divided by its width, so the two backends draw the body
+    # and the leads at one set of numbers and cannot drift.
+    #
+    # ``line`` is mxGraph's own ``mxLine``, which paints a single stroke
+    # across its box at mid-height; it turns only for ``direction`` north
+    # or south, and nothing here sets one. So a lead is a box as tall as
+    # the body with the run drawn through its middle, which puts the ink
+    # on the centre line both nozzles sit on.
+    #
+    # What is genuinely not drawable is the mark, and that is the whole
+    # of ``lost``: no built-in draws a chord across an ellipse, and none
+    # fills one side of it.
+    ("fitting", "steam_trap"): _Approximation(
+        None,
+        "the 45-degree diameter across the body and the discharge half filled below it",
+        # Transparent, like every stand-in here that is not a balloon:
+        # the drawn body fills white, and so do the two in-line mixers'
+        # boxes, and neither is exported opaque. See
+        # ``test_only_the_balloons_are_drawn_opaque``.
+        weight=_TRIM_STROKE,
+        pieces=(
+            _Piece("line", 0.0, 0.0, TRAP_LEAD / TRAP_W, 1.0),
+            _Piece("ellipse", TRAP_LEAD / TRAP_W, 0.0, TRAP_BODY_D / TRAP_W, 1.0),
+            _Piece("line", (TRAP_LEAD + TRAP_BODY_D) / TRAP_W, 0.0,
+                   TRAP_LEAD / TRAP_W, 1.0),
+        )),
     # Item 12.4, the kneader: the casing and the wave its blades draw.
     ("kneader", "default"): _Approximation(
         None, "the casing and the wave the blades draw across it"),
@@ -1778,6 +1900,13 @@ class DrawioRenderer:
             # `_generic_symbol`'s 60-unit box, ruled at the same weight
             # everything else is.
             return keys + [f"strokeColor={_INK}", f"fillColor={_NO_FILL}", weight]
+        if approx.pieces:
+            # The drawing is in the pieces (:meth:`_pieces`), so the cell
+            # itself draws nothing: left visible it would rule a box
+            # round a symbol that has none. It stays a real vertex --
+            # this is what the connection points are fractions of, and
+            # what a reader drags -- and only its ink is taken away.
+            return keys + ["strokeColor=none", f"fillColor={_NO_FILL}"]
         return keys + [*approx.keys, f"strokeColor={approx.stroke}",
                        f"fillColor={approx.fill}",
                        f"strokeWidth={fit.length(approx.weight):g}"]
@@ -1964,8 +2093,10 @@ class DrawioRenderer:
         else's line is.
 
         A symbol that is **two outlines** gets a second cell, inscribed
-        in the first: see :meth:`_inscribed`. A **composed** symbol gets
-        one cell per supplementary part: see :meth:`_overlay_cells`.
+        in the first: see :meth:`_inscribed`. A symbol whose parts sit at
+        different places along the cell gets one cell per part: see
+        :meth:`_pieces`. A **composed** symbol gets one cell per
+        supplementary part: see :meth:`_overlay_cells`.
         """
         sym = self.registry.for_unit(u)
         approx = self._approximation(u, sym)
@@ -1977,6 +2108,7 @@ class DrawioRenderer:
                 "warning", APPROXIMATED,
                 f"{u.name} has no draw.io stencil and is exported as a stand-in, "
                 f"which loses {approx.lost}"))
+        self._report_reshape(u, sym, approx)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
@@ -1994,11 +2126,113 @@ class DrawioRenderer:
             *body,
             '        </mxCell>',
             *self._inscribed(cid, approx, x1 - x0, y1 - y0, fit),
-            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.name),
+            *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
+            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u),
         ]
 
+    def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
+        """Say so when draw.io will stretch a drawing the sheet holds still.
+
+        :attr:`~pandid.render.symbols.Symbol.stretchable` is a *stencil*
+        attribute, and for every vendored reference it is true -- the
+        module docstring says the box is then the whole of the mapping,
+        and a test pins that every referenced stencil is ``variable``.
+        A **stand-in** has no such attribute to carry: draw.io scales a
+        built-in into whatever cell it is given, and there is no way to
+        ask an ``ellipse`` to stay a circle.
+
+        So for the twelve symbols that may not be distorted, the two
+        backends part company the moment an author sizes one to a box of
+        another shape: :func:`~pandid.portgeom.ink_box` centres the
+        artwork on the sheet and leaves the letterbox blank, and draw.io
+        stretches it to the cell. That is a real divergence and it used
+        to be silent, which is the one thing this backend promises not to
+        be. It is reported rather than repaired because repairing it
+        means handing draw.io the letterboxed rectangle instead of the
+        unit's box, and a cell that is not the unit's box is a different
+        change with its own consequences for every port fraction on it.
+
+        Silent in the ordinary case, which is the point: a symbol drawn
+        at its own proportions has nothing to report.
+        """
+        if approx is None or sym.stretchable:
+            return
+        x0, y0, x1, y1 = self._cell_box(u)
+        w, h = x1 - x0, y1 - y0
+        # The symbol's box **as placed**: a quarter turn swaps its width
+        # and height, and the cell is turned with it. Comparing against
+        # the unturned box reported every upright symbol laid on its side
+        # as reproportioned, which is a drawing that was never resized.
+        _px, _py, bw, bh = symbol_to_box(0.0, 0.0, sym.width, sym.height, *_xform(u.frame))
+        if not (w > 0 and h > 0 and bw > 0 and bh > 0):
+            return
+        # Same aspect, same drawing: a uniform scale is not a distortion.
+        if abs(w / h - bw / bh) <= _ASPECT_SLACK:
+            return
+        self._findings.append(Issue(
+            "warning", APPROXIMATED,
+            f"{u.name} is drawn to a box of {w:g} x {h:g} and its symbol keeps its "
+            f"shape, so the sheet centres the drawing and leaves the rest blank; "
+            f"draw.io has no stand-in that can refuse to be stretched, so the "
+            f"export fills the cell instead and the drawing comes out reproportioned"))
+
+    @staticmethod
+    def _pieces(u, approx: "_Approximation | None", cid: str,
+                w: float, h: float, fit: "_Fit") -> list[str]:
+        """A stand-in that is several built-ins, one cell each.
+
+        See :class:`_Piece` for why.
+
+        **The placement has to be applied here, by hand.** A parent's
+        ``direction`` and its flips are properties of how *its own shape*
+        paints inside its bounds; mxGraph does not turn a child's
+        geometry with them, and a child that is not a shape of the parent
+        but a piece *of the drawing* has to be turned by the same
+        quarter or the symbol comes apart. Left unturned, a trap laid on
+        its side exported as three tall slivers side by side inside a
+        cell that was itself upright -- ink that met none of the nozzles.
+
+        Two halves, and both are needed:
+
+        * **Where the piece is.** Its rectangle is stated in the
+          *symbol's* frame, so both corners go through
+          :func:`~pandid.portgeom.symbol_to_box` -- the same map the
+          nozzles and the SVG artwork are placed by, so a piece cannot
+          drift from the port it is drawn under.
+        * **Which way the piece paints.** ``mxLine`` draws across its box
+          horizontally and turns only for ``direction`` north or south,
+          so the quarter turn is restated on each child. It is the
+          parent's own ``direction``, not a fresh decision: the whole
+          drawing turns together.
+
+        ``connectable=0`` and ``movable=0`` for the reasons
+        :meth:`_inscribed` gives -- a piece is *part of* the symbol, and
+        a stream belongs on the parent's connection points rather than
+        on a lead the parent happens to be drawn with.
+        """
+        if approx is None or not approx.pieces:
+            return []
+        turn = _turn_keys(u.frame)
+        out: list[str] = []
+        for i, piece in enumerate(approx.pieces):
+            px, py, pw, ph = _placed_rect(u.frame, piece.x, piece.y, piece.w, piece.h)
+            keys = [] if piece.shape is None else [f"shape={piece.shape}"]
+            style = ";".join([
+                "html=1", "rounded=0", *keys, *turn,
+                f"strokeColor={approx.stroke}", f"fillColor={approx.fill}",
+                f"strokeWidth={fit.length(approx.weight):g}",
+                "connectable=0", "movable=0"]) + ";"
+            out += [
+                f'        <mxCell id="{cid}-s{i}" value="" style={_attr(style)} '
+                f'vertex="1" parent="{cid}">',
+                f'          <mxGeometry x="{_num(px * w)}" y="{_num(py * h)}" '
+                f'width="{_num(pw * w)}" height="{_num(ph * h)}" as="geometry" />',
+                '        </mxCell>',
+            ]
+        return out
+
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
-                       fit: "_Fit", owner: str = "") -> list[str]:
+                       fit: "_Fit", unit=None) -> list[str]:
         """One cell per ISO supplementary part, grouped under the body's.
 
         **This is what a composed symbol exports as.** A composition names
@@ -2049,7 +2283,8 @@ class DrawioRenderer:
                     # says so, naming the unit it is drawn on.
                     self._findings.append(Issue(
                         "warning", APPROXIMATED,
-                        f"{owner or cid}: the {overlay.name} part has no draw.io "
+                        f"{getattr(unit, 'name', '') or cid}: the {overlay.name} "
+                        f"part has no draw.io "
                         f"stencil and is exported as a stand-in, which loses "
                         f"{approx.lost}"))
             # A chiral part's second hand. The SVG reflects the artwork
@@ -2058,17 +2293,22 @@ class DrawioRenderer:
             # drawn inside it turns round.
             if overlay.mirror:
                 keys.append("flipH=1")
+            # The placement, which a child does not inherit: see
+            # :func:`_placed_rect`. Without it a stirred tank laid on its
+            # side exported as an upright agitator across a vessel drawn
+            # the other way, both of them reproportioned.
+            ox, oy, ow, oh = _placed_rect(
+                unit.frame, overlay.x, overlay.y, overlay.w, overlay.h)
             style = ";".join([
-                "html=1", "rounded=0", *keys,
+                "html=1", "rounded=0", *keys, *_turn_keys(unit.frame),
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(_PART_STROKE):g}",
                 "connectable=0", "movable=0"]) + ";"
             out += [
                 f'        <mxCell id="{cid}-p{i}" value="" style={_attr(style)} '
                 f'vertex="1" parent="{cid}">',
-                f'          <mxGeometry x="{_num(overlay.x * w)}" '
-                f'y="{_num(overlay.y * h)}" width="{_num(overlay.w * w)}" '
-                f'height="{_num(overlay.h * h)}" as="geometry" />',
+                f'          <mxGeometry x="{_num(ox * w)}" y="{_num(oy * h)}" '
+                f'width="{_num(ow * w)}" height="{_num(oh * h)}" as="geometry" />',
                 '        </mxCell>',
             ]
         return out

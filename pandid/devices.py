@@ -142,6 +142,7 @@ __all__ = [
     "MotorOperatedValve",
     "CheckValve",
     "SpectacleBlind",
+    "SteamTrap",
     "FlowElement",
     "StirredTankReactor",
     "GasHolder",
@@ -2576,6 +2577,34 @@ class SpectacleBlind(Fitting):
     kind = "fitting"
     VARIANTS = ("default", "blind")
     VARIANT_ALIASES = {"default": "blind"}
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+    inlet: Port
+    outlet: Port
+
+
+class SteamTrap(Fitting):
+    """Steam trap: drains condensate from a steam line and holds the steam.
+
+    ISO 10628-2 Table 2 item 24.15, registered 2181. Drawn as the row
+    draws it: a body with a diameter across it at 45 degrees and the
+    discharge half below that filled.
+
+    A class rather than a style of :class:`~pandid.units.Fitting`, for
+    the reason :class:`FlowElement` is one: a trap is what an equipment
+    or a valve schedule lists, sized and typed and bought as its own
+    item, while a strainer body and a flanged joint are the same shape
+    of thing to the drawing. Every steam main has one at each low point
+    and each drip leg, and until now this library had no way to draw one
+    at all.
+
+    Two faces on a line, like any fitting: the trap takes the condensate
+    in and passes it to the return header or to drain.
+    """
+
+    kind = "fitting"
+    VARIANTS = ("default", "steam_trap")
+    VARIANT_ALIASES = {"default": "steam_trap"}
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port

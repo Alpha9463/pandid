@@ -1387,6 +1387,14 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "fitting/static_mixer": "X2673",
     "fitting/mixing_path": "X8184",
     "kneader/default": "X8134",
+    # Group 24: item 24.15, the steam trap. Drawn from the row --
+    # the body, the diameter across it at 45 degrees and the half below
+    # that filled -- rather than vendored, because the draw.io set's
+    # shape of that name draws nothing at all. Its mark is in no
+    # supplementary group, so it is a whole drawing and belongs here
+    # rather than in a composition, on the same footing as group 10's
+    # driers and group 5's cooling towers above.
+    "fitting/steam_trap": "2181",
     # Group 7, SCREENING DEVICES, SIEVES AND RAKES: one outline, six
     # marks, plus 7.7's own larger outline for the basket reel.
     "screening_device/general": "X8123",

@@ -552,7 +552,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 132 of the 228 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 132 of the 229 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -1137,6 +1137,7 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `MotorOperatedValve` | `valve` | `Valve` | |
 | `CheckValve` | `valve` | `Valve` | `-actuator` |
 | `SpectacleBlind` | `fitting` | `Fitting` | |
+| `SteamTrap` | `fitting` | `Fitting` | |
 | `FlowElement` | `fitting` | `Fitting` | |
 | `StirredTankReactor` | `reactor` | `Reactor` | |
 | `GasHolder` | `tank` | `Tank` | |
@@ -1745,6 +1746,7 @@ first listed is what the class draws when it is built by name alone.
 | `CheckValve` | `valve` | `check` (as `default`) |
 | `Valve` | `valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `needle`, `saunders`, `plug`, `pinch`, `angle`, `bleed`<br>with a drawn operator: `hydraulic`, `manual`, `knife`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
 | `SpectacleBlind` | `fitting` | `blind` (as `default`) |
+| `SteamTrap` | `fitting` | `steam_trap` (as `default`) (ISO item 24.15, registered 2181) |
 | `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer` (ISO item 12.2 X2673), `rotary_mixer` (item 12.1 X2672), `mixing_path` (item 12.3 X8184), `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `StirredTankReactor` | `reactor` | `default` |
