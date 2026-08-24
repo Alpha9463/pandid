@@ -18,6 +18,12 @@ Every unit and equipment class is on the package. `pandid.units` and
 `pandid.devices` are the same classes under a qualified name, and importing
 either namespace still works.
 
+So is every type this reference names as something you are handed or annotate
+with — `Stream`, `Port`, `Loop`, `Issue`, `TitleBlock` and the rest. A type that
+is **not** on the package is named here with the module it lives in
+(`pandid.document.StreamTableOptions`), so an import written off this page
+imports.
+
 ---
 
 ## `Flowsheet`
@@ -77,7 +83,7 @@ neither stands in for the other.
 | `title_block` | `TitleBlock \| None` | drawn whenever it is set |
 | `annotations` | `list` | sheet furniture boxes, drawn whenever they are added |
 | `stream_table_sections` | `list[tuple[str, str]]` | `(before_key, header_label)` |
-| `stream_table` | `StreamTableOptions` | how that table is drawn; see [Sizing the table](#sizing-the-table) |
+| `stream_table` | `pandid.document.StreamTableOptions` | how that table is drawn; see [Sizing the table](#sizing-the-table) |
 
 ### Building the topology
 
@@ -344,8 +350,8 @@ flow stopping in the middle of an unbroken run. A line *leaving* a junction is
 untouched and takes its head at its own destination. Every in-line device that
 draws a body of its own, a valve or a reducer or a fitting, gives the head
 something to land against and keeps it; the rule is
-[`Symbol.bare_run`](#the-symbol), so it is the artwork that answers rather than
-the class.
+[`bare_run` on the symbol](#the-symbol), so it is the artwork that answers
+rather than the class.
 
 ### Flanged connections
 
@@ -3123,13 +3129,14 @@ already spoken for.
 
 ## Sheet furniture
 
-Everything here lives in `pandid.document`. A title block or a box on the flowsheet
-is drawn because it is there, whatever `border` is set to.
+The four classes are on the package, as `Flowsheet` is; the convenience
+constructors further down are in `pandid.document`. A title block or a box on
+the flowsheet is drawn because it is there, whatever `border` is set to.
 
 ### `TitleBlock` and `Revision`
 
 ```python
-from pandid.document import TitleBlock, Revision
+from pandid import TitleBlock, Revision
 
 fs.title_block = TitleBlock(
     title="Aromatics Recovery A100",      # the two title lines
@@ -3715,8 +3722,8 @@ Figure 22 b) draws those two: an open-topped U, and a body whose conical apex
 points down with the vortex spiralling into it. Both do their job by gravity, and
 both say something the plant cannot do once turned.
 
-`Symbol.gravity_fixed` marks them, and `pin(orientation=...)` on a unit drawn
-with one earns a `gravity-turned` warning:
+A symbol's `gravity_fixed` marks them, and `pin(orientation=...)` on a unit
+drawn with one earns a `gravity-turned` warning:
 
 ```python
 tank = fs.add(units.Tank("TK-301")).pin(x=300, y=200, orientation=90)
@@ -3821,10 +3828,10 @@ heat is added where it is removed.
 That is not a reason to refuse the flip. §11.4.2 permits mirroring outright, and
 what a reader asks for by flipping a condenser is its *nozzles* on the other side
 — `examples/10_ethanol_pfd` flips one so the tower overhead rises into the shell
-inlet dead straight. So `Symbol.directional` marks the drawing instead, and the
-renderer holds it still under the flip while the nozzles move: the flip is undone
-inside the `<defs>` entry and the `<use>` reapplies it, exactly as a symbol's own
-lettering is kept readable under a transform.
+inlet dead straight. So a symbol's `directional` marks the drawing instead, and
+the renderer holds it still under the flip while the nozzles move: the flip is
+undone inside the `<defs>` entry and the `<use>` reapplies it, exactly as a
+symbol's own lettering is kept readable under a transform.
 
 ```python
 cond = fs.add(units.HeatExchanger("E-301", variant="condenser"))
@@ -4227,7 +4234,7 @@ Everything a shipped class has, a custom one has: `pin()`, `nozzle()`,
 Without a symbol the unit draws a generic box (below) and every render says so,
 as a `symbol-kind-unknown` warning naming the unit and the kind — a blank box is
 also what a *misspelt* `kind` gets, and the two are the same file. To draw it
-properly, register a `Symbol` under the same `kind`:
+properly, register a `Symbol` from `pandid.render.symbols` under the same `kind`:
 
 ```python
 from pandid.render.symbols import Symbol, default_registry
@@ -4299,9 +4306,10 @@ port is still checked against the ones that do own a face.
 `port_series` places a family of like ports whose membership the **unit** decides
 rather than the symbol. A `Mixer(n_inlets=n)` has no fixed set of inlets, so the
 symbol declares the rule and the coordinates are resolved once the count is
-known. A `PortSeries` names the `prefix` its members are numbered from (`in_1`,
-`in_2`, …), the `face` they spread along, the `pitch` they sit at, the `extent`
-of the face they are squeezed into once that pitch would run them off the end,
+known. A `PortSeries` (`pandid.render.symbols`) names the `prefix` its members
+are numbered from (`in_1`, `in_2`, …), the `face` they spread along, the `pitch`
+they sit at, the `extent` of the face they are squeezed into once that pitch
+would run them off the end,
 and the point `at` along the face the run is centred on. `singular` names the
 lone member of a family that is usually singular: a `Column` with one feed has a
 nozzle called `feed`, and only grows `feed_1`, `feed_2` when given more than one.
@@ -4435,9 +4443,10 @@ fs.route(router=MyRouter())
 Defaults: `pandid.layout.ConstraintLayoutEngine` (exported as
 `default_layout_engine`) and `pandid.routing.DefaultRouter`.
 
-The symbol registry is `pandid.render.symbols.default_registry`, a
-`SymbolRegistry` with `register(kind, symbol, variant="default")`,
-`variants(kind)` and `get(kind, variant="default")`. `get()` raises `ValueError`
+The symbol registry is `default_registry` in `pandid.render.symbols`, a
+`pandid.render.symbols.SymbolRegistry` with
+`register(kind, symbol, variant="default")`, `variants(kind)` and
+`get(kind, variant="default")`. `get()` raises `ValueError`
 for a variant that kind has no symbol for, naming the ones it does. A kind with
 no symbols at all draws a generic box; registering one for a unit type of your
 own is [Custom equipment](#custom-equipment).
@@ -4590,9 +4599,9 @@ What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror, naming
   the open tank (2061) and the cyclone separator (X 2618) as its two examples.
-  95 registered symbols carry
-  `Symbol.gravity_fixed`, and
-  [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
+  95 registered symbols carry `Symbol.gravity_fixed` (`pandid.render.symbols`),
+  and [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists
+  them.
 
 The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2, and against
 ISO 15519-1 is §6.2, whose floor is a physical one: no line of a finished
