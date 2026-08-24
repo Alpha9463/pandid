@@ -29,7 +29,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
     from pandid.units import Unit
 
@@ -621,26 +621,59 @@ def pin_intent(unit: "Unit") -> dict[str, tuple[str | None, float]]:
             if (value := getattr(pin, axis)) is not None}
 
 
-def unmeasured_port(port_name: str, axes: "Sequence[str]", drop: str) -> str:
-    """The refusal for a ``port=`` no stated coordinate is measured to.
+def port_refusal(port_name: "str | None", axes: "Sequence[str]",
+                 stated: "Collection[str]", ranks: "Collection[str]",
+                 drop: str) -> str | None:
+    """Why a ``port=`` cannot be honoured as written, or ``None``.
 
-    ``axes`` names the coordinates the nozzle was given for and the pin
-    does not state, and ``drop`` is what the author would strike to keep
-    the rest of the placement -- ``port=`` from a call, ``port.x`` from a
-    key.
+    Every rule against a named nozzle, **and the order between them**.
+    The order is the half that sharing a sentence does not fix: a pin
+    tripping two of these answered one way through
+    :meth:`pandid.units.Unit.pin`, which asked about the grid first, and
+    another through ``pin:`` in :mod:`pandid.spec`, which asked whether
+    anything was measured first. Same rules, same words, different
+    verdict -- which is the divergence (#294) this change exists to
+    remove, so one function decides and there is no order left to
+    disagree about.
 
-    One sentence and one rule for both doors into a placement,
-    :meth:`pandid.units.Unit.pin` and ``pin:`` in :mod:`pandid.spec`,
-    built here for the reason :func:`unreachable_face` is: a rule
-    written out twice is a rule that drifts, and the two came to
-    disagree about *this* one -- the file refused ``port: inlet`` on a
-    pin stating no coordinate while the Python call took it and threw
-    the nozzle away, which is the very thing (#294) the rule exists to
-    stop. Whatever one door refuses the other refuses, because there is
-    only the one sentence to refuse it with.
+    ``stated`` is the axes the pin gives a coordinate for and ``ranks``
+    the grid lines it names. ``port_name`` and ``axes`` describe the one
+    nozzle being asked about: both axes where a single name serves the
+    whole pin, or the single axis an axis-by-axis mapping names it for.
+    ``None`` and ``()`` ask only the rules that are about the pin rather
+    than about one nozzle, which is how the mapping form gets one answer
+    about its grid before it asks about each of its axes.
+
+    ``drop`` is what the author strikes to keep the rest of the
+    placement -- ``port`` for a whole ``port=`` or ``port:``, ``port.x``
+    for one axis of the mapping. It is the only thing here a caller
+    supplies, and so the only reason two doors could word this
+    differently; for the rules both doors can trip, both pass ``port``
+    and the sentence is the same to the byte.
+
+    The complaints, in the order they are made:
+
+    1. **A grid cell has no nozzle in it.** ``col``/``row`` name a cell
+       and a nozzle is a point on a box, so the two cannot both place
+       the unit. Asked first because it is about the pin as a whole and
+       holds however the nozzle was spelt.
+    2. **A port that measures nothing.** A nozzle named for no
+       coordinate the pin states locates nothing, and was taken and
+       thrown away rather than refused.
+
+    Both are asked *after* the nozzle is resolved, at both doors: a name
+    that is not a port at all is wrong before anything about what it
+    measures.
     """
-    subject = " or ".join(axes)
-    return (f"port {port_name!r} is the nozzle {subject} "
-            f"{'are' if len(axes) > 1 else 'is'} measured to, and this pin states "
-            f"{'neither' if len(axes) > 1 else f'no {axes[0]}'}. "
-            f"Give {subject}, or drop {drop}")
+    if ranks:
+        named = " and ".join(sorted(ranks))
+        return (f"a port names a nozzle and x/y locate it, and {named} "
+                f"{'name' if len(ranks) > 1 else 'names'} a grid cell, which has "
+                f"no nozzle in it. Give x/y, or drop {drop}")
+    if axes and not set(axes) & set(stated):
+        subject = " or ".join(axes)
+        return (f"port {port_name!r} is the nozzle {subject} "
+                f"{'are' if len(axes) > 1 else 'is'} measured to, and this pin states "
+                f"{'neither' if len(axes) > 1 else f'no {axes[0]}'}. "
+                f"Give {subject}, or drop {drop}")
+    return None

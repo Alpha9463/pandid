@@ -823,39 +823,36 @@ class Unit:
             # ceremony of spelling out the only port there is. Nothing
             # else defaults: a box's corner is on the box.
             port = next(iter(self.ports)) if isinstance(self, _Boundary) else None
-        elif named_port is not None and (col is not None or row is not None):
-            # Only for a port this call *named*: the default above must
-            # leave a flag pinned to a grid cell alone rather than
-            # refusing a placement the caller wrote nothing wrong in.
-            raise ValueError(
-                f"{self.name}: pin(port=...) reads x/y as the position of a "
-                f"nozzle, and col/row name a grid cell, which has no nozzle in "
-                f"it. Give x/y, or drop port="
-            )
         # Named unconditionally, so a ``port`` this call spells wrongly
         # is refused whether or not it also gives a coordinate: the
         # complaint belongs to the call that misspelt it and not to a
         # later one that finally supplies an axis. It is also why this
-        # runs before the refusal below: ``pin(port="inlets")`` is wrong
-        # twice, and the spelling is the half worth saying.
+        # runs before the refusals below, here and in :mod:`pandid.spec`
+        # alike: ``pin(port="inlets")`` is wrong twice, and a name that
+        # is not a port at all is wrong before anything about what it
+        # measures.
         nozzle = self._pin_port(port) if port is not None else None
-        if named_port is not None and x is None and y is None:
-            # A nozzle named for no coordinate measures nothing, and was
-            # taken and thrown away: ``pin(port="inlet")`` succeeded and
-            # recorded no relation, so the Python call and the file
-            # disagreed about the one rule this whole change exists to
-            # enforce -- :mod:`pandid.spec` refused the same sentence.
-            # Worded once, in ``portgeom``, so they cannot come apart
-            # again.
+        if named_port is not None:
+            # Every remaining complaint against a named nozzle, in the
+            # order :func:`~pandid.portgeom.port_refusal` decides, which
+            # is the order the file uses too. Sharing only the wording
+            # left a pin that tripped two rules answering differently
+            # depending on which door it came through -- the same defect
+            # class this change is about, one layer up.
             #
             # ``named_port`` and not ``port``, because the flag default
             # above names a nozzle the caller did not:
             # ``feed.pin(mirrored=True)`` states no coordinate and there
             # is nothing in it to discard, so there is nothing to refuse.
-            from pandid.portgeom import unmeasured_port
+            from pandid.portgeom import port_refusal
 
-            raise ValueError(
-                f"{self.name}: {unmeasured_port(named_port, ('x', 'y'), 'port=')}")
+            complaint = port_refusal(
+                named_port, ("x", "y"),
+                {a for a, v in (("x", x), ("y", y)) if v is not None},
+                {r for r, v in (("col", col), ("row", row)) if v is not None},
+                "port")
+            if complaint is not None:
+                raise ValueError(f"{self.name}: {complaint}")
         # Which nozzle each named axis was measured to, recorded per
         # axis and not for the call: ``pin(x=..., port="inlet")``
         # followed by ``pin(y=...)`` leaves x on the nozzle and puts y

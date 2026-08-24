@@ -642,51 +642,131 @@ def test_an_absolute_coordinate_the_sheet_dropped_is_still_reported():
     assert not [m for m in said if "col=7" in m], said
 
 
-def test_the_call_and_the_file_refuse_the_same_port_that_measures_nothing():
-    """``pin(port=...)`` naming a nozzle no coordinate reaches is refused.
+_GRID_CELL = (
+    "a port names a nozzle and x/y locate it, and {ranks} a grid cell, "
+    "which has no nozzle in it. Give x/y, or drop port"
+)
+_MEASURES_NOTHING = (
+    "port 'inlet' is the nozzle x or y are measured to, and this "
+    "pin states neither. Give x or y, or drop port"
+)
 
-    It used to be accepted and thrown away: the nozzle was resolved, no
-    relation was recorded, and the pin serialised as ``{}``. The file API
-    refused the same sentence, so the two doors into a placement disagreed
-    about the very rule this change exists to enforce -- a value accepted,
-    quietly altered and shipped, one layer up from the bug being fixed.
 
-    Both doors are asked here, together, because what matters is that they
-    give the same answer; :func:`pandid.portgeom.unmeasured_port` is the one
-    sentence they both raise it with.
+@pytest.mark.parametrize(
+    "call, written, message",
+    [
+        # A nozzle and a grid cell. This is the case that trips *two* rules,
+        # and the one the two doors used to answer differently: the call
+        # asked about the grid first and the file asked whether anything was
+        # measured first, so the same pin got two verdicts.
+        (
+            dict(col=1, port="inlet"),
+            {"col": 1, "port": "inlet"},
+            _GRID_CELL.format(ranks="col names"),
+        ),
+        (
+            dict(row=2, port="inlet"),
+            {"row": 2, "port": "inlet"},
+            _GRID_CELL.format(ranks="row names"),
+        ),
+        (
+            dict(col=1, row=2, port="inlet"),
+            {"col": 1, "row": 2, "port": "inlet"},
+            _GRID_CELL.format(ranks="col and row name"),
+        ),
+        # An absolute coordinate does not rescue a rank stated beside a
+        # nozzle: the cell is still named, and naming it is the mistake.
+        (
+            dict(col=1, x=5.0, port="inlet"),
+            {"col": 1, "x": 5, "port": "inlet"},
+            _GRID_CELL.format(ranks="col names"),
+        ),
+        # A nozzle measuring nothing, with nothing else wrong.
+        (dict(port="inlet"), {"port": "inlet"}, _MEASURES_NOTHING),
+        # A transform is not a coordinate, so it does not locate a nozzle.
+        (
+            dict(orientation=90, port="inlet"),
+            {"orientation": 90, "port": "inlet"},
+            _MEASURES_NOTHING,
+        ),
+    ],
+    ids=["col", "row", "col+row", "col+x", "bare", "transform"],
+)
+def test_the_call_and_the_file_refuse_a_port_in_the_same_words(call, written, message):
+    """Both doors into a placement, asked the same question, to the byte.
+
+    ``pin(port="inlet")`` used to be accepted and thrown away -- the nozzle
+    resolved, no relation recorded, the pin serialised as ``{}`` -- while the
+    file refused it. Sharing the wording fixed that and left a second half
+    behind: a pin tripping *two* rules still got a different answer depending
+    on which door it came through, because each door asked the rules in its
+    own order. :func:`pandid.portgeom.port_refusal` now owns the order as
+    well as the words, so there is nothing left for the two to disagree
+    about.
+
+    The whole message is asserted and not a substring of it, because a
+    substring is exactly what hid this: both doors said "states neither"
+    where one of them should have been talking about the grid at all.
     """
     from pandid.spec import SpecError
 
     fs, valve = _valve_on_a_run()
-    with pytest.raises(ValueError, match="states neither"):
-        valve.pin(port="inlet")
-    # Nothing was recorded on the way out, either: a refusal that half
-    # applied would be the same defect wearing an exception.
+    with pytest.raises(ValueError) as from_call:
+        valve.pin(**call)
+    assert str(from_call.value) == f"HV-1: {message}"
+
+    with pytest.raises(SpecError) as from_file:
+        Flowsheet.from_dict(_written_valve(written))
+    assert str(from_file.value) == f"units[0] 'HV-1'.pin.port: {message}"
+
+
+def test_a_refused_port_leaves_no_half_applied_placement():
+    """A refusal that half landed would be this defect wearing an exception."""
     from pandid.portgeom import pin_intent
 
+    fs, valve = _valve_on_a_run()
+    with pytest.raises(ValueError):
+        valve.pin(port="inlet")
     assert pin_intent(valve) == {}
-
-    with pytest.raises(SpecError, match="states neither"):
-        Flowsheet.from_dict(_written_valve({"port": "inlet"}))
+    assert valve.pin_ is None
 
 
-def test_a_port_stated_with_a_transform_is_refused_and_a_flag_is_not():
-    """The refusal is for a nozzle the *caller* named and measured nothing to.
+def test_both_doors_name_the_misspelling_before_anything_it_measures():
+    """A name that is not a port at all is wrong before what it locates.
 
-    ``pin(port="inlet", orientation=90)`` states a transform and no
-    coordinate, so the nozzle it names locates nothing and goes the same way.
-    A boundary flag is the exception that has to keep working: its single
-    nozzle is filled in for the caller, so ``feed.pin(mirrored=True)`` names
-    no port at all and there is nothing in it to discard.
+    Ordering again, and the half no shared sentence covers: a nozzle that
+    does not exist is refused by both doors even when the pin is also wrong
+    about the grid, so neither door answers a spelling mistake by complaining
+    about a coordinate. The wording differs -- the file's carries the key
+    path and a suggestion, as every ``_find_port`` failure does -- but the
+    verdict does not.
+    """
+    from pandid.spec import SpecError
+
+    fs, valve = _valve_on_a_run()
+    for call in (dict(port="inlets"), dict(col=1, port="inlets"), dict(y=RUN_Y, port="inlets")):
+        with pytest.raises(KeyError, match="no port 'inlets'"):
+            valve.pin(**call)
+    for written in ({"port": "inlets"}, {"col": 1, "port": "inlets"}, {"y": 440, "port": "inlets"}):
+        with pytest.raises(SpecError, match="has no port 'inlets'"):
+            Flowsheet.from_dict(_written_valve(written))
+
+
+def test_a_flag_that_named_no_port_is_not_refused():
+    """The exception the refusal must leave alone.
+
+    A boundary flag's single nozzle is filled in for the caller, so
+    ``feed.pin(mirrored=True)`` names no port at all and there is nothing in
+    it to discard -- and a flag pinned to a grid cell is likewise not the
+    author writing a nozzle onto one.
     """
     fs, valve = _valve_on_a_run()
-    with pytest.raises(ValueError, match="states neither"):
-        valve.pin(port="inlet", orientation=90)
-
     feed = next(u for u in fs.units if u.name == "F")
     feed.pin(mirrored=True)
     feed.pin(orientation=90)
     assert feed.pin_ is not None and feed.pin_.mirrored
+    feed.pin(col=2, row=1)
+    assert feed.pin_ is not None and (feed.pin_.col, feed.pin_.row) == (2, 1)
 
 
 def _written_valve(pin):
@@ -706,15 +786,38 @@ def _written_valve(pin):
 
 
 @pytest.mark.parametrize(
-    "port, why, path",
+    "port, said",
     [
-        ({"orientation": 90, "port": "inlet"}, "states neither", ".pin.port"),
-        ({"y": 440, "port": {"x": "inlet"}}, "states no x", ".pin.port.x"),
-        ({"y": 440, "port": {}}, "names no axis", ".pin.port"),
-        ({"y": 440, "port": 5}, "names the nozzle", ".pin.port"),
+        ({"orientation": 90, "port": "inlet"}, "units[0] 'HV-1'.pin.port: " + _MEASURES_NOTHING),
+        # The axis-by-axis mapping, which has no ``pin()`` counterpart: only a
+        # key can say which axis it went wrong on, and the path and the ``drop``
+        # both name that key.
+        (
+            {"y": 440, "port": {"x": "inlet"}},
+            "units[0] 'HV-1'.pin.port.x: port 'inlet' is the nozzle x is measured "
+            "to, and this pin states no x. Give x, or drop port.x",
+        ),
+        # ...and the mapping form answers about the grid first too, once,
+        # against the whole key -- no one axis of it is what makes a cell and a
+        # nozzle disagree.
+        (
+            {"col": 1, "port": {"x": "inlet"}},
+            "units[0] 'HV-1'.pin.port: " + _GRID_CELL.format(ranks="col names"),
+        ),
+        (
+            {"y": 440, "port": {}},
+            "units[0] 'HV-1'.pin.port names no axis; give port: {x: ...} or drop port",
+        ),
+        (
+            {"y": 440, "port": 5},
+            "units[0] 'HV-1'.pin.port names the nozzle a coordinate was measured to: "
+            "either one name for every coordinate this pin states (port: inlet) or "
+            "one per axis (port: {y: inlet}), got int: 5",
+        ),
     ],
+    ids=["no-coordinate", "axis-not-stated", "axis-on-a-grid", "empty", "not-a-name"],
 )
-def test_a_written_port_that_measures_nothing_is_refused(port, why, path):
+def test_a_written_port_that_measures_nothing_is_refused(port, said):
     """The parser this change added must not drop input either.
 
     A nozzle named for an axis the pin does not state is the author saying
@@ -722,16 +825,15 @@ def test_a_written_port_that_measures_nothing_is_refused(port, why, path):
     same defect one layer down, so it raises against the key that says it
     rather than being quietly reinterpreted.
 
-    The path is asserted with the sentence because the path is the whole of
-    what the file adds: a key can say which axis went wrong and a keyword
-    argument cannot, which is why these two refusals are worded in one place
-    and located in two.
+    Whole messages, path included: the path is what the file adds over the
+    call, and asserting a substring of the sentence is how a wrong verdict
+    went unnoticed the last time these were checked.
     """
     from pandid.spec import SpecError
 
-    with pytest.raises(SpecError, match=why) as raised:
+    with pytest.raises(SpecError) as raised:
         Flowsheet.from_dict(_written_valve(port))
-    assert str(raised.value).startswith(f"units[0] 'HV-1'{path}"), raised.value
+    assert str(raised.value) == said
 
 
 def test_a_placement_the_sheet_honoured_is_not_reported():

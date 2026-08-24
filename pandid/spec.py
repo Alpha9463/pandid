@@ -104,7 +104,7 @@ from pandid.flowsheet import (
     Flowsheet,
 )
 from pandid.loops import Loop
-from pandid.portgeom import pin_intent, unmeasured_port
+from pandid.portgeom import pin_intent, port_refusal
 from pandid.ports import Port
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
@@ -803,14 +803,10 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
         kwargs["orientation"] = data["orientation"]
     if "mirrored" in data:
         kwargs["mirrored"] = data["mirrored"]
-    ports = _read_pin_ports(data.get("port"), {a for a in ("x", "y") if a in kwargs},
+    ports = _read_pin_ports(unit, data.get("port"),
+                            {a for a in ("x", "y") if a in kwargs},
+                            {r for r in ("col", "row") if r in kwargs},
                             f"{where}.port")
-    for axis, name in ports.items():
-        # Through the same door ``port_faces`` uses, so a nozzle a
-        # pooled connection mints is found and a misspelt one is named
-        # against the key that misspelt it rather than raising a
-        # ``KeyError`` out of ``pin()``.
-        _find_port(unit, name, f"{where}.port.{axis}")
     try:
         # Split by what each coordinate was measured to, because that is
         # what ``pin()`` takes: one call per nozzle, and one for the
@@ -831,7 +827,8 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
         raise _fail_from(e, where) from None
 
 
-def _read_pin_ports(entry: Any, stated: set[str], where: str) -> dict[str, str]:
+def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
+                    where: str) -> dict[str, str]:
     """``port:`` on a written pin, as ``{axis: nozzle}``.
 
     Two spellings, because the ordinary pin measures both coordinates to
@@ -843,18 +840,19 @@ def _read_pin_ports(entry: Any, stated: set[str], where: str) -> dict[str, str]:
     *different* nozzle per axis is not a contradiction and is written
     exactly that way: two calls measured two coordinates to two things.
 
-    ``stated`` is the axes this pin actually gives a coordinate for, and
-    every rule below is the same rule: **a port that measures nothing is
-    refused rather than dropped.** A nozzle named for an axis the pin
-    does not state is the author saying where something goes and the
-    reader silently not putting it there, which is the defect this whole
-    change is about -- so it raises here, against the key that says it.
+    Only the *shape* of the key is judged here. Which nozzle names are
+    refused, and **in what order**, is
+    :func:`~pandid.portgeom.port_refusal`'s, which is what
+    :meth:`pandid.units.Unit.pin` asks as well: sharing the sentence and
+    not the precedence left a pin tripping two rules answered one way by
+    the call and another by the file, which is this change's own subject
+    one layer up. So the nozzle is resolved first, then the rules are
+    asked in that one order, at both doors.
 
-    The sentence is :func:`~pandid.portgeom.unmeasured_port`'s, which is
-    also what :meth:`pandid.units.Unit.pin` refuses the same shape with.
-    Only the *path* is this module's: a key can say which axis it went
-    wrong on and a keyword argument cannot, and that is the whole of the
-    difference between the two doors.
+    What stays this module's is the *path*: a key can say which axis it
+    went wrong on and a keyword argument cannot, and ``stated`` /
+    ``ranks`` are how this door tells the shared rules what the rest of
+    the pin says.
     """
     key = where.rsplit(".", 1)[-1]
     if entry is None:
@@ -865,20 +863,34 @@ def _read_pin_ports(entry: Any, stated: set[str], where: str) -> dict[str, str]:
             f"name for every coordinate this pin states (port: inlet) or one per "
             f"axis (port: {{y: inlet}}), got {type(entry).__name__}: {entry!r}"
         )
+    # ``_find_port`` through the same door ``port_faces`` uses, so a
+    # nozzle a pooled connection mints is found and a misspelt one is
+    # named against the key that misspelt it rather than raising a
+    # ``KeyError`` out of ``pin()``.
     if isinstance(entry, str):
-        if not stated:
-            raise SpecError(f"{where}: {unmeasured_port(entry, ('x', 'y'), key)}")
+        _find_port(unit, entry, where)
+        _refuse_port(port_refusal(entry, ("x", "y"), stated, ranks, key), where)
         return dict.fromkeys(sorted(stated), entry)
     axes = _mapping(entry, where)
     _check_keys(axes, {"x", "y"}, where)
     if not axes:
         raise SpecError(f"{where} names no axis; give port: {{x: ...}} or drop port")
-    for axis, name in axes.items():
-        if axis not in stated:
-            raise SpecError(f"{where}.{axis}: "
-                            + unmeasured_port(_text(name, f"{where}.{axis}"),
-                                              (axis,), f"{key}.{axis}"))
-    return {axis: _text(name, f"{where}.{axis}") for axis, name in axes.items()}
+    named = {axis: _text(name, f"{where}.{axis}") for axis, name in sorted(axes.items())}
+    for axis, name in named.items():
+        _find_port(unit, name, f"{where}.{axis}")
+    # The pin's own grid first and once, against the whole key, since no
+    # one axis of the mapping is what makes a cell and a nozzle disagree.
+    _refuse_port(port_refusal(None, (), stated, ranks, key), where)
+    for axis, name in named.items():
+        _refuse_port(port_refusal(name, (axis,), stated, ranks, f"{key}.{axis}"),
+                     f"{where}.{axis}")
+    return named
+
+
+def _refuse_port(complaint: str | None, where: str) -> None:
+    """Raise :func:`~pandid.portgeom.port_refusal`'s answer at ``where``."""
+    if complaint is not None:
+        raise SpecError(f"{where}: {complaint}")
 
 
 def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
