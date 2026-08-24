@@ -186,10 +186,9 @@ from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
 from pandid.portgeom import _xform, port_point, symbol_to_box, unit_box
-# ISO 10628-1 5.3.1 c)'s in-line detail band, half the outline weight
-# below: imported rather than repeated, since the sheet draws a part and
-# its body at exactly that ratio and an export at another one is a second
-# drawing.
+# ISO 10628-1 5.3.1 c)'s in-line detail band: imported rather than
+# repeated, since the sheet draws a part and its body at exactly that
+# ratio and an export at another one is a second drawing.
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
@@ -197,14 +196,15 @@ from pandid.render import svg as _svg
 from pandid.render.escape import escaped, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _FIT_CODES, _furniture_name,
                                _LEADER_HEAD, _scale_text, _Sheet, _too_small,
-                               _SIGNAL_DASH, _PROCESS_STROKE,
-                               _SIGNAL_STROKE, _TAP_DASH, fit_issue, HOP_R,
+                               _SIGNAL_DASH, _stream_rung, _TAP_DASH,
+                               fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag,
                                draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, fail_marking, wears_arrowhead)
+from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -243,50 +243,24 @@ _PAPER = "#ffffff"
 #: back to the default vertex and draws a plain rectangle.
 _NO_STROKE = "none"
 
-#: The pen the sheet rules a **symbol's outline** with.
-#:
-#: It has to be stated: every one of the 319 vendored stencils declares
-#: ``strokewidth="inherit"``, which puts the pen in the cell's style
-#: rather than in the stencil's own coordinate space, so a cell that
-#: says nothing draws at draw.io's default 1 against pipes emitted at
-#: the sheet's 2.
-#:
-#: Two is the sheet's own answer, in two places. Every hand-drawn symbol
-#: in :mod:`pandid.render.symbols` says ``stroke-width="2"`` on its
-#: outline, and ``scripts/vendor_symbols.py`` compensates each converted
-#: stencil for the scale its artwork is drawn at, ``stroke_width = 2.0 /
-#: sqrt(sx * sy)``, so a gate valve's ``8.0`` inside a ``scale(0.25)``
-#: group is that same 2 on the paper. Neither is a constant to import --
-#: one is a literal in a hundred SVG fragments, the other is in a
-#: generator outside the installed package -- so
-#: ``tests/test_drawio.py`` measures it back off the rendered sheet.
-#:
-#: For a :class:`~.symbols.Symbol` whose :attr:`~.symbols.Symbol.trim`
-#: is unset: equipment and machinery, and the frames and connections
-#: beside them, per ISO 10628-1 §5.3.1 b).
-#:
-#: Two standards disagree about this pen, and this library picks one.
-#: ISO 15519-1:2010 §6.2 Table 1 gives the *general* process-industry
-#: diagram 0,1 M for every symbol and 0,2 M for connections, a bare
-#: symbol/connection split with the symbol the lighter of the two. ISO
-#: 10628-1 §1 names itself a collective application standard *of* 15519
-#: -- the specific rule for this industry's flow diagrams and P&IDs,
-#: exactly what this library draws -- and its own §5.3.1 splits
-#: symbols themselves in two: equipment at 0,2 M, valves, fittings,
-#: piping accessories and PCE symbols at half that, 0,1 M
-#: (:data:`_TRIM_STROKE`). Where the specific standard states its own
-#: rule for the document this library draws, that is the rule followed;
-#: 15519-1's flat single symbol weight is not.
-_EQUIPMENT_STROKE = 2.0
-
-#: The pen §5.3.1 c) rules instead: valves, fittings, piping
-#: accessories and PCE (instrument) symbols, at half
-#: :data:`_EQUIPMENT_STROKE` -- which happens to equal
-#: :data:`~pandid.render.svg._SIGNAL_STROKE`, the weight this library
-#: already draws a control or data line at, since 15519-1 puts both at
-#: its own 0,1 M. Not imported from there for it, since the two answer
-#: to different clauses that could in principle part company.
-_TRIM_STROKE = 1.0
+# --- line weights -----------------------------------------------------
+# Every width below comes off :class:`~.weights.LineWeight`, the same
+# ladder the sheet is drawn from, so the two backends cannot disagree
+# about a rung. Until #490 this file held its own copies of two of them
+# with a note saying both had to be edited together; a ladder they both
+# read is the version of that note a machine can keep.
+#
+# A pen has to be *stated* on every cell here, which is the one thing
+# this backend has to say that the sheet does not: all 319 vendored
+# stencils declare ``strokewidth="inherit"``, putting the pen in the
+# cell's style rather than in the stencil's own coordinate space, so a
+# cell that says nothing draws at draw.io's default 1 whatever rung the
+# element is on.
+#
+# And every one of them goes through ``fit.length``. A width is a
+# drawing dimension like any other, so on a sheet fitted to a fixed page
+# it scales with the drawing; stating one flat draws it out of
+# proportion with the lines beside it.
 
 #: The ink a *line* is drawn in, which is not quite the ink a symbol is
 #: drawn in: the SVG renderer strokes a stream ``black`` and a converted
@@ -687,8 +661,8 @@ class _Approximation(NamedTuple):
     sheet's stencil ink: a pipe tee is *pipe*, drawn black at the
     pipeline's weight, and drawing it at a stencil's ``#111`` hairline
     put a visibly lighter, thinner rule across every junction on the
-    sheet. ``weight`` defaults to :data:`_EQUIPMENT_STROKE` and is
-    stated as :data:`_TRIM_STROKE` on every entry whose
+    sheet. ``weight`` defaults to :attr:`~.weights.LineWeight.EQUIPMENT`
+    and is stated as :attr:`~.weights.LineWeight.DETAIL` on every entry whose
     :class:`~.symbols.Symbol` carries :attr:`~.symbols.Symbol.trim` --
     a balloon and the two in-line mixers this table stands in for --
     rather than read off ``sym`` here: the two must already agree, since
@@ -710,7 +684,7 @@ class _Approximation(NamedTuple):
     flip_h: bool = False
     fill: str = _NO_FILL
     stroke: str = _INK
-    weight: float = _EQUIPMENT_STROKE
+    weight: float = LineWeight.EQUIPMENT.width
     keys: tuple = ()
     inscribed: "str | None" = None
     pieces: "tuple[_Piece, ...]" = ()
@@ -778,36 +752,36 @@ _BALLOON_FILL = "#ffffff"
 
 _APPROXIMATIONS = {
     # ISA balloons -----------------------------------------------
-    # Every balloon carries weight=_TRIM_STROKE: a PCE symbol is ISO
+    # Every balloon carries the DETAIL rung: a PCE symbol is ISO
     # 10628-1 §5.3.1 c), never b), whichever built-in stands in for it.
     ("instrument", "default"): _Approximation(
         # A circle is a circle: nothing lost.
-        "ellipse", "", fill=_BALLOON_FILL, weight=_TRIM_STROKE),
+        "ellipse", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     ("instrument", "panel"): _Approximation(
         "ellipse", "the bar across the balloon that puts the instrument in a panel",
-        fill=_BALLOON_FILL, weight=_TRIM_STROKE),
+        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     ("instrument", "aux"): _Approximation(
         "ellipse", "the double bar that puts the instrument in an auxiliary panel",
-        fill=_BALLOON_FILL, weight=_TRIM_STROKE),
+        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     ("instrument", "shared"): _Approximation(
         "ellipse", "the square around the balloon that puts the function in a "
                    "shared display, and the bar that puts it in the control room",
-        fill=_BALLOON_FILL, weight=_TRIM_STROKE),
+        fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     ("instrument", "computer"): _Approximation(
         # The computer hexagon, drawn as one.
-        "hexagon", "", fill=_BALLOON_FILL, weight=_TRIM_STROKE),
+        "hexagon", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     # A square with a diamond inscribed in it, which is two outlines and
     # so two cells. Nothing lost, so nothing listed. `logic` is the same
     # Symbol under its second name (pandid.render.symbols registers one
     # object twice), so the two entries have to say the same thing or
     # the two spellings would draw differently.
     ("instrument", "sis"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=_TRIM_STROKE),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=LineWeight.DETAIL.width),
     ("instrument", "logic"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=_TRIM_STROKE),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=LineWeight.DETAIL.width),
     ("instrument", "interlock"): _Approximation(
         # A bare diamond, drawn as one.
-        "rhombus", "", fill=_BALLOON_FILL, weight=_TRIM_STROKE),
+        "rhombus", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     # junctions and boundaries -----------------------------------
     # A mixer is a triangle pointing the way the streams combine,
     # which is draw.io's own triangle; a splitter is that triangle
@@ -1035,9 +1009,9 @@ _APPROXIMATIONS = {
     # the box and the "N" element or elements drawn inside it.
     ("fitting", "rotary_mixer"): _Approximation(
         None, "the box, its flow axis and the two mixing elements in it",
-        weight=_TRIM_STROKE),
+        weight=LineWeight.DETAIL.width),
     ("fitting", "mixing_path"): _Approximation(
-        None, "the box and the three mixing elements in it", weight=_TRIM_STROKE),
+        None, "the box and the three mixing elements in it", weight=LineWeight.DETAIL.width),
     # ISO 10628-2 item 24.15 (2181), the steam trap. draw.io has a shape
     # called "Steam Trap" and it is an empty rectangle byte-identical to
     # the same file's "Desuper Heater", so there is no stencil to name
@@ -1068,7 +1042,7 @@ _APPROXIMATIONS = {
         # the drawn body fills white, and so do the two in-line mixers'
         # boxes, and neither is exported opaque. See
         # ``test_only_the_balloons_are_drawn_opaque``.
-        weight=_TRIM_STROKE,
+        weight=LineWeight.DETAIL.width,
         pieces=(
             _Piece("line", 0.0, 0.0, TRAP_LEAD / TRAP_W, 1.0),
             _Piece("ellipse", TRAP_LEAD / TRAP_W, 0.0, TRAP_BODY_D / TRAP_W, 1.0),
@@ -1871,7 +1845,7 @@ class DrawioRenderer:
         other end.
         """
         weight = (f"strokeWidth="
-                  f"{fit.length(_TRIM_STROKE if sym.trim else _EQUIPMENT_STROKE):g}")
+                  f"{fit.length(_svg._class_weight(sym).width):g}")
         if u.kind in ("feed", "product"):
             return self._flag_shape(u, fit)
         # A composition names no stencil of its own -- that is what stops
@@ -1893,7 +1867,7 @@ class DrawioRenderer:
             # is a stencil saying "take the pen from the cell" -- and
             # the cell said nothing, so draw.io's default 1 drew every
             # symbol lighter than the pipes around it. See
-            # :data:`_EQUIPMENT_STROKE`.
+            # :func:`pandid.render.svg._class_weight`.
             keys = [f"shape={stencil}", "outlineConnect=0",
                     f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
                     weight]
@@ -1964,12 +1938,14 @@ class DrawioRenderer:
                 # The pennant is a symbol outline and is ruled like one,
                 # and like one it scales with the drawing. It was stated
                 # flat here, which on a paged sheet drew the flag
-                # heavier than the pipe running into it. Equipment
-                # weight and not trim: a Feed or a Product is a boundary
-                # marker on the flow line itself (ISO 10628-1 §5.3.3.2's
-                # in/outgoing-flow arrow), not one of §5.3.1 c)'s
-                # classes, so it stays at the pipe's own weight.
-                f"strokeWidth={fit.length(_EQUIPMENT_STROKE):g}"]
+                # heavier than the pipe running into it. The §5.3.1 b)
+                # rung and not c): a Feed or a Product is a boundary
+                # marker on the flow line (ISO 10628-1 §5.3.3.2's
+                # in/outgoing-flow arrow) and a graphical symbol on the
+                # sheet, not one of §5.3.1 c)'s classes. It is no longer
+                # the pipe's own rung, which is what it used to be read
+                # as; ``SvgRenderer._draw_boundary`` states the same one.
+                f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
 
     def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
         """A unit's label text, the style keys that place it, and how
@@ -2538,18 +2514,17 @@ class DrawioRenderer:
                 "edgeStyle=none", "rounded=0", "orthogonalLoop=1", "jettySize=auto",
                 *self._ends((ex, ey), (tx, ty)),
                 f"strokeColor={s.color or _LINE_INK}",
-                # A signal is drawn at half the weight of the pipe it
-                # reads, and the pair is the sheet's whole line-weight
-                # vocabulary; see the note on _PROCESS_STROKE in
-                # pandid.render.svg.
-                f"strokeWidth={fit.length(_SIGNAL_STROKE if signal else _PROCESS_STROKE):g}",
+                # ISO 10628-1 §5.3.1 a) for a material run and c) for a
+                # control or data line, the same two rungs
+                # ``SvgRenderer._draw_streams`` picks between.
+                f"strokeWidth={fit.length(_stream_rung(signal).width):g}",
             ]
             # The semicircle this run hops the runs it crosses with,
             # where the direction selects it. Sized off the edge's own
             # pen, since draw.io's jumpSize is stated net of it; see
             # :func:`_jump_size`.
             if n in hops:
-                weight = fit.length(_SIGNAL_STROKE if signal else _PROCESS_STROKE)
+                weight = fit.length(_stream_rung(signal).width)
                 keys += [f"jumpStyle={_JUMP_STYLE}",
                          f"jumpSize={_jump_size(fit.length(HOP_R), weight)}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
@@ -2697,9 +2672,9 @@ class DrawioRenderer:
                 f"strokeColor={_LINE_INK}",
                 # ISO 15519-2 Annex A.1.02 puts an instrument connection
                 # on the 0,25 rung, alongside the signal line and half
-                # the pipeline it taps. See _SIGNAL_STROKE in
+                # the pipeline it taps. See LineWeight.DETAIL in
                 # pandid.render.svg.
-                f"strokeWidth={fit.length(_SIGNAL_STROKE):g}",
+                f"strokeWidth={fit.length(LineWeight.DETAIL.width):g}",
             ]
             if not impulse_tap(inst):
                 keys += _dash(_TAP_DASH)
@@ -2943,13 +2918,14 @@ class DrawioRenderer:
         ox, oy, ow, oh = z.outer
         rect = ("rounded=0;whiteSpace=wrap;html=1;fillColor=none;movable=1;"
                 f"strokeColor={_LINE_INK};")
-        out = _rect("z-sheet", ox, oy, ow, oh, rect + "strokeWidth=1;")
+        out = _rect("z-sheet", ox, oy, ow, oh,
+                    rect + f"strokeWidth={F.SHEET_RULE:g};")
         out += _rect("z-frame", ix, iy, iw, ih,
-                     rect + f"strokeWidth={_FRAME_STROKE:g};")
+                     rect + f"strokeWidth={F.FRAME_RULE:g};")
         for n, part in enumerate(z.parts):
             if part[0] == "rule":
                 _, x1, y1, x2, y2 = part
-                out += _segment(f"z{n}", x1, y1, x2, y2, _LINE_INK, 0.75)
+                out += _segment(f"z{n}", x1, y1, x2, y2, _LINE_INK, F.ZONE_TICK)
             else:
                 _, lx, ly, text = part
                 out += _label(f"z{n}", lx, ly, text, F.ZONE_TYPE)
@@ -3234,14 +3210,14 @@ def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
     label's colour, which ``stream_numbers`` takes from ``s.color``, so
     it is passed in, in the spelling :data:`_LINE_INK` settles on rather
     than in the SVG's ``black``. The weight is
-    :data:`~pandid.render.svg._SIGNAL_STROKE`, because §6.4 hands the
+    :attr:`~pandid.render.weights.LineWeight.DETAIL`, because §6.4 hands the
     leader itself to ISO 128-22 where it is a narrow line.
     """
     (ax, ay), (bx, by) = number.leader
     style = (f"edgeStyle=none;rounded=0;html=1;startArrow=none;endArrow=block;"
              f"endFill=1;endSize={fit.length(_LEADER_HEAD):g};"
              f"strokeColor={ink};"
-             f"strokeWidth={fit.length(_SIGNAL_STROKE):g};movable=1;{_NO_HOP}")
+             f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};movable=1;{_NO_HOP}")
     x0, y0 = fit.at(ax, ay)
     x1, y1 = fit.at(bx, by)
     return [
@@ -3349,7 +3325,7 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
         horiz = mark.horizontal
         angle = _HATCH_ANGLE if horiz else _HATCH_ANGLE + 90.0
         style = (f"shape=line;rotation={angle:g};strokeColor={ink};"
-                 f"strokeWidth={fit.length(_SIGNAL_STROKE):g};fillColor={_NO_FILL};html=1;"
+                 f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};fillColor={_NO_FILL};html=1;"
                  "resizable=0;movable=1;")
         for k, off in enumerate(_svg.HATCH_ALONG):
             step = fit.length(off)
@@ -3412,8 +3388,10 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
         # The bar is drawn *across* the run, and `line` strokes its
         # box's horizontal centreline, so the box turns a further
         # quarter.
+        # ISO 10628-1 §5.3.1 c), and §5.3.2 for why; see the same
+        # pair in ``SvgRenderer._draw_streams``.
         style = (f"shape=line;rotation={mark.angle + 90.0:g};strokeColor={ink};"
-                 f"strokeWidth={fit.length(_PROCESS_STROKE):g};fillColor={_NO_FILL};"
+                 f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};fillColor={_NO_FILL};"
                  "html=1;resizable=0;movable=1;")
         rad = math.radians(mark.angle)
         for k, sign in enumerate((-1, 1)):
@@ -3572,14 +3550,14 @@ def _line_box(size: float) -> float:
 _ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4;",
               "c": "align=center;"}
 
-#: The weight the drawing frame is ruled at.
-#:
-#: mxGraph strokes a rectangle on its path, so this lays one unit of ink
-#: *inside* the rectangle the title strip docks to. The strip is the
-#: sheet's own rectangle and the sheet docks it flush, setting its
-#: bottom band's value on a baseline five units above its own edge, so
-#: the clearance is in the layout where it belongs.
-_FRAME_STROKE = 2.0
+# The weight the drawing frame is ruled at is
+# :data:`pandid.render.furniture.FRAME_RULE`, stated there with the
+# other two weights of the border and read by both backends. mxGraph
+# strokes a rectangle on its path, so it lays one unit of ink *inside*
+# the rectangle the title strip docks to. The strip is the sheet's own
+# rectangle and the sheet docks it flush, setting its bottom band's
+# value on a baseline five units above its own edge, so the clearance is
+# in the layout where it belongs.
 
 #: How far into its line box a baseline falls, as a fraction of the font
 #: size.
@@ -4151,7 +4129,8 @@ def _rev_table(cid: str, grid) -> list[str]:
                  keys=f"rowLines=0;strokeWidth={F._STRIP_HAIRLINE:g};",
                  col_keys=["align=left;spacingLeft=3;"] * len(headings))
     return out + _segment(f"{cid}-rule", grid.x, grid.header_y,
-                          grid.x + grid.w, grid.header_y, _LINE_INK, 1)
+                          grid.x + grid.w, grid.header_y, _LINE_INK,
+                          F._BOX_UNDERLINE)
 
 
 def _strip_size(block) -> "tuple[float, float]":

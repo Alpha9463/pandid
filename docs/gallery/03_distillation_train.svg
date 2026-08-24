@@ -516,31 +516,31 @@
     <use href="#sym_valve" x="590" y="840" width="24.5" height="15.0" transform="translate(1204.5, 0) scale(-1, 1)" />
   </g>
   <g id="streams">
-    <path d="M 210.0,515.0 L 290.0,515.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 340.0,525.0 L 410.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 434.5,525.0 L 520.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 580.0,525.0 L 690.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 740.0,420.0 L 740.0,290.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 740.0,230.0 L 740.0,205.0 L 940.0,205.0 L 940.0,315.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1008.1967213114755,357.0 L 1008.1967213114755,409.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1008.1967213114755,421.0 L 1008.1967213114755,455.0 L 790.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1014.1967213114755,415.0 L 1070.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 740.0,620.0 L 740.0,714.0 L 890.0655737704918,714.0 L 890.0655737704918,685.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 913.9344262295082,645.0 L 913.9344262295082,595.0 L 790.0,595.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 941.4754098360656,685.0 L 941.4754098360656,730.0 L 1010.0,730.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1080.0,710.0 L 1235.0,710.0 L 1235.0,525.0 L 1260.0,525.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1310.0,420.0 L 1310.0,290.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1310.0,230.0 L 1310.0,205.0 L 1510.0,205.0 L 1510.0,315.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1578.1967213114754,357.0 L 1578.1967213114754,409.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1578.1967213114754,421.0 L 1578.1967213114754,455.0 L 1360.0,455.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1584.1967213114754,415.0 L 1640.0,415.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1310.0,620.0 L 1310.0,714.0 L 1460.0655737704917,714.0 L 1460.0655737704917,685.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1483.9344262295083,645.0 L 1483.9344262295083,595.0 L 1360.0,595.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1511.4754098360656,685.0 L 1511.4754098360656,730.0 L 1580.0,730.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1650.0,710.0 L 1685.0,710.0 L 1685.0,630.0 L 1710.0,630.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1760.0,620.0 L 1830.0,620.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1760.0,640.0 L 1785.0,640.0 L 1785.0,847.5 L 614.5,847.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 590.0,847.5 L 265.0,847.5 L 265.0,535.0 L 290.0,535.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 210.0,515.0 L 290.0,515.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 340.0,525.0 L 410.0,525.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 434.5,525.0 L 520.0,525.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 580.0,525.0 L 690.0,525.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 740.0,420.0 L 740.0,290.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 740.0,230.0 L 740.0,205.0 L 940.0,205.0 L 940.0,315.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1008.1967213114755,357.0 L 1008.1967213114755,409.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1008.1967213114755,421.0 L 1008.1967213114755,455.0 L 790.0,455.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1014.1967213114755,415.0 L 1070.0,415.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 740.0,620.0 L 740.0,714.0 L 890.0655737704918,714.0 L 890.0655737704918,685.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 913.9344262295082,645.0 L 913.9344262295082,595.0 L 790.0,595.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 941.4754098360656,685.0 L 941.4754098360656,730.0 L 1010.0,730.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1080.0,710.0 L 1235.0,710.0 L 1235.0,525.0 L 1260.0,525.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1310.0,420.0 L 1310.0,290.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1310.0,230.0 L 1310.0,205.0 L 1510.0,205.0 L 1510.0,315.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1578.1967213114754,357.0 L 1578.1967213114754,409.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1578.1967213114754,421.0 L 1578.1967213114754,455.0 L 1360.0,455.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1584.1967213114754,415.0 L 1640.0,415.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1310.0,620.0 L 1310.0,714.0 L 1460.0655737704917,714.0 L 1460.0655737704917,685.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1483.9344262295083,645.0 L 1483.9344262295083,595.0 L 1360.0,595.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1511.4754098360656,685.0 L 1511.4754098360656,730.0 L 1580.0,730.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1650.0,710.0 L 1685.0,710.0 L 1685.0,630.0 L 1710.0,630.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1760.0,620.0 L 1830.0,620.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1760.0,640.0 L 1785.0,640.0 L 1785.0,847.5 L 614.5,847.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 590.0,847.5 L 265.0,847.5 L 265.0,535.0 L 290.0,535.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <rect x="240.8" y="508.5" width="18.4" height="13.0" fill="white" />
     <text x="250.0" y="515.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="365.8" y="518.5" width="18.4" height="13.0" fill="white" />

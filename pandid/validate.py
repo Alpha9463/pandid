@@ -1469,7 +1469,89 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"That is corner arithmetic rather than a step: pin the nozzle, "
                 f"{dev.name}.pin(port={port!r}, y={target:g})"))
 
+    # Soft: two runs drawn side by side with less paper between them
+    # than ISO 10628-1 5.3.2 leaves. The clause floors the gap at twice
+    # the wider of the two lines and never under 1 mm, which in drawing
+    # units -- one unit is 0,25 mm, see pandid.render.weights.M -- is
+    # ``max(2 * wider, 4)``.
+    #
+    # Measured edge to edge and only where the two actually run beside
+    # each other: parallel, on the same axis, and overlapping in
+    # projection. Two runs that merely lie on nearby lines without ever
+    # being side by side are not a pair a reader can confuse.
+    #
+    # This became reportable when #490 widened a main flow line to the
+    # 0,4 M the standard asks: at 0,2 M the same routes cleared the
+    # floor and none of them fired. The routes have not moved -- the
+    # pens either side of them have -- so the finding is about spacing
+    # the runs, and the systemic answer (the router's own separation is
+    # 6 units and is derived from nothing) is #498. Reported rather than
+    # silently drawn, because a sheet that no longer conforms should say
+    # so on the sheet that fails rather than in an issue.
+    warnings.extend(_crowded_lines(fs))
+
     return errors + warnings
+
+
+def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
+    """ISO 10628-1 5.3.2, over every pair of parallel runs on the sheet."""
+    from pandid.render.svg import stream_polyline, _stream_rung
+    from pandid.render.weights import M
+    from pandid.streams import SIGNAL_KINDS
+
+    unit_mm = 2.5 / M           # one drawing unit as a physical width
+    floor_mm = 1.0              # the clause's absolute minimum
+
+    segments = []
+    # A stream with an unplaced end has no drawn path, so there is no
+    # line to measure a clearance against -- the same guard the rest of
+    # ``geometry_issues`` applies before it reads a route.
+    for s in fs.streams:
+        if s.source.owner.frame is None or s.dest.owner.frame is None:
+            continue
+        w = _stream_rung(s.kind in SIGNAL_KINDS).width
+        points = stream_polyline(s)
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if y1 == y2 and x1 != x2:
+                segments.append((s, "h", min(x1, x2), max(x1, x2), y1, w))
+            elif x1 == x2 and y1 != y2:
+                segments.append((s, "v", min(y1, y2), max(y1, y2), x1, w))
+
+    seen: dict = {}
+    for i, (sa, axis, a_lo, a_hi, a_at, aw) in enumerate(segments):
+        for sb, b_axis, b_lo, b_hi, b_at, bw in segments[i + 1:]:
+            if b_axis != axis or a_at == b_at:
+                continue
+            gap = abs(a_at - b_at) - aw / 2 - bw / 2
+            need = max(2 * max(aw, bw), floor_mm / unit_mm)
+            if gap >= need - 1e-9:
+                continue
+            # ...and only where they are *parallel lines* rather than two
+            # segments that happen to lie on nearby lines. The clause is
+            # about a pair a reader has to tell apart, so the two have to
+            # run together for at least as far as they would have to be
+            # apart -- which needs no constant of its own and drops the
+            # pairs that merely abut end to end. Two on the shipped
+            # corpus do exactly that, at zero overlap.
+            overlap = min(a_hi, b_hi) - max(a_lo, b_lo)
+            if overlap <= need:
+                continue
+            key = tuple(sorted((id(sa), id(sb))))
+            if key not in seen or gap < seen[key][0]:
+                seen[key] = (gap, need, sa, sb, axis, a_at, b_at)
+
+    out = []
+    for gap, need, sa, sb, axis, a_at, b_at in sorted(seen.values(), key=lambda v: v[0]):
+        a, b = sa.name or sa.kind, sb.name or sb.kind
+        where = "x" if axis == "v" else "y"
+        out.append(Issue(
+            "warning", "lines-crowded",
+            f"{a} and {b} run parallel at {where} {a_at:g} and {b_at:g}, leaving "
+            f"{gap:.1f}px ({gap * unit_mm:.2f} mm) of paper between them -- under "
+            f"the {need:.0f}px ISO 10628-1 5.3.2 asks between parallel lines, "
+            f"twice the wider of the two and never less than 1 mm. Pin one of "
+            f"them with via() to open the pair out"))
+    return out
 
 
 def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:

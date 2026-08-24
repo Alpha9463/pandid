@@ -1,8 +1,9 @@
 """Line weight, as it lands on the page rather than as it is written down.
 
-A sheet is drawn in two weights and the ratio between them is what tells a
-reader the process from the instrumentation (ISO 15519-1 §6.2; see
-``pandid.render.svg._PROCESS_STROKE``). Every check here is therefore about the
+A sheet is drawn on the three rungs of ISO 10628-1 §5.3.1 and the ratios
+between them are what tell a reader the main flow from the plant and the plant
+from the instrumentation (:class:`pandid.render.weights.LineWeight`). Every
+check here is therefore about the
 *drawn* weight: what a stroke measures after every viewport and transform
 between it and the drawing has been applied, which is not what its
 ``stroke-width`` attribute says. The one transform left out is the fit a fixed
@@ -20,8 +21,8 @@ So the invariant is stated as *the box a unit is given does not change the pen*,
 and it is checked against what the symbol library declares rather than against a
 constant: a symbol's own fine detail (a column's trays, an agitator, the
 location bar across a panel balloon) is deliberately finer than its outline, and
-a signal line is deliberately half a process line's weight. "2.0 everywhere" is
-not the invariant. "The weight it should be" is.
+a signal line is deliberately a quarter of a main flow line's weight.
+"2.0 everywhere" is not the invariant. "The weight it should be" is.
 
 And it is one weight, not a range. #235 is the half of #153 that was left: a box
 of another *shape* scales the two axes differently, and this file used to price
@@ -45,13 +46,10 @@ import pytest
 
 from pandid import Flowsheet, units
 from pandid.render.svg import (
-    _EQUIPMENT_STROKE,
-    _PROCESS_STROKE,
-    _SIGNAL_STROKE,
-    _TRIM_STROKE,
     SvgRenderer,
     _placement_scale,
 )
+from pandid.render.weights import LineWeight
 from pandid.render.symbols import default_registry
 from test_golden import SCENARIOS
 
@@ -219,7 +217,7 @@ def check_symbol_weights(fs, svg):
     so "the weight it should be" cannot be satisfied by moving the target.
 
     Every artwork is authored to one nominal weight, :data:`~pandid.render.svg
-    ._EQUIPMENT_STROKE`, whatever class it draws in on the page (#305): a
+    .weights.LineWeight.EQUIPMENT`, whatever rung it draws on (#305): a
     valve's ``8.0`` under ``scale(0.25)`` is centred on 2.0 the same as a
     vessel's bare ``2``. A trimmed symbol -- ISO 10628-1 §5.3.1 c), see
     :attr:`~pandid.render.symbols.Symbol.trim` -- is halved again once more at
@@ -238,7 +236,7 @@ def check_symbol_weights(fs, svg):
         sym = default_registry.for_unit(u)
         sym_id = renderer._sym_id(u)
         assert sym_id in by_id, f"{u.name}: nothing on the sheet uses {sym_id!r}"
-        class_factor = (_TRIM_STROKE / _EQUIPMENT_STROKE) if sym.trim else 1.0
+        class_factor = LineWeight.DETAIL.width / LineWeight.EQUIPMENT.width if sym.trim else 1.0
         expected = [w * class_factor for w in authored_pens(sym)]
         drawn = by_id[sym_id][: len(expected)]
         assert len(drawn) == len(expected), (
@@ -302,9 +300,9 @@ def test_every_symbol_declares_a_pen_centred_on_the_sheet_weight():
         # The tolerance is the generator's own rounding: it emits the divided
         # weight to three decimals, and the packed tower's 0.662 is the
         # smallest number that lands on, so a part in a thousand there.
-        assert math.isclose(pen, float(_PROCESS_STROKE), rel_tol=2e-3), (
+        assert math.isclose(pen, LineWeight.EQUIPMENT.width, rel_tol=2e-3), (
             f"{kind}/{variant}: its outline is drawn at {pen:.4g} against the "
-            f"sheet's {_PROCESS_STROKE}"
+            f"ladder's {LineWeight.EQUIPMENT.width}"
         )
         checked += 1
     assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
@@ -331,7 +329,8 @@ def test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights(name):
     """
     build, kwargs = SCENARIOS[name]
     fs = build()
-    weights = {"streams": float(_PROCESS_STROKE), "instrument_taps": float(_SIGNAL_STROKE)}
+    rungs = {LineWeight.MAIN_FLOW.width, LineWeight.DETAIL.width}
+    weights = {"streams", "instrument_taps"}
     seen = 0
     for where, lo, hi in drawn_pens(fs.to_svg(**kwargs)):
         if where not in weights:
@@ -339,9 +338,7 @@ def test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights(name):
         # A signal stream is drawn on the fine rung inside the streams group, so
         # the weights are checked as a set rather than one per group.
         assert lo == hi, f"{where}: a sheet line came out {lo:.4g} by {hi:.4g}"
-        assert lo in (float(_PROCESS_STROKE), float(_SIGNAL_STROKE)), (
-            f"{where}: drawn at {lo:.4g}, which is neither sheet weight"
-        )
+        assert lo in rungs, f"{where}: drawn at {lo:.4g}, which is on no rung of the ladder"
         seen += 1
     assert seen, f"{name} drew no stream or impulse line"
 
@@ -440,7 +437,7 @@ def test_a_uniformly_resized_valve_draws_at_the_sheet_weight_exactly(request):
     all.
 
     A valve is a trimmed symbol since #305 and draws at half that on the page,
-    :data:`~pandid.render.svg._TRIM_STROKE`, 1.0 -- a second, orthogonal
+    :attr:`~pandid.render.weights.LineWeight.DETAIL`, 1.0 -- a second, orthogonal
     halving this test holds just as exactly: the bug above was a resize
     working loose of *any* weight the symbol should have held, and checking
     against 1.0 now is what stops a regression of it from hiding behind the
@@ -457,5 +454,5 @@ def test_a_uniformly_resized_valve_draws_at_the_sheet_weight_exactly(request):
         for where, lo, hi in drawn_pens(fs.to_svg()):
             if not where.startswith("sym_valve"):
                 continue
-            assert lo == pytest.approx(float(_TRIM_STROKE), rel=1e-5)
-            assert hi == pytest.approx(float(_TRIM_STROKE), rel=1e-5)
+            assert lo == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)
+            assert hi == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)

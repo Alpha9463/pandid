@@ -52,16 +52,17 @@ from pandid.render.drawio import (
 )
 from pandid.render.svg import (
     HOP_R,
+    _class_weight,
+    _LEADER_HEAD,
     _page,
-    _PROCESS_STROKE,
-    _SIGNAL_STROKE,
     boundary_flag,
     impulse_tap,
     pneumatic_marks,
     stream_polyline,
     tap_lines,
 )
-from pandid.render.symbols import ARROWHEAD, _GROUP, Symbol, default_registry, expander
+from pandid.render.symbols import _GROUP, Symbol, default_registry, expander
+from pandid.render.weights import LineWeight
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -1200,12 +1201,19 @@ def test_an_off_page_flag_keeps_its_tag_and_its_reference():
 # ---------------------------------------------------------------------------
 
 
-def test_a_signal_line_is_dashed_and_drawn_at_half_the_weight_of_pipe(sample):
+def test_a_signal_line_is_dashed_and_drawn_a_quarter_the_weight_of_pipe(sample):
+    """ISO 10628-1 5.3.1 a) against c): a material run is 0,4 M and a control
+    or data line 0,1 M, so the export writes the two four apart and not two.
+    """
     cells = _cells(sample)
     weights = {}
     for n, s in enumerate(sample.streams):
         weights[s.kind] = _style(cells[f"s{n}"])
-    assert weights["material"]["strokeWidth"] == "2"
+    # Absolute, not computed from the same call the export makes: an
+    # expectation derived from the decision under test would hold however
+    # both of them moved. The ladder's numbers are knowable -- 0,4 M and
+    # 0,1 M against a 10-unit module -- so they are written down.
+    assert weights["material"]["strokeWidth"] == "4"
     assert weights["electric"]["strokeWidth"] == "1"
     assert weights["electric"]["dashed"] == "1"
     assert weights["electric"]["dashPattern"] == "7 4"
@@ -1909,7 +1917,6 @@ def test_the_title_strip_is_one_rectangle_flush_to_the_frame():
     anchor: the strip's own rule and the drawing frame's are coincident on the
     sheet, and every band inside it is ruled off that corner."""
     from pandid.render import furniture as F
-    from pandid.render.drawio import _FRAME_STROKE
 
     fs = _titled()
     cells = _cells(fs, page_size="A3", border="zone", check=False)
@@ -1929,7 +1936,7 @@ def test_the_title_strip_is_one_rectangle_flush_to_the_frame():
     assert float(geo.get("y")) + sh == pytest.approx(fy + fh, abs=0.01)
     # ...and the frame it is flush to is ruled at the weight the strip is, so
     # the corner of the sheet reads as one heavy line rather than two.
-    assert _style(cells["z-frame"])["strokeWidth"] == f"{_FRAME_STROKE:g}"
+    assert _style(cells["z-frame"])["strokeWidth"] == f"{F.FRAME_RULE:g}"
 
 
 def test_the_revision_history_is_still_a_grid_a_reader_can_edit():
@@ -2737,11 +2744,11 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(stem):
         # The head goes on the end that lands on the run, and nowhere else.
         assert style["endArrow"] == "block" and style["endFill"] == "1"
         assert style["startArrow"] == "none"
-        assert float(style["endSize"]) == pytest.approx(
-            fit.length(ARROWHEAD * _SIGNAL_STROKE / _PROCESS_STROKE), abs=0.01
+        assert float(style["endSize"]) == pytest.approx(fit.length(_LEADER_HEAD), abs=0.01)
+        # A reference line is ISO 10628-1 5.3.1 c), in the label's own ink.
+        assert float(style["strokeWidth"]) == pytest.approx(
+            fit.length(LineWeight.DETAIL.width), abs=0.01
         )
-        # A leader is drawn at half a pipeline's weight, in the label's own ink.
-        assert float(style["strokeWidth"]) == pytest.approx(fit.length(_SIGNAL_STROKE), abs=0.01)
 
 
 # ---------------------------------------------------------------------------
@@ -2750,22 +2757,21 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(stem):
 
 
 def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
-    """``_EQUIPMENT_STROKE`` is a copy, and this is what stops it drifting.
+    """The artwork states its own pen, and this is what holds it to the ladder.
 
-    It has to be a copy: the number is a literal inside a hundred SVG fragments
-    in `pandid.render.symbols` and a division inside `scripts/vendor_symbols.py`,
-    which is not part of the installed package. So it is held against the
-    library's own artwork instead -- `authored_pens` reads the weight each
-    symbol declares through its internal scale group, which is the weight it
-    draws at on the paper.
+    It has to state its own: the number is a literal inside a hundred SVG
+    fragments in `pandid.render.symbols` and a division inside
+    `scripts/vendor_symbols.py`, which is not part of the installed package.
+    So the library's artwork is held against the rung instead --
+    `authored_pens` reads the weight each symbol declares through its internal
+    scale group, which is the weight it draws at on the paper.
 
-    Every artwork is authored to this one nominal weight regardless of class
-    (#305): a trimmed symbol's own halving to ``_TRIM_STROKE`` is a render-time
-    division on top of it (:func:`pandid.render.drawio._shape`), not a second
-    number the artwork itself declares, so what is checked here does not
+    Every artwork is authored to the EQUIPMENT rung regardless of the class it
+    is placed in (#305): a trimmed symbol's own division to DETAIL is a
+    render-time one on top of it (:func:`pandid.render.drawio._shape`), not a
+    second number the artwork itself declares, so what is checked here does not
     change with :attr:`~pandid.render.symbols.Symbol.trim`.
     """
-    from pandid.render.drawio import _EQUIPMENT_STROKE
     from test_line_weight import authored_pens
 
     checked = 0
@@ -2773,8 +2779,8 @@ def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
         # The outline is the heaviest pen; a symbol's fine detail is
         # deliberately lighter and draw.io has one weight for the whole stencil.
         pen = max(authored_pens(sym))
-        assert pen == pytest.approx(_EQUIPMENT_STROKE, rel=2e-3), (
-            f"{kind}/{variant} is drawn at {pen:.4g} and exported at {_EQUIPMENT_STROKE}"
+        assert pen == pytest.approx(LineWeight.EQUIPMENT.width, rel=2e-3), (
+            f"{kind}/{variant} is drawn at {pen:.4g} and exported at {LineWeight.EQUIPMENT.width}"
         )
         checked += 1
     assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
@@ -2787,7 +2793,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
     All 319 vendored stencils declare ``strokewidth="inherit"``, which is a
     stencil saying *take the pen from the cell* -- and the cell said nothing, so
     draw.io's default 1 drew every valve, vessel and pump lighter than the pipes
-    they sit on, which were already emitted at the sheet's 2. The stand-ins were
+    they sit on, which were already emitted at the sheet's own weight. The stand-ins were
     worse than unstated: they said ``strokeWidth=1`` outright.
 
     Scaled, because a symbol's outline is a *drawing* dimension and a paged
@@ -2795,10 +2801,9 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
     beside a stream stated scaled is the same defect the other way round.
 
     Two weights and not one since #305: a trimmed symbol -- ISO 10628-1
-    §5.3.1 c), see :attr:`~pandid.render.symbols.Symbol.trim` -- states
-    ``_TRIM_STROKE``, and everything else states ``_EQUIPMENT_STROKE``.
+    §5.3.1 c), see :attr:`~pandid.render.symbols.Symbol.trim` -- states the
+    DETAIL rung, and everything else states EQUIPMENT.
     """
-    from pandid.render.drawio import _EQUIPMENT_STROKE, _TRIM_STROKE
 
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)
@@ -2807,7 +2812,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
     seen = 0
     for i, u in enumerate(fs.units):
         sym = default_registry.for_unit(u)
-        want = fit.length(_TRIM_STROKE if sym.trim else _EQUIPMENT_STROKE)
+        want = fit.length(_class_weight(sym).width)
         for cid in (f"u{i}", f"u{i}-in"):
             cell = cells.get(cid)
             if cell is None:
@@ -2819,7 +2824,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
                 continue
             assert "strokeWidth" in style, (
                 f"{stem}: {u.kind}/{getattr(u, 'variant', 'default')} leaves its "
-                f"pen to draw.io, which draws it at 1 beside pipes drawn at 2"
+                f"pen to draw.io, which draws it at 1 whatever rung it is on"
             )
             assert float(style["strokeWidth"]) == pytest.approx(want, abs=0.01)
             seen += 1

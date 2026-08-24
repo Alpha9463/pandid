@@ -260,241 +260,241 @@
     <use href="#sym_tee" x="495.5" y="608.09" width="12.0" height="12.0" />
   </g>
   <g id="streams">
-    <path d="M 689.5,130.0 L 719.5,130.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="717.0" y1="136.2" x2="717.0" y2="123.8" stroke="black" stroke-width="2" />
-    <line x1="712.0" y1="136.2" x2="712.0" y2="123.8" stroke="black" stroke-width="2" />
-    <path d="M 744.0,130.0 L 774.0,130.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="746.5" y1="123.8" x2="746.5" y2="136.2" stroke="black" stroke-width="2" />
-    <line x1="751.5" y1="123.8" x2="751.5" y2="136.2" stroke="black" stroke-width="2" />
-    <path d="M 786.0,130.0 L 816.0,130.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 828.5,130.0 L 858.5,130.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="856.0" y1="136.2" x2="856.0" y2="123.8" stroke="black" stroke-width="2" />
-    <line x1="851.0" y1="136.2" x2="851.0" y2="123.8" stroke="black" stroke-width="2" />
-    <path d="M 883.0,130.0 L 913.0,130.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="885.5" y1="123.8" x2="885.5" y2="136.2" stroke="black" stroke-width="2" />
-    <line x1="890.5" y1="123.8" x2="890.5" y2="136.2" stroke="black" stroke-width="2" />
-    <path d="M 925.5,130.0 L 955.5,130.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 967.5,130.0 L 997.5,130.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="995.0" y1="136.2" x2="995.0" y2="123.8" stroke="black" stroke-width="2" />
-    <line x1="990.0" y1="136.2" x2="990.0" y2="123.8" stroke="black" stroke-width="2" />
-    <path d="M 1022.0,130.0 L 1052.0,130.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1024.5" y1="123.8" x2="1024.5" y2="136.2" stroke="black" stroke-width="2" />
-    <line x1="1029.5" y1="123.8" x2="1029.5" y2="136.2" stroke="black" stroke-width="2" />
-    <path d="M 683.5,124.0 L 683.5,85.0 L 810.0,85.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="807.5" y1="91.2" x2="807.5" y2="78.8" stroke="black" stroke-width="2" />
-    <line x1="802.5" y1="91.2" x2="802.5" y2="78.8" stroke="black" stroke-width="2" />
-    <path d="M 834.5,85.0 L 1058.0,85.0 L 1058.0,124.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="837.0" y1="78.8" x2="837.0" y2="91.2" stroke="black" stroke-width="2" />
-    <line x1="842.0" y1="78.8" x2="842.0" y2="91.2" stroke="black" stroke-width="2" />
-    <path d="M 780.0,136.0 L 780.0,166.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="773.8" y1="163.5" x2="786.2" y2="163.5" stroke="black" stroke-width="2" />
-    <line x1="773.8" y1="158.5" x2="786.2" y2="158.5" stroke="black" stroke-width="2" />
-    <path d="M 961.5,136.0 L 961.5,166.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="955.2" y1="163.5" x2="967.8" y2="163.5" stroke="black" stroke-width="2" />
-    <line x1="955.2" y1="158.5" x2="967.8" y2="158.5" stroke="black" stroke-width="2" />
-    <path d="M 1047.0,440.0 L 1017.0,440.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1019.5" y1="433.8" x2="1019.5" y2="446.2" stroke="black" stroke-width="2" />
-    <line x1="1024.5" y1="433.8" x2="1024.5" y2="446.2" stroke="black" stroke-width="2" />
-    <path d="M 992.5,440.0 L 962.5,440.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="990.0" y1="446.2" x2="990.0" y2="433.8" stroke="black" stroke-width="2" />
-    <line x1="985.0" y1="446.2" x2="985.0" y2="433.8" stroke="black" stroke-width="2" />
-    <path d="M 950.5,440.0 L 920.5,440.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 908.0,440.0 L 878.0,440.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="880.5" y1="433.8" x2="880.5" y2="446.2" stroke="black" stroke-width="2" />
-    <line x1="885.5" y1="433.8" x2="885.5" y2="446.2" stroke="black" stroke-width="2" />
-    <path d="M 853.5,440.0 L 823.5,440.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="851.0" y1="446.2" x2="851.0" y2="433.8" stroke="black" stroke-width="2" />
-    <line x1="846.0" y1="446.2" x2="846.0" y2="433.8" stroke="black" stroke-width="2" />
-    <path d="M 811.0,440.0 L 781.0,440.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 769.0,440.0 L 739.0,440.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="741.5" y1="433.8" x2="741.5" y2="446.2" stroke="black" stroke-width="2" />
-    <line x1="746.5" y1="433.8" x2="746.5" y2="446.2" stroke="black" stroke-width="2" />
-    <path d="M 714.5,440.0 L 684.5,440.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="712.0" y1="446.2" x2="712.0" y2="433.8" stroke="black" stroke-width="2" />
-    <line x1="707.0" y1="446.2" x2="707.0" y2="433.8" stroke="black" stroke-width="2" />
-    <path d="M 1053.0,434.0 L 1053.0,395.0 L 926.5,395.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="929.0" y1="388.8" x2="929.0" y2="401.2" stroke="black" stroke-width="2" />
-    <line x1="934.0" y1="388.8" x2="934.0" y2="401.2" stroke="black" stroke-width="2" />
-    <path d="M 902.0,395.0 L 678.5,395.0 L 678.5,434.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="899.5" y1="401.2" x2="899.5" y2="388.8" stroke="black" stroke-width="2" />
-    <line x1="894.5" y1="401.2" x2="894.5" y2="388.8" stroke="black" stroke-width="2" />
-    <path d="M 956.5,446.0 L 956.5,476.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="950.2" y1="473.5" x2="962.8" y2="473.5" stroke="black" stroke-width="2" />
-    <line x1="950.2" y1="468.5" x2="962.8" y2="468.5" stroke="black" stroke-width="2" />
-    <path d="M 775.0,446.0 L 775.0,476.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="768.8" y1="473.5" x2="781.2" y2="473.5" stroke="black" stroke-width="2" />
-    <line x1="768.8" y1="468.5" x2="781.2" y2="468.5" stroke="black" stroke-width="2" />
-    <path d="M 1159.0,510.0 L 1181.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1178.5" y1="516.2" x2="1178.5" y2="503.8" stroke="black" stroke-width="2" />
-    <line x1="1173.5" y1="516.2" x2="1173.5" y2="503.8" stroke="black" stroke-width="2" />
-    <path d="M 1205.5,510.0 L 1227.5,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1208.0" y1="503.8" x2="1208.0" y2="516.2" stroke="black" stroke-width="2" />
-    <line x1="1213.0" y1="503.8" x2="1213.0" y2="516.2" stroke="black" stroke-width="2" />
-    <path d="M 1239.5,510.0 L 1261.5,510.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1274.0,510.0 L 1296.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1293.5" y1="516.2" x2="1293.5" y2="503.8" stroke="black" stroke-width="2" />
-    <line x1="1288.5" y1="516.2" x2="1288.5" y2="503.8" stroke="black" stroke-width="2" />
-    <path d="M 1320.5,510.0 L 1342.5,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1323.0" y1="503.8" x2="1323.0" y2="516.2" stroke="black" stroke-width="2" />
-    <line x1="1328.0" y1="503.8" x2="1328.0" y2="516.2" stroke="black" stroke-width="2" />
-    <path d="M 1355.0,510.0 L 1377.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1389.0,510.0 L 1411.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1408.5" y1="516.2" x2="1408.5" y2="503.8" stroke="black" stroke-width="2" />
-    <line x1="1403.5" y1="516.2" x2="1403.5" y2="503.8" stroke="black" stroke-width="2" />
-    <path d="M 1435.5,510.0 L 1457.5,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1438.0" y1="503.8" x2="1438.0" y2="516.2" stroke="black" stroke-width="2" />
-    <line x1="1443.0" y1="503.8" x2="1443.0" y2="516.2" stroke="black" stroke-width="2" />
-    <path d="M 1153.0,504.0 L 1153.0,465.0 L 1255.5,465.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1253.0" y1="471.2" x2="1253.0" y2="458.8" stroke="black" stroke-width="2" />
-    <line x1="1248.0" y1="471.2" x2="1248.0" y2="458.8" stroke="black" stroke-width="2" />
-    <path d="M 1280.0,465.0 L 1463.5,465.0 L 1463.5,504.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1282.5" y1="458.8" x2="1282.5" y2="471.2" stroke="black" stroke-width="2" />
-    <line x1="1287.5" y1="458.8" x2="1287.5" y2="471.2" stroke="black" stroke-width="2" />
-    <path d="M 1233.5,516.0 L 1233.5,546.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1227.2" y1="543.5" x2="1239.8" y2="543.5" stroke="black" stroke-width="2" />
-    <line x1="1227.2" y1="538.5" x2="1239.8" y2="538.5" stroke="black" stroke-width="2" />
-    <path d="M 1383.0,516.0 L 1383.0,546.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1376.8" y1="543.5" x2="1389.2" y2="543.5" stroke="black" stroke-width="2" />
-    <line x1="1376.8" y1="538.5" x2="1389.2" y2="538.5" stroke="black" stroke-width="2" />
-    <path d="M 229.5,614.0909090909091 L 259.5,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="257.0" y1="620.3" x2="257.0" y2="607.8" stroke="black" stroke-width="2" />
-    <line x1="252.0" y1="620.3" x2="252.0" y2="607.8" stroke="black" stroke-width="2" />
-    <path d="M 284.0,614.0909090909091 L 314.0,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="286.5" y1="607.8" x2="286.5" y2="620.3" stroke="black" stroke-width="2" />
-    <line x1="291.5" y1="607.8" x2="291.5" y2="620.3" stroke="black" stroke-width="2" />
-    <path d="M 326.0,614.0909090909091 L 356.0,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 368.5,614.0909090909091 L 398.5,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="396.0" y1="620.3" x2="396.0" y2="607.8" stroke="black" stroke-width="2" />
-    <line x1="391.0" y1="620.3" x2="391.0" y2="607.8" stroke="black" stroke-width="2" />
-    <path d="M 423.0,614.0909090909091 L 453.0,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="425.5" y1="607.8" x2="425.5" y2="620.3" stroke="black" stroke-width="2" />
-    <line x1="430.5" y1="607.8" x2="430.5" y2="620.3" stroke="black" stroke-width="2" />
-    <path d="M 465.5,614.0909090909091 L 495.5,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 507.5,614.0909090909091 L 537.5,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="535.0" y1="620.3" x2="535.0" y2="607.8" stroke="black" stroke-width="2" />
-    <line x1="530.0" y1="620.3" x2="530.0" y2="607.8" stroke="black" stroke-width="2" />
-    <path d="M 562.0,614.0909090909091 L 592.0,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="564.5" y1="607.8" x2="564.5" y2="620.3" stroke="black" stroke-width="2" />
-    <line x1="569.5" y1="607.8" x2="569.5" y2="620.3" stroke="black" stroke-width="2" />
-    <path d="M 223.5,608.0909090909091 L 223.5,569.0909090909091 L 537.5,569.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="535.0" y1="575.3" x2="535.0" y2="562.8" stroke="black" stroke-width="2" />
-    <line x1="530.0" y1="575.3" x2="530.0" y2="562.8" stroke="black" stroke-width="2" />
-    <path d="M 562.0,569.0909090909091 L 598.0,569.0909090909091 L 598.0,608.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="564.5" y1="562.8" x2="564.5" y2="575.3" stroke="black" stroke-width="2" />
-    <line x1="569.5" y1="562.8" x2="569.5" y2="575.3" stroke="black" stroke-width="2" />
-    <path d="M 320.0,620.0909090909091 L 320.0,650.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="313.8" y1="647.6" x2="326.2" y2="647.6" stroke="black" stroke-width="2" />
-    <line x1="313.8" y1="642.6" x2="326.2" y2="642.6" stroke="black" stroke-width="2" />
-    <path d="M 501.5,620.0909090909091 L 501.5,650.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="495.2" y1="647.6" x2="507.8" y2="647.6" stroke="black" stroke-width="2" />
-    <line x1="495.2" y1="642.6" x2="507.8" y2="642.6" stroke="black" stroke-width="2" />
-    <path d="M 200.0,405.0 L 250.0,405.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="247.5" y1="411.2" x2="247.5" y2="398.8" stroke="black" stroke-width="2" />
-    <line x1="242.5" y1="411.2" x2="242.5" y2="398.8" stroke="black" stroke-width="2" />
-    <path d="M 274.5,405.0 L 350.0,405.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="277.0" y1="398.8" x2="277.0" y2="411.2" stroke="black" stroke-width="2" />
-    <line x1="282.0" y1="398.8" x2="282.0" y2="411.2" stroke="black" stroke-width="2" />
-    <line x1="347.5" y1="411.2" x2="347.5" y2="398.8" stroke="black" stroke-width="2" />
-    <line x1="342.5" y1="411.2" x2="342.5" y2="398.8" stroke="black" stroke-width="2" />
-    <path d="M 368.8,405.0 L 470.0,405.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="371.3" y1="398.8" x2="371.3" y2="411.2" stroke="black" stroke-width="2" />
-    <line x1="376.3" y1="398.8" x2="376.3" y2="411.2" stroke="black" stroke-width="2" />
-    <line x1="467.5" y1="411.2" x2="467.5" y2="398.8" stroke="black" stroke-width="2" />
-    <line x1="462.5" y1="411.2" x2="462.5" y2="398.8" stroke="black" stroke-width="2" />
-    <path d="M 520.0,300.0 L 520.0,235.0 A 5 5 0 0 1 520.0,225.0 L 520.0,130.0 L 677.5,130.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="513.8" y1="297.5" x2="526.2" y2="297.5" stroke="black" stroke-width="2" />
-    <line x1="513.8" y1="292.5" x2="526.2" y2="292.5" stroke="black" stroke-width="2" />
-    <path d="M 1064.0,130.0 L 1107.5,130.0 L 1107.5,210.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1101.2" y1="207.5" x2="1113.8" y2="207.5" stroke="black" stroke-width="2" />
-    <line x1="1101.2" y1="202.5" x2="1113.8" y2="202.5" stroke="black" stroke-width="2" />
-    <path d="M 1042.5,250.0 L 1042.5,280.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1048.8" y1="252.5" x2="1036.2" y2="252.5" stroke="black" stroke-width="2" />
-    <line x1="1048.8" y1="257.5" x2="1036.2" y2="257.5" stroke="black" stroke-width="2" />
-    <line x1="1036.2" y1="277.5" x2="1048.8" y2="277.5" stroke="black" stroke-width="2" />
-    <line x1="1036.2" y1="272.5" x2="1048.8" y2="272.5" stroke="black" stroke-width="2" />
-    <path d="M 200.0,230.0 L 320.0,230.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="317.5" y1="236.2" x2="317.5" y2="223.8" stroke="black" stroke-width="2" />
-    <line x1="312.5" y1="236.2" x2="312.5" y2="223.8" stroke="black" stroke-width="2" />
-    <path d="M 344.5,230.0 L 1010.0,230.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="347.0" y1="223.8" x2="347.0" y2="236.2" stroke="black" stroke-width="2" />
-    <line x1="352.0" y1="223.8" x2="352.0" y2="236.2" stroke="black" stroke-width="2" />
-    <line x1="1007.5" y1="236.2" x2="1007.5" y2="223.8" stroke="black" stroke-width="2" />
-    <line x1="1002.5" y1="236.2" x2="1002.5" y2="223.8" stroke="black" stroke-width="2" />
-    <path d="M 1140.0,230.0 L 1540.0,230.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1142.5" y1="223.8" x2="1142.5" y2="236.2" stroke="black" stroke-width="2" />
-    <line x1="1147.5" y1="223.8" x2="1147.5" y2="236.2" stroke="black" stroke-width="2" />
-    <path d="M 1110.6967213114754,322.0 L 1110.6967213114754,434.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1116.9" y1="324.5" x2="1104.4" y2="324.5" stroke="black" stroke-width="2" />
-    <line x1="1116.9" y1="329.5" x2="1104.4" y2="329.5" stroke="black" stroke-width="2" />
-    <path d="M 1104.6967213114754,440.0 L 1059.0,440.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 672.5,440.0 L 642.5,440.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="645.0" y1="433.8" x2="645.0" y2="446.2" stroke="black" stroke-width="2" />
-    <line x1="650.0" y1="433.8" x2="650.0" y2="446.2" stroke="black" stroke-width="2" />
-    <path d="M 617.5,440.0 L 595.0,440.0 L 595.0,335.0 L 570.0,335.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="615.0" y1="446.2" x2="615.0" y2="433.8" stroke="black" stroke-width="2" />
-    <line x1="610.0" y1="446.2" x2="610.0" y2="433.8" stroke="black" stroke-width="2" />
-    <line x1="572.5" y1="328.8" x2="572.5" y2="341.2" stroke="black" stroke-width="2" />
-    <line x1="577.5" y1="328.8" x2="577.5" y2="341.2" stroke="black" stroke-width="2" />
-    <path d="M 1110.6967213114754,446.0 L 1110.6967213114754,510.0 L 1147.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1469.5,510.0 L 1495.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1492.5" y1="516.2" x2="1492.5" y2="503.8" stroke="black" stroke-width="2" />
-    <line x1="1487.5" y1="516.2" x2="1487.5" y2="503.8" stroke="black" stroke-width="2" />
-    <path d="M 1520.0,510.0 L 1540.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1522.5" y1="503.8" x2="1522.5" y2="516.2" stroke="black" stroke-width="2" />
-    <line x1="1527.5" y1="503.8" x2="1527.5" y2="516.2" stroke="black" stroke-width="2" />
-    <path d="M 520.0,500.0 L 520.0,564.0909090909091 A 5 5 0 0 1 520.0,574.0909090909091 L 520.0,609.0909090909091 A 5 5 0 0 1 520.0,619.0909090909091 L 520.0,655.0 L 770.0765027322404,655.0 L 770.0765027322404,625.4545454545455" fill="none" stroke="black" stroke-width="2" />
-    <line x1="526.2" y1="502.5" x2="513.8" y2="502.5" stroke="black" stroke-width="2" />
-    <line x1="526.2" y1="507.5" x2="513.8" y2="507.5" stroke="black" stroke-width="2" />
-    <line x1="776.3" y1="628.0" x2="763.8" y2="628.0" stroke="black" stroke-width="2" />
-    <line x1="776.3" y1="633.0" x2="763.8" y2="633.0" stroke="black" stroke-width="2" />
-    <path d="M 797.9234972677596,580.0 L 797.9234972677596,535.0 L 595.0,535.0 L 595.0,475.0 L 570.0,475.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="791.7" y1="577.5" x2="804.2" y2="577.5" stroke="black" stroke-width="2" />
-    <line x1="791.7" y1="572.5" x2="804.2" y2="572.5" stroke="black" stroke-width="2" />
-    <line x1="572.5" y1="468.8" x2="572.5" y2="481.2" stroke="black" stroke-width="2" />
-    <line x1="577.5" y1="468.8" x2="577.5" y2="481.2" stroke="black" stroke-width="2" />
-    <path d="M 130.0,614.0909090909091 L 150.0,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="147.5" y1="620.3" x2="147.5" y2="607.8" stroke="black" stroke-width="2" />
-    <line x1="142.5" y1="620.3" x2="142.5" y2="607.8" stroke="black" stroke-width="2" />
-    <path d="M 175.0,614.0909090909091 L 217.5,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="177.5" y1="607.8" x2="177.5" y2="620.3" stroke="black" stroke-width="2" />
-    <line x1="182.5" y1="607.8" x2="182.5" y2="620.3" stroke="black" stroke-width="2" />
-    <path d="M 604.0,614.0909090909091 L 700.0,614.0909090909091" fill="none" stroke="black" stroke-width="2" />
-    <line x1="697.5" y1="620.3" x2="697.5" y2="607.8" stroke="black" stroke-width="2" />
-    <line x1="692.5" y1="620.3" x2="692.5" y2="607.8" stroke="black" stroke-width="2" />
-    <path d="M 840.0,602.7272727272727 L 1540.0,602.7272727272727" fill="none" stroke="black" stroke-width="2" />
-    <line x1="842.5" y1="596.5" x2="842.5" y2="609.0" stroke="black" stroke-width="2" />
-    <line x1="847.5" y1="596.5" x2="847.5" y2="609.0" stroke="black" stroke-width="2" />
-    <path d="M 830.0546448087432,625.4545454545455 L 830.0546448087432,660.0 L 900.0,660.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="836.3" y1="628.0" x2="823.8" y2="628.0" stroke="black" stroke-width="2" />
-    <line x1="836.3" y1="633.0" x2="823.8" y2="633.0" stroke="black" stroke-width="2" />
-    <line x1="897.5" y1="666.2" x2="897.5" y2="653.8" stroke="black" stroke-width="2" />
-    <line x1="892.5" y1="666.2" x2="892.5" y2="653.8" stroke="black" stroke-width="2" />
-    <path d="M 924.5,660.0 L 1000.0,660.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="927.0" y1="653.8" x2="927.0" y2="666.2" stroke="black" stroke-width="2" />
-    <line x1="932.0" y1="653.8" x2="932.0" y2="666.2" stroke="black" stroke-width="2" />
-    <line x1="997.5" y1="666.2" x2="997.5" y2="653.8" stroke="black" stroke-width="2" />
-    <line x1="992.5" y1="666.2" x2="992.5" y2="653.8" stroke="black" stroke-width="2" />
-    <path d="M 1023.9,660.0 L 1197.5,660.0 L 1197.5,720.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1026.4" y1="653.8" x2="1026.4" y2="666.2" stroke="black" stroke-width="2" />
-    <line x1="1031.4" y1="653.8" x2="1031.4" y2="666.2" stroke="black" stroke-width="2" />
-    <line x1="1191.2" y1="717.5" x2="1203.8" y2="717.5" stroke="black" stroke-width="2" />
-    <line x1="1191.2" y1="712.5" x2="1203.8" y2="712.5" stroke="black" stroke-width="2" />
-    <path d="M 1132.5,760.0 L 1132.5,805.0 L 1540.0,805.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1138.8" y1="762.5" x2="1126.2" y2="762.5" stroke="black" stroke-width="2" />
-    <line x1="1138.8" y1="767.5" x2="1126.2" y2="767.5" stroke="black" stroke-width="2" />
-    <path d="M 200.0,740.0 L 320.0,740.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="317.5" y1="746.2" x2="317.5" y2="733.8" stroke="black" stroke-width="2" />
-    <line x1="312.5" y1="746.2" x2="312.5" y2="733.8" stroke="black" stroke-width="2" />
-    <path d="M 344.5,740.0 L 1100.0,740.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="347.0" y1="733.8" x2="347.0" y2="746.2" stroke="black" stroke-width="2" />
-    <line x1="352.0" y1="733.8" x2="352.0" y2="746.2" stroke="black" stroke-width="2" />
-    <line x1="1097.5" y1="746.2" x2="1097.5" y2="733.8" stroke="black" stroke-width="2" />
-    <line x1="1092.5" y1="746.2" x2="1092.5" y2="733.8" stroke="black" stroke-width="2" />
-    <path d="M 1230.0,740.0 L 1540.0,740.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1232.5" y1="733.8" x2="1232.5" y2="746.2" stroke="black" stroke-width="2" />
-    <line x1="1237.5" y1="733.8" x2="1237.5" y2="746.2" stroke="black" stroke-width="2" />
+    <path d="M 689.5,130.0 L 719.5,130.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="717.0" y1="136.2" x2="717.0" y2="123.8" stroke="black" stroke-width="1" />
+    <line x1="712.0" y1="136.2" x2="712.0" y2="123.8" stroke="black" stroke-width="1" />
+    <path d="M 744.0,130.0 L 774.0,130.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="746.5" y1="123.8" x2="746.5" y2="136.2" stroke="black" stroke-width="1" />
+    <line x1="751.5" y1="123.8" x2="751.5" y2="136.2" stroke="black" stroke-width="1" />
+    <path d="M 786.0,130.0 L 816.0,130.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 828.5,130.0 L 858.5,130.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="856.0" y1="136.2" x2="856.0" y2="123.8" stroke="black" stroke-width="1" />
+    <line x1="851.0" y1="136.2" x2="851.0" y2="123.8" stroke="black" stroke-width="1" />
+    <path d="M 883.0,130.0 L 913.0,130.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="885.5" y1="123.8" x2="885.5" y2="136.2" stroke="black" stroke-width="1" />
+    <line x1="890.5" y1="123.8" x2="890.5" y2="136.2" stroke="black" stroke-width="1" />
+    <path d="M 925.5,130.0 L 955.5,130.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 967.5,130.0 L 997.5,130.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="995.0" y1="136.2" x2="995.0" y2="123.8" stroke="black" stroke-width="1" />
+    <line x1="990.0" y1="136.2" x2="990.0" y2="123.8" stroke="black" stroke-width="1" />
+    <path d="M 1022.0,130.0 L 1052.0,130.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1024.5" y1="123.8" x2="1024.5" y2="136.2" stroke="black" stroke-width="1" />
+    <line x1="1029.5" y1="123.8" x2="1029.5" y2="136.2" stroke="black" stroke-width="1" />
+    <path d="M 683.5,124.0 L 683.5,85.0 L 810.0,85.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="807.5" y1="91.2" x2="807.5" y2="78.8" stroke="black" stroke-width="1" />
+    <line x1="802.5" y1="91.2" x2="802.5" y2="78.8" stroke="black" stroke-width="1" />
+    <path d="M 834.5,85.0 L 1058.0,85.0 L 1058.0,124.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="837.0" y1="78.8" x2="837.0" y2="91.2" stroke="black" stroke-width="1" />
+    <line x1="842.0" y1="78.8" x2="842.0" y2="91.2" stroke="black" stroke-width="1" />
+    <path d="M 780.0,136.0 L 780.0,166.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="773.8" y1="163.5" x2="786.2" y2="163.5" stroke="black" stroke-width="1" />
+    <line x1="773.8" y1="158.5" x2="786.2" y2="158.5" stroke="black" stroke-width="1" />
+    <path d="M 961.5,136.0 L 961.5,166.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="955.2" y1="163.5" x2="967.8" y2="163.5" stroke="black" stroke-width="1" />
+    <line x1="955.2" y1="158.5" x2="967.8" y2="158.5" stroke="black" stroke-width="1" />
+    <path d="M 1047.0,440.0 L 1017.0,440.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1019.5" y1="433.8" x2="1019.5" y2="446.2" stroke="black" stroke-width="1" />
+    <line x1="1024.5" y1="433.8" x2="1024.5" y2="446.2" stroke="black" stroke-width="1" />
+    <path d="M 992.5,440.0 L 962.5,440.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="990.0" y1="446.2" x2="990.0" y2="433.8" stroke="black" stroke-width="1" />
+    <line x1="985.0" y1="446.2" x2="985.0" y2="433.8" stroke="black" stroke-width="1" />
+    <path d="M 950.5,440.0 L 920.5,440.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 908.0,440.0 L 878.0,440.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="880.5" y1="433.8" x2="880.5" y2="446.2" stroke="black" stroke-width="1" />
+    <line x1="885.5" y1="433.8" x2="885.5" y2="446.2" stroke="black" stroke-width="1" />
+    <path d="M 853.5,440.0 L 823.5,440.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="851.0" y1="446.2" x2="851.0" y2="433.8" stroke="black" stroke-width="1" />
+    <line x1="846.0" y1="446.2" x2="846.0" y2="433.8" stroke="black" stroke-width="1" />
+    <path d="M 811.0,440.0 L 781.0,440.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 769.0,440.0 L 739.0,440.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="741.5" y1="433.8" x2="741.5" y2="446.2" stroke="black" stroke-width="1" />
+    <line x1="746.5" y1="433.8" x2="746.5" y2="446.2" stroke="black" stroke-width="1" />
+    <path d="M 714.5,440.0 L 684.5,440.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="712.0" y1="446.2" x2="712.0" y2="433.8" stroke="black" stroke-width="1" />
+    <line x1="707.0" y1="446.2" x2="707.0" y2="433.8" stroke="black" stroke-width="1" />
+    <path d="M 1053.0,434.0 L 1053.0,395.0 L 926.5,395.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="929.0" y1="388.8" x2="929.0" y2="401.2" stroke="black" stroke-width="1" />
+    <line x1="934.0" y1="388.8" x2="934.0" y2="401.2" stroke="black" stroke-width="1" />
+    <path d="M 902.0,395.0 L 678.5,395.0 L 678.5,434.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="899.5" y1="401.2" x2="899.5" y2="388.8" stroke="black" stroke-width="1" />
+    <line x1="894.5" y1="401.2" x2="894.5" y2="388.8" stroke="black" stroke-width="1" />
+    <path d="M 956.5,446.0 L 956.5,476.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="950.2" y1="473.5" x2="962.8" y2="473.5" stroke="black" stroke-width="1" />
+    <line x1="950.2" y1="468.5" x2="962.8" y2="468.5" stroke="black" stroke-width="1" />
+    <path d="M 775.0,446.0 L 775.0,476.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="768.8" y1="473.5" x2="781.2" y2="473.5" stroke="black" stroke-width="1" />
+    <line x1="768.8" y1="468.5" x2="781.2" y2="468.5" stroke="black" stroke-width="1" />
+    <path d="M 1159.0,510.0 L 1181.0,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1178.5" y1="516.2" x2="1178.5" y2="503.8" stroke="black" stroke-width="1" />
+    <line x1="1173.5" y1="516.2" x2="1173.5" y2="503.8" stroke="black" stroke-width="1" />
+    <path d="M 1205.5,510.0 L 1227.5,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1208.0" y1="503.8" x2="1208.0" y2="516.2" stroke="black" stroke-width="1" />
+    <line x1="1213.0" y1="503.8" x2="1213.0" y2="516.2" stroke="black" stroke-width="1" />
+    <path d="M 1239.5,510.0 L 1261.5,510.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1274.0,510.0 L 1296.0,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1293.5" y1="516.2" x2="1293.5" y2="503.8" stroke="black" stroke-width="1" />
+    <line x1="1288.5" y1="516.2" x2="1288.5" y2="503.8" stroke="black" stroke-width="1" />
+    <path d="M 1320.5,510.0 L 1342.5,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1323.0" y1="503.8" x2="1323.0" y2="516.2" stroke="black" stroke-width="1" />
+    <line x1="1328.0" y1="503.8" x2="1328.0" y2="516.2" stroke="black" stroke-width="1" />
+    <path d="M 1355.0,510.0 L 1377.0,510.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1389.0,510.0 L 1411.0,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1408.5" y1="516.2" x2="1408.5" y2="503.8" stroke="black" stroke-width="1" />
+    <line x1="1403.5" y1="516.2" x2="1403.5" y2="503.8" stroke="black" stroke-width="1" />
+    <path d="M 1435.5,510.0 L 1457.5,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1438.0" y1="503.8" x2="1438.0" y2="516.2" stroke="black" stroke-width="1" />
+    <line x1="1443.0" y1="503.8" x2="1443.0" y2="516.2" stroke="black" stroke-width="1" />
+    <path d="M 1153.0,504.0 L 1153.0,465.0 L 1255.5,465.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1253.0" y1="471.2" x2="1253.0" y2="458.8" stroke="black" stroke-width="1" />
+    <line x1="1248.0" y1="471.2" x2="1248.0" y2="458.8" stroke="black" stroke-width="1" />
+    <path d="M 1280.0,465.0 L 1463.5,465.0 L 1463.5,504.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1282.5" y1="458.8" x2="1282.5" y2="471.2" stroke="black" stroke-width="1" />
+    <line x1="1287.5" y1="458.8" x2="1287.5" y2="471.2" stroke="black" stroke-width="1" />
+    <path d="M 1233.5,516.0 L 1233.5,546.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1227.2" y1="543.5" x2="1239.8" y2="543.5" stroke="black" stroke-width="1" />
+    <line x1="1227.2" y1="538.5" x2="1239.8" y2="538.5" stroke="black" stroke-width="1" />
+    <path d="M 1383.0,516.0 L 1383.0,546.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1376.8" y1="543.5" x2="1389.2" y2="543.5" stroke="black" stroke-width="1" />
+    <line x1="1376.8" y1="538.5" x2="1389.2" y2="538.5" stroke="black" stroke-width="1" />
+    <path d="M 229.5,614.0909090909091 L 259.5,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="257.0" y1="620.3" x2="257.0" y2="607.8" stroke="black" stroke-width="1" />
+    <line x1="252.0" y1="620.3" x2="252.0" y2="607.8" stroke="black" stroke-width="1" />
+    <path d="M 284.0,614.0909090909091 L 314.0,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="286.5" y1="607.8" x2="286.5" y2="620.3" stroke="black" stroke-width="1" />
+    <line x1="291.5" y1="607.8" x2="291.5" y2="620.3" stroke="black" stroke-width="1" />
+    <path d="M 326.0,614.0909090909091 L 356.0,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 368.5,614.0909090909091 L 398.5,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="396.0" y1="620.3" x2="396.0" y2="607.8" stroke="black" stroke-width="1" />
+    <line x1="391.0" y1="620.3" x2="391.0" y2="607.8" stroke="black" stroke-width="1" />
+    <path d="M 423.0,614.0909090909091 L 453.0,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="425.5" y1="607.8" x2="425.5" y2="620.3" stroke="black" stroke-width="1" />
+    <line x1="430.5" y1="607.8" x2="430.5" y2="620.3" stroke="black" stroke-width="1" />
+    <path d="M 465.5,614.0909090909091 L 495.5,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 507.5,614.0909090909091 L 537.5,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="535.0" y1="620.3" x2="535.0" y2="607.8" stroke="black" stroke-width="1" />
+    <line x1="530.0" y1="620.3" x2="530.0" y2="607.8" stroke="black" stroke-width="1" />
+    <path d="M 562.0,614.0909090909091 L 592.0,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="564.5" y1="607.8" x2="564.5" y2="620.3" stroke="black" stroke-width="1" />
+    <line x1="569.5" y1="607.8" x2="569.5" y2="620.3" stroke="black" stroke-width="1" />
+    <path d="M 223.5,608.0909090909091 L 223.5,569.0909090909091 L 537.5,569.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="535.0" y1="575.3" x2="535.0" y2="562.8" stroke="black" stroke-width="1" />
+    <line x1="530.0" y1="575.3" x2="530.0" y2="562.8" stroke="black" stroke-width="1" />
+    <path d="M 562.0,569.0909090909091 L 598.0,569.0909090909091 L 598.0,608.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="564.5" y1="562.8" x2="564.5" y2="575.3" stroke="black" stroke-width="1" />
+    <line x1="569.5" y1="562.8" x2="569.5" y2="575.3" stroke="black" stroke-width="1" />
+    <path d="M 320.0,620.0909090909091 L 320.0,650.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="313.8" y1="647.6" x2="326.2" y2="647.6" stroke="black" stroke-width="1" />
+    <line x1="313.8" y1="642.6" x2="326.2" y2="642.6" stroke="black" stroke-width="1" />
+    <path d="M 501.5,620.0909090909091 L 501.5,650.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="495.2" y1="647.6" x2="507.8" y2="647.6" stroke="black" stroke-width="1" />
+    <line x1="495.2" y1="642.6" x2="507.8" y2="642.6" stroke="black" stroke-width="1" />
+    <path d="M 200.0,405.0 L 250.0,405.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="247.5" y1="411.2" x2="247.5" y2="398.8" stroke="black" stroke-width="1" />
+    <line x1="242.5" y1="411.2" x2="242.5" y2="398.8" stroke="black" stroke-width="1" />
+    <path d="M 274.5,405.0 L 350.0,405.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="277.0" y1="398.8" x2="277.0" y2="411.2" stroke="black" stroke-width="1" />
+    <line x1="282.0" y1="398.8" x2="282.0" y2="411.2" stroke="black" stroke-width="1" />
+    <line x1="347.5" y1="411.2" x2="347.5" y2="398.8" stroke="black" stroke-width="1" />
+    <line x1="342.5" y1="411.2" x2="342.5" y2="398.8" stroke="black" stroke-width="1" />
+    <path d="M 368.8,405.0 L 470.0,405.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="371.3" y1="398.8" x2="371.3" y2="411.2" stroke="black" stroke-width="1" />
+    <line x1="376.3" y1="398.8" x2="376.3" y2="411.2" stroke="black" stroke-width="1" />
+    <line x1="467.5" y1="411.2" x2="467.5" y2="398.8" stroke="black" stroke-width="1" />
+    <line x1="462.5" y1="411.2" x2="462.5" y2="398.8" stroke="black" stroke-width="1" />
+    <path d="M 520.0,300.0 L 520.0,237 A 7 7 0 0 1 520.0,223 L 520.0,130.0 L 677.5,130.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="513.8" y1="297.5" x2="526.2" y2="297.5" stroke="black" stroke-width="1" />
+    <line x1="513.8" y1="292.5" x2="526.2" y2="292.5" stroke="black" stroke-width="1" />
+    <path d="M 1064.0,130.0 L 1107.5,130.0 L 1107.5,210.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1101.2" y1="207.5" x2="1113.8" y2="207.5" stroke="black" stroke-width="1" />
+    <line x1="1101.2" y1="202.5" x2="1113.8" y2="202.5" stroke="black" stroke-width="1" />
+    <path d="M 1042.5,250.0 L 1042.5,280.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1048.8" y1="252.5" x2="1036.2" y2="252.5" stroke="black" stroke-width="1" />
+    <line x1="1048.8" y1="257.5" x2="1036.2" y2="257.5" stroke="black" stroke-width="1" />
+    <line x1="1036.2" y1="277.5" x2="1048.8" y2="277.5" stroke="black" stroke-width="1" />
+    <line x1="1036.2" y1="272.5" x2="1048.8" y2="272.5" stroke="black" stroke-width="1" />
+    <path d="M 200.0,230.0 L 320.0,230.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="317.5" y1="236.2" x2="317.5" y2="223.8" stroke="black" stroke-width="1" />
+    <line x1="312.5" y1="236.2" x2="312.5" y2="223.8" stroke="black" stroke-width="1" />
+    <path d="M 344.5,230.0 L 1010.0,230.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="347.0" y1="223.8" x2="347.0" y2="236.2" stroke="black" stroke-width="1" />
+    <line x1="352.0" y1="223.8" x2="352.0" y2="236.2" stroke="black" stroke-width="1" />
+    <line x1="1007.5" y1="236.2" x2="1007.5" y2="223.8" stroke="black" stroke-width="1" />
+    <line x1="1002.5" y1="236.2" x2="1002.5" y2="223.8" stroke="black" stroke-width="1" />
+    <path d="M 1140.0,230.0 L 1540.0,230.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1142.5" y1="223.8" x2="1142.5" y2="236.2" stroke="black" stroke-width="1" />
+    <line x1="1147.5" y1="223.8" x2="1147.5" y2="236.2" stroke="black" stroke-width="1" />
+    <path d="M 1110.6967213114754,322.0 L 1110.6967213114754,434.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1116.9" y1="324.5" x2="1104.4" y2="324.5" stroke="black" stroke-width="1" />
+    <line x1="1116.9" y1="329.5" x2="1104.4" y2="329.5" stroke="black" stroke-width="1" />
+    <path d="M 1104.6967213114754,440.0 L 1059.0,440.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 672.5,440.0 L 642.5,440.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="645.0" y1="433.8" x2="645.0" y2="446.2" stroke="black" stroke-width="1" />
+    <line x1="650.0" y1="433.8" x2="650.0" y2="446.2" stroke="black" stroke-width="1" />
+    <path d="M 617.5,440.0 L 595.0,440.0 L 595.0,335.0 L 570.0,335.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="615.0" y1="446.2" x2="615.0" y2="433.8" stroke="black" stroke-width="1" />
+    <line x1="610.0" y1="446.2" x2="610.0" y2="433.8" stroke="black" stroke-width="1" />
+    <line x1="572.5" y1="328.8" x2="572.5" y2="341.2" stroke="black" stroke-width="1" />
+    <line x1="577.5" y1="328.8" x2="577.5" y2="341.2" stroke="black" stroke-width="1" />
+    <path d="M 1110.6967213114754,446.0 L 1110.6967213114754,510.0 L 1147.0,510.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1469.5,510.0 L 1495.0,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1492.5" y1="516.2" x2="1492.5" y2="503.8" stroke="black" stroke-width="1" />
+    <line x1="1487.5" y1="516.2" x2="1487.5" y2="503.8" stroke="black" stroke-width="1" />
+    <path d="M 1520.0,510.0 L 1540.0,510.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1522.5" y1="503.8" x2="1522.5" y2="516.2" stroke="black" stroke-width="1" />
+    <line x1="1527.5" y1="503.8" x2="1527.5" y2="516.2" stroke="black" stroke-width="1" />
+    <path d="M 520.0,500.0 L 520.0,562.091 A 7 7 0 0 1 520.0,576.091 L 520.0,607.091 A 7 7 0 0 1 520.0,621.091 L 520.0,655.0 L 770.0765027322404,655.0 L 770.0765027322404,625.4545454545455" fill="none" stroke="black" stroke-width="4" />
+    <line x1="526.2" y1="502.5" x2="513.8" y2="502.5" stroke="black" stroke-width="1" />
+    <line x1="526.2" y1="507.5" x2="513.8" y2="507.5" stroke="black" stroke-width="1" />
+    <line x1="776.3" y1="628.0" x2="763.8" y2="628.0" stroke="black" stroke-width="1" />
+    <line x1="776.3" y1="633.0" x2="763.8" y2="633.0" stroke="black" stroke-width="1" />
+    <path d="M 797.9234972677596,580.0 L 797.9234972677596,535.0 L 595.0,535.0 L 595.0,475.0 L 570.0,475.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="791.7" y1="577.5" x2="804.2" y2="577.5" stroke="black" stroke-width="1" />
+    <line x1="791.7" y1="572.5" x2="804.2" y2="572.5" stroke="black" stroke-width="1" />
+    <line x1="572.5" y1="468.8" x2="572.5" y2="481.2" stroke="black" stroke-width="1" />
+    <line x1="577.5" y1="468.8" x2="577.5" y2="481.2" stroke="black" stroke-width="1" />
+    <path d="M 130.0,614.0909090909091 L 150.0,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="147.5" y1="620.3" x2="147.5" y2="607.8" stroke="black" stroke-width="1" />
+    <line x1="142.5" y1="620.3" x2="142.5" y2="607.8" stroke="black" stroke-width="1" />
+    <path d="M 175.0,614.0909090909091 L 217.5,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="177.5" y1="607.8" x2="177.5" y2="620.3" stroke="black" stroke-width="1" />
+    <line x1="182.5" y1="607.8" x2="182.5" y2="620.3" stroke="black" stroke-width="1" />
+    <path d="M 604.0,614.0909090909091 L 700.0,614.0909090909091" fill="none" stroke="black" stroke-width="4" />
+    <line x1="697.5" y1="620.3" x2="697.5" y2="607.8" stroke="black" stroke-width="1" />
+    <line x1="692.5" y1="620.3" x2="692.5" y2="607.8" stroke="black" stroke-width="1" />
+    <path d="M 840.0,602.7272727272727 L 1540.0,602.7272727272727" fill="none" stroke="black" stroke-width="4" />
+    <line x1="842.5" y1="596.5" x2="842.5" y2="609.0" stroke="black" stroke-width="1" />
+    <line x1="847.5" y1="596.5" x2="847.5" y2="609.0" stroke="black" stroke-width="1" />
+    <path d="M 830.0546448087432,625.4545454545455 L 830.0546448087432,660.0 L 900.0,660.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="836.3" y1="628.0" x2="823.8" y2="628.0" stroke="black" stroke-width="1" />
+    <line x1="836.3" y1="633.0" x2="823.8" y2="633.0" stroke="black" stroke-width="1" />
+    <line x1="897.5" y1="666.2" x2="897.5" y2="653.8" stroke="black" stroke-width="1" />
+    <line x1="892.5" y1="666.2" x2="892.5" y2="653.8" stroke="black" stroke-width="1" />
+    <path d="M 924.5,660.0 L 1000.0,660.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="927.0" y1="653.8" x2="927.0" y2="666.2" stroke="black" stroke-width="1" />
+    <line x1="932.0" y1="653.8" x2="932.0" y2="666.2" stroke="black" stroke-width="1" />
+    <line x1="997.5" y1="666.2" x2="997.5" y2="653.8" stroke="black" stroke-width="1" />
+    <line x1="992.5" y1="666.2" x2="992.5" y2="653.8" stroke="black" stroke-width="1" />
+    <path d="M 1023.9,660.0 L 1197.5,660.0 L 1197.5,720.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1026.4" y1="653.8" x2="1026.4" y2="666.2" stroke="black" stroke-width="1" />
+    <line x1="1031.4" y1="653.8" x2="1031.4" y2="666.2" stroke="black" stroke-width="1" />
+    <line x1="1191.2" y1="717.5" x2="1203.8" y2="717.5" stroke="black" stroke-width="1" />
+    <line x1="1191.2" y1="712.5" x2="1203.8" y2="712.5" stroke="black" stroke-width="1" />
+    <path d="M 1132.5,760.0 L 1132.5,805.0 L 1540.0,805.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1138.8" y1="762.5" x2="1126.2" y2="762.5" stroke="black" stroke-width="1" />
+    <line x1="1138.8" y1="767.5" x2="1126.2" y2="767.5" stroke="black" stroke-width="1" />
+    <path d="M 200.0,740.0 L 320.0,740.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="317.5" y1="746.2" x2="317.5" y2="733.8" stroke="black" stroke-width="1" />
+    <line x1="312.5" y1="746.2" x2="312.5" y2="733.8" stroke="black" stroke-width="1" />
+    <path d="M 344.5,740.0 L 1100.0,740.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="347.0" y1="733.8" x2="347.0" y2="746.2" stroke="black" stroke-width="1" />
+    <line x1="352.0" y1="733.8" x2="352.0" y2="746.2" stroke="black" stroke-width="1" />
+    <line x1="1097.5" y1="746.2" x2="1097.5" y2="733.8" stroke="black" stroke-width="1" />
+    <line x1="1092.5" y1="746.2" x2="1092.5" y2="733.8" stroke="black" stroke-width="1" />
+    <path d="M 1230.0,740.0 L 1540.0,740.0" fill="none" stroke="black" stroke-width="4" />
+    <line x1="1232.5" y1="733.8" x2="1232.5" y2="746.2" stroke="black" stroke-width="1" />
+    <line x1="1237.5" y1="733.8" x2="1237.5" y2="746.2" stroke="black" stroke-width="1" />
     <path d="M 617.625,45.0 L 848.75,45.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 870.75,67.0 L 870.75,80.0 A 5 5 0 0 1 870.75,90.0 L 870.75,92.6 L 870.7,92.6 L 870.7,117.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 870.75,67.0 L 870.75,78 A 7 7 0 0 1 870.75,92 L 870.75,92.6 L 870.7,92.6 L 870.7,117.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="865.8" y1="74.3" x2="875.8" y2="80.3" stroke="black" stroke-width="1" />
     <line x1="865.8" y1="78.3" x2="875.8" y2="84.3" stroke="black" stroke-width="1" />
     <line x1="865.7" y1="99.6" x2="875.7" y2="105.6" stroke="black" stroke-width="1" />
@@ -502,7 +502,7 @@
     <path d="M 622.0,257.425 L 678.0,257.425" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 652.0,347.0 L 700.0,347.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 700.0,279.425 L 700.0,300.0 L 722.0,300.0 L 722.0,325.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 744.0,347.0 L 865.8,347.0 L 865.8,390.0 A 5 5 0 0 1 865.8,400.0 L 865.8,427.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 744.0,347.0 L 865.8,347.0 L 865.8,388 A 7 7 0 0 1 865.8,402 L 865.8,427.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="779.1" y1="352.0" x2="785.1" y2="342.0" stroke="black" stroke-width="1" />
     <line x1="783.1" y1="352.0" x2="789.1" y2="342.0" stroke="black" stroke-width="1" />
     <line x1="819.7" y1="352.0" x2="825.7" y2="342.0" stroke="black" stroke-width="1" />
@@ -512,7 +512,7 @@
     <path d="M 1226.0846994535518,301.0 L 1261.25,301.0 L 1261.25,325.0 L 1286.25,325.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1485.5,417.0 L 1330.25,417.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1308.25,347.0 L 1308.25,395.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 1308.25,439.0 L 1308.25,460.0 A 5 5 0 0 1 1308.25,470.0 L 1308.25,472.6 L 1308.2,472.6 L 1308.2,497.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 1308.25,439.0 L 1308.25,458 A 7 7 0 0 1 1308.25,472 L 1308.25,472.6 L 1308.2,472.6 L 1308.2,497.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="1303.2" y1="450.3" x2="1313.2" y2="456.3" stroke="black" stroke-width="1" />
     <line x1="1303.2" y1="454.3" x2="1313.2" y2="460.3" stroke="black" stroke-width="1" />
     <line x1="1303.2" y1="479.6" x2="1313.2" y2="485.6" stroke="black" stroke-width="1" />
@@ -520,7 +520,7 @@
     <path d="M 413.0,521.7310978638848 L 339.0,521.7310978638848" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 184.5,521.0909090909091 L 222.5,521.0909090909091" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 295.0,521.7310978638848 L 291.5,521.7310978638848 L 291.5,521.0909090909091 L 266.5,521.0909090909091" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 244.5,543.0909090909091 L 244.5,564.0909090909091 A 5 5 0 0 1 244.5,574.0909090909091 L 244.5,576.6909090909091 L 410.7,576.6909090909091 L 410.7,601.6909090909091" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 244.5,543.0909090909091 L 244.5,562.091 A 7 7 0 0 1 244.5,576.091 L 244.5,576.6909090909091 L 410.7,576.6909090909091 L 410.7,601.6909090909091" fill="none" stroke="black" stroke-width="1" />
     <line x1="239.5" y1="554.4" x2="249.5" y2="560.4" stroke="black" stroke-width="1" />
     <line x1="239.5" y1="558.4" x2="249.5" y2="564.4" stroke="black" stroke-width="1" />
     <line x1="280.6" y1="581.7" x2="286.6" y2="571.7" stroke="black" stroke-width="1" />
@@ -750,10 +750,10 @@
     <text x="410.75" y="636.4909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-308</text>
     <rect x="244.7" y="584.6" width="54.2" height="15.0" fill="white" />
     <text x="271.75" y="596.5909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-308A</text>
-    <rect x="522.6" y="584.6" width="54.2" height="15.0" fill="white" />
-    <text x="549.75" y="596.5909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-308B</text>
-    <rect x="522.6" y="539.6" width="54.2" height="15.0" fill="white" />
-    <text x="549.75" y="551.5909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-308C</text>
+    <rect x="528.6" y="584.6" width="54.2" height="15.0" fill="white" />
+    <text x="555.75" y="596.5909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-308B</text>
+    <rect x="528.6" y="539.6" width="54.2" height="15.0" fill="white" />
+    <text x="555.75" y="551.5909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-308C</text>
     <rect x="292.9" y="682.1" width="54.2" height="15.0" fill="white" />
     <text x="320.0" y="689.5909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">HV-308D</text>
     <rect x="474.4" y="682.1" width="54.2" height="15.0" fill="white" />

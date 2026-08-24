@@ -62,7 +62,8 @@ from typing import NamedTuple
 import pytest
 
 from pandid.portgeom import unit_box
-from pandid.render.svg import _EQUIPMENT_STROKE, _PLATE_CLEARANCE, _ink, _obstacle
+from pandid.render.svg import _PLATE_CLEARANCE, _ink, _obstacle
+from pandid.render.weights import LineWeight
 
 from test_label_invariants import CORPUS, _RENDER_OPTS
 
@@ -177,12 +178,12 @@ def drawn():
 def _inked(box):
     """A symbol's box grown by the half-pen that is drawn outside it.
 
-    ``_EQUIPMENT_STROKE`` and not a trimmed symbol's finer pen: this is
+    The EQUIPMENT rung and not a trimmed symbol's finer pen: this is
     the same conservative half-pen ``_obstacle`` grows every box by,
     whatever class actually drew it (see the comment there), so this
     stays the outer bound production code holds a halo to.
     """
-    half = _EQUIPMENT_STROKE / 2
+    half = LineWeight.EQUIPMENT.width / 2
     return (box[0] - half, box[1] - half, box[2] + half, box[3] + half)
 
 

@@ -10,6 +10,7 @@ from pandid.render import furniture as F
 from pandid.render.escape import escaped, ident
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
+from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -74,24 +75,18 @@ _FIELD_BALLOONS = {"default"}
 LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
 
 # --- line weights -----------------------------------------------------
-# The two weights ISO 15519 draws a process diagram in. ISO 15519-1 §6.2
-# Table 1 gives field symbols 0,1 M and connections 0,2 M with M = 2,5
-# mm (§11.1.2), and makes the spacing a requirement rather than a habit:
-# where a drawing uses two or more line widths, any two of them have to
-# stand at least 2:1 apart. ISO 15519-2 Annex A.1 spends the pair per
-# line type -- A.1.01 pipeline 0,50, A.1.02 instrument and control
-# connection 0,25, A.1.03 pilot and signal line 0,25.
+# Every width this file draws in comes off :class:`~.weights.LineWeight`
+# and there is no local constant to add a fourth to. Which rung each
+# element is on is stated at the point it is drawn; the ladder itself,
+# and why it is three rungs at 4:2:1 rather than the two this file used
+# to hold, is in :mod:`pandid.render.weights`.
 #
-# A drawing unit here is a CSS pixel, 25,4/96 mm, so 2 and 1 land on
-# 0,53 mm and 0,26 mm: the standard's own pair at exactly its 2:1. They
-# are relative weights and still scale with the sheet; holding them to a
-# physical width is the *other* half of §6.2, which floors every line of
-# a finished diagram on paper or equivalent media at 0,18 mm -- and
-# nothing here checks it. (Not §11.1.3, which is the unrelated
-# rule that a symbol's stroke survives the symbol being resized; see
-# :data:`_EQUIPMENT_STROKE`.)
-_PROCESS_STROKE = 2
-_SIGNAL_STROKE = 1
+# What #490 moved is one assignment: a material run is ISO 10628-1
+# §5.3.1 a) and not b). It had been drawn at the same 2 units as the
+# vessel it enters -- a coherent reading of ISO 15519-2 Annex A.1, which
+# spends two widths across pipeline (A.1.01) and instrument and signal
+# line (A.1.02, A.1.03), but not the reading 10628-1 §5.3.1 states for
+# the documents this library draws.
 
 #: The dash a signal line is drawn with, per kind. A pneumatic line is
 #: absent because it is drawn *solid* and cross-hatched instead. Held at
@@ -116,7 +111,57 @@ _TAP_DASH = "5,4"
 #: ``mxConnector.paintLine`` makes the half-extent ``(jumpSize - 2) / 2
 #: + strokeWidth``. That is a different number, and
 #: :func:`pandid.render.drawio._jump_size` solves it for this radius.
-HOP_R = 5
+#:
+#: **Derived from the pen since #490, because it has to be.** The paper
+#: the arc leaves against the run it bridges is the radius less a
+#: half-pen of each::
+#:
+#:     clearance = HOP_R - w_hop / 2 - w_crossed / 2
+#:
+#: Left at the flat 5 it was, a run widening from 2 units to
+#: :attr:`~.weights.LineWeight.MAIN_FLOW`'s 4 took that from 3 units to
+#: **1, 0,25 mm** -- measured on the raster, not only computed -- and at
+#: that width the crescent closes: the arc, the run it crosses and the
+#: corner beside it merge into one shape, and the mark states a junction
+#: where there is none. A tight crossing is a defect; one that reads as
+#: a tee is a false statement, so the radius follows the rung.
+#:
+#: :data:`_HOP_CLEARANCE` is the paper the sheet has always left there,
+#: and the term added to it is a half-pen of each of two main flow runs
+#: -- the widest pair that can meet -- so the clearance is a floor for
+#: every crossing and exact for that one.
+#:
+#: **No clause sizes this**, and none is cited as if it did. §5.3.2's
+#: floor is between *parallel* lines and does not reach a crossing, and
+#: nothing in §5.3.4, ISO 15519-1 §12.5 or ISO 15519-2 Table A.1 gives
+#: the gap a dimension. The number below restores what the drawing had
+#: and claims nothing further.
+#:
+#: **Nor is the arc itself specified anywhere.** §5.3.4 draws an
+#: interruption, 15519-1 §12.5 draws a plain crossing, and none of the
+#: three reference sheets in ``professional_examples/`` marks a crossing
+#: at all -- 393 of 393 interior crossings are plain. An arc is a
+#: drafting convention this library brought with it, and which of the
+#: three a sheet should draw is #499, with the prototype and the
+#: measurements on it.
+#:
+#: The radius cannot simply be raised to whatever would be comfortable.
+#: ``_draw_streams`` only marks a segment longer than twice it, so a
+#: larger radius *drops* crossings -- 2 of the corpus's 53 at 7 and 5 at
+#: 12 -- and an interruption wide enough to clear the run eats the run
+#: it is cut into instead, leaving 0,25 mm stubs of pipe beside a corner
+#: on this same corpus. Both conventions meet the same wall: the router
+#: puts crossings within a few units of a corner
+#: (``pandid.routing.separation``, whose spacing is 6 units and is
+#: derived from nothing), and at 0,4 M no crossing mark of any shape
+#: fits in what it leaves. That is #498.
+#:
+#: The two crossings that go unmarked here are drawn plain, which is
+#: ambiguous where the merged arc was wrong -- the same trade
+#: :data:`~pandid.render.drawio.HOP_DROPPED` already makes, and the way
+#: every crossing on all three reference sheets is drawn.
+_HOP_CLEARANCE = 3.0
+HOP_R = _HOP_CLEARANCE + LineWeight.MAIN_FLOW.width
 
 # --- stream-label placement -------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on*
@@ -142,39 +187,51 @@ _LABEL_STEP = 6.0
 # 10 and 12 bands that label lands in the same place.
 _LABEL_BANDS = 7
 
-#: The weight a graphical symbol's outline is drawn at, in whatever box
-#: it is placed in, for the class ISO 10628-1 §5.3.1 b) rules: equipment
-#: and machinery, the frames a block or a splitter draws, and (see
-#: :data:`_PROCESS_STROKE`) subsidiary flow and energy-carrier lines.
-#: ISO 15519-1 §11.1.3 is a *shall* that applies to both this and
-#: :data:`_TRIM_STROKE` alike: resizing a symbol leaves its line width
-#: alone. :func:`_nominal` holds every artwork in the registry to
-#: whichever of the two it is drawn at, so each is one number for its
-#: whole class rather than a property of any one drawing.
-#:
-#: 15519-1 §6.2 Table 1 disagrees with 5.3.1 b) about this number by a
-#: flat factor of two, and :data:`pandid.render.drawio._EQUIPMENT_STROKE`
-#: is where the choice between the two governing standards is written
-#: down.
-_EQUIPMENT_STROKE = 2.0
+def _class_weight(sym) -> LineWeight:
+    """The rung *sym*'s outline is drawn on.
 
-#: The weight §5.3.1 c) rules instead, for a :class:`~.symbols.Symbol`
-#: whose :attr:`~.symbols.Symbol.trim` is set: valves, fittings, piping
-#: accessories and PCE (instrument) symbols. Half of
-#: :data:`_EQUIPMENT_STROKE`, which is the clause's own ratio between
-#: the two -- 0,5 mm to 0,25 mm -- and happens to equal
-#: :data:`_SIGNAL_STROKE`, a coincidence of the two governing standards
-#: agreeing on this one pair of numbers and not a reason to write one in
-#: terms of the other: a control line and a valve bowtie answer to
-#: different clauses that could in principle diverge.
-_TRIM_STROKE = 1.0
+    :attr:`~.symbols.Symbol.trim` is the flag that says which, and it
+    says it for exactly ISO 10628-1 §5.3.1 c)'s class -- valves,
+    fittings, piping accessories and PCE symbols -- against §5.3.1 b)'s
+    equipment and machinery for everything else.
 
-
-def _class_stroke(sym) -> float:
-    """The outline weight *sym* draws at: :data:`_TRIM_STROKE` for a
-    trimmed symbol, :data:`_EQUIPMENT_STROKE` for every other one.
+    ISO 15519-1 §11.1.3 applies to both rungs alike. :func:`_nominal`
+    holds every artwork in the registry to one nominal weight whichever
+    rung it is placed on, so a class is one number for the whole class
+    rather than a property of any one drawing, and the division to the
+    finer rung happens once at render time (see :meth:`SvgRenderer._defs`).
     """
-    return _TRIM_STROKE if sym.trim else _EQUIPMENT_STROKE
+    return LineWeight.DETAIL if sym.trim else LineWeight.EQUIPMENT
+
+
+def _stream_rung(signal: bool) -> LineWeight:
+    """The rung a run is drawn on.
+
+    ISO 10628-1 §5.3.1 a) for a material run and c) for a control or
+    data line -- the *whole* of what either backend has to decide about
+    a stream's width, in one place, because both of them ask here.
+
+    A material run is drawn on a) rather than b) and the clause offers
+    no third answer for it: b)'s flow-line class is the *subsidiary*
+    one, and this library has no way for an author to call a run
+    subsidiary (see #497). Every material run is therefore a main flow
+    line, which is what #490 changed -- they had all been drawn on b),
+    at the weight of the equipment they run into.
+
+    This is also the seam #489 attaches at: an energy carrier is
+    §5.3.1 b), so it is one branch here and :attr:`~.weights
+    .LineWeight.EQUIPMENT`, with no new rung and nothing else to move.
+    """
+    return LineWeight.DETAIL if signal else LineWeight.MAIN_FLOW
+
+
+def _ink_pad(rung: LineWeight) -> float:
+    """How far off a line drawn on *rung* an opaque plate has to stop.
+
+    Half a pen of ink and one unit of paper beyond it; see the call in
+    :func:`_ink`, which is where the two halves are argued.
+    """
+    return rung.width / 2 + LineWeight.DETAIL.width
 
 
 #: The paper a label's opaque plate leaves outside a symbol's ink.
@@ -205,19 +262,19 @@ def _obstacle(box) -> "tuple[float, float, float, float]":
     they are built, because the draw.io exporter builds a list of its
     own and hands it to ``_tag_item``.
 
-    Held to :data:`_EQUIPMENT_STROKE`, the heavier of the two symbol
-    weights, whatever *box* was actually drawn at. This is a clearance
+    Held to :attr:`~.weights.LineWeight.EQUIPMENT`, the heavier of the
+    two symbol rungs, whatever *box* was actually drawn at. This is a clearance
     around a box that already grew to the ink (see :data:`_PLATE_CLEARANCE`),
     not the ink's own measurement, so an obstacle for a valve or a
     balloon a half-pen too generous never puts a label nearer real ink
     than it draws -- only ever ekes it a little further off a trimmed
-    symbol than :data:`_TRIM_STROKE` strictly requires. Threading which
+    symbol than :attr:`~.weights.LineWeight.DETAIL` strictly requires. Threading which
     class each box was drawn in through every caller here, several of
     which build their list from mixed geometry (a flange mark has no
     :class:`~.symbols.Symbol` at all), would buy nothing a reader could
     see.
     """
-    pad = _EQUIPMENT_STROKE / 2 + _PLATE_CLEARANCE
+    pad = LineWeight.EQUIPMENT.width / 2 + _PLATE_CLEARANCE
     return (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
 
 
@@ -559,12 +616,28 @@ def _ink(fs) -> "list[_Ink]":
                         max(ax, bx) + pad, max(ay, by) + pad, axis, at, kind, line))
 
     for s in fs.streams:
-        pad = float(_SIGNAL_STROKE if s.kind in _SIGNAL_KINDS else _PROCESS_STROKE)
+        # Half the pen is the ink itself; the unit beyond it is paper
+        # a halo may not crowd. Two quantities, and stated as two
+        # since #490: written as the whole pen they were one number,
+        # which read correctly only while every rung's clearance
+        # happened to equal its own half-pen. Widening the main flow
+        # rung would then have doubled a clearance nothing asked to
+        # move -- the same slip as :data:`_LEADER_HEAD`, a step
+        # further from the pen.
+        #
+        # One unit of paper because that is the finest rung on the
+        # ladder: the narrowest thing this sheet can draw, and so the
+        # narrowest gap that reads as a gap rather than as a join. It
+        # is what a main flow line already stood off at, and it is the
+        # same division :data:`_PLATE_CLEARANCE` makes around a symbol
+        # -- half a pen of ink, then a clearance with its own name.
+        pad = _ink_pad(_stream_rung(s.kind in _SIGNAL_KINDS))
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe", s.name or "")
     for _u, tap, centre in tap_lines(fs):
-        add(tap, centre, float(_SIGNAL_STROKE), "tap")
+        # A tap is §5.3.1 c) too, and stands off by the same rule.
+        add(tap, centre, _ink_pad(LineWeight.DETAIL), "tap")
     return out
 
 
@@ -759,12 +832,96 @@ def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vert
 # -- §7.2.5 wants the number along its line and treats the leader as
 # what to do when that is impossible. See :func:`_along`.
 
-# Half the sheet's flow arrowhead, because a leader is drawn at half the
-# weight of a process line: §6.4 hands the leader to ISO 128-22, where
-# it is a narrow line, and a terminator heavier than the line it ends
-# would read as the weightier of the two. Same proportions as the flow
-# head, so the two are one drawing at two sizes.
-_LEADER_HEAD = ARROWHEAD * _SIGNAL_STROKE / _PROCESS_STROKE
+# Half the sheet's flow arrowhead: §6.4 hands the leader to ISO 128-22,
+# where it is a narrow line, and a terminator heavier than the line it
+# ends would read as the weightier of the two. Same proportions as the
+# flow head, so the two are one drawing at two sizes.
+#
+# A *size*, and half outright. It was written as the ratio between two
+# line weights that happened to stand at 2:1, which made a glyph's size
+# a function of a width -- so #490's widening of the main flow rung
+# would have shrunk this head to a quarter of the flow head without
+# anything in the drawing asking it to. A width and a size are
+# different quantities and this is the one place they were tied.
+_LEADER_HEAD = ARROWHEAD / 2
+
+
+#: A crossing the sheet could not mark. See :func:`unmarked_crossings`.
+CROSSING_UNMARKED = "crossing-unmarked"
+
+
+def unmarked_crossings(fs, jump_direction: str = "vertical") -> list:
+    """Every crossing of two unconnected runs the sheet draws **bare**.
+
+    A crossing is marked by breaking one of the two runs over the other
+    with a semicircle of :data:`HOP_R` (:meth:`SvgRenderer._draw_streams`),
+    and the run that carries it needs that much of itself either side of
+    the crossing for the arc to sit on rather than overhang. Where it has
+    less, no mark is drawn and the two runs are laid down straight
+    through each other.
+
+    **That is not a neutral fallback on this sheet.** A drawing on which
+    every other crossing carries an arc has taught its reader that a
+    crossing looks like an arc, so a bare one does not read as "no
+    information" -- it reads as the other thing, a junction. The
+    reference sheets get away with drawing every crossing bare because
+    they draw *all* of them bare and mark the junctions instead; a sheet
+    that does both cannot borrow that. So the sheet says so rather than
+    leaving the reader to find it: :meth:`SvgRenderer.render` turns each
+    of these into a :data:`CROSSING_UNMARKED` warning naming both runs
+    and the point.
+
+    Returns ``(marked, crossed, x, y)`` per crossing, where *marked* is
+    the run that would have carried the arc. The room test is the one
+    ``_draw_streams`` applies, and ``tests/test_render.py``'s
+    ``test_a_hop_has_room_for_its_own_arc`` holds the two to agreeing:
+    it counts the arcs actually drawn against the crossings that have
+    room, so a drift here shows up there.
+
+    Widening a run is what made this worth reporting -- at 0,4 M an arc
+    needs more room than it did (see :data:`HOP_R`) -- but the condition
+    is older than #490 and the count on the shipped corpus is 2 of 53.
+    Giving those two the room is the router's to do, and is #498.
+    """
+    segments = []
+    for stream in fs.streams:
+        points = stream_polyline(stream)
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if y1 == y2 and x1 != x2:
+                segments.append((stream, "h", min(x1, x2), max(x1, x2), y1))
+            elif x1 == x2 and y1 != y2:
+                segments.append((stream, "v", min(y1, y2), max(y1, y2), x1))
+
+    marks = "v" if jump_direction == "vertical" else "h"
+    out = []
+    for stream, axis, lo, hi, at in segments:
+        if axis != marks:
+            continue
+        for other, o_axis, o_lo, o_hi, o_at in segments:
+            if o_axis == axis or not (o_lo < at < o_hi) or not (lo < o_at < hi):
+                continue
+            if lo + HOP_R < o_at < hi - HOP_R:
+                continue  # room for the mark; the sheet draws it
+            x, y = (at, o_at) if axis == "v" else (o_at, at)
+            out.append((stream, other, x, y))
+    return out
+
+
+def _crossing_issues(fs, jump_direction: str = "vertical") -> list:
+    """:func:`unmarked_crossings`, worded for the reader of the sheet."""
+    issues = []
+    for marked, crossed, x, y in unmarked_crossings(fs, jump_direction):
+        a = marked.name or marked.kind
+        b = crossed.name or crossed.kind
+        issues.append(Issue(
+            "warning", CROSSING_UNMARKED,
+            f"{a} crosses {b} at ({x:g}, {y:g}) and the crossing is drawn "
+            f"bare: {a} has under {HOP_R:g}px of itself either side of the "
+            f"point, which is what the arc marking a crossing needs to sit "
+            f"on. Every other crossing on this sheet carries that arc, so a "
+            f"reader may take this one for a junction. Pin one of the two "
+            f"runs with via() to move the crossing clear of the corner"))
+    return issues
 
 
 def _crosses(start, end, region) -> bool:
@@ -2433,6 +2590,12 @@ def _scale_text(s: float) -> str:
 # for it, as against the validator's findings about the diagram.
 _FIT_CODES = ("text-truncated", "text-overruns-cell")
 
+#: Every code the *renderer* puts on ``fs.warnings`` itself, as
+#: against the validator's findings about the model. Replaced rather
+#: than added to on each render, so a sheet redrawn after a fix stops
+#: reporting what the last one found.
+_RENDER_CODES = _FIT_CODES + ("crossing-unmarked",)
+
 
 def fit_issue(field: str, text: str, drawn: str,
               room: float, need: float) -> Issue:
@@ -2716,8 +2879,14 @@ class SvgRenderer:
         # Findings from an earlier render are dropped rather than added
         # to: a title shortened and re-rendered must stop warning about
         # the old one.
+        #
+        # A crossing drawn bare is the same kind of finding and is
+        # replaced the same way: it depends on ``jump_direction``, which
+        # is this render's option and not a property of the model, so
+        # the validator cannot know it (:func:`unmarked_crossings`).
+        render_issues = fit_issues + _crossing_issues(fs, jump_direction)
         fs.warnings = [w for w in fs.warnings
-                       if getattr(w, "code", "") not in _FIT_CODES] + fit_issues
+                       if getattr(w, "code", "") not in _RENDER_CODES] + render_issues
 
         # 4. SVG document.
         lines = ['<?xml version="1.0" encoding="UTF-8"?>']
@@ -3044,7 +3213,7 @@ class SvgRenderer:
             art = _baked(sym.svg, *fold)
             width, height = sym.width * fold[0], sym.height * fold[1]
             # Every weight the artwork was drawn at is baked to
-            # :data:`_EQUIPMENT_STROKE`, whichever class the symbol is
+            # :attr:`~.weights.LineWeight.EQUIPMENT`, whichever rung the symbol is
             # actually in (see :func:`_nominal`), so a trimmed symbol's
             # weight is divided out here rather than carried by `pen`,
             # which stays the *resize* factor alone and nothing else:
@@ -3052,7 +3221,7 @@ class SvgRenderer:
             # for that, and every symbol of one (kind, variant) is one
             # class, so folding the two together would buy the cache
             # nothing and cost `_size_tag` its meaning.
-            stroke = pen * _EQUIPMENT_STROKE / _class_stroke(sym)
+            stroke = pen * LineWeight.EQUIPMENT.width / _class_weight(sym).width
             # Either, never both. A directional symbol's *whole*
             # drawing is held still, lettering included, so a glyph
             # inside one would need the residual of the two rather than
@@ -3200,7 +3369,7 @@ class SvgRenderer:
         Fine is the same fine as a signal stream: ISO 15519-2 Annex
         A.1.02 puts an instrument connection on the 0,25 rung, alongside
         the signal line and half the pipeline it taps. See
-        :data:`_SIGNAL_STROKE`.
+        :attr:`~.weights.LineWeight.DETAIL`.
 
         Which lines there are is :func:`tap_lines`' answer, since label
         placement has to dodge exactly the ones this draws.
@@ -3209,7 +3378,8 @@ class SvgRenderer:
         for u, (tx, ty), (cx, cy) in tap_lines(fs):
             dash = "" if impulse_tap(u) else f' stroke-dasharray="{_TAP_DASH}"'
             out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
-                       f'y2="{_num(cy)}" stroke="black" stroke-width="{_SIGNAL_STROKE}"{dash} />')
+                       f'y2="{_num(cy)}" stroke="black" '
+                       f'stroke-width="{LineWeight.DETAIL.width:g}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 
     def _draw_boundary(self, u, f, safe_name):
@@ -3239,7 +3409,14 @@ class SvgRenderer:
             px0, px1, px2 = bx1, bx0 + depth, bx0
             tx = bx0 + depth + (label_w - depth) / 2
         points = f"{px0},{top} {px1},{top} {px2},{mid} {px1},{bot} {px0},{bot}"
-        out = [f'    <polygon points="{points}" fill="transparent" stroke="black" stroke-width="2" />']
+        # The pennant is a graphical symbol on the sheet rather
+        # than a valve, a fitting or a PCE symbol, so it is drawn
+        # on ISO 10628-1 §5.3.1 b)'s rung -- the same rung
+        # ``pandid.render.drawio._boundary_cell`` states, read off
+        # the ladder here since #490 rather than written as a bare
+        # ``2`` that only happened to agree with it.
+        out = [f'    <polygon points="{points}" fill="transparent" '
+               f'stroke="black" stroke-width="{LineWeight.EQUIPMENT.width:g}" />']
         if ref:
             out.append(f'    <text x="{tx}" y="{mid - 4}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
             out.append(f'    <text x="{tx}" y="{mid + 8}" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">{escaped(ref)}</text>')
@@ -3643,9 +3820,9 @@ class SvgRenderer:
                     crossings.sort(reverse=(y1 > y2))
                     for hy in crossings:
                         if y1 < y2:
-                            d_parts.extend([f"L {x1},{hy - HOP_R}", f"A {HOP_R} {HOP_R} 0 0 1 {x1},{hy + HOP_R}"])
+                            d_parts.extend([f"L {x1},{hy - HOP_R:g}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {x1},{hy + HOP_R:g}"])
                         else:
-                            d_parts.extend([f"L {x1},{hy + HOP_R}", f"A {HOP_R} {HOP_R} 0 0 1 {x1},{hy - HOP_R}"])
+                            d_parts.extend([f"L {x1},{hy + HOP_R:g}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {x1},{hy - HOP_R:g}"])
                     d_parts.append(f"L {x2},{y2}")
                 elif jump_direction == "horizontal" and y1 == y2:
                     crossings = [vx for vx, my, My in verticals
@@ -3654,9 +3831,9 @@ class SvgRenderer:
                     crossings.sort(reverse=(x1 > x2))
                     for vx in crossings:
                         if x1 < x2:
-                            d_parts.extend([f"L {vx - HOP_R},{y1}", f"A {HOP_R} {HOP_R} 0 0 1 {vx + HOP_R},{y1}"])
+                            d_parts.extend([f"L {vx - HOP_R:g},{y1}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {vx + HOP_R:g},{y1}"])
                         else:
-                            d_parts.extend([f"L {vx + HOP_R},{y1}", f"A {HOP_R} {HOP_R} 0 0 1 {vx - HOP_R},{y1}"])
+                            d_parts.extend([f"L {vx + HOP_R:g},{y1}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {vx - HOP_R:g},{y1}"])
                     d_parts.append(f"L {x2},{y2}")
                 else:
                     d_parts.append(f"L {x2},{y2}")
@@ -3665,10 +3842,10 @@ class SvgRenderer:
             marker = f' marker-end="url(#{marker_id})"' if self._tipped(s, arrows) else ""
             # A signal is drawn at half the weight of the pipe it
             # reads, per ISO 15519-2 Annex A.1.02/A.1.03 against A.1.01.
-            width = _SIGNAL_STROKE if is_signal else _PROCESS_STROKE
+            width = _stream_rung(is_signal).width
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
-                f'stroke="{color}" stroke-width="{width}"{dash}{marker} />'
+                f'stroke="{color}" stroke-width="{width:g}"{dash}{marker} />'
             )
 
             # The joint marks, drawn over the line rather than instead
@@ -3678,6 +3855,18 @@ class SvgRenderer:
             for fx, fy, angle, _at in flange_marks(s, points,
                                                    resolve_connections(s, joints)):
                 rad = math.radians(angle)
+                # A flange is a piping accessory, so the pair of faces
+                # is ISO 10628-1 §5.3.1 c) and not the rung of the run
+                # they sit across -- which is what they were drawn at
+                # before #490, when that rung was the same number.
+                #
+                # §5.3.2 settles it independently and arithmetically.
+                # The two bars are :data:`FLANGE_GAP` apart centre to
+                # centre, so at a width w they leave 5 - w of paper
+                # against that clause's floor of 2w and of 1 mm (4
+                # units). Only the c) rung clears both: at 1 unit the
+                # pair leaves exactly 4, at 2 it leaves 3, and at the
+                # run's own 4 the two faces all but merge.
                 # Along the run for the offset between the two faces,
                 # across it for the bars themselves.
                 ax, ay = math.cos(rad) * FLANGE_GAP / 2, math.sin(rad) * FLANGE_GAP / 2
@@ -3687,23 +3876,25 @@ class SvgRenderer:
                     lines.append(
                         f'    <line x1="{mx - bx:.1f}" y1="{my - by:.1f}" '
                         f'x2="{mx + bx:.1f}" y2="{my + by:.1f}" '
-                        f'stroke="{color}" stroke-width="{_PROCESS_STROKE}" />'
+                        f'stroke="{color}" '
+                        f'stroke-width="{LineWeight.DETAIL.width:g}" />'
                     )
 
             if s.kind == "pneumatic":
-                # The mark is drawn at the weight of the line it
-                # marks. A supplementary symbol on a connection is a
-                # graphical symbol (ISO 15519-2 Annex A.1.09, pneumatic
-                # type 433A), and ISO 15519-1 §11.1.3 puts a graphical
-                # symbol at 0,1 M, the rung the signal line sits on.
+                # A supplementary symbol on a connection (ISO 15519-2
+                # Annex A.1.09, pneumatic type 433A), and the line it
+                # marks is a pneumatic signal: both are ISO 10628-1
+                # §5.3.1 c), so the mark is the rung its line is.
                 for mx, my, horiz, _at in pneumatic_marks(points):
                     for off in HATCH_ALONG:
                         if horiz:
                             lines.append(f'    <line x1="{mx+off-3:.1f}" y1="{my+5:.1f}" '
-                                         f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
+                                         f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" '
+                                         f'stroke-width="{LineWeight.DETAIL.width:g}" />')
                         else:
                             lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
-                                         f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
+                                         f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" '
+                                         f'stroke-width="{LineWeight.DETAIL.width:g}" />')
 
         # Final pass: stream-number labels, each on a white halo so it
         # reads cleanly over any line crossing beneath it.
@@ -3746,7 +3937,8 @@ class SvgRenderer:
                 # not a line of its own.
                 lines.append(f'    <line x1="{ax0:.1f}" y1="{ay0:.1f}" '
                              f'x2="{ax1:.1f}" y2="{ay1:.1f}" '
-                             f'stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
+                             f'stroke="{color}" '
+                             f'stroke-width="{LineWeight.DETAIL.width:g}" />')
                 lines.append(f'    <path d="{_arrowhead(*number.leader)}" fill="{color}" />')
         # ``placed`` is now every opaque plate the sheet's two label
         # passes lay down: the equipment tags it was seeded with, each

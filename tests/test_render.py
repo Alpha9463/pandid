@@ -21,7 +21,10 @@ _TAG = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
     r'<text [^>]*font-size="12"[^>]*>([^<]*)</text>'
 )
-_PROCESS_LINE = re.compile(r'<path d="([^"]+)" fill="none" stroke="[^"]*" stroke-width="2"')
+#: A material run: ISO 10628-1 5.3.1 a), the ladder's main-flow rung. Written
+#: out rather than interpolated, so moving a rung shows up here as a failure
+#: rather than being absorbed by the regex that reads the sheet back.
+_PROCESS_LINE = re.compile(r'<path d="([^"]+)" fill="none" stroke="[^"]*" stroke-width="4"')
 _TAP_LINE = re.compile(
     r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)" stroke="black"'
 )
@@ -400,7 +403,7 @@ def test_a_hop_has_room_for_its_own_arc(drawn, name):
             )
 
     drawn_arcs = sum(
-        d.count(f"A {HOP_R} {HOP_R} ")
+        d.count(f"A {HOP_R:g} {HOP_R:g} ")
         for d in re.findall(r'<path d="(M [^"]*)"', svg)
         if " A " in d
     )
@@ -492,3 +495,67 @@ def test_two_runs_at_one_height_are_two_runs():
     assert max(piece.x1 for piece in mine) - min(piece.x0 for piece in mine) < 200, (
         "the short run measures longer than it is drawn"
     )
+
+
+# --- a crossing the sheet could not mark --------------------------------------
+
+
+def test_a_crossing_with_no_room_for_its_mark_is_reported():
+    """The silent half of the hop, and #490 is what made it worth saying.
+
+    ``_draw_streams`` marks a crossing with an arc, and only where the run
+    carrying it has ``HOP_R`` of itself either side to sit on. Where it has
+    less the arc is dropped and the two runs are laid straight through each
+    other -- and on a sheet where every *other* crossing carries an arc, a bare
+    one does not read as "no information", it reads as a junction. That was
+    drawn and not said; it is said now.
+
+    Held against the shipped corpus rather than a fixture, because the
+    condition needs a crossing within a few units of a corner and the routes
+    that produce one are exactly what a hand-built sheet cannot be trusted to
+    reproduce.
+    """
+    from pandid.render.svg import unmarked_crossings
+
+    from test_golden import SCENARIOS
+
+    build, kwargs = SCENARIOS["18_fixed_bed_recycle"]
+    fs = build()
+    fs.to_svg(**kwargs)
+
+    said = [w for w in fs.warnings if w.code == "crossing-unmarked"]
+    assert len(said) == len(unmarked_crossings(fs)) == 1
+    assert "350-LG-310-CS crosses 350-LG-314-CS at (1278, 629)" in said[0].message
+    # The measurement a reader can check, and what to do about it.
+    assert f"under {HOP_R:g}px of itself either side" in said[0].message
+    assert "via()" in said[0].message
+
+
+def test_a_sheet_whose_crossings_all_have_room_says_nothing():
+    """The other side of it: the finding is about the crossings that lost their
+    mark, not about having crossings at all."""
+    from pandid.render.svg import unmarked_crossings
+
+    from test_golden import SCENARIOS
+
+    build, kwargs = SCENARIOS["21_alumina_refinery"]
+    fs = build()
+    fs.to_svg(**kwargs)
+    assert unmarked_crossings(fs) == []
+    assert [w for w in fs.warnings if w.code == "crossing-unmarked"] == []
+
+
+def test_a_redrawn_sheet_drops_the_crossing_it_used_to_report():
+    """A render's own findings describe *that* render, the rule ``_FIT_CODES``
+    already follows: a sheet redrawn with the crossing moved clear must stop
+    warning about it, rather than accumulating both answers."""
+    from test_golden import SCENARIOS
+
+    build, kwargs = SCENARIOS["18_fixed_bed_recycle"]
+    fs = build()
+    fs.to_svg(**kwargs)
+    assert [w for w in fs.warnings if w.code == "crossing-unmarked"]
+    # The same sheet drawn with the crossings marked the other way round: the
+    # horizontal carries the arc, and it has the room the vertical lacked.
+    fs.to_svg(**{**kwargs, "jump_direction": "horizontal"})
+    assert [w for w in fs.warnings if w.code == "crossing-unmarked"] == []
