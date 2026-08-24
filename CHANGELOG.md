@@ -1066,22 +1066,38 @@ class hierarchy, or what it is called.
   `18_fixed_bed_recycle` is redrawn.
 
   Two gaps closed since: a crossing was only priced at a node a search
-  actually stopped at, so a manual (`.via()`) route drawn at a coordinate
-  the lane grid does not carry -- any coordinate an author writes, not only
-  ones a search would land on -- could cross a searched route's own edge
-  unpriced, mid-span, with no node there to catch it. Crossings are now
-  checked along the whole of every edge a search considers, not only its
-  ends. Separately, every stream's *raw*, pre-separation geometry was what
+  actually stopped at, so a manual (`.via()`) route drawn at an orthogonal
+  coordinate the lane grid does not carry -- any coordinate an author
+  writes, not only ones a search would land on -- could cross a searched
+  route's own edge unpriced, mid-span, with no node there to catch it.
+  Crossings are now checked along the whole of every edge a search
+  considers, not only its ends -- indexed by track rather than scanned one
+  by one, since the whole-edge check runs once per edge on every search on
+  the sheet, and a linear scan there cost one real sheet +56% and a
+  synthetic worst case (a long path against 50,000 already-drawn tracks)
+  154x. Separately, every stream's *raw*, pre-separation geometry was what
   got priced, one single `separate_streams` pass only running after every
   stream was already routed -- so a later stream's search could be pricing
   a drawing a few pixels off the one that was actually going up. The router
   now previews where separation will put each already-routed stream before
-  pricing the next one against it. Neither closes a gap this corpus's own
-  numbers above move on -- re-run in full, both are unchanged -- and the
-  second is a preview against the streams routed *so far*, not the sheet's
-  final set, so a stream added later can still, in principle, reassign an
-  earlier one's track a second time; measured at zero times on this corpus's
-  1030 already-routed streams, checked one by one.
+  pricing the next one against it. Neither gap closing moves this corpus's
+  numbers above -- re-run in full, both are unchanged.
+
+  The preview is not a perfect match for the final drawing: a stream not
+  yet routed can still, once added, reassign an already-settled stream's
+  track a second time. Measured directly -- at each stream's own settlement,
+  not against the last preview it happens to appear in, which trivially
+  matches by construction and is not the question -- at 14 divergences out
+  of 1032 already-routed streams checked on this corpus, max shift 19.37px,
+  across five auto-placed sheets. The consequence is real and is filed as
+  #509 rather than fixed here: a later search can be undercharged for a
+  crossing the finished drawing actually has, when an earlier stream's
+  track moves again after that search already ran.
+
+  A diagonal `.via()` leg is drawn, reported by `validate()`
+  (`route-diagonal`), and priced against by nothing -- filed as #510,
+  since pricing one is a geometric extension to `CrossingIndex`, not a
+  bookkeeping fix like recording its orthogonal neighbours already is.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on

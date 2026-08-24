@@ -1,3 +1,4 @@
+import bisect
 import heapq
 import math
 from dataclasses import dataclass, field
@@ -106,10 +107,46 @@ class CrossingIndex:
     h: Dict[float, List[Tuple[float, float]]] = field(default_factory=dict)
     v: Dict[float, List[Tuple[float, float]]] = field(default_factory=dict)
 
+    # A cached, sorted view of ``h``/``v``'s own keys, so ``crossings_along``
+    # can *bisect* to the handful of tracks a query's range actually covers
+    # instead of walking every track this index has ever been given -- that
+    # scan now runs once per candidate edge, not once per node, on every
+    # search on the sheet (#483 round 6: +56% on a real corpus sheet, 154x
+    # on a synthetic worst case of a long path against 50,000 tracks).
+    #
+    # Not maintained incrementally on ``record`` -- a test (and there are
+    # several) builds one of these by poking ``h``/``v`` directly, which a
+    # parallel sorted list kept up to date only inside ``record`` would
+    # silently fall out of sync with. Cached and rebuilt instead, keyed on
+    # ``len(h)``/``len(v)``: adding a *new* track changes that count, so the
+    # cache is known stale and re-sorted; appending another span onto a
+    # track already keyed (``record``'s common case for a straight run
+    # crossing an existing one, or a test extending ``h[y]`` in place) does
+    # not change the key set at all, so the cached order is still exactly
+    # right and paying to re-sort would buy nothing. One index served
+    # through one search sees its key count settle after the handful of
+    # ``record`` calls building it and then queried thousands of times, so
+    # this pays the sort once per sheet's worth of growth, not once per
+    # query.
+    _h_sorted: Optional[Tuple[int, List[float]]] = field(default=None, repr=False, compare=False)
+    _v_sorted: Optional[Tuple[int, List[float]]] = field(default=None, repr=False, compare=False)
+
     def record(self, path: List[Tuple[float, float]]) -> None:
         """Add one committed, drawn path's segments to the index."""
         for axis, fixed, lo, hi in committed_segments(path):
             (self.h if axis == "h" else self.v).setdefault(fixed, []).append((lo, hi))
+
+    def _sorted_keys(self, axis: Axis) -> List[float]:
+        d = self.h if axis == "h" else self.v
+        cached = self._h_sorted if axis == "h" else self._v_sorted
+        if cached is not None and cached[0] == len(d):
+            return cached[1]
+        keys = sorted(d)
+        if axis == "h":
+            self._h_sorted = (len(d), keys)
+        else:
+            self._v_sorted = (len(d), keys)
+        return keys
 
     def crosses(self, node: Tuple[float, float], axis: Axis) -> int:
         """How many already-recorded segments does a run through *node*,
@@ -147,7 +184,13 @@ class CrossingIndex:
         no node-by-node walk to check it with. This scans every span on the
         other axis instead, over the run's whole coordinate range, the way
         ``route_quality.py``'s own ``crossing_point`` reads the drawn
-        geometry rather than the search that produced it.
+        geometry rather than the search that produced it -- but only the
+        tracks strictly inside that range, found by bisecting ``_sorted
+        _keys`` rather than testing every track this index has ever been
+        given: ``find_path`` calls this once per candidate edge now, not
+        once per node, so a scan proportional to the *whole* index rather
+        than to what a query's own range actually covers is a cost this
+        search pays on every edge of every route on the sheet, not once.
 
         ``0`` for a diagonal or zero-length pair: neither is a segment this
         index's straight-line spans can properly cross.
@@ -155,23 +198,15 @@ class CrossingIndex:
         if p1[1] == p2[1] and p1[0] != p2[0]:  # horizontal
             y = p1[1]
             xlo, xhi = sorted((p1[0], p2[0]))
-            return sum(
-                1
-                for x, spans in self.v.items()
-                if xlo < x < xhi
-                for lo, hi in spans
-                if lo < y < hi
-            )
+            keys = self._sorted_keys("v")
+            i0, i1 = bisect.bisect_right(keys, xlo), bisect.bisect_left(keys, xhi)
+            return sum(1 for x in keys[i0:i1] for lo, hi in self.v[x] if lo < y < hi)
         if p1[0] == p2[0] and p1[1] != p2[1]:  # vertical
             x = p1[0]
             ylo, yhi = sorted((p1[1], p2[1]))
-            return sum(
-                1
-                for y, spans in self.h.items()
-                if ylo < y < yhi
-                for lo, hi in spans
-                if lo < x < hi
-            )
+            keys = self._sorted_keys("h")
+            i0, i1 = bisect.bisect_right(keys, ylo), bisect.bisect_left(keys, yhi)
+            return sum(1 for y in keys[i0:i1] for lo, hi in self.h[y] if lo < x < hi)
         return 0
 
 

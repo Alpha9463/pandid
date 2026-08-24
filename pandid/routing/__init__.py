@@ -136,6 +136,13 @@ def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, 
     recorded one orthogonal run at a time here, and a diagonal leg is left
     out of the index rather than taking the whole sheet's routing down with
     it; the author still gets ``route-diagonal`` for the leg itself.
+
+    Leaving the leg out means it is never priced against either: a diagonal
+    ``.via()`` leg is drawn, and a later search can cross it for free.
+    Tracked as #510, not fixed here -- pricing a genuinely diagonal segment
+    is a geometric extension to ``CrossingIndex``/``crossings_along``, which
+    only ever test an orthogonal one, not a bookkeeping change like this
+    function.
     """
     if not manual:
         crossing_index.record(waypoints)
@@ -220,9 +227,11 @@ class DefaultRouter:
             already-recorded track when it is added, the same as any later
             stream in this preview's own set can -- closing that gap
             requires knowing the full final set before the first stream is
-            searched, which is not what "earlier only" means here. See
-            ``preview_separated_waypoints`` for the same point made once,
-            not per call.
+            searched, which is not what "earlier only" means here. Measured
+            at 14 divergences out of 1032 streams on this corpus, not the
+            zero once claimed from a comparison that could not have found
+            them (see ``preview_separated_waypoints``, and #509 for the
+            undercharging that follows from it).
             """
             nonlocal crossing_index
             routed.append(stream)

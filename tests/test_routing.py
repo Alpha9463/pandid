@@ -878,6 +878,28 @@ def test_crossings_along_counts_a_crossing_strictly_inside_the_span_open_on_both
     assert index.crossings_along((5.0, 5.0), (5.0, 5.0)) == 0
 
 
+def test_crossings_along_sees_a_track_added_after_its_own_sorted_cache_was_built():
+    # #483 round 6: the per-edge scan a search now runs (see above) was
+    # linear in every track this index had ever been given, on every edge
+    # -- +56% on a real corpus sheet, 154x on a synthetic worst case (a
+    # long path against 50,000 already-drawn tracks). Fixed by bisecting a
+    # cached, sorted view of ``v``'s keys instead of walking all of them,
+    # invalidated by a change in key *count* rather than kept in step with
+    # every mutation -- which only works if a query genuinely rebuilds
+    # after a new track appears, not just returns whatever it cached the
+    # first time it was asked. First query builds the cache over one
+    # track; a second track then arrives -- via ``record``, the way a real
+    # stream adds one, not another direct poke -- strictly inside a range
+    # the first query alone would not have crossed, so the second query
+    # only finds it if the cache actually refreshed.
+    index = CrossingIndex()
+    index.v[10.0] = [(-10.0, 10.0)]
+    assert index.crossings_along((0.0, 0.0), (20.0, 0.0)) == 1  # builds the cache over {10.0}
+
+    index.record([(50.0, -10.0), (50.0, 10.0)])  # a new track, added after that build
+    assert index.crossings_along((0.0, 0.0), (100.0, 0.0)) == 2
+
+
 def test_find_path_prices_a_crossing_strictly_inside_a_long_edge_not_just_at_a_node():
     # #483's round-5 review, point 1: a graph edge is one hop, but not
     # necessarily a short one -- the visibility grid skips lane coordinates

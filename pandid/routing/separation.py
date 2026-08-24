@@ -303,13 +303,24 @@ def preview_separated_waypoints(
     resolve to +0px/+6px; add a *third*, port-fixed run onto the +6px one
     -- unremarkable on its own, a fixed run always keeps its own track --
     and the recompute that follows moves *both* of the first two again,
-    to +12px/+0px, not just makes room for the newcomer. #483's own corpus
-    never exercises this: every one of 1030 already-routed streams checked
-    across both its pinned and auto-placed forms was previewed, at the
-    point it was itself settled, into exactly the position it was finally
-    drawn at -- zero exceptions, not a rounding-off of a few. That is a
-    measurement of this corpus, not a proof about every one a caller might
-    hand this to.
+    to +12px/+0px, not just makes room for the newcomer.
+
+    #483's own corpus does exercise this, measured correctly the second
+    time: capturing each stream's preview *at its own* ``settle()`` call
+    (not the last preview it happens to appear in, which is a different
+    question and trivially matches the final pass by construction) and
+    comparing against its final, post-``separate_streams`` waypoints finds
+    14 divergences out of 1032 already-routed streams checked, across both
+    the pinned and auto-placed forms of all 21 shipped examples -- max
+    shift 19.37px, all five on auto-placed sheets. The consequence is real:
+    a later search can be undercharged for a crossing the finished drawing
+    actually has, because the earlier stream's track moves again after
+    that search already ran. Tracked as #509, with a reproduced case
+    (``06_column_reflux+auto``, streams ``S7``/``S5``) rather than fixed
+    here -- closing it needs either a second, full-set-aware separation
+    pass before the crossing-sensitive decisions, or re-checking every
+    stream against the real geometry after ``separate_streams``'s one true
+    pass, both a larger change than this preview mechanism itself.
     """
     h_offsets, v_offsets = _compute_offsets(streams, spacing)
     return _apply_offsets(streams, h_offsets, v_offsets)
