@@ -14,7 +14,7 @@ from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
 # A runtime import and not a TYPE_CHECKING one: every flowsheet builds
 # its own StreamTableOptions. pandid.document imports nothing from this
 # package, so there is no cycle to route around.
-from pandid.document import StreamTableOptions
+from pandid.document import StreamLabelOptions, StreamTableOptions
 from pandid.stations import (
     DEFAULT_BYPASS_RISE,
     DEFAULT_DRAIN_DROP,
@@ -442,6 +442,13 @@ class Flowsheet:
         # a field on it and not another name on this class; see
         # pandid.document.StreamTableOptions.
         self.stream_table = StreamTableOptions()
+        # How the numbers written on the *lines* are drawn -- the
+        # enclosure ruled around each, and whatever is asked of them
+        # next. A second object rather than a field on the one above,
+        # because a mark on a pipe and a block of properties docked to
+        # the sheet are two drawings; see
+        # pandid.document.StreamLabelOptions.
+        self.stream_labels = StreamLabelOptions()
 
     def _invalidate_layout(self) -> None:
         """Say that the resolved geometry no longer answers for this
@@ -1799,6 +1806,9 @@ class Flowsheet:
         :meth:`render` all state, and this is the one place it is
         carried out:
 
+        0. refuse a drawing option no backend answers to, before
+           anything at all is touched, so a refused render leaves the
+           sheet exactly as it found it;
         1. number the streams, so any finding quotes the name that will
            actually be drawn;
         2. **check the arguments** --
@@ -1849,9 +1859,32 @@ class Flowsheet:
         here either way, so an empty list after a ``check=False`` render
         means nothing was found rather than nothing was looked for.
         """
+        from pandid.document import _resolve_enclosure
         from pandid.render.svg import check_render_arguments, draws_arrowheads
         from pandid.validate import geometry_issues, model_issues
 
+        # First, and before a single attribute of this sheet is
+        # touched. ``stream_labels.enclosure`` is a plain attribute, so
+        # a name outside the closed set reaches the renderer, which
+        # refuses it -- and used to refuse it from the far side of
+        # ``_resolve_geometry``, leaving the sheet laid out, routed,
+        # un-stale and carrying this render's warnings behind a call
+        # that raised. #433 and #451 are the same defect: a refused
+        # render has to leave the model exactly as it found it, or the
+        # caller who catches the error cannot tell what they still hold.
+        #
+        # Ahead of ``check_render_arguments`` rather than beside it,
+        # because that one checks what the *caller* passed and this is
+        # an attribute of the sheet: it is wrong before the call is
+        # made, and refusing it first costs the author not even a
+        # renumbering.
+        #
+        # Not under ``check``, which selects which *findings about the
+        # drawing* are looked for. This is not a finding: it is an
+        # argument no output answers to, with no fallback to draw --
+        # ``check=False`` asks for the sheet unvalidated, not for a
+        # shape that does not exist.
+        _resolve_enclosure(self.stream_labels.enclosure)
         # Before the model check, not after: `stream-name-reused` reads
         # the names, and `new_line_number` set after the last connect()
         # regroups the runs and so changes them.

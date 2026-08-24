@@ -459,7 +459,7 @@ def test_every_piece_of_pipe_ink_says_whose_run_it_is():
     into no run, which is the answer wanted.
     """
     fs = _collinear_pair()
-    ink = _ink(fs)
+    ink = _ink(fs, "vertical")
     pipes = [piece for piece in ink if piece.kind == "pipe"]
     assert pipes, "the sheet drew no pipe"
     assert {piece.line for piece in pipes} == {s.name for s in fs.streams}
@@ -480,7 +480,7 @@ def test_two_runs_at_one_height_are_two_runs():
     )
     level = [
         piece
-        for piece in _ink(fs)
+        for piece in _ink(fs, "vertical")
         if piece.kind == "pipe" and piece.axis == "h" and abs(piece.at - 100.0) < 0.5
     ]
     assert len({piece.line for piece in level}) == 2, (

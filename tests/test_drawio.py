@@ -1291,11 +1291,11 @@ def test_a_line_number_is_written_where_the_sheet_writes_it():
         fs.to_svg(**kwargs)
         cells = _drawio_cells(fs, kwargs)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
-        plates = _tag_pass(fs, default_registry).plates
+        plates = _tag_pass(fs, default_registry, None, "vertical").plates
         # The sheet's own joints, because a flange mark is ink the number search
         # dodges: asking without them is asking about a different drawing.
         joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
-        wanted = {number.name: number for number in stream_numbers(fs, plates, joints)}
+        wanted = {number.name: number for number in stream_numbers(fs, plates, joints, "vertical")}
         checked = 0
         for n, s in enumerate(fs.streams):
             cell = cells[f"s{n}"]
@@ -1369,7 +1369,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
         svg = fs.to_svg(**kwargs)
         cells = _drawio_cells(fs, kwargs)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
-        codes = quadrant_labels(fs)
+        codes = quadrant_labels(fs, "vertical")
         written[stem] = {item[5] for item in codes}
         counted[stem] = len(codes)
         for n, (lx, ly, anchor, _baseline, _lpos, text) in enumerate(codes):
