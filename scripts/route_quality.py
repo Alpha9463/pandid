@@ -339,7 +339,8 @@ class Recorder:
         self._original = astar_mod.find_path
         recorder = self
 
-        def wrapped(graph, start, goal, start_dir=None, goal_dir=None, edge_penalties=None, is_recycle=False):
+        def wrapped(graph, start, goal, start_dir=None, goal_dir=None, edge_penalties=None,
+                    is_recycle=False, crossing_index=None):
             count = [0]
             real_heappop = heapq.heappop
 
@@ -349,7 +350,8 @@ class Recorder:
 
             heapq.heappop = counting_heappop
             try:
-                result = recorder._original(graph, start, goal, start_dir, goal_dir, edge_penalties, is_recycle)
+                result = recorder._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
+                                             is_recycle, crossing_index)
             finally:
                 heapq.heappop = real_heappop
             budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))

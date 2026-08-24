@@ -514,18 +514,25 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported():
     condition needs a crossing within a few units of a corner and the routes
     that produce one are exactly what a hand-built sheet cannot be trusted to
     reproduce.
+
+    ``19_absorber_stripper``, not ``18_fixed_bed_recycle`` -- #425/#483
+    redraws the latter, clearing the specific near-corner crossing this
+    test used to hold it against (``350-LG-310-CS``/``350-LG-314-CS``, the
+    router's whole point being that a crossing with a same-cost clear
+    alternative no longer gets drawn). ``19_absorber_stripper`` carries an
+    unrelated one this router never touches, on a manually-routed stream.
     """
     from pandid.render.svg import unmarked_crossings
 
     from test_golden import SCENARIOS
 
-    build, kwargs = SCENARIOS["18_fixed_bed_recycle"]
+    build, kwargs = SCENARIOS["19_absorber_stripper"]
     fs = build()
     fs.to_svg(**kwargs)
 
     said = [w for w in fs.warnings if w.code == "crossing-unmarked"]
     assert len(said) == len(unmarked_crossings(fs)) == 1
-    assert "350-LG-310-CS crosses 350-LG-314-CS at (1278, 629)" in said[0].message
+    assert "S-409 crosses S-418 at (1289.18, 174.662)" in said[0].message
     # The measurement a reader can check, and what to do about it.
     assert f"under {HOP_R:g}px of itself either side" in said[0].message
     assert "via()" in said[0].message
@@ -548,10 +555,14 @@ def test_a_sheet_whose_crossings_all_have_room_says_nothing():
 def test_a_redrawn_sheet_drops_the_crossing_it_used_to_report():
     """A render's own findings describe *that* render, the rule ``_FIT_CODES``
     already follows: a sheet redrawn with the crossing moved clear must stop
-    warning about it, rather than accumulating both answers."""
+    warning about it, rather than accumulating both answers.
+
+    ``19_absorber_stripper``, not ``18_fixed_bed_recycle`` -- see the sibling
+    test above for why.
+    """
     from test_golden import SCENARIOS
 
-    build, kwargs = SCENARIOS["18_fixed_bed_recycle"]
+    build, kwargs = SCENARIOS["19_absorber_stripper"]
     fs = build()
     fs.to_svg(**kwargs)
     assert [w for w in fs.warnings if w.code == "crossing-unmarked"]

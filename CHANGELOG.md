@@ -1036,6 +1036,68 @@ class hierarchy, or what it is called.
   heading widens anything the answer is arithmetically identical to the division
   it replaces, so no sheet that fitted before moves; a table that fits at no
   count at all is still a page too small, and still says so.
+- The router's cost model **now charges for a drawn crossing**, so two routes
+  tied on bends and length no longer break the tie arbitrarily when one of
+  them crosses an already-drawn line and the other does not (#425). The
+  charge (`CROSSING_PENALTY`, 10px) only sees streams already drawn earlier
+  in `fs.streams`'s order -- manual (`.via()`) and fallback-`L` routes
+  included, not only searched ones, and the fallback `L`'s own choice
+  between its two candidate corners now weighs an already-drawn line the
+  same way it already weighed an obstacle -- so which crossings clear stays
+  reproducible under `PYTHONHASHSEED`, and prices the span a stub or a
+  shared escape mid-point actually draws rather than only the lane nodes a
+  search happened to visit. A route crossing two earlier streams at the same
+  point is charged twice, not once. A crossing at the destination itself is
+  priced too, on whichever move reaches it, with a bend charged instead
+  wherever a side approach's own always-unpriced turn would otherwise make a
+  bend look free next to a small crossing charge.
+
+  10px was chosen by sweeping every whole value from 0px to 40px against
+  this corpus and picking the smallest value that clears every crossing it
+  has a same- or near-cost alternative for -- corpus tuning, not a value
+  independent of it. Crossings and bend/length metrics are flat across
+  1px-15px; mean length ratio is the first to move, at 16px, followed by
+  bend-optimal share at 26px. Crossings fall from 32 to 29 on the pinned
+  corpus and 246 to 232 on the auto-placed one; bend-optimal share and mean
+  length ratio are bit-for-bit unchanged on both, at this corpus's own
+  points, at this penalty -- not a general guarantee against trading length
+  for a crossing, which this charge can still do, up to just under its own
+  value, on a sheet whose alternative happens to be priced into that gap.
+  `18_fixed_bed_recycle` is redrawn.
+
+  Two gaps closed since: a crossing was only priced at a node a search
+  actually stopped at, so a manual (`.via()`) route drawn at an orthogonal
+  coordinate the lane grid does not carry -- any coordinate an author
+  writes, not only ones a search would land on -- could cross a searched
+  route's own edge unpriced, mid-span, with no node there to catch it.
+  Crossings are now checked along the whole of every edge a search
+  considers, not only its ends -- indexed by track rather than scanned one
+  by one, since the whole-edge check runs once per edge on every search on
+  the sheet, and a linear scan there cost one real sheet +56% and a
+  synthetic worst case (a long path against 50,000 already-drawn tracks)
+  154x. Separately, every stream's *raw*, pre-separation geometry was what
+  got priced, one single `separate_streams` pass only running after every
+  stream was already routed -- so a later stream's search could be pricing
+  a drawing a few pixels off the one that was actually going up. The router
+  now previews where separation will put each already-routed stream before
+  pricing the next one against it. Neither gap closing moves this corpus's
+  numbers above -- re-run in full, both are unchanged.
+
+  The preview is not a perfect match for the final drawing: a stream not
+  yet routed can still, once added, reassign an already-settled stream's
+  track a second time. Measured directly -- at each stream's own settlement,
+  not against the last preview it happens to appear in, which trivially
+  matches by construction and is not the question -- at 14 divergences out
+  of 1032 already-routed streams checked on this corpus, max shift 19.37px,
+  across five auto-placed sheets. The consequence is real and is filed as
+  #509 rather than fixed here: a later search can be undercharged for a
+  crossing the finished drawing actually has, when an earlier stream's
+  track moves again after that search already ran.
+
+  A diagonal `.via()` leg is drawn, reported by `validate()`
+  (`route-diagonal`), and priced against by nothing -- filed as #510,
+  since pricing one is a geometric extension to `CrossingIndex`, not a
+  bookkeeping fix like recording its orthogonal neighbours already is.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on
