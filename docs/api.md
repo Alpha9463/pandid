@@ -77,6 +77,7 @@ neither stands in for the other.
 | `title_block` | `TitleBlock \| None` | drawn whenever it is set |
 | `annotations` | `list` | sheet furniture boxes, drawn whenever they are added |
 | `stream_table_sections` | `list[tuple[str, str]]` | `(before_key, header_label)` |
+| `stream_table` | `StreamTableOptions` | how that table is drawn; see [Sizing the table](#sizing-the-table) |
 
 ### Building the topology
 
@@ -2420,6 +2421,24 @@ difference is that the column stays:
 s.properties = {"Flow (kg/h)": ""}   # nothing to report, and the column says so
 ```
 
+#### Sizing the table
+
+```python
+fs.stream_table.font_size = 8.0     # default: None, sized from the column count
+```
+
+Left alone, the table is set at 10.5 up to 18 columns and shrinks from there. A
+size stated here **rules the table and not only its lettering**: the row height
+and the minimum column widths follow it in proportion, so a table that overruns
+an A3 sheet has a remedy short of a bigger page. A size that is not a positive
+number raises `ValueError`.
+
+It is one field on an object rather than a bare `fs.stream_table_font_size`
+because the next table option will be a field on the same object rather than a
+tenth keyword on `render()`, and because a table option describes the sheet
+rather than the file — it means the same thing to `to_drawio()` as to
+`to_svg()`. It comes through the spec as `stream_table:`.
+
 Every column is ruled wide enough for everything drawn in it: the row labels,
 the stream number or line number heading the column, the values under it, and
 any section header spanning the table. The table's width is an output of the
@@ -3820,6 +3839,7 @@ streams:
   - {from: [LIC-101, sig_out], to: [FV-101, actuator], kind: electric}
 
 stream_table_sections: [[Ethanol, Mass Fraction]]
+stream_table: {font_size: 8}
 
 title_block:
   title: Utilities U200

@@ -142,6 +142,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The temporary file no longer leaks. A window is handed bytes and writes
   nothing at all; the browser fallback keeps one file per process,
   overwritten by each `show()` and dropped on the way out.
+- **`fs.stream_table.font_size`: the stream table can be sized (#473).**
+
+  ```python
+  fs.stream_table.font_size = 8.0
+  ```
+
+  It **rules the table and not only its lettering.** The row height and both
+  minimum column widths follow it in proportion, so the table's footprint
+  actually shrinks: on the fifteen-column sheet the issue describes, 8.0 takes
+  the table from 902x80 to 687x61 drawing units, which is the difference
+  between a drawing that fits A3 and one that raises. Setting only the glyphs
+  would have done nothing at all for that sheet, since every column of a table
+  of short names and short values sits on its minimum width. Left unset the
+  table is sized exactly as it always was, and every shipped sheet is
+  byte-identical.
+
+  **An object rather than another keyword on `render()`**, which already
+  carries nine that three of the four output calls restate. A table option
+  describes the sheet rather than the file -- it means the same to
+  `to_drawio()` as to `to_svg()` -- so it is settled on the flowsheet and said
+  once for every way the sheet comes out, and the next table option is a field
+  on `StreamTableOptions` rather than a tenth keyword on four signatures. It
+  round-trips through the spec as `stream_table:`, and a sheet that leaves the
+  table alone writes no such section, so its spec is the file it was before.
+  `stream_table_sections` stays where it is: it is content -- the heading text
+  the table draws -- and belongs beside `title_block` and `annotations`, not
+  among the drafting choices.
 
 ### Changed
 

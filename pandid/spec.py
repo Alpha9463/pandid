@@ -61,6 +61,7 @@ The format::
          properties: {"Temperature (C)": 25 C}}
 
     stream_table_sections: [[Benzene, Mass Fraction]]
+    stream_table: {font_size: 8}
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
     annotations: [{type: equipment_list, align: top-right}]
 
@@ -85,7 +86,16 @@ from typing import Any
 from pandid import devices as device_types
 from pandid import units as unit_types
 from pandid.components import Component
-from pandid.document import Annotation, Revision, TableBox, TitleBlock, equipment_list, legend, notes
+from pandid.document import (
+    Annotation,
+    Revision,
+    StreamTableOptions,
+    TableBox,
+    TitleBlock,
+    equipment_list,
+    legend,
+    notes,
+)
 from pandid.flowsheet import (
     DEFAULT_LINE_NUMBER_START,
     DEFAULT_LINE_NUMBERING_SCHEME,
@@ -311,7 +321,8 @@ _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
     "line_numbering_scheme", "line_number_start", "loop_number_start",
     "auto_faces", "components", "units", "loops",
-    "instruments", "streams", "stream_table_sections", "title_block", "annotations",
+    "instruments", "streams", "stream_table_sections", "stream_table", "title_block",
+    "annotations",
 }
 # Keys the format no longer has. A file written against the old one
 # names the sheet it wants, so say so rather than reporting an unknown
@@ -514,6 +525,8 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         for i, entry in enumerate(_sequence(data.get("stream_table_sections", []),
                                             "stream_table_sections"))
     ]
+    if "stream_table" in data:
+        fs.stream_table = _read_stream_table(data["stream_table"], "stream_table")
     if "title_block" in data:
         fs.title_block = _read_title_block(data["title_block"], "title_block")
     for i, entry in enumerate(_sequence(data.get("annotations", []), "annotations")):
@@ -1040,6 +1053,23 @@ def _read_section(entry: Any, where: str) -> tuple[str, str]:
     return _text(pair[0], f"{where}[0]"), _text(pair[1], f"{where}[1]")
 
 
+def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
+    """``stream_table:`` -- how the table is drawn, not what is in it.
+
+    ``font_size`` takes ``null`` as itself, which is the field's own
+    default and means *let the table pick one*. So the reader
+    distinguishes an absent key from a stated null only in that both
+    land on the same value, and a spec may state the default back
+    explicitly without being told it is wrong.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, {f.name for f in dataclass_fields(StreamTableOptions)}, where)
+    options = StreamTableOptions()
+    if data.get("font_size") is not None:
+        options.font_size = _number(data["font_size"], f"{where}.font_size")
+    return options
+
+
 def _read_title_block(entry: Any, where: str) -> TitleBlock:
     data = _mapping(entry, where)
     allowed = {f.name for f in dataclass_fields(TitleBlock)}
@@ -1218,6 +1248,13 @@ def to_dict(fs: Flowsheet) -> dict:
         spec["streams"] = [_write_stream(s) for s in fs.streams]
     if fs.stream_table_sections:
         spec["stream_table_sections"] = [list(sec) for sec in fs.stream_table_sections]
+    # Only what was changed, so a spec written by a sheet that left the
+    # table alone is the same file it was before these options existed.
+    table = {f.name: getattr(fs.stream_table, f.name)
+             for f in dataclass_fields(StreamTableOptions)
+             if getattr(fs.stream_table, f.name) != f.default}
+    if table:
+        spec["stream_table"] = table
     if fs.title_block is not None:
         spec["title_block"] = _write_title_block(fs.title_block)
     if fs.annotations:

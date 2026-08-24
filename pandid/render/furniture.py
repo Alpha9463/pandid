@@ -364,6 +364,36 @@ _STREAM_SECTION_FILL = "#f4f4f4"
 _STREAM_KEY_FILL = "#f9f9f9"
 _STREAM_VALUE_FILL = "white"
 
+#: The type size a table of up to 18 columns is set at, and the size the
+#: three fixed measurements below were chosen against. An author who
+#: states a size states it as a multiple of this one, which is what
+#: makes the three follow it; see :func:`stream_table_layout`.
+_BASE_SIZE = 10.5
+
+#: Depth of every row at :data:`_BASE_SIZE`.
+_ROW_H = 20.0
+
+#: Narrowest the row-label column and a stream column are ruled at
+#: :data:`_BASE_SIZE`, whatever goes in them. Text is measured and
+#: gutter-ed on top (see :func:`stream_table_layout`), so these two are
+#: floors and not widths: they keep a table of two-character names and
+#: three-figure values from being ruled too narrow to read across.
+_MIN_LABEL_W = 122.0
+_MIN_NAME_W = 52.0
+
+
+def _options(fs):
+    """This sheet's :class:`~pandid.document.StreamTableOptions`.
+
+    Through ``getattr``, as :attr:`stream_table_sections` is read: every
+    :class:`~pandid.flowsheet.Flowsheet` has one, and this module is
+    handed whatever the renderer was handed.
+    """
+    from pandid.document import StreamTableOptions
+    options = getattr(fs, "stream_table", None)
+    return StreamTableOptions() if options is None else options
+
+
 #: A :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections` key that
 #: matched no property row. Unlike ``label_pos`` or ``col_align``, this
 #: cannot be checked when the author sets it -- the streams it is
@@ -576,8 +606,43 @@ def stream_table_layout(fs) -> "StreamTable | None":
         return None
 
     n = len(streams)
-    size = 10.5 if n <= 18 else max(8.0, 190.0 / n)
-    row_h = 20.0 if n <= 18 else max(15.0, size + 5)
+    asked = _options(fs).font_size
+    if asked is not None and asked <= 0:
+        raise ValueError(
+            f"fs.stream_table.font_size={asked!r}: a type size is a positive "
+            f"number of drawing units, or None to let the table pick one from "
+            f"how many columns it has"
+        )
+    if asked is None:
+        # As it always was: 10.5 while the columns fit, then shrunk so
+        # that a long value still sits inside a column already at its
+        # minimum width. That last clause is why the minimums do not
+        # shrink with it -- shrinking them would rule a 55-column table
+        # too narrow to track a row across, which is the failure they
+        # were put there to prevent.
+        size = _BASE_SIZE if n <= 18 else max(8.0, 190.0 / n)
+        row_h = _ROW_H if n <= 18 else max(15.0, size + 5)
+        ruled = 1.0
+    else:
+        # A size the author stated is the author overruling that
+        # judgement, for a sheet that has to fit a given page. So it
+        # rules the table and not only its lettering: the row height and
+        # both minimum widths are taken as multiples of _BASE_SIZE and
+        # follow it down. Setting only the glyphs would leave the table
+        # its whole footprint and the feature would do nothing at all
+        # for the sheet that needed it -- every column of a table of
+        # short names and short values is at its floor.
+        #
+        # Everything else already followed: each column is measured from
+        # `text_width(..., size)` and only *held up* by a floor.
+        # _STREAM_GUTTER and _STREAM_PAD do not scale and are not meant
+        # to. They are the clearance between a rule and a glyph, which
+        # is about the eye and the printer rather than about the type,
+        # and the draw.io exporter states the pad as a cell inset of its
+        # own.
+        size = asked
+        ruled = size / _BASE_SIZE
+        row_h = _ROW_H * ruled
     disp = []  # ('section', label) | ('data', key)
     for k in order:
         if k in sec_before:
@@ -592,11 +657,11 @@ def stream_table_layout(fs) -> "StreamTable | None":
     # Every column is sized to what goes in it. A minimum keeps a table
     # of short values from ruling columns too narrow to read as columns.
     labels = [heading] + [key for kind, key in disp if kind == "data"]
-    label_w = max(122.0, max(text_width(t, size, bold=True)
-                             for t in labels) + _STREAM_GUTTER)
+    label_w = max(_MIN_LABEL_W * ruled, max(text_width(t, size, bold=True)
+                                            for t in labels) + _STREAM_GUTTER)
     values = [_stream_cell_text(c, key) for kind, key in disp if kind == "data"
               for c in cells]
-    name_w = max(52.0,
+    name_w = max(_MIN_NAME_W * ruled,
                  max((text_width(s.name, size, bold=True) for s in streams),
                      default=0.0) + _STREAM_GUTTER,
                  max((text_width(v, size) for v in values), default=0.0)

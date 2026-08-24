@@ -10,6 +10,10 @@ from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, TYPE_CHECKING, TypeVar
 
+# A runtime import and not a TYPE_CHECKING one: every flowsheet builds
+# its own StreamTableOptions. pandid.document imports nothing from this
+# package, so there is no cycle to route around.
+from pandid.document import StreamTableOptions
 from pandid.stations import (
     DEFAULT_BYPASS_RISE,
     DEFAULT_DRAIN_DROP,
@@ -372,8 +376,15 @@ class Flowsheet:
         # docked to the sheet corners. See pandid.document.
         self.annotations: list = []
         # Section headers to inject into the stream table: (before_key,
-        # label).
+        # label). Content rather than a setting -- the heading text the
+        # table draws -- which is why it is here beside `title_block`
+        # and `annotations` and not on `stream_table` below.
         self.stream_table_sections: list[tuple[str, str]] = []
+        # How that table is drawn: its type size today, and whatever is
+        # asked of it next. An object rather than an attribute apiece,
+        # so the second option is a field on it and not another name on
+        # this class; see pandid.document.StreamTableOptions.
+        self.stream_table = StreamTableOptions()
 
     def _invalidate_layout(self) -> None:
         """Say that the resolved geometry no longer answers for this
@@ -2225,7 +2236,9 @@ class Flowsheet:
         Args:
             path: Output file path; its extension selects the format.
             show_stream_table: Draw a property table of all streams at
-                the bottom.
+                the bottom. How that table is drawn -- its type size --
+                is ``fs.stream_table``; see
+                :class:`~pandid.document.StreamTableOptions`.
             border: ``"none"`` or ``"zone"`` (the zone-ruled frame).
             diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled
                 ``"pid"``. A P&ID draws no arrowheads on process lines.
