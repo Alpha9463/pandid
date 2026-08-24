@@ -1029,10 +1029,20 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             # dropped, and the more natural spelling for a balloon at
             # that. A unit the sheet gave no rank at all says so rather
             # than quoting ``None`` at the author.
+            #
+            # A rank an absolute coordinate on the same axis supersedes
+            # is not one the sheet declined to read: ``pin(col=7, x=222)``
+            # means x, by the placement rule
+            # :func:`pandid.layout.control._place_free` states and
+            # records -- it writes no ``col`` where it used none. Holding
+            # the drawing to the overridden half reported a correct sheet
+            # twice, and a check that cries wolf teaches an author to
+            # stop reading it. The coordinate that did the superseding is
+            # held above, so nothing goes unheld.
             pin = u.pin_
-            for axis in ("col", "row") if pin is not None else ():
+            for axis, absolute in (("col", "x"), ("row", "y")) if pin is not None else ():
                 want, rank = getattr(pin, axis), getattr(u.frame, axis)
-                if want is None or rank == want:
+                if want is None or rank == want or getattr(pin, absolute) is not None:
                     continue
                 missed.append(f"{u.name} was pinned {axis}={want} and is "
                               + (f"drawn in {axis}={rank}" if rank is not None
