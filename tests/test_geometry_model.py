@@ -364,11 +364,15 @@ def test_a_written_pin_reads_back_as_the_pin_that_was_written():
         from pandid.portgeom import pin_intent
 
         read = Flowsheet.from_dict(written).units[0]
-        was = [(port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
-               for axis, (port, _) in pin_intent(read).items()]
+        was = [
+            (port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
+            for axis, (port, _) in pin_intent(read).items()
+        ]
         read.pin(orientation=90)
-        assert [(port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
-                for axis, (port, _) in pin_intent(read).items()] == was
+        assert [
+            (port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
+            for axis, (port, _) in pin_intent(read).items()
+        ] == was
 
 
 def test_a_pin_read_back_refuses_to_be_edited_in_place():

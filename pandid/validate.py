@@ -1011,46 +1011,44 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # What the author cannot see is that it is not the drawing they
         # asked for.
         for u in placed:
-            asked: list[tuple[str, str, Any, Any]] = []
+            # Each miss already worded, because a rank and a coordinate
+            # are not the same sentence and neither is phrased where the
+            # other's numbers are in scope.
+            missed: list[str] = []
             for axis, (port_name, want) in pin_intent(u).items():
                 drawn = (port_point(u, u.frame, port_name)[0 if axis == "x" else 1]
                          if port_name is not None else getattr(u.frame, axis))
                 if abs(drawn - want) > _PIN_TOL:
-                    asked.append((axis, f".{port_name}" if port_name is not None else "",
-                                  want, drawn))
-            # The grid half of the same question. A rank is not a
-            # coordinate, so it is compared as one: the frame carries the
-            # rank the sheet stood the unit in, and a pin naming one the
-            # frame does not is a pin nothing read -- which is how an
-            # attached balloon's is dropped, and the more natural
-            # spelling for a balloon at that.
+                    nozzle = f".{port_name}" if port_name is not None else ""
+                    missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
+                                  f"drawn at {drawn:g}, {abs(drawn - want):g} away")
+            # The grid half of the same question. A rank is compared as a
+            # rank: the frame carries the one the sheet stood the unit
+            # in, and a pin naming one the frame does not is a pin
+            # nothing read -- which is how an attached balloon's is
+            # dropped, and the more natural spelling for a balloon at
+            # that. A unit the sheet gave no rank at all says so rather
+            # than quoting ``None`` at the author.
             pin = u.pin_
             for axis in ("col", "row") if pin is not None else ():
-                want, drawn = getattr(pin, axis), getattr(u.frame, axis)
-                if want is not None and drawn != want:
-                    asked.append((axis, "", want, drawn))
-            for axis, nozzle, want, drawn in asked:
-                # An attached balloon is positioned from its host and its
-                # pin is never read, so name the aiming that does work in
-                # place of the one that was written.
-                cure = ("An attached balloon is positioned from its host rather "
-                        f"than from its pin: aim it with {u.name}.attach(at=..., "
-                        f"offset=..., angle=...), or detach it to have it laid "
-                        "out like any other unit"
-                        if getattr(u, "host", None) is not None else
-                        "A pinned axis is honoured exactly, so something moved "
-                        "this unit after the solver read the pin")
-                # A rank reads as a rank and a coordinate as a
-                # coordinate, and a unit the sheet gave no rank at all
-                # says so rather than quoting ``None`` at the author.
-                if axis in ("col", "row"):
-                    put = (f"is drawn in {axis}={drawn}" if drawn is not None
-                           else f"is drawn with no {axis} of its own")
-                else:
-                    put = f"is drawn at {drawn:g}, {abs(drawn - want):g} away"
-                warnings.append(Issue(
-                    "warning", "pin-not-honored",
-                    f"{u.name}{nozzle} was pinned {axis}={want:g} and {put}. {cure}"))
+                want, rank = getattr(pin, axis), getattr(u.frame, axis)
+                if want is None or rank == want:
+                    continue
+                missed.append(f"{u.name} was pinned {axis}={want} and is "
+                              + (f"drawn in {axis}={rank}" if rank is not None
+                                 else f"drawn with no {axis} of its own"))
+            # An attached balloon is positioned from its host and its pin
+            # is never read, so name the aiming that does work in place
+            # of the one that was written.
+            cure = ("An attached balloon is positioned from its host rather "
+                    f"than from its pin: aim it with {u.name}.attach(at=..., "
+                    f"offset=..., angle=...), or detach it to have it laid "
+                    "out like any other unit"
+                    if getattr(u, "host", None) is not None else
+                    "A pinned axis is honoured exactly, so something moved "
+                    "this unit after the solver read the pin")
+            for said in missed:
+                warnings.append(Issue("warning", "pin-not-honored", f"{said}. {cure}"))
 
         boxes = [(u, unit_box(u, u.frame)) for u in placed]
         # A stream with an unplaced end has no drawn path, so there is

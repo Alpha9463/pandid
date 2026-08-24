@@ -46,7 +46,13 @@ def _grid(fs: Flowsheet) -> tuple[dict[int, float], dict[int, float]]:
     rows: dict[int, float] = {}
     for u in fs.units:
         frame = u.frame
-        if frame is None:
+        # Stage 1's units, which is what `control._grid` reads: a balloon
+        # is placed in stage 2 and consumes the grid, and its frame now
+        # records the rank it was stood in so `pin-not-honored` can tell
+        # a grid pin that was honoured from one nothing read. Letting one
+        # back in here would have `pin(col=7)` answer as though the sheet
+        # had a column 7 -- which is the very thing this test denies.
+        if frame is None or isinstance(u, U.Instrument):
             continue
         if frame.col is not None:
             held = cols.get(frame.col)
