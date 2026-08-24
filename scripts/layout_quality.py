@@ -10,6 +10,12 @@ are what :func:`strip_placement` below takes away, and the other 31 pass
 decision rather than a placement and is kept. Counted at run time instead
 there are 456 calls, 410 of them placing, because a site inside a loop is
 one site and many calls -- ``11_ethanol_pid``'s 29 sites make 129 of them.
+That run-time figure is over ``gallery.sheets()``, which is the corpus this
+script itself measures; the same count over ``tests/test_golden.SCENARIOS``
+is 455, because the gallery builds ``10`` and ``11`` from the example
+modules where ``SCENARIOS`` rebuilds them. Three corpora of 21 sheets exist
+in this repository and they are not identical, so a corpus figure that does
+not say which one it counted is not checkable.
 
 Sheet for sheet the hand placement is near total wherever it is used at
 all: ``21_alumina_refinery`` and ``13_mineral_dewatering`` place every unit

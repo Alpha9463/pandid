@@ -585,9 +585,14 @@ def test_a_spec_built_sheet_is_checked_too():
     ],
 )
 def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
-    """442 ports carry no stream across the 21 shipped examples -- every port
-    on every unit whose ``stream`` is ``None``, against 1030 that are piped --
-    and every one of them is one of these. The drain valve is the plainest: "a drain runs
+    """445 ports carry no stream across the 21 ``tests/test_golden.SCENARIOS``
+    this file's own acceptance sweep builds -- every port on every unit whose
+    ``stream`` is ``None``, against 1030 that are piped -- and every one of
+    them is one of these. The population matters and is named for a reason:
+    the same count over ``scripts/gallery.py``'s corpus is 442, because the
+    gallery builds ``10`` and ``11`` from the example modules where
+    ``SCENARIOS`` rebuilds them, and the two disagree by three ports on ``11``
+    and ``14``. The drain valve is the plainest: "a drain runs
     down to a funnel on the floor, which is not on this sheet, so the leg ends
     at the valve", in ``add_valve_station``'s own words, and its outlet is bare
     eight times on ``11_ethanol_pid`` alone."""

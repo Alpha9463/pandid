@@ -1355,7 +1355,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
     from pandid.render.drawio import _TEXT_INSET
     from pandid.render.svg import quadrant_labels
 
-    written = {}
+    written, counted = {}, {}
     for stem in SHEETS:
         fs, kwargs = gallery.flowsheet(stem)
         svg = fs.to_svg(**kwargs)
@@ -1363,6 +1363,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         codes = quadrant_labels(fs)
         written[stem] = {item[5] for item in codes}
+        counted[stem] = len(codes)
         for n, (lx, ly, anchor, _baseline, _lpos, text) in enumerate(codes):
             assert f">{text}</text>" in svg, f"{stem}: the sheet letters no {text}"
             cell = cells.get(f"q{n}")
@@ -1383,9 +1384,28 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
             # haloed for the lines it could not step off, as the sheet haloes it.
             assert style["labelBackgroundColor"] == "#ffffff"
 
-    # Vacuous on the eighteen of 21 sheets that annotate nothing, so the three
-    # that do are named. `tests/test_halo_invariants.py` counts the same codes from the
-    # sheet's side; this is the pair of them the export was losing.
+    # Fifteen of the 21 sheets annotate nothing, so the loop above is vacuous on
+    # most of the corpus -- and everything in it is a *parity* check, which one
+    # broken shared path satisfies by breaking both sides equally. Mutating
+    # `quadrant_labels` to return [] for 17, 18 and 20 alone deletes fifteen
+    # required codes and leaves every assertion above green, because the export
+    # loses exactly what the sheet loses and the loop never runs for them.
+    #
+    # So the population is asserted, not just the agreement: how many codes each
+    # annotating sheet writes, as a whole dict, so a sheet that stops annotating
+    # disappears from it and fails on its own rather than falling out of a check
+    # that only ever compared two silences. `tests/test_halo_invariants.py`
+    # counts the same codes from the sheet's side; this is the pair of them the
+    # export was losing.
+    assert {stem: n for stem, n in counted.items() if n} == {
+        "04_control_loop": 2,
+        "11_ethanol_pid": 6,
+        "14_tank_farm": 5,
+        "17_stirred_reactor_train": 5,
+        "18_fixed_bed_recycle": 5,
+        "20_molecular_sieve_dryer": 5,
+    }, counted
+    # The three whose codes were the reported defect, by name and not by count.
     assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
     assert written["04_control_loop"] == {"LAH", "LAL"}
     assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
