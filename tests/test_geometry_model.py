@@ -337,8 +337,10 @@ def test_a_written_pin_reads_back_as_the_pin_that_was_written():
     itself takes it, and the axis-by-axis mapping for the pin built out of
     two calls that measured to different things.
     """
-    for place in (lambda u: u.pin(port="in_1", x=300.0, y=100.0),
-                  lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0))):
+    for place in (
+        lambda u: u.pin(port="in_1", x=300.0, y=100.0),
+        lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0)),
+    ):
         fs = Flowsheet("written")
         tank = fs.add(U.Tank("T-1"))
         prod = fs.add(U.Product("P"))
