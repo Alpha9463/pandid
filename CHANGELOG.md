@@ -409,6 +409,47 @@ class hierarchy, or what it is called.
   days after its last revision. `test_the_generator_leaves_a_date_the_sheet_states_alone`
   now asks that question directly.
 
+- **A title block that does not fit its box is no longer settled quietly**
+  (#370). Every cell of the strip measured its value and abbreviated it, and
+  every one of those decisions reached the author only as ink: `validate()` said
+  nothing, and the finding a render did make named the field and quoted the
+  value without saying by how much it missed. Four things change.
+
+  **The drawing title is lettered smaller rather than abbreviated.** It is the
+  only value on the strip set above the strip's reading size, and the only one
+  read straight through instead of matched character by character against
+  another document -- so it has size to give back before it has meaning to give
+  up. It is set down to whatever fits, floored at the subtitle's size so the
+  band cannot say the wrong thing about which line is the title, and abbreviated
+  only below that. `examples/17_stirred_reactor_train` is the shipped sheet this
+  moves: *Propylene Glycol Reaction* was being issued as *Propylene Glycol
+  Reacti…*, and is now drawn whole at 12,0 in place of 12,5.
+
+  **`validate()` reports an over-long field before anything is drawn.** Every
+  width the strip rules is a constant, so whether a value fits is settled by the
+  block alone; the check now runs in the model half, where it can reach the
+  author rather than describe a sheet that has already been issued. A render
+  measures the same strip and replaces the findings with its own.
+
+  **The finding says by how much.** `text-truncated` and `text-overruns-cell`
+  now give the width the value needs, the width the cell has and the ratio
+  between them, the way `route-detour` states its two lengths -- so the author
+  reads how much has to come out instead of guessing. The `SHEET n of m` cell
+  also names both of the fields that fill it: reported as `sheet` alone, it sent
+  an author who had set `of_sheets` to look at the wrong one.
+
+  **Two fields could be lost without any cell overrunning, and both now say
+  so.** A `company` name that wraps to more lines than the strip is deep was
+  drawn out through the top and the bottom of the block in silence
+  (`title-block-company-overflows`); and `drawn_by`/`checked_by`/`approved_by`
+  fill the newest revision row's BY / CHK'D / APP'D cells, so a block that set
+  them and listed no revisions drew none of them anywhere
+  (`title-block-signatory-undrawn`) -- two of ISO 7200's mandatory data fields,
+  accepted and dropped.
+
+  The sweep behind it covers all fifteen fields of `TitleBlock` and all six of
+  `Revision`, and `tests/test_titleblock.py` keeps it: no field of the block
+  takes a value it cannot draw and says nothing about it.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on

@@ -970,14 +970,21 @@ def test_a_page_too_small_for_the_stream_table_says_so():
 
 
 def test_an_abbreviated_title_names_the_field_and_the_text_it_cut():
+    """Past the size the title is allowed down to, the cell abbreviates -- and
+    says which field, what it was given, and by how much it missed."""
+    long_title = "Ethanol Purification and Dehydration Area A300"
     fs = _sheet()
-    fs.title_block = TitleBlock(drawing_number="PFD-1", title="Ethanol Purification A300")
+    fs.title_block = TitleBlock(drawing_number="PFD-1", title=long_title)
     svg = fs.to_svg(page_size="A3", border="zone")
-    assert "Ethanol Purification A3…" in svg  # the strip cannot grow: it abbreviates
+    assert "Ethanol Purification and De…" in svg  # the strip cannot grow
     cut = [w for w in fs.warnings if w.code == "text-truncated"]
     assert cut, "an abbreviated title must not be silent"
     assert len(cut) == 1 and "title" in cut[0].message
-    assert "Ethanol Purification A300" in cut[0].message
+    assert long_title in cut[0].message
+    # The two widths and the ratio: what the author edits between. The need is
+    # measured at the smallest size the title is allowed down to, since that is
+    # the width the text still has to come out of.
+    assert "needs 299 of the 187 units its cell has (1.6x)" in cut[0].message
 
 
 def test_a_title_that_fits_says_nothing():
@@ -1066,9 +1073,177 @@ def test_a_box_narrower_than_its_own_rows_is_reported():
 
 def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():
     fs = _sheet()
-    fs.title_block = TitleBlock(title="Ethanol Purification A300")
+    fs.title_block = TitleBlock(title="Ethanol Purification and Dehydration Area A300")
     fs.to_svg(border="zone")
     assert [w for w in fs.warnings if w.code == "text-truncated"]
     fs.title_block.title = "Ethanol A300"
     fs.to_svg(border="zone")
     assert not [w for w in fs.warnings if w.code == "text-truncated"]
+
+
+# --- what each field does with a value too long for its cell ------------------
+#
+# The sweep behind #370. Fifteen fields, three answers, and the answer has to be
+# a property of the field rather than of which cell somebody looked at last.
+
+
+def test_a_long_title_is_lettered_smaller_rather_than_abbreviated():
+    """The title is the one value on the strip set above the strip's reading
+    size, so it has size to give back before it has meaning to give up. Two of
+    these three were abbreviated before #370, one of them the title of the
+    library's own shipped example."""
+    for title, drawn_at in (
+        ("Propylene Glycol Reaction", "12.0"),
+        ("Ethanol Purification A300", "12.0"),
+        ("Transfer and Relief U100", "12.5"),
+    ):
+        fs = _sheet()
+        fs.title_block = TitleBlock(title=title)
+        svg = fs.to_svg(border="zone")
+        assert f'font-size="{drawn_at}"' in svg, title
+        assert f">{title}</text>" in svg, title
+        assert not [w for w in fs.warnings if w.code.startswith("text-")], title
+
+
+def test_the_title_is_never_lettered_under_its_subtitle():
+    """Below the subtitle's size the band would say the wrong thing about the
+    drawing -- the subordinate line would read as the title -- so the shrinking
+    stops there and the cell abbreviates instead."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Ethanol Purification and Dehydration Area A300",
+        subtitle="Piping and Instrumentation Diagram",
+    )
+    svg = fs.to_svg(border="zone")
+    assert "Ethanol Purification and De…" in svg
+    title_sizes = re.findall(r'font-size="([\d.]+)" text-anchor="start" font-weight="bold"', svg)
+    assert "10.5" in title_sizes  # the subtitle's size, and no smaller
+
+
+def test_validate_reports_an_over_long_field_with_nothing_rendered():
+    """The finding's point is to reach the author before the sheet is issued,
+    and every width the strip rules is a constant -- so it needs no render."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo", project="Dalby Bioethanol Expansion, Stage 2 Debottlenecking"
+    )
+    found = [i for i in fs.validate() if i.code == "text-truncated"]
+    assert len(found) == 1
+    assert "project" in found[0].message
+    assert "units its cell has" in found[0].message
+    assert fs.streams[0].route is None  # nothing was laid out to answer it
+
+
+def test_a_render_reports_an_over_long_field_once():
+    """model_issues measures the strip and so does the render; the render's is
+    the one that describes the sheet that came out, and it replaces rather than
+    joins the other."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
+    fs.to_svg(border="zone", page_size="A3")
+    assert len([w for w in fs.warnings if "status" in w.message]) == 1
+
+
+def test_the_sheet_count_names_both_the_fields_that_fill_it():
+    """One cell, two fields. Named only 'sheet', it sent an author who had set
+    of_sheets to look at the wrong one."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", sheet="1", of_sheets="1 of the 128 issued")
+    fs.to_svg(border="zone")
+    over = [w for w in fs.warnings if w.code == "text-overruns-cell"]
+    assert len(over) == 1
+    assert over[0].message.startswith("sheet/of_sheets is wider than")
+
+
+def test_a_signatory_with_no_revision_row_to_sign_is_reported():
+    """drawn_by/checked_by/approved_by fill the newest revision row's BY /
+    CHK'D / APP'D cells, and a block with no revisions has no such row -- so all
+    three were accepted and drawn nowhere at all."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", drawn_by="A. Anderson", approved_by="R. Lee")
+    svg = fs.to_svg(border="zone")
+    assert "A. Anderson" not in svg and "R. Lee" not in svg
+    found = [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
+    assert len(found) == 1
+    assert "drawn_by='A. Anderson'" in found[0].message
+    assert "approved_by='R. Lee'" in found[0].message
+    assert "checked_by" not in found[0].message  # unset, so nothing was lost
+
+
+def test_a_signatory_with_a_revision_row_is_drawn_and_silent():
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo",
+        drawn_by="AA",
+        checked_by="JS",
+        revisions=[Revision("0", "2026-01-01", "Issued")],
+    )
+    svg = fs.to_svg(border="zone")
+    assert ">AA</text>" in svg and ">JS</text>" in svg
+    assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
+
+
+#: Every field of the block that draws a cell of its own, the value that
+#: overruns it, the answer the cell gives, and the name the finding has to use.
+#: The three signatories are absent because they draw no cell of their own --
+#: they backfill a revision row, which is the test two above this one.
+#:
+#: ``company`` takes an unbreakable value rather than a long one: its cell wraps
+#: between words, so a long *name* is stacked rather than lost and only a single
+#: over-wide word has nowhere to go. That is the sweep's point -- the answer is a
+#: property of the field, and the probe has to be too.
+_LONG = "Wollongong " * 12
+_FIELD_ANSWERS = [
+    ("title", _LONG, "text-truncated", "title"),
+    ("subtitle", _LONG, "text-truncated", "subtitle"),
+    ("drawing_number", _LONG, "text-truncated", "drawing_number"),
+    ("project", _LONG, "text-truncated", "project"),
+    ("client", _LONG, "text-truncated", "client"),
+    ("company", "Wollongong-Warrawong-Woonona", "text-overruns-cell", "company"),
+    ("status", _LONG, "text-truncated", "status"),
+    ("sheet", _LONG, "text-overruns-cell", "sheet/of_sheets"),
+    ("of_sheets", _LONG, "text-overruns-cell", "sheet/of_sheets"),
+    ("scale", _LONG, "text-truncated", "scale"),
+    ("date", _LONG, "text-truncated", "date"),
+]
+
+
+@pytest.mark.parametrize("field,value,code,named", _FIELD_ANSWERS)
+def test_every_title_block_field_reports_a_value_it_cannot_hold(field, value, code, named):
+    """The sweep, kept: no field of the block takes an over-long value and says
+    nothing about it, and each is named by the name it was set by."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(**{field: value})
+    found = [w for w in fs.validate() if w.code.startswith("text-")]
+    assert [w.code for w in found] == [code]
+    assert found[0].message.startswith(f"{named} ")
+
+
+def test_a_company_name_that_wraps_past_the_strip_is_reported():
+    """The one cell that answers a long value by growing, and so the one that
+    can lose it downwards: every wrapped line is inside its own cell and the
+    stack of them runs out through the top and the bottom of the block."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", company="Wollongong " * 12)
+    fs.to_svg(border="zone")
+    found = [w for w in fs.warnings if w.code == "title-block-company-overflows"]
+    assert len(found) == 1
+    assert "wraps to 12 lines" in found[0].message
+    assert "units the strip is deep" in found[0].message
+
+
+def test_a_company_name_the_strip_is_deep_enough_for_is_silent():
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", company="PANDID Engineering Pty Ltd")
+    fs.to_svg(border="zone")
+    assert not [w for w in fs.warnings if w.code.startswith("title-block-")]
+
+
+@pytest.mark.parametrize("field", ["rev", "date", "description", "by", "checked", "approved"])
+def test_every_revision_field_reports_a_value_it_cannot_hold(field):
+    """The revision grid is six narrow columns and every one of them abbreviates
+    -- a revision row is a history, and a history reads as prose."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", revisions=[Revision(**{field: "Wollongong " * 12})])
+    found = [w for w in fs.validate() if w.code == "text-truncated"]
+    assert sum(f"revisions[0].{field}" in w.message for w in found) == 1

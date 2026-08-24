@@ -20,6 +20,7 @@ anchor).
 
 from __future__ import annotations
 
+import math
 import string
 import unicodedata
 from typing import Callable, NamedTuple
@@ -35,13 +36,20 @@ _ADV_BOLD = 0.62
 FONT = "sans-serif"
 
 # How a cell says it could not hold what it was given: the field it
-# draws, the text it was asked for, and the text it actually drew (the
-# same string when nothing was trimmed). An ellipsis tells whoever reads
-# the sheet that a value was abbreviated and tells the program that
-# supplied it nothing at all, and that program is the one that can
-# shorten the field or ask for a bigger sheet. Every fixed-width cell
-# here measures first and reports through one of these.
-Reporter = Callable[[str, str, str], None]
+# draws, the text it was asked for, the text it actually drew (the same
+# string when nothing was trimmed), the room the cell has and the width
+# the text needed, the last two in drawing units. An ellipsis tells
+# whoever reads the sheet that a value was abbreviated and tells the
+# program that supplied it nothing at all, and that program is the one
+# that can shorten the field or ask for a bigger sheet. Every
+# fixed-width cell here measures first and reports through one of these.
+#
+# The two widths are carried because a finding without them is not
+# actionable: "the title was truncated" leaves an author guessing how
+# much has to come out, and "needs 194 of the 187 units its cell has"
+# says it. ``route-detour`` states its two lengths and their ratio for
+# the same reason.
+Reporter = Callable[[str, str, str, float, float], None]
 
 
 def script_counts(s: str) -> "tuple[int, int, int]":
@@ -139,12 +147,13 @@ def clip(s, room: float, size: float, bold: bool = False, *,
     abbreviates.
     """
     s = str(s)
-    if text_width(s, size, bold) <= room:
+    need = text_width(s, size, bold)
+    if need <= room:
         return s
     per = size * (_ADV_BOLD if bold else _ADV)
     drawn = s[: max(0, int(room / per) - 1)].rstrip() + "…"
     if report is not None:
-        report(field, s, drawn)
+        report(field, s, drawn, room, need)
     return drawn
 
 
@@ -159,9 +168,38 @@ def check_fit(s, room: float, size: float, bold: bool = False, *,
     reported instead of hidden.
     """
     s = str(s)
-    if report is not None and text_width(s, size, bold) > room:
-        report(field, s, s)
+    need = text_width(s, size, bold)
+    if report is not None and need > room:
+        report(field, s, s, room, need)
     return s
+
+
+def fit_size(s, room: float, size: float, floor: float,
+             bold: bool = False) -> float:
+    """The largest type size at or under *size* that draws *s* inside
+    *room*, and never under *floor*.
+
+    The third answer to a value too long for its cell, and the only one
+    that keeps all of it and stays inside the rule. Lettering a long
+    value smaller is what a draughtsman does to a value that is *read*
+    -- the drawing title, set in display type well above everything else
+    on the strip. It is not what they do to a drawing number or a date,
+    which are matched character by character against another document
+    and are set at the strip's own reading size already, with nothing to
+    give back. So this is offered rather than applied: the caller says
+    which cell has size to spare and what its floor is, and the cells
+    that have none never ask.
+
+    :func:`text_width` is linear in the size, so the size that exactly
+    fills the cell is ``size * room / need``. That is rounded *down* to
+    the tenth :func:`_text` writes into the file, so the size measured
+    here is the size the consumer sets and the fit is not a rounding
+    away from a clipped glyph.
+    """
+    need = text_width(s, size, bold)
+    if need <= room or need <= 0 or room <= 0:
+        return size
+    return max(floor, math.floor(size * room / need * 10) / 10)
 
 
 def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=None):
@@ -246,7 +284,11 @@ def draw_annotation(ann, x: float, y: float, *,
         inner = max(body_w, text_width(ann.title, size + 1, bold=True))
         if ann.width < inner + 2 * pad:
             over = _overflowing_text(ann, size, body_w)
-            report(f"annotation {ann.title!r} (width={ann.width:g})", over, over)
+            # The box's own ``width`` is the room and the width it would
+            # have measured to is the need, so the two numbers in the
+            # finding are the two numbers the author edits between.
+            report(f"annotation {ann.title!r} (width={ann.width:g})", over, over,
+                   ann.width, inner + 2 * pad)
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
          f'fill="white" stroke="black" stroke-width="{_BOX_RULE:g}"/>']
     if ann.title:
@@ -829,6 +871,60 @@ _VALUE_TYPE = 11.0     # a status, a drawing number, a scale, a date, a rev
 CAPTION_INK = "#666"
 
 
+#: Baseline-to-baseline spacing of the company cell's wrapped lines.
+_COMPANY_LEAD = 12.0
+
+
+def company_lines(company: str) -> list[str]:
+    """The company name broken into the lines its cell stacks.
+
+    The company cell is the one on the strip that *wraps*, because a
+    company name is several words and the cell is a hundred units wide.
+    It is also the one where breaking mid-word is not available: a
+    hyphen the author did not write invents a name, so a single word
+    wider than the cell is drawn whole and reported (:func:`check_fit`)
+    rather than split.
+
+    A function rather than four lines inside the layout because
+    :func:`pandid.validate.model_issues` has to count the lines to know
+    whether they still fit the strip's depth, and a second wrapper
+    written to answer that would be a second opinion about where the
+    breaks fall.
+    """
+    line, lines = "", []
+    for word in company.split():
+        trial = (line + " " + word).strip()
+        if text_width(trial, _COMPANY_TYPE, bold=True) > _COMPANY_W - 10 and line:
+            lines.append(line)
+            line = word
+        else:
+            line = trial
+    if line:
+        lines.append(line)
+    return lines
+
+
+def company_overflow(tb) -> "tuple[int, float, float] | None":
+    """``(line count, room, need)`` when the company name wraps to more
+    lines than the strip is deep, or ``None``.
+
+    The cell is centred on the strip's depth, so a name that wraps to
+    more lines than fit does not stop at the rule: it runs *out of the
+    strip*, over the drawing above and off the sheet below, and the
+    per-line width check above sees nothing wrong because every line is
+    within its width. It is the one way this block loses a value in a
+    direction the rest of the strip cannot.
+
+    The depth is the strip's own, since the company cell is ruled the
+    full height of it (:func:`measure_title_strip`), so a block with a
+    revision history or a client line has more room than a bare one.
+    """
+    lines = company_lines(tb.company)
+    _, room = measure_title_strip(tb)
+    need = len(lines) * _COMPANY_LEAD
+    return (len(lines), room, need) if need > room else None
+
+
 def _header_lines(tb) -> list[tuple[str, str]]:
     return [(label, value) for label, value
             in (("CLIENT", tb.client), ("PROJECT", tb.project)) if value]
@@ -901,13 +997,26 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
     The strip is fixed geometry -- ISO 15519-1 §5.2.2 splits the title
     block in two and fixes both halves, where it sits to ISO 5457 and
-    how big it is and what goes in it to ISO 7200 --
-    so a value too long for its cell cannot be given more room and is
-    abbreviated instead. ``report`` is how each such
-    cell says which field it abbreviated and what it was given; see
-    :data:`Reporter`. The clipping happens **here** and not in either
+    how big it is and what goes in it to ISO 7200 -- so a value too long
+    for its cell cannot be given more room. What each cell does about
+    that is a property of the field it draws, and there are three
+    answers:
+
+    * the drawing **title** is lettered smaller until it fits
+      (:func:`fit_size`), because it alone is set above the strip's
+      reading size and is read straight through;
+    * the **company** cell wraps between words, and the sheet count is
+      drawn whole, because half of either reads as a different company
+      or a different sheet (:func:`check_fit`);
+    * everything else is abbreviated to an ellipsis (:func:`clip`),
+      which is what a draughtsman does and what the cell beside it makes
+      necessary.
+
+    ``report`` is how each such cell says which field it could not hold,
+    what it was given, what it drew and the two widths; see
+    :data:`Reporter`. The measuring happens **here** and not in either
     stroker, so the two backends abbreviate the same field to the same
-    string.
+    string and report it in the same words.
     """
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
@@ -946,17 +1055,8 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
     # Company / logo cell (middle) -------------------------------
     if tb.company:
-        words, line, lines = tb.company.split(), "", []
-        for wd in words:
-            trial = (line + " " + wd).strip()
-            if text_width(trial, _COMPANY_TYPE, bold=True) > _COMPANY_W - 10 and line:
-                lines.append(line)
-                line = wd
-            else:
-                line = trial
-        if line:
-            lines.append(line)
-        cy = y + h / 2 - (len(lines) - 1) * 6
+        lines = company_lines(tb.company)
+        cy = y + h / 2 - (len(lines) - 1) * _COMPANY_LEAD / 2
         for ln in lines:
             # A word too long for the cell has no break point the
             # wrapper may use: hyphenating a company name invents one,
@@ -965,7 +1065,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                           check_fit(ln, _COMPANY_W - 10, _COMPANY_TYPE, True,
                                     field="company", report=report),
                           _COMPANY_TYPE, "middle", True, "black"))
-            cy += 12
+            cy += _COMPANY_LEAD
 
     # --- Info block (right): client/project, title, status, dwg/rev
     ix = cx2
@@ -990,18 +1090,38 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     # title + subtitle, with sheet count tucked top-right of the title
     # band
     sheets = f"SHEET {tb.sheet} of {tb.of_sheets}"
+    # The drawing title is the one value on the strip lettered *above*
+    # the strip's reading size, so it is the one with size to give back
+    # before it has meaning to give up -- and it is read straight
+    # through, where a drawing number or a date is matched character by
+    # character against another document. A draughtsman letters a long
+    # title smaller; nobody abbreviates it. So it is set down to fit,
+    # and only abbreviated below the floor.
+    #
+    # The floor is the subtitle's size, because a title lettered under
+    # it would read as the subordinate line of the two and the band
+    # would say the wrong thing about the drawing. The baseline does not
+    # move with the size: a set of sheets is scanned down the same line,
+    # and it is the lettering that varies with the title's length, not
+    # where the title sits.
+    title = tb.title or name
+    title_type = fit_size(title, _TITLE_W, _TITLE_TYPE, _SUBTITLE_TYPE, True)
     parts.append(("text", ix + 6, top + 15,
-                  clip(tb.title or name, _TITLE_W, _TITLE_TYPE, True,
+                  clip(title, _TITLE_W, title_type, True,
                        field="title", report=report),
-                  _TITLE_TYPE, "start", True, "black"))
+                  title_type, "start", True, "black"))
     if tb.subtitle:
         parts.append(("text", ix + 6, band2 - 6,
                       clip(tb.subtitle, _INFO_W - 12, _SUBTITLE_TYPE,
                            field="subtitle", report=report),
                       _SUBTITLE_TYPE, "start", False, "black"))
+    # One cell drawn from two fields, so the finding names both: which
+    # of the two is the long one is visible in the string it quotes, and
+    # a cell that named only ``sheet`` sent an author who had set
+    # ``of_sheets`` to look at the wrong field.
     parts.append(("text", x + w - 5, top + 11,
-                  check_fit(sheets, _SHEET_W, _REV_TYPE, field="sheet",
-                            report=report),
+                  check_fit(sheets, _SHEET_W, _REV_TYPE,
+                            field="sheet/of_sheets", report=report),
                   _REV_TYPE, "end", False, CAPTION_INK))
     # status (tiny label at cell top, value below)
     parts.append(("text", ix + 6, band2 + 8, "STATUS", _CAPTION,
@@ -1039,6 +1159,44 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                       _VALUE_TYPE, "start", bold, "black"))
         cxr += seg_w
     return Strip((x, y, w, h), rules, rev, parts)
+
+
+def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
+                    ) -> "list[tuple[str, str, str, float, float]]":
+    """Every cell of the strip that cannot hold what it was given, as
+    :data:`Reporter` tuples, without drawing anything.
+
+    Whether a value fits is a fact about the *model*: every width the
+    strip rules is a constant in this module, so the answer does not
+    depend on the page size, on the drawing, or on anything layout or
+    routing settles. That is what lets
+    :func:`pandid.validate.model_issues` report an over-long title block
+    on a sheet that has never been rendered -- the point of the finding
+    being to reach the author *before* the sheet is issued, not to
+    describe one that already was.
+
+    It is the same measurement and not a second opinion about it: the
+    layout is run with a collecting reporter and its ink thrown away,
+    so a cell width can never be stated in two places and drift.
+
+    ``fit_scale`` is the ratio the renderer settled on, which the scale
+    cell reports for a block that states no scale of its own. A caller
+    with no render behind it cannot know it and passes none -- and the
+    one cell that then measures differently is the drawing number's,
+    which is ruled the wider of its two widths because the scale cell it
+    shares the band with is absent. So this can *miss* a drawing number
+    that a fitted sheet goes on to abbreviate; the render measures that
+    one itself and reports it, and the two findings are the same
+    sentence.
+    """
+    found: list[tuple[str, str, str, float, float]] = []
+
+    def collect(field: str, text: str, drawn: str,
+                room: float, need: float) -> None:
+        found.append((field, text, drawn, room, need))
+
+    title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale, report=collect)
+    return found
 
 
 def _strip_part(part) -> str:

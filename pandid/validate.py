@@ -794,6 +794,89 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"the series clear of the names already in use with "
             f"Flowsheet(stream_number_start=...)"))
 
+    # --- a title-block cell that cannot hold what it was given ---
+    # The strip is fixed geometry (ISO 5457 for where it sits, ISO 7200
+    # for what goes in it), so a value longer than its cell is lettered
+    # smaller, abbreviated, or drawn across the rule -- one of the three,
+    # field by field, and the choice is
+    # :func:`~pandid.render.furniture.title_strip_layout`'s. Whichever it
+    # is, the author has to hear about it: an accepted value silently
+    # altered and then issued is what this whole module exists to stop,
+    # and a drawing number is exactly the field an ellipsis turns into
+    # somebody else's document.
+    #
+    # Asked *here*, in the model half, because every width the strip
+    # rules is a constant: the answer needs no page size, no layout and
+    # no routing, so `validate()` can give it before a render exists
+    # rather than only describing one that already happened. The two
+    # renderers ask the same function while they draw and replace these
+    # with their own -- see ``_FIT_CODES`` in :mod:`pandid.render.svg` --
+    # so the finding is made once however many ways the sheet comes out.
+    if fs.title_block is not None:
+        from datetime import datetime
+
+        from pandid.render.furniture import company_overflow, title_strip_fit
+        from pandid.render.svg import fit_issue
+
+        tb = fs.title_block
+        # The renderer's own fallbacks, because the finding has to
+        # describe the sheet that will be drawn rather than the fields
+        # as typed: a blank ``title`` is drawn as the flowsheet's name
+        # and a blank ``date`` as today's.
+        warnings.extend(fit_issue(*found) for found in title_strip_fit(
+            tb, tb.title or fs.name,
+            tb.date or datetime.now().strftime("%Y-%m-%d")))
+
+        # --- a company name that wraps out through the strip ---
+        # The one cell of the strip that answers a long value by
+        # *growing*, and the one that can therefore lose it in a
+        # direction the width checks above cannot see: every wrapped
+        # line is inside its own cell, and the stack of them is not
+        # inside the strip. Centred on the depth, so it runs out of both
+        # ends at once -- over the drawing above and off the sheet
+        # below.
+        over = company_overflow(tb)
+        if over is not None:
+            rows, room, need = over
+            warnings.append(Issue(
+                "warning", "title-block-company-overflows",
+                f"company={tb.company!r} wraps to {rows} lines and needs "
+                f"{need:.0f} of the {room:.0f} units the strip is deep "
+                f"({need / room:.1f}x), so it is drawn out through the top and "
+                f"the bottom of the block. The cell breaks between words and "
+                f"never inside one: shorten the name, or state the trading name "
+                f"the drawing office puts on a sheet"))
+
+        # --- a signatory the strip has nowhere to letter ---
+        # ``drawn_by``/``checked_by``/``approved_by`` are *backfills*:
+        # the strip letters them into the BY/CHK'D/APP'D cells of the
+        # newest revision row, which is the only place on the sheet
+        # those three columns exist. A block with no revisions has no
+        # such row, so all three are accepted, drawn nowhere, and the
+        # sheet issues without the creator and the approver ISO 7200 4.3
+        # makes mandatory data fields.
+        #
+        # Reported rather than drawn: ruling a row for a revision the
+        # drawing office never raised would put a revision history on
+        # the sheet to carry two initials, and the revision is the thing
+        # being signed for. The cure is the row, so the message names
+        # it.
+        signatories = [(field, value) for field, value in (
+            ("drawn_by", tb.drawn_by), ("checked_by", tb.checked_by),
+            ("approved_by", tb.approved_by)) if value]
+        if signatories and not tb.revisions:
+            warnings.append(Issue(
+                "warning", "title-block-signatory-undrawn",
+                f"the title block sets "
+                f"{_and([f'{f}={v!r}' for f, v in signatories])} and the sheet "
+                f"draws {'none of them' if len(signatories) > 1 else 'it'}. "
+                f"Those fields fill the BY / CHK'D / APP'D cells of the newest "
+                f"revision row, and a block with no revisions has no row for "
+                f"them to fill. Add the revision they signed, "
+                f"revisions=[Revision('0', '<date>', '<description>')], or "
+                f"name them on it directly with Revision(..., by=, checked=, "
+                f"approved=)"))
+
     # --- an ingoing or outgoing material with nothing to report ---
     # ISO 10628-1:2014 4.3.2, *Process flow diagram*, lists what a PFD
     # must carry at a minimum. Item d) is the name of each ingoing and

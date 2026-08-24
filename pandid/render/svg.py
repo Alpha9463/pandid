@@ -2426,22 +2426,34 @@ def _scale_text(s: float) -> str:
 _FIT_CODES = ("text-truncated", "text-overruns-cell")
 
 
-def fit_issue(field: str, text: str, drawn: str) -> Issue:
+def fit_issue(field: str, text: str, drawn: str,
+              room: float, need: float) -> Issue:
     """One :data:`_FIT_CODES` finding, from what a cell was given and
     what it drew.
 
     The shape :data:`~pandid.render.furniture.Reporter` reports in, made
     into an :class:`~pandid.validate.Issue` here rather than in each
     backend: the draw.io exporter measures the same title strip with the
-    same functions, so the sentence a reader gets must not depend on
-    which file they exported.
+    same functions, and :func:`pandid.validate.model_issues` measures it
+    with no file at all, so the sentence a reader gets must not depend
+    on which of the three asked.
+
+    The two widths are the actionable half of the finding, stated the
+    way ``route-detour`` states its two lengths: how much room the cell
+    has, how much the value wanted, and the ratio between them, which is
+    what says whether a word has to come out or a whole phrase.
     """
+    # A box given ``width=0`` has no ratio to state, so the ratio is
+    # dropped rather than the finding.
+    span = (f"needs {need:.0f} of the {room:.0f} units its cell has"
+            + (f" ({need / room:.1f}x)" if room > 0 else ""))
     if drawn != text:
         return Issue("warning", "text-truncated",
                      f"{field} was truncated to fit its cell: "
-                     f"{text!r} drawn as {drawn!r}")
+                     f"{text!r} {span}, drawn as {drawn!r}")
     return Issue("warning", "text-overruns-cell",
-                 f"{field} is wider than the cell it is drawn in: {text!r}")
+                 f"{field} is wider than the cell it is drawn in: "
+                 f"{text!r} {span}")
 
 
 def _too_small(sheet: _Sheet, need_w: float, need_h: float,
@@ -2642,8 +2654,9 @@ class SvgRenderer:
         free = None  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
 
-        def report(field: str, text: str, drawn: str) -> None:
-            fit_issues.append(fit_issue(field, text, drawn))
+        def report(field: str, text: str, drawn: str,
+                   room: float, need: float) -> None:
+            fit_issues.append(fit_issue(field, text, drawn, room, need))
 
         # Furniture belongs to the sheet, not to the border: a title
         # block or a docked box is drawn because it was supplied. A zone

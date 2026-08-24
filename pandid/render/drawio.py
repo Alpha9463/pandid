@@ -1414,7 +1414,8 @@ class DrawioRenderer:
         # (:meth:`~pandid.flowsheet.Flowsheet.to_drawio`).
         self._findings: list = []
 
-    def _report(self, field: str, text: str, drawn: str) -> None:
+    def _report(self, field: str, text: str, drawn: str,
+                room: float, need: float) -> None:
         """A cell that could not hold what it was given
         (:data:`~pandid.render.furniture.Reporter`).
 
@@ -1423,7 +1424,7 @@ class DrawioRenderer:
         cell widths, so which file was exported must not change what the
         author is told about it.
         """
-        self._findings.append(fit_issue(field, text, drawn))
+        self._findings.append(fit_issue(field, text, drawn, room, need))
 
     # --------------------------------------------------- document
 
