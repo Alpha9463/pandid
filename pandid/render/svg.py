@@ -2518,12 +2518,14 @@ def _sheet_title(fs: "Flowsheet") -> str:
     title the drawing is *issued* under, and what is lettered on it --
     and the flowsheet's own name otherwise. Either can be empty, and an
     empty accessible name is worse than none, so the caller drops
-    ``<title>`` rather than emitting a blank one.
+    ``<title>`` rather than emitting a blank one -- and a title of
+    nothing but spaces is one of those, being *truthy* and announced by
+    a screen reader as silence. Both are stripped to the blank they
+    mean, so the fallback to the flowsheet's name happens for either.
     """
     tb = fs.title_block
-    if tb is not None and tb.title:
-        return tb.title
-    return fs.name or ""
+    title = str((tb.title if tb is not None else "") or "").strip()
+    return title or str(fs.name or "").strip()
 
 
 def _provenance(fs: "Flowsheet") -> list[str]:
@@ -2842,7 +2844,7 @@ class SvgRenderer:
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
         date = tb.date or datetime.now().strftime("%Y-%m-%d")
-        name = tb.title or fs.name
+        name = fs.name
 
         items = [(a, a.align, *measure(a))
                  for a in getattr(fs, "annotations", []) or []]

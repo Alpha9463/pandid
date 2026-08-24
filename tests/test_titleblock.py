@@ -1378,3 +1378,147 @@ def test_a_signatory_the_sheet_does_draw_is_silent(revision):
     svg = fs.to_svg(border="zone")
     assert ">AA</text>" in svg
     assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
+
+
+# --- the cut is the arithmetic the width was measured by ----------------------
+
+
+@pytest.mark.parametrize("bold", [False, True])
+@pytest.mark.parametrize("size", [6.5, 7.5, 8.0, 9.0, 10.5, 11.0, 12.5])
+def test_a_narrow_script_is_cut_by_the_shipped_arithmetic(size, bold):
+    """`text_width` measures an all-narrow string with a closed form, and the
+    cut is that form inverted -- the arithmetic every sheet this package has
+    drawn was cut by.
+
+    Repairing the fullwidth defect by walking *both* ends was the obvious fix
+    and the wrong one: summing per-character widths lands a rounding away from
+    the same characters measured whole, and seventy room/size pairs over this
+    sweep cut a character earlier or later than they always had. `room=126` at
+    7.5 was one of them -- 30 characters fit it exactly, and the walk kept 29.
+    """
+    from pandid.render.furniture import _ADV, _ADV_BOLD, clip
+
+    per = size * (_ADV_BOLD if bold else _ADV)
+    room = 1.0
+    while room <= 300.0:
+        drawn = clip("W" * 400, room, size, bold)
+        assert len(drawn) - 1 == max(0, int(room / per) - 1), (room, size, bold)
+        room = round(room + 0.5, 3)
+
+
+@pytest.mark.parametrize("bold", [False, True])
+@pytest.mark.parametrize("size", [6.5, 7.5, 8.0, 9.0, 10.5, 11.0, 12.5])
+def test_a_wide_script_is_never_cut_wider_than_its_cell(size, bold):
+    """The other half of the same guarantee: what a fullwidth cell keeps is a
+    prefix `text_width` agrees fits, at every width the strip rules."""
+    from pandid.render.furniture import clip, text_width
+
+    room = 1.0
+    while room <= 300.0:
+        drawn = clip("Ｗ" * 400, room, size, bold)
+        if room > text_width("…", size, bold):
+            assert text_width(drawn, size, bold) <= room, (room, size, bold)
+        room = round(room + 0.5, 3)
+
+
+# --- the finding names the field that supplied the value, all five of them ----
+
+
+def _fit_messages(**kw):
+    fs = _sheet(name="A Flowsheet Name Far Too Long For The Title Cell To Hold")
+    fs.title_block = TitleBlock(**kw)
+    return [i.message for i in fs.validate() if i.code.startswith("text-")]
+
+
+LONG = "Wollongong " * 12
+
+
+@pytest.mark.parametrize(
+    "kw,named",
+    [
+        # A blank field draws some other field's value, and the finding has to
+        # name the field the author would edit rather than the cell.
+        ({}, "Flowsheet name -> title"),
+        ({"title": "Demo", "scale": LONG}, "scale"),
+        ({"title": "Demo", "date": LONG}, "date"),
+        (
+            {
+                "title": "Demo",
+                "drawn_by": LONG,
+                "revisions": [Revision("0", "2026-01-01", "Issued")],
+            },
+            "drawn_by -> revisions[0].by",
+        ),
+        (
+            {"title": "Demo", "revisions": [Revision(LONG, "2026-01-01", "Issued")]},
+            "revisions[0].rev -> rev",
+        ),
+    ],
+)
+def test_a_finding_names_the_field_that_supplied_the_value(kw, named):
+    assert any(m.startswith(f"{named} ") for m in _fit_messages(**kw)), (named, _fit_messages(**kw))
+
+
+def test_a_fitted_scale_is_not_reported_as_the_scale_field():
+    """The scale cell draws the ratio the sheet was fitted at when the block
+    states none, so a finding about it must not send the author to `scale`."""
+    from pandid.render.furniture import title_strip_fit
+
+    found = title_strip_fit(
+        TitleBlock(title="Demo"), "Demo", "2026-01-01", fit_scale="1:" + "9" * 40
+    )
+    assert [f[0] for f in found] == ["the fitted scale -> scale"]
+
+
+def test_a_stamped_date_is_not_reported_as_the_date_field():
+    """And the date cell draws today's when the block states none."""
+    from pandid.render.furniture import title_strip_fit
+
+    found = title_strip_fit(TitleBlock(title="Demo"), "Demo", "2026-01-01" * 6)
+    assert [f[0] for f in found] == ["today's date -> date"]
+
+
+# --- a field of nothing but spaces is the blank it means -----------------------
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["title", "subtitle", "drawing_number", "project", "client", "company", "status", "scale"],
+)
+def test_a_whitespace_field_draws_what_an_unset_one_draws(field):
+    """A field of only spaces is *truthy*, so it defeated every fallback the
+    block has: the title lost the flowsheet's name, the status and the drawing
+    number lost their dash, a whitespace client ruled an empty row and made the
+    whole strip taller, and a whitespace scale turned the four-cell bottom band
+    on with nothing to put in it."""
+
+    def draw(**kw):
+        fs = _sheet(name="Ethanol Purification A300")
+        fs.title_block = TitleBlock(**kw)
+        return fs.to_svg(border="zone", page_size="A3")
+
+    base = {} if field == "title" else {"title": "Demo"}
+    assert draw(**base) == draw(**{**base, field: "   "})
+
+
+def test_a_whitespace_field_set_after_the_block_is_built_is_also_blank():
+    """`fs.title_block.title = ...` is the documented way to shorten a field and
+    re-render, so normalising on the dataclass would have missed it."""
+    fs = _sheet(name="Ethanol Purification A300")
+    fs.title_block = TitleBlock(title="Demo")
+    fs.title_block.title = "  \t "
+    svg = fs.to_svg(border="zone", page_size="A3")
+    assert ">Ethanol Purification A300</text>" in svg
+
+
+def test_a_whitespace_revision_field_is_the_blank_it_means():
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo",
+        drawn_by="AA",
+        revisions=[Revision("0", "2026-01-01", "Issued", by="   ")],
+    )
+    svg = fs.to_svg(border="zone")
+    # The block backfills, because a whitespace row value is not a value.
+    assert ">AA</text>" in svg
+    assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]

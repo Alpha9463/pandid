@@ -815,8 +815,9 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     if fs.title_block is not None:
         from datetime import datetime
 
-        from pandid.render import furniture
-        from pandid.render.furniture import company_overflow, title_strip_fit
+        from pandid.render.furniture import (company_overflow,
+                                             title_strip_fit,
+                                             undrawn_signatories)
         from pandid.render.svg import fit_issue
 
         tb = fs.title_block
@@ -852,10 +853,11 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # ``drawn_by``/``checked_by``/``approved_by`` are *backfills*:
         # the strip letters them into the BY/CHK'D/APP'D cells of the
         # newest revision row, which is the only place on the sheet
-        # those three columns exist (:data:`~pandid.render.furniture.
-        # _BACKFILL` is the mapping, read from there rather than
-        # restated). So a block-level name is drawn in that row or it is
-        # drawn nowhere, and it goes undrawn two ways:
+        # those three columns exist. Which of them the strip does not
+        # letter is :func:`~pandid.render.furniture.
+        # undrawn_signatories`, asked rather than worked out again --
+        # it is the same question the strip answers when it fills the
+        # row. It goes undrawn two ways:
         #
         # * there is no revision at all, so there is no row to fill; or
         # * the newest revision states a signatory of its own, which is
@@ -871,18 +873,12 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # drawing office never raised would put a revision history on
         # the sheet to carry two initials, and the revision is the thing
         # being signed for.
-        newest = tb.revisions[-1] if tb.revisions else None
-        unfilled, overridden = [], []
-        for column, block in furniture._BACKFILL.items():
-            value = getattr(tb, block)
-            if not value:
-                continue
-            if newest is None:
-                unfilled.append(f"{block}={value!r}")
-            elif getattr(newest, column) not in ("", value):
-                overridden.append(
-                    f"{block}={value!r} (revisions[{len(tb.revisions) - 1}]."
-                    f"{column}={getattr(newest, column)!r} is drawn)")
+        unfilled = [f"{field}={value!r}"
+                    for field, value, displaced in undrawn_signatories(tb)
+                    if not displaced]
+        overridden = [f"{field}={value!r} ({displaced} is drawn)"
+                      for field, value, displaced in undrawn_signatories(tb)
+                      if displaced]
         if unfilled:
             warnings.append(Issue(
                 "warning", "title-block-signatory-undrawn",

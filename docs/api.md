@@ -3210,6 +3210,11 @@ drawn_by -> revisions[0].by was truncated to fit its cell: …
 The `SHEET n of m` cell is the reverse case, one cell from two fields, and is
 named `sheet/of_sheets`.
 
+A field of nothing but spaces is the blank it means. Whitespace is *truthy*, so
+`title="   "` used to defeat the fallback to the flowsheet's name, `status="  "`
+the em dash, and `client=" "` ruled an empty row and made the whole strip
+taller; all of them now behave exactly as leaving the field unset does.
+
 `validate()` answers before anything is drawn, and every render asks the same
 question again and replaces the answer — `to_drawio()` as well as `to_svg()`, in
 the same words, since all three measure one strip with one set of cell widths.

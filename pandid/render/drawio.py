@@ -2634,9 +2634,12 @@ class DrawioRenderer:
         # from, all three of them the sheet's answer rather than this
         # file's: the drawing name a blank title falls back to, today's
         # date where the block states none, and the ratio the dock has
-        # just settled the drawing at.
+        # just settled the drawing at. The title fallback itself is the
+        # strip's, not applied here as well -- it reads the block, and a
+        # caller that pre-empted it handed on a whitespace title with the
+        # name it should have fallen back to already thrown away.
         block = fs.title_block
-        name = (getattr(block, "title", "") or fs.name) if block is not None else fs.name
+        name = fs.name
         date = (getattr(block, "date", "") if block is not None else "") or \
             datetime.now().strftime("%Y-%m-%d")
         scale = "" if free is None else _scale_text(fit.scale)

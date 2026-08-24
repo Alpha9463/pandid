@@ -425,15 +425,31 @@ class hierarchy, or what it is called.
   moves: *Propylene Glycol Reaction* was being issued as *Propylene Glycol
   Reacti…*, and is now drawn whole at 12,0 in place of 12,5.
 
-  **How much of a value survives is measured rather than counted.** The cut
-  was `int(room / (size * _ADV)) - 1` -- characters at the *Latin* advance --
-  while the decision to cut at all was `text_width`'s, which charges a CJK or
-  fullwidth codepoint a full em and a combining mark nothing. The two disagreed
-  by the ratio between those rates, so a fullwidth title kept 28 characters
-  measuring 290 units for a 187-unit cell and was drawn straight through the
-  sheet count beside it, on every page size from A4 to A0. Both ends of `clip`
-  now ask `text_width`, so a cell cannot cut to a width it would not accept, and
-  the ellipsis is measured as part of what the cell holds.
+  **How much of a value survives is decided the way its width is measured** --
+  and `text_width` measures two ways, so `clip` now cuts two ways, on the same
+  test. The cut used to be `int(room / (size * _ADV)) - 1` for everything:
+  characters at the *Latin* advance, while the decision to cut at all was
+  `text_width`'s, which charges a CJK or fullwidth codepoint a full em and a
+  combining mark nothing. The two disagreed by the ratio between those rates, so
+  a fullwidth title kept 28 characters measuring 290 units for a 187-unit cell
+  and was drawn straight through the sheet count beside it, on every page size
+  from A4 to A0.
+
+  A string of narrow codepoints alone measures `len(s) * size * adv`, a closed
+  form, and keeps the cut that inverts it -- exact, and the arithmetic every
+  sheet this package has drawn was cut by. Anything with a wide codepoint or a
+  combining mark in it has no such closed form and is walked forward through the
+  one expression `text_width` evaluates, so the prefix kept is a prefix
+  `text_width` agrees fits.
+
+  **Making *both* ends walk was the obvious repair and the wrong one.** Summing
+  per-character widths lands a rounding away from the same characters measured
+  whole, so seventy room/size pairs over a sweep of the strip's own type sizes
+  cut a character earlier or later than they always had -- 30 characters fit a
+  126-unit cell at 7,5 exactly, and the walk kept 29. That is `_total`'s
+  complaint about `sum()` pointed at a different pair of numbers, and the answer
+  is the same one: measure and use the identical arithmetic. A sweep of 19 586
+  width/size/weight combinations holds both halves.
 
   **`validate()` reports an over-long field before anything is drawn.** Every
   width the strip rules is a constant, so whether a value fits is settled by the
@@ -472,6 +488,19 @@ class hierarchy, or what it is called.
   stating the *same* name is silent, since the value is on the sheet and which
   field put it there is nobody's problem. Two of ISO 7200's mandatory data
   fields, accepted and dropped.
+
+  **A field of nothing but spaces is the blank it means.** Whitespace is
+  *truthy*, so it defeated every fallback the block has: `title="   "` drew
+  three spaces instead of the flowsheet's name, `status` and `drawing_number`
+  lost their em dash, a whitespace `scale` turned the four-cell bottom band on
+  with nothing to put in it, a whitespace `client` or `project` ruled an empty
+  row and made the whole strip *taller*, and a whitespace `company` was
+  accepted, wrapped to no lines and drawn nowhere. Six of the block's fields
+  answered differently from the blank they mean, and the SVG's `<title>` -- the
+  document's accessible name -- was emitted as spaces where the code that drops
+  an empty one could not see it. All of them are read through one function now,
+  at the read rather than on the dataclass, since `fs.title_block.title = ...`
+  is the documented way to shorten a field and re-render.
 
   Those three cells carry **initials**, being the only signatory cells the strip
   rules, so `examples/03`, `08` and `09` now set `drawn_by="AA"` in place of
