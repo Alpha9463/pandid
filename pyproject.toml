@@ -122,6 +122,8 @@ exclude = [
     "*.egg-info",
     "renders",                # local render output
     "test_diagram.svg",       # scratch render at the repo root
+    "test.py",                # scratch probe at the repo root
+    "*.pgm",                  # raster scratch, e.g. a mis-quoted pdftoppm prefix
     "skills-lock.json",
     "uv.lock",
 ]
