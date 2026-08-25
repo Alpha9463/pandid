@@ -541,46 +541,67 @@
     <path d="M 1760.0,620.0 L 1830.0,620.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <path d="M 1760.0,640.0 L 1785.0,640.0 L 1785.0,847.5 L 614.5,847.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <path d="M 590.0,847.5 L 265.0,847.5 L 265.0,535.0 L 290.0,535.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <polygon points="250.0,502.0 274.6,515.0 250.0,528.0 225.4,515.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="240.8" y="508.5" width="18.4" height="13.0" fill="white" />
     <text x="250.0" y="515.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
+    <polygon points="375.0,512.0 399.6,525.0 375.0,538.0 350.4,525.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="365.8" y="518.5" width="18.4" height="13.0" fill="white" />
     <text x="375.0" y="525.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
+    <polygon points="635.0,512.0 659.6,525.0 635.0,538.0 610.4,525.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="625.8" y="518.5" width="18.4" height="13.0" fill="white" />
     <text x="635.0" y="525.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
+    <polygon points="740.0,330.4 753.0,355.0 740.0,379.6 727.0,355.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="733.5" y="345.8" width="13.0" height="18.4" fill="white" />
     <text x="740.0" y="355.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 740.0, 355.0)">S4</text>
+    <polygon points="840.0,192.0 864.6,205.0 840.0,218.0 815.4,205.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="830.8" y="198.5" width="18.4" height="13.0" fill="white" />
     <text x="840.0" y="205.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S5</text>
-    <rect x="991.2" y="373.8" width="13.0" height="18.4" fill="white" />
-    <text x="997.7" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 997.7, 383.0)">S6</text>
-    <rect x="1032.9" y="398.0" width="18.4" height="13.0" fill="white" />
-    <text x="1042.1" y="404.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <polygon points="1008.2,358.4 1021.2,383.0 1008.2,407.6 995.2,383.0" fill="none" stroke="black" stroke-width="1" />
+    <rect x="1001.7" y="373.8" width="13.0" height="18.4" fill="white" />
+    <text x="1008.2" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1008.2, 383.0)">S6</text>
+    <polygon points="1042.1,402.0 1066.7,415.0 1042.1,428.0 1017.5,415.0" fill="none" stroke="black" stroke-width="1" />
+    <rect x="1032.9" y="408.5" width="18.4" height="13.0" fill="white" />
+    <text x="1042.1" y="415.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <polygon points="815.0,701.0 839.6,714.0 815.0,727.0 790.4,714.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="805.8" y="707.5" width="18.4" height="13.0" fill="white" />
     <text x="815.0" y="714.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
+    <polygon points="852.0,582.0 876.6,595.0 852.0,608.0 827.4,595.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="842.8" y="588.5" width="18.4" height="13.0" fill="white" />
     <text x="852.0" y="595.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
+    <polygon points="975.7,717.0 1000.3,730.0 975.7,743.0 951.1,730.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="963.4" y="723.5" width="24.6" height="13.0" fill="white" />
     <text x="975.7" y="730.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S10</text>
+    <polygon points="1235.0,592.9 1248.0,617.5 1235.0,642.1 1222.0,617.5" fill="none" stroke="black" stroke-width="1" />
     <rect x="1228.5" y="605.2" width="13.0" height="24.6" fill="white" />
     <text x="1235.0" y="617.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1235.0, 617.5)">S11</text>
+    <polygon points="1310.0,330.4 1323.0,355.0 1310.0,379.6 1297.0,355.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="1303.5" y="342.7" width="13.0" height="24.6" fill="white" />
     <text x="1310.0" y="355.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1310.0, 355.0)">S12</text>
+    <polygon points="1410.0,192.0 1434.6,205.0 1410.0,218.0 1385.4,205.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="1397.7" y="198.5" width="24.6" height="13.0" fill="white" />
     <text x="1410.0" y="205.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S13</text>
-    <rect x="1561.2" y="370.7" width="13.0" height="24.6" fill="white" />
-    <text x="1567.7" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1567.7, 383.0)">S14</text>
-    <rect x="1599.8" y="398.0" width="24.6" height="13.0" fill="white" />
-    <text x="1612.1" y="404.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S15</text>
+    <polygon points="1578.2,358.4 1591.2,383.0 1578.2,407.6 1565.2,383.0" fill="none" stroke="black" stroke-width="1" />
+    <rect x="1571.7" y="370.7" width="13.0" height="24.6" fill="white" />
+    <text x="1578.2" y="383.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1578.2, 383.0)">S14</text>
+    <polygon points="1612.1,402.0 1636.7,415.0 1612.1,428.0 1587.5,415.0" fill="none" stroke="black" stroke-width="1" />
+    <rect x="1599.8" y="408.5" width="24.6" height="13.0" fill="white" />
+    <text x="1612.1" y="415.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S15</text>
+    <polygon points="1385.0,701.0 1409.6,714.0 1385.0,727.0 1360.4,714.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="1372.7" y="707.5" width="24.6" height="13.0" fill="white" />
     <text x="1385.0" y="714.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S16</text>
+    <polygon points="1422.0,582.0 1446.6,595.0 1422.0,608.0 1397.4,595.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="1409.7" y="588.5" width="24.6" height="13.0" fill="white" />
     <text x="1422.0" y="595.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S17</text>
+    <polygon points="1545.7,717.0 1570.3,730.0 1545.7,743.0 1521.1,730.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="1533.4" y="723.5" width="24.6" height="13.0" fill="white" />
     <text x="1545.7" y="730.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S18</text>
+    <polygon points="1685.0,645.4 1698.0,670.0 1685.0,694.6 1672.0,670.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="1678.5" y="657.7" width="13.0" height="24.6" fill="white" />
     <text x="1685.0" y="670.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1685.0, 670.0)">S19</text>
+    <polygon points="1795.0,607.0 1819.6,620.0 1795.0,633.0 1770.4,620.0" fill="none" stroke="black" stroke-width="1" />
     <rect x="1782.7" y="613.5" width="24.6" height="13.0" fill="white" />
     <text x="1795.0" y="620.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S20</text>
+    <polygon points="1199.8,834.5 1224.3,847.5 1199.8,860.5 1175.2,847.5" fill="none" stroke="black" stroke-width="1" />
     <rect x="1187.5" y="841.0" width="24.6" height="13.0" fill="white" />
     <text x="1199.8" y="847.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S21</text>
   </g>

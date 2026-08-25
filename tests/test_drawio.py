@@ -1289,6 +1289,12 @@ def test_a_line_number_is_written_where_the_sheet_writes_it():
 
     for stem in SHEETS:
         fs, kwargs = gallery.flowsheet(stem)
+        # Bare numbers only. Ruled round, the number stops being the edge's
+        # label and becomes a cell of its own, so there is no
+        # `labelBackgroundColor` to ask about and `value` is empty -- a
+        # different export path, held by tests/test_stream_label_enclosure.py.
+        if fs.stream_labels.enclosure != "none":
+            continue
         fs.to_svg(**kwargs)
         cells = _drawio_cells(fs, kwargs)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
