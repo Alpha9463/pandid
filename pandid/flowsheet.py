@@ -2452,7 +2452,8 @@ class Flowsheet:
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
-               jump_direction: str = "vertical", debug: bool | float = False,
+               jump_direction: str = "vertical",
+               crossing_style: str = "arc", debug: bool | float = False,
                check: bool = True) -> str:
         """Render to an SVG string, running ``layout()`` and ``route()``
         first if they have not been run yet, or if anything changed
@@ -2483,7 +2484,37 @@ class Flowsheet:
         (``"A4"`` through ``"A0"``), fitting the drawing into what the
         sheet furniture leaves; omit it to size the sheet to the drawing
         instead. ``jump_direction`` selects which of two crossing lines
-        gets the semicircle hop: ``"vertical"`` or ``"horizontal"``.
+        carries the crossing mark: ``"vertical"`` or ``"horizontal"``.
+
+        ``crossing_style`` selects what that mark is, and its three
+        values are three conventions the documents on disk do not agree
+        between:
+
+        * ``"arc"`` (the default) bridges the crossed line with a
+          semicircle. It appears in no standard this project holds and
+          on none of the reference sheets; it is the convention this
+          library inherited, and it stays the default so that no drawing
+          already issued changes.
+        * ``"gap"`` interrupts the marking line instead, which is what
+          ISO 10628-1 5.3.4 prescribes. **It has a cost the arc does
+          not**: the break is taken out of the run rather than laid over
+          it, so a crossing close to a corner can leave a short stub of
+          pipe hanging between the two. No clause dimensions the gap;
+          this draws it over the same span the arc spans, and an author
+          who chooses it accepts that trade until the router can
+          guarantee a length of clear run either side of a crossing.
+        * ``"plain"`` draws both lines straight through, which is how
+          ISO 15519-1 12.5 Figure 31 draws a crossing and how every
+          interior crossing on the reference sheets is drawn. A junction
+          is then told from a crossing by the *junction* carrying a mark
+          rather than by the crossing carrying one.
+
+        It is a property of the **sheet** and not of a line: a drawing
+        that marked some crossings and not others would teach a reader a
+        convention and then break it. Where a crossing sits too near a
+        corner to carry the mark chosen, the drawing is still made and
+        the crossing is reported as ``crossing-unmarked`` on
+        :attr:`warnings` rather than dropped in silence.
 
         ``connections`` says how the sheet's joints are made up, as the
         double tick across the run:
@@ -2529,18 +2560,21 @@ class Flowsheet:
             self._prepare_to_draw(
                 diagram=diagram, check=check, show_stream_table=show_stream_table,
                 border=border, page_size=page_size, connections=connections,
-                jump_direction=jump_direction, debug=debug)
+                jump_direction=jump_direction, crossing_style=crossing_style,
+                debug=debug)
             from pandid.render.svg import SvgRenderer
             return SvgRenderer().render(
                 self, show_stream_table=show_stream_table,
                 border=border, diagram=diagram, page_size=page_size,
-                connections=connections, jump_direction=jump_direction, debug=debug
+                connections=connections, jump_direction=jump_direction,
+                crossing_style=crossing_style, debug=debug
             )
 
     def to_drawio(self, *, diagram: str | None = None,
                   page_size: str | None = None, border: str | None = None,
                   connections: str | None = None,
                   jump_direction: str = "vertical",
+                  crossing_style: str = "arc",
                   show_stream_table: bool | Literal["sheet"] = False, check: bool = True) -> str:
         """Render to a draw.io (``.drawio``) document string, running
         ``layout()`` and ``route()`` first if they have not been run
@@ -2592,12 +2626,19 @@ class Flowsheet:
         so what is exported is a **snapshot of the grid**, true of the
         drawing as it left pandid.
 
-        ``jump_direction`` selects which of two crossing lines gets the
-        semicircle hop, exactly as it does on the sheet: ``"vertical"``,
-        the default, hops the vertical runs. draw.io draws the hop
-        itself from a style key on the edge that carries it, and settles
-        ties between two crossing lines by z-order, so the export states
-        both.
+        ``jump_direction`` selects which of two crossing lines carries
+        the crossing mark, exactly as it does on the sheet:
+        ``"vertical"``, the default, marks the vertical runs. draw.io
+        draws the mark itself from a style key on the edge that carries
+        it, and settles ties between two crossing lines by z-order, so
+        the export states both.
+
+        ``crossing_style`` selects what that mark is -- ``"arc"``,
+        ``"gap"`` or ``"plain"`` -- and means exactly what it means on
+        the sheet; see :meth:`to_svg`. Two of the three are draw.io's
+        own line-jump styles and export as one, and ``"plain"`` writes
+        no style at all, so an exported crossing looks like the drawn
+        one whichever is chosen.
 
         ``show_stream_table`` docks the stream property table at the
         foot of the sheet, as :meth:`to_svg` does: one column per unique
@@ -2619,19 +2660,21 @@ class Flowsheet:
             self._prepare_to_draw(
                 diagram=diagram, check=check, show_stream_table=show_stream_table,
                 border=border, page_size=page_size, connections=connections,
-                jump_direction=jump_direction)
+                jump_direction=jump_direction, crossing_style=crossing_style)
             from pandid.render.drawio import DrawioRenderer
             return DrawioRenderer().render(self, diagram=diagram,
                                            page_size=page_size, border=border,
                                            connections=connections,
                                            jump_direction=jump_direction,
+                                           crossing_style=crossing_style,
                                            show_stream_table=show_stream_table)
 
     def render(self, path: str | Path, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
-               jump_direction: str = "vertical", debug: bool | float = False,
+               jump_direction: str = "vertical",
+               crossing_style: str = "arc", debug: bool | float = False,
                check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
 
@@ -2683,8 +2726,13 @@ class Flowsheet:
                 ``"flanged-at-nozzles"`` for the nozzles alone. A P&ID
                 only; one line may say otherwise with
                 ``connect(ends=...)``.
-            jump_direction: Which crossing lines hop, ``"vertical"`` or
-                ``"horizontal"``.
+            jump_direction: Which of two crossing lines carries the
+                crossing mark, ``"vertical"`` or ``"horizontal"``.
+            crossing_style: What that mark is: ``"arc"`` (the default,
+                and the drawing this library has always made), ``"gap"``
+                for ISO 10628-1 5.3.4's interruption, or ``"plain"`` for
+                the bare crossing of ISO 15519-1 12.5. See
+                :meth:`to_svg` for what each costs.
             debug: Draw the coordinate overlay under the diagram: the
                 grid, every ``pin()`` anchor and every port. ``True``
                 for the default spacing, a number to set it. Off by
@@ -2748,6 +2796,7 @@ class Flowsheet:
                     self.to_drawio(diagram=diagram, page_size=page_size,
                                    border=border, connections=connections,
                                    jump_direction=jump_direction,
+                                   crossing_style=crossing_style,
                                    show_stream_table=show_stream_table,
                                    check=check), encoding="utf-8")
                 return
@@ -2755,7 +2804,8 @@ class Flowsheet:
             svg = self.to_svg(
                 show_stream_table=show_stream_table, border=border,
                 diagram=diagram, page_size=page_size, connections=connections,
-                jump_direction=jump_direction, debug=debug, check=check,
+                jump_direction=jump_direction, crossing_style=crossing_style,
+                debug=debug, check=check,
             )
             if ext in ("", ".svg"):
                 Path(path).write_text(svg, encoding="utf-8")
@@ -2772,7 +2822,8 @@ class Flowsheet:
              border: str | None = None,
              diagram: str | None = None, page_size: str | None = None,
              connections: str | None = None,
-             jump_direction: str = "vertical", debug: bool | float = False,
+             jump_direction: str = "vertical",
+             crossing_style: str = "arc", debug: bool | float = False,
              check: bool = True) -> None:
         """Render the flowsheet and put it on screen.
 
@@ -2811,7 +2862,8 @@ class Flowsheet:
             preview(self.to_svg(
                 show_stream_table=show_stream_table, border=border,
                 diagram=diagram, page_size=page_size, connections=connections,
-                jump_direction=jump_direction, debug=debug, check=check,
+                jump_direction=jump_direction, crossing_style=crossing_style,
+                debug=debug, check=check,
             ), title=self.name)
 
     def __repr__(self) -> str:

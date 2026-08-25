@@ -296,6 +296,18 @@ _LINE_INK = "#000000"
 #: difference a reader comparing the two drawings will see.
 _JUMP_STYLE = "arc"
 
+#: ``jumpStyle`` for each of :data:`~pandid.render.svg.CROSSING_STYLES`
+#: the export writes one for.
+#:
+#: The mapping is the identity on the two it has, which is why the sheet
+#: spells its option in draw.io's own words rather than in a third
+#: vocabulary that would need a table kept in step. ``"plain"`` is
+#: absent on purpose: a sheet that marks no crossing writes no
+#: ``jumpStyle`` at all, and :func:`_hops` returns nothing to write one
+#: on -- ``jumpStyle=none`` would be a longer way of saying it and would
+#: leave the edges reordered for jumps that are not there.
+_JUMP_STYLES = {"arc": _JUMP_STYLE, "gap": "gap"}
+
 #: An edge that is never hopped, whatever is written after it.
 #:
 #: The sheet's jump pass builds its two lists of segments from
@@ -339,15 +351,24 @@ def _jump_size(radius: float, weight: float) -> int:
     return max(1, round(2.0 * (radius - weight) + 2.0))
 
 
-def _hops(polylines: dict, direction: str) -> "tuple[list, set, set]":
+def _hops(polylines: dict, direction: str,
+          style: str = "arc") -> "tuple[list, set, set]":
     """Which edges carry the hop, and the order that lets draw.io draw
     it.
 
     ``polylines`` is ``{key: points}`` for every **stream** on the
     sheet, in the order the streams are to be written; ``direction`` is
-    :meth:`Flowsheet.to_svg`'s own ``jump_direction``. Returns the keys
-    in the order they must be emitted in, and the set of them that is to
-    carry :data:`_JUMP_STYLE`.
+    :meth:`Flowsheet.to_svg`'s own ``jump_direction`` and ``style`` its
+    ``crossing_style``. Returns the keys in the order they must be
+    emitted in, and the set of them that is to carry a
+    :data:`_JUMP_STYLES` entry.
+
+    ``style="plain"`` marks nothing, so nothing hops, nothing has to be
+    written after anything else and nothing is lost: the keys come back
+    in exactly the order they went in. That is the same early return an
+    unrecognised ``direction`` takes and for the same reason -- the
+    reordering below exists only to let draw.io draw a jump, and a sheet
+    with no jump on it must not have its edges shuffled for one.
 
     **Which line hops** is the sheet's rule, taken from the same place
     :meth:`SvgRenderer._draw_streams` takes it: a *vertical* segment
@@ -397,7 +418,7 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
     pins that the emitted order satisfies every crossing it kept.
     """
     keys = list(polylines)
-    if direction not in ("vertical", "horizontal"):
+    if style not in _JUMP_STYLES or direction not in ("vertical", "horizontal"):
         return keys, set(), set()
     # The two families of segment, by the edge that owns each.
     # `_draw_streams` keeps the same two lists and tests the same strict
@@ -1534,6 +1555,7 @@ class DrawioRenderer:
                page_size: "str | None" = None, border: "str | None" = None,
                connections: "str | None" = None,
                jump_direction: str = "vertical",
+               crossing_style: str = "arc",
                show_stream_table: "bool | str" = False, **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
@@ -1570,12 +1592,21 @@ class DrawioRenderer:
         to mark nothing a stream has not stated. Ignored outside a
         P&ID. See :func:`~pandid.render.svg.sheet_connections`.
 
-        ``jump_direction`` says which of two crossing lines hops the
-        other, and means what it means on the sheet: ``"vertical"`` puts
-        the semicircle on the vertical runs. It reaches draw.io as a
-        style key on the hopping edges *and* as the order those edges
-        are written in, since z-order is what breaks the tie. See
-        :func:`_hops`.
+        ``crossing_style`` says what mark a crossing carries --
+        ``"arc"``, ``"gap"`` or ``"plain"`` -- and means exactly what it
+        means on the sheet; see
+        :data:`~pandid.render.svg.CROSSING_STYLES`. Two of the three are
+        draw.io's own line-jump styles and export as one; ``"plain"``
+        writes no style at all and reorders no edge, so an exported
+        crossing looks like the drawn one whichever is chosen. An
+        unknown spelling is refused here rather than exported as the
+        default.
+
+        ``jump_direction`` says which of two crossing lines carries that
+        mark, and means what it means on the sheet: ``"vertical"`` puts
+        it on the vertical runs. It reaches draw.io as a style key on
+        the marking edges *and* as the order those edges are written in,
+        since z-order is what breaks the tie. See :func:`_hops`.
 
         ``show_stream_table`` docks the stream property table at the
         foot of the sheet and rules it as the grid it is, exactly as
@@ -1611,7 +1642,7 @@ class DrawioRenderer:
         check_render_arguments(
             fs, show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction)
+            jump_direction=jump_direction, crossing_style=crossing_style)
         table_sheet = wants_table_sheet(show_stream_table)
         if not table_sheet:
             for u in fs.units:
@@ -1659,7 +1690,8 @@ class DrawioRenderer:
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
                 self._vertex(u, i, fit, tags))
-        body.extend(self._edges(fs, arrows, fit, tags, jump_direction, joints))
+        body.extend(self._edges(fs, arrows, fit, tags, jump_direction, joints,
+                                crossing_style))
         # Instrumentation goes on over the lines, as it does on the
         # sheet: the tap runs from the plant to the balloon and the
         # balloon's opaque body then knocks out both it and any process
@@ -2525,7 +2557,8 @@ class DrawioRenderer:
 
     def _edges(self, fs, arrows: bool, fit: "_Fit", tags: "_Tags",
                direction: str = "vertical",
-               joints: "str | None" = None) -> list[str]:
+               joints: "str | None" = None,
+               crossing_style: str = "arc") -> list[str]:
         """Every stream, as a draw.io edge between the two ports it
         joins.
 
@@ -2535,10 +2568,12 @@ class DrawioRenderer:
         about the drawing, and the export draws the drawing.
 
         ``direction`` is the sheet's ``jump_direction``, and it settles
-        two things at once: which edges carry :data:`_JUMP_STYLE`, and
-        **the order the edges come out in**, since draw.io breaks the
-        tie between two crossing lines by z-order. Both are
-        :func:`_hops`' answer.
+        two things at once: which edges carry a :data:`_JUMP_STYLES`
+        entry, and **the order the edges come out in**, since draw.io
+        breaks the tie between two crossing lines by z-order. Both are
+        :func:`_hops`' answer, and ``crossing_style`` says which entry
+        -- or, at ``"plain"``, that there is none and the sheet marks no
+        crossing at all.
 
         The cells are therefore built in ``fs.streams`` order and
         *written* in the hop order. Building them in stream order is not
@@ -2562,7 +2597,7 @@ class DrawioRenderer:
         # author the same account of what the shape landed on.
         self._findings += label_findings(fs, shape, placed, direction)
         polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
-        order, hops, lost = _hops(polylines, direction)
+        order, hops, lost = _hops(polylines, direction, crossing_style)
 
         def _run(key):
             return fs.streams[key].name or f"stream {key + 1}"
@@ -2609,7 +2644,11 @@ class DrawioRenderer:
             # :func:`_jump_size`.
             if n in hops:
                 weight = fit.length(_stream_rung(signal).width)
-                keys += [f"jumpStyle={_JUMP_STYLE}",
+                # One ``jumpSize`` for either mark: ``mxShape`` reads
+                # the half-extent off it before it branches on the
+                # style, so the arc and the gap span the same run --
+                # which is what the sheet does with ``HOP_R`` too.
+                keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}",
                          f"jumpSize={_jump_size(fit.length(HOP_R), weight)}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):

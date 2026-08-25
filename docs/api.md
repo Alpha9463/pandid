@@ -244,6 +244,7 @@ to_svg(*, show_stream_table: bool | "sheet" = False,
        page_size: str | None = None,
        connections: str | None = None,
        jump_direction: str = "vertical",
+       crossing_style: str = "arc",
        debug: bool | float = False,
        check: bool = True) -> str
 ```
@@ -259,6 +260,7 @@ to_drawio(*, diagram: str | None = None,
           border: str | None = None,
           connections: str | None = None,
           jump_direction: str = "vertical",
+          crossing_style: str = "arc",
           show_stream_table: bool | "sheet" = False,
           check: bool = True) -> str
 ```
@@ -268,7 +270,8 @@ Returns a draw.io / diagrams.net document, on the same terms. See
 ```text
 render(path: str | Path, *, show_stream_table=False, border=None,
        diagram=None, page_size=None, connections=None,
-       jump_direction="vertical", debug=False, check=True) -> None
+       jump_direction="vertical", crossing_style="arc", debug=False,
+       check=True) -> None
 ```
 Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `pdf` extra
@@ -280,7 +283,8 @@ at the sheet's physical size, and the PNG is rasterised from that same PDF.
 
 ```text
 show(*, show_stream_table=False, border=None, diagram=None, page_size=None,
-     connections=None, jump_direction="vertical", debug=False, check=True) -> None
+     connections=None, jump_direction="vertical", crossing_style="arc",
+     debug=False, check=True) -> None
 _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 ```
 `show()` is `render()` without the path: every keyword above means what it means
@@ -314,8 +318,39 @@ per process, overwritten by each `show()` and swept on the way out.
 | `show_stream_table` | `False` (the default), `True`, `"sheet"` | `True` draws the stream property table under the drawing (one column per stream that has properties, plus every feed and product); `"sheet"` draws the table as a sheet of its own instead, with no diagram on it. See [Stream properties and the table](#stream-properties-and-the-table) |
 | `check` | `bool` | validate; errors raise, warnings collect. The model-only checks run before the sheet is laid out, the geometric ones after — see [When the checks run](#when-the-checks-run) |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
-| `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop. Anything else raises `ValueError`, whether or not this sheet has a crossing to hop |
+| `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines carries the crossing mark. Anything else raises `ValueError`, whether or not this sheet has a crossing to mark |
+| `crossing_style` | `"arc"` (the default), `"gap"`, `"plain"` | what that mark is. See [Crossing lines](#crossing-lines). Anything else raises `ValueError` |
 | `debug` | `False` (the default), `True`, a number | draws the [coordinate overlay](#the-coordinate-overlay). `True` uses a 50-unit grid; a number sets the spacing |
+
+### Crossing lines
+
+Where two unconnected lines cross, `crossing_style` says what the drawing puts
+there. The standards do not agree on one, so it is your choice:
+
+| Value | The drawing | Where it comes from |
+|---|---|---|
+| `"arc"` | the marking line bridges the other with a semicircle | the default, and what pandid has always drawn. It is in no standard on file and on none of the reference sheets |
+| `"gap"` | the marking line is interrupted | ISO 10628-1 5.3.4 |
+| `"plain"` | both lines run straight through | ISO 15519-1 12.5 Figure 31, and every interior crossing on the reference sheets |
+
+```python
+fs.render("sheet.svg", crossing_style="gap")
+```
+
+`jump_direction` picks *which* of the two lines carries the mark; `"plain"`
+marks neither, so it has nothing to pick.
+
+**`"gap"` costs you run.** The break is taken out of the line rather than laid
+over it, so a crossing close to a corner leaves a short stub of pipe between
+the two. On the shipped examples, three of the eighty-four resulting pieces
+keep a straight leg under 1 mm. Choose it knowing that; the routing work that would fix it is separate.
+
+It is a property of the sheet, not of a line. A drawing that marked some
+crossings and not others would teach a reader a convention and then break it.
+
+Where a crossing sits too close to a corner for the mark you chose, the drawing
+is still made and the crossing is reported on `fs.warnings` as
+`crossing-unmarked`, naming both lines and the point.
 
 ### The coordinate overlay
 
@@ -4381,6 +4416,7 @@ not on PATH. It is a shell over the API above and adds nothing to it.
 pandid draw SPEC [-o OUT] [--page-size SIZE] [--border {none,zone}]
                  [--diagram {pfd,p&id}] [--stream-table [sheet]]
                  [--jump-direction {vertical,horizontal}]
+                 [--crossing-style {arc,gap,plain}]
 pandid validate SPEC
 pandid symbols [--kind KIND]
 ```
@@ -4404,6 +4440,7 @@ under the same name with `.svg`.
 | `--diagram 'p&id'` | `diagram="p&id"` |
 | `--stream-table`, `--stream-table sheet` | `show_stream_table=True`, `show_stream_table="sheet"` |
 | `--jump-direction horizontal` | `jump_direction="horizontal"` |
+| `--crossing-style gap` | `crossing_style="gap"` |
 | `--debug`, `--debug 100` | `debug=True`, `debug=100` |
 
 One line on stdout says what was drawn, and any warnings the sheet carries are
