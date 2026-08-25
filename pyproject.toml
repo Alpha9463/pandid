@@ -3,24 +3,20 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-# `pandid` is how "P&ID" is said out loud, and is both the distribution name and
-# the import name, so there is one name to remember. Plain "pfd" was not an
-# option: it is taken on PyPI by an unrelated project (Parallel Fast Downloader).
+
 name = "pandid"
-dynamic = ["version"]     # read from pandid/__init__.py; see [tool.hatch.version]
+dynamic = ["version"]
 description = "Generate chemical-engineering P&IDs and process flow diagrams with automatic layout and orthogonal stream routing."
 readme = "README.md"
 requires-python = ">=3.10"
-# The engine is PolyForm Small Business; the vendored draw.io symbol geometry
-# in pandid/render/_vendored_symbols.py stays Apache-2.0, as that licence requires.
-# NOTICE says which files are which; the expression alone cannot.
+
 license = "LicenseRef-PolyForm-Small-Business-1.0.0 AND Apache-2.0"
 license-files = ["LICENSE", "LICENSE-APACHE", "NOTICE"]
 authors = [{ name = "Alex Anderson" }]
 keywords = ["chemical-engineering", "p&id", "piping-and-instrumentation-diagram",
             "process-flow-diagram", "pfd", "flowsheet", "isa-5.1", "iso-10628"]
-# No `License ::` trove classifier: `license` above is an SPDX expression, and
-# Metadata 2.4 forbids carrying both (PyPI rejects the upload).
+
+
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -41,8 +37,7 @@ classifiers = [
 ]
 dependencies = []
 
-# A reader who installed `pandid` types `pandid`. `python -m pandid` runs the
-# same entry point from a checkout.
+
 [project.scripts]
 pandid = "pandid.cli:main"
 
@@ -54,30 +49,8 @@ Changelog = "https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Alpha9463/pandid/issues"
 
 [project.optional-dependencies]
-# PDF/PNG export via fs.render("x.pdf"). Every one of these is imported directly
-# by pandid.render.export, and every one arrives as a wheel on Windows, Linux and
-# macOS for 3.10 through 3.14: svglib and reportlab are pure Python, and
-# pypdfium2 is tagged py3-none-<platform>, so it carries PDFium with it and does
-# not wait for a new interpreter to be built for. That is the whole point of the
-# list -- see the module docstring for the binary cairosvg could not bring.
-#
-# The same four are what `fs.show()` needs for a window rather than a browser
-# (pandid.render.preview): the window itself is stdlib tkinter, and what it
-# cannot do is turn an SVG into pixels. Pillow is floored at 9.1 for
-# `Image.Resampling`, the enum the preview scales the sheet with; 9.0 spells it
-# as a bare `Image.LANCZOS` constant that Pillow's own type stubs no longer
-# declare, so the two spellings are a type error apart and the newer one is a
-# 2022 release.
 pdf = ["svglib>=2.0", "reportlab>=4.4.3", "pypdfium2>=4", "pillow>=9.1"]
 yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
-# hatchling is the build backend above; it is here as well so that the sdist
-# test in tests/test_packaging.py has something to build with instead of skipping.
-# `pyright` is pinned exactly, as `ruff` is and for the same reason: it is a
-# CI gate, and a gate whose bar moves on somebody else's release schedule
-# fails a pull request that changed nothing. The pin is the version `pandid/`
-# was measured clean against, and it is what a contributor's local run uses
-# too, so "pyright is clean" means the same thing in a PR body as in CI.
-# Raising it is a deliberate commit that fixes whatever the new release finds.
 dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "pyright==1.1.411", "PyYAML>=6",
        "hatchling"]
 
@@ -87,22 +60,10 @@ path = "pandid/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["pandid"]        # ships pandid/py.typed with it, so installers see the hints
 
-# The sdist is the buildable, testable source: package, tests (goldens included,
-# so the regression suite runs from the tarball), examples, docs and the stencil
-# vendoring pipeline. Only editor/agent scratch, local output and the material
-# that must never leave this machine is dropped.
-#
-# Every one of those paths is named here rather than left to hatchling's
-# `ignore-vcs = false` default, which reads .gitignore. .gitignore is a file, and
-# a build does not always have one: `git archive`, a CI step that cleans the tree,
-# a contributor building from an unpacked copy, or anyone setting
-# `ignore-vcs = true` all remove it. The purchased BS EN ISO 10628 / BS ISO 14617 /
-# BS ISO 15519 PDFs under standards/ and the third-party drawings under
-# professional_examples/ cannot be redistributed, so their exclusion has to hold
-# without it. tests/test_packaging.py builds an sdist from a tree with no
-# .gitignore and fails if a PDF comes out.
 [tool.hatch.build.targets.sdist]
 exclude = [
+    "tests",
+    "tests/golden/*.svg",
     # Never redistributable.
     "standards",              # purchased BSI/ISO standards (PDF)
     "professional_examples",  # third-party reference drawings (PDF)
@@ -122,8 +83,8 @@ exclude = [
     "*.egg-info",
     "renders",                # local render output
     "test_diagram.svg",       # scratch render at the repo root
-    "test.py",                # scratch probe at the repo root
-    "*.pgm",                  # raster scratch, e.g. a mis-quoted pdftoppm prefix
+    "test.py",
+    "*.pgm",
     "skills-lock.json",
     "uv.lock",
 ]
