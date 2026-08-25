@@ -58,15 +58,15 @@
     <text x="1517.5" y="105.88892222222225" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
   </g>
   <g id="streams">
-    <path d="M 100.0,125.8889 L 288.0,125.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 338.0,115.8889 L 458.0,115.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 528.0,95.8889 L 648.0,95.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 679.0,145.88892222222225 L 679.0,160.88892222222225 L 839.9,160.88892222222225" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 900.1,160.88892222222225 L 1030.0,160.88892222222225" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 1061.0,210.88892222222225 L 1061.0,225.88892222222225 L 1212.0,225.88892222222225" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 1061.0,110.88892222222225 L 1061.0,95.88892222222225 L 1212.0,95.88892222222225" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 1262.0,105.88892222222225 L 1474.0,105.88892222222225" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 1262.0,85.88892222222225 L 1287.0,85.88892222222225 L 1287.0,-45.888877777777765 L 263.0,-45.888877777777765 L 263.0,105.8889 L 288.0,105.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 100.0,125.8889 L 288.0,125.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 338.0,115.8889 L 458.0,115.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 528.0,95.8889 L 648.0,95.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 679.0,145.88892222222225 L 679.0,160.88892222222225 L 839.9,160.88892222222225" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 900.1,160.88892222222225 L 1030.0,160.88892222222225" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1061.0,210.88892222222225 L 1061.0,225.88892222222225 L 1212.0,225.88892222222225" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1061.0,110.88892222222225 L 1061.0,95.88892222222225 L 1212.0,95.88892222222225" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1262.0,105.88892222222225 L 1474.0,105.88892222222225" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1262.0,85.88892222222225 L 1287.0,85.88892222222225 L 1287.0,-45.888877777777765 L 263.0,-45.888877777777765 L 263.0,105.8889 L 288.0,105.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <rect x="184.8" y="119.4" width="18.4" height="13.0" fill="white" />
     <text x="194.0" y="125.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="388.8" y="109.4" width="18.4" height="13.0" fill="white" />

@@ -39,11 +39,11 @@ from pandid.streams import SIGNAL_KINDS
 from test_golden import SCENARIOS
 from test_line_weight import drawn_pens
 
-#: One drawing unit as a physical width. The grid module ISO 10628-1 5.3.1
-#: states its widths against is 2,5 mm and ten drawing units, so a unit is a
-#: quarter of a millimetre and the clause's three widths land on 4, 2 and 1
-#: units exactly. Restated here rather than imported, so that this file's
-#: millimetre readings do not come from the same place as the widths they judge.
+#: One drawing unit as a physical width. The grid module ISO 15519-1 6.2 states
+#: its widths against is 2,5 mm and ten drawing units, so a unit is a quarter of
+#: a millimetre and the row's two widths land on 2 and 1 units exactly. Restated
+#: here rather than imported, so that this file's millimetre readings do not
+#: come from the same place as the widths they judge.
 UNIT_MM = 0.25
 
 #: The groups a sheet draws its own lines into, as opposed to sheet furniture
@@ -123,11 +123,14 @@ def _two_unit_sheet() -> Flowsheet:
 # --- the shape of the ladder --------------------------------------------------
 
 
-def test_the_ladder_stands_in_the_ratio_5_3_1_states() -> None:
-    """4 : 2 : 1, asserted as three divisions and no absolute width.
+def test_the_ladder_stands_in_the_ratio_6_2_states() -> None:
+    """Two widths at 2:1, across three classes.
 
-    ISO 10628-1 5.3.1 a), b) and c). Each neighbouring pair also has to meet
-    ISO 15519-1 6.2's 2:1 on its own, not only the pair at the ends.
+    ISO 15519-1 6.2 Table 1 gives the process-industry row 0,1 M and 0,2 M
+    outright and a third of 0,4 M in parentheses. pandid does not take the
+    parenthesised rung (see :class:`~pandid.render.weights.LineWeight`), so a
+    run and the vessel it enters are one width and the instrumentation is half
+    it -- and any two widths on the sheet stand at the 2:1 6.2 requires.
     """
     from pandid.render.weights import LineWeight
 
@@ -135,30 +138,34 @@ def test_the_ladder_stands_in_the_ratio_5_3_1_states() -> None:
     equipment = LineWeight.EQUIPMENT.width
     detail = LineWeight.DETAIL.width
 
-    assert main / equipment == pytest.approx(2.0)
+    assert main / equipment == pytest.approx(1.0)
     assert equipment / detail == pytest.approx(2.0)
-    assert main / detail == pytest.approx(4.0)
-    # Three rungs and no fourth: a width can only be chosen by naming one.
+    assert main / detail == pytest.approx(2.0)
+    # Three classes and no fourth: a width can only be chosen by naming one.
+    # Two of them resolving to one width does not merge them -- if it did,
+    # ``_stream_rung`` and ``_symbol_rung`` would be answering the same
+    # question and #497 and #489 would have nowhere to attach.
     assert len(LineWeight) == 3
+    assert LineWeight.MAIN_FLOW is not LineWeight.EQUIPMENT
     # DETAIL is the floor 5.3.1 sets, so nothing on the ladder is under it.
     assert min(rung.width for rung in LineWeight) == detail
 
 
 def test_each_rung_is_its_own_multiple_of_the_grid_module() -> None:
-    """The ladder is derived, not chosen: 5.3.1 states each width as a multiple
-    of the module, and each member's *value* is that multiple.
+    """The ladder is derived, not chosen: 6.2 states each width as a multiple of
+    the module, and each member's ``modules`` is that multiple.
 
     Which is what makes the ratio unbreakable by editing one rung -- there is no
     width to edit, only a multiple -- and what ties the drawing units to
-    millimetres: the module is 2,5 mm and ten units, so a unit is 0,25 mm and
-    the three rungs are 1,0 mm, 0,5 mm and 0,25 mm.
+    millimetres: the module is 2,5 mm and ten units, so a unit is 0,25 mm, a run
+    and an equipment outline are 0,5 mm and a control line is 0,25 mm.
     """
     from pandid.render.weights import M, LineWeight
 
     assert M * UNIT_MM == pytest.approx(2.5)
     for rung in LineWeight:
-        assert rung.width == pytest.approx(rung.value * M)
-    assert LineWeight.MAIN_FLOW.width * UNIT_MM == pytest.approx(1.0)
+        assert rung.width == pytest.approx(rung.modules * M)
+    assert LineWeight.MAIN_FLOW.width * UNIT_MM == pytest.approx(0.5)
     assert LineWeight.EQUIPMENT.width * UNIT_MM == pytest.approx(0.5)
     assert LineWeight.DETAIL.width * UNIT_MM == pytest.approx(0.25)
 
@@ -244,10 +251,14 @@ def test_neither_backend_writes_a_stroke_width_as_a_literal() -> None:
 # --- the ladder as the sheet draws it -----------------------------------------
 
 
-def test_a_main_flow_line_is_drawn_at_twice_the_equipment_it_enters() -> None:
-    """#490 itself. A main flow line is 5.3.1 a) and the vessel it runs into is
-    5.3.1 b), and the clause exists so that the first stands out from the
-    second; drawn at one weight, it does not.
+def test_a_main_flow_line_is_drawn_at_the_weight_of_the_equipment_it_enters() -> None:
+    """A run and the vessel it runs into are one width, which is what a process
+    drawing office rules and what ISO 15519-1 6.2 Table 1 gives outright.
+
+    #502 drew the run at twice the outline on the parenthesised 0,4 M rung. The
+    sheets that shipped are the argument against it: at the size this library
+    draws a symbol, doubling the run turns it into a black bar against hairline
+    plant. See :class:`~pandid.render.weights.LineWeight`.
 
     Measured as the ratio between the two pens the sheet actually put down, so
     it says nothing about either number and everything about the pair.
@@ -258,22 +269,22 @@ def test_a_main_flow_line_is_drawn_at_twice_the_equipment_it_enters() -> None:
     outline = _quantised(
         max(lo for where, lo, _hi in drawn_pens(svg) if where.startswith("sym_vessel"))
     )
-    assert run / outline == pytest.approx(2.0)
+    assert run / outline == pytest.approx(1.0)
 
 
-def test_a_control_line_is_drawn_at_a_quarter_of_the_run_it_reads() -> None:
-    """5.3.1 c) against a), the two ends of the ladder, on one sheet.
+def test_a_control_line_is_drawn_at_half_the_run_it_reads() -> None:
+    """6.2's two widths, the two ends of the ladder, on one sheet.
 
-    A signal line and an impulse tap are the same rung as each other and a
-    quarter of the run -- which is the whole of what tells a reader the
-    instrumentation from the process.
+    A signal line and an impulse tap are the same rung as each other and half
+    the run -- which is the whole of what tells a reader the instrumentation
+    from the process.
     """
     fs = _two_unit_sheet()
     svg = fs.to_svg()
     pens = sorted(_stream_pens(svg))
     assert len(pens) == 2, f"expected a run and a signal, got {pens}"
     signal, run = pens
-    assert run / signal == pytest.approx(4.0)
+    assert run / signal == pytest.approx(2.0)
 
 
 @pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
@@ -333,7 +344,7 @@ def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(name: str) -
     **Agreement is not enough on its own**, and this test used to stop there:
     two backends that had both collapsed to the finest rung would have agreed
     perfectly. So the sheet's own widths are pinned absolutely first -- a run
-    is 4 units, a control line is 1 -- and the parity check runs on top of a
+    is 2 units, a control line is 1 -- and the parity check runs on top of a
     drawing already known to be right.
     """
     from test_drawio import _DRAWIO_KWARGS, _drawio_cells, _style
@@ -358,7 +369,7 @@ def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(name: str) -
     # The positive half: the numbers themselves, per stream, from the model
     # rather than from the renderer's own answer about the same stream.
     for stream, width in zip(fs.streams, drawn):
-        want = 1.0 if stream.kind in SIGNAL_KINDS else 4.0
+        want = 1.0 if stream.kind in SIGNAL_KINDS else 2.0
         assert width == pytest.approx(want), (
             f"{name}: {stream.name or stream.kind} is a "
             f"{'control or data line' if stream.kind in SIGNAL_KINDS else 'material run'} "
@@ -417,18 +428,19 @@ def test_the_arrowhead_clearance_floor_is_twice_the_line_the_heads_end() -> None
 
 
 def test_a_leader_head_is_a_size_and_does_not_follow_a_rung() -> None:
-    """A leader ends in a head half the flow head's size -- and the line it ends
-    is a *quarter* of a main flow line, not a half.
+    """A leader ends in a head half the flow head's size, and that half is fixed
+    however the rung under it moves.
 
     The two used to be one number: the head was written as the flow head times
-    the ratio between two rungs, which read correctly only while that ratio was
-    2:1. It is 4:1 now, and a head that had followed it would have halved
-    without anything in the drawing asking it to. A width and a size are
-    different quantities, and this is the assertion that they have come apart.
+    the ratio between two rungs. #502 took that ratio to 4:1 and would have
+    halved the head with it; this change takes it back to 2:1, which is the
+    value the head was coincidentally right at before either. The assertion is
+    therefore *both* numbers -- the head's own 2:1 and the pens' -- because a
+    head that had re-followed the rung would pass on the first alone.
     """
     from pandid.render.svg import _LEADER_HEAD
 
     fs = _two_unit_sheet()
     pens = sorted(_stream_pens(fs.to_svg()))
     assert ARROWHEAD / _LEADER_HEAD == pytest.approx(2.0)
-    assert pens[-1] / pens[0] == pytest.approx(4.0)
+    assert pens[-1] / pens[0] == pytest.approx(2.0)

@@ -6,6 +6,7 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
 from pandid.render.svg import HOP_R, _ink, stream_polyline
+from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS
 
 from test_route_invariants import CORPUS
@@ -24,7 +25,14 @@ _TAG = re.compile(
 #: A material run: ISO 10628-1 5.3.1 a), the ladder's main-flow rung. Written
 #: out rather than interpolated, so moving a rung shows up here as a failure
 #: rather than being absorbed by the regex that reads the sheet back.
-_PROCESS_LINE = re.compile(r'<path d="([^"]+)" fill="none" stroke="[^"]*" stroke-width="4"')
+#: A drawn material run. The width comes off the ladder rather than being typed
+#: as a literal: written ``stroke-width="4"``, this quietly matched *nothing*
+#: once the main-flow rung moved, and every test built on it went on passing by
+#: finding no runs at all to contradict it.
+_PROCESS_LINE = re.compile(
+    r'<path d="([^"]+)" fill="none" stroke="[^"]*" '
+    rf'stroke-width="{LineWeight.MAIN_FLOW.width:g}"'
+)
 _TAP_LINE = re.compile(
     r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)" stroke="black"'
 )
@@ -515,29 +523,27 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported():
     one does not read as "no information", it reads as a junction. That was
     drawn and not said; it is said now.
 
-    Held against the shipped corpus rather than a fixture, because the
-    condition needs a crossing within a few units of a corner and the routes
-    that produce one are exactly what a hand-built sheet cannot be trusted to
-    reproduce.
+    Held against a fixture rather than the shipped corpus. It used to be
+    ``19_absorber_stripper``, the last sheet with a crossing too near a corner
+    to carry its mark -- but ``HOP_R`` is the hop's clearance plus a pen, so
+    restoring the main-flow rung to the weight of the equipment shrank the
+    radius and that crossing now fits one. The corpus is clean, which is the
+    right outcome for the drawing and leaves this case nothing to hold.
 
-    ``19_absorber_stripper``, not ``18_fixed_bed_recycle`` -- #425/#483
-    redraws the latter, clearing the specific near-corner crossing this
-    test used to hold it against (``350-LG-310-CS``/``350-LG-314-CS``, the
-    router's whole point being that a crossing with a same-cost clear
-    alternative no longer gets drawn). ``19_absorber_stripper`` carries an
-    unrelated one this router never touches, on a manually-routed stream.
+    ``test_crossing_style._pair`` builds the condition directly: its waypoints
+    are set on the route rather than through ``via()`` precisely so a corner
+    can sit closer to a crossing than the router would ever place one.
     """
     from pandid.render.svg import unmarked_crossings
 
-    from test_golden import SCENARIOS
+    from test_crossing_style import TIGHT, _pair
 
-    build, kwargs = SCENARIOS["19_absorber_stripper"]
-    fs = build()
-    fs.to_svg(**kwargs)
+    fs = _pair(TIGHT)
+    fs.to_svg()
 
     said = [w for w in fs.warnings if w.code == "crossing-unmarked"]
-    assert len(said) == len(unmarked_crossings(fs)) == 1
-    assert "S-409 crosses S-418 at (1289.18, 174.662)" in said[0].message
+    assert len(said) == len(unmarked_crossings(fs)) == 2
+    assert "crosses" in said[0].message
     # The measurement a reader can check, and what to do about it.
     assert f"under {HOP_R:g}px of itself either side" in said[0].message
     assert "via()" in said[0].message
@@ -562,16 +568,16 @@ def test_a_redrawn_sheet_drops_the_crossing_it_used_to_report():
     already follows: a sheet redrawn with the crossing moved clear must stop
     warning about it, rather than accumulating both answers.
 
-    ``19_absorber_stripper``, not ``18_fixed_bed_recycle`` -- see the sibling
-    test above for why.
+    On the fixture rather than a shipped sheet -- see the sibling test above
+    for why the corpus no longer carries one.
     """
-    from test_golden import SCENARIOS
+    from test_crossing_style import ROOMY, TIGHT, _pair
 
-    build, kwargs = SCENARIOS["19_absorber_stripper"]
-    fs = build()
-    fs.to_svg(**kwargs)
+    fs = _pair(TIGHT)
+    fs.to_svg()
     assert [w for w in fs.warnings if w.code == "crossing-unmarked"]
-    # The same sheet drawn with the crossings marked the other way round: the
-    # horizontal carries the arc, and it has the room the vertical lacked.
-    fs.to_svg(**{**kwargs, "jump_direction": "horizontal"})
+    # The same two runs redrawn with the vertical's corner moved well clear of
+    # the crossing, so the arc it could not carry now fits.
+    fs = _pair(ROOMY)
+    fs.to_svg()
     assert [w for w in fs.warnings if w.code == "crossing-unmarked"] == []

@@ -64,6 +64,7 @@ from pandid.render.svg import (
     _shape_hits,
     _shapes_meet,
     enclosure_box,
+    fillable_enclosures,
     hop_box,
     HOP_R,
     JUMP_DIRECTIONS,
@@ -142,7 +143,7 @@ def halo(name: str) -> "tuple[float, float]":
     return len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
 
 
-def drawn(shape: str, box, ink: str = "black") -> str:
+def drawn(shape: str, box, ink: str = "black", fill: bool = False) -> str:
     """The one SVG element *shape* is drawn as, ruled around *box*.
 
     Spelled out here rather than taken from ``_enclosure_svg``, so the check is
@@ -151,13 +152,15 @@ def drawn(shape: str, box, ink: str = "black") -> str:
     label, like the leader beside it, and a coloured line's number is ruled in
     the colour it is written in.
 
-    ``fill="none"``, which is the whole of #480's second defect: a filled shape
-    is an opaque plate the size of a diamond and it deletes whatever run
-    crosses it. Only the words are written on paper.
+    *fill* is the white a shape is given when it was measured to reach no ink
+    but its own run, which is what a drawing office rules. Filling one blindly
+    is #480's second defect and is still not done: a shape that reaches
+    anything else stays ``fill="none"`` and the run is seen through it. Which
+    shape gets which is :func:`~pandid.render.svg.fillable_enclosures`.
     """
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    pen = f'fill="none" stroke="{ink}" stroke-width="1" />'
+    pen = f'fill="{"white" if fill else "none"}" stroke="{ink}" stroke-width="1" />'
     if shape == "diamond":
         return (
             f'<polygon points="{cx:.1f},{y0:.1f} {x1:.1f},{cy:.1f} '
@@ -212,10 +215,18 @@ def drawn_runs(svg: str) -> "list[tuple[list, float]]":
 
 
 def drawn_plates(svg: str) -> "list[tuple[float, float, float, float]]":
-    """Every opaque white rectangle the label pass laid down."""
+    """Every opaque white **plate** the label pass laid down.
+
+    A plate is the halo under the words and carries no outline. The ``box``
+    enclosure is also a white rectangle now that a shape clear of foreign ink
+    is filled, and it is *not* a plate -- it is ruled, so it has a ``stroke``,
+    and that is what tells the two apart here. Without the distinction this
+    helper returned the enclosures as well and every ``box`` sheet read as
+    having twice the plates the placement laid.
+    """
     out = []
     for node in _streams_group(svg).iter(f"{SVG_NS}rect"):
-        if node.get("fill") != "white":
+        if node.get("fill") != "white" or node.get("stroke"):
             continue
         x, y = float(node.get("x") or 0), float(node.get("y") or 0)
         # Rounded to the decimal the file is written at, so a plate read back
@@ -438,29 +449,35 @@ def test_the_shape_is_ruled_round_the_box_reserved_and_fills_none_of_it(shape):
     search reserved and the shape a reader sees are one rectangle: one element
     per label, in the shape asked for, at the reserved size and place.
 
-    And it fills none of it, which is #480's second defect. A shape filled
-    white is a plate the size of a diamond, and on ``14_tank_farm`` it took 8,5
-    units out of ``MS-605``: a run that stopped and started again for no reason
-    a reader could see, on a sheet whose validator is blind to it because the
-    topology is untouched. So a sheet ruling shapes writes exactly as many
-    opaque fills as the same sheet ruling nothing -- one per label and no more,
-    however much larger the shapes are.
+    And the white it fills is decided per label, never taken for granted. A
+    shape filled blindly is a plate the size of a diamond, and on
+    ``14_tank_farm`` it took 8,5 units out of ``MS-605``: a run that stopped
+    and started again for no reason a reader could see, on a sheet whose
+    validator is blind to it because the topology is untouched. So the fill is
+    allowed only where the shape was measured to reach no ink but its own run
+    (:func:`~pandid.render.svg.fillable_enclosures`), and this asserts the two
+    agree label by label rather than that the sheet fills nothing.
+
+    This fixture is uncrowded and every shape on it clears everything, so the
+    ``fillable`` list is expected to be all true -- asserted outright, because a
+    ``fillable_enclosures`` that returned all false would otherwise let the
+    per-label comparison below pass while the sheet drew no fill at all.
     """
-    bare = sheet().to_svg()
     fs = sheet()
     fs.stream_labels.enclosure = shape
     ruled = fs.to_svg()
     placed = numbers(fs)
     assert placed
 
-    assert ruled.count('fill="white"') == bare.count('fill="white"'), (
-        f"{shape}: the sheet lays down white the bare sheet does not"
+    fillable = fillable_enclosures(fs, shape, placed, "vertical")
+    assert all(fillable), (
+        f"{shape}: this fixture is uncrowded, so every shape on it should be "
+        f"clear enough to fill; got {fillable}"
     )
-    for number in placed:
-        assert ruled.count(drawn(shape, number.box)) == 1, (
+    for number, fill in zip(placed, fillable):
+        assert ruled.count(drawn(shape, number.box, fill=fill)) == 1, (
             f"{shape}: {number.name} is not drawn to fill the box reserved for it"
         )
-        assert 'fill="none"' in drawn(shape, number.box)
         # This sheet is uncrowded, so every label keeps its plate...
         assert number.words is not None
         assert ruled.count(plate(number.words)) == 1
@@ -527,21 +544,35 @@ def test_one_size_rules_every_label_however_long_its_own_name_is(shape):
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_a_label_on_a_vertical_run_turns_its_shape_with_it(shape):
-    """A number reads bottom to top on a vertical run (ISO 15519-1 §7.2.5, and
-    §5.1.5 for the reading direction), so the paper it takes is the transpose
-    of the paper it takes flat -- and so is the shape around it. A circle
-    transposes to itself, which is the check that this is measured rather than
-    special-cased."""
+    """The shape a label is ruled in follows the **run**, so the paper it takes
+    on a vertical one is the transpose of the paper it takes on a horizontal
+    one. A circle transposes to itself, and so does the diamond now that it is
+    a square on its corner, which is the check that this is measured rather
+    than special-cased.
+
+    Partitioned on the run's own direction and not on ``n.vertical``. That
+    field says which way the *words* face, and inside a diamond or a circle
+    they stay upright however the line runs -- so asking it put every label in
+    the ``flat`` half and left the other empty, and the test failed on its own
+    guard rather than on the thing it measures.
+    """
     fs, kwargs = gallery.flowsheet(CROWDED)
     fs.stream_labels.enclosure = shape
     placed = numbers(fs, **kwargs)
+
+    def on_a_vertical_run(n) -> bool:
+        (x1, y1), (x2, y2) = n.seg
+        return abs(x2 - x1) < abs(y2 - y1)
+
     flat = {
         (round(n.box[2] - n.box[0], 6), round(n.box[3] - n.box[1], 6))
         for n in placed
-        if not n.vertical
+        if not on_a_vertical_run(n)
     }
     turned = {
-        (round(n.box[3] - n.box[1], 6), round(n.box[2] - n.box[0], 6)) for n in placed if n.vertical
+        (round(n.box[3] - n.box[1], 6), round(n.box[2] - n.box[0], 6))
+        for n in placed
+        if on_a_vertical_run(n)
     }
     assert flat and turned, "the fixture has to draw both, or this checks nothing"
     assert flat == turned
@@ -554,9 +585,16 @@ def test_a_label_on_a_vertical_run_turns_its_shape_with_it(shape):
 
 def _on_its_run(number) -> "tuple[bool, float, float]":
     """Is the label written *on* its own run, and if so how much run is there
-    against how much label?"""
+    against how much label?
+
+    The direction is read off ``seg`` and **not** off ``number.vertical``,
+    which is a fact about the words rather than about the run: inside a
+    diamond or a circle they stay upright on a vertical line. Asking the words
+    gave this the wrong axis for exactly those, so a vertical run measured as
+    ``0.0`` units long and every label on one read as having left it.
+    """
     (x1, y1), (x2, y2) = number.seg
-    if number.vertical:
+    if abs(x2 - x1) < abs(y2 - y1):
         axis, centre, span = (x1 + x2) / 2, number.x, abs(y2 - y1)
         reach = number.box[3] - number.box[1]
     else:
@@ -599,8 +637,14 @@ def test_a_shape_too_big_for_its_run_stays_on_the_line_anyway():
 
     Without this the check above passes on a corpus where every shape happens
     to fit, and says nothing about the rule.
+
+    The scheme is longer than it used to need to be. A diamond is a square
+    turned on its corner now rather than a minimum-area rhombus, and a square
+    reaches less far along the run for the same words -- which is the point of
+    the change -- so ``STREAM-{n}00`` no longer overruns anything and the case
+    needs a wider label to have a subject at all.
     """
-    fs = sheet(scheme="STREAM-{n}00")
+    fs = sheet(scheme="VERY-LONG-STREAM-{n}00")
     fs.stream_labels.enclosure = "diamond"
     placed = numbers(fs)
     assert placed
@@ -658,11 +702,19 @@ def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo():
 # What a label paints out
 # ---------------------------------------------------------------------------
 
-#: The one label on the crowded sheet whose run has nowhere to put a plate:
-#: ``S-403`` names a 14-unit segment with two other runs crossing it, and no
-#: slide along 14 units moves a 43-unit plate off either of them. It is the
-#: knot the second review rendered and looked at.
-PLATELESS = "S-403"
+#: The sheet carrying a label whose run has nowhere to put a plate, and that
+#: label. One per sheet, the same one at all three shapes, and its plate is
+#: kept off ``250-CWS-312-CS``.
+#:
+#: This was ``13_mineral_dewatering``/``S-403``, whose 14-unit segment could
+#: not slide a 43-unit plate clear of either run crossing it. It stopped being
+#: plateless at the diamond and the circle when a number inside those two
+#: stopped turning with its line: upright, the plate on a vertical run is short
+#: *along* the run rather than tall down it, and S-403's found room. That is
+#: the change working, and it left this case needing a sheet where the knot is
+#: tight enough to survive it.
+PLATELESS_SHEET = "18_fixed_bed_recycle"
+PLATELESS = "350-LG-314-CS"
 
 
 def foreign(fs, name) -> list:
@@ -848,7 +900,7 @@ def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape):
     Without it the sweep above passes on a corpus where every plate happens to
     find clear paper, and says nothing about what happens when none does.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery.flowsheet(PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
     svg = fs.to_svg(**kwargs)
     placed = numbers(fs, **kwargs)
@@ -879,7 +931,7 @@ def test_the_author_is_told_when_the_number_itself_is_written_across_a_run(shape
     ``label-over-line``, which names the runs it is written across so the
     author knows which two to space apart.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery.flowsheet(PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
     fs.to_svg(**kwargs)
     said = {i.message.split("'s ")[0]: i.message for i in findings(fs, {"label-over-line"})}
@@ -1118,10 +1170,17 @@ def test_the_author_is_told_which_line_a_diamond_was_drawn_over():
     the lot.
 
     A warning and not an error, and that is settled by ``_enclosure_svg``: the
-    shape is an outline, so the crossing line is still drawn and the drawing
-    is crowded rather than false. Fill the shape again and this severity has
-    to rise with it -- a sheet that draws a connection which is not there is
-    not something to warn about.
+    shape is an outline *here*, so the crossing line is still drawn and the
+    drawing is crowded rather than false.
+
+    A shape clear of foreign ink is filled white now, and this severity does
+    not have to rise with it, because the two conditions cannot both hold: the
+    fill is granted only where ``fillable_enclosures`` measures the shape to
+    reach nothing that is not its own run, and that is exactly the complement
+    of what this finding reports. Every shape named below is hollow. The
+    assertion at the foot of the test is what holds the pair together -- if a
+    reported shape were ever filled, it would be deleting the line it is
+    reported for, and a warning would be the wrong severity.
     """
     fs, kwargs = gallery.flowsheet("11_ethanol_pid")
     fs.stream_labels.enclosure = "diamond"
@@ -1129,11 +1188,26 @@ def test_the_author_is_told_which_line_a_diamond_was_drawn_over():
     over_lines = findings(fs, {"enclosure-over-line"})
     assert over_lines
     named = {i.message.split("'s diamond")[0] for i in over_lines}
-    assert "AE-309-100-80-SS" in named
-    said = next(i for i in over_lines if i.message.startswith("AE-309-100-80-SS"))
-    assert "AE-303-80-80-SS" in said.message
+    assert "FB-307-250-160-SS" in named
+    said = next(i for i in over_lines if i.message.startswith("FB-307-250-160-SS"))
+    assert "HPS-308-100-80-CS" in said.message
     for issue in over_lines:
         assert issue.severity == "warning"
+
+    # The shapes this finding names are the shapes that were refused a fill,
+    # which is what makes "warning" the right severity for all of them.
+    placed = numbers(fs, **kwargs)
+    fills = dict(
+        zip(
+            (n.name for n in placed),
+            fillable_enclosures(fs, "diamond", placed, kwargs.get("jump_direction", "vertical")),
+        )
+    )
+    for name in named:
+        assert fills[name] is False, (
+            f"{name}'s diamond is reported as drawn over another line and is "
+            f"filled white, so it is deleting that line rather than crowding it"
+        )
 
 
 def reported_pairs(fs, shape: str) -> set:
@@ -1398,7 +1472,7 @@ def test_the_export_lays_down_no_plate_where_the_sheet_lays_none():
     deletes the run the ``.svg`` was careful to leave whole, and the two files
     stop being one drawing.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery.flowsheet(PLATELESS_SHEET)
     fs.stream_labels.enclosure = "diamond"
     bare = {n.name for n in numbers(fs, **kwargs) if n.words is None}
     assert bare == {PLATELESS}
@@ -1411,13 +1485,29 @@ def test_the_export_lays_down_no_plate_where_the_sheet_lays_none():
     assert checked
 
 
-def test_the_export_turns_a_number_on_a_vertical_run():
+@pytest.mark.parametrize(
+    "shape, any_turned",
+    [("box", True), ("diamond", False)],
+    ids=["box-turns-with-its-line", "diamond-stays-upright"],
+)
+def test_the_export_turns_exactly_the_numbers_the_sheet_turns(shape, any_turned):
     """``horizontal=0`` on the vertex, which is the ordinary way to set text on
-    end in draw.io and needs none of the argument the edge-label case does."""
+    end in draw.io and needs none of the argument the edge-label case does.
+
+    Both directions, because the two backends now have a rule to disagree
+    about. A number in a ``box`` follows its line; one in a ``diamond`` stays
+    upright however the line runs, and the export reads
+    :attr:`~pandid.render.svg.StreamNumber.vertical` rather than re-deriving
+    the direction from the geometry, which is what keeps them one drawing. A
+    single-shape check would pass on an exporter that turned everything or
+    nothing, so ``any_turned`` pins which case each shape is.
+    """
     fs, kwargs = gallery.flowsheet(CROWDED)
-    fs.stream_labels.enclosure = "diamond"
+    fs.stream_labels.enclosure = shape
     turned = {n.name for n in numbers(fs, **kwargs) if n.vertical}
-    assert turned, "the fixture has to draw one, or this checks nothing"
+    assert bool(turned) is any_turned, (
+        f"{shape}: the fixture turned {len(turned)} numbers, so this checks nothing"
+    )
     checked = 0
     for cell in cells(fs, **kwargs):
         if (cell.get("id") or "").endswith("-box"):

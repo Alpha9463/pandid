@@ -50,13 +50,13 @@
     <text x="857.5" y="366.7778" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Ammonia</text>
   </g>
   <g id="streams">
-    <path d="M 100.0,125.8889 L 288.0,125.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 338.0,115.8889 L 458.0,115.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 489.0,165.88892222222225 L 489.0,190.88892222222225 L 535.0,190.88892222222225 L 535.0,60.88890000000001 L 670.0,60.88890000000001 L 670.0,85.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 670.0,145.8889 L 670.0,301.7778 L 695.0,301.7778" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 726.0,251.7778 L 726.0,236.7778 L 822.0,236.7778" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 892.0,216.7778 L 917.0,216.7778 L 917.0,-25.888877777777765 L 263.0,-25.888877777777765 L 263.0,105.8889 L 288.0,105.8889" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 726.0,351.7778 L 726.0,366.7778 L 822.0,366.7778" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 100.0,125.8889 L 288.0,125.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 338.0,115.8889 L 458.0,115.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 489.0,165.88892222222225 L 489.0,190.88892222222225 L 535.0,190.88892222222225 L 535.0,60.88890000000001 L 670.0,60.88890000000001 L 670.0,85.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 670.0,145.8889 L 670.0,301.7778 L 695.0,301.7778" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 726.0,251.7778 L 726.0,236.7778 L 822.0,236.7778" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 892.0,216.7778 L 917.0,216.7778 L 917.0,-25.888877777777765 L 263.0,-25.888877777777765 L 263.0,105.8889 L 288.0,105.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 726.0,351.7778 L 726.0,366.7778 L 822.0,366.7778" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <rect x="184.8" y="119.4" width="18.4" height="13.0" fill="white" />
     <text x="194.0" y="125.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="388.8" y="109.4" width="18.4" height="13.0" fill="white" />
