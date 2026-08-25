@@ -4200,7 +4200,13 @@ SCENARIOS = {
     # arithmetic claim: the boxes here are as wide as their own names and as
     # tall as their walls need, so a change to the pitch, the minimum box or the
     # label allowance moves this file and nothing else.
-    "12_block_flow_diagram": (_block_flow_diagram, {}),
+    # 12 declares what it is, as examples/12_block_flow_diagram.py does: a BFD
+    # answers ISO 10628-1 4.2 and owes no boundary flow rate, where a PFD owes
+    # one under 4.3.2 d). It changes no ink -- the two renders are byte equal --
+    # but without it the fixture is validated as a PFD and reports a
+    # stream-table-missing the example does not, so the two builders disagree
+    # about what the sheet is.
+    "12_block_flow_diagram": (_block_flow_diagram, {"diagram": "bfd"}),
     # 13 is the solids circuit: a mineral concentrate thickened, filtered, dried and
     # magnetically cleaned. It is the only scenario drawing a dryer, a furnace, a
     # blower or a funnel, the only one with a tee that *combines* rather than
