@@ -28,9 +28,68 @@ Two probe values, not one, because "no consequence" has two spellings. A
 parameter whose default is falsy (``debug=False``) reacts to any truthy value,
 and one whose default is truthy (``isolation=True``) reacts to none of them --
 so the probes are an alien object and a *falsy* alien object, and an argument
-counts as honoured when **either** of them makes a difference. Dropping the
-falsy probe silently stops ``add_valve_station``'s three ``True`` flags from
-being checked at all; ``tests`` below plants exactly that.
+counts as honoured when **either** of them makes a difference.
+
+What the second probe is worth is measured rather than argued about, and it is
+the opposite of quiet: delete ``_FalsyAlien()`` from :data:`PROBES` and nine
+checks fail. Eight are arguments that *are* read and would be reported dropped
+-- ``isolation``, ``reducers`` and ``bypass`` on both ``add_valve_station``
+cases, and ``auto_faces`` through the constructor and again through its setter
+-- and the ninth is
+:func:`test_the_falsy_probe_is_what_finds_an_argument_whose_default_is_true`,
+which plants the shape on a case of its own so that the reason arrives beside
+the failure. #528 said the opposite of this in its body and here: that the
+flags would stop being checked at all. A loud false failure and a silent gap
+are not the same thing, and this file least of all can afford prose that does
+not match what running it does.
+
+An honoured verdict is only as strong as what the probe could reach, though.
+An argument counts as honoured as soon as *a* probe makes a difference -- and
+a probe that is **refused** has made one. That is the second tier's whole
+subject, below.
+
+Two tiers, because a refusal is not an answer
+--------------------------------------------
+
+An argument that is *refused* has changed what the call did, so it passes the
+rule above -- and all it has proved is that something inspected it. Whether
+anything after that read it is a different question, and it is where both
+measurements of #528 missed -- five times between them, and nowhere else:
+``pandid draw`` checks ``--border`` against its own ``choices`` and hands
+``render()`` a None; ``to_svg`` checks ``page_size`` and draws unpaged.
+
+So the check is asked twice. The second time the values are ones the package
+itself says the argument takes, and **two of them must make the call do
+different things**
+(:func:`test_two_values_the_package_accepts_do_not_do_the_same_thing`). They
+are asked for rather than written down, from the two places this package
+states them in a form a program can read:
+
+* ``argparse``'s ``choices`` -- ``--border`` offers ``none`` and ``zone``, and
+  ``--crossing-style`` takes its list from
+  :data:`pandid.render.svg.CROSSING_STYLES`, so a fourth style is probed here
+  the day it is added;
+* a **boolean default**. ``tabulate: bool = False`` says in the signature that
+  both values are meant, which is what reaches a flag that is *validated* --
+  ``_flag(data["tabulate"])`` refuses an alien, and the alien learns nothing.
+
+A vocabulary is keyed by the argument's name and then used wherever that name
+turns up, because a keyword, a spec key and a property setter that share one
+are one argument arriving through three doors: ``auto_faces`` is
+``Flowsheet(auto_faces=...)``, ``"auto_faces"`` in a spec file, and
+``fs.auto_faces =``, and all three are probed with True and False.
+
+The cost is the one #528 named: **a fixture per configuration in which the
+values can show**. Where a fixture could carry the feature, it now does --
+:func:`_crossed_sheet` is the sheet the command line is given, so that
+``--crossing-style`` has two lines crossing to style and ``pandid validate``
+has an untabulated line over the sheet edge to report differently for a PFD
+than for a BFD; and a render case that is not about one particular drawing is
+built on a P&ID, which is the drawing with the most on it. Where it could not
+-- a stream table drawn as the sheet has no diagram under it, whatever the
+fixture -- that is a line in :data:`INDISTINGUISHABLE` with a reason, held as
+strictly as :data:`INAPPLICABLE`: if the values start differing, the line is
+out of date and this file fails until it comes out.
 
 What this cannot see, said plainly
 ----------------------------------
@@ -47,23 +106,25 @@ the package on purpose and this file was watched not to notice:
 
 1. **Validated at the door and dropped on the way through.** A probe that is
    *refused* proves the argument reached a validator, and nothing beyond it.
-   Three mutations were left in the package on purpose and not one of them
-   failed anything here: ``to_svg`` passing ``page_size=None`` to its renderer
-   after ``_prepare_to_draw`` has checked the real one; ``_read_stream``
-   calling ``_flag(data["tabulate"])`` and throwing the answer away; ``pandid
-   draw`` passing ``border=None`` to ``render()`` after argparse has checked
-   ``--border`` against its own ``choices``.
+   #528 planted eleven defects and missed three, an independent review planted
+   nine and missed two, and all five misses were this one shape -- so the
+   second tier below is aimed at exactly it, and closes as much of it as the
+   package states its own accepted values in a form a program can read.
 
-   What would close it is a second-tier probe taken from *the values the
-   refusal offers* -- argparse hands them over in ``action.choices`` -- with
-   two of them required to draw different sheets. That needs a fixture per
-   configuration in which each of those values can show: a crossing on the
-   sheet before ``--crossing-style`` means anything, a P&ID before
-   ``--connections`` does. That is a fact about fixtures rather than a rule, so
-   it is not here. What is here for the render chain is #492's guard in
+   What is left is the rest of that sentence. A vocabulary comes from
+   ``action.choices`` and from a boolean default, and an argument whose
+   accepted set is a private table with nothing tying it to the argument's name
+   has none: ``page_size`` is checked against
+   ``pandid.render.svg._PAGE_SIZES`` and ``--page-size`` offers no ``choices``;
+   ``Valve.fail`` is checked against ``FAIL_POSITIONS``; a stream ``color`` is
+   checked as text. Each of those can still be validated and then dropped
+   without failing anything here, which is measured rather than assumed --
+   three planted defects of that shape, one per table, all three missed. What
+   would close it is a way to say *which* table an argument is checked against
+   that is not a list of argument names in this file, and there is not one
+   today. For the render chain the seam is also held by #492's guard in
    ``tests/test_stream_table_sheet.py``, holding each entry point's keywords
-   against its backend's, and ``tests/test_show.py``, holding ``show()``'s
-   signature to ``render()``'s.
+   against its backend's, and by ``tests/test_show.py``.
 2. **Refused, but not by name.** #495 asks that a refusal name the argument.
    Several here raise something legible only to a Python programmer --
    ``AttributeError: '_Alien' object has no attribute 'upper'`` for a bad
@@ -117,6 +178,16 @@ not yet fixed**, not a design decision; the two live in one table because the
 guard treats them identically, and are told apart by
 :attr:`Inapplicable.issue`.
 
+Three tables excuse a check in this file, and all three are held to the same
+rules: :data:`INAPPLICABLE`, for an argument with no effect at all here;
+:data:`INDISTINGUISHABLE`, for one that *does* reach something and whose values
+this configuration cannot tell apart; and :data:`UNEXERCISED`, for an entry
+point no case can call. Every one of them must give a reason worth reading --
+:func:`_reason_worth_reading`, one predicate, shared so the three cannot drift
+apart. They had: until #529 an **empty** ``UNEXERCISED`` reason passed, so "no
+case can be written for this" needed nothing after the comma, which is the one
+thing that turns a declaration table into somewhere to put a failure.
+
 Guarding the guard
 ------------------
 
@@ -132,9 +203,17 @@ purpose at the bottom and shown to produce a failure:
 * the **tables** are validated by functions that take the table, so a
   fabricated table with a stale key, a blank reason or a malformed issue
   number is shown to be reported;
-* the **parametrisation** is asserted non-empty and to contain named pairs, so
-  a signature reader that quietly returned nothing cannot make the whole file
-  pass by having nothing to check.
+* the **second tier** is run against a planted entry point that checks its
+  argument against a list and then draws the same thing whichever it was, and
+  against one that checks it and then uses it, and must tell those apart --
+  and the first of the two is shown to pass the *first* tier, which is the
+  whole reason there is a second;
+* the **vocabularies** are read off a parser and a signature this file makes
+  up, including a dest two subcommands disagree about, which is dropped rather
+  than guessed at and reported rather than dropped quietly;
+* the **parametrisation** -- both tiers of it -- is asserted non-empty and to
+  contain named pairs, so a signature reader that quietly returned nothing
+  cannot make the whole file pass by having nothing to check.
 """
 
 import argparse
@@ -277,6 +356,17 @@ def _parameters(func: Any) -> tuple[str, ...]:
     )
 
 
+def _function(obj: Any) -> Any:
+    """The plain function behind a bound method, classmethod or staticmethod.
+
+    ``Flowsheet.from_dict`` is a bound classmethod and is a *different object*
+    from the function the enumeration keys on, so a case declaring it would
+    have read as covering nothing at all -- which is how three of these entry
+    points went missing on the first run of this file.
+    """
+    return getattr(obj, "__func__", obj)
+
+
 def _has_catch_all(func: Any) -> bool:
     return any(p.kind is p.VAR_KEYWORD for p in inspect.signature(func).parameters.values())
 
@@ -386,6 +476,44 @@ def _faulty_sheet() -> Flowsheet:
     return fs
 
 
+def _crossed_sheet() -> Flowsheet:
+    """A sheet with two runs that cross, and nothing tabulated on it.
+
+    Two features :func:`_sheet` has no room for, and both are ones a *value*
+    needs before it can show:
+
+    * ``crossing_style`` and ``jump_direction`` say what to do where two lines
+      cross. On a sheet where none do, every one of the styles the package
+      offers draws the same file, and the second-tier check below could only be
+      told that they cannot be told apart.
+    * ``stream-table-missing`` is the one finding that reads which drawing this
+      is -- ISO 10628-1:2014 4.3.2 d) is a *process flow diagram*'s clause -- and
+      it is made about a line crossing the sheet edge on a sheet with nothing
+      tabulated. :func:`_sheet` tabulates every stream, so ``validate`` there
+      answers the same for a PFD, a P&ID and a BFD.
+
+    A vessel in the middle of the first run, so that a joint mark has an
+    equipment nozzle to mark; two boundary pairs, so that a line crosses. The
+    pins are well inside the sheet: a negative one is an error, and an error is
+    what a baseline call may not have.
+    """
+    fs = Flowsheet("Argument Contract")
+    feed = fs.add(U.Feed("F-1"))
+    crossing = fs.add(U.Feed("F-2"))
+    tank = fs.add(U.Vessel("T-1"))
+    product = fs.add(U.Product("PR-1"))
+    aside = fs.add(U.Product("PR-2"))
+    feed.pin(x=200, y=200)
+    tank.pin(x=500, y=200)
+    product.pin(x=800, y=200)
+    crossing.pin(x=350, y=400)
+    aside.pin(x=650, y=100)
+    fs.connect(feed.outlet, tank.inlet, size=6, service="P", spec="A1A")
+    fs.connect(tank.outlet, product.inlet)
+    fs.connect(crossing.outlet, aside.inlet)
+    return fs
+
+
 # --------------------------------------------------------------------------
 # The cases: Python callables
 # --------------------------------------------------------------------------
@@ -436,16 +564,27 @@ def _render_case(cid: str, method: str, **fixed: Any) -> Case:
     return _case(Case(id=cid, arguments=_parameters(entry), run=run, entry=entry))
 
 
+# A case that is about one kind of drawing says which; every other one is a
+# P&ID, because it is the drawing with the most on it -- a PFD marks no joints,
+# so `connections=` on one is a word that can be checked and can change
+# nothing, and a case with no reason to prefer a PFD would be declaring that
+# rather than measuring anything.
 _render_case("to_svg[pfd]", "to_svg")
 _render_case("to_svg[p&id]", "to_svg", diagram="p&id")
 _render_case("to_svg[bfd]", "to_svg", diagram="bfd")
-_render_case("to_svg[table docked]", "to_svg", show_stream_table=True, page_size="A3")
-_render_case("to_svg[table sheet]", "to_svg", show_stream_table="sheet", page_size="A3")
+_render_case(
+    "to_svg[table docked]", "to_svg", diagram="p&id", show_stream_table=True, page_size="A3"
+)
+_render_case(
+    "to_svg[table sheet]", "to_svg", diagram="p&id", show_stream_table="sheet", page_size="A3"
+)
 _render_case("to_drawio[pfd]", "to_drawio")
-_render_case("to_drawio[table sheet]", "to_drawio", show_stream_table="sheet", page_size="A3")
-_render_case("render[.svg]", "render", _suffix=".svg")
-_render_case("render[.drawio]", "render", _suffix=".drawio")
-_render_case("show[]", "show")
+_render_case(
+    "to_drawio[table sheet]", "to_drawio", diagram="p&id", show_stream_table="sheet", page_size="A3"
+)
+_render_case("render[.svg]", "render", diagram="p&id", _suffix=".svg")
+_render_case("render[.drawio]", "render", diagram="p&id", _suffix=".drawio")
+_render_case("show[]", "show", diagram="p&id")
 
 
 def _backend_case(cid: str, backend: Any) -> Case:
@@ -454,7 +593,7 @@ def _backend_case(cid: str, backend: Any) -> Case:
     def run(**overrides: Any) -> str:
         fs = _faulty_sheet()
         fs.route()
-        return str(backend().render(fs, **overrides))
+        return str(backend().render(fs, **_default(dict(overrides), diagram="p&id")))
 
     return _case(Case(id=cid, arguments=_parameters(backend.render), run=run, entry=backend.render))
 
@@ -484,11 +623,34 @@ def _default(kwargs: dict[str, Any], **defaults: Any) -> dict[str, Any]:
 
 _sheet_case("Flowsheet.layout", Flowsheet.layout, lambda fs, kw: fs.layout(**kw))
 _sheet_case("Flowsheet.route", Flowsheet.route, lambda fs, kw: fs.route(**kw))
-_sheet_case(
-    "Flowsheet.validate",
-    Flowsheet.validate,
-    lambda fs, kw: [str(i) for i in fs.validate(**kw)],
-)
+
+
+def _validate_case() -> Case:
+    """``validate`` on a sheet that has been laid out and routed.
+
+    Not :func:`_sheet_case`, for two reasons that are the same reason: the
+    findings that read ``diagram=`` are made about runs, and a sheet that has
+    never been routed has none -- so a case built the ordinary way would call
+    every drawing the same and prove only that an alien is refused.
+    """
+
+    def run(**overrides: Any) -> str:
+        fs = _crossed_sheet()
+        fs.layout()
+        fs.route()
+        return _sheet_state(fs, [str(i) for i in fs.validate(**overrides)])
+
+    return _case(
+        Case(
+            id="Flowsheet.validate",
+            arguments=_parameters(Flowsheet.validate),
+            run=run,
+            entry=Flowsheet.validate,
+        )
+    )
+
+
+_validate_case()
 _sheet_case(
     "Flowsheet.add",
     Flowsheet.add,
@@ -1222,10 +1384,22 @@ for _owner_name, _owner_keys in _kind_key_owners().items():
 
 #: How each subcommand is invoked with nothing unusual asked of it.
 _CLI_BASELINES: dict[str, list[str]] = {
-    "draw": ["draw", "@SPEC@", "-o", "@OUT@"],
+    # A P&ID, because `--connections` marks nothing on any other drawing and a
+    # PFD baseline would have the second-tier check below told that rather than
+    # measuring it.
+    "draw": ["draw", "@SPEC@", "-o", "@OUT@", "--diagram", "p&id"],
     "validate": ["validate", "@SPEC@"],
     "symbols": ["symbols"],
 }
+
+
+#: The spec the command line is given, written out of :func:`_crossed_sheet`
+#: rather than typed: the shell's own options are the ones whose values need a
+#: crossing on the sheet before they mean anything, and `pandid validate` needs
+#: an untabulated line over the sheet edge before it answers differently for
+#: one drawing than another. Derived from the fixture, so a spec key that
+#: stops round-tripping shows up here as a case that stops distinguishing.
+_CLI_SPEC = json.dumps(SPEC.to_dict(_crossed_sheet()))
 
 
 def _cli_actions(sub: argparse.ArgumentParser) -> dict[str, argparse.Action]:
@@ -1242,12 +1416,18 @@ def _cli_actions(sub: argparse.ArgumentParser) -> dict[str, argparse.Action]:
     }
 
 
+#: The actions behind each command-line case, kept as the case is built. The
+#: second tier below asks a subcommand what values it offers, and doing it from
+#: here is what saves it picking a case id apart to find the subcommand again.
+CLI_ACTIONS: dict[str, dict[str, argparse.Action]] = {}
+
+
 def _cli_case(name: str, sub: argparse.ArgumentParser) -> Case:
     actions = _cli_actions(sub)
 
     def run(**overrides: Any) -> str:
         with tempfile.TemporaryDirectory() as tmp:
-            spec_path = _spec_file(tmp, "spec.json", _JSON_SPEC)
+            spec_path = _spec_file(tmp, "spec.json", _CLI_SPEC)
             out_path = str(Path(tmp) / "out.svg")
             argv: list[str] = []
             for token in _CLI_BASELINES[name]:
@@ -1285,6 +1465,7 @@ def _cli_case(name: str, sub: argparse.ArgumentParser) -> Case:
             text = f"{code}\n{out.getvalue()}\n{err.getvalue()}\n{body}"
             return text.replace(tmp, "<tmp>").replace(str(Path(tmp)), "<tmp>")
 
+    CLI_ACTIONS[f"cli:{name}"] = actions
     return _case(
         Case(id=f"cli:{name}", arguments=tuple(sorted(actions)), run=run, probes=(NONSENSE,))
     )
@@ -1300,6 +1481,223 @@ def _cli_subcommands() -> dict[str, argparse.ArgumentParser]:
 
 for _name, _sub in sorted(_cli_subcommands().items()):
     _cli_case(_name, _sub)
+
+
+# --------------------------------------------------------------------------
+# The second tier: two values the package itself says it accepts
+# --------------------------------------------------------------------------
+#
+# An alien probe that is *refused* proves the argument reached a validator and
+# nothing past it, and that is where both measurements of this file put every
+# one of their misses. What tells the rest of the journey is a second value the
+# argument really takes: run the case with each of the values the package says
+# it accepts, and two of them must make it do different things. `--border zone`
+# forwarded to the renderer as None draws what `--border none` draws, and the
+# refusal of an alien never had anything to say about it.
+#
+# The values are asked for rather than written down, from the two places this
+# package states them in a form a program can read: `argparse.choices`, and a
+# boolean default -- `tabulate: bool = False` says in the signature that True
+# and False are both meant.
+
+
+class _Absent:
+    """What an argument's default is when it has none to read.
+
+    A spec key's baseline is the section *without* it and a property's is
+    whatever the object was built with; neither is a value, and neither is
+    ``None``, which several arguments here take as a real one.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<absent>"
+
+
+ABSENT = _Absent()
+
+
+def _words_offered(
+    subcommands: Mapping[str, argparse.ArgumentParser],
+) -> dict[str, set[tuple[str, ...]]]:
+    """Every set of values each dest is offered anywhere on the command line.
+
+    One walk behind both readers below, because a vocabulary and the conflicts
+    kept out of it are two readings of one thing, and two walks would be two
+    things to keep in step.
+    """
+    offered: dict[str, set[tuple[str, ...]]] = {}
+    for sub in subcommands.values():
+        for dest, action in _cli_actions(sub).items():
+            words = tuple(action.choices) if action.choices else ()
+            if len(words) >= 2:
+                offered.setdefault(dest, set()).add(words)
+    return offered
+
+
+def cli_vocabularies(
+    subcommands: Mapping[str, argparse.ArgumentParser],
+) -> dict[str, tuple[str, ...]]:
+    """Every option that states the values it takes, and what they are.
+
+    ``choices`` is the shell's own statement of what a word may be, so
+    ``--border`` offers ``none`` and ``zone`` here because the parser offers
+    them, and a fourth crossing style added to
+    :data:`pandid.render.svg.CROSSING_STYLES` is probed without an edit here --
+    ``pandid draw`` takes its ``choices`` from that tuple.
+
+    An option offering one value is left out: there is no second value to tell
+    it apart from. So is a dest two subcommands disagree about, which
+    :func:`vocabulary_conflicts` reports instead.
+    """
+    return {
+        dest: next(iter(offered))
+        for dest, offered in _words_offered(subcommands).items()
+        if len(offered) == 1
+    }
+
+
+def vocabulary_conflicts(subcommands: Mapping[str, argparse.ArgumentParser]) -> list[str]:
+    """Dests two subcommands offer different values for.
+
+    A name is the only thing tying ``--diagram`` on ``draw`` to ``--diagram``
+    on ``validate``, and a name meaning two things would have one of them
+    probed with the other's words -- so the conflict is dropped above rather
+    than guessed at, and reported here rather than dropped quietly.
+    """
+    return sorted(dest for dest, offered in _words_offered(subcommands).items() if len(offered) > 1)
+
+
+def boolean_vocabularies(functions: Iterable[Any]) -> dict[str, tuple[Any, ...]]:
+    """Every argument name the package itself gives a boolean default.
+
+    The one accepted set that needs no table anywhere: a parameter written
+    ``check: bool = True`` says in its own signature that both values are
+    meant. This is what reaches a *validated* flag, where the alien probe
+    cannot -- ``_flag(data["tabulate"])`` refuses an alien, so the alien proves
+    the validator ran and stops there.
+
+    Read off the whole public surface rather than off the cases, because the
+    two are not the same list and the difference matters: ``Stream.__init__``
+    is declared out of reach in :data:`UNEXERCISED` -- ``connect()`` is the
+    constructor an author calls -- and it is where ``tabulate: bool = False``
+    is written down. The spec key of that name is read through the same
+    ``_flag`` and is a case here.
+
+    Keyed by name and then used wherever that name turns up, because in this
+    package a keyword, a spec key and a property setter sharing a name are one
+    argument arriving through three doors: ``auto_faces`` is
+    ``Flowsheet(auto_faces=...)``, ``"auto_faces"`` in a spec, and
+    ``fs.auto_faces =``. A name that turned out to mean two things would be
+    probed with a value the second one refuses -- and a refusal is *visible*,
+    since it makes the call do something different, so the pair reads as
+    honoured rather than being skipped in silence.
+    """
+    found: dict[str, tuple[Any, ...]] = {}
+    for func in functions:
+        for name, parameter in inspect.signature(_function(func)).parameters.items():
+            if isinstance(parameter.default, bool):
+                found[name] = (True, False)
+    return found
+
+
+def accepted_values(
+    argument: str, default: Any, vocabularies: Mapping[str, tuple[Any, ...]]
+) -> tuple[Any, ...]:
+    """Two or more values *argument* is meant to take here, or nothing.
+
+    *default* is what the entry point does when nobody asks: the parameter's
+    default, the option's, or :data:`ABSENT` where there is none to read. A
+    vocabulary applies when the default is drawn from it or when there is no
+    default at all; a default the vocabulary does not contain says the two
+    names are not the same argument, and then nothing is probed rather than
+    something wrong being probed.
+
+    A bare ``object()`` counts as no default. It is the sentinel spelling of
+    "not given" -- ``pandid.units._UNCHANGED`` and ``_UNSTATED``, which is how
+    ``pin(mirrored=...)`` tells a stated False from an unmentioned one -- and it
+    is recognisable precisely because it carries nothing: no class of its own,
+    no attributes, nothing an argument could be meant to take. Reading it as a
+    value cost four of these checks before it was written down.
+    """
+    words = tuple(vocabularies.get(argument, ()))
+    if len(words) < 2:
+        return ()
+    if default is ABSENT or default is None or type(default) is object:
+        return words
+    return words if default in words else ()
+
+
+def _case_default(case: Case, argument: str) -> Any:
+    """What *case* passes for *argument* when no probe overrides it."""
+    actions = CLI_ACTIONS.get(case.id)
+    if actions is not None:
+        action = actions[argument]
+        return action.default
+    if case.entry is None:
+        return ABSENT
+    parameter = inspect.signature(_function(case.entry)).parameters.get(argument)
+    if parameter is None or parameter.default is inspect.Parameter.empty:
+        return ABSENT
+    return parameter.default
+
+
+def value_sets(
+    cases: Mapping[str, Case], vocabularies: Mapping[str, tuple[Any, ...]]
+) -> dict[tuple[str, str], tuple[Any, ...]]:
+    """The second-tier probe for every pair that has one.
+
+    A command line is given its own subcommand's ``choices`` and nothing
+    else, because everything the shell hands over is a string: ``--stream-table
+    True`` is not the boolean the Python argument of that name takes, and
+    argparse would refuse it in a way that looks like an answer.
+    """
+    found: dict[tuple[str, str], tuple[Any, ...]] = {}
+    for case in cases.values():
+        actions = CLI_ACTIONS.get(case.id)
+        for argument in case.arguments:
+            available: Mapping[str, tuple[Any, ...]] = vocabularies
+            if actions is not None:
+                words = tuple(actions[argument].choices or ())
+                available = {argument: words} if len(words) >= 2 else {}
+            values = accepted_values(argument, _case_default(case, argument), available)
+            if values:
+                found[(case.id, argument)] = values
+    return found
+
+
+def _readings(case: Case, argument: str, values: Iterable[Any]) -> list[tuple[Any, str, str]]:
+    """Each value, and what *case* did with it -- read twice.
+
+    Twice because a reading that differs from itself makes every value look
+    like a different one, which would call every argument below carried and
+    this whole tier vacuous.
+    :func:`test_a_case_says_the_same_thing_twice` asks that of the baseline
+    call, and a value in hand is a second thing that could unsettle it --
+    ``debug=True`` draws an overlay the baseline has not got -- so it is asked
+    again rather than assumed to carry over.
+    """
+    return [
+        (value, _outcome(case, **{argument: value}), _outcome(case, **{argument: value}))
+        for value in values
+    ]
+
+
+def _restless(readings: Iterable[tuple[Any, str, str]]) -> list[Any]:
+    """The values the case answered two different ways."""
+    return [value for value, first, second in readings if first != second]
+
+
+def _distinguished(readings: Iterable[tuple[Any, str, str]]) -> bool:
+    """Whether two of the values read differently from each other.
+
+    A value that is *refused* counts as a difference, and correctly: these are
+    values the package says it accepts, so a refusal is what the value means
+    rather than a gatekeeper's opinion of it. ``check=True`` refuses a sheet
+    that fails validation, which is the whole of what the argument is for.
+    """
+    return len({first for _value, first, _second in readings}) > 1
 
 
 # --------------------------------------------------------------------------
@@ -1330,9 +1728,57 @@ INAPPLICABLE: dict[tuple[str, str], Inapplicable] = {
 }
 
 
+#: Where two values the package accepts cannot be told apart, and why.
+#:
+#: The second tier's own :data:`INAPPLICABLE`, and held exactly as strictly: a
+#: line here says the argument *does* reach something -- the alien probe found
+#: it, or it would be in the table above -- and that this configuration has
+#: nothing for its values to show. If they start differing, the line is out of
+#: date and this file fails until it comes out.
+#:
+#: Every line here is one drawing not having a feature another one has, which
+#: is the shape #528 predicted: "a crossing on the sheet before
+#: ``--crossing-style`` means anything, a P&ID before ``--connections`` does".
+#: Where a fixture could carry the feature instead, it now does -- the sheet
+#: the command line is given crosses two of its lines, and the render cases
+#: that are not about one particular drawing are P&IDs.
+_NO_DIAGRAM_TO_DRAW_ON = Inapplicable(
+    "show_stream_table='sheet' draws the stream property table as the sheet, and there "
+    "is no diagram under it: no joint to mark, no two lines to cross, and no process "
+    "line to leave an arrowhead off. Every drawing word is still checked here -- an "
+    "alien is refused, which is what keeps this out of INAPPLICABLE -- and then has "
+    "nothing to change. to_svg[p&id] is the case each of them shows in."
+)
+
+_JOINTS_ARE_A_PID_S = Inapplicable(
+    "a joint mark is a P&ID's: 'flanged' marks every equipment nozzle and both sides of "
+    "every valve and in-line fitting, which is content ISO 10628-1:2014 4.4.2 asks of a "
+    "P&ID and 4.3.2 does not ask of a process flow diagram. Checked wherever it is "
+    "accepted, which is the call #492 made and #528 measured; to_svg[p&id] and cli:draw "
+    "are where the marks show."
+)
+
+INDISTINGUISHABLE: dict[tuple[str, str], Inapplicable] = {
+    # --- a sheet that is a table has no drawing for a drawing word to change -
+    ("to_svg[table sheet]", "diagram"): _NO_DIAGRAM_TO_DRAW_ON,
+    ("to_svg[table sheet]", "connections"): _NO_DIAGRAM_TO_DRAW_ON,
+    ("to_svg[table sheet]", "crossing_style"): _NO_DIAGRAM_TO_DRAW_ON,
+    ("to_svg[table sheet]", "jump_direction"): _NO_DIAGRAM_TO_DRAW_ON,
+    ("to_drawio[table sheet]", "diagram"): _NO_DIAGRAM_TO_DRAW_ON,
+    ("to_drawio[table sheet]", "connections"): _NO_DIAGRAM_TO_DRAW_ON,
+    ("to_drawio[table sheet]", "crossing_style"): _NO_DIAGRAM_TO_DRAW_ON,
+    ("to_drawio[table sheet]", "jump_direction"): _NO_DIAGRAM_TO_DRAW_ON,
+    # --- and a drawing that is not a P&ID marks no joints -------------------
+    ("to_svg[pfd]", "connections"): _JOINTS_ARE_A_PID_S,
+    ("to_svg[bfd]", "connections"): _JOINTS_ARE_A_PID_S,
+    ("to_drawio[pfd]", "connections"): _JOINTS_ARE_A_PID_S,
+}
+
+
 #: Entry points the public surface has that no case here calls, and why. A name
 #: is here because calling it cannot show what this file measures -- not
-#: because it was inconvenient.
+#: because it was inconvenient. A reason is held to the same length as one in
+#: :data:`INAPPLICABLE`: "I could not test this" has to say why.
 UNEXERCISED: dict[str, str] = {
     "pandid.ports.Port.__init__": (
         "a port is minted by the unit that declares it (Unit.PORTS) or by a pool "
@@ -1459,17 +1905,6 @@ def _surface_namespaces() -> dict[str, Mapping[str, object]]:
     }
 
 
-def _function(obj: Any) -> Any:
-    """The plain function behind a bound method, classmethod or staticmethod.
-
-    ``Flowsheet.from_dict`` is a bound classmethod and is a *different object*
-    from the function the enumeration keys on, so a case declaring it would
-    have read as covering nothing at all -- which is how three of these entry
-    points went missing on the first run of this file.
-    """
-    return getattr(obj, "__func__", obj)
-
-
 def _qualified(func: Any) -> str:
     func = _function(func)
     return f"{func.__module__}.{func.__qualname__}"
@@ -1485,6 +1920,16 @@ def _pairs() -> list[tuple[str, str]]:
 
 
 PAIRS = _pairs()
+#: What the package says each argument accepts, gathered from the two places it
+#: says so in a form a program can read. Built here rather than beside the
+#: functions above because the boolean half reads the public surface, and the
+#: surface is enumerated below them.
+VOCABULARIES: dict[str, tuple[Any, ...]] = {
+    **cli_vocabularies(_cli_subcommands()),
+    **boolean_vocabularies(public_callables(_surface_namespaces())),
+}
+VALUE_SETS = value_sets(CASES, VOCABULARIES)
+VALUE_PAIRS = sorted(VALUE_SETS)
 CATCH_ALLS = [case.id for case in CASES.values() if case.entry and _has_catch_all(case.entry)]
 
 
@@ -1583,6 +2028,61 @@ def test_an_argument_that_is_accepted_is_capable_of_changing_something(
     )
 
 
+@pytest.mark.parametrize(
+    ("case_id", "argument"), VALUE_PAIRS, ids=[f"{c}:{a}" for c, a in VALUE_PAIRS]
+)
+def test_two_values_the_package_accepts_do_not_do_the_same_thing(
+    case_id: str, argument: str
+) -> None:
+    """The rule of #495 again, past the validator this time.
+
+    The check above is satisfied by a refusal, and a refusal proves the
+    argument reached something that inspected it -- not that anything after
+    that read it. Both measurements of this file found every one of their
+    misses in that gap: ``pandid draw`` checking ``--border`` against its own
+    ``choices`` and handing ``render()`` a None, ``to_svg`` checking
+    ``page_size`` and drawing unpaged.
+
+    So here the values are ones the package says it takes, and two of them have
+    to make the call do different things. A failure means the word was
+    inspected and then dropped. If the argument genuinely reaches something and
+    this drawing has nothing for its values to show, that is a line in
+    :data:`INDISTINGUISHABLE`; if it reaches nothing at all, it is already a
+    line in :data:`INAPPLICABLE`, and this check holds that line to the
+    stronger statement -- inert means inert for a value the package likes, not
+    only for an alien.
+    """
+    case = CASES[case_id]
+    values = VALUE_SETS[(case_id, argument)]
+    readings = _readings(case, argument, values)
+    restless = _restless(readings)
+    assert not restless, (
+        f"{case_id} does not describe itself the same way twice with "
+        f"{argument}={restless[0]!r}, so every value would look like a different one"
+    )
+    inert = INAPPLICABLE.get((case_id, argument))
+    declared = INDISTINGUISHABLE.get((case_id, argument))
+    distinguished = _distinguished(readings)
+    if inert is not None:
+        assert not distinguished, (
+            f"INAPPLICABLE says {case_id} cannot act on {argument}=, and it told "
+            f"{values!r} apart. The declaration is out of date -- delete the line."
+        )
+        return
+    if declared is None:
+        assert distinguished, (
+            f"{case_id} accepts every one of {argument}={values!r} and does the same thing "
+            f"whichever it is given, so the word is inspected and dropped. If this "
+            f"configuration has nothing for them to show, declare it in INDISTINGUISHABLE."
+        )
+        return
+    assert not distinguished, (
+        f"INDISTINGUISHABLE says {case_id} cannot show {argument}={values!r} apart, and it "
+        f"did. The declaration is out of date"
+        f"{' (' + declared.issue + ')' if declared.issue else ''} -- delete the line."
+    )
+
+
 @pytest.mark.parametrize("case_id", sorted(CATCH_ALLS), ids=sorted(CATCH_ALLS))
 def test_an_entry_point_with_a_catch_all_refuses_an_unknown_keyword(case_id: str) -> None:
     """``**opts`` may not mean accepted and dropped.
@@ -1604,6 +2104,19 @@ def test_an_entry_point_with_a_catch_all_refuses_an_unknown_keyword(case_id: str
 # --------------------------------------------------------------------------
 
 
+def _reason_worth_reading(reason: str) -> bool:
+    """Whether a declaration says anything at all.
+
+    Four words, which is not much of a bar and is deliberately the *same* bar
+    everywhere a table here excuses a check: :data:`INAPPLICABLE`,
+    :data:`INDISTINGUISHABLE` and :data:`UNEXERCISED` share this predicate so
+    that they cannot drift apart, which they had -- an empty ``UNEXERCISED``
+    reason passed until #529. A line that stops a check being made has to say
+    what it is stopping and why; "" and "dunno" are what this is for.
+    """
+    return len(reason.split()) >= 4
+
+
 def stale_declarations(
     declared: Mapping[tuple[str, str], Inapplicable], cases: Mapping[str, Case]
 ) -> list[str]:
@@ -1622,10 +2135,48 @@ def stale_declarations(
             continue
         if argument not in case.arguments:
             complaints.append(f"{case_id}:{argument} names no argument of that case")
-        if len(entry.reason.split()) < 4:
+        if not _reason_worth_reading(entry.reason):
             complaints.append(f"{case_id}:{argument} gives no reason worth reading")
         if entry.issue and not re.fullmatch(r"#\d+", entry.issue):
             complaints.append(f"{case_id}:{argument} cites {entry.issue!r}, which is not an issue")
+    return complaints
+
+
+def thin_declarations(unexercised: Mapping[str, str]) -> list[str]:
+    """Every entry point declared out of reach that does not say why.
+
+    :data:`INAPPLICABLE` has been held to a reason since #528 and
+    :data:`UNEXERCISED` was not: an empty string passed, so "no case can be
+    written for this" needed nothing after the comma. That is the one thing
+    that turns a declaration table into somewhere to put a failure, which is
+    the argument #528 made for the other table and did not carry across.
+    """
+    return sorted(
+        f"{name} is declared out of reach and gives no reason worth reading"
+        for name, reason in unexercised.items()
+        if not _reason_worth_reading(reason)
+    )
+
+
+def stale_value_declarations(
+    declared: Mapping[tuple[str, str], Inapplicable],
+    values: Mapping[tuple[str, str], tuple[Any, ...]],
+    inapplicable: Mapping[tuple[str, str], Inapplicable],
+) -> list[str]:
+    """The two ways a line of :data:`INDISTINGUISHABLE` excuses nothing.
+
+    On top of the four :func:`stale_declarations` reports for any table: a pair
+    the second tier never probes has nothing to be excused from, and a pair
+    :data:`INAPPLICABLE` already covers is excused twice -- and the two say
+    different things, so a reader would have to guess which is meant. Both are
+    lines that would sit there looking like a check being waived.
+    """
+    complaints: list[str] = []
+    for case_id, argument in sorted(declared):
+        if (case_id, argument) not in values:
+            complaints.append(f"{case_id}:{argument} has no second-tier probe to excuse")
+        if (case_id, argument) in inapplicable:
+            complaints.append(f"{case_id}:{argument} is declared inert in INAPPLICABLE already")
     return complaints
 
 
@@ -1708,15 +2259,28 @@ def test_a_callable_of_an_unexpected_shape_is_reported() -> None:
 
 def test_the_declarations_are_all_live() -> None:
     assert stale_declarations(INAPPLICABLE, CASES) == []
+    assert stale_declarations(INDISTINGUISHABLE, CASES) == []
+    assert stale_value_declarations(INDISTINGUISHABLE, VALUE_SETS, INAPPLICABLE) == []
+
+
+def test_every_entry_point_declared_out_of_reach_says_why() -> None:
+    """The half of that :data:`UNEXERCISED` did not have.
+
+    Nine names are declared out of reach here, and until #529 the reason
+    beside each was decoration -- an empty one passed. It is now the same rule
+    the other two tables are held to.
+    """
+    assert thin_declarations(UNEXERCISED) == []
 
 
 def test_every_declaration_that_cites_an_issue_says_which() -> None:
-    """A defect parked in the table is parked with a number, so that fixing it
+    """A defect parked in a table is parked with a number, so that fixing it
     has somewhere to be recorded and this line has something to be deleted
     alongside."""
-    for (case_id, argument), entry in INAPPLICABLE.items():
-        if entry.issue:
-            assert re.fullmatch(r"#\d+", entry.issue), f"{case_id}:{argument}"
+    for table in (INAPPLICABLE, INDISTINGUISHABLE):
+        for (case_id, argument), entry in table.items():
+            if entry.issue:
+                assert re.fullmatch(r"#\d+", entry.issue), f"{case_id}:{argument}"
 
 
 def test_there_is_something_to_check() -> None:
@@ -1739,6 +2303,30 @@ def test_there_is_something_to_check() -> None:
     ):
         assert expected in PAIRS, f"the parametrisation lost {expected}"
     assert CATCH_ALLS, "no entry point with a catch-all was found to check"
+
+
+def test_there_is_a_second_tier_to_check() -> None:
+    """The same floor under the check that goes past the validator.
+
+    A vocabulary reader that came back empty -- a parser walked wrongly, a
+    signature reader that stopped seeing defaults -- would take every one of
+    these checks away and leave the file as green as it is now. Both halves of
+    the derivation are named, and one pair from each of the four surfaces.
+    """
+    assert len(VALUE_PAIRS) >= 90, f"only {len(VALUE_PAIRS)} second-tier checks were built"
+    assert "border" in VOCABULARIES, "the shell's own choices stopped being read"
+    assert "check" in VOCABULARIES, "boolean defaults stopped being read"
+    for expected in (
+        ("cli:draw", "border"),
+        ("to_svg[p&id]", "connections"),
+        ("Flowsheet.add_valve_station[placed]", "isolation"),
+        ("spec:top", "auto_faces"),
+        ("Flowsheet.auto_faces =", "auto_faces"),
+        # ...and one whose default is a sentinel rather than a value, which is
+        # the reading that decides whether an argument has a default at all.
+        ("Unit.pin", "mirrored"),
+    ):
+        assert expected in VALUE_SETS, f"the second tier lost {expected}"
 
 
 # --- the fixtures that break each mechanism on purpose ------------------------
@@ -1808,6 +2396,153 @@ def test_the_falsy_probe_is_what_finds_an_argument_whose_default_is_true() -> No
     assert _honoured(alien_only, "flag") is False
 
 
+def _validating_case() -> Case:
+    """Checks its argument against a list, and then draws without it.
+
+    The defect the second tier exists for, and the exact shape of every miss
+    both measurements of this file recorded: ``pandid draw`` checking
+    ``--border`` against ``choices`` and handing the renderer a None. The alien
+    probe is *refused*, so the first tier is satisfied and reports it honoured.
+    """
+
+    def run(**overrides: Any) -> str:
+        value = overrides.get("border", "none")
+        if value not in ("none", "zone"):
+            raise ValueError(f"border must be one of 'none', 'zone', not {value!r}")
+        return "the same sheet whichever it was"
+
+    return Case(id="planted:validator", arguments=("border",), run=run)
+
+
+def _carrying_case() -> Case:
+    """The same check, and then the value is used for something."""
+
+    def run(**overrides: Any) -> str:
+        value = overrides.get("border", "none")
+        if value not in ("none", "zone"):
+            raise ValueError(f"border must be one of 'none', 'zone', not {value!r}")
+        return f"drawn with a {value} border"
+
+    return Case(id="planted:carrier", arguments=("border",), run=run)
+
+
+def test_the_second_tier_reports_an_argument_checked_and_then_dropped() -> None:
+    """The negative control for the check #529 adds, and the whole of why it
+    is a second tier rather than a wider first one: the same planted case is
+    honoured by the alien probe and caught by the accepted values."""
+    case = _validating_case()
+    assert _honoured(case, "border") is True
+    assert _distinguished(_readings(case, "border", ("none", "zone"))) is False
+
+
+def test_the_second_tier_reports_an_argument_carried_past_its_check() -> None:
+    """The positive control: an engine that answered "dropped" to everything
+    would fail loudly rather than silently, but it would also make every line
+    of INDISTINGUISHABLE look correct."""
+    assert _distinguished(_readings(_carrying_case(), "border", ("none", "zone"))) is True
+
+
+def test_the_second_tier_needs_two_values_before_it_says_anything() -> None:
+    """One value can only differ from itself, and does not. A vocabulary that
+    collapsed to a single word would report every argument dropped, which is
+    why :func:`accepted_values` refuses to build a probe out of one."""
+    assert _distinguished(_readings(_carrying_case(), "border", ("zone",))) is False
+
+
+def test_the_vocabulary_reader_reads_a_parser_this_test_made_up() -> None:
+    """The shell half of the second tier's derivation, driven by a parser of
+    its own: an option that names two values is a vocabulary, one that names a
+    single value is not a pair, and one that names none is not a vocabulary."""
+    planted = argparse.ArgumentParser()
+    planted.add_argument("--two", choices=("a", "b"))
+    planted.add_argument("--one", choices=("only",))
+    planted.add_argument("--free")
+    assert cli_vocabularies({"planted": planted}) == {"two": ("a", "b")}
+    assert cli_vocabularies({}) == {}
+
+
+def test_an_option_two_subcommands_disagree_about_is_dropped_and_reported() -> None:
+    """A name is all that ties one subcommand's ``--diagram`` to another's, and
+    a name meaning two things would have one of them probed with the other's
+    words. Such a dest is left out of the vocabulary and reported instead."""
+    first = argparse.ArgumentParser()
+    first.add_argument("--diagram", choices=("pfd", "p&id"))
+    second = argparse.ArgumentParser()
+    second.add_argument("--diagram", choices=("wiring", "loop"))
+    assert cli_vocabularies({"first": first, "second": second}) == {}
+    assert vocabulary_conflicts({"first": first, "second": second}) == ["diagram"]
+    assert vocabulary_conflicts({"first": first}) == []
+
+
+def test_no_two_subcommands_offer_the_same_option_different_values() -> None:
+    """...and the package held to it, so that a dest quietly dropped from the
+    vocabulary is a failure here rather than a check that stops happening."""
+    assert vocabulary_conflicts(_cli_subcommands()) == []
+
+
+def test_the_boolean_reader_finds_a_planted_flag_and_nothing_else() -> None:
+    """The other half of the derivation: a signature that writes ``bool`` and a
+    default says both values are meant, and nothing else in a signature says
+    anything about what a value may be."""
+
+    def planted(*, flag: bool = False, word: str = "x", untyped: Any = None) -> str:
+        return f"{flag}{word}{untyped}"
+
+    assert boolean_vocabularies([planted]) == {"flag": (True, False)}
+    assert boolean_vocabularies([]) == {}
+
+
+def test_the_value_reader_takes_a_vocabulary_only_where_it_fits() -> None:
+    """A name is evidence and not proof, so the default has to agree with it.
+
+    An argument that takes no value, one whose default is drawn from the
+    vocabulary, and one with no default at all are the same argument arriving
+    three ways. A default the vocabulary has never heard of says the two names
+    are not the same argument, and then nothing is probed -- rather than
+    something wrong being probed and reported as a defect.
+    """
+    words = {"border": ("none", "zone")}
+    assert accepted_values("border", None, words) == ("none", "zone")
+    assert accepted_values("border", ABSENT, words) == ("none", "zone")
+    assert accepted_values("border", object(), words) == ("none", "zone")
+    assert accepted_values("border", "zone", words) == ("none", "zone")
+    assert accepted_values("border", "a frame in millimetres", words) == ()
+    assert accepted_values("border", _Alien(), words) == ()
+    assert accepted_values("border", None, {"border": ("only",)}) == ()
+    assert accepted_values("unheard-of", None, words) == ()
+
+
+def test_the_default_reader_answers_for_each_door_an_argument_arrives_through() -> None:
+    """What an argument does when nobody asks, read from the door it came in by.
+
+    A parameter's default, an option's, and -- for a spec key or a property
+    setter, which have neither -- :data:`ABSENT`, which is not ``None``: half
+    the render chain takes ``None`` as a real value meaning "fit the sheet to
+    the drawing", and a reader that conflated the two would hand
+    :func:`accepted_values` a default it had never been given.
+    """
+    assert _case_default(CASES["to_svg[pfd]"], "crossing_style") == "gap"
+    assert _case_default(CASES["to_svg[pfd]"], "page_size") is None
+    assert _case_default(CASES["cli:draw"], "diagram") == "pfd"
+    assert _case_default(CASES["spec:top"], "auto_faces") is ABSENT
+    assert _case_default(CASES["Flowsheet.auto_faces ="], "auto_faces") is ABSENT
+
+
+def test_the_command_line_is_probed_with_words_and_never_with_booleans() -> None:
+    """A shell hands over strings, so a command line is given its own
+    subcommand's ``choices`` and nothing else.
+
+    ``--stream-table`` and ``--debug`` are the two that would go wrong: both
+    have a boolean default, both share a name with a Python argument that takes
+    one, and ``--stream-table True`` is a word argparse refuses -- which would
+    read as the option having answered rather than as the probe being wrong.
+    ``--page-size`` is the third shape: an option that names no values at all.
+    """
+    assert ("cli:draw", "diagram") in VALUE_SETS
+    for unprobed in ("stream_table", "debug", "page_size"):
+        assert ("cli:draw", unprobed) not in VALUE_SETS, f"--{unprobed} was probed with a value"
+
+
 def test_a_witness_that_differs_from_itself_is_caught() -> None:
     """The determinism check, driven by a case that cannot say the same thing
     twice. Everything in this file rests on a stable witness."""
@@ -1821,6 +2556,12 @@ def test_a_witness_that_differs_from_itself_is_caught() -> None:
     assert _outcome(case) != _outcome(case)
     # ...and such a case would call every argument honoured, which is the harm.
     assert _honoured(case, "anything") is True
+    # The second tier is no safer: it would read two accepted values as two
+    # different answers and call the argument carried past its validator. So it
+    # reads each value twice and reports the ones that will not sit still.
+    readings = _readings(case, "anything", (True, False))
+    assert _distinguished(readings) is True
+    assert _restless(readings) == [True, False]
 
 
 def test_a_declaration_naming_a_case_that_is_gone_is_reported() -> None:
@@ -1841,6 +2582,38 @@ def test_a_declaration_naming_an_argument_that_is_gone_is_reported() -> None:
 def test_a_declaration_with_no_reason_is_reported() -> None:
     complaints = stale_declarations({("to_svg[pfd]", "border"): Inapplicable("dunno")}, CASES)
     assert complaints and "no reason" in complaints[0]
+
+
+def test_a_declaration_out_of_reach_with_no_reason_is_reported() -> None:
+    """The UNEXERCISED half of the same rule, shown to be made.
+
+    A blank reason and a two-word one are both what #529 found passing; a real
+    one must not be reported, or the check would be a rule against writing the
+    table at all.
+    """
+    assert thin_declarations({"pandid.planted.Thing.__init__": ""}) == [
+        "pandid.planted.Thing.__init__ is declared out of reach and gives no reason worth reading"
+    ]
+    assert thin_declarations({"pandid.planted.Thing.__init__": "   "})
+    assert thin_declarations({"pandid.planted.Thing.__init__": "cannot"})
+    assert thin_declarations({"pandid.planted.Thing.__init__": "a reason of four words"}) == []
+    assert thin_declarations({}) == []
+
+
+def test_a_value_declaration_that_excuses_nothing_is_reported() -> None:
+    """Break the second tier's table and show a case fails.
+
+    A line naming a pair with no second-tier probe is excusing a check that was
+    never going to be made, and one naming a pair INAPPLICABLE covers is
+    excusing it twice while saying something different about it.
+    """
+    reason = Inapplicable("a reason of at least four words")
+    real = next(iter(VALUE_SETS))
+    assert stale_value_declarations({real: reason}, VALUE_SETS, {}) == []
+    unprobed = stale_value_declarations({("to_svg[pfd]", "page_size"): reason}, VALUE_SETS, {})
+    assert unprobed and "no second-tier probe" in unprobed[0]
+    doubled = stale_value_declarations({real: reason}, VALUE_SETS, {real: reason})
+    assert doubled and "INAPPLICABLE already" in doubled[0]
 
 
 def test_a_declaration_citing_something_that_is_not_an_issue_is_reported() -> None:
