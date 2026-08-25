@@ -31,7 +31,7 @@ module it lives in -- ``pandid.state.State``,
 # time (`[tool.hatch.version]`), so the distribution metadata cannot disagree
 # with what `import pandid` reports, and a source checkout reports the same string
 # without the package having to be installed.
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 from pandid.components import Component
 from pandid.flowsheet import Flowsheet

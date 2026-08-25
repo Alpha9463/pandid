@@ -48,3 +48,9 @@ standards/
 
 # Agent worktrees (created per-run under .claude/, never part of the project)
 .claude/worktrees/
+
+# Scratch at the repo root: a mis-quoted pdftoppm prefix, and an empty probe
+# file. Both reached main once (2ea51a4) through a `git add -A` in the shared
+# checkout, and the 33 MB raster would have shipped in the sdist.
+*.pgm
+/test.py
