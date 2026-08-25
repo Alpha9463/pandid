@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`diagram="bfd"`: a sheet can say it is a block flow diagram (#410).**
+  `Block` has always been able to draw one, and `12_block_flow_diagram`
+  is built from nothing else, but the *sheet* was still rendered and
+  validated as a plain PFD -- so it was judged against ISO 10628-1
+  4.3.2, the clause that governs a process flow diagram, and reported
+  `stream-table-missing` for six boundary lines that owe no such thing.
+  A BFD answers 4.2 instead: 4.2.2 is its minimum content and the flow
+  rate is listed a clause later, under 4.2.3.
+
+  Declared, not inferred. A sheet built only from `Block` looks like a
+  BFD and the validator could have guessed, but the author is the one
+  who knows, and `diagram=` is where every other statement about which
+  drawing this is already goes. `--diagram bfd` reaches it from the
+  command line.
+
+  The drawing does not change: a BFD heads its lines exactly as a PFD
+  does (4.2.2 c)), and `docs/gallery/12_block_flow_diagram.svg` is
+  byte-identical. What changes is which clause it is read against --
+  which is why the one boolean threaded into the validator has become
+  two. `draws_arrowheads()` and the new `tabulates_boundary_flows()` are
+  the same answer on a PFD and on a P&ID and part company on a BFD, so
+  no single flag could have carried both, and the finding that reads the
+  second one used to read the first.
+
+  `12_block_flow_diagram` was the last of the 21 shipped examples to
+  raise `stream-table-missing`. Inventing a boundary balance for it to
+  satisfy the check would have needed plant-scale ammonia stoichiometry
+  the sheet does not model, and put an individually implausible figure
+  on a reference drawing.
+
 - **`crossing_style`**: which mark two crossing lines carry is now the
   author's choice, because the documents do not agree on one (#499).
   ISO 10628-1 5.3.4 interrupts one of the two lines; ISO 15519-1 12.5
@@ -636,6 +666,36 @@ class hierarchy, or what it is called.
   absorber's overhead product is stripped gas, not distillate.
 
 ### Fixed
+
+- **`validate()` now answers about the sheet that was last rendered
+  (#423).** It is diagram-aware -- `stream-table-missing` is silent on a
+  P&ID, and `nozzles-crowded` is about arrowheads a P&ID does not draw --
+  and it defaulted to `"pfd"` however the sheet had actually been drawn.
+  Seven shipped examples end by printing their own findings, five of them
+  after rendering a P&ID, so what they printed was a PFD's findings about
+  a drawing they had not made: `stream-table-missing` for lines that
+  `scripts/gallery.py`, rendering the very same flowsheet, reported
+  nothing about. An example is the thing a reader copies, and this one
+  taught a call that reports on some other drawing.
+
+  Unsaid, `diagram=` is now whatever the last `render()`, `to_svg()` or
+  `to_drawio()` was given, and `"pfd"` on a sheet nothing has drawn yet.
+  That is exactly what `fs.warnings` already means -- the last render's
+  findings and no earlier one's -- and it is deliberately not the
+  mechanical cure of writing `diagram=` out a second time at each call
+  site: the same argument spelled twice in two places is what drifted in
+  the first place. Naming one at the call still wins, so a caller can
+  still ask what a model would report as some other drawing without
+  rendering it as one. A render whose diagram name the renderer refuses
+  leaves nothing remembered.
+
+  No example changed and no drawing moved; what moved is what five of
+  them print. `tests/test_gallery.py` now renders every example, compares
+  what a bare `validate()` says against what that render left on
+  `fs.warnings`, and pins the findings the whole shipped corpus reports,
+  sheet by sheet in `CORPUS_FINDINGS` -- the check that would have caught
+  this, and the one nothing was doing. The corpus goes from 11 findings
+  to 10, and the one that leaves is `12_block_flow_diagram`'s.
 
 - **A balloon lands where it was pinned** (#467). An attached instrument is
   positioned from its host, and `pin(x=..., y=...)` on one was accepted,

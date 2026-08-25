@@ -80,9 +80,11 @@ and a flowsheet renders inline in Jupyter.
 - **Instrumentation to ISA-5.1.** Balloons anchored to the line or the equipment
   they read, tags drawn inside, location variants, alarms and interlock squares,
   typed signal lines, and controller outputs landing on a valve's actuator.
-- **PFD or P&ID.** `diagram="p&id"` draws the sheet by the P&ID's own
+- **PFD, P&ID or BFD.** `diagram="p&id"` draws the sheet by the P&ID's own
   conventions, starting with the one every engineer notices: a process line
-  carries no arrowhead. `diagram="pfd"` is the default and keeps them.
+  carries no arrowhead. `diagram="pfd"` is the default and keeps them, and
+  `diagram="bfd"` is a block flow diagram. The sheet says which it is, and
+  `validate()` judges it by that drawing's own clause of ISO 10628-1.
 - **Engineering sheet framing.** A full-width title strip with revision history,
   titled boxes docked to the corners (equipment list, notes, legend), a
   sectioned stream-property table, and an optional zone-ruled drawing border.

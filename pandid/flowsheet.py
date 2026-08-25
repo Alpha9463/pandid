@@ -425,6 +425,19 @@ class Flowsheet:
         # since been fixed, and `check=False` would report an older
         # render's list as though it were this one's.
         self.warnings: list = []
+        # Which drawing the last render made, in the spelling it was
+        # asked for, and `None` until one has been made. Set by
+        # `_prepare_to_draw` and read by `validate()`, which answers
+        # about that sheet when the caller has not named another --
+        # exactly as `warnings` describes the last render and nothing
+        # earlier.
+        #
+        # Two findings depend on which drawing this is, and an example
+        # that rendered a P&ID and then printed a bare `validate()` was
+        # printing a PFD's findings about a sheet it had not drawn. The
+        # cure is not to make the caller spell the diagram twice: the
+        # same argument written out twice is what drifted.
+        self._drawn_as: str | None = None
         # Did the last route() settle its attached instruments, or run
         # out of passes still moving them? Read by validate(), which
         # carries the answer onto `warnings`.
@@ -2021,7 +2034,8 @@ class Flowsheet:
         means nothing was found rather than nothing was looked for.
         """
         from pandid.document import _resolve_enclosure
-        from pandid.render.svg import check_render_arguments, draws_arrowheads
+        from pandid.render.svg import (check_render_arguments, draws_arrowheads,
+                                       tabulates_boundary_flows)
         from pandid.validate import geometry_issues, model_issues
 
         # First, and before a single attribute of this sheet is
@@ -2071,9 +2085,23 @@ class Flowsheet:
         # -- data loss rather than noise. A render that does not happen
         # leaves this list exactly as it found it.
         self.warnings = []
+        # And `_drawn_as`, which is the same statement about the same
+        # render: it is what `validate()` answers about when the caller
+        # names no diagram. Beside `warnings` because it is the same kind
+        # of claim and wants the same two protections -- it is after
+        # `check_render_arguments`, which has already refused a name no
+        # backend can draw, and it is a plain attribute of this sheet, so
+        # `_unchanged_if_it_raises` puts it back wholesale with everything
+        # else if the render goes on to fail. A render that did not happen
+        # must not be the one `validate()` then answers about.
+        #
+        # Outside the `check` branch, though: `check=False` turns off the
+        # findings, not the drawing, and it still *drew* this kind of
+        # sheet.
+        self._drawn_as = diagram
         found: list = []
         if check:
-            found = model_issues(self, arrows=draws_arrowheads(diagram))
+            found = model_issues(self, tabulates=tabulates_boundary_flows(diagram))
             self._raise_on_errors(found)
         self._resolve_geometry()
         if check:
@@ -2443,15 +2471,24 @@ class Flowsheet:
         imperfections (a route crossing a unit body, a large detour).
 
         ``diagram`` names the drawing the findings are about, in the
-        spelling :meth:`to_svg` takes it: ``"pfd"`` (the default) or
-        ``"p&id"``. Two findings depend on it. A P&ID draws no
+        spelling :meth:`to_svg` takes it: ``"pfd"``, ``"p&id"`` or
+        ``"bfd"``. Two findings depend on it. A P&ID draws no
         arrowheads, so nozzles pitched inside the head they would carry
         on a PFD are not a defect there. And ``stream-table-missing``
-        answers ISO 10628-1 4.3.2, a *process flow diagram*'s clause, so
-        it is silent on a sheet declared a P&ID, which answers to 4.4.2
-        instead. ``render()`` passes the drawing it is making, so the
-        warnings left on ``fs.warnings`` are about the sheet that came
-        out.
+        answers ISO 10628-1 4.3.2 d), a *process flow diagram*'s clause,
+        so it is silent both on a sheet declared a P&ID, which answers
+        4.4.2, and on one declared a BFD, which answers 4.2.
+
+        **Left unsaid, it is the drawing this sheet was last rendered
+        as**, and ``"pfd"`` on a sheet nothing has drawn yet. That is
+        what ``fs.warnings`` already means -- the last render's findings
+        and no earlier one's -- and it is the whole reason this default
+        is not simply ``"pfd"``: an example that rendered a P&ID and
+        then printed a bare ``validate()`` printed a PFD's findings
+        about a drawing it had not made, and the mechanical cure of
+        spelling ``diagram=`` out a second time is the very thing that
+        drifted. Naming one here still wins, so a caller may ask what a
+        model would report as some other drawing without rendering it.
 
         Both halves of the check, over the sheet as it stands: the
         geometric findings need frames and routes, so call this after
@@ -2461,9 +2498,12 @@ class Flowsheet:
         answer. A render asks the two separately, and in the order
         :meth:`_prepare_to_draw` sets out.
         """
-        from pandid.render.svg import draws_arrowheads
+        from pandid.render.svg import draws_arrowheads, tabulates_boundary_flows
         from pandid.validate import validate as _validate
-        return _validate(self, arrows=draws_arrowheads(diagram))
+        if diagram is None:
+            diagram = self._drawn_as
+        return _validate(self, arrows=draws_arrowheads(diagram),
+                         tabulates=tabulates_boundary_flows(diagram))
 
     def to_svg(self, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
@@ -2490,12 +2530,15 @@ class Flowsheet:
         block and annotation boxes attached to this flowsheet are drawn
         either way.
 
-        ``diagram`` says which drawing this is: ``"pfd"`` (the default)
-        or ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process
-        lines without arrowheads, since flow direction is read off the
-        equipment and the line list rather than off an arrow on every
-        run. The two are independent: the frame is sheet furniture and a
-        PFD carries the zone-ruled one as readily as a P&ID does.
+        ``diagram`` says which drawing this is: ``"pfd"`` (the default),
+        ``"p&id"``, also spelled ``"pid"``, or ``"bfd"`` for a block
+        flow diagram. A P&ID draws its process lines without arrowheads,
+        since flow direction is read off the equipment and the line list
+        rather than off an arrow on every run; a BFD heads its lines as
+        a PFD does and answers a lighter clause for what it has to
+        state. ``diagram`` and ``border`` are independent: the frame is
+        sheet furniture and a PFD carries the zone-ruled one as readily
+        as a P&ID does.
 
         ``page_size`` draws a sheet of exactly that standard size
         (``"A4"`` through ``"A0"``), fitting the drawing into what the
@@ -2733,8 +2776,9 @@ class Flowsheet:
                 and numbered -- is ``fs.stream_table``; see
                 :class:`~pandid.document.StreamTableOptions`.
             border: ``"none"`` or ``"zone"`` (the zone-ruled frame).
-            diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled
-                ``"pid"``. A P&ID draws no arrowheads on process lines.
+            diagram: ``"pfd"`` (the default), ``"p&id"``, also spelled
+                ``"pid"``, or ``"bfd"``. A P&ID draws no arrowheads on
+                process lines.
             page_size: Draw on a sheet of exactly this standard size,
                 e.g. ``"A3"``; omit to size the sheet to the drawing.
             connections: ``"none"`` (the default), ``"flanged"`` -- the

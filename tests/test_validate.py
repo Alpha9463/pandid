@@ -1457,10 +1457,117 @@ def test_a_pid_is_not_reported():
     fs.to_svg(diagram="p&id")  # does not raise or warn
 
 
+def test_a_bfd_is_not_reported():
+    """Nor does a block flow diagram, which answers 4.2.
+
+    4.2.2 is a block diagram's minimum content and the flow rate is not
+    in it; 4.2.3 is where it sits, and 4.2.3 is what a block diagram
+    *may* also carry. So a BFD whose edge tabulates nothing is short of
+    nothing, and ``12_block_flow_diagram`` -- a real ammonia plant drawn
+    one box per section -- was reported against a clause that does not
+    reach it. Inventing a boundary balance to satisfy the finding would
+    have put plant-scale stoichiometry the sheet does not model onto a
+    reference drawing.
+    """
+    fs = _untabulated()
+    assert fs.validate(diagram="bfd") == []
+    fs.to_svg(diagram="bfd")  # does not raise or warn
+    assert fs.warnings == []
+
+
+def test_the_bfd_owes_no_table_and_heads_its_lines_all_the_same():
+    """The two questions a diagram name is read for, and why there are two.
+
+    A P&ID answers no to both, so one boolean carried both facts for as
+    long as there were two kinds of sheet. A BFD answers yes to one and
+    no to the other, and no single boolean can say that: read as
+    ``arrows``, ``stream-table-missing`` had to report every BFD or
+    every sheet without arrowheads had to be excused the clause.
+
+    The arrowhead half is drawn and measured in
+    ``tests/test_render_api.py``; this is the pair that must not be
+    collapsed back into one.
+    """
+    from pandid.render.svg import draws_arrowheads, tabulates_boundary_flows
+
+    answers = {
+        kind: (draws_arrowheads(kind), tabulates_boundary_flows(kind))
+        for kind in ("pfd", "p&id", "bfd")
+    }
+    assert answers == {
+        "pfd": (True, True),  # heads its lines, and 4.3.2 d) is its clause
+        "p&id": (False, False),  # neither: 4.4.2
+        "bfd": (True, False),  # heads its lines (4.2.2 c)), owes no rate
+    }
+
+
 def test_the_finding_is_soft_and_the_default_render_still_draws():
     fs = _untabulated()
     assert [i.severity for i in _no_table(fs)] == ["warning"]
     fs.to_svg()  # show_stream_table stays False; does not raise
+
+
+# --- validate() answers about the sheet that was drawn ------------------------
+# Two findings depend on which drawing a sheet is, and until this section
+# existed a caller had to say so twice -- once to `render()` and once to
+# `validate()` -- with nothing holding the two in step. Seven shipped
+# examples ended in a bare `validate()` print after rendering, and five of
+# them rendered a P&ID, so what they printed was a PFD's findings about a
+# drawing they had not made. The same argument spelled out twice is what
+# drifted, so the cure is not a third place to spell it: unsaid,
+# `validate()` answers about the last render, exactly as `fs.warnings`
+# already describes the last render and nothing earlier.
+#
+# `tests/test_gallery.py` holds the corpus to it, sheet by sheet.
+
+
+def test_a_sheet_nothing_has_drawn_yet_answers_as_a_pfd():
+    """The default is unchanged where there is no render to read."""
+    assert len(_no_table(_untabulated())) == 1
+
+
+def test_a_bare_validate_follows_the_drawing_that_was_made():
+    fs = _untabulated()
+    fs.to_svg(diagram="p&id")
+    assert _no_table(fs) == []  # 4.4.2, and this finding is 4.3.2 d)
+    fs.to_svg(diagram="pfd")
+    assert len(_no_table(fs)) == 1  # ...and back again
+
+
+def test_a_diagram_named_at_the_call_still_wins():
+    """So a caller can still ask what this model would report as some
+    other drawing, without rendering it as one."""
+    fs = _untabulated()
+    fs.to_svg(diagram="p&id")
+    assert len(fs.validate(diagram="pfd")) == 1
+    assert fs.validate(diagram="bfd") == []
+
+
+def test_the_render_leaves_the_findings_a_bare_validate_then_makes():
+    """The statement the examples rest on: what `validate()` prints after a
+    render is what that render put on `fs.warnings`."""
+    fs = _untabulated()
+    for kind in ("pfd", "p&id", "bfd"):
+        fs.to_svg(diagram=kind)
+        assert [str(i) for i in fs.validate()] == [str(w) for w in fs.warnings]
+
+
+def test_an_unchecked_render_still_says_which_drawing_it_made():
+    """`check=False` skips the findings, not the sheet: it drew a P&ID, and
+    the next `validate()` is about a P&ID."""
+    fs = _untabulated()
+    fs.to_svg(diagram="p&id", check=False)
+    assert _no_table(fs) == []
+
+
+def test_a_drawing_the_renderer_refused_is_not_remembered_as_the_one_made():
+    """A name that raises leaves no sheet behind, so a later bare
+    `validate()` must answer as a PFD rather than raise the render's error
+    a second time from a call that named nothing."""
+    fs = _untabulated()
+    with pytest.raises(ValueError):
+        fs.to_svg(diagram="isometric")
+    assert len(_no_table(fs)) == 1
 
 
 # --- the model is checked before any geometry is built ------------------------
