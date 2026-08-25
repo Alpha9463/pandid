@@ -1661,15 +1661,37 @@ def value_sets(
     return found
 
 
-def _distinguished(case: Case, argument: str, values: Iterable[Any]) -> bool:
-    """Whether two of *values* make *case* do different things.
+def _readings(case: Case, argument: str, values: Iterable[Any]) -> list[tuple[Any, str, str]]:
+    """Each value, and what *case* did with it -- read twice.
+
+    Twice because a reading that differs from itself makes every value look
+    like a different one, which would call every argument below carried and
+    this whole tier vacuous.
+    :func:`test_a_case_says_the_same_thing_twice` asks that of the baseline
+    call, and a value in hand is a second thing that could unsettle it --
+    ``debug=True`` draws an overlay the baseline has not got -- so it is asked
+    again rather than assumed to carry over.
+    """
+    return [
+        (value, _outcome(case, **{argument: value}), _outcome(case, **{argument: value}))
+        for value in values
+    ]
+
+
+def _restless(readings: Iterable[tuple[Any, str, str]]) -> list[Any]:
+    """The values the case answered two different ways."""
+    return [value for value, first, second in readings if first != second]
+
+
+def _distinguished(readings: Iterable[tuple[Any, str, str]]) -> bool:
+    """Whether two of the values read differently from each other.
 
     A value that is *refused* counts as a difference, and correctly: these are
     values the package says it accepts, so a refusal is what the value means
     rather than a gatekeeper's opinion of it. ``check=True`` refuses a sheet
     that fails validation, which is the whole of what the argument is for.
     """
-    return len({_outcome(case, **{argument: value}) for value in values}) > 1
+    return len({first for _value, first, _second in readings}) > 1
 
 
 # --------------------------------------------------------------------------
@@ -2044,9 +2066,15 @@ def test_two_values_the_package_accepts_do_not_do_the_same_thing(
     """
     case = CASES[case_id]
     values = VALUE_SETS[(case_id, argument)]
+    readings = _readings(case, argument, values)
+    restless = _restless(readings)
+    assert not restless, (
+        f"{case_id} does not describe itself the same way twice with "
+        f"{argument}={restless[0]!r}, so every value would look like a different one"
+    )
     inert = INAPPLICABLE.get((case_id, argument))
     declared = INDISTINGUISHABLE.get((case_id, argument))
-    distinguished = _distinguished(case, argument, values)
+    distinguished = _distinguished(readings)
     if inert is not None:
         assert not distinguished, (
             f"INAPPLICABLE says {case_id} cannot act on {argument}=, and it told "
@@ -2416,21 +2444,21 @@ def test_the_second_tier_reports_an_argument_checked_and_then_dropped() -> None:
     honoured by the alien probe and caught by the accepted values."""
     case = _validating_case()
     assert _honoured(case, "border") is True
-    assert _distinguished(case, "border", ("none", "zone")) is False
+    assert _distinguished(_readings(case, "border", ("none", "zone"))) is False
 
 
 def test_the_second_tier_reports_an_argument_carried_past_its_check() -> None:
     """The positive control: an engine that answered "dropped" to everything
     would fail loudly rather than silently, but it would also make every line
     of INDISTINGUISHABLE look correct."""
-    assert _distinguished(_carrying_case(), "border", ("none", "zone")) is True
+    assert _distinguished(_readings(_carrying_case(), "border", ("none", "zone"))) is True
 
 
 def test_the_second_tier_needs_two_values_before_it_says_anything() -> None:
     """One value can only differ from itself, and does not. A vocabulary that
     collapsed to a single word would report every argument dropped, which is
     why :func:`accepted_values` refuses to build a probe out of one."""
-    assert _distinguished(_carrying_case(), "border", ("zone",)) is False
+    assert _distinguished(_readings(_carrying_case(), "border", ("zone",))) is False
 
 
 def test_the_vocabulary_reader_reads_a_parser_this_test_made_up() -> None:
@@ -2540,6 +2568,12 @@ def test_a_witness_that_differs_from_itself_is_caught() -> None:
     assert _outcome(case) != _outcome(case)
     # ...and such a case would call every argument honoured, which is the harm.
     assert _honoured(case, "anything") is True
+    # The second tier is no safer: it would read two accepted values as two
+    # different answers and call the argument carried past its validator. So it
+    # reads each value twice and reports the ones that will not sit still.
+    readings = _readings(case, "anything", (True, False))
+    assert _distinguished(readings) is True
+    assert _restless(readings) == [True, False]
 
 
 def test_a_declaration_naming_a_case_that_is_gone_is_reported() -> None:
