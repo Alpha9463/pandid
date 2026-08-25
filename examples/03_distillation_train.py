@@ -31,6 +31,14 @@ from pandid.portgeom import pinned_x, pinned_y, port_offset
 def main():
     fs = Flowsheet("Distillation Train")
 
+    # A PFD numbers its streams, and the number is ruled round so the eye
+    # picks it out from the line data lettered beside it. The diamond is
+    # what most course notes and company standards ask for; "circle" and
+    # "box" are the other two shapes, and the default "none" leaves the
+    # number bare. Whatever is chosen, the number stays *on* its own run --
+    # a shape floating in clear paper would not say which line it counts.
+    fs.stream_labels.enclosure = "diamond"
+
     # reference= puts an off-page drawing number on a boundary flag.
     feed = fs.add(Feed("Raw Feed", reference="PFD-1000"))
     mixer = fs.add(Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))

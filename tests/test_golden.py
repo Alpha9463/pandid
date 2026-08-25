@@ -114,6 +114,11 @@ def _manual_layout() -> Flowsheet:
 
 def _distillation_train() -> Flowsheet:
     fs = Flowsheet("Distillation Train")
+    # Matches examples/03_distillation_train.py: this is the sheet that pins
+    # the diamond enclosure in the corpus, so a change to how a stream number
+    # is ruled round shows up here as a drawing rather than only as a claim
+    # in a unit test.
+    fs.stream_labels.enclosure = "diamond"
     feed = fs.add(units.Feed("Raw Feed", reference="PFD-1000"))
     mixer = fs.add(units.Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))
     feed_valve = fs.add(units.Valve("FV-100"))
