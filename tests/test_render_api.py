@@ -186,9 +186,7 @@ def test_jump_direction_reaches_the_public_api():
     fs.layout()
     fs.route()
     fs.renumber_streams()
-    assert SvgRenderer().render(
-        fs, jump_direction="horizontal", crossing_style="arc"
-    ) == horizontal
+    assert SvgRenderer().render(fs, jump_direction="horizontal", crossing_style="arc") == horizontal
 
 
 def test_render_unknown_extension_raises_valueerror(tmp_path):

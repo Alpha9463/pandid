@@ -1688,8 +1688,14 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
 #: ``AE-304-150-80-SS``'s leader to a landing the sheet had moved it off. The
 #: check is whether two backends draw one drawing, so it has to be given the
 #: arguments that drawing was made with.
-_DRAWIO_KWARGS = ("diagram", "page_size", "border", "show_stream_table", "connections",
-                  "crossing_style")
+_DRAWIO_KWARGS = (
+    "diagram",
+    "page_size",
+    "border",
+    "show_stream_table",
+    "connections",
+    "crossing_style",
+)
 
 
 def _drawio_cells(fs, kwargs) -> dict:
