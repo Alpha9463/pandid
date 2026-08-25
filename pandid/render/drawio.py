@@ -212,6 +212,7 @@ from pandid.validate import Issue
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.geometry import Frame
 
 #: The one ink the sheet is drawn in, and the one draw.io has to be told
 #: to draw it in. ``scripts/mxgraph_to_svg.py`` converts every stencil
@@ -2224,7 +2225,7 @@ class DrawioRenderer:
             '        </mxCell>',
             *self._inscribed(cid, approx, x1 - x0, y1 - y0, fit),
             *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
-            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u),
+            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name),
         ]
 
     def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
@@ -2329,7 +2330,7 @@ class DrawioRenderer:
         return out
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
-                       fit: "_Fit", unit=None) -> list[str]:
+                       fit: "_Fit", frame: "Frame", name: str) -> list[str]:
         """One cell per ISO supplementary part, grouped under the body's.
 
         **This is what a composed symbol exports as.** A composition names
@@ -2361,6 +2362,14 @@ class DrawioRenderer:
         The pen is the part's and not the body's: ISO 10628-1 §5.3.1 puts
         an outline at 0,5 mm and the detail inside it at 0,25, and the
         sheet draws them at exactly that ratio (:data:`_PART_STROKE`).
+
+        The frame arrives as an argument rather than being read back off
+        the unit, and so does the tag. On a unit the frame is a
+        ``Frame | None``, and this method has no useful answer for a
+        unit that was never laid out -- :meth:`render` already refuses
+        one by name, before any cell is written. So the caller is the
+        one that knows the frame is there, and handing it over is what
+        keeps that fact in the signature instead of in a comment.
         """
         if not sym.overlays:
             return []
@@ -2380,8 +2389,7 @@ class DrawioRenderer:
                     # says so, naming the unit it is drawn on.
                     self._findings.append(Issue(
                         "warning", APPROXIMATED,
-                        f"{getattr(unit, 'name', '') or cid}: the {overlay.name} "
-                        f"part has no draw.io "
+                        f"{name or cid}: the {overlay.name} part has no draw.io "
                         f"stencil and is exported as a stand-in, which loses "
                         f"{approx.lost}"))
             # A chiral part's second hand. The SVG reflects the artwork
@@ -2394,10 +2402,9 @@ class DrawioRenderer:
             # :func:`_placed_rect`. Without it a stirred tank laid on its
             # side exported as an upright agitator across a vessel drawn
             # the other way, both of them reproportioned.
-            ox, oy, ow, oh = _placed_rect(
-                unit.frame, overlay.x, overlay.y, overlay.w, overlay.h)
+            ox, oy, ow, oh = _placed_rect(frame, overlay.x, overlay.y, overlay.w, overlay.h)
             style = ";".join([
-                "html=1", "rounded=0", *keys, *_turn_keys(unit.frame),
+                "html=1", "rounded=0", *keys, *_turn_keys(frame),
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(_PART_STROKE):g}",
                 "connectable=0", "movable=0"]) + ";"

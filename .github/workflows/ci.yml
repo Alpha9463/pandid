@@ -49,6 +49,41 @@ jobs:
       - name: mypy
         run: mypy pandid
 
+  # A second type checker, because the two disagree about what they can see.
+  # mypy was clean on the drawio overlay block that read a `Frame | None`
+  # without narrowing it (issue #513) and pyright was not, and agents were
+  # already citing a clean pyright run as evidence in pull request bodies --
+  # so the project had the appearance of that coverage without the fact of
+  # it, and a type error could land with every check green.
+  pyright:
+    name: Type check (pyright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        # The `pdf` extra as well as `dev`, unlike the mypy job above, and it
+        # is not optional here. mypy is told `ignore_missing_imports` and
+        # shrugs at an absent third party; pyright calls one an **error** and
+        # would have failed this job on `import PIL` in `render/preview.py`
+        # before it ever read a line of pandid's own. Installing what the
+        # optional paths import is the honest fix -- it is also the only way
+        # those paths get checked at all, and `pdf` is a set of wheels the
+        # test job already proves installs clean on this interpreter.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,pdf]"
+      # `pandid/` only, deliberately, and `tests/` is not an oversight: it
+      # carries 1044 diagnostics today (issue #530), almost all of them the
+      # same shape -- a test reaches through an Optional the suite has just
+      # proved is there. That is its own piece of work, and a gate that
+      # starts red is worse than no gate at all. The version is pinned in
+      # the `dev` extra above, so this bar cannot move under the repo.
+      - name: pyright
+        run: pyright pandid
+
   test:
     name: Tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest

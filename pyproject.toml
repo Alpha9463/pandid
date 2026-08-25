@@ -72,7 +72,14 @@ pdf = ["svglib>=2.0", "reportlab>=4.4.3", "pypdfium2>=4", "pillow>=9.1"]
 yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
 # hatchling is the build backend above; it is here as well so that the sdist
 # test in tests/test_packaging.py has something to build with instead of skipping.
-dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "PyYAML>=6", "hatchling"]
+# `pyright` is pinned exactly, as `ruff` is and for the same reason: it is a
+# CI gate, and a gate whose bar moves on somebody else's release schedule
+# fails a pull request that changed nothing. The pin is the version `pandid/`
+# was measured clean against, and it is what a contributor's local run uses
+# too, so "pyright is clean" means the same thing in a PR body as in CI.
+# Raising it is a deliberate commit that fixes whatever the new release finds.
+dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "pyright==1.1.411", "PyYAML>=6",
+       "hatchling"]
 
 [tool.hatch.version]
 path = "pandid/__init__.py"
