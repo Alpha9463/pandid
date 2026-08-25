@@ -908,24 +908,24 @@ def test_two_heads_without_the_paper_between_them_are_reported():
     assert f"{MIN_HEAD_CLEARANCE:.0f}px ISO 128-20:1996 4.4" in issues[0].message
     # The finding is only worth making if it also says what to do about it, the
     # way run-off-elevation names the pin.
-    assert "M-1.height = 50" in issues[0].message
+    assert "M-1.height = 40" in issues[0].message
 
 
 def test_the_box_the_message_names_is_the_cure():
     """Typing the message's own suggestion back in has to silence it, or the
-    advice is wrong. 50 is the 35px box scaled by the 20/14 it fell short by."""
-    fs, _ = _fed_mixer(height=50)
+    advice is wrong. 40 is the 35px box scaled by the 16/14 it fell short by."""
+    fs, _ = _fed_mixer(height=40)
     assert _crowded(fs) == []
 
 
 def test_a_default_mixer_is_not_a_finding():
     """The pitch this check must *not* report, and the reason it is stated as a
     clearance rather than as a multiple of the head. Two heads 20px apart leave
-    8px of paper -- exactly twice the width the sheet now draws a main flow line
-    at, and so exactly the floor ISO 128-20:1996 4.4 and ISO 10628-1 5.3.2 both
-    set. It stood at four times that floor until #490 widened the line those
-    heads end, which is what took the margin out: a default mixer is on the
-    boundary now rather than clear of it."""
+    8px of paper against a floor of 4 -- twice the width the sheet draws a main
+    flow line at, which is what ISO 128-20:1996 4.4 and ISO 10628-1 5.3.2 both
+    ask. #502 halved that margin by widening the line those heads end, putting a
+    default mixer exactly on the boundary; restoring the rung puts it clear
+    again."""
     fs, _ = _fed_mixer()
     assert _crowded(fs) == []
 
@@ -2086,19 +2086,26 @@ def _crowded_lines(fs, **kw):
 def test_two_runs_without_the_paper_between_them_are_reported():
     """ISO 10628-1 5.3.2: twice the wider of the two, and never under 1 mm.
 
-    Both runs are main flow lines at 4 units, so the floor is 8 units of paper
-    and centres 12 apart. At 10 apart they leave 6 and are reported.
+    Both runs are main flow lines at 2 units, so the clause's two floors land on
+    the same number: twice the width is 4 units, and 1 mm is 4 units at 0,25 mm
+    to the unit. Centres 6 apart clear it exactly. At 5 apart they leave 3 and
+    are reported.
     """
-    issues = _crowded_lines(_parallel_pair(10.0))
+    issues = _crowded_lines(_parallel_pair(5.0))
     assert [i.severity for i in issues] == ["warning"]
-    assert "run parallel at y 200 and 210" in issues[0].message
-    assert "leaving 6.0px (1.50 mm) of paper between them" in issues[0].message
-    assert "8px ISO 10628-1 5.3.2" in issues[0].message
+    assert "run parallel at y 200 and 205" in issues[0].message
+    assert "leaving 3.0px (0.75 mm) of paper between them" in issues[0].message
+    assert "4px ISO 10628-1 5.3.2" in issues[0].message
 
 
 def test_two_runs_far_enough_apart_are_not_a_finding():
-    """The other side of the floor, so the check is not simply always firing."""
-    assert _crowded_lines(_parallel_pair(12.0)) == []
+    """The other side of the floor, so the check is not simply always firing.
+
+    6 and not some comfortable number: it is the exact separation the floor
+    admits, so this fails if the floor moves in *either* direction rather than
+    only if it grows.
+    """
+    assert _crowded_lines(_parallel_pair(6.0)) == []
 
 
 def test_the_clearance_floor_is_twice_the_widest_rung_the_pair_is_drawn_on():
@@ -2112,7 +2119,7 @@ def test_the_clearance_floor_is_twice_the_widest_rung_the_pair_is_drawn_on():
 
     from pandid.render.weights import LineWeight
 
-    (issue,) = _crowded_lines(_parallel_pair(10.0))
+    (issue,) = _crowded_lines(_parallel_pair(5.0))
     asked = float(re.search(r"under the ([\d.]+)px ISO 10628-1 5\.3\.2", issue.message).group(1))
     assert asked / LineWeight.MAIN_FLOW.width == pytest.approx(2.0)
 

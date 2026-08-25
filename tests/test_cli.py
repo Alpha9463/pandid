@@ -100,7 +100,11 @@ CROWDED = {
     "units": [
         {"kind": "Feed", "name": "A"},
         {"kind": "Feed", "name": "B"},
-        {"kind": "Mixer", "name": "M-1", "n_inlets": 2, "height": 20},
+        # 14 and not 20: the two floors this fixture has to breach are both
+        # derived from the main-flow rung, so restoring that rung to the
+        # weight of the equipment (see pandid/render/weights.py) moved both.
+        # At 20 the sheet is now clean and the test below has no subject.
+        {"kind": "Mixer", "name": "M-1", "n_inlets": 2, "height": 14},
         {"kind": "Product", "name": "P"},
     ],
     "streams": [

@@ -96,9 +96,13 @@ MARKED = (
 #: how many each has. #490 found and reported them; this file holds that the
 #: report follows ``crossing_style`` rather than assuming the arc. It was two
 #: sheets until #483 taught the router to charge for a crossing, which routed
-#: one of them away; the number is measured, not assumed, and
+#: one of them away; then one until the main-flow rung came back to the weight
+#: of the equipment, which shrank ``HOP_R`` -- the radius is the hop's clearance
+#: plus a pen, so a narrower pen needs less run either side of a crossing to
+#: carry its mark, and 19_absorber_stripper's last bare crossing now fits one.
+#: The number is measured, not assumed, and
 #: ``test_the_corpus_leaves_exactly_two_crossings_bare`` re-measures it.
-BARE = {"19_absorber_stripper": 1}
+BARE: "dict[str, int]" = {}
 
 #: The keywords the draw.io backend takes, from the ones a gallery sheet is
 #: drawn with. The same filter ``tests/test_drawio.py`` applies.
@@ -561,18 +565,22 @@ def test_a_plain_sheet_reports_nothing_because_it_promised_nothing():
     """``"plain"`` draws every crossing bare on purpose, so a finding against
     each would be a finding against the option rather than the drawing.
 
-    Held on the fixture *and* on the two shipped sheets that carry the
-    finding, so it cannot pass by there being nothing to report.
+    The fixture carries the whole of this now. It used to be held on the
+    shipped sheets as well, so that it could not pass by there being nothing to
+    report -- but ``BARE`` is empty since the main-flow rung came back to the
+    weight of the equipment, and a loop over an empty table asserts nothing. So
+    the fixture is checked *both* ways instead: it has to report at the default
+    style before ``"plain"`` is allowed to silence it, which is the same guard
+    the shipped sheets were giving.
     """
     fs = _pair(TIGHT)
+    _svg(fs)
+    assert _found(fs), (
+        "the fixture reports nothing at the default style, so the assertion "
+        "below would pass on a sheet that had nothing to silence"
+    )
     _svg(fs, crossing_style="plain")
     assert not _found(fs)
-    for stem, count in BARE.items():
-        fs, kwargs = gallery.flowsheet(stem)
-        fs.to_svg(**kwargs)
-        assert len(_found(fs)) == count, stem
-        fs.to_svg(**kwargs, crossing_style="plain")
-        assert not _found(fs), f"{stem}: plain marks nothing, so nothing is missing"
 
 
 def test_the_finding_counts_the_crossings_the_sheet_left_bare():
@@ -625,12 +633,18 @@ def test_a_crossing_moved_clear_stops_being_reported():
     assert not _found(fs)
 
 
-def test_the_corpus_leaves_exactly_two_crossings_bare():
-    """49 of the 50 crossings on the shipped sheets carry a mark, at either
-    style, and the one that cannot is the one #490 already names.
+def test_the_corpus_leaves_no_crossing_bare():
+    """All 50 crossings on the shipped sheets carry a mark, at either style.
 
-    Which is why this release moves no golden, and is the measurement that
-    makes the cases above guards rather than descriptions of the corpus.
+    It was 49 of 50 while a material run was drawn at twice the equipment:
+    ``HOP_R`` is the hop's clearance plus a pen, so the wider run needed more
+    clear line either side of a crossing than 19_absorber_stripper had at one
+    of its corners. At the restored rung the mark fits and the corpus is clean.
+
+    This is the measurement that makes the cases above guards rather than
+    descriptions of the corpus -- and with ``BARE`` empty it is the only thing
+    holding the shipped sheets to a number, so it asserts zero outright rather
+    than looping over a table that no longer has entries.
     """
     for stem in gallery.sheets():
         fs, kwargs = gallery.flowsheet(stem)

@@ -1408,6 +1408,14 @@ _ENCLOSURE_PAD = 4.0
 #: than the run it sits on would read as plant.
 _ENCLOSURE_STROKE = LineWeight.DETAIL.width
 
+#: The enclosures a quarter turn leaves unchanged, and so the ones whose
+#: number is written horizontally on a vertical run rather than turned
+#: with the line. A square on its corner and a circle are both symmetric
+#: about their centre under 90 degrees; the box is not. The reasoning is
+#: at the ``turned`` line in :func:`stream_numbers`, which is where it is
+#: decided; :mod:`pandid.render.drawio` reads it to make the same call.
+UPRIGHT_ENCLOSURES = ("diamond", "circle")
+
 
 def enclosure_shape(fs) -> str:
     """The shape ruled around every stream label on *fs*.
@@ -1446,13 +1454,22 @@ def enclosure_box(shape: str, hw: float, hh: float) -> "tuple[float, float]":
     one shape here carrying a chosen number, :data:`_ENCLOSURE_PAD`,
     and that constant is where the choice is argued.
 
-    * ``diamond`` -- the minimum-area rhombus around a rectangle has
-      each half-diagonal at twice the half-side it answers to (put the
-      corner on the side, ``p/a + q/b = 1``, and the area ``2ab`` is
-      least at ``a = 2p``, ``b = 2q``), so the box simply doubles. Then
-      held to at least as wide as it is deep: a one-character number
-      would otherwise get a rhombus standing on end, which is a shape a
-      reader stops at and no drawing office rules.
+    * ``diamond`` -- a **square turned through 45 degrees**: the
+      smallest one containing the halo, so its diagonal is the halo's
+      width plus its depth. Put a corner of the rectangle on the edge
+      and the containment condition is ``p/a + q/b <= 1``; a square has
+      ``a = b = d``, which gives ``d = (hw + hh) / 2`` and a box of
+      ``hw + hh`` each way.
+
+      Not the minimum-area rhombus, which is what this drew until the
+      shape was measured on a sheet. That one doubles each half-side
+      independently (``a = 2p``, ``b = 2q``), and on a two- or
+      three-character number the words are much wider than they are
+      deep, so it came out a long flat lozenge -- wider than the square
+      by half again, which is the direction that matters, because a
+      stream number sits *along* its run and it is the reach either side
+      that collides with the next fitting. It costs about 3% in area and
+      returns the shape a drawing office actually rules.
     * ``circle`` -- the circumscribed circle, diameter the halo's
       diagonal. Much the tightest of the three on a long label, since it
       pays for the corners once rather than twice. It is also what an
@@ -1462,7 +1479,8 @@ def enclosure_box(shape: str, hw: float, hh: float) -> "tuple[float, float]":
     * ``box`` -- the halo plus :data:`_ENCLOSURE_PAD`.
     """
     if shape == "diamond":
-        return max(2 * hw, 2 * hh), 2 * hh
+        side = hw + hh
+        return side, side
     if shape == "circle":
         d = math.hypot(hw, hh)
         return d, d
@@ -1471,7 +1489,7 @@ def enclosure_box(shape: str, hw: float, hh: float) -> "tuple[float, float]":
     return hw, hh
 
 
-def _enclosure_svg(shape: str, box, words, color: str) -> list[str]:
+def _enclosure_svg(shape: str, box, words, color: str, fill: bool = False) -> list[str]:
     """The plate a stream label is written on, and the shape ruled
     around it: *words* is the plate and *box* the shape, and *words* is
     ``None`` where the label lays down no plate at all.
@@ -1537,7 +1555,13 @@ def _enclosure_svg(shape: str, box, words, color: str) -> list[str]:
         return plate
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    pen = f'fill="none" stroke="{color}" stroke-width="{_ENCLOSURE_STROKE:g}"'
+    # White where the shape was measured to reach nothing but its own run
+    # (:func:`fillable_enclosures`), and hollow where it reaches anything
+    # else. Painted before the plate and the words below, and the whole
+    # label pass runs after every run is drawn, so a filled shape hides
+    # the piece of its own line that used to be drawn across the outline.
+    pen = (f'fill="{"white" if fill else "none"}" stroke="{color}" '
+           f'stroke-width="{_ENCLOSURE_STROKE:g}"')
     if shape == "diamond":
         points = (f"{cx:.1f},{y0:.1f} {x1:.1f},{cy:.1f} "
                   f"{cx:.1f},{y1:.1f} {x0:.1f},{cy:.1f}")
@@ -1548,11 +1572,24 @@ def _enclosure_svg(shape: str, box, words, color: str) -> list[str]:
     else:
         outline = (f'    <rect x="{x0:.1f}" y="{y0:.1f}" '
                    f'width="{x1 - x0:.1f}" height="{y1 - y0:.1f}" {pen} />')
-    # The outline first and the plate over it, so a rule that grazes the
-    # words is buried by them rather than drawn across them -- which is
-    # only ever the box, whose gutter is _ENCLOSURE_PAD, but it costs
-    # nothing to be true of all three.
-    return [outline, *plate]
+    # The plate first and the **outline over it**, so the rule is a
+    # closed shape rather than one with white bitten out of its sides.
+    #
+    # This was the other way round, on the reasoning that a rule grazing
+    # the words should be buried by them. That reasoning had the geometry
+    # backwards for two of the three shapes: a diamond and a circle are
+    # the *smallest* of their kind containing the halo
+    # (:func:`enclosure_box`), so the halo's four corners lie exactly on
+    # the outline -- touching is the containment condition, not a near
+    # miss. Drawing the plate last therefore painted four white notches
+    # into every diamond, and the wider the number the more of the edge
+    # each notch took: a two-digit stream number showed it plainly. The
+    # box is the only shape with a gutter (:data:`_ENCLOSURE_PAD`) and is
+    # unaffected either way, so one order is right for all three.
+    #
+    # The words themselves are written after this list, at the call site,
+    # so they stay on top of the rule they are enclosed by.
+    return [*plate, outline]
 
 
 class StreamNumber(NamedTuple):
@@ -1565,6 +1602,14 @@ class StreamNumber(NamedTuple):
     in -- the opaque halo where the sheet rules none -- and ``leader``
     is the pair of points a leader runs between where the search found
     no paper alongside the run (``None`` where it did).
+
+    ``vertical`` is a fact about **the words** and not about the run
+    under them. The two agree wherever the number is written bare or in
+    a box, and part company inside a diamond or a circle, where the
+    words stay upright however the line runs
+    (:data:`UPRIGHT_ENCLOSURES`). Both backends read this field rather
+    than re-deriving the direction from ``seg``, which is what keeps the
+    ``.drawio`` file turning exactly the numbers the sheet turns.
 
     ``words`` is the opaque plate the string itself is written on, and
     is the *only* white a label lays down: it equals ``box`` where
@@ -1703,10 +1748,32 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
         vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
         span = abs(sy2 - sy1) if vertical else abs(sx2 - sx1)
+        # Which way the *words* face, which stops being the same
+        # question as which way the run goes once a shape is ruled
+        # around them.
+        #
+        # A number written alongside a pipe is a designation and is
+        # oriented along its line -- ISO 15519-1 7.2.5, and Figure 40
+        # turns it to read bottom to top on a vertical connection. A
+        # number written *inside a shape* is not alongside anything: the
+        # shape is a balloon, and a balloon's contents read horizontally
+        # however the line under it runs. That is what a drawing office
+        # rules, and it is what ISA-5.1 draws for the instrument balloon
+        # this one sits beside on a P&ID. Turning them asked a reader to
+        # tilt their head for a symbol that had not tilted, since neither
+        # the diamond nor the circle changes under a quarter turn.
+        #
+        # Only those two suppress it. The box is not symmetric, and
+        # standing its words up without standing the box up would put
+        # them through the sides; it goes on following its line, which is
+        # right for what it is -- a ruled designation, not a balloon.
+        turned = vertical and shape not in UPRIGHT_ENCLOSURES
         # Turned to follow the run, the halo measures hw along it, hh
-        # across.
+        # across. The *enclosure* follows the run either way; for the two
+        # shapes above that is a distinction without a difference, their
+        # box being square.
         bw, bh = (hh, hw) if vertical else (hw, hh)
-        lw, lh = (th, tw) if vertical else (tw, th)
+        lw, lh = (th, tw) if turned else (tw, th)
 
         # Everything the anchors below can reach: along the run as far
         # as _label_anchors will slide the label, and across it to the
@@ -1837,7 +1904,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
             (ax0, ay0), (ax1, ay1) = leader
             placed.append((min(ax0, ax1), min(ay0, ay1),
                            max(ax0, ax1), max(ay0, ay1)))
-        out.append(StreamNumber(name, color, seg, tx, ty, vertical, halo,
+        out.append(StreamNumber(name, color, seg, tx, ty, turned, halo,
                                 leader, words, crossed))
     return out
 
@@ -1934,6 +2001,60 @@ def _shapes_meet(shape: str, box, other) -> bool:
         if abs(dx * ux + dy * uy) >= reach:
             return False
     return True
+
+
+def fillable_enclosures(fs, shape: str, numbers: "list[StreamNumber]",
+                        direction: str) -> "list[bool]":
+    """Which of *numbers* may have their enclosure filled white, in order.
+
+    A filled shape is what a drawing office rules -- the number sits on
+    clean paper and its own run stops at the shape's edge instead of
+    being drawn across the outline and out the other side. What stopped
+    it being drawn here was that the fill is opaque over *everything*,
+    not only over the run it belongs to, and a diamond is large: filled
+    blindly on the corpus as it stood, one would have taken 1154 square
+    units of somebody else's ink out of 26 places. Deleting a neighbour's
+    line is a wrong drawing, and no amount of convention buys it.
+
+    So the fill is decided per label instead of once for the sheet, and
+    the question asked is exactly the one the three
+    ``enclosure-over-*`` findings ask: does this shape reach any ink
+    that is not its own? Where it reaches none, the fill is free and is
+    drawn; where it reaches any, the shape stays hollow and the run is
+    seen to pass through it, which is what the whole sheet used to do.
+    A label that keeps the hollow shape is also a label
+    :func:`label_findings` is reporting, so the author is told about the
+    one case the convention is not carried in.
+
+    **Deliberately conservative.** ``_ink`` is reservation area -- each
+    stroke padded by a whole stroke width -- so it claims a little more
+    of the sheet than the drawing actually puts ink on. Reading the fill
+    off it therefore refuses a few fills that would have been safe, and
+    never allows one that is not. That is the direction to be wrong in:
+    a hollow diamond is the old drawing, and the old drawing was not
+    wrong, only less conventional.
+    """
+    from pandid.portgeom import unit_box
+
+    if shape == "none":
+        return [False] * len(numbers)
+    ink = _ink(fs, direction)
+    boxes = [u.frame is not None and unit_box(u, u.frame) for u in fs.units]
+    out: list[bool] = []
+    for number in numbers:
+        clear = (
+            not any(box and _shape_hits(shape, number.box, box) for box in boxes)
+            and not any(line.line != number.name
+                        and _shape_hits(shape, number.box, line.box) for line in ink)
+            # Against *every* other label and not only the earlier ones:
+            # a finding is raised once for a pair, but both members of
+            # that pair have to keep their fill off it.
+            and not any(other is not number
+                        and _shapes_meet(shape, number.box, other.box)
+                        for other in numbers)
+        )
+        out.append(clear)
+    return out
 
 
 def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
@@ -5224,10 +5345,11 @@ class SvgRenderer:
         shape = enclosure_shape(fs)
         numbers = stream_numbers(fs, placed, joints, jump_direction)
         self._findings += label_findings(fs, shape, numbers, jump_direction)
-        for number in numbers:
+        fills = fillable_enclosures(fs, shape, numbers, jump_direction)
+        for number, fill in zip(numbers, fills):
             tx, ty, name = number.x, number.y, number.name
             color = escaped(number.color)
-            lines += _enclosure_svg(shape, number.box, number.words, color)
+            lines += _enclosure_svg(shape, number.box, number.words, color, fill)
             turn = f' transform="rotate(-90, {tx:.1f}, {ty:.1f})"' if number.vertical else ""
             lines.append(
                 f'    <text x="{tx:.1f}" y="{ty:.1f}" font-family="sans-serif" '

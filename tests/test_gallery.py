@@ -224,15 +224,21 @@ def test_the_corpus_still_holds_a_sheet_the_diagram_changes_the_answer_for(check
 #: So this is meant to be edited, and only ever deliberately: a validator
 #: change that moves what a shipped sheet reports has to say which sheet
 #: and why, in the same commit that moves it.
-CORPUS_FINDINGS = {
-    "08_from_data": ["lines-crowded", "nozzles-crowded"],
-    "10_ethanol_pfd": ["nozzles-crowded"],
-    "11_ethanol_pid": ["lines-crowded"],
-    "15_condensing_turbine": ["lines-crowded"],
-    "18_fixed_bed_recycle": ["lines-crowded", "lines-crowded"],
-    "19_absorber_stripper": ["crossing-unmarked"],
-    "21_alumina_refinery": ["nozzles-crowded", "nozzles-crowded"],
-}
+#: Empty, and every one of the twenty-one sheets is in it. The seven
+#: entries this table used to carry -- six ``lines-crowded`` and
+#: ``nozzles-crowded`` between them, and one ``crossing-unmarked`` --
+#: were every one of them a consequence of #502 drawing a material run
+#: at twice the equipment it enters. All three floors are derived from
+#: that rung: 5.3.2's clearance is twice the wider of two runs,
+#: ``MIN_HEAD_CLEARANCE`` is twice the rung, and ``HOP_R`` is the hop's
+#: clearance plus a pen. Restoring the run to the weight of the
+#: equipment (pandid/render/weights.py) moved all three back under the
+#: room the sheets already had, and the corpus came out clean.
+#:
+#: That is the whole of #498, which 0.1.4 shipped as a known issue: the
+#: nine clearances it names are not crowded once the pen that crowded
+#: them is the one a drawing office rules.
+CORPUS_FINDINGS: "dict[str, list[str]]" = {}
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)

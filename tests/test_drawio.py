@@ -1202,9 +1202,10 @@ def test_an_off_page_flag_keeps_its_tag_and_its_reference():
 # ---------------------------------------------------------------------------
 
 
-def test_a_signal_line_is_dashed_and_drawn_a_quarter_the_weight_of_pipe(sample):
-    """ISO 10628-1 5.3.1 a) against c): a material run is 0,4 M and a control
-    or data line 0,1 M, so the export writes the two four apart and not two.
+def test_a_signal_line_is_dashed_and_drawn_half_the_weight_of_pipe(sample):
+    """ISO 15519-1 6.2 Table 1's two widths: a material run is 0,2 M and a
+    control or data line 0,1 M, so the export writes the two a factor of two
+    apart.
     """
     cells = _cells(sample)
     weights = {}
@@ -1212,9 +1213,9 @@ def test_a_signal_line_is_dashed_and_drawn_a_quarter_the_weight_of_pipe(sample):
         weights[s.kind] = _style(cells[f"s{n}"])
     # Absolute, not computed from the same call the export makes: an
     # expectation derived from the decision under test would hold however
-    # both of them moved. The ladder's numbers are knowable -- 0,4 M and
+    # both of them moved. The ladder's numbers are knowable -- 0,2 M and
     # 0,1 M against a 10-unit module -- so they are written down.
-    assert weights["material"]["strokeWidth"] == "4"
+    assert weights["material"]["strokeWidth"] == "2"
     assert weights["electric"]["strokeWidth"] == "1"
     assert weights["electric"]["dashed"] == "1"
     assert weights["electric"]["dashPattern"] == "7 4"

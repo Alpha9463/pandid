@@ -63,7 +63,7 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
 from pandid.portgeom import unit_box
-from pandid.render.svg import _along, _crosses, _ink, _SIGNAL_KINDS
+from pandid.render.svg import _along, _crosses, _ink, _SIGNAL_KINDS, UPRIGHT_ENCLOSURES
 
 from test_golden import SCENARIOS
 
@@ -236,14 +236,64 @@ def _gap(box, seg) -> float:
     return math.hypot(dx, dy)
 
 
-def _parallel(segs, turned):
+def _line_axis(segs, box) -> bool:
+    """Which way the piece of line this label is written on runs.
+
+    The label's own rotation used to answer this, on the reasoning that a
+    label is turned to follow its run. That stopped being one fact when a
+    number inside a diamond or a circle stopped turning with its line: the
+    shape is a balloon and its contents read horizontally, so the text's
+    rotation and the line's direction are now two separate things, and only
+    the second one says where the run is.
+
+    Taken from the segment of the label's own line that passes **nearest the
+    label**, not from the line as a whole. A line is not all one direction --
+    it turns corners -- and the question here is only ever about the piece the
+    number was written on. Answering it with the line's overall bias put four
+    sheets' numbers against a stub at the far end of their own run.
+    """
+    centre = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+    point = (centre[0], centre[1], centre[0], centre[1])
+    nearest, vertical = None, False
+    for (ax, ay), (bx, by) in segs:
+        if abs(bx - ax) < TOL and abs(by - ay) < TOL:
+            continue
+        away = _gap(point, ((ax, ay), (bx, by)))
+        if nearest is None or away < nearest:
+            nearest, vertical = away, abs(bx - ax) < TOL
+    return vertical
+
+
+def _axis(label, segs, upright: bool) -> bool:
+    """The axis to measure this label's alongness on.
+
+    ``label.turned`` wherever the words follow their line, which is every
+    sheet but one ruling a diamond or a circle -- and it is the exact answer
+    there, taken from the renderer's own decision rather than reconstructed.
+
+    Only where the words stay upright inside a balloon does it stop carrying
+    the run's direction, and only then is the direction read back off the ink
+    (:func:`_line_axis`). Scoped rather than applied to everything, because
+    "the nearest segment of this line" and "the segment this label was
+    written along" are the same thing on almost every label and not on all of
+    them: ``100-CWR-210-CS`` on 17 is written beside a run whose corner turns
+    closer to the words than the run itself does, and reading its axis off
+    the geometry picked the corner.
+    """
+    if not upright:
+        return label.turned
+    return _line_axis(segs, label.box)
+
+
+def _parallel(segs, along_vertical):
     """The segments of a line that a label lying along it could be lying along.
 
-    A label is turned to follow its run, so a turned one names a vertical
-    segment and an upright one a horizontal segment. Zero-length hops between
-    coincident points are dropped: they are drawn as nothing and so name
-    nothing.
+    *along_vertical* is the axis of the run being measured -- :func:`_line_axis`
+    -- so a vertical line's segments are the vertical ones. Zero-length hops
+    between coincident points are dropped: they are drawn as nothing and so
+    name nothing.
     """
+    turned = along_vertical
     out = []
     for (ax, ay), (bx, by) in segs:
         vertical = abs(bx - ax) < TOL
@@ -297,10 +347,12 @@ def test_a_line_number_is_written_along_its_line_or_carries_a_leader(sheets, nam
     fs, labels = sheets[name]
     segs = _drawn_segments(fs)
     adrift = []
+    upright = fs.stream_labels.enclosure in UPRIGHT_ENCLOSURES
     for label in labels:
-        runs = _runs(segs.get(label.name, []), label.turned)
+        along = _axis(label, segs.get(label.name, []), upright)
+        runs = _runs(segs.get(label.name, []), along)
         assert runs, f"{name}: {label.name} lies along no run of its own line"
-        share = _alongness(label.box, label.turned, runs)
+        share = _alongness(label.box, along, runs)
         if share <= 0.5 and label.leader is None:
             adrift.append(f"{label.name} has its own line beside {share:.0%} of it and no leader")
     assert not adrift, f"{name}: " + "; ".join(adrift)
@@ -437,9 +489,11 @@ def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
     over, under = [], []
     for name, (fs, labels) in sheets.items():
         segs = _drawn_segments(fs)
+        upright = fs.stream_labels.enclosure in UPRIGHT_ENCLOSURES
         for label in labels:
-            runs = _runs(segs.get(label.name, []), label.turned)
-            share = _alongness(label.box, label.turned, runs)
+            along = _axis(label, segs.get(label.name, []), upright)
+            runs = _runs(segs.get(label.name, []), along)
+            share = _alongness(label.box, along, runs)
             if share > 0.5 and label.leader is not None:
                 over.append(f"{name}/{label.name} at {share:.0%}")
             if share <= 0.5 and label.leader is None:
