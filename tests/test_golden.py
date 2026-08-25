@@ -4200,7 +4200,13 @@ SCENARIOS = {
     # arithmetic claim: the boxes here are as wide as their own names and as
     # tall as their walls need, so a change to the pitch, the minimum box or the
     # label allowance moves this file and nothing else.
-    "12_block_flow_diagram": (_block_flow_diagram, {}),
+    # 12 declares what it is, as examples/12_block_flow_diagram.py does: a BFD
+    # answers ISO 10628-1 4.2 and owes no boundary flow rate, where a PFD owes
+    # one under 4.3.2 d). It changes no ink -- the two renders are byte equal --
+    # but without it the fixture is validated as a PFD and reports a
+    # stream-table-missing the example does not, so the two builders disagree
+    # about what the sheet is.
+    "12_block_flow_diagram": (_block_flow_diagram, {"diagram": "bfd"}),
     # 13 is the solids circuit: a mineral concentrate thickened, filtered, dried and
     # magnetically cleaned. It is the only scenario drawing a dryer, a furnace, a
     # blower or a funnel, the only one with a tee that *combines* rather than
@@ -4583,6 +4589,32 @@ def test_every_example_has_a_fixture():
     the suite would stay green while nothing at all held the new sheet to
     anything. #231 asks for this before the corpus grows again."""
     assert sorted(SCENARIOS) == _example_capture().sheets()
+
+
+@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
+def test_a_fixture_is_drawn_with_what_its_example_draws_it_with(name):
+    """The two builders have to agree about the *arguments*, not only the ink.
+
+    ``test_the_example_draws_the_same_sheet_as_its_fixture`` compares what
+    comes out, and there is a class of disagreement it cannot see: an argument
+    that changes what ``validate()`` says and no pixel at all. ``diagram=`` is
+    exactly that. ``12_block_flow_diagram`` shipped with the example rendering
+    ``diagram="bfd"`` and the fixture rendering nothing, so the same drawing was
+    a BFD to one builder and a PFD to the other, and the fixture reported a
+    ``stream-table-missing`` against ISO 10628-1 4.3.2 d) -- a PFD's clause,
+    which a BFD does not answer. The sheets were byte equal throughout, so
+    every existing golden test passed.
+
+    Compared as whole dictionaries rather than key by key: an argument added to
+    one side and not the other is the same defect whichever side gains it, and
+    naming the keys that matter is how this drifted in the first place.
+    """
+    _fixture_build, fixture_kwargs = SCENARIOS[name]
+    _fs, example_kwargs = _example_capture().flowsheet(name)
+    assert fixture_kwargs == example_kwargs, (
+        f"{name}: the fixture draws with {fixture_kwargs} and "
+        f"examples/{name}.py draws with {example_kwargs}"
+    )
 
 
 def test_the_fractionator_schedules_only_equipment_that_exists():
