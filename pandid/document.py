@@ -24,8 +24,8 @@ sheet, whichever border is drawn.
 """
 
 import re
-from dataclasses import dataclass, field, replace
-from typing import Literal
+from dataclasses import dataclass, field, fields, replace
+from typing import Any, Literal
 
 # --------------------------------------------------------------
 # Location references (ISO 15519-1:2010 Clause 9)
@@ -203,6 +203,61 @@ class TitleBlock:
     approved_by: str = ""
     date: str = ""
     revisions: list[Revision] = field(default_factory=list)
+
+
+def _drawn_text(value: Any) -> str:
+    """A title-block field's value as the text a sheet draws from it.
+
+    Every field of :class:`TitleBlock` and :class:`Revision` is
+    annotated ``str`` and **nothing enforces it**, so
+    ``TitleBlock(sheet=1, of_sheets=3)`` is an ordinary thing for an
+    engineer to type and has always drawn ``SHEET 1 of 3``. This is the
+    one place that says what a value which is not text draws, so the
+    two doors into a block cannot answer differently about it: the
+    constructor's, and the spec reader's
+    (:meth:`~pandid.Flowsheet.from_dict`).
+
+    They used to. ``to_dict()`` wrote back the ``0`` an author set on
+    ``sheet`` and the reader refused to read it -- a document this
+    package had just written and would not accept, which is a broken
+    public round trip and not a choice anyone made. Refusing a
+    non-string at *both* doors was the other consistent answer and is
+    not the one taken: it would break ``sheet=1``, which reads
+    naturally and works today.
+
+    ``None`` is the blank the strip already draws for it, and the blank
+    a file means -- YAML reads ``title:`` with nothing after it as
+    ``None``, and an author who wrote nothing after the colon wrote
+    nothing. Everything else is drawn as written; there is no second
+    vocabulary of types here, because the question this answers is what
+    a cell letters and ``str`` answers it for anything.
+
+    Whitespace is **not** trimmed here. A field of nothing but spaces
+    is the blank it means, but that is the *cell's* reading of it
+    (:func:`~pandid.render.furniture._field`, which strips this before
+    drawing) -- a file keeps what its author typed, so a spec that
+    round-trips through here comes back out unchanged.
+    """
+    return "" if value is None else str(value)
+
+
+def _drawn_text_fields(cls: type) -> frozenset[str]:
+    """The fields of *cls* that hold drawn text, read off the dataclass.
+
+    A field whose default is a string holds text. The block's one list
+    field, ``revisions``, is built by a factory and has no string
+    default, so it leaves itself out without being named -- and so does
+    any field somebody later adds that is not text.
+
+    Derived rather than listed because a written-out list of the
+    fourteen has fallen behind this block before, and because it is the
+    same test
+    :func:`~pandid.render.furniture._class_defaults` uses to find the
+    default a blank cell draws. One derivation, so the reader and the
+    strip agree about which fields are text on the day a field is added
+    rather than on the day a cell is noticed drawing the wrong thing.
+    """
+    return frozenset(f.name for f in fields(cls) if isinstance(f.default, str))
 
 
 # The nine positions a box can dock to on the sheet *frame* (not the

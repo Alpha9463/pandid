@@ -4429,7 +4429,9 @@ never the computed sequence.
 ### The `title_block` and `annotations` sections
 
 `title_block` takes the [`TitleBlock`](#titleblock-and-revision) fields plus
-`revisions`. Each `annotations` entry is one box, typed `equipment_list`,
+`revisions`, and takes them exactly as the class does: a value that is not text
+is drawn as text, so `sheet: 1` needs no quotes and `sheet: 0` is sheet 0.
+Each `annotations` entry is one box, typed `equipment_list`,
 `notes`, `legend`, `annotation` or `table`, placed with `align`, `position` and
 `margin` exactly as in [Sheet furniture](#sheet-furniture).
 

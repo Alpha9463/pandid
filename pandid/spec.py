@@ -97,6 +97,8 @@ from pandid.document import (
     equipment_list,
     legend,
     notes,
+    _drawn_text,
+    _drawn_text_fields,
     _resolve_enclosure,
 )
 from pandid.flowsheet import (
@@ -1202,20 +1204,42 @@ def _read_stream_labels(entry: Any, where: str) -> StreamLabelOptions:
 
 
 def _read_title_block(entry: Any, where: str) -> TitleBlock:
+    """A title block, read the way its constructor reads one.
+
+    Every cell of the block letters text and **no field of it is
+    checked**, so ``TitleBlock(sheet=1, of_sheets=3)`` is what an
+    engineer types and ``sheet: 1`` is what the same engineer writes in
+    a file -- unquoted, because that is how a count is written and
+    because YAML hands the reader an ``int`` for it either way.
+
+    This door used to be the strict one, and the disagreement was not a
+    policy, it was a bug: :func:`_write_title_block` wrote out the
+    value the author set, so a block carrying ``sheet=0`` produced a
+    document *this package had just written* and would not read back
+    (#506). The two now settle the question in one place --
+    :func:`~pandid.document._drawn_text`, which is also what the strip
+    letters from -- so a block that survives the round trip draws the
+    sheet it drew before it.
+
+    Which fields those are is :func:`~pandid.document._drawn_text_fields`,
+    off the dataclass, and it is also what fixes the **allowed** keys:
+    ``revisions`` is the one field of the block that is not a cell, and
+    a field somebody adds later that is not text is refused by name
+    here rather than quietly stringified into a cell or dropped on the
+    floor.
+    """
     data = _mapping(entry, where)
-    allowed = {f.name for f in dataclass_fields(TitleBlock)}
-    _check_keys(data, allowed, where)
+    text_fields = _drawn_text_fields(TitleBlock)
+    _check_keys(data, text_fields | {"revisions"}, where)
     kwargs: dict[str, Any] = {
-        key: _text(value, f"{where}.{key}") for key, value in data.items() if key != "revisions"
+        key: _drawn_text(value) for key, value in data.items() if key in text_fields
     }
     revisions = []
     for i, item in enumerate(_sequence(data.get("revisions", []), f"{where}.revisions")):
         rev_where = f"{where}.revisions[{i}]"
         rev = _mapping(item, rev_where)
-        _check_keys(rev, {f.name for f in dataclass_fields(Revision)}, rev_where)
-        revisions.append(
-            Revision(**{key: _text(value, f"{rev_where}.{key}") for key, value in rev.items()})
-        )
+        _check_keys(rev, _drawn_text_fields(Revision), rev_where)
+        revisions.append(Revision(**{key: _drawn_text(value) for key, value in rev.items()}))
     return TitleBlock(revisions=revisions, **kwargs)
 
 
@@ -1742,20 +1766,34 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
     return entry
 
 
+def _stated_text(obj: TitleBlock | Revision) -> dict[str, Any]:
+    """Every drawn-text field of *obj* the author moved off its default.
+
+    A field still on its default is left out, because writing it back
+    states nothing the class does not already say -- and the two
+    defaults that are not blank (``sheet``, ``of_sheets``) would then be
+    written onto every sheet that never mentioned a set.
+
+    **Off its default, not truthy.** The revision rows used to be
+    written with ``if getattr(rev, f.name)``, and a falsey value is not
+    a blank one: an author who raised revision ``0`` -- the rev an
+    as-built sheet issues at, and a number this package deliberately
+    honours (#484) -- had it dropped from the document and read back as
+    the empty cell. That is a stated value silently discarded by the
+    package's own writer, which is worse than the read that refused it,
+    because a refusal at least says so. The block's own half already
+    compared against the default, so this is one test for both halves
+    rather than two that can disagree.
+    """
+    text = _drawn_text_fields(type(obj))
+    return {f.name: getattr(obj, f.name) for f in dataclass_fields(type(obj))
+            if f.name in text and getattr(obj, f.name) != f.default}
+
+
 def _write_title_block(block: TitleBlock) -> dict[str, Any]:
-    entry: dict[str, Any] = {}
-    for field in dataclass_fields(TitleBlock):
-        if field.name == "revisions":
-            continue
-        value = getattr(block, field.name)
-        if value != field.default:
-            entry[field.name] = value
+    entry: dict[str, Any] = _stated_text(block)
     if block.revisions:
-        entry["revisions"] = [
-            {f.name: getattr(rev, f.name) for f in dataclass_fields(Revision)
-             if getattr(rev, f.name)}
-            for rev in block.revisions
-        ]
+        entry["revisions"] = [_stated_text(rev) for rev in block.revisions]
     return entry
 
 
