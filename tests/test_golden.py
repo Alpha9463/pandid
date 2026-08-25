@@ -4591,6 +4591,32 @@ def test_every_example_has_a_fixture():
     assert sorted(SCENARIOS) == _example_capture().sheets()
 
 
+@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
+def test_a_fixture_is_drawn_with_what_its_example_draws_it_with(name):
+    """The two builders have to agree about the *arguments*, not only the ink.
+
+    ``test_the_example_draws_the_same_sheet_as_its_fixture`` compares what
+    comes out, and there is a class of disagreement it cannot see: an argument
+    that changes what ``validate()`` says and no pixel at all. ``diagram=`` is
+    exactly that. ``12_block_flow_diagram`` shipped with the example rendering
+    ``diagram="bfd"`` and the fixture rendering nothing, so the same drawing was
+    a BFD to one builder and a PFD to the other, and the fixture reported a
+    ``stream-table-missing`` against ISO 10628-1 4.3.2 d) -- a PFD's clause,
+    which a BFD does not answer. The sheets were byte equal throughout, so
+    every existing golden test passed.
+
+    Compared as whole dictionaries rather than key by key: an argument added to
+    one side and not the other is the same defect whichever side gains it, and
+    naming the keys that matter is how this drifted in the first place.
+    """
+    _fixture_build, fixture_kwargs = SCENARIOS[name]
+    _fs, example_kwargs = _example_capture().flowsheet(name)
+    assert fixture_kwargs == example_kwargs, (
+        f"{name}: the fixture draws with {fixture_kwargs} and "
+        f"examples/{name}.py draws with {example_kwargs}"
+    )
+
+
 def test_the_fractionator_schedules_only_equipment_that_exists():
     """The bottoms product leaves over the reboiler's weir, off the kettle's own
     draw. Splitting the sump line instead needs a piece of equipment that is not
