@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-26
+
+### Fixed
+
+Four things about how a sheet looks, all of them visible in 0.1.4:
+
+- **A material run was drawn at twice the equipment it enters**, so the runs read
+  as heavy black bars against hairline plant. 0.1.4 took ISO 10628-1 5.3.1's
+  0,4 M for a main flow line, but that clause states an absolute width and this
+  library's symbols are smaller relative to the grid module than an issued
+  drawing's are: a run came out at 1:15 against the symbol it entered where a
+  drawing office rules about 1:60. A run is 0,2 M again, the weight of the
+  equipment it enters, which is ISO 15519-1 6.2 Table 1's unparenthesised pair.
+- **A stream number's diamond was a flat lozenge.** It is a square turned on its
+  corner now, which reaches less far along the run it sits on.
+- **A stream number's shape was drawn hollow, and its own run through it.** The
+  shape is filled white wherever it was measured to reach no ink but its own
+  run, and stays hollow -- and reported -- where it reaches anything else.
+- **The words' plate was drawn over the shape**, biting four white notches out of
+  every diamond, plainest on a two-digit number. The outline is ruled last.
+
+### Changed
+
+- A stream number inside a diamond or a circle is written horizontally on a
+  vertical run. The shape is a balloon and a balloon's contents read upright; a
+  `box` enclosure still follows its line.
+- The shipped corpus reports nothing. All seven findings it carried in 0.1.4,
+  #498 included, were consequences of the wide run: the ISO 5.3.2 clearance,
+  the arrowhead clearance and the crossing-mark radius all derive from it.
+  Closes #498, and all 50 crossings on the corpus now carry a mark.
+
 ## [0.1.4] - 2026-08-25
 
 ### Fixed
