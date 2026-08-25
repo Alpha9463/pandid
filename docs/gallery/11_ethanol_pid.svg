@@ -410,7 +410,7 @@
     <line x1="376.3" y1="398.8" x2="376.3" y2="411.2" stroke="black" stroke-width="1" />
     <line x1="467.5" y1="411.2" x2="467.5" y2="398.8" stroke="black" stroke-width="1" />
     <line x1="462.5" y1="411.2" x2="462.5" y2="398.8" stroke="black" stroke-width="1" />
-    <path d="M 520.0,300.0 L 520.0,237 A 7 7 0 0 1 520.0,223 L 520.0,130.0 L 677.5,130.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 520.0,300.0 L 520.0,237 M 520.0,223 L 520.0,130.0 L 677.5,130.0" fill="none" stroke="black" stroke-width="4" />
     <line x1="513.8" y1="297.5" x2="526.2" y2="297.5" stroke="black" stroke-width="1" />
     <line x1="513.8" y1="292.5" x2="526.2" y2="292.5" stroke="black" stroke-width="1" />
     <path d="M 1064.0,130.0 L 1107.5,130.0 L 1107.5,210.0" fill="none" stroke="black" stroke-width="4" />
@@ -451,7 +451,7 @@
     <path d="M 1520.0,510.0 L 1540.0,510.0" fill="none" stroke="black" stroke-width="4" />
     <line x1="1522.5" y1="503.8" x2="1522.5" y2="516.2" stroke="black" stroke-width="1" />
     <line x1="1527.5" y1="503.8" x2="1527.5" y2="516.2" stroke="black" stroke-width="1" />
-    <path d="M 520.0,500.0 L 520.0,562.091 A 7 7 0 0 1 520.0,576.091 L 520.0,607.091 A 7 7 0 0 1 520.0,621.091 L 520.0,655.0 L 770.0765027322404,655.0 L 770.0765027322404,625.4545454545455" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 520.0,500.0 L 520.0,562.091 M 520.0,576.091 L 520.0,607.091 M 520.0,621.091 L 520.0,655.0 L 770.0765027322404,655.0 L 770.0765027322404,625.4545454545455" fill="none" stroke="black" stroke-width="4" />
     <line x1="526.2" y1="502.5" x2="513.8" y2="502.5" stroke="black" stroke-width="1" />
     <line x1="526.2" y1="507.5" x2="513.8" y2="507.5" stroke="black" stroke-width="1" />
     <line x1="776.3" y1="628.0" x2="763.8" y2="628.0" stroke="black" stroke-width="1" />
@@ -503,7 +503,7 @@
     <line x1="1232.5" y1="733.8" x2="1232.5" y2="746.2" stroke="black" stroke-width="1" />
     <line x1="1237.5" y1="733.8" x2="1237.5" y2="746.2" stroke="black" stroke-width="1" />
     <path d="M 617.625,45.0 L 848.75,45.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 870.75,67.0 L 870.75,78 A 7 7 0 0 1 870.75,92 L 870.75,92.6 L 870.7,92.6 L 870.7,117.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 870.75,67.0 L 870.75,78 M 870.75,92 L 870.75,92.6 L 870.7,92.6 L 870.7,117.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="865.8" y1="74.3" x2="875.8" y2="80.3" stroke="black" stroke-width="1" />
     <line x1="865.8" y1="78.3" x2="875.8" y2="84.3" stroke="black" stroke-width="1" />
     <line x1="865.7" y1="99.6" x2="875.7" y2="105.6" stroke="black" stroke-width="1" />
@@ -511,7 +511,7 @@
     <path d="M 622.0,257.425 L 678.0,257.425" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 652.0,347.0 L 700.0,347.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 700.0,279.425 L 700.0,300.0 L 722.0,300.0 L 722.0,325.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 744.0,347.0 L 865.8,347.0 L 865.8,388 A 7 7 0 0 1 865.8,402 L 865.8,427.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 744.0,347.0 L 865.8,347.0 L 865.8,388 M 865.8,402 L 865.8,427.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="779.1" y1="352.0" x2="785.1" y2="342.0" stroke="black" stroke-width="1" />
     <line x1="783.1" y1="352.0" x2="789.1" y2="342.0" stroke="black" stroke-width="1" />
     <line x1="819.7" y1="352.0" x2="825.7" y2="342.0" stroke="black" stroke-width="1" />
@@ -521,7 +521,7 @@
     <path d="M 1226.0846994535518,301.0 L 1261.25,301.0 L 1261.25,325.0 L 1286.25,325.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1485.5,417.0 L 1330.25,417.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1308.25,347.0 L 1308.25,395.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 1308.25,439.0 L 1308.25,458 A 7 7 0 0 1 1308.25,472 L 1308.25,472.6 L 1308.2,472.6 L 1308.2,497.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 1308.25,439.0 L 1308.25,458 M 1308.25,472 L 1308.25,472.6 L 1308.2,472.6 L 1308.2,497.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="1303.2" y1="450.3" x2="1313.2" y2="456.3" stroke="black" stroke-width="1" />
     <line x1="1303.2" y1="454.3" x2="1313.2" y2="460.3" stroke="black" stroke-width="1" />
     <line x1="1303.2" y1="479.6" x2="1313.2" y2="485.6" stroke="black" stroke-width="1" />
@@ -529,7 +529,7 @@
     <path d="M 413.0,521.7310978638848 L 339.0,521.7310978638848" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 184.5,521.0909090909091 L 222.5,521.0909090909091" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 295.0,521.7310978638848 L 291.5,521.7310978638848 L 291.5,521.0909090909091 L 266.5,521.0909090909091" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 244.5,543.0909090909091 L 244.5,562.091 A 7 7 0 0 1 244.5,576.091 L 244.5,576.6909090909091 L 410.7,576.6909090909091 L 410.7,601.6909090909091" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 244.5,543.0909090909091 L 244.5,562.091 M 244.5,576.091 L 244.5,576.6909090909091 L 410.7,576.6909090909091 L 410.7,601.6909090909091" fill="none" stroke="black" stroke-width="1" />
     <line x1="239.5" y1="554.4" x2="249.5" y2="560.4" stroke="black" stroke-width="1" />
     <line x1="239.5" y1="558.4" x2="249.5" y2="564.4" stroke="black" stroke-width="1" />
     <line x1="280.6" y1="581.7" x2="286.6" y2="571.7" stroke="black" stroke-width="1" />

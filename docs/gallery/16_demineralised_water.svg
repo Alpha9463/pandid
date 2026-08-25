@@ -219,7 +219,7 @@
     <path d="M 1387.0,490.0 L 1591.0,490.0" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <path d="M 1641.0,440.0 L 1641.0,397.75 L 1399.0,397.75" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <path d="M 1368.0,222.75 L 1368.0,117.5 L 1601.0,117.5 L 1601.0,92.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
-    <path d="M 1368.0,422.75 L 1368.0,447.75 L 1566.0,447.75 L 1566.0,404.75 A 7 7 0 0 1 1566.0,390.75 L 1566.0,266.5 L 1591.0,266.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
+    <path d="M 1368.0,422.75 L 1368.0,447.75 L 1566.0,447.75 L 1566.0,404.75 M 1566.0,390.75 L 1566.0,266.5 L 1591.0,266.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <path d="M 1661.0,246.5 L 1811.0,246.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <path d="M 1861.0,246.5 L 1981.0,246.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />
     <path d="M 2031.0,246.5 L 2151.0,246.5" fill="none" stroke="black" stroke-width="4" marker-end="url(#arrow_black)" />

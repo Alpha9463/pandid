@@ -1555,7 +1555,7 @@ class DrawioRenderer:
                page_size: "str | None" = None, border: "str | None" = None,
                connections: "str | None" = None,
                jump_direction: str = "vertical",
-               crossing_style: str = "arc",
+               crossing_style: str = "gap",
                show_stream_table: "bool | str" = False, **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
@@ -2558,7 +2558,7 @@ class DrawioRenderer:
     def _edges(self, fs, arrows: bool, fit: "_Fit", tags: "_Tags",
                direction: str = "vertical",
                joints: "str | None" = None,
-               crossing_style: str = "arc") -> list[str]:
+               crossing_style: str = "gap") -> list[str]:
         """Every stream, as a draw.io edge between the two ports it
         joins.
 

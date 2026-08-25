@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A crossing is now interrupted rather than bridged (#499).**
+  `crossing_style` defaults to `"gap"`, the interruption ISO 10628-1 5.3.4
+  asks for, in place of the semicircular bridge pandid has always drawn.
+  4.1 puts block diagrams, process flow diagrams and P&IDs alike under
+  Clause 5, so the rule does not vary by diagram type and neither does
+  this default.
+
+  The bridge is in no document this project holds and on none of the 393
+  interior crossings across the reference sheets, which disambiguate the
+  other way round: a crossing is bare, and a *junction* carries a mark.
+  It stays available as `crossing_style="arc"` for a house style that
+  wants it, and `"plain"` draws neither.
+
+  Nine of the twenty-one shipped sheets change, which is every sheet that
+  has a crossing to draw; the corpus draws 49 interruptions. Nothing else
+  moves — the break takes the same `2 * HOP_R` of run the arc took, so no
+  crossing that could be marked before goes unmarked now, and the
+  `crossing-unmarked` finding still names the ones that cannot be. The
+  shortest run left beside a break anywhere on the corpus is 6,0 units,
+  1,50 mm, on `21_alumina_refinery`.
+
+  Every signature that takes `crossing_style` now defaults to the one
+  named constant `pandid.render.svg.CROSSING_STYLE_DEFAULT`, and a test
+  fails if any of the eleven drifts from it.
+
 ### Added
 
 - **`diagram="bfd"`: a sheet can say it is a block flow diagram (#410).**

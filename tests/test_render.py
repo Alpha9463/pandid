@@ -379,7 +379,12 @@ def test_a_hop_has_room_for_its_own_arc(drawn, name):
     number exactly the crossings that have the room -- which is the rule
     restated, and would fail if the renderer kept the old bound.
     """
-    fs, svg = drawn[name]
+    fs, _ = drawn[name]
+    # Drawn as arcs on purpose: the rule is about the arc, and the arc is no
+    # longer what a sheet gets by default. The room it needs is the room the
+    # interruption needs -- both take 2 * HOP_R of run -- so holding it here
+    # holds it for either mark, but only the arc can be counted by shape.
+    svg = fs.to_svg(crossing_style="arc")
 
     horizontals, verticals = [], []
     for s in fs.streams:

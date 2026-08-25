@@ -37,7 +37,7 @@ from pathlib import Path
 
 from pandid import __version__, spec, units
 from pandid.flowsheet import Flowsheet
-from pandid.render.svg import CROSSING_STYLES
+from pandid.render.svg import CROSSING_STYLE_DEFAULT, CROSSING_STYLES
 from pandid.render.svg import TABLE_SHEET
 
 EXIT_OK = 0
@@ -327,7 +327,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # shell and the API refuse the same words, and a fourth style added
     # to one is offered by the other without an edit here.
     draw.add_argument(
-        "--crossing-style", choices=CROSSING_STYLES, default="arc",
+        "--crossing-style", choices=CROSSING_STYLES, default=CROSSING_STYLE_DEFAULT,
         help="what that mark is: 'arc' bridges the crossed line, 'gap' "
              "interrupts the marking one (ISO 10628-1 5.3.4) at the cost of "
              "eating the run either side of it, 'plain' draws both lines "

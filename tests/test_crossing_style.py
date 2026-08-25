@@ -3,15 +3,19 @@
 Three conventions, and the documents on disk do not agree between them:
 ISO 10628-1 5.3.4 interrupts one of the two lines, ISO 15519-1 12.5 Figure 31
 draws both straight through, and the semicircular bridge pandid has always
-drawn is in neither. ``crossing_style`` offers all three and keeps the bridge
-as the default, so no drawing already issued changes.
+drawn is in neither. ``crossing_style`` offers all three, and the default is
+the interruption 5.3.4 asks for: 4.1 puts block diagrams, PFDs and P&IDs alike
+under Clause 5, so the rule does not vary by diagram type and the package
+should not either. The bridge stays available for a house style that wants it.
 
 What this file holds, and what it deliberately does not:
 
-* **The default is the drawing that shipped.** Byte equality against the 21
+* **The default is a named constant, not a word.** Byte equality against the 21
   goldens is ``tests/test_golden.py``'s job and is not restated here; what is
   restated is that *naming* the default draws the same bytes as not naming it,
-  on both backends, on every corpus sheet that has a crossing to draw.
+  on both backends, on every corpus sheet that has a crossing to draw. The
+  cases say ``CROSSING_STYLE_DEFAULT`` rather than the word it currently holds,
+  so they keep saying the same thing the next time it changes.
 * **Each style draws its own mark and nothing else.** Measured against the
   same run drawn with nothing crossing it, so ``"plain"`` cannot pass by
   drawing something else that happens not to be an arc.
@@ -49,6 +53,7 @@ from pandid.cli import EXIT_OK, EXIT_USAGE, main
 from pandid.geometry import Route
 from pandid.render.drawio import _JUMP_STYLES, DrawioRenderer
 from pandid.render.svg import (
+    CROSSING_STYLE_DEFAULT,
     CROSSING_STYLES,
     CROSSING_UNMARKED,
     HOP_R,
@@ -215,7 +220,11 @@ def _drawio(fs: Flowsheet, **opts) -> str:
 
 @pytest.mark.parametrize("stem", MARKED, ids=MARKED)
 def test_naming_the_default_draws_what_not_naming_it_draws(stem):
-    """``crossing_style="arc"`` is the drawing that shipped, to the byte.
+    """Naming the default draws what leaving it unnamed draws, to the byte.
+
+    Stated against the constant rather than against a word, so it keeps
+    saying the same thing when the default changes -- as it did when the
+    interruption ISO 10628-1 5.3.4 asks for replaced the arc.
 
     The goldens hold the *bytes*; this holds that the new keyword is a no-op
     at its default, which is the half of "nothing changes" a golden cannot
@@ -228,9 +237,9 @@ def test_naming_the_default_draws_what_not_naming_it_draws(stem):
     """
     fs, kwargs = gallery.flowsheet(stem)
     default = fs.to_svg(**kwargs)
-    assert _marks(default)[0] > 0, f"{stem} has no crossing and proves nothing"
+    assert sum(_marks(default)) > 0, f"{stem} has no crossing and proves nothing"
     fs, kwargs = gallery.flowsheet(stem)
-    assert fs.to_svg(**kwargs, crossing_style="arc") == default
+    assert fs.to_svg(**kwargs, crossing_style=CROSSING_STYLE_DEFAULT) == default
 
     export = {k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS}
     fs, kwargs = gallery.flowsheet(stem)
@@ -239,7 +248,7 @@ def test_naming_the_default_draws_what_not_naming_it_draws(stem):
     assert _jumps(plain_call), f"{stem} exports no jump and proves nothing"
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)
-    assert fs.to_drawio(**export, crossing_style="arc") == plain_call
+    assert fs.to_drawio(**export, crossing_style=CROSSING_STYLE_DEFAULT) == plain_call
 
 
 # --- what each style draws ------------------------------------------------------
@@ -254,7 +263,7 @@ def test_each_style_draws_its_own_mark_and_nothing_else():
     would have had if the other line were not there. So the fixture is built a
     second time straight, and the marking run's ``d`` is held to it.
     """
-    arc = _svg(_pair(ROOMY))
+    arc = _svg(_pair(ROOMY), crossing_style="arc")
     gap = _svg(_pair(ROOMY), crossing_style="gap")
     plain = _svg(_pair(ROOMY), crossing_style="plain")
 
@@ -279,7 +288,7 @@ def test_the_mark_takes_the_same_run_whichever_mark_it_is():
     It is asserted on the coordinates rather than on the constant: the arc's
     two ends and the interruption's two ends are the same four numbers.
     """
-    arc_run = [d for d in _paths(_svg(_pair(ROOMY))) if _ARC in d][0]
+    arc_run = [d for d in _paths(_svg(_pair(ROOMY), crossing_style="arc")) if _ARC in d][0]
     gap_run = [d for d in _paths(_svg(_pair(ROOMY), crossing_style="gap")) if d.count("M ") > 1][0]
     # The point each command ends at, whichever command it is.
     point = re.compile(r"[LMA][^LMA]*?([\d.]+),([\d.]+)")
@@ -452,17 +461,17 @@ def test_every_entry_point_hands_the_word_on(tmp_path, shown):
     """
     svg = tmp_path / "sheet.svg"
     drawio = tmp_path / "sheet.drawio"
-    _pair(ROOMY).render(svg, crossing_style="gap", check=False)
-    assert svg.read_text(encoding="utf-8") == _pair(ROOMY).to_svg(crossing_style="gap", check=False)
+    _pair(ROOMY).render(svg, crossing_style="arc", check=False)
+    assert svg.read_text(encoding="utf-8") == _pair(ROOMY).to_svg(crossing_style="arc", check=False)
     assert svg.read_text(encoding="utf-8") != _pair(ROOMY).to_svg(check=False), (
         "...and the two really are different drawings, or this proves nothing"
     )
-    _pair(ROOMY).render(drawio, crossing_style="gap", check=False)
+    _pair(ROOMY).render(drawio, crossing_style="arc", check=False)
     assert drawio.read_text(encoding="utf-8") == _pair(ROOMY).to_drawio(
-        crossing_style="gap", check=False
+        crossing_style="arc", check=False
     )
-    _pair(ROOMY).show(crossing_style="gap", check=False)
-    assert shown["svg"] == _pair(ROOMY).to_svg(crossing_style="gap", check=False)
+    _pair(ROOMY).show(crossing_style="arc", check=False)
+    assert shown["svg"] == _pair(ROOMY).to_svg(crossing_style="arc", check=False)
 
 
 def test_both_renderers_refuse_it_too():
@@ -632,3 +641,44 @@ def test_the_corpus_leaves_exactly_two_crossings_bare():
         direction = kwargs.get("jump_direction", "vertical")
         for style in ("arc", "gap"):
             assert len(unmarked_crossings(fs, direction, style)) == BARE.get(stem, 0), (stem, style)
+
+
+def test_every_crossing_style_default_is_the_package_default():
+    """One default, in eleven signatures.
+
+    ``crossing_style`` is taken by four public entry points and by the
+    helpers underneath them, and each states its own default because
+    ``pandid.flowsheet`` imports ``pandid.render.svg`` lazily and cannot
+    name the constant at ``def`` time. That is eleven copies of one
+    value, which is exactly how a package ends up drawing one thing from
+    the CLI and another from Python.
+
+    So the copies are checked rather than trusted: every parameter named
+    ``crossing_style`` anywhere in the package must default to
+    :data:`~pandid.render.svg.CROSSING_STYLE_DEFAULT`, and the CLI's
+    ``--crossing-style`` must too.
+    """
+    import inspect
+    import pkgutil
+    import importlib
+
+    import pandid
+    from pandid.render.svg import CROSSING_STYLE_DEFAULT, CROSSING_STYLES
+
+    assert CROSSING_STYLE_DEFAULT in CROSSING_STYLES
+
+    seen = 0
+    for info in pkgutil.walk_packages(pandid.__path__, "pandid."):
+        module = importlib.import_module(info.name)
+        for _, obj in inspect.getmembers(module, inspect.isfunction):
+            if obj.__module__ != info.name:
+                continue
+            parameter = inspect.signature(obj).parameters.get("crossing_style")
+            if parameter is None or parameter.default is inspect.Parameter.empty:
+                continue
+            seen += 1
+            assert parameter.default == CROSSING_STYLE_DEFAULT, (
+                f"{info.name}.{obj.__qualname__} defaults crossing_style to "
+                f"{parameter.default!r}, not {CROSSING_STYLE_DEFAULT!r}"
+            )
+    assert seen, "no crossing_style parameter was found, so nothing was checked"
