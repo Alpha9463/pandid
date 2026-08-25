@@ -3010,7 +3010,7 @@ fs.add_valve_station(
     tag, *, x=None, y=None, mirrored=False, variant="control", number=None,
     isolation=True, reducers=True, bypass=True, drains=2,
     description="", bypass_over=None, tag_scheme=None,
-    gap=30.0, bypass_rise=45.0, drain_drop=36.0,
+    gap=None, bypass_rise=None, drain_drop=None,
     size=None, schedule=None, service=None, sequence=None, spec=None,
     insulation=None,
 ) -> ValveStation
@@ -3085,11 +3085,22 @@ left edge of the drawn assembly and `y` is the run's **centreline**, so each
 device lands on the line whatever its artwork measures. `mirrored=True` pipes
 the run east to west, the same run drawn the other way round, still occupying
 `x` rightwards. `gap`, `bypass_rise` and `drain_drop` are the spacing along the
-run, the height of the bypass leg and the depth of a drain leg. `bypass_over`
-stands the bypass valve over a named member instead of in the middle of its own
-leg, which is what a station wants when a controller's output crosses the leg on
-its way down to the actuator. Give `x` and `y` together or not at all; without
-them the members lay out like any other unit.
+run, the height of the bypass leg and the depth of a drain leg; left unsaid they
+are 30, 45 and 36. `bypass_over` stands the bypass valve over a named member
+instead of in the middle of its own leg, which is what a station wants when a
+controller's output crosses the leg on its way down to the actuator. Give `x`
+and `y` together or not at all; without them the members lay out like any other
+unit.
+
+**Those four describe a run that is drawn, so they need one.** `mirrored`,
+`gap`, `bypass_rise` and `drain_drop` say which way round the run is piped and
+how far apart its devices stand, and an unplaced station has no run: its members
+go to the layout engine one at a time, like everything else on the sheet, and
+the engine ranks and faces them from the graph. Writing one of them without `x`
+and `y` **raises**, naming the word — including `mirrored`, which reads as if it
+might survive but does not. Flipping every member of an unplaced station only
+turns each nozzle away from the neighbour the engine put beside it, and the
+sheet comes back doubling back on itself.
 
 **Line numbers.** The run through the station takes the number of whatever is
 connected to `inlet`, carried through the valves, reducers and tees as any
@@ -3101,8 +3112,11 @@ spec as the run it goes round.
 **Refusals.** A bypass with `isolation=False` raises: a bypass exists so the
 unit keeps running while the control valve is isolated, and there is nothing to
 isolate it with. So does a `drains` that is not 0, 1 or 2, one of `x`/`y`
-without the other, and a `bypass_over` naming a member the station was told to
-leave out.
+without the other, a `bypass_over` naming a member the station was told to
+leave out, and any of `mirrored`/`gap`/`bypass_rise`/`drain_drop` on a station
+with no `x`/`y` to draw a run along. Every one of them is checked before a
+member joins the sheet, so a call that raises has built nothing at all and the
+tag is free to be used again.
 
 ### Anchoring a balloon
 

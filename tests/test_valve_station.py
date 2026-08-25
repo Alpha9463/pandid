@@ -24,8 +24,9 @@ import pytest
 
 from pandid import Flowsheet, spec, units
 from pandid.document import equipment_list
+from pandid.geometry import Frame
 from pandid.portgeom import port_offset, port_point, resolve_size
-from pandid.stations import ValveStation
+from pandid.stations import DEFAULT_GAP, ValveStation
 
 RUN_Y = 400.0
 
@@ -232,6 +233,19 @@ def _nozzle(unit, port):
     return port_point(unit, unit.frame, port)
 
 
+def _box(unit: units.Unit) -> Frame:
+    """The frame layout resolved for *unit*, asserted rather than assumed:
+    a reading taken off a sheet that was never laid out is not a reading."""
+    assert unit.frame is not None
+    return unit.frame
+
+
+def _drawn(station: ValveStation) -> list[tuple[float, float, bool, bool]]:
+    """Where each member ended up and which way round it is: between them,
+    the whole of what a station's placement arguments move."""
+    return [(_box(u).x, _box(u).y, _box(u).mirrored, _box(u).mirror_y) for u in station.members]
+
+
 def test_every_device_on_the_run_lands_on_the_run():
     fs, st = _sheet()
     fs.layout()
@@ -252,6 +266,16 @@ def test_the_run_is_drawn_left_to_right_in_piping_order():
         if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
     ]
     assert xs == sorted(xs)
+
+
+def test_gap_is_edge_to_edge_between_one_device_and_the_next():
+    fs, st = _sheet(gap=50)
+    fs.layout()
+    on_the_run = [
+        u for u in st.members if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
+    ]
+    for before, after in zip(on_the_run, on_the_run[1:]):
+        assert _box(after).x - _box(before).x_max == pytest.approx(50)
 
 
 def test_a_mirrored_station_is_the_same_run_drawn_the_other_way_round():
@@ -367,6 +391,79 @@ def test_a_bypass_over_something_that_is_not_a_member_is_refused():
         fs.add_valve_station("CV-1", x=300, y=RUN_Y, bypass_over="drain")
 
 
+# --- the four words that describe a drawn run (#527) --------------------------
+
+
+#: The four, each with a value that is not its default -- what an author writes
+#: when they mean it. All four are statements about a run that is *drawn*:
+#: which way round it is piped, and the distances along and off its centreline.
+#: An unplaced station has no drawn run, its members reaching the layout engine
+#: one at a time like every other unit on the sheet, and until #527 every one
+#: of the four was accepted there and read by nobody.
+RUN_WORDS = {
+    "mirrored": True,
+    "gap": 50.0,
+    "bypass_rise": 80.0,
+    "drain_drop": 60.0,
+}
+
+
+@pytest.mark.parametrize("word", list(RUN_WORDS))
+def test_a_word_about_the_drawn_run_is_refused_where_there_is_no_run(word):
+    """Refused, and refused *by name*: the author who typed it is told which
+    word could not be kept and what to write instead, rather than handed the
+    sheet they would have got without it."""
+    fs = Flowsheet("unplaced")
+    with pytest.raises(ValueError) as raised:
+        fs.add_valve_station("CV-1", **{word: RUN_WORDS[word]})
+    assert f"{word}=" in str(raised.value)
+    assert "Give x= and y=" in str(raised.value)
+
+
+def test_all_four_together_are_named_in_the_one_refusal():
+    """One reading of the call, not four rounds of trial and error."""
+    fs = Flowsheet("unplaced")
+    with pytest.raises(ValueError) as raised:
+        fs.add_valve_station("CV-1", **RUN_WORDS)
+    assert "mirrored=, gap=, bypass_rise=, drain_drop=" in str(raised.value)
+
+
+@pytest.mark.parametrize("word", list(RUN_WORDS))
+def test_the_same_word_is_taken_the_moment_the_station_has_a_run(word):
+    """The refusal is about the missing run and not about the word, so every
+    one of the four is honoured as soon as x and y draw one -- and each moves
+    the sheet, which is what stops the refusal above from being a way of
+    never reading them at all.
+
+    Both stations are pinned to the same corner, so the only thing that can
+    move one and not the other is the word."""
+    fs = Flowsheet("placed")
+    plain = fs.add_valve_station("CV-1", x=300, y=RUN_Y)
+    stated = fs.add_valve_station("CV-2", x=300, y=RUN_Y, **{word: RUN_WORDS[word]})
+    fs.layout()
+    assert _drawn(stated) != _drawn(plain)
+
+
+def test_a_word_left_unsaid_is_the_default_it_always_was():
+    """What is refused is a *statement* about a run. ``mirrored=False`` asks
+    for the run an unplaced station already draws and is not one; and a
+    distance nobody wrote still takes :mod:`pandid.stations`' default the
+    moment a placement gives it a run to measure. The two halves of moving
+    those defaults out of the signature and into the placement."""
+    fs = Flowsheet("mixed")
+    unplaced = fs.add_valve_station("CV-1", mirrored=False)
+    assert all(u.pin_ is None for u in unplaced.members)
+    placed = fs.add_valve_station("CV-2", x=300, y=RUN_Y)
+    fs.layout()
+    on_the_run = [
+        u
+        for u in placed.members
+        if u not in (placed.bypass, placed.upstream_drain, placed.downstream_drain)
+    ]
+    for before, after in zip(on_the_run, on_the_run[1:]):
+        assert _box(after).x - _box(before).x_max == pytest.approx(DEFAULT_GAP)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -374,12 +471,14 @@ def test_a_bypass_over_something_that_is_not_a_member_is_refused():
         dict(drains=3),
         dict(x=300),
         dict(x=300, y=RUN_Y, reducers=False, bypass_over="reduction"),
+        dict(mirrored=True, gap=50),
     ],
     ids=[
         "bypass_without_isolation",
         "bad_drain_count",
         "x_without_y",
         "bypass_over_a_role_left_out",
+        "a_word_about_a_run_that_is_not_drawn",
     ],
 )
 def test_a_refused_call_leaves_the_sheet_exactly_as_it_was(kwargs):
