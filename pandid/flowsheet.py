@@ -1263,8 +1263,8 @@ class Flowsheet:
         isolation: bool = True, reducers: bool = True, bypass: bool = True,
         drains: int = 2, description: str = "", bypass_over: str | None = None,
         tag_scheme: "str | Callable[[str, str], str] | None" = None,
-        gap: float = DEFAULT_GAP, bypass_rise: float = DEFAULT_BYPASS_RISE,
-        drain_drop: float = DEFAULT_DRAIN_DROP,
+        gap: float | None = None, bypass_rise: float | None = None,
+        drain_drop: float | None = None,
         size: str | float | None = None, schedule: str | float | None = None,
         service: str | float | None = None,
         sequence: str | float | None = None, spec: str | float | None = None,
@@ -1300,7 +1300,10 @@ class Flowsheet:
             x: Left edge of the drawn station; ``y`` is the run's
                 **centreline**, so each device lands on the line
                 whatever its artwork measures. Give both or neither;
-                without them the members lay out like any other units.
+                without them the members lay out like any other units,
+                and the four arguments that describe the drawn run --
+                ``mirrored``, ``gap``, ``bypass_rise``, ``drain_drop``
+                -- have no run to describe and are refused.
             mirrored: Pipe the run east to west. The station still
                 occupies ``x`` rightwards; what reverses is which end
                 the flow enters.
@@ -1325,9 +1328,12 @@ class Flowsheet:
                 onto the actuator.
             tag_scheme: Overrides :attr:`valve_station_tag_scheme` for
                 this station only.
-            gap: Edge to edge between devices along the run.
-            bypass_rise: How far the bypass leg stands off the run.
-            drain_drop: How far a drain leg hangs below it.
+            gap: Edge to edge between devices along the run;
+                :data:`~pandid.stations.DEFAULT_GAP` by default.
+            bypass_rise: How far the bypass leg stands off the run;
+                :data:`~pandid.stations.DEFAULT_BYPASS_RISE` by default.
+            drain_drop: How far a drain leg hangs below it;
+                :data:`~pandid.stations.DEFAULT_DRAIN_DROP` by default.
             size, schedule, service, sequence, spec, insulation: The
                 line number's components, put on the bypass and drain
                 branches. A branch off a tee starts a number of its own,
@@ -1339,8 +1345,10 @@ class Flowsheet:
             ValueError: for a station that cannot mean what it says: a
                 bypass with nothing to bypass around, a drain count that
                 is not 0, 1 or 2, one of ``x``/``y`` without the other,
-                or a ``bypass_over`` naming a member this station was
-                told to leave out.
+                a ``bypass_over`` naming a member this station was told
+                to leave out, or any of ``mirrored``/``gap``/
+                ``bypass_rise``/``drain_drop`` on a station with no
+                ``x``/``y`` to draw a run along.
         """
         from pandid.portgeom import port_offset, resolve_size
         from pandid.stations import (
@@ -1366,6 +1374,44 @@ class Flowsheet:
                 f"{tag}: a station is a run of devices on one line, so it is placed by "
                 f"an x and the run's centreline y together; got "
                 f"x={x!r}, y={y!r}"
+            )
+        # All four of these describe a run that is *drawn*: which way round it
+        # is piped, and the distances along and off its centreline. None of
+        # them survives the loss of x and y, because an unplaced station has
+        # no run at all -- its members reach the layout engine one at a time,
+        # like every other unit on the sheet, and the engine ranks and faces
+        # them from the graph.
+        #
+        # mirrored= is the one that reads as if it might: "pipe the run east
+        # to west" sounds like a fact about the assembly rather than about
+        # where it sits. It is not, and it was measured rather than argued.
+        # Flipping every member of an unplaced station turns each nozzle to
+        # face away from the neighbour the engine put next to it: on a
+        # station spliced between a feed and a product the sheet came back
+        # with every leg doubling back on itself under seven `lines-crowded`
+        # findings. What mirroring reverses is the direction the run is *laid
+        # out* in, and laying the run out is what x and y are for.
+        #
+        # So the four are refused by name, at the door, rather than accepted
+        # and dropped -- which is what they were until #527. The distances
+        # take their defaults from pandid.stations below rather than in the
+        # signature, so that "stated" here means the author wrote one and not
+        # merely that it differs from ours.
+        stated = [
+            f"{name}=" for name, given in (("mirrored", bool(mirrored)),
+                                           ("gap", gap is not None),
+                                           ("bypass_rise", bypass_rise is not None),
+                                           ("drain_drop", drain_drop is not None))
+            if given
+        ]
+        if x is None and stated:
+            named = ", ".join(stated)
+            raise ValueError(
+                f"{tag}: {named} {'is' if len(stated) == 1 else 'are'} about the run a "
+                f"station is drawn along, and this station has no x/y to draw one: "
+                f"without them its members are laid out with every other unit on the "
+                f"sheet, ranked and faced by the layout engine. Give x= and y=, or "
+                f"drop {named}"
             )
         if bypass_over is not None and bypass_over not in BYPASS_ANCHORS:
             raise ValueError(
@@ -1436,6 +1482,12 @@ class Flowsheet:
                    "reduction": red, "expansion": exp, "control": control}
 
         if x is not None and y is not None:
+            # Filled in here rather than in the signature, so that the door
+            # above can tell a distance the author wrote from one they left
+            # to us. Past this point the run exists and every one applies.
+            gap = DEFAULT_GAP if gap is None else gap
+            bypass_rise = DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise
+            drain_drop = DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop
             left: dict[int, float] = {}   # the corner each member was pinned at
             cursor = x
             for unit in (reversed(run) if mirrored else run):

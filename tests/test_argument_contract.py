@@ -87,7 +87,12 @@ a defect. Three shapes of it turn up:
   parameter is there for :meth:`Instrument.repeats` and :meth:`Tee.repeats` to
   read, and both are exercised here.
 * an argument whose **companion is absent**. ``add_valve_station(gap=...)``
-  measures a run that is only laid out when ``x`` and ``y`` are both given.
+  measures a run that is only laid out when ``x`` and ``y`` are both given --
+  the shape this table's four filed entries took, and the shape they left by.
+  #527 refuses ``mirrored``, ``gap``, ``bypass_rise`` and ``drain_drop`` on a
+  station with no coordinates instead of declaring them inert, and that is the
+  answer wherever it is available: a missing companion is a *declaration* only
+  where there is nothing to say back.
 * an argument with **nothing to act on**. ``check=`` refuses a sheet with
   errors; a sheet with none has nothing to refuse. (Rather than declare that
   five times over, the render fixture here carries one deliberate error and
@@ -246,10 +251,11 @@ class Case:
 class Inapplicable:
     """Why an argument can have no effect in one configuration.
 
-    *issue* turns the entry from a statement about the design into a defect
-    that has been filed: ``"#527"``. Both are held to the same test -- the
-    argument really must be inert -- and the only difference is what the
-    failure message says when it stops being true.
+    *issue* turns the entry from a decision that was taken into a defect that
+    has been filed, and is spelled ``issue="#123"``. Both are held to the same
+    test -- the argument really must be inert -- and the only difference is
+    what the failure message says when it stops being true. #527 was the last
+    entry on that footing, and closing it emptied that half of the table.
     """
 
     reason: str
@@ -1320,24 +1326,6 @@ INAPPLICABLE: dict[tuple[str, str], Inapplicable] = {
     ("Unit.composition_defaults", "stated"): Inapplicable(
         "same: one part rules another out only where a class says so, and this base "
         "says nothing. Reactor.composition_defaults reads it."
-    ),
-    # --- filed defects, not design ------------------------------------------
-    ("Flowsheet.add_valve_station[unplaced]", "mirrored"): Inapplicable(
-        "read only inside `if x is not None and y is not None`, so a station with no "
-        "x/y accepts mirrored= and pipes the run the way it always did",
-        issue="#527",
-    ),
-    ("Flowsheet.add_valve_station[unplaced]", "gap"): Inapplicable(
-        "edge-to-edge along a run that is only laid out when x and y are given",
-        issue="#527",
-    ),
-    ("Flowsheet.add_valve_station[unplaced]", "bypass_rise"): Inapplicable(
-        "the bypass leg is only pinned when x and y are given",
-        issue="#527",
-    ),
-    ("Flowsheet.add_valve_station[unplaced]", "drain_drop"): Inapplicable(
-        "the drain leg is only pinned when x and y are given",
-        issue="#527",
     ),
 }
 

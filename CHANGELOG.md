@@ -694,6 +694,39 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- **`add_valve_station()` no longer accepts four words about a run it is
+  not drawing (#527).** `mirrored`, `gap`, `bypass_rise` and `drain_drop`
+  were read only inside `if x is not None and y is not None`, so
+  `add_valve_station("CV-301", mirrored=True, gap=50)` drew, modelled and
+  reported exactly what `add_valve_station("CV-301")` drew. All four are
+  now **refused by name** on a station with no `x`/`y`, the way one of
+  `x`/`y` without the other already is, and the message says what to
+  write instead.
+
+  A refusal rather than a placement, because there is nothing to place
+  against: the four describe a run that is *drawn* -- which way round it
+  is piped, and the distances along and off its centreline -- and an
+  unplaced station has no run at all. Its members reach the layout
+  engine one at a time, like every other unit on the sheet, and the
+  engine ranks and faces them from the graph.
+
+  `mirrored` was the one worth measuring rather than arguing, since
+  "pipe the run east to west" reads like a fact about the assembly.
+  Honouring it was tried: flipping every member of an unplaced station
+  turns each nozzle away from the neighbour the engine put beside it,
+  and a station spliced between a feed and a product came back with
+  every leg doubling back on itself under seven `lines-crowded`
+  findings. What mirroring reverses is the direction the run is laid out
+  in, and laying the run out is what `x` and `y` are for.
+
+  Nothing placed changes: the three distances now default to `None` in
+  the signature and take `DEFAULT_GAP`, `DEFAULT_BYPASS_RISE` and
+  `DEFAULT_DRAIN_DROP` once the run exists, so that a distance the
+  author wrote can be told from one they left to us. No shipped sheet
+  moves. `tests/test_argument_contract.py` drops the four `INAPPLICABLE`
+  declarations that recorded this, and that table now has no filed
+  defect left in it.
+
 - **`validate()` now answers about the sheet that was last rendered
   (#423).** It is diagram-aware -- `stream-table-missing` is silent on a
   P&ID, and `nozzles-crowded` is about arrowheads a P&ID does not draw --
