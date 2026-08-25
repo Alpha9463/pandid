@@ -1919,6 +1919,150 @@ def test_a_stated_sheet_number_is_never_replaced_by_the_default(half, ink, how):
     assert _drawn_sheet(how, half, 0) != _drawn_sheet(how, half, None)
 
 
+# --- ...and it survives the document this package writes for it ---------------
+#
+# The block has two doors: `TitleBlock(...)`, which takes any type and letters
+# `str()` of it, and `Flowsheet.from_dict(...)`, which used to demand quoted
+# text. `to_dict()` writes what the author set, so the two disagreed about a
+# document the package itself had produced -- `fs.title_block.sheet = 0` wrote
+# `{"sheet": 0}` and reading it back raised `title_block.sheet must be text`
+# (#506). Nothing below asserts which of the two answers was picked; they assert
+# that one sheet goes in and the same sheet comes out.
+
+
+#: Spellings of a field's value that are not `str`. Every field of the block is
+#: annotated `str` and nothing enforces it, so all of these reach a cell and are
+#: lettered: `0` and `False` are the falsey ones a truthiness read discarded
+#: (#484), and `None` is what YAML hands the reader for a key written with
+#: nothing after the colon.
+_TYPED = [0, 0.0, False, True, 1, 7, 7.5, None]
+_TYPED_IDS = ["zero", "zero-float", "false", "true", "one", "seven", "float", "none"]
+
+
+def _file(tb: TitleBlock, how: str) -> str:
+    """The whole file one backend writes for a sheet carrying *tb*."""
+    return getattr(_sheet_with(tb), how)(border="zone", page_size="A3")
+
+
+def _through_a_spec(tb: TitleBlock) -> TitleBlock:
+    """The block a sheet carrying *tb* comes back with after being written to a
+    document and read from it -- `from_dict(fs.to_dict())`, both halves of the
+    package's own public round trip with nothing hand-written in between."""
+    read = Flowsheet.from_dict(_sheet_with(tb).to_dict()).title_block
+    assert read is not None, "the document lost the block entirely"
+    return read
+
+
+def _stating(field: str, value: "object | None") -> TitleBlock:
+    """A block stating *value* in *field*, titled so it is not degenerate."""
+    kw: dict = {} if field == "title" else {"title": "Demo"}
+    kw[field] = value
+    return TitleBlock(**kw)
+
+
+def _revising(field: str, value: "object | None") -> Revision:
+    """A revision row stating *value* in *field* and nothing else."""
+    kw: dict = {field: value}
+    return Revision(**kw)
+
+
+@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize("stated", _TYPED, ids=_TYPED_IDS)
+@pytest.mark.parametrize("field", _BLOCK_FIELDS)
+def test_a_typed_field_draws_the_same_sheet_after_a_spec_round_trip(field, stated, how):
+    """`to_dict()` must never write a sheet `from_dict()` refuses, and never one
+    it reads back as a different drawing.
+
+    Whole-file equality on both backends, so it is not only the cell that
+    matches but the strip's depth and everything the sheet is laid out around
+    it -- and the file is the one the package wrote, not a document composed
+    here to be read.
+
+    Swept over the block's own field list, because the constructor's
+    permissiveness is uniform: a fix for the two sheet-count fields would be the
+    same defect with twelve fewer symptoms, and the field list is
+    `dataclasses.fields`, so a field added to the block is a case here the day
+    it is added.
+    """
+    tb = _stating(field, stated)
+    assert _file(_through_a_spec(tb), how) == _file(tb, how)
+
+
+@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize("stated", _TYPED, ids=_TYPED_IDS)
+@pytest.mark.parametrize("field", _REV_FIELDS)
+def test_a_typed_revision_field_draws_the_same_sheet_after_a_spec_round_trip(field, stated, how):
+    """The revision rows go through the same reader and the same writer, and
+    they had a second bug of their own: a row was written out field by field
+    `if getattr(rev, name)`, so revision **0** -- what an as-built sheet issues
+    at -- was dropped from the document by the *writer* and read back as an
+    empty cell. Refusing to read a value says so; discarding it does not."""
+    tb = TitleBlock(title="Demo", revisions=[_revising(field, stated)])
+    assert _file(_through_a_spec(tb), how) == _file(tb, how)
+
+
+@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize("half,ink", [("sheet", "SHEET 0 of 1"), ("of_sheets", "SHEET 1 of 0")])
+def test_a_sheet_number_read_back_from_a_document_is_still_the_stated_one(half, ink, how):
+    """#506's reproduction carried all the way to the ink.
+
+    The sweeps above are equalities between two sheets, so a read that lost the
+    value on *both* sides of one would satisfy them -- and losing a stated value
+    to the field's default is precisely what #484 was about. So the count is
+    asserted literally, on the block that came out of the document: sheet 0 is a
+    sheet number an author can write, and 0 is what a reader of the file sees.
+    """
+    tb = _through_a_spec(_stating(half, 0))
+    assert _cells_drawing(_sheet_with(tb), how, ink)
+
+
+@pytest.mark.parametrize("field", _REV_FIELDS)
+def test_a_revision_field_read_back_from_a_document_is_still_the_stated_one(field):
+    """The same, for the row half: the value is asserted on the object that came
+    out of the file rather than on a sheet compared with another sheet."""
+    tb = _through_a_spec(TitleBlock(title="Demo", revisions=[_revising(field, 0)]))
+    assert getattr(tb.revisions[0], field) == "0"
+
+
+@pytest.mark.parametrize(
+    "stated",
+    ["Ethanol A300", "  spaced  ", "0", "", "  "],
+    ids=["plain", "padded", "digit", "empty", "spaces"],
+)
+@pytest.mark.parametrize("field", _BLOCK_FIELDS)
+def test_a_text_field_comes_back_out_of_a_document_exactly_as_it_went_in(field, stated):
+    """Text is not normalised on the way through a file.
+
+    The strip reads a run of spaces as the blank it means, but it reads it at
+    the *cell*, on the way to lettering it. A document carries what its author
+    typed, so a spec written out and read back is the same spec character for
+    character -- which is also what makes the round trip settle rather than
+    drift a field further every time it is saved.
+    """
+    tb = _stating(field, stated)
+    assert getattr(_through_a_spec(tb), field) == stated
+    fs = _sheet_with(tb)
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
+def test_the_reader_and_the_writer_cover_every_field_the_block_has():
+    """Which fields hold drawn text is derived from the dataclass, not listed:
+    `revisions` is the block's one field that is not a cell and names itself out
+    by having no string default.
+
+    Written-out lists of the others have fallen behind this class before, so
+    what is asserted is that the derivation still covers it -- and it is the
+    same derivation the strip uses to find the default a blank cell draws, so
+    the reader and the sheet cannot come to disagree about which fields are
+    text.
+    """
+    from pandid.document import _drawn_text_fields
+
+    assert _drawn_text_fields(TitleBlock) == set(_BLOCK_FIELDS)
+    assert _drawn_text_fields(Revision) == set(_REV_FIELDS)
+    assert "revisions" not in _drawn_text_fields(TitleBlock)
+
+
 def test_a_whitespace_revision_field_is_the_blank_it_means():
     fs = _sheet()
     fs.title_block = TitleBlock(

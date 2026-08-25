@@ -26,6 +26,7 @@ import string
 import unicodedata
 from typing import Any, Callable, NamedTuple
 
+from pandid.document import _drawn_text
 from pandid.render.escape import escaped
 
 FONT = "sans-serif"
@@ -1427,12 +1428,20 @@ def _field(obj, name: str) -> str:
     and is not the one taken: it would break ``sheet=1``, which reads
     naturally, works today, and has nothing to do with the defect.
 
+    Which of the two doors that is settled is why the reading itself is
+    :func:`pandid.document._drawn_text` and not four words here. The
+    spec reader has to arrive at the same text for the same value or
+    ``from_dict(fs.to_dict())`` draws a different sheet from the one it
+    was handed, and for a while it did not arrive at any text at all --
+    it refused the ``0`` (#506). Strip is this end's alone: a cell
+    letters nothing for a run of spaces, but a *file* keeps what its
+    author typed.
+
     :func:`pandid.document._clean` strips a location reference's parts
     for the reason this strips a drawing field: whitespace at the ends
     of either has nothing it could draw.
     """
-    value = getattr(obj, name, None)
-    return "" if value is None else str(value).strip()
+    return _drawn_text(getattr(obj, name, None)).strip()
 
 
 #: :func:`_class_defaults` per class, since the answer is a property of

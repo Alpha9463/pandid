@@ -727,6 +727,37 @@ class hierarchy, or what it is called.
   declarations that recorded this, and that table now has no filed
   defect left in it.
 
+- **A title block survives the document `to_dict()` writes for it
+  (#506).** `TitleBlock` annotates every field `str` and enforces none of
+  them, so `TitleBlock(sheet=1, of_sheets=3)` is what an engineer types
+  and the strip letters `str()` of whatever it is given. The spec reader
+  demanded quoted text, and `to_dict()` wrote out the value the author
+  set -- so `fs.title_block.sheet = 0` produced a document *this package
+  had just written* and `from_dict()` refused it: `title_block.sheet must
+  be text`. Two doors into one class, each defensible alone, disagreeing
+  about a sheet neither was wrong to make.
+
+  The reader now reads what the constructor takes, through the same one
+  function the strip letters from, so a block that goes out to a file and
+  comes back draws the sheet it drew before it. In a spec that means a
+  count needs no quotes: `sheet: 1` is what you would write, `sheet: 0`
+  is sheet 0, and a key with nothing after it is the blank it looks like.
+  Refusing non-text at both doors was the other consistent answer and is
+  not the one taken -- it would have broken `TitleBlock(sheet=1)`, which
+  reads naturally and has always worked.
+
+  A second bug in the same round trip went with it: a revision row was
+  written out field by field *if the field was truthy*, so a sheet issued
+  at revision **0** -- the rev an as-built carries -- had it dropped from
+  the document by the writer and read back as an empty cell. Both halves
+  now ask whether the author moved the field off its default, which is
+  the question, and the falsey answer to it is a value.
+
+  Which fields hold drawn text is derived from the dataclass rather than
+  listed, so it covers all fourteen of the block's and all six of a
+  revision row's, and covers a field added later on the day it is added.
+  No drawing moved.
+
 - **`validate()` now answers about the sheet that was last rendered
   (#423).** It is diagram-aware -- `stream-table-missing` is silent on a
   P&ID, and `nozzles-crowded` is about arrowheads a P&ID does not draw --
