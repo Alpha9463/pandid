@@ -170,9 +170,10 @@ def test_jump_direction_reaches_the_public_api():
         fs.connect(f2.outlet, p2.inlet).via([(300, 400), (300, 100), (400, 100), (400, 400)])
         return fs
 
-    default = build().to_svg()
-    assert build().to_svg(jump_direction="vertical") == default
-    horizontal = build().to_svg(jump_direction="horizontal")
+    # Arcs on purpose: this counts arcs, and the arc is no longer the default.
+    default = build().to_svg(crossing_style="arc")
+    assert build().to_svg(jump_direction="vertical", crossing_style="arc") == default
+    horizontal = build().to_svg(jump_direction="horizontal", crossing_style="arc")
     assert horizontal != default
     # Read off ``HOP_R`` rather than typed: the radius follows the main-flow
     # rung since #490 (an arc has to clear two half-pens), so a literal here
@@ -185,7 +186,7 @@ def test_jump_direction_reaches_the_public_api():
     fs.layout()
     fs.route()
     fs.renumber_streams()
-    assert SvgRenderer().render(fs, jump_direction="horizontal") == horizontal
+    assert SvgRenderer().render(fs, jump_direction="horizontal", crossing_style="arc") == horizontal
 
 
 def test_render_unknown_extension_raises_valueerror(tmp_path):

@@ -2510,7 +2510,7 @@ class Flowsheet:
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
                jump_direction: str = "vertical",
-               crossing_style: str = "arc", debug: bool | float = False,
+               crossing_style: str = "gap", debug: bool | float = False,
                check: bool = True) -> str:
         """Render to an SVG string, running ``layout()`` and ``route()``
         first if they have not been run yet, or if anything changed
@@ -2634,7 +2634,7 @@ class Flowsheet:
                   page_size: str | None = None, border: str | None = None,
                   connections: str | None = None,
                   jump_direction: str = "vertical",
-                  crossing_style: str = "arc",
+                  crossing_style: str = "gap",
                   show_stream_table: bool | Literal["sheet"] = False, check: bool = True) -> str:
         """Render to a draw.io (``.drawio``) document string, running
         ``layout()`` and ``route()`` first if they have not been run
@@ -2734,7 +2734,7 @@ class Flowsheet:
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
                jump_direction: str = "vertical",
-               crossing_style: str = "arc", debug: bool | float = False,
+               crossing_style: str = "gap", debug: bool | float = False,
                check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
 
@@ -2884,7 +2884,7 @@ class Flowsheet:
              diagram: str | None = None, page_size: str | None = None,
              connections: str | None = None,
              jump_direction: str = "vertical",
-             crossing_style: str = "arc", debug: bool | float = False,
+             crossing_style: str = "gap", debug: bool | float = False,
              check: bool = True) -> None:
         """Render the flowsheet and put it on screen.
 

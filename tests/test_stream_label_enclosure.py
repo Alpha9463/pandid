@@ -768,7 +768,13 @@ def test_the_hop_the_sheet_draws_is_the_hop_the_search_is_told_about():
     since it falls out of the sweep flag and the direction of travel rather
     than out of anything written down in the path.
     """
-    fs, svg = crossing_sheet()
+    fs, _ = crossing_sheet()
+    # Drawn as an arc on purpose. What is under test is that the ink the
+    # search reserves is the ink the sheet lays down, and the arc is the
+    # mark that can be measured by standing off its own axis; the
+    # interruption takes the same run but leaves nothing to measure there.
+    # It stopped being the default when ISO 10628-1 5.3.4's break became one.
+    svg = fs.to_svg(crossing_style="arc")
     hops = stream_hops(fs, "vertical")
     assert len(hops) == 1, "the fixture has to draw exactly one hop"
     hop = hops[0]

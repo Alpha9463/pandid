@@ -198,6 +198,20 @@ HOP_R = _HOP_CLEARANCE + LineWeight.MAIN_FLOW.width
 #: :func:`check_crossing_style`.
 CROSSING_STYLES = ("arc", "gap", "plain")
 
+#: What a crossing is drawn as when the author says nothing.
+#:
+#: ISO 10628-1 5.3.4 asks for an interruption and describes no other mark,
+#: and 4.1 puts every diagram this package draws -- block, PFD and P&ID
+#: alike -- under Clause 5, so the rule does not vary by diagram type.
+#: The arc is a drafting convention this library brought with it and no
+#: document here specifies; it stays available because a house style may
+#: want it, but it is no longer what a sheet gets by default.
+#:
+#: Every signature that takes ``crossing_style`` defaults to this value,
+#: and ``test_every_crossing_style_default_is_the_package_default``
+#: fails if one of them drifts.
+CROSSING_STYLE_DEFAULT = "gap"
+
 # --- stream-label placement -------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on*
 # the pipe where the run leaves pipe showing at each end: the ARROWHEAD
@@ -946,7 +960,7 @@ CROSSING_UNMARKED = "crossing-unmarked"
 
 
 def unmarked_crossings(fs, jump_direction: str = "vertical",
-                       crossing_style: str = "arc") -> list:
+                       crossing_style: str = "gap") -> list:
     """Every crossing of two unconnected runs the sheet draws **bare**.
 
     A crossing is marked by breaking one of the two runs over the other
@@ -1015,7 +1029,7 @@ def unmarked_crossings(fs, jump_direction: str = "vertical",
 
 
 def _crossing_issues(fs, jump_direction: str = "vertical",
-                     crossing_style: str = "arc") -> list:
+                     crossing_style: str = "gap") -> list:
     """:func:`unmarked_crossings`, worded for the reader of the sheet.
 
     The mark is named as the sheet drew it, and the cure has gained a
@@ -3857,7 +3871,7 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
                            page_size: "str | None" = None,
                            connections: "str | None" = None,
                            jump_direction: str = "vertical",
-                           crossing_style: str = "arc",
+                           crossing_style: str = "gap",
                            debug: "bool | float" = False) -> None:
     """Everything a render can refuse about the arguments it was given,
     asked **before the sheet is laid out or routed**.
@@ -3948,7 +3962,7 @@ class SvgRenderer:
         self.registry = registry or default_registry
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
-               crossing_style: str = "arc",
+               crossing_style: str = "gap",
                show_stream_table: "bool | str" = False,
                border: "str | None" = None, diagram: "str | None" = None,
                page_size: "str | None" = None, connections: "str | None" = None,
