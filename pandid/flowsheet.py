@@ -1082,6 +1082,23 @@ class Flowsheet:
         a second copy of every standoff in the package, and a number an
         author has to guess is what issue #439 was raised about.
 
+        ``at`` is the one worth spelling out rather than referring to,
+        because it means two different things and which applies follows
+        from ``measuring``: on a **stream** it is a fraction ``0..1``
+        along the routed path, and on a **unit** it is a face,
+        ``"N"``/``"S"``/``"E"``/``"W"``. It is also the lever that moves
+        a badly drawn loop furthest -- a fifth of a fraction slides the
+        tap the width of a bay, and every line into the balloon follows
+        it -- so an author reading this section is the one who needs it
+        (#467).
+
+        **A member is an ordinary unit and takes an ordinary pin.**
+        ``loop.transmitter.pin(x=..., y=...)`` places the balloon
+        outright, superseding the standoff on the axis it names; the tap
+        stays on the host either way, so the impulse line still leaves
+        the point on the line the bubble reads. A balloon stands in no
+        grid, so ``col``/``row`` on one is reported rather than drawn.
+
         ``variable`` takes the :class:`~pandid.loops.Loop`
         :meth:`add_loop` returned as well as the measured-variable
         letter, and usually has to: the valve is tagged from the loop

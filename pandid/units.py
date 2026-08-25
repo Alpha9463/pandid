@@ -279,6 +279,15 @@ class Unit:
     #: both at this class's own :attr:`LAYOUT_CONFIDENCE`. See
     #: :mod:`pandid.layout.claims`.
     #:
+    #: **Written in the symbol's own frame**, beside the artwork it is
+    #: written against, and turned onto the sheet by
+    #: :func:`~pandid.portgeom.drawn_direction` when it is read -- so a
+    #: unit drawn ``mirrored=True`` states the mirrored arrangement and
+    #: an entry never has to be written twice. Read untransformed it was
+    #: silently wrong the moment a unit was mirrored, and an entry that
+    #: merely restated a face the symbol already fixes was a hazard
+    #: rather than a no-op (#471).
+    #:
     #: An entry of ``None`` is that fallback **declined**: this nozzle's
     #: face is where the pipe attaches and nothing more, and the class
     #: has no view on where its peer is drawn. Which is what a *service*
@@ -789,6 +798,20 @@ class Unit:
         :func:`pandid.portgeom.unit_box`). Pass ``port=None`` to place
         that corner anyway -- which is what a placement read back off a
         resolved :class:`~pandid.geometry.Pin` wants.
+
+        **On an attached** :class:`Instrument` **the coordinates still
+        place the balloon.** A bubble is furniture hung off a tap point
+        and is otherwise positioned from its host (see
+        :mod:`pandid.layout.attach`), but an absolute ``x``/``y``
+        supersedes that standoff on the axis it names, the way an
+        absolute coordinate supersedes a grid rank everywhere else -- so
+        ``pin(x=...)`` alone fixes the column the bubble stands in and
+        leaves the resolver to find it clear air down the page. The tap
+        does not move with it, so the impulse line still leaves the
+        point on the line the balloon reads. What a balloon has no
+        answer for is a *rank*: it stands in no grid, and ``col``/``row``
+        on one is reported by :func:`~pandid.validate.validate` as
+        ``pin-not-honored`` rather than drawn (#467).
 
         Every argument is optional and an omitted one leaves that part
         of the placement as it stands, so a second ``pin(y=...)`` keeps
@@ -4644,7 +4667,10 @@ class Instrument(Unit):
         unit host the reference direction is the face's tangent.
 
         An attached balloon takes no part in the layout ranking: it is
-        placed from its host, not from the process flow order.
+        placed from its host, not from the process flow order -- unless
+        the author placed it outright. An absolute
+        :meth:`~Unit.pin` supersedes the standoff on the axis it names,
+        and the tap stays here either way.
         """
         from pandid.streams import Stream
 

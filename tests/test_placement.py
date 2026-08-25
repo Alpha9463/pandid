@@ -22,11 +22,15 @@ import os
 import random
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 from pandid import Flowsheet, devices as D, units as U
+from pandid.geometry import Pin
 from pandid.layout import claims as claims_mod
 from pandid.layout import solver
+from pandid.portgeom import drawn_direction, port_faces
+from pandid.render.symbols import default_registry
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -281,6 +285,153 @@ def test_a_silent_end_is_not_dropped_because_the_other_spoke() -> None:
 
     claims = claims_mod.read(process_streams(fs))
     assert claims == [claims_mod.Claim(col, valve, 1, -1, 8.0)]
+
+
+def _classes_that_state_a_direction() -> list[type]:
+    """Every ``pandid.units`` class whose ``PLACES`` names a compass point.
+
+    Walked off ``Unit.__subclasses__`` and filtered to the module, exactly as
+    ``tests/test_variants._unit_classes`` does and for the same reason: this
+    file and two others subclass ``Unit`` for fixtures, and pytest has already
+    imported them by the time a sweep runs.
+    """
+    found: dict[type, None] = {}
+    pending = [U.Unit]
+    while pending:
+        cls = pending.pop()
+        if cls in found:
+            continue
+        pending.extend(cls.__subclasses__())
+        if cls.__module__ == U.__name__ and any(entry is not None for entry in cls.PLACES.values()):
+            found[cls] = None
+    return list(found)
+
+
+#: Every placement transform a unit can be drawn under.
+_TRANSFORMS = [
+    Pin(orientation=turn, mirrored=mirror_x, mirror_y=mirror_y)
+    for turn in (0, 90, 180, 270)
+    for mirror_x in (False, True)
+    for mirror_y in (False, True)
+]
+
+
+def _pump_line(*, mirrored: bool) -> tuple[Flowsheet, U.Unit, U.Unit, U.Unit]:
+    """Feed -> pump -> product, with nothing placed but the pump's mirror."""
+    fs = Flowsheet("mirrored pump" if mirrored else "plain pump")
+    feed = fs.add(U.Feed("F"))
+    pump = fs.add(U.Pump("P-1")).pin(mirrored=mirrored)
+    prod = fs.add(U.Product("Pr"))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, prod.inlet)
+    fs.layout()
+    return fs, feed, pump, prod
+
+
+def test_a_places_entry_is_read_as_the_unit_is_drawn() -> None:
+    """A mirror swaps the sides a class states, because it swaps its nozzles.
+
+    ``Pump.PLACES`` puts suction west and discharge east -- written in the
+    symbol's own frame, beside the artwork it describes. Draw the pump
+    ``mirrored=True`` and the artwork puts suction east, so a class still
+    asserting its supply lies west asserts that the peer sits on the side the
+    nozzle has just left, and the run has to cross the body to reach it. The
+    author's mirror was honoured in the ink and discarded in the fit (#471):
+    stated, accepted, and silently not done.
+    """
+    from pandid.layout.stages import process_streams
+
+    fs, feed, pump, prod = _pump_line(mirrored=False)
+    assert claims_mod.read(process_streams(fs)) == [
+        claims_mod.Claim(pump, feed, -1, 0, 2.0),
+        claims_mod.Claim(pump, prod, 1, 0, 2.0),
+    ]
+    assert feed.frame is not None and pump.frame is not None and prod.frame is not None
+    assert feed.frame.x < pump.frame.x < prod.frame.x
+
+    fs, feed, pump, prod = _pump_line(mirrored=True)
+    assert claims_mod.read(process_streams(fs)) == [
+        claims_mod.Claim(pump, feed, 1, 0, 2.0),
+        claims_mod.Claim(pump, prod, -1, 0, 2.0),
+    ], "a mirrored pump draws its supply on the side its suction is drawn on"
+    # And the sheet follows the claim: the train reads right to left, which is
+    # the whole of what mirroring a pump asks for.
+    assert feed.frame is not None and pump.frame is not None and prod.frame is not None
+    assert prod.frame.x < pump.frame.x < feed.frame.x
+
+
+def test_a_diagonal_convention_turns_with_the_unit() -> None:
+    """Not only the faces: the drafting convention itself is in the symbol's frame.
+
+    A column's ``overhead -> "NE"`` is the condenser drawn top *right*, which
+    reads that way because the sheet runs left to right past the tower. Mirror
+    the tower and it does not: the overhead nozzle is still north and the
+    column now reads right to left, so top left is where the same convention
+    puts the condenser.
+    """
+    from pandid.layout.stages import process_streams
+
+    fs = Flowsheet("mirrored column")
+    col = fs.add(U.DistillationColumn("T-1")).pin(mirrored=True)
+    cond = fs.add(D.Condenser("E-1"))
+    fs.connect(col.overhead, cond.shell_in)
+    fs.layout()
+
+    stated = [c for c in claims_mod.read(process_streams(fs)) if c.author is col]
+    assert stated == [claims_mod.Claim(col, cond, -1, -1, 8.0)]
+
+
+def test_an_entry_that_restates_a_fixed_face_says_what_the_artwork_says() -> None:
+    """A redundant entry is a no-op again -- under every transform, which is the point.
+
+    An entry that merely restates the face the symbol already fixes was worse
+    than no entry at all: a no-op on an unmirrored unit and silently wrong on a
+    mirrored one, because the untransformed literal replaced a value that
+    ``fixed_face`` would have flipped. Deleting them was the first fix proposed
+    for #471 and it cannot be done: ``Vessel.PLACES["in"]`` restates the face on
+    the vertical artwork and states a real convention on the horizontal one, so
+    redundancy is a fact about a *variant* and the table is per class.
+
+    Read as drawn, the two rungs of the ladder are the same statement again
+    wherever they were ever the same statement. That is what this sweeps --
+    every class in the library that states a direction, every variant of it
+    registered, every quarter turn and mirror -- so nothing has to be deleted
+    and the next contributor who adds one "for clarity" adds a no-op rather
+    than a hazard.
+    """
+    restated: set[str] = set()
+    for cls in _classes_that_state_a_direction():
+        for variant in default_registry.variants(cls.kind) or ["default"]:
+            # A few shipped variants are deprecated spellings. They are still
+            # registered artwork and still have to answer this, and the notice
+            # they raise is ``tests/test_variants``'s subject rather than
+            # this one's.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                unit = cls("X-1", variant=variant)
+            for key, entry in cls.PLACES.items():
+                if entry is None:
+                    continue
+                stated = entry[0] if isinstance(entry, tuple) else entry
+                for port in unit.ports:
+                    if port != key and claims_mod.family(port) != key:
+                        continue
+                    if port_faces(unit, port) != [stated]:
+                        continue  # a menu, or a face the entry does not restate
+                    restated.add(f"{cls.__name__}.{port}")
+                    for placed in _TRANSFORMS:
+                        assert port_faces(unit, port, placed) == [
+                            drawn_direction(stated, placed)
+                        ], f"{cls.__name__}[{variant}].{port} under {placed}"
+    # Not a sweep that swept nothing: these are the entries #471 names, and
+    # every one of them is in fact restated artwork.
+    assert {
+        "Pump.suction",
+        "Pump.discharge",
+        "Compressor.suction",
+        "Vessel.vent",
+        "Tank.drain",
+    } <= restated
 
 
 def test_a_return_line_states_the_pipe_once() -> None:

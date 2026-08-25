@@ -148,6 +148,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 from pandid.layout.stages import slot
+from pandid.portgeom import COMPASS, drawn_direction
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -181,10 +182,13 @@ RETURN = 0.5
 #: Compass point -> ``(eastward, southward)``, in grid steps. South is
 #: positive: the canvas is y-down and the table is written the way the
 #: drawing reads, not the way the maths would prefer.
-STEPS: dict[str, tuple[int, int]] = {
-    "N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0),
-    "NE": (1, -1), "NW": (-1, -1), "SE": (1, 1), "SW": (-1, 1),
-}
+#:
+#: :data:`pandid.portgeom.COMPASS` itself rather than a copy of it: the
+#: same table says which way a claim steps and which way
+#: :func:`~pandid.portgeom.drawn_direction` turns a direction through a
+#: placement, and a step that disagreed with the transform beside it is
+#: the defect that made the transform necessary.
+STEPS = COMPASS
 
 
 class Claim(NamedTuple):
@@ -287,6 +291,19 @@ def _placed(unit: "Unit", port_name: str) -> tuple[str | None, float]:
     ``PLACES`` is looked up by the port's own name first and then by the
     family name, so ``{"feed": "W"}`` covers a tower with eight of them
     without listing eight keys.
+
+    Both rungs answer **as drawn**. A ``PLACES`` entry is authored in
+    the symbol's own frame -- it is written beside the artwork, against
+    the nozzle it names -- so it is turned and mirrored onto the sheet
+    by :func:`~pandid.portgeom.drawn_direction` exactly as
+    :func:`fixed_face` is by :func:`~pandid.portgeom.port_faces`. Read
+    untransformed, the two rungs disagreed the moment a unit was
+    mirrored: the artwork put the nozzle east and the class went on
+    asserting its peer lay west, so a stated ``mirrored=True`` was
+    honoured in the ink and discarded in the fit (#471). It also made a
+    redundant entry -- one that merely restates the face the symbol
+    already fixes -- a hazard rather than a no-op, which is what #471
+    measured; with the transform they are once again the same statement.
     """
     confidence = float(type(unit).LAYOUT_CONFIDENCE)
     places = type(unit).PLACES
@@ -299,9 +316,8 @@ def _placed(unit: "Unit", port_name: str) -> tuple[str | None, float]:
         entry = places[key]
         if entry is None:
             return None, confidence
-        if isinstance(entry, tuple):
-            return entry[0], float(entry[1])
-        return entry, confidence
+        direction, weight = entry if isinstance(entry, tuple) else (entry, confidence)
+        return drawn_direction(direction, slot(unit)), float(weight)
     if confidence <= 0.0:
         return None, confidence  # nothing to say; do not resolve a face for it
     return fixed_face(unit, port_name, slot(unit)), confidence

@@ -1,6 +1,7 @@
 """Invariants for the intent (Pin) / result (Frame) geometry model."""
 
 import itertools
+from dataclasses import replace
 
 import pytest
 
@@ -531,25 +532,40 @@ def _codes(fs):
 def test_a_placement_the_sheet_did_not_honour_is_reported():
     """The loud half: one check for the whole shape of the defect.
 
-    An attached balloon is positioned from its host and its pin is never
-    read (#467), so it is drawn hundreds of pixels from where it was put and
-    says nothing. That is the same defect as a nozzle walked off its run --
-    a value accepted, quietly altered, and the drawing shipped -- and it is
-    the same finding, because holding the drawing to what was asked for
-    catches the shape rather than the instances.
+    A pinned axis is honoured exactly, so a drawn coordinate that is not
+    the one the author wrote means something moved the unit after the
+    solver read its pin -- and every way that happens happens silently.
+    The check is written to that shape rather than to a cause, which is
+    why it outlived the two causes it was raised for: the balloon whose
+    absolute pin was discarded (#467) and the nozzle walked off its run by
+    a later transform (#294) are both honoured now, and this still holds
+    the drawing to the pin.
+
+    So the mover here is explicit, and it is the finding's own sentence:
+    the sheet is laid out, routed, and *then* the unit is shoved. Nothing
+    re-runs the solve, because a frame is an output and assigning one is
+    not a layout input -- which is exactly the hole a future phase could
+    fall into.
     """
-    fs = Flowsheet("discarded")
+    fs = Flowsheet("moved-after-the-solve")
     feed = fs.add(U.Feed("F"))
     vessel = fs.add(U.Vessel("V-1"))
     prod = fs.add(U.Product("P"))
     fs.connect(feed.outlet, vessel.inlet)
     fs.connect(vessel.outlet, prod.inlet)
-    balloon = fs.add_instrument("LI", 1, sensing=vessel)
-    balloon.pin(x=900.0, y=900.0)
+    vessel.pin(x=300.0, y=300.0)
+    fs.layout()
+    fs.route()
+    assert vessel.frame is not None
+    assert (vessel.frame.x, vessel.frame.y) == (300.0, 300.0)
+    assert "pin-not-honored" not in [i.code for i in fs.validate()]
 
-    assert "pin-not-honored" in _codes(fs)
+    vessel.frame = replace(vessel.frame, x=900.0)
+
     said = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
-    assert any("900" in m and "attach(" in m for m in said), said
+    assert len(said) == 1, said
+    assert "V-1 was pinned x=300 and is drawn at 900, 600 away" in said[0]
+    assert "something moved this unit after the solver read the pin" in said[0]
 
 
 def test_a_grid_pin_the_sheet_did_not_honour_is_reported():
@@ -622,13 +638,14 @@ def test_a_rank_an_absolute_coordinate_supersedes_is_not_reported():
     assert (balloon.frame.col, balloon.frame.row) == (None, None)
 
 
-def test_an_absolute_coordinate_the_sheet_dropped_is_still_reported():
-    """The other side of the exemption: only the *rank* is excused.
+def test_only_the_rank_of_an_attached_balloons_pin_goes_unread():
+    """The other side of the exemption, on the unit that has both halves.
 
-    An attached balloon is positioned from its host, so ``pin(col=7, x=222)``
-    on one is dropped whole. The coordinate that superseded the rank is what
-    the check holds the drawing to, so nothing goes unheld -- exempting the
-    rank must not exempt the pin.
+    ``pin(col=7, x=222, row=2)`` on an attached balloon: the coordinate is
+    honoured (#467), the rank on *that* axis is superseded rather than
+    dropped, and the rank on the axis with no coordinate is the one half a
+    balloon genuinely cannot stand in -- so it is the one thing reported.
+    A grid is what a balloon does not have; an absolute position is not.
     """
     fs = Flowsheet("superseded-attached")
     feed = fs.add(U.Feed("F"))
@@ -636,12 +653,14 @@ def test_an_absolute_coordinate_the_sheet_dropped_is_still_reported():
     prod = fs.add(U.Product("P"))
     fs.connect(feed.outlet, vessel.inlet)
     fs.connect(vessel.outlet, prod.inlet)
-    fs.add_instrument("LI", 1, sensing=vessel).pin(col=7, x=222.0)
+    balloon = fs.add_instrument("LI", 1, sensing=vessel).pin(col=7, x=222.0, row=2)
 
     assert "pin-not-honored" in _codes(fs)
+    assert balloon.frame is not None
+    assert balloon.frame.x == 222.0
     said = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
-    assert [m for m in said if "x=222" in m], said
-    assert not [m for m in said if "col=7" in m], said
+    assert len(said) == 1, said
+    assert "row=2" in said[0] and "pin(x=..., y=...)" in said[0]
 
 
 _MEASURES_NOTHING = "port 'inlet' is the nozzle x or y are measured to, and this pin states neither"

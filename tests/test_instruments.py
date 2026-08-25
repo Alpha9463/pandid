@@ -5,6 +5,7 @@ import math
 import pytest
 
 from pandid import Flowsheet, units as U
+from pandid.portgeom import port_point
 
 
 def _line(**kw):
@@ -527,6 +528,95 @@ def test_a_crowded_sheet_places_the_same_way_every_time():
     first = boxes()
     assert boxes() == first
     assert boxes() == first
+
+
+# --- a balloon the author placed (issue #467) --------------------------------
+
+
+def test_a_pinned_balloon_lands_where_it_was_pinned():
+    """``pin(x=, y=)`` on an attached balloon is a placement, not a suggestion.
+
+    It used to be neither: accepted, dropped, and the bubble drawn wherever
+    the standoff resolver had already put it -- while ``add_control_loop``'s
+    own documentation told authors that every part of a loop "is an ordinary
+    unit or stream: pin it". The docs described a capability the code did not
+    have, which is worse than not having it (#467).
+
+    The tap does not move with the balloon: the anchor is the host's, so the
+    impulse line still leaves the point on the line the bubble reads.
+    """
+    fs, _, inst, _ = _line()
+    assert inst.frame is not None
+    tap = _tap_of(inst)
+    assert (inst.frame.x, inst.frame.y) != (1120.0, 760.0)
+
+    inst.pin(x=1120.0, y=760.0)
+    fs.route()
+
+    assert inst.frame is not None
+    assert (inst.frame.x, inst.frame.y) == (1120.0, 760.0)
+    assert _tap_of(inst) == tap
+    # And the checker is silent about the placement it was told to make: a
+    # sheet that honours the pin and then reports it would be the same defect
+    # wearing the other hat.
+    assert "pin-not-honored" not in [i.code for i in fs.validate()]
+
+
+def test_a_pinned_balloon_is_never_walked_off_what_it_was_put_on():
+    """Honoured exactly, including where the author put it somewhere poor.
+
+    The standoff resolver's whole job is walking a bubble clear of what it
+    landed on, and a balloon it must not move is the one case it may not do
+    that in: moving it would be discarding the placement all over again, with
+    a smaller number. The overlap is reported instead, which is the honest
+    answer -- the drawing is what was asked for and the checker says what is
+    wrong with it.
+    """
+    fs, _, inst, fv = _line()
+    assert fv.frame is not None
+    inst.pin(x=fv.frame.x, y=fv.frame.y)
+    fs.route()
+
+    assert inst.frame is not None
+    assert (inst.frame.x, inst.frame.y) == (fv.frame.x, fv.frame.y)
+    codes = [i.code for i in fs.validate()]
+    assert "unit-overlap" in codes and "pin-not-honored" not in codes
+
+
+def test_one_pinned_axis_leaves_the_other_to_the_standoff():
+    """Per axis, as an absolute coordinate supersedes a grid rank everywhere else.
+
+    An author who wants the bubble in a particular column and does not care
+    how far down the page it hangs says the one they mean, and the resolver
+    still finds clear air on the other axis.
+    """
+    fs, _, inst, _ = _line()
+    assert inst.frame is not None
+    free_x, free_y = inst.frame.x, inst.frame.y
+
+    inst.pin(x=free_x + 240.0)
+    fs.route()
+
+    assert inst.frame is not None
+    assert inst.frame.x == free_x + 240.0
+    assert inst.frame.y == free_y, "the axis nobody stated is still the resolver's"
+
+
+def test_a_balloon_pinned_by_a_nozzle_lands_that_nozzle():
+    """``pin(port=..., y=...)`` puts the *signal terminal* on that elevation.
+
+    The relation, not the corner (#294): a balloon's own box is furniture
+    around a circle, and the point an author lines up with a signal trunk is
+    where the signal leaves it.
+    """
+    fs, _, inst, _ = _line()
+
+    inst.pin(port="pv", x=700.0, y=500.0)
+    fs.route()
+
+    assert inst.frame is not None
+    assert port_point(inst, inst.frame, "pv") == (700.0, 500.0)
+    assert "pin-not-honored" not in [i.code for i in fs.validate()]
 
 
 # --- final control element ---------------------------------------------------

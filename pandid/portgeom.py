@@ -91,6 +91,59 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
     return px, py, sw, sh
 
 
+#: Compass point -> ``(eastward, southward)``, on a y-down canvas where
+#: south is positive.
+#:
+#: One table for the two things this package reads a compass point as:
+#: the grid step :mod:`pandid.layout.claims` fits a sheet to, and the
+#: direction :func:`drawn_direction` turns through a placement. Written
+#: twice they could disagree, and a claim whose step said one thing and
+#: whose transform said another is exactly the shape of defect #471.
+COMPASS: dict[str, tuple[int, int]] = {
+    "N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0),
+    "NE": (1, -1), "NW": (-1, -1), "SE": (1, 1), "SW": (-1, 1),
+}
+
+_POINT = {step: point for point, step in COMPASS.items()}
+
+
+def drawn_direction(direction: str, placed) -> str:
+    """A compass point authored in the symbol's frame, as drawn.
+
+    :func:`symbol_to_box` for a *direction* rather than a point, and
+    composed in the same order for the same reason: mirror first, in the
+    symbol's own frame, then the clockwise quarter turn. So a west
+    nozzle's ``"W"`` on a unit drawn ``mirrored=True`` comes back
+    ``"E"``, and the diagonal a class states for a convention
+    (``"NE"``) turns with the box rather than staying where the class
+    typed it.
+
+    ``placed`` is the placement to answer for -- a
+    :class:`~pandid.geometry.Pin`, :class:`~pandid.geometry.Frame` or
+    the solver's ``_Slot``, as :func:`port_faces` takes it -- and
+    ``None`` is the identity, for a caller with nothing placed yet.
+
+    What this exists for: :attr:`pandid.units.Unit.PLACES` is authored
+    in the symbol's frame, beside the artwork it is written against, and
+    was read onto the sheet untransformed. On a mirrored unit that made
+    the class assert its peer lay on the side the nozzle had just left
+    -- the author's ``mirrored=True`` accepted by the drawing and
+    discarded by the claim (#471).
+    """
+    rot, mirror_x, mirror_y = _xform(placed) if placed is not None else (0, False, False)
+    dx, dy = COMPASS[direction]
+    if mirror_x:
+        dx = -dx
+    if mirror_y:
+        dy = -dy
+    # Clockwise on a y-down canvas, which sends east to south: the same
+    # quarter turn ``symbol_to_box`` applies, taken a quarter at a time
+    # so the two cannot be spelled differently.
+    for _ in range(rot // 90 % 4):
+        dx, dy = -dy, dx
+    return _POINT[(dx, dy)]
+
+
 def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True
             ) -> tuple[float, float, float, float]:
     """Where a symbol's artwork lands inside a ``w`` x ``h`` placed box.
