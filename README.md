@@ -268,14 +268,13 @@ The gates are `pytest`, `ruff check .`, `ruff format --check tests` and
 
 ## Licence and attribution
 
-`pandid` is **free for individuals, for research and teaching, and for small
-companies**, under the [PolyForm Small Business License 1.0.0](https://polyformproject.org/licenses/small-business/1.0.0).
+`pandid` is available for **noncommercial use only** under the
+[PolyForm Strict License 1.0.0](https://polyformproject.org/licenses/strict/1.0.0).
 
-You may use it at no cost if your company has **fewer than 100 people** and
-**under 1,000,000 USD** (2019, inflation adjusted) of revenue in its prior tax
-year. Students, academics, hobbyists and small consultancies are covered. A
-company above either threshold needs a commercial licence. Contact
-`alexandersonxii+pandid@gmail.com`.
+The licence does **not** grant permission to distribute the software, modify it,
+or create new works based on it. Noncommercial research, teaching, study, hobby,
+and similar personal uses are permitted. Contact
+`alexandersonxii+pandid@gmail.com` for a commercial or other separate licence.
 
 This is a source-available licence, not an OSI-approved open-source one, which
 matters if your organisation screens dependencies.

@@ -10,7 +10,7 @@ description = "Generate chemical-engineering P&IDs and process flow diagrams wit
 readme = "README.md"
 requires-python = ">=3.10"
 
-license = "LicenseRef-PolyForm-Small-Business-1.0.0 AND Apache-2.0"
+license = "LicenseRef-PolyForm-Strict-1.0.0 AND Apache-2.0"
 license-files = ["LICENSE", "LICENSE-APACHE", "NOTICE"]
 authors = [{ name = "Alex Anderson" }]
 keywords = ["chemical-engineering", "p&id", "piping-and-instrumentation-diagram",

@@ -498,11 +498,10 @@ and then warnings, and is usually the fastest way to describe what went wrong.
 
 ## Licence
 
-The engine is under the [PolyForm Small Business License
-1.0.0](https://polyformproject.org/licenses/small-business/1.0.0), free for
-individuals, research, teaching and small companies. A commercial licence is
-required above 100 people or 1,000,000 USD revenue. It is source-available
-rather than OSI open source.
+The engine is under the [PolyForm Strict License
+1.0.0](https://polyformproject.org/licenses/strict/1.0.0). It permits
+noncommercial use, but does not permit redistribution, modification, or new
+works. It is source-available rather than OSI open source.
 
 By opening a pull request you agree that your contribution is licensed under
 those same terms, and that the maintainer may also offer it under a commercial

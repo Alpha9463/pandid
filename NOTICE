@@ -5,19 +5,18 @@ This distribution contains material under two different licences. Which one
 applies depends on the file.
 
 
-1. The engine: PolyForm Small Business License 1.0.0
-----------------------------------------------------
+1. The engine: PolyForm Strict License 1.0.0
+----------------------------------------------
 
 Everything in this repository EXCEPT the files listed in section 2 is
 
     Copyright (c) Alex Anderson
-    Licensed under the PolyForm Small Business License 1.0.0
-    See LICENSE, or https://polyformproject.org/licenses/small-business/1.0.0
+    Licensed under the PolyForm Strict License 1.0.0
+    See LICENSE, or https://polyformproject.org/licenses/strict/1.0.0
 
-In short: free to use for individuals, for research and teaching, and for any
-company with fewer than 100 people and under 1,000,000 USD (2019, inflation
-adjusted) of revenue in its prior tax year. A company above either threshold
-needs a separate commercial licence. See the Licensing section of README.md.
+In short: it permits noncommercial use, but does not permit redistribution,
+modification, or new works based on the engine. A separate licence is required
+for any use beyond those terms. See the Licensing section of README.md.
 
 This is a source-available licence, not an OSI-approved open-source licence.
 
