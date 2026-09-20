@@ -1,3 +1,5 @@
+import pytest
+
 from pandid import Flowsheet, devices as D, units as U
 from pandid.layout import _seed_slots
 from pandid.layout.cycles import break_cycles
@@ -911,3 +913,112 @@ def test_pixel_clearance_does_not_move_a_separator_into_a_free_pump():
     feed.pin(y=200)
     a.pin(x=1400, y=375)
     fs.to_svg()
+
+
+@pytest.mark.parametrize("skip", ["s103", "dirty_water"])
+def test_biodiesel_unpin_matches_a_fresh_build_and_keeps_remaining_pins(skip):
+    from _layout_cases import build
+    from pandid.portgeom import pin_intent, port_point
+
+    live, units = build()
+    live.to_svg()
+    units[skip].pin_ = None
+    fresh, _ = build(skip=skip)
+    assert live.to_svg() == fresh.to_svg()
+    assert not [issue for issue in live.validate() if issue.code == "unit-overlap"]
+    for unit in live.units:
+        for axis, (port, value) in pin_intent(unit).items():
+            point = port_point(unit, unit.frame, port) if port else (unit.frame.x, unit.frame.y)
+            assert point[0 if axis == "x" else 1] == pytest.approx(value)
+    positions = [(u.frame.x, u.frame.y) for u in live.units]
+    live.layout()
+    assert [(u.frame.x, u.frame.y) for u in live.units] == positions
+
+
+def test_disconnected_partial_pin_clears_a_fixed_body_on_its_free_axis():
+    fs = Flowsheet("Partial pin clearance")
+    fixed = fs.add(U.Pump("Fixed")).pin(x=50, y=50)
+    free = fs.add(U.Pump("Free")).pin(y=50)
+    fs.to_svg()
+    assert (fixed.frame.x, fixed.frame.y) == (50, 50)
+    assert free.frame.y == 50
+    assert free.frame.x_max <= fixed.frame.x or free.frame.x >= fixed.frame.x_max
+
+
+def test_pin_clearance_uses_drawn_feed_extents_and_transformed_equipment_size():
+    from pandid.portgeom import port_point, unit_box
+
+    fs = Flowsheet("Drawn extent clearance")
+    feed = fs.add(U.Feed("Long feed label that extends far to the left")).pin(x=300, y=100)
+    pump = fs.add(U.Pump("Rotated", width=140, height=90)).pin(y=75, orientation=90, mirrored="x")
+    fs.to_svg()
+    assert port_point(feed, feed.frame, "outlet") == (300, 100)
+    assert (pump.frame.y, pump.frame.w, pump.frame.h) == (75, 140, 90)
+    left, right = unit_box(feed, feed.frame), unit_box(pump, pump.frame)
+    assert right[2] <= left[0] or right[0] >= left[2]
+
+
+def test_straightening_preserves_explicit_grid_row_order():
+    fs = Flowsheet("Explicit row order")
+    source = fs.add(U.Feed("Source")).pin(col=0, row=2)
+    top = fs.add(U.Pump("Top")).pin(col=1, row=0)
+    middle = fs.add(U.Pump("Middle")).pin(col=2, row=1)
+    fs.connect(source.outlet, top.suction)
+    fs.to_svg()
+    assert (top.frame.row, middle.frame.row, source.frame.row) == (0, 1, 2)
+    assert top.frame.y_max <= middle.frame.y < middle.frame.y_max <= source.frame.y
+
+
+def test_collision_repair_preserves_explicit_grid_row_order():
+    fs = Flowsheet("Clearance within explicit rows")
+    obstacle = fs.add(U.Pump("Fixed", height=540)).pin(x=50, y=0)
+    top = fs.add(U.Pump("Top")).pin(x=50, row=3)
+    bottom = fs.add(U.Pump("Bottom")).pin(x=50, row=4)
+    fs.to_svg()
+    assert (obstacle.frame.x, obstacle.frame.y) == (50, 0)
+    assert (top.frame.x, bottom.frame.x) == (50, 50)
+    assert (top.frame.row, bottom.frame.row) == (3, 4)
+    assert top.frame.y_max <= bottom.frame.y
+
+
+def test_collision_repair_keeps_an_attached_instrument_clear_with_its_host():
+    fs = Flowsheet("Instrument clearance")
+    fixed = fs.add(U.Pump("Fixed", width=1500, height=400)).pin(x=0, y=50)
+    host = fs.add(U.Pump("Host", width=100, height=100)).pin(x=550)
+    fs.connect(fixed.discharge, host.suction)
+    fs.add_instrument("LT", 1, sensing=host, at="S", offset=40)
+    fs.to_svg()
+    assert (fixed.frame.x, fixed.frame.y) == (0, 50)
+    assert host.frame.x == 550
+    assert not [issue for issue in fs.validate() if issue.code == "unit-overlap"]
+
+
+def test_collision_repair_can_make_room_between_free_grid_rows():
+    fs = Flowsheet("Make room between rows")
+    upper = fs.add(U.Pump("Upper")).pin(row=0, x=500)
+    middle = fs.add(U.Pump("Middle")).pin(row=1, x=50)
+    lower = fs.add(U.Pump("Lower")).pin(row=2, x=500)
+    fixed = fs.add(U.Pump("Fixed", height=100)).pin(x=50, y=150)
+    fs.to_svg()
+    assert (upper.frame.x, middle.frame.x, lower.frame.x) == (500, 50, 500)
+    assert (fixed.frame.x, fixed.frame.y) == (50, 150)
+    assert upper.frame.y_max <= middle.frame.y < middle.frame.y_max <= lower.frame.y
+    positions = [(u.frame.x, u.frame.y) for u in fs.units]
+    fs.layout()
+    assert [(u.frame.x, u.frame.y) for u in fs.units] == positions
+
+
+def test_collision_repair_can_make_room_for_two_units_in_one_grid_column():
+    fs = Flowsheet("Make room within a column")
+    left = fs.add(U.Pump("Left", width=100)).pin(col=0, y=150)
+    right = fs.add(U.Pump("Right")).pin(col=2, row=0)
+    fixed = fs.add(U.Pump("Fixed", width=50)).pin(x=100, y=50)
+    a = fs.add(U.Pump("A", width=50)).pin(col=1, y=50)
+    b = fs.add(U.Pump("B", width=70, height=50)).pin(col=1, y=50)
+    fs.to_svg()
+    assert (fixed.frame.x, fixed.frame.y) == (100, 50)
+    assert (left.frame.y, a.frame.y, b.frame.y) == (150, 50, 50)
+    assert left.frame.x_max <= min(a.frame.x, b.frame.x)
+    assert max(a.frame.x_max, b.frame.x_max) <= right.frame.x
+    assert a.frame.x_max <= b.frame.x or b.frame.x_max <= a.frame.x
+    assert fixed.frame.x_max < min(a.frame.x, b.frame.x)

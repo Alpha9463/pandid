@@ -108,7 +108,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
 
     _straighten(fs, units, band_of, pads)
     if moved:
-        clear_pins(units, moved, STACK_CLEAR)
+        clear_pins(units, moved, STACK_CLEAR, pads)
     for u in units:
         s = slot(u)
         u.frame = Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h,
@@ -415,6 +415,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
     at the wrong height.
     """
     from pandid.layout import claims as claims_mod
+    from pandid.layout.pixel import grid_limits, occupied_box
     from pandid.layout.stages import process_streams
     from pandid.portgeom import resolve_port
 
@@ -446,6 +447,9 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         if src is not dst:
             touching[src].append((st.source, dst, st.dest))
 
+    boxes = {u: occupied_box(u, pads) for u in units}
+    pixel_pins = not _wrappable(fs, units)
+
     def overlaps(u: "Unit", new_y: float, moving: set["Unit"]) -> bool:
         """Would ``u`` at ``new_y`` land on a neighbour, or on its halo?
 
@@ -455,11 +459,17 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         it out here is how a bubble comes to be drawn over the boundary
         flag beside its own orifice plate.
         """
+        lower, upper = grid_limits(u, "y", boxes, moving=moving)
+        if not lower <= new_y <= upper:
+            return True
         s, pad = slot(u), pads.get(u, Pad())
         top, bottom = new_y - pad.north, new_y + s.h + pad.south
-        for other in by_col[s.col]:
+        for other in units if pixel_pins else by_col[s.col]:
             o, o_pad = slot(other), pads.get(other, Pad())
             if other is u or other in moving or o.y is None:
+                continue
+            if pixel_pins and (boxes[u][2] <= boxes[other][0]
+                               or boxes[u][0] >= boxes[other][2]):
                 continue
             if not (bottom <= o.y - o_pad.north or top >= o.y + o.h + o_pad.south):
                 return True
@@ -503,11 +513,14 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
             continue
         for v in group:
             slot(v).y = (slot(v).y or 0.0) + shift
+            boxes[v] = occupied_box(v, pads)
         settled.update(group)
 
     for u, new_x in _stack_offsets(fs, units, band_of):
-        if not _overlaps_x(u, new_x, units):
+        lower, upper = grid_limits(u, "x", boxes)
+        if lower <= new_x <= upper and not _overlaps_x(u, new_x, units):
             slot(u).x = new_x
+            boxes[u] = occupied_box(u, pads)
 
 
 def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
