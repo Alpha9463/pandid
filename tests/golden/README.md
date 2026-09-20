@@ -74,29 +74,16 @@ it is what holds a closed circuit — and a stream table wider than any standard
 page — to a drawing rather than to an arithmetic claim. It states its own
 title-block date, so nothing here is pinned.
 
-The flowsheets are rebuilt inline in `test_golden.py` rather than by running
-`examples/*.py` directly: those scripts write into `examples/` (a side
-effect a test suite shouldn't have) and `03`'s and `08`'s `TitleBlock`s leave
-`date` empty, which `SvgRenderer` fills in with `datetime.now()`. The fixture
-sets an explicit fixed date instead, per the "prefer a fixture over regexing
-it out" rule for anything that varies run to run. It sets the date the sheet's
-own newest revision states — the date it was issued at, and the value
-`scripts/gallery.py` stamps into that same blank field — so the two committed
-artefacts made from those examples date them alike rather than one cell apart.
-`10` and `11` state their own dates, so those two need no pinning.
+The flowsheets come directly from `examples/*.py`, captured through
+`scripts/gallery.py` without writing output files. The capture preserves render
+options and stamps blank title-block dates from the latest revision.
+`tests/_render_cases.py` supplies fresh example models to the geometry tests.
 
-Each golden is nevertheless compared against **both** copies. A rebuilt fixture
-is a copy, and a copy drifts: #230 corrected real people's initials in
-`examples/13_mineral_dewatering.py` and this golden went on reading the old
-ones, because the golden is built from the fixture and nothing asserted the two
-agreed. `test_the_example_draws_the_same_sheet_as_its_fixture` closes that — it
-imports each example with `Flowsheet.render` replaced (reusing the capture in
-`scripts/gallery.py`, so nothing is written anywhere), renders what the example
-was about to draw, and compares it against this same file. If it fails, one of
-the two copies is wrong: fix that one, and do not regenerate the golden until
-they agree. Every field is taken from the example; there is none it excepts.
+`test_golden_svg` compares each fresh example render against its golden once.
+The gallery tests compare the committed `docs/gallery/*.svg` files against these
+same goldens, and separately check PNG dimensions, completeness and README links.
 
-Comparisons run on *normalized* text (see `_normalize` in `test_golden.py`),
+Comparisons run on *normalized* text (see `normalize` in `tests/_svg_compare.py`),
 which canonicalizes two things and leaves every other line to compare verbatim,
 so a real rendering regression still fails the test.
 
@@ -110,7 +97,7 @@ included. Left alone, bumping `pandid.__version__` would rewrite all twenty-one
 fixtures for a reason that is about none of the drawings, and cutting a release
 would be a diff of every artefact in the repository. The renderer therefore
 fences the block between `<!-- pandid:provenance -->` and
-`<!-- /pandid:provenance -->`, and `_normalize` drops what lies between them — a
+`<!-- /pandid:provenance -->`, and `normalize` drops what lies between them — a
 slice between two known lines, not a version pattern hunted across the document.
 That is why the committed fixtures show the two fence comments with nothing in
 between: they are stored normalized, so `git grep` finds no version number here.

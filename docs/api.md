@@ -2909,8 +2909,7 @@ loop = fs.add_control_loop("F", 101, measuring=feed, acting_on=fv)
 which builds exactly what the long-hand builds — `add_loop`, two
 `add_instrument` calls and two `connect` calls — and nothing else.
 `examples/04_control_loop.py` draws its level loop this way and
-`tests/test_golden.py` draws the same sheet the long way, so the two are held
-to one golden.
+`tests/test_loops.py` compares the helper and long-hand renderings directly.
 
 - **It takes the final element; it does not make one.** A control valve stands
   in a line between two pieces of piping you drew, so `acting_on` is required.

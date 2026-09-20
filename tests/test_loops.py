@@ -704,15 +704,7 @@ def test_a_feedback_loop_is_one_statement():
 
 @pytest.mark.parametrize("placement", _PLACEMENTS, ids=["defaults", "stated"])
 def test_the_helper_draws_what_the_long_hand_draws(placement):
-    """The whole of the claim: identical sheets, to the last character.
-
-    Built twice on one process from two spellings and rendered, so this covers
-    the tags, both balloon frames, both signal routes and every mark either
-    spelling puts on the paper. ``examples/04_control_loop.py`` makes the same
-    comparison against a committed golden; this one is the API's own, and the
-    one that runs with no placement stated at all -- which is where a hidden
-    default inside the helper would show up as a moved balloon.
-    """
+    """The helper and long-hand calls render identical tags, frames and routes."""
     long_hand, drum, lv = _feedback_sheet()
     loop = long_hand.add_loop("L", 101)
     lt = long_hand.add_instrument(

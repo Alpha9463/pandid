@@ -30,20 +30,11 @@ stubbed, catching the flowsheet and the keyword arguments it was about to be
 drawn with, and renders it here under the example's own stem. Nothing is written
 into ``examples/`` and there is no mapping to get wrong.
 
-**It stamps a date that does not churn.** ``03`` and ``08`` leave
-``TitleBlock.date`` blank, which the renderer fills in with today's, so
-regenerating them moved the date and nothing else -- a daily diff on a
-committed artefact and a freshness check that could never compare exactly.
-:func:`_stamp` fills that field, before the render, with the newest revision's
-date: the date the sheet was in fact issued at, taken from the sheet's own
-revision history rather than from a constant kept in step by hand.
-``tests/test_golden.py`` pins the same field, to the same value, so the golden
-and the gallery sheet made from one example are the same drawing rather than two
-that differ in one cell;
-``test_no_fixture_dates_a_sheet_differently_from_the_generator`` holds them to
-it. Only a *blank* field is filled: a date the author stated is theirs, and
-replacing it would ship a drawing dated a day nobody typed
-(``test_the_generator_leaves_a_date_the_sheet_states_alone``).
+**It stamps blank dates from revision history.** :func:`_stamp` fills a blank
+``TitleBlock.date`` with the newest revision's date before rendering. Golden
+tests and the gallery use this same captured flowsheet. Explicit dates are
+preserved, as checked by
+``test_the_generator_leaves_a_date_the_sheet_states_alone``.
 """
 
 import argparse

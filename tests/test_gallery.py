@@ -1,82 +1,24 @@
-"""``docs/gallery/``: the committed sheets, against the examples they came from.
+"""Check committed gallery SVGs against goldens and validate gallery assets."""
 
-The gallery is generated -- twenty-one examples rendered to SVG and rasterised to
-PNG by ``scripts/gallery.py`` -- and until this file existed nothing held it to
-its source. It drifted, and drifted invisibly: ``04_control_loop.svg`` sat on
-``main`` through a dozen rendering PRs showing a sheet 526 px tall with an
-instrument panel on it and no LT-101, which was a drawing the package had
-stopped producing. Every one of those PRs was individually right to say "a
-re-rasterise is coming"; what was missing was anything that noticed it had not.
-
-That is the same gap ``_vendored_symbols.py`` had before #150 and ``docs/api.md``
-had before #179, and this is the same answer: regenerate and compare.
-
-**Why the whole gallery, on every push.** Rendering all twenty-one sheets costs
-about 5 s, four fifths of it example 11 and most of the rest example 14 --
-measured, not assumed. That is small
-enough that the two cheaper designs both cost more than they save. Checking only
-the sheets whose example changed would have let this very drift through, since
-the change that stales a sheet is often in ``pandid/`` rather than in the
-example; and it needs a diff base, which a shallow CI clone does not reliably
-have. Leaving it to a scheduled job means finding out after the merge.
-
-**Why the SVG is compared exactly and the PNG is not.** The SVG is deterministic:
-given the same code it is the same text, once ``<defs>`` ordering is
-canonicalised (:func:`gallery.normalize`, the rule ``tests/test_golden.py``
-applies for the same reason). A PNG is a raster, and its bytes come out of
-whichever PDFium build and font substitution the machine that made it had, so
-comparing them across a five-interpreter Linux matrix against a file made on one
-developer's machine would be a flake and not a check. What is checked about the
-raster is the part that is platform-independent and is exactly what goes stale
-when a drawing changes shape: it exists, it is the width the gallery declares,
-and it is the shape of the sheet beside it. A drawing that changed *within* the
-same outline is caught by the SVG comparison, which fails first and sends the
-author back to the one command that rewrites both.
-"""
-
-import importlib.util
 import pathlib
 import struct
 
 import pytest
 
+from _render_cases import gallery
+from _svg_compare import normalize
 from pandid import Flowsheet
 from pandid.document import Revision, TitleBlock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GALLERY = ROOT / "docs" / "gallery"
+GOLDEN = ROOT / "tests" / "golden"
 EXAMPLES = ROOT / "examples"
 
 
-def _generator():
-    """Import ``scripts/gallery.py`` by path.
-
-    A dev-only script rather than part of the package, exactly as
-    ``scripts/vendor_symbols.py`` and ``scripts/gen_devices.py`` are, and this is
-    the loader ``tests/test_devices.py`` uses for those.
-    """
-    path = ROOT / "scripts" / "gallery.py"
-    module_spec = importlib.util.spec_from_file_location("_pandid_script_gallery", path)
-    module = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(module)
-    return module
-
-
-gallery = _generator()
 SHEETS = gallery.sheets()
 
 REGENERATE = "    python scripts/gallery.py\n"
-
-
-@pytest.fixture(scope="module")
-def rendered():
-    """Every example rendered once, keyed by sheet name.
-
-    Module-scoped because the corpus is the expensive part of this file and
-    every test below wants all of it: rendered per-test it would be twenty
-    renders a test rather than twenty in total.
-    """
-    return {stem: gallery.render(stem) for stem in SHEETS}
 
 
 def _png_size(data: bytes) -> tuple[int, int]:
@@ -93,36 +35,36 @@ def _png_size(data: bytes) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------
-# The committed sheets, against a fresh render of the examples
+# The committed gallery sheets, against the canonical goldens
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_the_committed_sheet_is_what_the_example_draws_today(rendered, stem):
-    """A gallery that has drifted shows a reader a drawing nobody can produce."""
+def test_the_committed_sheet_matches_its_golden(stem):
+    """The gallery and its canonical golden contain the same drawing."""
     path = GALLERY / f"{stem}.svg"
     if not path.exists():
         pytest.fail(f"docs/gallery/{stem}.svg is missing. Run\n\n{REGENERATE}", pytrace=False)
-    committed = gallery.normalize(path.read_text(encoding="utf-8"))
-    fresh = rendered[stem]
-    if committed != fresh:
+    committed = normalize(path.read_text(encoding="utf-8"))
+    golden = normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8"))
+    if committed != golden:
         pytest.fail(
-            f"docs/gallery/{stem}.svg is not what examples/{stem}.py draws today.\n"
+            f"docs/gallery/{stem}.svg does not match tests/golden/{stem}.svg.\n"
             f"The gallery is generated; regenerate it with\n\n{REGENERATE}\n"
-            "and commit the result with the change that moved it.\n\n" + _diff(committed, fresh),
+            "and commit the result with the change that moved it.\n\n" + _diff(committed, golden),
             pytrace=False,
         )
 
 
-def _diff(committed: str, fresh: str, context: int = 2) -> str:
+def _diff(committed: str, golden: str, context: int = 2) -> str:
     """First divergence with a little context -- not a 70 KB dump."""
-    old, new = committed.split("\n"), fresh.split("\n")
+    old, new = committed.split("\n"), golden.split("\n")
     total = max(len(old), len(new))
     row = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
     out = [f"first divergence at line {row + 1} of {total}:"]
     for k in range(max(0, row - context), min(total, row + context + 1)):
         mark = ">>" if k == row else "  "
-        for label, lines in (("committed", old), ("rendered ", new)):
+        for label, lines in (("committed", old), ("golden   ", new)):
             out.append(f"{mark} [{k + 1}] {label}: {lines[k] if k < len(lines) else '<no line>'}")
     return "\n".join(out)
 
@@ -371,17 +313,12 @@ def test_an_example_shows_the_drawio_export():
 
 
 @pytest.mark.parametrize("stem", _exporters(), ids=_exporters())
-def test_the_export_is_not_counted_as_a_second_sheet(rendered, stem):
-    """:func:`gallery.flowsheet` refuses an example that draws two sheets, and an
-    example that exports calls ``render()`` twice. What the second call writes is
-    the same drawing in a second format, so it is passed over and the count goes
-    on meaning what it says for a file that really does draw two.
-
-    The ``rendered`` fixture is the check: it runs ``flowsheet(stem)``, which
-    raises ``SystemExit`` if the ``.drawio`` write is counted as a sheet."""
+def test_the_export_is_not_counted_as_a_second_sheet(stem):
+    """Capture one flowsheet when an example also exports it to draw.io."""
     source = (EXAMPLES / f"{stem}.py").read_text(encoding="utf-8")
     assert source.count(".render(") >= 2, "an exporting example writes its sheet as well"
-    assert rendered[stem], "and the generator still gets exactly one sheet out of it"
+    fs, _kwargs = gallery.flowsheet(stem)
+    assert isinstance(fs, Flowsheet)
 
 
 # ---------------------------------------------------------------------------
