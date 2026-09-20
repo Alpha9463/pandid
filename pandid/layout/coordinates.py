@@ -23,6 +23,7 @@ faces, since a label dodges the faces the nozzles actually leave from.
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from pandid.layout.halo import Pad
@@ -30,6 +31,7 @@ from pandid.layout.stages import slot
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.geometry import _Slot
     from pandid.units import Unit
 
 #: Clear paper between one column of boxes and the next, which is where
@@ -79,6 +81,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     """Map every process unit's ``(column, row)`` to pixels."""
     from pandid.geometry import Frame
     from pandid.layout.halo import balloon_pads
+    from pandid.layout.pixel import clear_pins, refine
     from pandid.layout.stages import process_units
 
     units = process_units(fs)
@@ -93,7 +96,19 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     for index, group in enumerate(bands):
         cursor = _lay_band(columns, group, cursor, pads, anchored=not index)
 
+    moved: dict[str, list["Unit"]] = {}
+    if not _wrappable(fs, units):
+        nominal = {u: replace(slot(u), x=None, y=None) for u in units}
+        cursor = float(MARGIN_Y)
+        for index, group in enumerate(bands):
+            cursor = _lay_band(columns, group, cursor, pads, anchored=not index,
+                               positions=nominal)
+        reference = {u: (s.x or 0.0, s.y or 0.0) for u, s in nominal.items()}
+        moved = refine(fs, units, reference)
+
     _straighten(fs, units, band_of, pads)
+    if moved:
+        clear_pins(units, moved, STACK_CLEAR)
     for u in units:
         s = slot(u)
         u.frame = Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h,
@@ -256,7 +271,8 @@ def _refill(order: list[int], bands: list[list[int]]) -> list[list[int]]:
 
 
 def _lay_columns(columns: dict[int, _Column], band: list[int],
-                 pads: dict["Unit", Pad], place: bool = False) -> float:
+                 pads: dict["Unit", Pad], place: bool = False,
+                 positions: dict["Unit", "_Slot"] | None = None) -> float:
     """How wide this run of columns comes out, and optionally place it.
 
     The balloon demand is settled **per row**, the way the rows settle
@@ -271,41 +287,44 @@ def _lay_columns(columns: dict[int, _Column], band: list[int],
     # column starts on the margin, and a boundary flag whose pennant
     # reaches back past its own origin reaches into the margin rather
     # than pushing the whole sheet right.
+    position = slot if positions is None else positions.__getitem__
     wall: dict[int, float] = {}
     cursor = float(MARGIN_X)
     for column in band:
         held = columns[column]
         x = cursor
         for u in held.units:
-            behind = wall.get(slot(u).row or 0)
+            behind = wall.get(position(u).row or 0)
             if behind is not None:
                 x = max(x, behind + _west(u, pads))
         if place:
             for u in held.units:
-                if slot(u).x is None:
-                    slot(u).x = x
+                if position(u).x is None:
+                    position(u).x = x
         cursor = x + held.body + COL_GAP
         for u in held.units:
-            row = slot(u).row or 0
+            row = position(u).row or 0
             wall[row] = max(wall.get(row, 0.0),
-                            x + slot(u).w + pads.get(u, Pad()).east)
+                            x + position(u).w + pads.get(u, Pad()).east)
     return max([cursor - COL_GAP, *wall.values()], default=cursor) - MARGIN_X
 
 
 def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
-              pads: dict["Unit", Pad], anchored: bool) -> float:
+              pads: dict["Unit", Pad], anchored: bool,
+              positions: dict["Unit", "_Slot"] | None = None) -> float:
     """Place one band's units and return where the next band starts."""
+    position = slot if positions is None else positions.__getitem__
     members = [u for c in band for u in columns[c].units]
     if not members:
         return top
 
-    _lay_columns(columns, band, pads, place=True)
+    _lay_columns(columns, band, pads, place=True, positions=positions)
 
     # Bands are built for every row the sheet names between the band's
     # own first and last, and a pin can name one above row 0:
     # ``pin(row=-1)`` is the band over it, which is where a header
     # belongs. An empty row keeps a default height, so a run has a lane.
-    banded = [slot(u).row or 0 for u in members if slot(u).y is None]
+    banded = [position(u).row or 0 for u in members if position(u).y is None]
     if not banded:
         return top
     # Row 0 anchors the top margin of the *first* band where nothing
@@ -318,10 +337,10 @@ def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
     body = dict.fromkeys(rows, 50.0)  # the tallest box in the row
     holds: dict[int, list["Unit"]] = {r: [] for r in rows}
     for u in members:
-        if slot(u).y is None:
-            row = slot(u).row or 0
+        if position(u).y is None:
+            row = position(u).row or 0
             holds[row].append(u)
-            body[row] = max(body[row], slot(u).h)
+            body[row] = max(body[row], position(u).h)
 
     # The balloon demand is settled **per column**, not per row. A chain
     # of bubbles standing 200 units over an orifice plate in column 3
@@ -340,17 +359,17 @@ def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
         here = cursor_y + body[row] / 2.0
         for u in holds[row]:
             pad = pads.get(u, Pad())
-            here = max(here, floor.get(slot(u).col or 0, top)
-                       + pad.north + slot(u).h / 2.0)
+            here = max(here, floor.get(position(u).col or 0, top)
+                       + pad.north + position(u).h / 2.0)
         axis[row] = here
         cursor_y = here - body[row] / 2.0
         for u in holds[row]:
-            col, pad = slot(u).col or 0, pads.get(u, Pad())
+            col, pad = position(u).col or 0, pads.get(u, Pad())
             floor[col] = max(floor.get(col, top),
-                             here + slot(u).h / 2.0 + pad.south)
+                             here + position(u).h / 2.0 + pad.south)
     for u in members:
-        if slot(u).y is None:
-            slot(u).y = axis[slot(u).row or 0] - slot(u).h / 2.0
+        if position(u).y is None:
+            position(u).y = axis[position(u).row or 0] - position(u).h / 2.0
     return max([cursor_y + body[rows[-1]], *floor.values()], default=top) + BAND_GAP
 
 

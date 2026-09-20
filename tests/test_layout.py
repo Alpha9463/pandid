@@ -768,3 +768,146 @@ def test_a_ribbon_that_fits_the_paper_is_left_alone():
     fs.layout()
     frames = [u.frame for u in fs.units if u.frame is not None]
     assert len({round(f.cy) for f in frames}) == 1
+
+
+def _pixel_anchored_pump(dx=0, dy=0, vertical=False):
+    fs = Flowsheet("Pixel anchors")
+    feed = fs.add(U.Feed("Feed"))
+    pump = fs.add(U.Pump("P-1"))
+    product = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, product.inlet)
+    if vertical:
+        pump.pin(orientation=90)
+        feed.pin(x=400 + dx, y=100 + dy, orientation=90)
+        product.pin(x=400 + dx, y=700 + dy, orientation=90)
+    else:
+        feed.pin(x=100 + dx, y=400 + dy)
+        product.pin(x=700 + dx, y=400 + dy)
+    fs.layout()
+    return fs, pump
+
+
+def test_free_pump_follows_translated_pixel_anchors():
+    import pytest
+
+    from pandid.portgeom import port_point
+
+    before_fs, before = _pixel_anchored_pump()
+    after_fs, after = _pixel_anchored_pump(dx=1000)
+    assert after.frame.x - before.frame.x == pytest.approx(1000)
+    assert after.frame.y == pytest.approx(before.frame.y)
+    assert 1100 < after.frame.x < after.frame.x_max < 1700
+    assert port_point(after_fs.units[0], after_fs.units[0].frame, "outlet") == (1100, 400)
+    assert port_point(after_fs.units[-1], after_fs.units[-1].frame, "inlet") == (1700, 400)
+    before_fs.to_svg()
+    after_fs.to_svg()
+
+
+def test_vertical_pump_follows_translated_pixel_anchors():
+    import pytest
+
+    _, before = _pixel_anchored_pump(vertical=True)
+    fs, after = _pixel_anchored_pump(dy=1000, vertical=True)
+    assert after.frame.y - before.frame.y == pytest.approx(1000)
+    assert after.frame.x == pytest.approx(before.frame.x)
+    assert 1100 < after.frame.y < after.frame.y_max < 1700
+    fs.to_svg()
+
+
+def test_partial_pixel_pins_follow_transformed_nozzles_and_preserve_grid_intent():
+    import pytest
+
+    from pandid.portgeom import port_point
+
+    def build(dx, dy):
+        fs = Flowsheet("Partial transformed anchors")
+        pump = fs.add(U.Pump("P-1", width=140, height=100))
+        valve = fs.add(D.Valve("V-1"))
+        product = fs.add(U.Product("Product"))
+        pump.pin(col=1, port="discharge", x=1000 + dx, y=400 + dy, orientation=90, mirrored="x")
+        product.pin(row=2, x=1800 + dx)
+        fs.connect(pump.discharge, valve.inlet)
+        fs.connect(valve.outlet, product.inlet)
+        fs.layout()
+        return fs, pump, valve, product
+
+    _, _, valve_before, _ = build(0, 0)
+    after, pump, valve, product = build(1000, 500)
+    assert valve.frame.x - valve_before.frame.x == pytest.approx(1000)
+    assert valve.frame.y - valve_before.frame.y == pytest.approx(500)
+    assert port_point(pump, pump.frame, "discharge") == pytest.approx((2000, 900))
+    assert port_point(product, product.frame, "inlet")[0] == 2800
+    assert pump.frame.col == 1
+    assert product.frame.row == 2
+    assert product.pin_.y is None
+    assert (pump.frame.w, pump.frame.h) == (140, 100)
+    restored = Flowsheet.from_dict(after.to_dict())
+    restored.layout()
+    assert restored.to_dict() == after.to_dict()
+    expected = [(u.frame.x, u.frame.y) for u in after.units]
+    after.layout()
+    assert [(u.frame.x, u.frame.y) for u in after.units] == expected
+    assert [(u.frame.x, u.frame.y) for u in restored.units] == expected
+
+
+def test_pixel_anchors_leave_a_disconnected_free_component_in_place():
+    def build(dx):
+        fs, _ = _pixel_anchored_pump(dx=dx)
+        feed = fs.add(U.Feed("Other feed"))
+        pump = fs.add(U.Pump("Other pump"))
+        fs.connect(feed.outlet, pump.suction)
+        fs.layout()
+        return [(u.frame.x, u.frame.y) for u in (feed, pump)]
+
+    assert build(0) == build(1000)
+
+
+def test_conflicting_pixel_pins_are_reported_without_moving_them():
+    import pytest
+
+    fs = Flowsheet("Conflicting pixel pins")
+    a = fs.add(U.Pump("P-1")).pin(x=400, y=300)
+    b = fs.add(U.Pump("P-2")).pin(x=400, y=300)
+    fs.connect(a.discharge, b.suction)
+    fs.layout()
+    assert (a.frame.x, a.frame.y) == (400, 300)
+    assert (b.frame.x, b.frame.y) == (400, 300)
+    with pytest.raises(ValueError, match="overlap"):
+        fs.to_svg()
+
+
+def test_biodiesel_pixel_refinement_keeps_the_pinned_control_renderable():
+    import pytest
+
+    from _layout_cases import build
+    from pandid.portgeom import pin_intent
+
+    fs, _ = build()
+    fs.to_svg()
+    before = {u: (u.frame.x, u.frame.y) for u in fs.units}
+    for u in fs.units:
+        for axis, (port, value) in pin_intent(u).items():
+            u.pin(**{axis: value + 1000}, port=port)
+    fs.to_svg()
+    for u, (x, y) in before.items():
+        assert (u.frame.x, u.frame.y) == pytest.approx((x + 1000, y + 1000)), u.name
+
+
+def test_pixel_clearance_does_not_move_a_separator_into_a_free_pump():
+    fs = Flowsheet("Branched pixel anchors")
+    feed = fs.add(U.Feed("F"))
+    separator = fs.add(U.Separator("S"))
+    first = fs.add(U.Pump("P1"))
+    second = fs.add(U.Pump("P2"))
+    a = fs.add(U.Product("A"))
+    b = fs.add(U.Product("B"))
+    fs.connect(feed.outlet, separator.feed)
+    fs.connect(separator.vapor, first.suction)
+    fs.connect(separator.liquid, second.suction)
+    fs.connect(first.discharge, a.inlet)
+    fs.connect(second.discharge, b.inlet)
+    b.pin(x=450)
+    feed.pin(y=200)
+    a.pin(x=1400, y=375)
+    fs.to_svg()
