@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pandid.layout.conflicts import Conflict, analyze_conflicts
 from pandid.portgeom import pin_intent, port_anchor, port_point
 from pandid.routing.metrics import crossing_count, min_bends, path_length, real_bends
 
@@ -42,6 +43,10 @@ class Quality:
         Resolved orientation and mirror choices for each unit.
     pin_geometry : tuple
         Drawn values of each pinned coordinate or rank, by unit and axis.
+    hard_conflicts : frozenset[Conflict]
+        Named automatic routing and placement defects.
+    crossing_pairs : frozenset[tuple[int, int]]
+        Crossing stream identities in global flowsheet order.
     """
 
     hard: tuple[int, ...]
@@ -53,6 +58,8 @@ class Quality:
     author_intent: tuple
     frame_transform: tuple
     pin_geometry: tuple
+    hard_conflicts: frozenset[Conflict] = frozenset()
+    crossing_pairs: frozenset[tuple[int, int]] = frozenset()
 
 
 def _author_intent(fs: Flowsheet) -> tuple:
@@ -104,6 +111,13 @@ def measure_final(fs: Flowsheet) -> Quality:
     codes = [issue.code for issue in issues]
     routes = [stream.route for stream in fs.streams]
     paths = [route.waypoints for route in routes if route is not None]
+    conflicts = analyze_conflicts(fs)
+    hard_conflicts = frozenset(conflict for conflict in conflicts if conflict.kind != "crossing")
+    pairs = frozenset(
+        (conflict.streams[0], conflict.streams[1])
+        for conflict in conflicts
+        if conflict.kind == "crossing"
+    )
     frames = [unit.frame for unit in fs.units if unit.frame is not None]
     area = 0.0
     if frames:
@@ -134,7 +148,8 @@ def measure_final(fs: Flowsheet) -> Quality:
         sum(issue.severity == "error" for issue in issues),
         sum(route is not None and not route.manual and route.used_fallback for route in routes),
         *(codes.count(code) for code in _HARD_CODES),
-        sum(route is None or len(route.waypoints) < 2 for route in routes),
+        sum(route is None or (not route.manual and len(route.waypoints) < 2)
+            for route in routes),
     )
     return Quality(
         hard=hard,
@@ -173,6 +188,8 @@ def measure_final(fs: Flowsheet) -> Quality:
             )
             for unit in fs.units
         ),
+        hard_conflicts=hard_conflicts,
+        crossing_pairs=pairs,
     )
 
 
@@ -195,6 +212,8 @@ def admissible(before: Quality, after: Quality) -> bool:
         and before.frame_transform == after.frame_transform
         and before.pin_geometry == after.pin_geometry
         and all(new <= old for old, new in zip(before.hard, after.hard))
+        and after.hard_conflicts <= before.hard_conflicts
+        and after.crossing_pairs <= before.crossing_pairs
         and after.hard[_NONCONVERGENCE_INDEX] == 0
         and after.crossings <= before.crossings
         and after.bends <= min(before.bends + 1, before.bends * 1.03)
@@ -219,6 +238,7 @@ def improves(before: Quality, after: Quality) -> bool:
     """
     return (
         any(new < old for old, new in zip(before.hard, after.hard))
+        or after.hard_conflicts < before.hard_conflicts
         or after.crossings < before.crossings
         or after.excess_bends < before.excess_bends
         or after.length < before.length * 0.98 - 0.1

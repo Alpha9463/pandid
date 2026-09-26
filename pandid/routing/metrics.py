@@ -188,3 +188,32 @@ def crossing_count(paths: list[list[Point]]) -> int:
             if stream_h != stream_v:
                 count += crossing_point(h, v) is not None
     return count
+
+
+def crossing_pairs(paths: list[list[Point] | None]) -> frozenset[tuple[int, int]]:
+    """Identify crossing stream pairs using global stream positions.
+
+    Parameters
+    ----------
+    paths : list[list[Point] or None]
+        Final paths in flowsheet stream order; missing routes remain in
+        the sequence as ``None``.
+
+    Returns
+    -------
+    frozenset[tuple[int, int]]
+        Sorted index pairs with at least one proper path crossing.
+    """
+    horizontal: list[tuple[int, tuple[Point, Point]]] = []
+    vertical: list[tuple[int, tuple[Point, Point]]] = []
+    for index, points in enumerate(paths):
+        if points is None:
+            continue
+        for a, b, axis in waypoint_segments(points):
+            (horizontal if axis == "h" else vertical).append((index, (a, b)))
+    pairs: set[tuple[int, int]] = set()
+    for stream_h, h in horizontal:
+        for stream_v, v in vertical:
+            if stream_h != stream_v and crossing_point(h, v) is not None:
+                pairs.add((min(stream_h, stream_v), max(stream_h, stream_v)))
+    return frozenset(pairs)
