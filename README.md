@@ -13,8 +13,7 @@ every stream, and draws industry-standard symbols.
 ## Install
 
 Requires Python 3.10 or later. Fully type-hinted and marked
-[PEP 561](https://peps.python.org/pep-0561/), so `mypy` and `pyright` read the
-annotations straight out of the wheel.
+[PEP 561](https://peps.python.org/pep-0561/).
 
 ```bash
 pip install pandid
@@ -24,7 +23,6 @@ pip install 'pandid[yaml]'   # optional YAML spec reader (Flowsheet.from_yaml)
 
 The `pdf` extra is wheels the whole way down (svglib, ReportLab, pypdfium2,
 Pillow), so it needs no system libraries and no compiler on any platform.
-`.svg` needs none of it: the engine has zero runtime dependencies.
 
 From a checkout, `pip install -e '.[dev]'` adds pytest, ruff and mypy.
 
