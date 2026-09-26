@@ -60,7 +60,11 @@ def _geometry_state(fs: Flowsheet) -> tuple:
     )
 
 
-def _settle_candidate(fs: Flowsheet, router: Router | None) -> None:
+def _settle_candidate(
+    fs: Flowsheet,
+    router: Router | None,
+    face_choices: tuple[tuple[int, str, str], ...] = (),
+) -> None:
     """Settle automatic faces, labels, controls, and routes on a clone.
 
     Parameters
@@ -69,6 +73,8 @@ def _settle_candidate(fs: Flowsheet, router: Router | None) -> None:
         Candidate with proposed frames already installed.
     router : Router or None
         Router used for each bounded settling pass.
+    face_choices : tuple[tuple[int, str, str], ...], optional
+        Trial-only unit, port, and drawn-face preferences.
 
     Returns
     -------
@@ -83,11 +89,12 @@ def _settle_candidate(fs: Flowsheet, router: Router | None) -> None:
 
     if router is None:
         router = DefaultRouter()
+    preferred = {(index, port): face for index, port, face in face_choices}
     previous = _geometry_state(fs)
     fs.route_converged = False
     moved = False
     for _ in range(MAX_PLACEMENT_PASSES):
-        select_faces(fs)
+        select_faces(fs, preferred)
         assign_labels(fs)
         router.route(fs)
         moved = place_control(fs)
@@ -108,6 +115,8 @@ def evaluate_trial(
     fs: Flowsheet,
     move: Callable[[list[Frame | None]], None],
     router: Router | None = None,
+    *,
+    face_choices: tuple[tuple[int, str, str], ...] = (),
 ) -> TrialResult:
     """Score a frame proposal on a deep copy of a settled drawing.
 
@@ -120,6 +129,9 @@ def evaluate_trial(
         callback receives no model objects, pins, routes, or topology.
     router : Router or None, optional
         Router used to settle the candidate's completed geometry.
+    face_choices : tuple[tuple[int, str, str], ...], optional
+        Trial-only automatic face preferences. They never modify author
+        nozzle choices and must survive final face selection to qualify.
 
     Returns
     -------
@@ -130,9 +142,22 @@ def evaluate_trial(
     Raises
     ------
     ValueError
-        If the original drawing has stale geometry.
+        If the original drawing has stale geometry or a requested face
+        is not an available automatic choice.
     """
+    from pandid.layout.faces import eligible_faces
+
     before = measure_final(fs)
+    seen: set[tuple[int, str]] = set()
+    for index, port, face in face_choices:
+        if not 0 <= index < len(fs.units):
+            raise ValueError("trial face unit index is out of range")
+        key = index, port
+        if key in seen:
+            raise ValueError("trial requests two faces for one port")
+        seen.add(key)
+        if port not in fs.units[index].ports or face not in eligible_faces(fs, fs.units[index], port):
+            raise ValueError("trial face is not an eligible automatic choice")
     candidate = copy.deepcopy(fs)
     frames = [copy.deepcopy(unit.frame) for unit in candidate.units]
     move(frames)
@@ -141,10 +166,15 @@ def evaluate_trial(
     for unit, frame in zip(candidate.units, frames):
         unit.frame = frame
     candidate._route_stale = True
-    _settle_candidate(candidate, router)
+    _settle_candidate(candidate, router, face_choices)
     after = measure_final(candidate)
+    faces_held = all(
+        candidate.units[index].frame is not None
+        and candidate.units[index].frame.port_faces.get(port) == face
+        for index, port, face in face_choices
+    )
     return TrialResult(
-        qualified=admissible(before, after) and improves(before, after),
+        qualified=faces_held and admissible(before, after) and improves(before, after),
         before=before,
         after=after,
     )

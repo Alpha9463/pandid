@@ -24,7 +24,7 @@ emits fresh frames, so laying a sheet out twice draws it the same way.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -70,20 +70,26 @@ def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, 
     return menu if len(menu) > 1 else ()
 
 
-def select_faces(fs: "Flowsheet") -> None:
+def select_faces(
+    fs: "Flowsheet",
+    preferred: Mapping[tuple[int, str], str] | None = None,
+) -> None:
     """Choose a face for every movable port without author overrides.
 
     Parameters
     ----------
     fs : Flowsheet
         Placed drawing whose resolved frame faces are updated.
+    preferred : Mapping[tuple[int, str], str] or None, optional
+        Trial-only preferences keyed by global unit index and port name.
+        Unavailable or occupied choices fall back to normal selection.
 
     Returns
     -------
     None
         Automatic selections are stored on each resolved frame.
     """
-    for unit in fs.units:
+    for index, unit in enumerate(fs.units):
         frame = unit.frame
         if frame is None:
             continue
@@ -137,7 +143,11 @@ def select_faces(fs: "Flowsheet") -> None:
             target = _reference(unit.ports[name])
             if target is None:
                 continue
-            face = _best(unit, frame, name, list(menu), target, taken)
+            preferred_face = None if preferred is None else preferred.get((index, name))
+            face = (_best(unit, frame, name, [preferred_face], target, taken)
+                    if preferred_face in menu else None)
+            if face is None:
+                face = _best(unit, frame, name, list(menu), target, taken)
             if face is None:
                 continue  # all faces taken; leave the symbol's
             frame.port_faces[name] = face

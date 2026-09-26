@@ -1,8 +1,8 @@
-"""Bounded, read-only placement proposals for completed process drawings.
+"""Bounded, read-only placement and face proposals for completed drawings.
 
-Proposals move resolved frames only. They do not change the model, choose
-faces, or accept a drawing; :mod:`pandid.layout.trials` evaluates those effects
-on an isolated, fully routed copy.
+Proposals change resolved frames or selected automatic faces on an isolated
+trial. They do not change the live model or accept a drawing;
+:mod:`pandid.layout.trials` measures the fully routed result.
 """
 
 from __future__ import annotations
@@ -13,17 +13,19 @@ from typing import TYPE_CHECKING
 
 from pandid.layout.claims import stacks
 from pandid.layout.coordinates import ROW_GAP
+from pandid.layout.faces import eligible_faces
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.pixel import grid_limits
 from pandid.layout.stages import process_streams, process_units
 from pandid.layout.structure import Structure, infer
 from pandid.portgeom import resolve_port, unit_box
-from pandid.routing.metrics import min_bends, waypoint_segments
+from pandid.routing.metrics import min_bends, path_length, real_bends, waypoint_segments
 from pandid.routing.visibility import Rect, escape_distance, share_escape_room
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
+    from pandid.layout.trials import TrialResult
     from pandid.streams import Stream
     from pandid.units import Unit
 
@@ -60,7 +62,7 @@ def _placed(unit: Unit) -> Frame:
 
 @dataclass(frozen=True)
 class Candidate:
-    """A legal local translation of one connected process group.
+    """A local placement or automatic-face proposal.
 
     Attributes
     ----------
@@ -69,16 +71,20 @@ class Candidate:
     dy : float
         Vertical displacement in drawing pixels.
     stream : int
-        Process-stream index that proposed the alignment.
+        Global ``Flowsheet.streams`` index behind this proposal.
     estimated_gain : float
         Cheap reduction in affected stream costs; only a trial can
         establish final-drawing improvement.
+    face_choices : tuple[tuple[int, str, str], ...]
+        Optional global unit index, canonical port name, and face choices.
+        These are passed to trial face selection, not author intent.
     """
 
     units: tuple[int, ...]
     dy: float
     stream: int
     estimated_gain: float
+    face_choices: tuple[tuple[int, str, str], ...] = ()
 
     def apply(self, frames: list[Frame | None]) -> None:
         """Translate detached frames for a dry-run trial.
@@ -91,13 +97,32 @@ class Candidate:
         Returns
         -------
         None
-            Only frames listed in this proposal change.
+            Only frames listed in this proposal change. Face choices are
+            applied by ``evaluate`` during automatic face selection.
         """
         for index in self.units:
             frame = frames[index]
             if frame is None:
                 raise ValueError("candidate unit has no frame")
             frame.y += self.dy
+
+    def evaluate(self, fs: Flowsheet) -> TrialResult:
+        """Score this complete proposal on a routed clone.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Settled drawing from which this proposal was generated.
+
+        Returns
+        -------
+        TrialResult
+            Final-drawing measurements and qualification. The live
+            drawing is unchanged.
+        """
+        from pandid.layout.trials import evaluate_trial
+
+        return evaluate_trial(fs, self.apply, face_choices=self.face_choices)
 
 
 def _box(unit: Unit, frame: Frame, pad: Pad) -> tuple[float, float, float, float]:
@@ -360,9 +385,80 @@ def _estimate(moving: set[Unit], dy: float,
     return gain
 
 
+def _face_candidates(fs: Flowsheet, limit: int) -> tuple[Candidate, ...]:
+    """Propose alternative declared faces for costly automatic routes.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed drawing with final routes and selected faces.
+    limit : int
+        Maximum face proposals to return.
+
+    Returns
+    -------
+    tuple[Candidate, ...]
+        Face choices ordered by optimistic routed-cost reduction. No
+        proposed face changes author intent or a manual-route endpoint.
+    """
+    if limit <= 0:
+        return ()
+    global_index = {unit: index for index, unit in enumerate(fs.units)}
+    proposals: dict[tuple[int, str, str], Candidate] = {}
+    for stream_index, stream in enumerate(fs.streams):
+        route = stream.route
+        if route is None or route.manual or len(route.waypoints) < 2:
+            continue
+        source, dest = stream.source.owner, stream.dest.owner
+        if source is None or dest is None or source.frame is None or dest.frame is None:
+            continue
+        current = (resolve_port(source, _placed(source), stream.source.name),
+                   resolve_port(dest, _placed(dest), stream.dest.name))
+        actual = path_length(route.waypoints) + 25.0 * real_bends(route.waypoints)
+        for side, (owner, port) in enumerate(((source, stream.source), (dest, stream.dest))):
+            if any(connected.route is not None and connected.route.manual
+                   for item in owner.ports.values()
+                   if (connected := item.stream) is not None):
+                continue
+            frame = _placed(owner)
+            live = [name for name, item in owner.ports.items()
+                    if item.stream is not None]
+            earlier = set(live[:live.index(port.name)])
+            reserved = [name for name in live
+                        if name in earlier or not eligible_faces(fs, owner, name)]
+            reserved_points = {
+                tuple(round(value, 3) for value in resolve_port(owner, frame, name).point)
+                for name in reserved
+            }
+            for face in eligible_faces(fs, owner, port.name):
+                if face == current[side].face:
+                    continue
+                chosen = replace(frame, port_faces={**frame.port_faces, port.name: face})
+                alternative = resolve_port(owner, chosen, port.name)
+                point = tuple(round(value, 3) for value in alternative.point)
+                if point in reserved_points:
+                    continue
+                endpoints = (alternative, current[1]) if side == 0 else (current[0], alternative)
+                first, second = endpoints
+                bends = min_bends(first.anchor, first.face, second.anchor, second.face)
+                lower = (abs(first.anchor[0] - second.anchor[0])
+                         + abs(first.anchor[1] - second.anchor[1])
+                         + 25.0 * (bends or 0))
+                gain = actual - lower
+                if gain <= 0:
+                    continue
+                key = global_index[owner], port.name, face
+                candidate = Candidate((), 0.0, stream_index, round(gain, 6), (key,))
+                if key not in proposals or candidate.estimated_gain > proposals[key].estimated_gain:
+                    proposals[key] = candidate
+    return tuple(sorted(proposals.values(),
+                        key=lambda item: (-item.estimated_gain, item.stream,
+                                          item.face_choices))[:limit])
+
+
 def generate(fs: Flowsheet, structure: Structure | None = None,
              limit: int = MAX_CANDIDATES) -> tuple[Candidate, ...]:
-    """Propose a stable, bounded list of legal stream-alignment moves.
+    """Propose a stable, bounded list of local and automatic-face trials.
 
     Parameters
     ----------
@@ -377,7 +473,7 @@ def generate(fs: Flowsheet, structure: Structure | None = None,
     -------
     tuple[Candidate, ...]
         Proposals ranked by a cheap cost reduction, then stable indices.
-        Each can be passed as ``candidate.apply`` to ``evaluate_trial``.
+        Call ``candidate.evaluate(fs)`` for an isolated completed trial.
 
     Raises
     ------
@@ -400,12 +496,13 @@ def generate(fs: Flowsheet, structure: Structure | None = None,
     opportunities: dict[tuple[tuple[int, ...], float],
                         tuple[float, int, int, float, tuple[Unit, ...]]] = {}
     streams = process_streams(fs)
+    global_stream_index = {id(stream): index for index, stream in enumerate(fs.streams)}
     touching: dict[Unit, list[int]] = {}
     for index, stream in enumerate(streams):
         for port in (stream.source, stream.dest):
             if port.owner is not None:
                 touching.setdefault(port.owner, []).append(index)
-    for stream_index, stream in enumerate(streams):
+    for stream in streams:
         if stream.is_recycle:
             continue
         source, dest = stream.source.owner, stream.dest.owner
@@ -424,7 +521,7 @@ def generate(fs: Flowsheet, structure: Structure | None = None,
                 continue
             indices = tuple(sorted(global_index[unit] for unit in group))
             key = indices, round(dy, 6)
-            choice = (-abs(dy), stream_index, global_index[target], dy, group)
+            choice = (-abs(dy), global_stream_index[id(stream)], global_index[target], dy, group)
             if key not in opportunities or choice[:3] < opportunities[key][:3]:
                 opportunities[key] = choice
     for _, stream_index, _, dy, group in sorted(opportunities.values())[:MAX_PREFLIGHTS]:
@@ -438,6 +535,11 @@ def generate(fs: Flowsheet, structure: Structure | None = None,
         candidate = Candidate(indices, round(dy, 6), stream_index, round(gain, 6))
         if key not in proposals or candidate.estimated_gain > proposals[key].estimated_gain:
             proposals[key] = candidate
-    return tuple(sorted(proposals.values(),
+    moves = sorted(proposals.values(),
+                   key=lambda item: (-item.estimated_gain, item.stream,
+                                     item.units, item.dy))[:MAX_CANDIDATES]
+    faces = _face_candidates(fs, MAX_CANDIDATES)
+    return tuple(sorted((*moves, *faces),
                         key=lambda item: (-item.estimated_gain, item.stream,
-                                          item.units, item.dy))[:min(limit, MAX_CANDIDATES)])
+                                          item.units, item.dy, item.face_choices))
+                 [:min(limit, MAX_CANDIDATES)])
