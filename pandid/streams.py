@@ -286,9 +286,21 @@ class Stream:
                 for f in LINE_NUMBER_FIELDS}
 
     def via(self, waypoints: list[tuple[float, float]]) -> "Stream":
-        """Route the stream through these exact pixel waypoints."""
+        """Route the stream through exact author-supplied waypoints.
+
+        Parameters
+        ----------
+        waypoints : list[tuple[float, float]]
+            Ordered drawing coordinates in pixels.
+
+        Returns
+        -------
+        Stream
+            This stream, with its route marked manual.
+        """
         if self.route is None:
             self.route = Route()
         self.route.waypoints = waypoints
         self.route.manual = True
+        self.route.used_fallback = False
         return self

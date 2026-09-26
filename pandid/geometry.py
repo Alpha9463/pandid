@@ -154,6 +154,17 @@ class _Slot:
 
 @dataclass
 class Route:
-    """A Stream's resolved path, in absolute pixel waypoints."""
+    """A stream's resolved path in absolute drawing coordinates.
+
+    Attributes
+    ----------
+    waypoints : list[tuple[float, float]]
+        Ordered path points in pixels.
+    manual : bool
+        Whether the author supplied the path through ``via()``.
+    used_fallback : bool
+        Whether automatic search failed and the router used its fallback.
+    """
     waypoints: list[tuple[float, float]] = field(default_factory=list)
     manual: bool = False
+    used_fallback: bool = False

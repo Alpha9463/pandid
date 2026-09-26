@@ -185,6 +185,18 @@ def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
 
 class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
+        """Compute and separate all automatic stream paths.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Sheet with resolved unit frames and selected nozzle faces.
+
+        Returns
+        -------
+        None
+            Final route waypoints and fallback status are stored on streams.
+        """
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
@@ -310,6 +322,7 @@ class DefaultRouter:
                 graph, start_proj, goal_proj, start_dir, goal_dir,
                 edge_penalties, is_recycle, crossing_index,
             )
+            path_found = bool(path)
 
             if path:
                 path = [start] + path + [goal]
@@ -339,7 +352,7 @@ class DefaultRouter:
             if len(path) > 1:
                 simplified.append(path[-1])
 
-            stream.route = Route(waypoints=simplified)
+            stream.route = Route(waypoints=simplified, used_fallback=not path_found)
 
             # Record this stream's own drawn segments -- the fallback L
             # included -- so a later one prices crossing them. Not folded

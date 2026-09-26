@@ -159,3 +159,32 @@ def overlap_length(a: tuple[Point, Point], b: tuple[Point, Point], axis: str) ->
     alo, ahi = sorted((a[0][j], a[1][j]))
     blo, bhi = sorted((b[0][j], b[1][j]))
     return max(0.0, min(ahi, bhi) - max(alo, blo))
+
+
+def crossing_count(paths: list[list[Point]]) -> int:
+    """Count proper crossings between different final stream paths.
+
+    Parameters
+    ----------
+    paths : list[list[Point]]
+        One ordered waypoint path per stream, after route separation.
+
+    Returns
+    -------
+    int
+        Number of orthogonal interior intersections. Endpoint touches
+        and crossings within a single stream are excluded.
+    """
+    segments = [
+        (index, *segment)
+        for index, points in enumerate(paths)
+        for segment in waypoint_segments(points)
+    ]
+    horizontal = [(index, (a, b)) for index, a, b, axis in segments if axis == "h"]
+    vertical = [(index, (a, b)) for index, a, b, axis in segments if axis == "v"]
+    count = 0
+    for stream_h, h in horizontal:
+        for stream_v, v in vertical:
+            if stream_h != stream_v:
+                count += crossing_point(h, v) is not None
+    return count
