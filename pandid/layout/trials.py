@@ -11,6 +11,7 @@ from pandid.layout.quality import Quality, admissible, improves, measure_final
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
+    from pandid.layout.candidates import Move
     from pandid.routing import Router
 
 
@@ -185,7 +186,7 @@ def _evaluate_candidate(
 
 def evaluate_trial(
     fs: Flowsheet,
-    move: Callable[[list[Frame | None]], None],
+    move: Callable[[list[Frame | None]], None] | Move,
     router: Router | None = None,
     *,
     face_choices: tuple[tuple[int, str, str], ...] = (),
@@ -196,7 +197,7 @@ def evaluate_trial(
     ----------
     fs : Flowsheet
         Settled drawing to assess.
-    move : Callable[[list[Frame or None]], None]
+    move : Callable[[list[Frame or None]], None] or Move
         Change detached, index-aligned frames on a clone.
     router : Router or None, optional
         Router used to settle the candidate.
@@ -213,7 +214,10 @@ def evaluate_trial(
     ValueError
         If geometry is stale or a requested face is ineligible.
     """
-    result, _ = _evaluate_candidate(fs, move, router, face_choices=face_choices)
+    from pandid.layout.candidates import Move
+
+    operation = move.apply if isinstance(move, Move) else move
+    result, _ = _evaluate_candidate(fs, operation, router, face_choices=face_choices)
     return result
 
 

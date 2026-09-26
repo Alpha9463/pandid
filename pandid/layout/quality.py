@@ -47,6 +47,8 @@ class Quality:
         Named automatic routing and placement defects.
     crossing_pairs : frozenset[tuple[int, int]]
         Crossing stream identities in global flowsheet order.
+    manual_endpoint_geometry : tuple
+        Drawn source and destination points of each hand-routed stream.
     """
 
     hard: tuple[int, ...]
@@ -60,6 +62,7 @@ class Quality:
     pin_geometry: tuple
     hard_conflicts: frozenset[Conflict] = frozenset()
     crossing_pairs: frozenset[tuple[int, int]] = frozenset()
+    manual_endpoint_geometry: tuple = ()
 
 
 def _author_intent(fs: Flowsheet) -> tuple:
@@ -190,6 +193,19 @@ def measure_final(fs: Flowsheet) -> Quality:
         ),
         hard_conflicts=hard_conflicts,
         crossing_pairs=pairs,
+        manual_endpoint_geometry=tuple(
+            (
+                index,
+                None if stream.source.owner.frame is None else port_point(
+                    stream.source.owner, stream.source.owner.frame, stream.source.name
+                ),
+                None if stream.dest.owner.frame is None else port_point(
+                    stream.dest.owner, stream.dest.owner.frame, stream.dest.name
+                ),
+            )
+            for index, stream in enumerate(fs.streams)
+            if stream.route is not None and stream.route.manual
+        ),
     )
 
 
@@ -211,6 +227,7 @@ def admissible(before: Quality, after: Quality) -> bool:
         before.author_intent == after.author_intent
         and before.frame_transform == after.frame_transform
         and before.pin_geometry == after.pin_geometry
+        and before.manual_endpoint_geometry == after.manual_endpoint_geometry
         and all(new <= old for old, new in zip(before.hard, after.hard))
         and after.hard_conflicts <= before.hard_conflicts
         and after.crossing_pairs <= before.crossing_pairs

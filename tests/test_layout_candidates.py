@@ -1,356 +1,178 @@
-"""Legal, bounded placement proposals before final-route acceptance."""
+"""Behavioral checks for conflict-derived placement moves."""
 
 from __future__ import annotations
 
-import pytest
-
-from pandid import Flowsheet, units as U
-from pandid.layout.candidates import MAX_CANDIDATES, _groups, generate
-from pandid.layout.faces import eligible_faces
-from pandid.layout.quality import measure_final
-from pandid.layout.stages import process_units
-from pandid.layout.structure import infer
+from pandid import Block, Feed, Flowsheet, Instrument, Product, units as U
+from pandid.layout.candidates import (
+    MAX_CANDIDATES,
+    Move,
+    Translation,
+    _move_groups,
+    _move_preflight,
+    generate_moves,
+)
+from pandid.layout.conflicts import Conflict, analyze_conflicts
+from pandid.layout.halo import balloon_pads
 from pandid.layout.trials import evaluate_trial
-from pandid.routing import DefaultRouter
 
 
-def _off_lane() -> Flowsheet:
-    """Build a straight material run with one displaced free pump.
-
-    Returns
-    -------
-    Flowsheet
-        Routed drawing with an avoidable dogleg.
-    """
-    fs = Flowsheet("Off-lane pump")
-    feed = fs.add(U.Feed("Feed"))
-    pump = fs.add(U.Pump("P-1"))
-    product = fs.add(U.Product("Product"))
-    fs.connect(feed.outlet, pump.suction)
-    fs.connect(pump.discharge, product.inlet)
-    fs.layout()
-    assert pump.frame is not None
-    pump.frame.y += 70
-    fs.route(DefaultRouter())
-    return fs
-
-
-def _off_column() -> Flowsheet:
-    """Build a vertical block run with a displaced free column.
+def _closed_arms() -> Flowsheet:
+    """Build two complete process arms with overlapping interiors.
 
     Returns
     -------
     Flowsheet
-        Routed drawing with a correctable horizontal dogleg.
-    """
-    fs = Flowsheet("Off-column block")
-    upper = fs.add(U.Block("Upper", inputs=0, outputs=["S"]))
-    lower = fs.add(U.Block("Lower", inputs=["N"], outputs=0))
-    fs.connect(upper.out_1, lower.in_1)
-    upper.pin(row=0)
-    lower.pin(row=2)
-    fs.layout()
-    assert lower.frame is not None and lower._slot is not None
-    lower._slot.col = 1
-    lower.frame.col = 1
-    lower.frame.x += 120
-    fs.route(DefaultRouter())
-    return fs
-
-
-def _diamond() -> Flowsheet:
-    """Build two two-unit arms with shared split and merge.
-
-    Returns
-    -------
-    Flowsheet
-        Routed closed-branch drawing.
+        Routed split/merge drawing requiring an arm-level move.
     """
     fs = Flowsheet("Closed arms")
-    feed = fs.add(U.Feed("Feed"))
+    feed = fs.add(Feed("Feed"))
     split = fs.add(U.Splitter("Split"))
-    a1 = fs.add(U.Pump("A1"))
-    a2 = fs.add(U.Pump("A2"))
-    b1 = fs.add(U.Pump("B1"))
-    b2 = fs.add(U.Pump("B2"))
+    upper_first = fs.add(U.Pump("Upper 1"))
+    upper_second = fs.add(U.Pump("Upper 2"))
+    lower_first = fs.add(U.Pump("Lower 1"))
+    lower_second = fs.add(U.Pump("Lower 2"))
     merge = fs.add(U.Mixer("Merge", n_inlets=2))
-    product = fs.add(U.Product("Product"))
-    fs.connect(feed.outlet, split.inlet)
-    fs.connect(split.out_1, a1.suction)
-    fs.connect(a1.discharge, a2.suction)
-    fs.connect(a2.discharge, merge.in_1)
-    fs.connect(split.out_2, b1.suction)
-    fs.connect(b1.discharge, b2.suction)
-    fs.connect(b2.discharge, merge.in_2)
-    fs.connect(merge.outlet, product.inlet)
+    product = fs.add(Product("Product"))
+    for source, dest in (
+        (feed.outlet, split.inlet),
+        (split.out_1, upper_first.suction),
+        (upper_first.discharge, upper_second.suction),
+        (upper_second.discharge, merge.in_1),
+        (split.out_2, lower_first.suction),
+        (lower_first.discharge, lower_second.suction),
+        (lower_second.discharge, merge.in_2),
+        (merge.outlet, product.inlet),
+    ):
+        fs.connect(source, dest)
     fs.layout()
-    fs.route(DefaultRouter())
+    upper_first.frame.y += 100
+    upper_second.frame.y += 100
+    fs.route()
     return fs
 
 
-def test_off_lane_proposal_qualifies_without_changing_the_live_sheet() -> None:
-    """A clear dogleg admits a deterministic, beneficial frame trial.
+def test_closed_arm_moves_keep_each_connected_interior_together() -> None:
+    """Move complete arms, including when two groups move atomically.
 
     Returns
     -------
     None
-        The proposed group, completed-route gain, and isolation are checked.
+        Every proposal preserves group membership and stays bounded.
     """
-    fs = _off_lane()
-    before = measure_final(fs)
-    frames = tuple(unit.frame for unit in fs.units)
-    routes = tuple(stream.route for stream in fs.streams)
-    proposals = generate(fs)
-    assert proposals == generate(fs)
-    assert proposals[0].units == (1,)
-    assert proposals[0].dy == -70
-    trial = proposals[0].evaluate(fs)
-    assert trial.qualified
-    assert trial.after.length < trial.before.length
-    assert measure_final(fs) == before
-    assert tuple(unit.frame for unit in fs.units) == frames
-    assert tuple(stream.route for stream in fs.streams) == routes
+    fs = _closed_arms()
+    moves = generate_moves(fs)
+    assert 0 < len(moves) <= MAX_CANDIDATES
+    assert moves == generate_moves(_closed_arms())
+    assert any(len(move.translations) == 2 for move in moves)
+    for move in moves:
+        for part in move.translations:
+            assert part.units in ((2, 3), (4, 5))
+        assert all(index not in part.units for part in move.translations for index in (1, 6))
 
 
-def test_off_column_proposal_qualifies_without_changing_row_pins() -> None:
-    """A vertical dogleg admits a horizontal isolated trial.
+def test_fully_pinned_obstruction_has_no_legal_move() -> None:
+    """Leave an impossible authored obstruction in place for reporting.
 
     Returns
     -------
     None
-        The completed route improves while row pins and live state hold.
+        Pins stay exact and no illegal move is offered.
     """
-    fs = _off_column()
-    before = measure_final(fs)
-    frames = tuple(unit.frame for unit in fs.units)
-    proposals = generate(fs)
-    assert proposals == generate(_off_column())
-    horizontal = next(candidate for candidate in proposals if candidate.dx)
-    assert horizontal.dy == 0
-    result = horizontal.evaluate(fs)
-    assert result.qualified
-    assert result.after.bends < result.before.bends
-    assert result.after.pin_geometry == result.before.pin_geometry
-    assert measure_final(fs) == before
-    assert tuple(unit.frame for unit in fs.units) == frames
-
-
-def test_horizontal_proposals_leave_existing_vertical_priority_intact() -> None:
-    """A horizontal opportunity does not consume a vertical trial slot.
-
-    Returns
-    -------
-    None
-        Existing vertical candidates precede new horizontal candidates.
-    """
-    fs = Flowsheet("Mixed moves")
-    feed = fs.add(U.Feed("Feed"))
-    pump = fs.add(U.Pump("Pump"))
-    product = fs.add(U.Product("Product"))
-    upper = fs.add(U.Block("Upper", inputs=0, outputs=["S"]))
-    lower = fs.add(U.Block("Lower", inputs=["N"], outputs=0))
-    fs.connect(feed.outlet, pump.suction)
-    fs.connect(pump.discharge, product.inlet)
-    fs.connect(upper.out_1, lower.in_1)
-    upper.pin(row=0)
-    lower.pin(row=2)
+    fs = Flowsheet("Fixed obstruction")
+    source = fs.add(Feed("Feed"))
+    dest = fs.add(Product("Product"))
+    blocker = fs.add(Block("Blocker", inputs=0, outputs=1))
+    source.pin(x=0, y=50)
+    dest.pin(x=300, y=50)
+    blocker.pin(x=10, y=20)
+    fs.connect(source.outlet, dest.inlet)
     fs.layout()
-    assert pump.frame is not None and lower.frame is not None
-    assert lower._slot is not None and lower._slot.col is not None
-    assert lower.frame.col is not None
-    pump.frame.y += 70
-    lower._slot.col += 1
-    lower.frame.col += 1
-    lower.frame.x += 120
-    fs.route(DefaultRouter())
-    proposals = generate(fs)
-    assert proposals[0].units == (1,) and proposals[0].dy == -70
-    assert all(candidate.dy for candidate in proposals[:3])
-    assert any(candidate.dx for candidate in proposals[3:])
+    fs.route()
+
+    assert any(item.kind == "blocked-exit" for item in analyze_conflicts(fs))
+    assert generate_moves(fs) == ()
+    assert (blocker.frame.x, blocker.frame.y) == (10, 20)
 
 
-def test_closed_arms_do_not_offer_singleton_interior_or_shared_endpoint_moves() -> None:
-    """Closed arms form groups and shared junctions cannot move alone.
+def test_mixed_face_blocker_offers_a_clear_adjacent_lane() -> None:
+    """Derive a movable blocker lane from an S-to-W connection.
 
     Returns
     -------
     None
-        Every proposal respects the closed-branch grouping.
+        A detached trial clears the conflict without moving the live sheet.
     """
-    fs = _diamond()
-    grouped = _groups(fs, infer(fs), process_units(fs))
-    assert grouped[fs.units[2]] == (fs.units[2], fs.units[3])
-    assert grouped[fs.units[4]] == (fs.units[4], fs.units[5])
-    assert fs.units[1] not in grouped and fs.units[6] not in grouped
-    for proposal in generate(fs):
-        assert proposal.units not in ((1,), (2,), (3,), (4,), (5,), (6,))
-        assert 1 not in proposal.units and 6 not in proposal.units
-        assert (2 in proposal.units) == (3 in proposal.units)
-        assert (4 in proposal.units) == (5 in proposal.units)
-
-
-def test_pin_manual_route_and_explicit_nozzle_are_author_owned() -> None:
-    """Candidate generation cannot move or re-face author geometry.
-
-    Returns
-    -------
-    None
-        Pinned and hand-routed endpoints are absent from proposals.
-    """
-    fs = _off_lane()
-    pump = fs.units[1]
-    pump.pin(y=pump.frame.y)
-    pump.nozzle("suction", "W")
+    fs = Flowsheet("Mixed-face blockage")
+    source = fs.add(Block("Source", inputs=0, outputs=["S"]))
+    dest = fs.add(Block("Dest", inputs=["W"], outputs=0))
+    blocker = fs.add(Block("Blocker", inputs=0, outputs=1))
+    source.pin(x=100, y=0)
+    dest.pin(x=400, y=200)
+    blocker.pin(x=130)
+    fs.connect(source.out_1, dest.in_1)
     fs.layout()
-    fs.route(DefaultRouter())
-    assert eligible_faces(fs, pump, "suction") == ()
-    assert all(1 not in proposal.units for proposal in generate(fs))
+    blocker.frame.y = 90
+    fs.route()
+    before = (blocker.frame.x, blocker.frame.y)
+    findings = analyze_conflicts(fs)
+    assert any(item.kind == "blocked-exit" for item in findings)
 
-    fs = _off_lane()
-    pump = fs.units[1]
-    assert fs.streams[0].route is not None
-    fs.streams[0].via(list(fs.streams[0].route.waypoints))
-    assert all(1 not in proposal.units for proposal in generate(fs))
-
-
-def test_generation_is_bounded_and_repeatable_across_fresh_builds() -> None:
-    """Fresh equivalent sheets yield the same ordered proposal values.
-
-    Returns
-    -------
-    None
-        The list is deterministic and never exceeds its fixed budget.
-    """
-    first = generate(_off_lane())
-    second = generate(_off_lane())
-    assert first == second
-    assert 0 < len(first) <= MAX_CANDIDATES
-    assert generate(_off_lane(), limit=1) == first[:1]
+    moves = generate_moves(fs, findings)
+    assert moves == generate_moves(fs, findings)
+    assert any(part.units == (2,) for move in moves for part in move.translations)
+    assert all(part.dx == 0 for move in moves for part in move.translations)
+    assert any(evaluate_trial(fs, move).qualified for move in moves)
+    assert (blocker.frame.x, blocker.frame.y) == before
 
 
-def test_preflight_rejects_port_escape_through_nearby_equipment() -> None:
-    """A clear body gap is not enough room for a nozzle's outward lead.
+def test_fixed_blocker_can_be_cleared_by_a_free_endpoint() -> None:
+    """Shift a free stream end around a fully pinned obstacle.
 
     Returns
     -------
     None
-        The pump is not proposed for an escape-blocking placement.
+        A short boundary-derived move qualifies without changing pins.
     """
-    fs = Flowsheet("Blocked escape")
-    feed = fs.add(U.Feed("Feed"))
-    pump = fs.add(U.Pump("Pump"))
-    product = fs.add(U.Product("Product"))
-    obstacle = fs.add(U.Pump("Obstacle"))
-    fs.connect(feed.outlet, pump.suction)
-    fs.connect(pump.discharge, product.inlet)
+    fs = Flowsheet("Pinned blocker")
+    source = fs.add(Block("Source", inputs=0, outputs=["E"]))
+    dest = fs.add(Block("Dest", inputs=["W"], outputs=0))
+    blocker = fs.add(Block("Blocker", inputs=0, outputs=1))
+    source.pin(x=100)
+    dest.pin(x=500, y=400)
+    blocker.pin(x=235, y=0)
+    fs.connect(source.out_1, dest.in_1)
     fs.layout()
-    assert pump.frame is not None and obstacle.frame is not None
-    aligned_y = pump.frame.y
-    pump.frame.y += 70
-    obstacle.frame.x = pump.frame.x + pump.frame.w + 10
-    obstacle.frame.y = aligned_y
-    fs.route(DefaultRouter())
+    source.frame.y = 0
+    fs.route()
 
-    assert all(1 not in candidate.units for candidate in generate(fs))
-
-
-def test_facing_ports_can_share_a_short_escape_gap() -> None:
-    """A nearby connected endpoint can share the nozzle escape lane.
-
-    Returns
-    -------
-    None
-        The legal move survives preflight and qualifies after routing.
-    """
-    fs = Flowsheet("Shared escape")
-    feed = fs.add(U.Feed("Feed"))
-    pump = fs.add(U.Pump("Pump"))
-    product = fs.add(U.Product("Product"))
-    fs.connect(feed.outlet, pump.suction)
-    fs.connect(pump.discharge, product.inlet)
-    fs.layout()
-    assert pump.frame is not None and product.frame is not None
-    aligned_y = pump.frame.y
-    pump.frame.y += 70
-    product.frame.x = pump.frame.x + pump.frame.w + 10
-    product.frame.y = aligned_y
-    fs.route(DefaultRouter())
-
-    restored = next(
-        candidate for candidate in generate(fs) if candidate.units == (1,) and candidate.dy == -70
-    )
-    assert evaluate_trial(fs, restored.apply).qualified
+    moves = generate_moves(fs)
+    assert any(part.units == (0,) and part.dy == 50 for move in moves for part in move.translations)
+    assert any(evaluate_trial(fs, move).qualified for move in moves)
+    assert (source.frame.x, source.frame.y) == (100, 0)
+    assert (blocker.frame.x, blocker.frame.y) == (235, 0)
 
 
-def test_automatic_face_proposal_qualifies_without_publishing_it() -> None:
-    """A routed example can gain from a declared alternate nozzle face.
+def test_attached_manual_endpoint_cannot_follow_a_moved_host() -> None:
+    """Keep the drawn end of a hand-routed signal fixed.
 
     Returns
     -------
     None
-        The face choice qualifies while live geometry and routes stay fixed.
+        Preflight and final quality both reject movement of its host.
     """
-    from scripts import layout_quality
-
-    fs, _ = layout_quality.build("10_ethanol_pfd", True)
+    fs = Flowsheet("Attached manual signal")
+    host = fs.add(Block("Host", inputs=0, outputs=1))
+    transmitter = fs.add(Instrument("LT-101"))
+    controller = fs.add(Instrument("LIC-101"))
+    transmitter.attach(host, at="E", offset=60)
+    controller.pin(x=500, y=200)
+    signal = fs.connect(transmitter.sig_out, controller.sig_in, kind="electric")
+    signal.via([(300, 200)])
     fs.layout()
-    fs.route(DefaultRouter())
-    before = measure_final(fs)
-    faces = tuple(dict(unit.frame.port_faces) for unit in fs.units)
-    proposal = next(candidate for candidate in generate(fs) if candidate.face_choices)
+    fs.route()
 
-    trial = proposal.evaluate(fs)
-    assert trial.qualified
-    assert trial.after.length < trial.before.length
-    assert measure_final(fs) == before
-    assert tuple(unit.frame.port_faces for unit in fs.units) == faces
-
-
-def test_face_trial_rejects_an_author_fixed_nozzle() -> None:
-    """An explicit nozzle face is unavailable to automatic trials.
-
-    Returns
-    -------
-    None
-        The trial refuses the override before creating a candidate.
-    """
-    fs = Flowsheet("Author nozzle")
-    feed = fs.add(U.Feed("Feed"))
-    drum = fs.add(U.Separator("Drum", variant="horizontal"))
-    stream = fs.connect(feed.outlet, drum.feed)
-    drum.nozzle("feed", "E")
-    fs.layout()
-    fs.route(DefaultRouter())
-
-    with pytest.raises(ValueError, match="eligible automatic choice"):
-        evaluate_trial(fs, lambda frames: None, face_choices=((1, stream.dest.name, "W"),))
-
-
-def test_face_candidates_skip_a_nozzle_point_taken_by_an_earlier_port() -> None:
-    """A later signal port cannot reuse its controller's occupied face.
-
-    Returns
-    -------
-    None
-        Feasible alternatives remain while the occupied face is absent.
-    """
-    fs = Flowsheet("Signal faces")
-    valve = fs.add(U.Valve("FV-1", variant="control")).pin(x=300, y=180)
-    feed = fs.add(U.Feed("Feed")).pin(x=100, y=175)
-    product = fs.add(U.Product("Product")).pin(x=520, y=175)
-    fs.connect(feed.outlet, valve.inlet)
-    fs.connect(valve.outlet, product.inlet)
-    transmitter = fs.add(U.Instrument("LT-101")).pin(x=300, y=400)
-    controller = fs.add(U.Instrument("LIC-101", display="central")).pin(x=300, y=520)
-    fs.connect(transmitter.sig_out, controller.sig_in, kind="electric")
-    fs.connect(controller.sig_out, valve.actuator, kind="electric")
-    fs.layout()
-    fs.route(DefaultRouter())
-
-    assert controller.frame is not None
-    assert controller.frame.port_faces["sig_in"] == "N"
-    choices = {candidate.face_choices for candidate in generate(fs) if candidate.face_choices}
-    assert ((4, "sig_out", "E"),) in choices
-    assert ((4, "sig_out", "N"),) not in choices
-    invalid = evaluate_trial(fs, lambda frames: None, face_choices=((4, "sig_out", "N"),))
-    assert not invalid.qualified
+    move = Move((Translation((0,), dy=50),), Conflict("route-cost", streams=(0,)), 100)
+    assert not _move_preflight(fs, move, _move_groups(fs), balloon_pads(fs))
+    trial = evaluate_trial(fs, move)
+    assert trial.before.manual_endpoint_geometry != trial.after.manual_endpoint_geometry
+    assert not trial.qualified
