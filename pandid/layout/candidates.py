@@ -12,7 +12,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from pandid.layout.claims import stacks
-from pandid.layout.coordinates import ROW_GAP
+from pandid.layout.coordinates import COL_GAP, ROW_GAP
 from pandid.layout.faces import eligible_faces
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.pixel import grid_limits
@@ -34,6 +34,7 @@ MAX_CANDIDATES = 24
 MAX_PREFLIGHTS = 24
 _MIN_SHIFT = 5.0
 _MAX_SHIFT = 2.0 * ROW_GAP
+_MAX_COLUMN_SHIFT = 2.0 * COL_GAP
 
 
 def _placed(unit: Unit) -> Frame:
@@ -78,6 +79,8 @@ class Candidate:
     face_choices : tuple[tuple[int, str, str], ...]
         Optional global unit index, canonical port name, and face choices.
         These are passed to trial face selection, not author intent.
+    dx : float
+        Horizontal displacement in drawing pixels.
     """
 
     units: tuple[int, ...]
@@ -85,6 +88,7 @@ class Candidate:
     stream: int
     estimated_gain: float
     face_choices: tuple[tuple[int, str, str], ...] = ()
+    dx: float = 0.0
 
     def apply(self, frames: list[Frame | None]) -> None:
         """Translate detached frames for a dry-run trial.
@@ -104,6 +108,7 @@ class Candidate:
             frame = frames[index]
             if frame is None:
                 raise ValueError("candidate unit has no frame")
+            frame.x += self.dx
             frame.y += self.dy
 
     def evaluate(self, fs: Flowsheet) -> TrialResult:
@@ -186,22 +191,26 @@ def _segment_hits_box(a: tuple[float, float], b: tuple[float, float],
     return False
 
 
-def _movable(group: tuple[Unit, ...]) -> bool:
-    """Reject a group that owns its row or a hand-routed endpoint.
+def _movable(group: tuple[Unit, ...], axis: str = "y") -> bool:
+    """Reject a group with an author-owned axis or manual-route endpoint.
 
     Parameters
     ----------
     group : tuple[Unit, ...]
-        Connected process group considered for vertical translation.
+        Connected process group considered for translation.
+    axis : str, optional
+        Coordinate axis proposed for movement.
 
     Returns
     -------
     bool
-        Whether all group members leave their vertical position free.
+        Whether all group members leave the requested coordinate free.
     """
     for unit in group:
         pin = unit.pin_
-        if pin is not None and (pin.y is not None or pin.row is not None):
+        rank = "col" if axis == "x" else "row"
+        if pin is not None and (getattr(pin, axis) is not None
+                                or getattr(pin, rank) is not None):
             return False
         if any(stream.route is not None and stream.route.manual
                for port in unit.ports.values()
@@ -210,7 +219,7 @@ def _movable(group: tuple[Unit, ...]) -> bool:
     return True
 
 
-def _legal(fs: Flowsheet, group: tuple[Unit, ...], dy: float,
+def _legal(fs: Flowsheet, group: tuple[Unit, ...], delta: float, axis: str,
            boxes: dict[Unit, tuple[float, float, float, float]]) -> bool:
     """Reject pin, grid-order, manual-route, and occupied-box conflicts.
 
@@ -220,8 +229,10 @@ def _legal(fs: Flowsheet, group: tuple[Unit, ...], dy: float,
         Current settled drawing.
     group : tuple[Unit, ...]
         Connected process units that would move together.
-    dy : float
-        Proposed vertical shift.
+    delta : float
+        Proposed shift on the selected axis.
+    axis : str
+        ``"x"`` or ``"y"``.
     boxes : dict[Unit, tuple[float, float, float, float]]
         Current process reservations, including control clearance.
 
@@ -231,19 +242,22 @@ def _legal(fs: Flowsheet, group: tuple[Unit, ...], dy: float,
         Whether inexpensive preflight checks permit an exact trial.
     """
     moving = set(group)
-    if not group or not _movable(group) or abs(dy) < _MIN_SHIFT or abs(dy) > _MAX_SHIFT:
+    maximum = _MAX_COLUMN_SHIFT if axis == "x" else _MAX_SHIFT
+    if not group or not _movable(group, axis) or not _MIN_SHIFT <= abs(delta) <= maximum:
         return False
     for unit in group:
-        lower, upper = grid_limits(unit, "y", boxes, moving=moving)
-        if not lower <= _placed(unit).y + dy <= upper:
+        lower, upper = grid_limits(unit, axis, boxes, moving=moving)
+        if not lower <= getattr(_placed(unit), axis) + delta <= upper:
             return False
-    shifted = {unit: (box[0], box[1] + dy, box[2], box[3] + dy)
+    offset = (delta, 0.0) if axis == "x" else (0.0, delta)
+    shifted = {unit: (box[0] + offset[0], box[1] + offset[1],
+                      box[2] + offset[0], box[3] + offset[1])
                for unit, box in boxes.items() if unit in moving}
     for unit, box in shifted.items():
         if any(_overlap(box, other_box) for other, other_box in boxes.items()
                if other not in moving):
             return False
-    placed = {unit: replace(_placed(unit), y=_placed(unit).y + dy)
+    placed = {unit: replace(_placed(unit), **{axis: getattr(_placed(unit), axis) + delta})
               if unit in moving else _placed(unit) for unit in boxes}
     drawn = {unit: unit_box(unit, frame) for unit, frame in placed.items()}
     rects = [Rect(box[0], box[2], box[1], box[3]) for box in drawn.values()]
@@ -339,7 +353,7 @@ def _groups(fs: Flowsheet, structure: Structure,
     return result
 
 
-def _estimate(moving: set[Unit], dy: float,
+def _estimate(moving: set[Unit], delta: float, axis: str,
               touching: dict[Unit, list[int]], streams: list[Stream]) -> float:
     """Estimate the affected route length and directed-bend reduction.
 
@@ -347,8 +361,10 @@ def _estimate(moving: set[Unit], dy: float,
     ----------
     moving : set[Unit]
         Process group proposed for translation.
-    dy : float
-        Proposed vertical shift.
+    delta : float
+        Proposed shift on the selected axis.
+    axis : str
+        ``"x"`` or ``"y"``.
     touching : dict[Unit, list[int]]
         Process-stream indices indexed by either endpoint unit.
     streams : list[Stream]
@@ -372,7 +388,7 @@ def _estimate(moving: set[Unit], dy: float,
         for unit, port in ((source, stream.source), (dest, stream.dest)):
             if unit in moving:
                 frame = _placed(unit)
-                frame = replace(frame, y=frame.y + dy)
+                frame = replace(frame, **{axis: getattr(frame, axis) + delta})
             else:
                 frame = _placed(unit)
             proposed.append(resolve_port(unit, frame, port.name))
@@ -472,7 +488,9 @@ def generate(fs: Flowsheet, structure: Structure | None = None,
     Returns
     -------
     tuple[Candidate, ...]
-        Proposals ranked by a cheap cost reduction, then stable indices.
+        Existing vertical and face proposals retain priority; horizontal
+        proposals fill remaining slots by cheap cost reduction and stable
+        indices.
         Call ``candidate.evaluate(fs)`` for an isolated completed trial.
 
     Raises
@@ -492,9 +510,9 @@ def generate(fs: Flowsheet, structure: Structure | None = None,
     boxes = {unit: _box(unit, _placed(unit), pads.get(unit, Pad())) for unit in units}
     groups = _groups(fs, structure, units)
     global_index = {unit: index for index, unit in enumerate(fs.units)}
-    proposals: dict[tuple[tuple[int, ...], float], Candidate] = {}
-    opportunities: dict[tuple[tuple[int, ...], float],
-                        tuple[float, int, int, float, tuple[Unit, ...]]] = {}
+    proposals: dict[tuple[tuple[int, ...], str, float], Candidate] = {}
+    opportunities: dict[tuple[tuple[int, ...], str, float],
+                        tuple[float, int, int, str, float, tuple[Unit, ...]]] = {}
     streams = process_streams(fs)
     global_stream_index = {id(stream): index for index, stream in enumerate(fs.streams)}
     touching: dict[Unit, list[int]] = {}
@@ -506,40 +524,61 @@ def generate(fs: Flowsheet, structure: Structure | None = None,
         if stream.is_recycle:
             continue
         source, dest = stream.source.owner, stream.dest.owner
-        if source is None or dest is None or _placed(source).col == _placed(dest).col:
+        if source is None or dest is None:
             continue
         first = resolve_port(source, _placed(source), stream.source.name)
         second = resolve_port(dest, _placed(dest), stream.dest.name)
-        if first.face not in ("E", "W") or second.face not in ("E", "W"):
+        if first.face in ("E", "W") and second.face in ("E", "W"):
+            if _placed(source).col == _placed(dest).col:
+                continue
+            axis = "y"
+            coordinate = 1
+        elif first.face in ("N", "S") and second.face in ("N", "S"):
+            if _placed(source).row == _placed(dest).row:
+                continue
+            axis = "x"
+            coordinate = 0
+        else:
             continue
-        for target, dy in ((dest, first.anchor[1] - second.anchor[1]),
-                           (source, second.anchor[1] - first.anchor[1])):
+        for target, delta in ((dest, first.anchor[coordinate] - second.anchor[coordinate]),
+                              (source, second.anchor[coordinate] - first.anchor[coordinate])):
             group = groups.get(target)
             if group is None or source in group and dest in group:
                 continue
-            if not _MIN_SHIFT <= abs(dy) <= _MAX_SHIFT or not _movable(group):
+            maximum = _MAX_COLUMN_SHIFT if axis == "x" else _MAX_SHIFT
+            if not _MIN_SHIFT <= abs(delta) <= maximum or not _movable(group, axis):
                 continue
             indices = tuple(sorted(global_index[unit] for unit in group))
-            key = indices, round(dy, 6)
-            choice = (-abs(dy), global_stream_index[id(stream)], global_index[target], dy, group)
+            key = indices, axis, round(delta, 6)
+            choice = (-abs(delta) / maximum, global_stream_index[id(stream)],
+                      global_index[target], axis, delta, group)
             if key not in opportunities or choice[:3] < opportunities[key][:3]:
                 opportunities[key] = choice
-    for _, stream_index, _, dy, group in sorted(opportunities.values())[:MAX_PREFLIGHTS]:
-        if not _legal(fs, group, dy, boxes):
+    vertical = sorted(value for value in opportunities.values() if value[3] == "y")
+    horizontal = sorted(value for value in opportunities.values() if value[3] == "x")
+    preflights = vertical[:MAX_PREFLIGHTS]
+    preflights += horizontal[:MAX_PREFLIGHTS - len(preflights)]
+    for _, stream_index, _, axis, delta, group in preflights:
+        if not _legal(fs, group, delta, axis, boxes):
             continue
-        gain = _estimate(set(group), dy, touching, streams)
+        gain = _estimate(set(group), delta, axis, touching, streams)
         if gain <= 0:
             continue
         indices = tuple(sorted(global_index[unit] for unit in group))
-        key = indices, round(dy, 6)
-        candidate = Candidate(indices, round(dy, 6), stream_index, round(gain, 6))
+        key = indices, axis, round(delta, 6)
+        candidate = Candidate(indices, round(delta, 6) if axis == "y" else 0.0,
+                              stream_index, round(gain, 6),
+                              dx=round(delta, 6) if axis == "x" else 0.0)
         if key not in proposals or candidate.estimated_gain > proposals[key].estimated_gain:
             proposals[key] = candidate
-    moves = sorted(proposals.values(),
-                   key=lambda item: (-item.estimated_gain, item.stream,
-                                     item.units, item.dy))[:MAX_CANDIDATES]
+    vertical_moves = sorted((item for item in proposals.values() if item.dy),
+                            key=lambda item: (-item.estimated_gain, item.stream,
+                                              item.units, item.dy))[:MAX_CANDIDATES]
+    horizontal_moves = sorted((item for item in proposals.values() if item.dx),
+                              key=lambda item: (-item.estimated_gain, item.stream,
+                                                item.units, item.dx))
     faces = _face_candidates(fs, MAX_CANDIDATES)
-    return tuple(sorted((*moves, *faces),
-                        key=lambda item: (-item.estimated_gain, item.stream,
-                                          item.units, item.dy, item.face_choices))
-                 [:min(limit, MAX_CANDIDATES)])
+    established = sorted((*vertical_moves, *faces),
+                         key=lambda item: (-item.estimated_gain, item.stream,
+                                           item.units, item.dy, item.face_choices))
+    return tuple((*established, *horizontal_moves)[:min(limit, MAX_CANDIDATES)])

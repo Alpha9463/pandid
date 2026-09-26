@@ -34,6 +34,29 @@ def _off_lane() -> Flowsheet:
     return fs
 
 
+def _off_column() -> Flowsheet:
+    """Build a vertical block run with a displaced free column.
+
+    Returns
+    -------
+    Flowsheet
+        Routed drawing with a correctable horizontal dogleg.
+    """
+    fs = Flowsheet("Off-column block")
+    upper = fs.add(U.Block("Upper", inputs=0, outputs=["S"]))
+    lower = fs.add(U.Block("Lower", inputs=["N"], outputs=0))
+    fs.connect(upper.out_1, lower.in_1)
+    upper.pin(row=0)
+    lower.pin(row=2)
+    fs.layout()
+    assert lower.frame is not None and lower._slot is not None
+    lower._slot.col = 1
+    lower.frame.col = 1
+    lower.frame.x += 120
+    fs.route()
+    return fs
+
+
 def _diamond() -> Flowsheet:
     """Build two two-unit arms with shared split and merge.
 
@@ -86,6 +109,63 @@ def test_off_lane_proposal_qualifies_without_changing_the_live_sheet() -> None:
     assert measure_final(fs) == before
     assert tuple(unit.frame for unit in fs.units) == frames
     assert tuple(stream.route for stream in fs.streams) == routes
+
+
+def test_off_column_proposal_qualifies_without_changing_row_pins() -> None:
+    """A vertical dogleg admits a horizontal isolated trial.
+
+    Returns
+    -------
+    None
+        The completed route improves while row pins and live state hold.
+    """
+    fs = _off_column()
+    before = measure_final(fs)
+    frames = tuple(unit.frame for unit in fs.units)
+    proposals = generate(fs)
+    assert proposals == generate(_off_column())
+    horizontal = next(candidate for candidate in proposals if candidate.dx)
+    assert horizontal.dy == 0
+    result = horizontal.evaluate(fs)
+    assert result.qualified
+    assert result.after.bends < result.before.bends
+    assert result.after.pin_geometry == result.before.pin_geometry
+    assert measure_final(fs) == before
+    assert tuple(unit.frame for unit in fs.units) == frames
+
+
+def test_horizontal_proposals_leave_existing_vertical_priority_intact() -> None:
+    """A horizontal opportunity does not consume a vertical trial slot.
+
+    Returns
+    -------
+    None
+        Existing vertical candidates precede new horizontal candidates.
+    """
+    fs = Flowsheet("Mixed moves")
+    feed = fs.add(U.Feed("Feed"))
+    pump = fs.add(U.Pump("Pump"))
+    product = fs.add(U.Product("Product"))
+    upper = fs.add(U.Block("Upper", inputs=0, outputs=["S"]))
+    lower = fs.add(U.Block("Lower", inputs=["N"], outputs=0))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, product.inlet)
+    fs.connect(upper.out_1, lower.in_1)
+    upper.pin(row=0)
+    lower.pin(row=2)
+    fs.layout()
+    assert pump.frame is not None and lower.frame is not None
+    assert lower._slot is not None and lower._slot.col is not None
+    assert lower.frame.col is not None
+    pump.frame.y += 70
+    lower._slot.col += 1
+    lower.frame.col += 1
+    lower.frame.x += 120
+    fs.route()
+    proposals = generate(fs)
+    assert proposals[0].units == (1,) and proposals[0].dy == -70
+    assert all(candidate.dy for candidate in proposals[:3])
+    assert any(candidate.dx for candidate in proposals[3:])
 
 
 def test_closed_arms_do_not_offer_singleton_interior_or_shared_endpoint_moves() -> None:
@@ -266,6 +346,7 @@ def test_face_candidates_skip_a_nozzle_point_taken_by_an_earlier_port() -> None:
     fs.layout()
     fs.route()
 
+    assert controller.frame is not None
     assert controller.frame.port_faces["sig_in"] == "N"
     choices = {candidate.face_choices for candidate in generate(fs) if candidate.face_choices}
     assert ((4, "sig_out", "E"),) in choices

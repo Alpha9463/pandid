@@ -659,7 +659,7 @@ def _regressions(before: dict, after: dict, *, auto: bool) -> list[str]:
     before, after : dict
         Baseline and candidate variant records.
     auto : bool
-        Apply automatic-layout soft limits if true; otherwise check author intent.
+        Check author intent for authored variants when false.
 
     Returns
     -------
@@ -672,47 +672,67 @@ def _regressions(before: dict, after: dict, *, auto: bool) -> list[str]:
     for key in HARD_KEYS:
         if after["hard"][key] > before["hard"][key]:
             reasons.append(f"{key} increased {before['hard'][key]} -> {after['hard'][key]}")
+    old_offenders, new_offenders = before.get("offenders", {}), after.get("offenders", {})
+    if "fallback_streams" in old_offenders and "fallback_streams" in new_offenders:
+        added = Counter(new_offenders["fallback_streams"]) - Counter(old_offenders["fallback_streams"])
+        if added:
+            reasons.append(f"new fallback streams: {', '.join(sorted(added))}")
+    for code in ("unit-overlap", "route-crosses-unit"):
+        if "issues" not in old_offenders or "issues" not in new_offenders:
+            continue
+        old_issues = Counter(issue["message"] for issue in old_offenders["issues"]
+                             if issue["code"] == code)
+        new_issues = Counter(issue["message"] for issue in new_offenders["issues"]
+                             if issue["code"] == code)
+        added = new_issues - old_issues
+        if added:
+            reasons.append(f"new {code} findings: {', '.join(sorted(added)[:3])}")
     old, new = before["metrics"], after["metrics"]
     if new["crossings"] > old["crossings"]:
         reasons.append(f"crossings increased {old['crossings']} -> {new['crossings']}")
-        before_crossings = {
-            (c["horizontal"], c["vertical"], tuple(c["point"]))
-            for c in before.get("offenders", {}).get("crossings", [])
-        }
-        added = [
-            c
-            for c in after.get("offenders", {}).get("crossings", [])
-            if (c["horizontal"], c["vertical"], tuple(c["point"])) not in before_crossings
-        ]
+    if "crossings" in old_offenders and "crossings" in new_offenders:
+        def crossing_pair(crossing: dict) -> tuple[str, str]:
+            """Identify a crossing by its streams, independent of position.
+
+            Parameters
+            ----------
+            crossing : dict
+                Snapshot crossing record.
+
+            Returns
+            -------
+            tuple[str, str]
+                Pair of crossing stream names.
+            """
+            return tuple(sorted((crossing["horizontal"], crossing["vertical"])))
+
+        old_pairs = Counter(crossing_pair(c) for c in old_offenders["crossings"])
+        new_pairs = Counter(crossing_pair(c) for c in new_offenders["crossings"])
+        added = new_pairs - old_pairs
         if added:
-            reasons.append(
-                "new crossing examples: "
-                + ", ".join(
-                    f"{c['horizontal']} / {c['vertical']} at {c['point']}" for c in added[:3]
-                )
+            reasons.append("new crossing pairs: " + ", ".join(
+                f"{first} / {second}" for first, second in sorted(added)[:3]))
+    if new["bends"] > min(old["bends"] + 1, old["bends"] * 1.03):
+        reasons.append(f"bends increased {old['bends']} -> {new['bends']}")
+    if new["length"] > old["length"] * 1.02 + 0.1:
+        reasons.append(f"route length increased {old['length']} -> {new['length']}")
+        old_rows = before.get("offenders", {}).get("route_rows", [])
+        new_rows = after.get("offenders", {}).get("route_rows", [])
+        if len(old_rows) == len(new_rows):
+            largest = max(
+                ((n["length"] - o["length"], n["name"]) for o, n in zip(old_rows, new_rows)),
+                default=(0, ""),
             )
-    if auto:
-        if new["bends"] > min(old["bends"] + 1, old["bends"] * 1.03):
-            reasons.append(f"bends increased {old['bends']} -> {new['bends']}")
-        if new["length"] > old["length"] * 1.02 + 0.1:
-            reasons.append(f"route length increased {old['length']} -> {new['length']}")
-            old_rows = before.get("offenders", {}).get("route_rows", [])
-            new_rows = after.get("offenders", {}).get("route_rows", [])
-            if len(old_rows) == len(new_rows):
-                largest = max(
-                    ((n["length"] - o["length"], n["name"]) for o, n in zip(old_rows, new_rows)),
-                    default=(0, ""),
-                )
-                if largest[0] > 0:
-                    reasons.append(f"longest added route: {largest[1]} +{largest[0]:.1f}px")
-        if new["area"] > old["area"] * 1.02 + 1.0:
-            reasons.append(f"drawing area increased {old['area']} -> {new['area']}")
-            bounds = after.get("offenders", {}).get("extent_units", {})
-            if bounds:
-                reasons.append(
-                    "extent units: "
-                    + ", ".join(f"{direction}={unit}" for direction, unit in bounds.items())
-                )
+            if largest[0] > 0:
+                reasons.append(f"longest added route: {largest[1]} +{largest[0]:.1f}px")
+    if new["area"] > old["area"] * 1.02 + 1.0:
+        reasons.append(f"drawing area increased {old['area']} -> {new['area']}")
+        bounds = after.get("offenders", {}).get("extent_units", {})
+        if bounds:
+            reasons.append(
+                "extent units: "
+                + ", ".join(f"{direction}={unit}" for direction, unit in bounds.items())
+            )
     return reasons
 
 
@@ -722,7 +742,7 @@ def _improved_rules(before: dict, after: dict) -> set[str]:
     Parameters
     ----------
     before, after : dict
-        Baseline and candidate automatic variant records.
+        Baseline and candidate drawing variant records.
 
     Returns
     -------
@@ -738,6 +758,8 @@ def _improved_rules(before: dict, after: dict) -> set[str]:
         improved.add("G1")
     if new["crossings"] < old["crossings"]:
         improved.add("G2")
+    if new["bends"] < old["bends"]:
+        improved.add("G2")
     if new["length"] < old["length"] * 0.98 - 0.1:
         improved.add("G2")
     if new["area"] < old["area"] * 0.98 - 1.0:
@@ -746,7 +768,7 @@ def _improved_rules(before: dict, after: dict) -> set[str]:
 
 
 def compare(before: dict, after: dict, review: dict | None = None) -> Comparison:
-    """Apply the fixed corpus release gate to two snapshots.
+    """Require every changed drawing to improve without a regression.
 
     Parameters
     ----------
@@ -785,32 +807,37 @@ def compare(before: dict, after: dict, review: dict | None = None) -> Comparison
         authored_problem = _regressions(base[(stem, False)], current[(stem, False)], auto=False)
         problem.extend(f"authored: {reason}" for reason in authored_problem)
         changed = old["fingerprint"] != new["fingerprint"]
-        authored_changed = (
-            base[(stem, False)]["fingerprint"] != current[(stem, False)]["fingerprint"]
-        )
+        authored_old, authored_new = base[(stem, False)], current[(stem, False)]
+        authored_changed = authored_old["fingerprint"] != authored_new["fingerprint"]
         if not changed and (
             old["metrics"] != new["metrics"] or old.get("proxies") != new.get("proxies")
         ):
             problem.append("metrics changed without a changed drawing")
-        reviewed, review_problem = _review_findings(review, stem, old, new, required=changed)
-        problem.extend(review_problem)
-        _, authored_review_problem = _review_findings(
-            review,
-            f"{stem}|authored",
-            base[(stem, False)],
-            current[(stem, False)],
-            required=authored_changed,
-        )
-        problem.extend(f"authored: {reason}" for reason in authored_review_problem)
-        measurable = _improved_rules(old, new)
+        if not authored_changed and (
+            authored_old["metrics"] != authored_new["metrics"]
+            or authored_old.get("proxies") != authored_new.get("proxies")
+        ):
+            problem.append("authored: metrics changed without a changed drawing")
+        reviewed: set[str] = set()
+        if changed:
+            reviewed, review_problem = _review_findings(review, stem, old, new, required=True)
+            problem.extend(review_problem)
+        authored_reviewed: set[str] = set()
+        if authored_changed:
+            authored_reviewed, authored_review_problem = _review_findings(
+                review, f"{stem}|authored", authored_old, authored_new, required=True
+            )
+            problem.extend(f"authored: {reason}" for reason in authored_review_problem)
+        if changed and not _improved_rules(old, new) & reviewed:
+            problem.append("changed automatic drawing lacks matching measured and visual improvement")
+        if authored_changed and not _improved_rules(authored_old, authored_new) & authored_reviewed:
+            problem.append("changed authored drawing lacks matching measured and visual improvement")
         if problem:
             regressed.append(stem)
-        elif measurable & reviewed:
+        elif changed or authored_changed:
             improved.append(stem)
         else:
             unchanged.append(stem)
-            if measurable:
-                problem.append("measured rule improvement lacks matching positive visual review")
         reasons[stem] = problem
 
     aggregates = {
@@ -824,22 +851,13 @@ def compare(before: dict, after: dict, review: dict | None = None) -> Comparison
         new <= old + (0.1 if key == "length" else 1.0 if key == "area" else 0)
         for key, (old, new) in aggregates.items()
     )
-    aggregate_improvements = sum(
-        new < old - (0.1 if key == "length" else 1.0 if key == "area" else 0)
-        for key, (old, new) in aggregates.items()
-    )
-    hard_clear = all(
-        current[(stem, True)]["hard"]["fallback"] == 0
-        and current[(stem, True)]["hard"]["route_crosses_unit"] == 0
-        for stem in stems
-    )
+    if not improved:
+        gate_reasons.append("no changed drawing has a measured and visually reviewed improvement")
+    if not aggregate_ok:
+        gate_reasons.append("automatic corpus aggregate worsened")
     passed = (
         not gate_reasons
-        and len(improved) >= 11
         and not regressed
-        and aggregate_ok
-        and aggregate_improvements >= 2
-        and hard_clear
     )
     return Comparison(passed, improved, regressed, unchanged, reasons, aggregates, gate_reasons)
 

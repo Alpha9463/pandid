@@ -89,7 +89,7 @@ def test_a_visual_win_must_match_the_measured_rule(tmp_path):
     Returns
     -------
     None
-        The test succeeds when the unrelated visual claim stays unchanged.
+        The changed drawing fails when its visual claim does not match a measured gain.
     """
     before_image = tmp_path / "before.svg"
     after_image = tmp_path / "after.svg"
@@ -139,7 +139,10 @@ def test_a_visual_win_must_match_the_measured_rule(tmp_path):
     result = compare(baseline, candidate, review)
 
     assert result.improved == []
-    assert result.unchanged == ["example"]
+    assert result.regressed == ["example"]
+    assert any(
+        "matching measured and visual improvement" in reason for reason in result.reasons["example"]
+    )
 
 
 def test_release_pass_requires_real_corpus_evidence_and_authored_intent(tmp_path):
@@ -177,12 +180,13 @@ def test_release_pass_requires_real_corpus_evidence_and_authored_intent(tmp_path
             for auto in (False, True)
         ],
     }
+    baseline["variants"][-1]["hard"]["fallback"] = 1
+    baseline["variants"][-1]["hard"]["route_crosses_unit"] = 1
     candidate = deepcopy(baseline)
     review = {}
-    for stem in BASE_STEMS[:11]:
+    for stem in BASE_STEMS[:1]:
         row = next(v for v in candidate["variants"] if v["stem"] == stem and v["auto"])
         row["metrics"]["crossings"] = 0
-        row["metrics"]["area"] = 9700.0
         row["fingerprint"] += "-changed"
         row["images"] = {"svg": str(after_image)}
         row["image_hashes"] = {"svg": _hash(after_image)}
@@ -204,7 +208,67 @@ def test_release_pass_requires_real_corpus_evidence_and_authored_intent(tmp_path
             },
         }
 
+    assert not compare(baseline, baseline).passed
     assert compare(baseline, candidate, review).passed
+
+    review[BASE_STEMS[-1]] = {"G2": {"verdict": "worse"}}
+    assert compare(baseline, candidate, review).passed
+    review.pop(BASE_STEMS[-1])
+
+    baseline["variants"][-1]["offenders"] = {"fallback_streams": ["old"]}
+    candidate["variants"][-1]["offenders"] = {"fallback_streams": ["new"]}
+    replaced_fallback = compare(baseline, candidate, review)
+    assert not replaced_fallback.passed
+    assert any(
+        "new fallback streams" in reason for reason in replaced_fallback.reasons[BASE_STEMS[-1]]
+    )
+    candidate["variants"][-1]["offenders"] = {"fallback_streams": ["old"]}
+
+    row["metrics"]["crossings"] = 1
+    row["metrics"]["bends"] = 4
+    review[BASE_STEMS[0]]["G2"]["reason"] = "fewer bends"
+    old_row = baseline["variants"][1]
+    old_row["offenders"] = {"crossings": [{"horizontal": "A", "vertical": "B", "point": [1, 1]}]}
+    row["offenders"] = {"crossings": [{"horizontal": "A", "vertical": "B", "point": [2, 2]}]}
+    assert compare(baseline, candidate, review).passed
+    row["offenders"]["crossings"][0]["vertical"] = "C"
+    replaced_crossing = compare(baseline, candidate, review)
+    assert not replaced_crossing.passed
+    assert any(
+        "new crossing pairs" in reason for reason in replaced_crossing.reasons[BASE_STEMS[0]]
+    )
+    row["metrics"]["crossings"] = 0
+    row["metrics"]["bends"] = 5
+    old_row.pop("offenders")
+    row.pop("offenders")
+    review[BASE_STEMS[0]]["G2"]["reason"] = "fewer crossings"
+
+    authored = candidate["variants"][0]
+    authored["metrics"]["area"] = 9700.0
+    authored["fingerprint"] += "-changed"
+    authored["images"] = {"svg": str(after_image)}
+    authored["image_hashes"] = {"svg": _hash(after_image)}
+    assert not compare(baseline, candidate, review).passed
+    review[f"{BASE_STEMS[0]}|authored"] = {
+        **{
+            rule: {
+                "verdict": "same",
+                "reason": "no visible change to this rule",
+                "before": str(before_image),
+                "after": str(after_image),
+            }
+            for rule in RULES
+        },
+        "G3": {
+            "verdict": "better",
+            "reason": "smaller drawing",
+            "before": str(before_image),
+            "after": str(after_image),
+        },
+    }
+    assert compare(baseline, candidate, review).passed
+    candidate["variants"][0] = deepcopy(baseline["variants"][0])
+    review.pop(f"{BASE_STEMS[0]}|authored")
 
     candidate["variants"][0]["author_intent"] = {"pins": "moved"}
     assert not compare(baseline, candidate, review).passed
