@@ -39,10 +39,50 @@ if TYPE_CHECKING:
 _ESCAPE = 25.0
 
 
-def select_faces(fs: "Flowsheet") -> None:
-    """Choose a face for every movable port with none named or pinned."""
+def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, ...]:
+    """List automatic face choices for a connected port.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Drawing whose automatic-face setting controls selection.
+    unit : Unit
+        Owner of the port.
+    port_name : str
+        Canonical connected port name.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Drawn-space alternatives in symbol preference order. Author
+        nozzles, pinned nozzles, and fixed ports have no alternatives.
+    """
     from pandid.portgeom import pin_intent, port_faces
 
+    frame = unit.frame
+    if not fs.auto_faces or frame is None or unit.ports[port_name].stream is None:
+        return ()
+    if port_name in unit._port_faces:
+        return ()
+    if any(port_name == port for port, _ in pin_intent(unit).values()):
+        return ()
+    menu = tuple(port_faces(unit, port_name, frame))
+    return menu if len(menu) > 1 else ()
+
+
+def select_faces(fs: "Flowsheet") -> None:
+    """Choose a face for every movable port without author overrides.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Placed drawing whose resolved frame faces are updated.
+
+    Returns
+    -------
+    None
+        Automatic selections are stored on each resolved frame.
+    """
     for unit in fs.units:
         frame = unit.frame
         if frame is None:
@@ -72,12 +112,9 @@ def select_faces(fs: "Flowsheet") -> None:
         # engine's preference, and it is the preference that yields.
         # :meth:`~pandid.units.Unit.nozzle` is how a face is *chosen*
         # for a pinned nozzle, and it wins here by the same exemption.
-        pinned = {port for port, _ in pin_intent(unit).values() if port is not None}
         live = [name for name, port in unit.ports.items() if port.stream is not None]
-        movable = [name for name in live
-                   if name not in unit._port_faces
-                   and name not in pinned
-                   and len(port_faces(unit, name, frame)) > 1]
+        menus = {name: menu for name in live
+                 if (menu := eligible_faces(fs, unit, name))}
         # Points already spoken for: a nozzle the author named, one
         # fixed by physics. Two live connections resolving to one point
         # is a hard validation error, and the selector must not be the
@@ -95,12 +132,12 @@ def select_faces(fs: "Flowsheet") -> None:
         # rule and the selector still cannot break it; what the flag
         # changes is only that ``validate`` no longer *reports* the
         # coincidence, and it reports it for everything else.
-        taken = {_point(unit, frame, name) for name in live if name not in movable}
-        for name in movable:
+        taken = {_point(unit, frame, name) for name in live if name not in menus}
+        for name, menu in menus.items():
             target = _reference(unit.ports[name])
             if target is None:
                 continue
-            face = _best(unit, frame, name, port_faces(unit, name, frame), target, taken)
+            face = _best(unit, frame, name, list(menu), target, taken)
             if face is None:
                 continue  # all faces taken; leave the symbol's
             frame.port_faces[name] = face

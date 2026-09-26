@@ -61,6 +61,32 @@ TRAVEL: Dict[str, Tuple[int, float]] = {
 }
 
 
+def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
+    """Return the router's outward stand-off for a placed nozzle.
+
+    Parameters
+    ----------
+    kind : str
+        Owner unit kind.
+    label_pos : str or None
+        Resolved label side on the owner's frame.
+    face : str
+        Drawn-space port face.
+
+    Returns
+    -------
+    float
+        Distance to the port's projected escape node in pixels.
+    """
+    if kind in ("feed", "product"):
+        return 25.0
+    if (face, label_pos) in (("N", "top"), ("S", "bottom")):
+        return 45.0
+    if (face, label_pos) in (("W", "left"), ("E", "right")):
+        return 50.0
+    return 25.0
+
+
 def share_escape_room(
     start: Tuple[float, float],
     start_dir: Optional[str],
@@ -206,16 +232,7 @@ class VisibilityGraph:
                 self.port_dirs[(u.name, name)] = o_dir
 
                 px_proj, py_proj = ax, ay
-                proj_dist = 25.0
-                if u.kind not in ("feed", "product"):
-                    if o_dir == "N" and lpos == "top":
-                        proj_dist = 45.0
-                    elif o_dir == "S" and lpos == "bottom":
-                        proj_dist = 45.0
-                    elif o_dir == "W" and lpos == "left":
-                        proj_dist = 50.0
-                    elif o_dir == "E" and lpos == "right":
-                        proj_dist = 50.0
+                proj_dist = escape_distance(u.kind, lpos, o_dir)
                 if o_dir == "N":
                     py_proj -= proj_dist
                 elif o_dir == "S":
