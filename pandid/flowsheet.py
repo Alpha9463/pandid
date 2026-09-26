@@ -1856,7 +1856,20 @@ class Flowsheet:
         again. Without that a ``pin()`` and a hand-called ``layout()``
         moved the equipment and left the pipe where it was, drawn from
         the new nozzle to the old run and so no longer orthogonal.
+
+        Parameters
+        ----------
+        engine : object or None, optional
+            Layout engine. ``None`` selects the default engine and enables
+            bounded refinement after routing.
+
+        Returns
+        -------
+        None
+            Resolved frames are stored on the drawing.
         """
+        self._default_layout = engine is None
+        self._refinement_attempted = False
         if engine is None:
             from pandid.layout import default_layout_engine
             engine = default_layout_engine
@@ -1875,9 +1888,24 @@ class Flowsheet:
         :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES`. A sheet that
         never settles leaves ``route_converged`` false, which
         :meth:`validate` reports as a warning.
+
+        One fully routed local proposal may replace the default result
+        when it improves final-drawing quality without new defects.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router. ``None`` selects the default router and its bounded
+            placement refinement.
+
+        Returns
+        -------
+        None
+            Resolved routes and control placements are stored on the drawing.
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
+        default_router = router is None
         if router is None:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
@@ -1901,6 +1929,11 @@ class Flowsheet:
         # routes are stale -- which they are: half of them are this
         # run's and half the previous one's.
         self._route_stale = False
+        if (default_router and getattr(self, "_default_layout", False)
+                and not self._refinement_attempted):
+            from pandid.layout.trials import refine_default
+            self._refinement_attempted = True
+            refine_default(self)
 
     def _resolve_geometry(self) -> None:
         """Bring the frames and routes up to date with the model.

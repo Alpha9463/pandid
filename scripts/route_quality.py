@@ -68,6 +68,7 @@ import gallery  # noqa: E402
 from pandid.flowsheet import Flowsheet  # noqa: E402
 from pandid.units import Feed, Product, Pump, Valve  # noqa: E402
 import pandid.routing.astar as astar_mod  # noqa: E402
+from pandid.routing import DefaultRouter  # noqa: E402
 from pandid.routing.astar import (  # noqa: E402
     MAX_EXPANSIONS_PER_NODE,
     MIN_EXPANSION_BUDGET,
@@ -152,6 +153,29 @@ def find_crossings_and_overlaps(fs: Flowsheet) -> tuple[list[Crossing], list[Ove
 
 @dataclass
 class Call:
+    """One path search and the drawing that requested it.
+
+    Attributes
+    ----------
+    sheet : Flowsheet
+        Live or isolated drawing routed during this call.
+    graph : VisibilityGraph
+        Visibility graph used by the search.
+    start, goal : Point
+        Projected route endpoints.
+    start_dir, goal_dir : str or None
+        Required endpoint directions.
+    edge_penalties : dict
+        Costs from earlier streams in the same pass.
+    is_recycle : bool
+        Whether the stream is a recycle.
+    result : list[Point]
+        Search result before route separation.
+    expansions, budget : int
+        Search effort and its limit.
+    """
+
+    sheet: Flowsheet
     graph: VisibilityGraph
     start: Point
     goal: Point
@@ -165,69 +189,188 @@ class Call:
 
 
 class Recorder:
-    """Capture every ``find_path`` call made during one ``fs.route()``,
-    without changing a single decision it makes.
+    """Record router searches and their owning drawing.
 
-    Wraps ``pandid.routing.astar.find_path`` for the ``with`` block's
-    duration. ``DefaultRouter.route()`` does ``from pandid.routing.astar
-    import find_path`` fresh on every call, which is an attribute lookup on
-    the module at that moment -- so patching the module's attribute here is
-    enough, and nothing in ``pandid/`` has to change to be measured. Restored
-    on exit regardless of how the block ends.
-
-    Two things ride along for free because they are already in scope at the
-    point ``find_path`` is called: the *exact* ``edge_penalties`` state
-    earlier streams left behind (a shallow copy, since values are floats)
-    and expansions spent, counted by wrapping ``heapq.heappop`` only for the
-    duration of the one nested call -- it is what ``find_path``'s own budget
-    check counts, so this reads the same number the router would raise on.
-
-    The recorded ``result`` is the *pre-separation* path: graph nodes only,
-    before ``[start] + result + [goal]`` and before ``separate_streams``
-    offsets anything sideways by a few pixels to de-overlap parallel runs.
-    That is deliberately what :func:`avoidable` re-routes against -- every
-    coordinate in it is a member of ``graph.xs`` / ``graph.ys``, so a lane
-    to ban can be read straight off it, where the drawn (separated) version
-    can sit a few pixels off every lane the graph carries. A crossing
-    between two perpendicular segments is not moved by a 6px parallel
-    offset, so this changes nothing about which crossings are found --
-    only how the alternate-route check for one is carried out.
+    Attributes
+    ----------
+    calls : list[Call]
+        Search calls in execution order, including isolated trials.
     """
 
     def __init__(self) -> None:
+        """Prepare an empty route-search log.
+
+        Returns
+        -------
+        None
+            Search calls are stored in ``calls``.
+        """
         self.calls: list[Call] = []
+        self._active_sheet: Flowsheet | None = None
+        self._count = 0
 
     def __enter__(self) -> "Recorder":
+        """Install temporary route and path-search observers.
+
+        Returns
+        -------
+        Recorder
+            Active observer for the live drawing.
+        """
+        global _ACTIVE_RECORDER
+        if _ACTIVE_RECORDER is not None:
+            raise RuntimeError("route recorders cannot be nested")
         self._original = astar_mod.find_path
-        recorder = self
-
-        def wrapped(graph, start, goal, start_dir=None, goal_dir=None, edge_penalties=None,
-                    is_recycle=False, crossing_index=None):
-            count = [0]
-            real_heappop = heapq.heappop
-
-            def counting_heappop(heap):
-                count[0] += 1
-                return real_heappop(heap)
-
-            heapq.heappop = counting_heappop
-            try:
-                result = recorder._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
-                                             is_recycle, crossing_index)
-            finally:
-                heapq.heappop = real_heappop
-            budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
-            recorder.calls.append(
-                Call(graph, start, goal, start_dir, goal_dir, dict(edge_penalties or {}), is_recycle,
-                     list(result), count[0], budget)
-            )
-            return result
-
-        astar_mod.find_path = wrapped
+        self._original_route = DefaultRouter.route
+        _ACTIVE_RECORDER = self
+        DefaultRouter.route = _recorded_route
+        astar_mod.find_path = self._record_path
         return self
 
+    def _record_route(self, router: DefaultRouter, fs: Flowsheet) -> None:
+        """Associate one router pass with its drawing.
+
+        Parameters
+        ----------
+        router : DefaultRouter
+            Router performing the pass.
+        fs : Flowsheet
+            Drawing being routed.
+
+        Returns
+        -------
+        None
+            Routes are stored on ``fs`` by the original router.
+        """
+        previous = self._active_sheet
+        self._active_sheet = fs
+        try:
+            self._original_route(router, fs)
+        finally:
+            self._active_sheet = previous
+
+    def _record_path(self, graph, start, goal, start_dir=None, goal_dir=None,
+                     edge_penalties=None, is_recycle=False, crossing_index=None):
+        """Record one path search with its owning drawing.
+
+        Parameters
+        ----------
+        graph : VisibilityGraph
+            Search graph.
+        start, goal : Point
+            Projected route endpoints.
+        start_dir, goal_dir : str or None, optional
+            Required endpoint directions.
+        edge_penalties : dict or None, optional
+            Costs accumulated from earlier streams.
+        is_recycle : bool, optional
+            Whether this stream is a recycle.
+        crossing_index : object or None, optional
+            Router crossing state.
+
+        Returns
+        -------
+        list[Point]
+            Original path search result.
+        """
+        if self._active_sheet is None:
+            return self._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
+                                  is_recycle, crossing_index)
+        self._count = 0
+        self._original_heappop = heapq.heappop
+        heapq.heappop = self._count_heappop
+        try:
+            result = self._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
+                                    is_recycle, crossing_index)
+        finally:
+            heapq.heappop = self._original_heappop
+        budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
+        self.calls.append(
+            Call(self._active_sheet, graph, start, goal, start_dir, goal_dir,
+                 dict(edge_penalties or {}), is_recycle, list(result), self._count, budget)
+        )
+        return result
+
+    def _count_heappop(self, heap):
+        """Count one heap removal without changing the search.
+
+        Parameters
+        ----------
+        heap : list
+            Search priority queue.
+
+        Returns
+        -------
+        object
+            Item removed by the original heap operation.
+        """
+        self._count += 1
+        return self._original_heappop(heap)
+
     def __exit__(self, exc_type, exc, tb) -> None:
+        """Restore the unobserved router and path search.
+
+        Parameters
+        ----------
+        exc_type, exc, tb : object
+            Exception context supplied by the context manager protocol.
+
+        Returns
+        -------
+        None
+            Both temporary wrappers are removed.
+        """
+        global _ACTIVE_RECORDER
         astar_mod.find_path = self._original
+        DefaultRouter.route = self._original_route
+        _ACTIVE_RECORDER = None
+
+
+_ACTIVE_RECORDER: Recorder | None = None
+
+
+def _recorded_route(router: DefaultRouter, fs: Flowsheet) -> None:
+    """Forward a patched router call to the active recorder.
+
+    Parameters
+    ----------
+    router : DefaultRouter
+        Router performing the pass.
+    fs : Flowsheet
+        Drawing being routed.
+
+    Returns
+    -------
+    None
+        Routes are stored on ``fs`` by the original router.
+    """
+    recorder = _ACTIVE_RECORDER
+    if recorder is None:
+        raise RuntimeError("no route recorder is active")
+    recorder._record_route(router, fs)
+
+
+def _same_drawing(first: Flowsheet, second: Flowsheet) -> bool:
+    """Compare settled geometry across a live drawing and a trial.
+
+    Parameters
+    ----------
+    first, second : Flowsheet
+        Drawings with corresponding units and streams.
+
+    Returns
+    -------
+    bool
+        Whether frames, routes, control taps, and convergence agree.
+    """
+    return (
+        len(first.units) == len(second.units)
+        and len(first.streams) == len(second.streams)
+        and all(a.frame == b.frame and getattr(a, "tap", None) == getattr(b, "tap", None)
+                for a, b in zip(first.units, second.units))
+        and all(a.route == b.route for a, b in zip(first.streams, second.streams))
+        and first.route_converged == second.route_converged
+    )
 
 
 def eligible_streams(fs: Flowsheet, graph: VisibilityGraph) -> list:
@@ -362,38 +505,51 @@ class SheetReport:
 
 
 def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
+    """Measure the final routed drawing and its matching search pass.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Drawing to lay out and route.
+    name : str
+        Name used in the report.
+
+    Returns
+    -------
+    SheetReport
+        Final route costs, findings, and search effort.
+    """
     fs.layout()
-    with warnings.catch_warnings(record=True) as caught:
+    with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         with Recorder() as rec:
             fs.route()
 
-    # ``Flowsheet.route()`` is not one pass over the streams: it places
-    # attached instruments and re-runs ``DefaultRouter.route()`` -- a fresh
-    # ``VisibilityGraph`` and a fresh ``find_path`` call per eligible stream,
-    # since a newly-placed balloon is a new obstacle for every stream, not
-    # only the one it hangs off -- until a pass moves nothing, up to
-    # ``MAX_PLACEMENT_PASSES``. So the call log holds a whole number of
-    # equal-length passes, and only the *last* one produced the routes on
-    # the sheet in hand; matching against an earlier pass would credit or
-    # blame the router for a graph nothing was finally drawn against.
-    graph = rec.calls[-1].graph if rec.calls else VisibilityGraph(fs, margin=15.0)
+    # Use the last routed drawing whose geometry matches the published one.
+    # Rejected isolated trials leave no trace in the measured route graph.
+    owner = next((call.sheet for call in reversed(rec.calls)
+                  if _same_drawing(call.sheet, fs)), fs)
+    calls = [call for call in rec.calls if call.sheet is owner]
+    graph = calls[-1].graph if calls else VisibilityGraph(fs, margin=15.0)
     eligible = eligible_streams(fs, graph)
     n = len(eligible)
     if n == 0:
-        assert not rec.calls, f"{name}: no eligible streams but {len(rec.calls)} calls logged"
+        assert not calls, f"{name}: no eligible streams but {len(calls)} calls logged"
         final_pass: list[Call] = []
     else:
-        assert len(rec.calls) % n == 0, (
-            f"{name}: {len(rec.calls)} calls is not a whole number of "
+        assert len(calls) % n == 0, (
+            f"{name}: {len(calls)} calls is not a whole number of "
             f"{n}-stream passes -- eligibility filter drifted from "
             f"DefaultRouter.route(); re-check eligible_streams() against "
             f"pandid/routing/__init__.py."
         )
-        final_pass = rec.calls[-n:]
+        final_pass = calls[-n:]
     stream_call = dict(zip((id(s) for s in eligible), final_pass))
 
-    undrawn = [str(w.message) for w in caught if "is left unrouted" in str(w.message)]
+    undrawn = [f"stream {stream.name!r} is left unrouted"
+               for stream in fs.streams
+               if stream.route is None or (not stream.route.manual
+                   and len(stream.route.waypoints) < 2)]
 
     rows: list[StreamRow] = []
     for s in fs.streams:
@@ -436,8 +592,7 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
 
     # Fallback and budget both read the final pass only, for the same reason
     # the call-to-stream matching above does: an earlier pass's search is not
-    # what is on the sheet. ``len(rec.calls)`` (every pass) is available to a
-    # caller who wants total search effort instead.
+    # what is on the sheet. ``len(rec.calls)`` includes trial searches too.
     fallback = sum(1 for c in final_pass if not c.result)
     return SheetReport(
         sheet=name,

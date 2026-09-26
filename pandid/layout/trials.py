@@ -14,6 +14,9 @@ if TYPE_CHECKING:
     from pandid.routing import Router
 
 
+MIN_ESTIMATED_GAIN_FRACTION = 0.004
+
+
 @dataclass(frozen=True)
 class TrialResult:
     """Completed-route measurements for a proposed geometry change.
@@ -90,20 +93,18 @@ def _settle_candidate(
     if router is None:
         router = DefaultRouter()
     preferred = {(index, port): face for index, port, face in face_choices}
-    previous = _geometry_state(fs)
     fs.route_converged = False
     moved = False
     for _ in range(MAX_PLACEMENT_PASSES):
         select_faces(fs, preferred)
         assign_labels(fs)
+        before_route = _geometry_state(fs)
         router.route(fs)
         moved = place_control(fs)
-        current = _geometry_state(fs)
-        if not moved and current == previous:
+        if not moved and _geometry_state(fs) == before_route:
             fs.route_converged = True
             fs._route_stale = False
             return
-        previous = current
     # As in Flowsheet.route(), six control checks may need a final route
     # so a nonconvergent drawing still ends on a path for its last boxes.
     if moved:
@@ -111,14 +112,14 @@ def _settle_candidate(
     fs._route_stale = False
 
 
-def evaluate_trial(
+def _evaluate_candidate(
     fs: Flowsheet,
     move: Callable[[list[Frame | None]], None],
     router: Router | None = None,
     *,
     face_choices: tuple[tuple[int, str, str], ...] = (),
-) -> TrialResult:
-    """Score a frame proposal on a deep copy of a settled drawing.
+) -> tuple[TrialResult, Flowsheet]:
+    """Settle and score a proposed drawing on an isolated copy.
 
     Parameters
     ----------
@@ -135,9 +136,8 @@ def evaluate_trial(
 
     Returns
     -------
-    TrialResult
-        Before/after quality and whether the proposal qualifies for
-        later, reproducible integration. No result is copied back.
+    tuple[TrialResult, Flowsheet]
+        Measurements and the fully settled candidate drawing.
 
     Raises
     ------
@@ -156,7 +156,9 @@ def evaluate_trial(
         if key in seen:
             raise ValueError("trial requests two faces for one port")
         seen.add(key)
-        if port not in fs.units[index].ports or face not in eligible_faces(fs, fs.units[index], port):
+        if port not in fs.units[index].ports or face not in eligible_faces(
+            fs, fs.units[index], port
+        ):
             raise ValueError("trial face is not an eligible automatic choice")
     candidate = copy.deepcopy(fs)
     frames = [copy.deepcopy(unit.frame) for unit in candidate.units]
@@ -173,8 +175,114 @@ def evaluate_trial(
         and candidate.units[index].frame.port_faces.get(port) == face
         for index, port, face in face_choices
     )
-    return TrialResult(
+    result = TrialResult(
         qualified=faces_held and admissible(before, after) and improves(before, after),
         before=before,
         after=after,
     )
+    return result, candidate
+
+
+def evaluate_trial(
+    fs: Flowsheet,
+    move: Callable[[list[Frame | None]], None],
+    router: Router | None = None,
+    *,
+    face_choices: tuple[tuple[int, str, str], ...] = (),
+) -> TrialResult:
+    """Score a proposed drawing without changing the live drawing.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Settled drawing to assess.
+    move : Callable[[list[Frame or None]], None]
+        Change detached, index-aligned frames on a clone.
+    router : Router or None, optional
+        Router used to settle the candidate.
+    face_choices : tuple[tuple[int, str, str], ...], optional
+        Requested automatic faces for the trial.
+
+    Returns
+    -------
+    TrialResult
+        Final-drawing measurements and qualification.
+
+    Raises
+    ------
+    ValueError
+        If geometry is stale or a requested face is ineligible.
+    """
+    result, _ = _evaluate_candidate(fs, move, router, face_choices=face_choices)
+    return result
+
+
+def _publish_candidate(fs: Flowsheet, candidate: Flowsheet) -> None:
+    """Copy accepted derived geometry onto the original drawing.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Live drawing whose model identities and author intent are retained.
+    candidate : Flowsheet
+        Settled and qualified clone of the same drawing.
+
+    Returns
+    -------
+    None
+        Frames, automatic routes, control taps, and placement status are
+        updated on the live drawing.
+    """
+    from pandid.units import Instrument
+
+    for live, settled in zip(fs.units, candidate.units):
+        live.frame = copy.deepcopy(settled.frame)
+        if isinstance(live, Instrument):
+            live.tap = copy.deepcopy(settled.tap)
+    for live, settled in zip(fs.streams, candidate.streams):
+        if live.route is None or not live.route.manual:
+            live.route = copy.deepcopy(settled.route)
+    index_of = {id(unit): index for index, unit in enumerate(candidate.units)}
+    fs.unplaced_instruments = [
+        fs.units[index_of[id(unit)]] for unit in candidate.unplaced_instruments
+    ]
+    fs.route_converged = candidate.route_converged
+    fs._layout_stale = False
+    fs._route_stale = False
+
+
+def refine_default(fs: Flowsheet, *, max_trials: int = 1) -> bool:
+    """Publish the first qualifying local proposal within a fixed budget.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Settled drawing routed with the default router.
+    max_trials : int, optional
+        Maximum number of fully routed proposals to assess.
+
+    Returns
+    -------
+    bool
+        Whether an accepted proposal changed the drawing.
+    """
+    from pandid.layout.candidates import generate
+    from pandid.routing.metrics import path_length
+
+    if max_trials <= 0:
+        return False
+    total_length = sum(
+        path_length(stream.route.waypoints) for stream in fs.streams if stream.route is not None
+    )
+    for proposal in generate(fs, limit=max_trials):
+        # Skip an exact route when its cheap estimate is negligible beside
+        # the complete drawing. This keeps large low-value trials bounded.
+        if proposal.estimated_gain < total_length * MIN_ESTIMATED_GAIN_FRACTION:
+            continue
+        result, candidate = _evaluate_candidate(
+            fs, proposal.apply, face_choices=proposal.face_choices
+        )
+        if result.qualified:
+            _publish_candidate(fs, candidate)
+            return True
+    return False

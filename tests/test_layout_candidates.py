@@ -11,6 +11,7 @@ from pandid.layout.quality import measure_final
 from pandid.layout.stages import process_units
 from pandid.layout.structure import infer
 from pandid.layout.trials import evaluate_trial
+from pandid.routing import DefaultRouter
 
 
 def _off_lane() -> Flowsheet:
@@ -30,7 +31,7 @@ def _off_lane() -> Flowsheet:
     fs.layout()
     assert pump.frame is not None
     pump.frame.y += 70
-    fs.route()
+    fs.route(DefaultRouter())
     return fs
 
 
@@ -53,7 +54,7 @@ def _off_column() -> Flowsheet:
     lower._slot.col = 1
     lower.frame.col = 1
     lower.frame.x += 120
-    fs.route()
+    fs.route(DefaultRouter())
     return fs
 
 
@@ -83,7 +84,7 @@ def _diamond() -> Flowsheet:
     fs.connect(b2.discharge, merge.in_2)
     fs.connect(merge.outlet, product.inlet)
     fs.layout()
-    fs.route()
+    fs.route(DefaultRouter())
     return fs
 
 
@@ -161,7 +162,7 @@ def test_horizontal_proposals_leave_existing_vertical_priority_intact() -> None:
     lower._slot.col += 1
     lower.frame.col += 1
     lower.frame.x += 120
-    fs.route()
+    fs.route(DefaultRouter())
     proposals = generate(fs)
     assert proposals[0].units == (1,) and proposals[0].dy == -70
     assert all(candidate.dy for candidate in proposals[:3])
@@ -201,7 +202,7 @@ def test_pin_manual_route_and_explicit_nozzle_are_author_owned() -> None:
     pump.pin(y=pump.frame.y)
     pump.nozzle("suction", "W")
     fs.layout()
-    fs.route()
+    fs.route(DefaultRouter())
     assert eligible_faces(fs, pump, "suction") == ()
     assert all(1 not in proposal.units for proposal in generate(fs))
 
@@ -248,7 +249,7 @@ def test_preflight_rejects_port_escape_through_nearby_equipment() -> None:
     pump.frame.y += 70
     obstacle.frame.x = pump.frame.x + pump.frame.w + 10
     obstacle.frame.y = aligned_y
-    fs.route()
+    fs.route(DefaultRouter())
 
     assert all(1 not in candidate.units for candidate in generate(fs))
 
@@ -273,7 +274,7 @@ def test_facing_ports_can_share_a_short_escape_gap() -> None:
     pump.frame.y += 70
     product.frame.x = pump.frame.x + pump.frame.w + 10
     product.frame.y = aligned_y
-    fs.route()
+    fs.route(DefaultRouter())
 
     restored = next(
         candidate for candidate in generate(fs) if candidate.units == (1,) and candidate.dy == -70
@@ -293,7 +294,7 @@ def test_automatic_face_proposal_qualifies_without_publishing_it() -> None:
 
     fs, _ = layout_quality.build("10_ethanol_pfd", True)
     fs.layout()
-    fs.route()
+    fs.route(DefaultRouter())
     before = measure_final(fs)
     faces = tuple(dict(unit.frame.port_faces) for unit in fs.units)
     proposal = next(candidate for candidate in generate(fs) if candidate.face_choices)
@@ -319,7 +320,7 @@ def test_face_trial_rejects_an_author_fixed_nozzle() -> None:
     stream = fs.connect(feed.outlet, drum.feed)
     drum.nozzle("feed", "E")
     fs.layout()
-    fs.route()
+    fs.route(DefaultRouter())
 
     with pytest.raises(ValueError, match="eligible automatic choice"):
         evaluate_trial(fs, lambda frames: None, face_choices=((1, stream.dest.name, "W"),))
@@ -344,7 +345,7 @@ def test_face_candidates_skip_a_nozzle_point_taken_by_an_earlier_port() -> None:
     fs.connect(transmitter.sig_out, controller.sig_in, kind="electric")
     fs.connect(controller.sig_out, valve.actuator, kind="electric")
     fs.layout()
-    fs.route()
+    fs.route(DefaultRouter())
 
     assert controller.frame is not None
     assert controller.frame.port_faces["sig_in"] == "N"
