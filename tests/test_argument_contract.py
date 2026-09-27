@@ -707,6 +707,15 @@ _sheet_case(
     ),
 )
 _sheet_case(
+    "Flowsheet.place_valve_station_on",
+    Flowsheet.place_valve_station_on,
+    lambda fs, kw: (
+        fs.place_valve_station_on(
+            **_default(kw, run=fs.streams[0], tag="CV-2", at=0.5)
+        ).control.name
+    ),
+)
+_sheet_case(
     "Flowsheet.add_valve_station[placed]",
     Flowsheet.add_valve_station,
     lambda fs, kw: [
@@ -1306,6 +1315,31 @@ _spec_case(
     SPEC._STREAM_KEYS,
     _spec_base(),
     lambda s, k, v: s["streams"][0].__setitem__(k, v),
+)
+
+
+def _station_spec_base() -> dict[str, Any]:
+    """Create a connected station spec for argument probes.
+
+    Returns
+    -------
+    dict[str, Any]
+        Valid spec with one unpinned station record.
+    """
+    fs = Flowsheet("Station arguments")
+    feed = fs.add(U.Feed("Feed"))
+    product = fs.add(U.Product("Product"))
+    station = fs.add_valve_station("CV-101")
+    fs.connect(feed.outlet, station.inlet)
+    fs.connect(station.outlet, product.inlet)
+    return fs.to_dict()
+
+
+_spec_case(
+    "spec:station",
+    SPEC._STATION_KEYS,
+    _station_spec_base(),
+    lambda s, k, v: s["stations"][0].__setitem__(k, v),
 )
 _spec_case(
     "spec:instrument",

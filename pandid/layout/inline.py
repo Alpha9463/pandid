@@ -118,10 +118,12 @@ def place_inline(fs: Flowsheet) -> None:
     units = process_units(fs)
     streams = process_streams(fs)
     backbone = infer_backbone(fs)
+    station_members = {unit for assembly in fs._station_assemblies
+                       for unit in assembly.station.members}
     for run in backbone.runs:
         movable = [
             units[index] for index, at in zip(run.inline_units, run.inline_at)
-            if at is not None and (
+            if at is not None and units[index] not in station_members and (
                 units[index].pin_ is None
                 or all(getattr(units[index].pin_, key) is None
                        for key in ("col", "row", "x", "y"))

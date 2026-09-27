@@ -434,6 +434,7 @@ class Flowsheet:
         self.valve_station_tag_scheme = valve_station_tag_scheme
         self.auto_faces = auto_faces
         self.units: list = []
+        self._station_assemblies: list = []
         self.streams: list[Stream] = []
         self.components: list = []
         # Declared control loops, in declaration order. Kept apart from
@@ -1005,6 +1006,15 @@ class Flowsheet:
                 or not isfinite(at) or not 0 < at < 1):
             raise ValueError("inline position must be a finite number between 0 and 1")
         unit = stream.dest.owner
+        station = next((assembly for assembly in self._station_assemblies
+                        if assembly.station.inlet is stream.dest and assembly.run is not None), None)
+        if station is not None:
+            if (stream.kind != "material" or stream.dest.stream is not stream
+                    or station.at != float(at) or station.station.outlet.stream is None):
+                raise ValueError("inline position differs from its station attachment")
+            stream._inline_at = float(at)
+            self._invalidate_layout()
+            return
         if (stream.kind != "material" or stream.draw_as_recycle
                 or stream.is_recycle or unit is None
                 or unit.kind not in {"valve", "reducer", "fitting"}):
@@ -1020,7 +1030,7 @@ class Flowsheet:
         stream._inline_at = float(at)
         self._invalidate_layout()
 
-    def place_on(self, run: Stream, device: _UnitT, *, at: float) -> _UnitT:
+    def place_on(self, run: Stream, device: _UnitT, *, at: float = 0.5) -> _UnitT:
         """Insert a simple inline device on a material run.
 
         The original stream remains the run's stable handle. Its physical
@@ -1032,8 +1042,8 @@ class Flowsheet:
             Existing material run or handle returned by an earlier insertion.
         device : Unit
             Fresh two-port valve, reducer, or fitting.
-        at : float
-            Preferred fraction of the complete run, from source to destination.
+        at : float, optional
+            Preferred fraction of the complete run. Defaults to its midpoint.
 
         Returns
         -------
@@ -1048,6 +1058,62 @@ class Flowsheet:
         from pandid.inline import insert_device
 
         return insert_device(self, run, device, at=at)
+
+    def place_valve_station_on(self, run: Stream, tag: str, *, at: float = 0.5,
+                               **station_options) -> "ValveStation":
+        """Build and place a valve station on a material run.
+
+        Parameters
+        ----------
+        run : Stream
+            Original material run handle.
+        tag : str
+            Control valve tag used to name the station members.
+        at : float, optional
+            Preferred fraction of the complete run. Defaults to its midpoint.
+        **station_options : Any
+            Options accepted by ``add_valve_station`` other than coordinates.
+
+        Returns
+        -------
+        ValveStation
+            The station handle with its members wired into the run.
+
+        Raises
+        ------
+        ValueError
+            If the run, fraction, or station options are invalid.
+        """
+        from dataclasses import replace
+
+        from pandid.inline import insert_station
+
+        if (isinstance(at, bool) or not isinstance(at, (int, float))
+                or not isfinite(at) or not 0 < at < 1):
+            raise ValueError("station fraction must be a finite number between 0 and 1")
+        if "x" in station_options or "y" in station_options:
+            raise ValueError("stream-relative stations do not accept x or y")
+        local = {}
+        for key, default in (("gap", DEFAULT_GAP),
+                             ("bypass_rise", DEFAULT_BYPASS_RISE),
+                             ("drain_drop", DEFAULT_DRAIN_DROP)):
+            value = station_options.pop(key, default)
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not isfinite(value) or value <= 0):
+                raise ValueError(f"{key} must be a positive finite number")
+            local[key] = float(value)
+        mirrored = station_options.pop("mirrored", False)
+        if not isinstance(mirrored, bool):
+            raise ValueError("mirrored must be a boolean")
+        with self._unchanged_if_it_raises():
+            station = self.add_valve_station(tag, **station_options)
+            index = next(i for i, assembly in enumerate(self._station_assemblies)
+                         if assembly.station is station)
+            self._station_assemblies[index] = replace(
+                self._station_assemblies[index], mirrored=mirrored, **local,
+            )
+            insert_station(self, run, station, at=at)
+        return station
 
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """The one anchor an ``add_instrument`` call named, and its use.
@@ -1372,85 +1438,49 @@ class Flowsheet:
         sequence: str | float | None = None, spec: str | float | None = None,
         insulation: str | float | None = None,
     ) -> "ValveStation":
-        """Build the standard assembly a control valve is installed in.
+        """Build a wired control-valve station.
 
-        Two isolation valves, two drain valves, one bypass valve on a
-        leg tapped outside the isolations, and a size change at each
-        end: the arrangement the CHEE4001/7103 guidelines draw and
-        :mod:`pandid.stations` quotes. The units are added, tagged,
-        described, pinned along a run at ``y`` and wired to each other;
-        what is left for the author is the piping either side of it,
-        which is what :attr:`~pandid.stations.ValveStation.inlet` and
-        :attr:`~pandid.stations.ValveStation.outlet` are for::
+        The returned handle exposes the main run, bypass, and drain
+        members. With ``x`` and ``y``, member positions are pinned.
+        Without them, the layout engine places a connected station as
+        one assembly when its external run has a clear straight corridor.
 
-            station = fs.add_valve_station(
-                "CV-303", x=670, y=440, mirrored=True,
-                description="Reflux", service="AE", sequence=303,
-                size=80, schedule=80, spec="SS")
-            fs.connect(t_draw.branch, station.inlet, service="AE",
-                       sequence=303, size=80, schedule=80, spec="SS")
-            fs.connect(station.outlet, fe303.inlet)
+        Parameters
+        ----------
+        tag : str
+            Control valve tag used to derive member names.
+        x, y : float or None
+            Optional absolute station left edge and run centerline.
+        mirrored : bool
+            Reverse the pinned run's flow direction.
+        variant : str
+            Control valve symbol variant.
+        number : str, int, or None
+            Optional number for derived member tags.
+        isolation, reducers, bypass : bool
+            Include the corresponding station components.
+        drains : int
+            Number of drain valves, from zero to two.
+        description : str
+            Service description for member labels.
+        bypass_over : str or None
+            Main member beneath the bypass valve.
+        tag_scheme : str, callable, or None
+            Optional member tag format.
+        gap, bypass_rise, drain_drop : float or None
+            Local spacing for an absolutely positioned station.
+        size, schedule, service, sequence, spec, insulation : str, float, or None
+            Line-number components for bypass and drain branches.
 
-        The returned :class:`~pandid.stations.ValveStation` is a handle,
-        not a unit: it draws nothing, reaches no equipment list, and its
-        members are ordinary units that can be re-pinned, re-tagged or
-        instrumented.
+        Returns
+        -------
+        ValveStation
+            Handle to the connected station members and external ports.
 
-        Args:
-            tag: The control valve's tag, and what the other members'
-                tags are derived from.
-            x: Left edge of the drawn station; ``y`` is the run's
-                **centreline**, so each device lands on the line
-                whatever its artwork measures. Give both or neither;
-                without them the members lay out like any other units,
-                and the four arguments that describe the drawn run --
-                ``mirrored``, ``gap``, ``bypass_rise``, ``drain_drop``
-                -- have no run to describe and are refused.
-            mirrored: Pipe the run east to west. The station still
-                occupies ``x`` rightwards; what reverses is which end
-                the flow enters.
-            variant: The control valve's variant.
-            number: The number the members are tagged from, defaulting
-                to the one in ``tag``. The escape hatch for a control
-                valve whose own number is not what its station is
-                numbered by: ``CV-301-1`` with ``number=301`` gives
-                ``HV-301A``, not ``HV-301-1A``.
-            isolation: Draw the two isolation valves.
-            reducers: Draw the reduction in and the expansion out.
-            bypass: Draw the bypass leg and its normally closed
-                throttling valve.
-            drains: How many drain valves, 0, 1 or 2. One goes upstream.
-            description: The service in words. Each member's description
-                is this plus what it does: ``"Reflux Isolation Valve"``.
-            bypass_over: The member the bypass valve stands over, one of
-                :data:`~pandid.stations.BYPASS_ANCHORS`; by default it
-                sits in the middle of its own leg, where the reference
-                figure draws it. Move it when something else already
-                crosses there, most often a controller's output dropping
-                onto the actuator.
-            tag_scheme: Overrides :attr:`valve_station_tag_scheme` for
-                this station only.
-            gap: Edge to edge between devices along the run;
-                :data:`~pandid.stations.DEFAULT_GAP` by default.
-            bypass_rise: How far the bypass leg stands off the run;
-                :data:`~pandid.stations.DEFAULT_BYPASS_RISE` by default.
-            drain_drop: How far a drain leg hangs below it;
-                :data:`~pandid.stations.DEFAULT_DRAIN_DROP` by default.
-            size, schedule, service, sequence, spec, insulation: The
-                line number's components, put on the bypass and drain
-                branches. A branch off a tee starts a number of its own,
-                and a bypass is the same service, size and spec as the
-                run it goes round. The run through the station carries
-                the number of whatever is connected to :attr:`inlet`.
-
-        Raises:
-            ValueError: for a station that cannot mean what it says: a
-                bypass with nothing to bypass around, a drain count that
-                is not 0, 1 or 2, one of ``x``/``y`` without the other,
-                a ``bypass_over`` naming a member this station was told
-                to leave out, or any of ``mirrored``/``gap``/
-                ``bypass_rise``/``drain_drop`` on a station with no
-                ``x``/``y`` to draw a run along.
+        Raises
+        ------
+        ValueError
+            If the requested components or coordinates are inconsistent.
         """
         from pandid.portgeom import port_offset, resolve_size
         from pandid.stations import (
@@ -1640,13 +1670,22 @@ class Flowsheet:
             branch = hanging.get(id(unit))
             if branch is not None:
                 members.append(branch)
-        return ValveStation(
+        station = ValveStation(
             control=control, upstream_isolation=iso_a, downstream_isolation=iso_b,
             reduction=red, expansion=exp, bypass=byp,
             upstream_drain=dr_a, downstream_drain=dr_b,
             tees=tuple(t for t in (t_bya, t_dra, t_drb, t_byb) if t is not None),
             members=tuple(members), inlet=run[0].inlet, outlet=run[-1].outlet,
         )
+        if x is None:
+            from pandid.stations import StationAssembly
+
+            self._station_assemblies.append(StationAssembly(
+                station=station, mirrored=mirrored,
+                gap=DEFAULT_GAP, bypass_rise=DEFAULT_BYPASS_RISE,
+                drain_drop=DEFAULT_DRAIN_DROP, bypass_over=bypass_over,
+            ))
+        return station
 
     def add_component(self, component: "Component") -> "Component":
         """Register a chemical component. Returns it, for chaining."""

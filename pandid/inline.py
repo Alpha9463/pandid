@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
+from dataclasses import replace
 from math import isfinite
 from typing import TYPE_CHECKING, TypeVar
 
@@ -130,9 +131,12 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
     while segments[-1].dest is not endpoint:
         incoming = segments[-1]
         unit = incoming.dest.owner
-        if unit is None or unit.kind not in _INLINE_KINDS or incoming._inline_at is None:
+        station = next((assembly.station for assembly in fs._station_assemblies
+                        if assembly.run is root and assembly.station.inlet is incoming.dest), None)
+        if incoming._inline_at is None or (station is None and (
+                unit is None or unit.kind not in _INLINE_KINDS)):
             raise ValueError("logical run does not reach its destination through inline devices")
-        outlet = unit.ports.get("outlet")
+        outlet = station.outlet if station is not None else unit.ports.get("outlet")
         following = outlet.stream if outlet is not None else None
         if (following is None or following.source is not outlet
                 or following.kind != "material" or id(following) in visited
@@ -150,3 +154,75 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
     root._logical_segments = segments
     for segment in segments[1:]:
         segment._logical_root = root
+
+
+def insert_station(fs: Flowsheet, run: Stream, station, *, at: float) -> None:
+    """Split one material run around a newly built valve station.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet owning the original run and station members.
+    run : Stream
+        Original material run handle.
+    station : ValveStation
+        Fresh station with free external ports.
+    at : float
+        Preferred fraction of the complete run.
+
+    Returns
+    -------
+    None
+        A downstream physical segment and station attachment are recorded.
+
+    Raises
+    ------
+    ValueError
+        If the station or run cannot be inserted without changing authored intent.
+    """
+    if not isinstance(run, Stream):
+        raise ValueError("station insertion requires a material run")
+    fs._refuse_foreign("run", run)
+    if run._logical_root is not None or run.kind != "material":
+        raise ValueError("station insertion requires the original material run")
+    if isinstance(at, bool) or not isinstance(at, (int, float)) or not isfinite(at) or not 0 < at < 1:
+        raise ValueError("station fraction must be a finite number between 0 and 1")
+    segments = run._logical_segments or [run]
+    if (any(s.draw_as_recycle or s.is_recycle or s.ends is not None
+            or (s.route is not None and s.route.manual) for s in segments)
+            or (not run._logical_segments and run._inline_at is not None)):
+        raise ValueError("station insertion cannot split a manual, recycle, or styled run")
+    fractions = [segment._inline_at for segment in segments[:-1]]
+    if any(value is None for value in fractions):
+        raise ValueError("station insertion requires an intact logical run")
+    ordered = [value for value in fractions if value is not None]
+    if at in ordered or ordered != sorted(ordered):
+        raise ValueError("station fractions must be distinct and in flow order")
+    assembly_index = next((i for i, item in enumerate(fs._station_assemblies)
+                           if item.station is station), None)
+    if assembly_index is None or station.inlet.stream is not None or station.outlet.stream is not None:
+        raise ValueError("station insertion requires an unconnected station")
+    position = bisect_left(ordered, at)
+    selected = segments[position]
+    old_dest = selected.dest
+    successor = Stream(name="", source=station.outlet, dest=old_dest, kind="material",
+                       color=selected.color, dasharray=selected.dasharray)
+    successor._inline_at = selected._inline_at
+    successor._logical_root = run
+    with fs._unchanged_if_it_raises((fs, *fs.streams, old_dest, station.inlet,
+                                    station.outlet)):
+        selected.dest = station.inlet
+        station.inlet.stream = selected
+        station.outlet.stream = successor
+        old_dest.stream = successor
+        selected._inline_at = float(at)
+        if run._logical_to is None:
+            run._logical_to = old_dest
+        run._logical_segments = [*segments[:position + 1], successor, *segments[position + 1:]]
+        stream_index = next(i for i, stream in enumerate(fs.streams) if stream is selected)
+        fs.streams.insert(stream_index + 1, successor)
+        fs._station_assemblies[assembly_index] = replace(
+            fs._station_assemblies[assembly_index], run=run, at=float(at),
+        )
+        fs.renumber_streams()
+        fs._invalidate_layout()

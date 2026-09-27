@@ -107,12 +107,14 @@ class ConstraintLayoutEngine:
         from pandid.layout.cycles import break_cycles
         from pandid.layout.faces import select_faces
         from pandid.layout.inline import place_inline
+        from pandid.layout.station import place_stations
         from pandid.layout.place import assign_positions
 
         _seed_slots(fs)
         break_cycles(fs)
         assign_positions(fs)
         assign_coordinates(fs)
+        place_stations(fs)
         place_inline(fs)
         # Choose the faces, and place again where that moved a balloon.
         # The loop ends on a selection made against boxes nothing has

@@ -160,12 +160,32 @@ def logical_stream_path(stream: "Stream") -> list[Point]:
         Routed points with each inline device's inlet and outlet joined.
     """
     segments = stream._logical_segments or [stream]
+    root = stream._logical_root or stream
+    owner = root.source.owner
+    fs = owner.flowsheet if owner is not None else None
     points: list[Point] = []
-    for segment in segments:
+    for index, segment in enumerate(segments):
         physical = stream_path(segment)
         if not physical:
             return []
         points.extend(physical)
+        if fs is None or index + 1 == len(segments):
+            continue
+        following = segments[index + 1]
+        station = next((assembly.station for assembly in fs._station_assemblies
+                        if assembly.run is root and assembly.station.inlet is segment.dest
+                        and assembly.station.outlet is following.source), None)
+        if station is None:
+            continue
+        unit = station.inlet.owner
+        for _ in station.members:
+            if unit is station.outlet.owner:
+                break
+            outgoing = unit.ports["outlet"].stream
+            if outgoing is None or outgoing.dest.owner not in station.members:
+                return []
+            points.extend(stream_path(outgoing))
+            unit = outgoing.dest.owner
     return points
 
 
