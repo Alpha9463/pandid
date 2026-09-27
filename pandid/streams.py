@@ -230,6 +230,9 @@ class Stream:
     # re-runs.
     _auto_sequence: str | None = field(default=None, init=False, repr=False)
     _inline_at: float | None = field(default=None, init=False, repr=False, compare=False)
+    _logical_to: Port | None = field(default=None, init=False, repr=False, compare=False)
+    _logical_segments: list[Stream] = field(default_factory=list, init=False, repr=False, compare=False)
+    _logical_root: Stream | None = field(default=None, init=False, repr=False, compare=False)
 
     #: The two fields that are checked as they are written, and why they
     #: are the only two. Everything else on a stream is *lettering* --
@@ -328,7 +331,14 @@ class Stream:
         -------
         Stream
             This stream, with its route marked manual.
+
+        Raises
+        ------
+        ValueError
+            If this stream is the handle of a split logical run.
         """
+        if self._logical_segments:
+            raise ValueError("via() on a split run is ambiguous; route a physical segment instead")
         if self.route is None:
             self.route = Route()
         self.route.waypoints = waypoints

@@ -89,17 +89,31 @@ class ConstraintLayoutEngine:
     """
 
     def layout(self, fs: "Flowsheet") -> None:
+        """Resolve process, inline, and control geometry for a sheet.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Sheet to lay out.
+
+        Returns
+        -------
+        None
+            Unit frames and chosen faces are updated in place.
+        """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
         from pandid.layout.coordinates import assign_coordinates, assign_labels
         from pandid.layout.cycles import break_cycles
         from pandid.layout.faces import select_faces
+        from pandid.layout.inline import place_inline
         from pandid.layout.place import assign_positions
 
         _seed_slots(fs)
         break_cycles(fs)
         assign_positions(fs)
         assign_coordinates(fs)
+        place_inline(fs)
         # Choose the faces, and place again where that moved a balloon.
         # The loop ends on a selection made against boxes nothing has
         # moved since, so the sheet it hands on is a function of the

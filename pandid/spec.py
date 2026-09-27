@@ -378,7 +378,7 @@ _QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
-    "color", "dasharray", "ends", "inline_at",
+    "color", "dasharray", "ends", "inline_at", "logical_to",
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
@@ -548,14 +548,25 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         pending.append((_read_instrument(fs, entry, where_i), mapping, where_i))
 
     pending_inline = []
+    pending_logical = []
     for i, entry in enumerate(_sequence(data.get("streams", []), "streams")):
         stream = _read_stream(fs, entry, f"streams[{i}]")
         if "inline_at" in entry:
             pending_inline.append((stream, entry["inline_at"], f"streams[{i}].inline_at"))
+        if "logical_to" in entry:
+            pending_logical.append((stream, entry["logical_to"], f"streams[{i}].logical_to"))
 
     for stream, value, where_i in pending_inline:
         try:
             fs._set_inline_at(stream, _number(value, where_i))
+        except ValueError as e:
+            raise _fail_from(e, where_i) from None
+
+    from pandid.inline import restore_logical_run
+    for stream, value, where_i in pending_logical:
+        endpoint = _read_endpoint(fs, value, where_i)
+        try:
+            restore_logical_run(fs, stream, endpoint)
         except ValueError as e:
             raise _fail_from(e, where_i) from None
 
@@ -1808,6 +1819,8 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["tabulate"] = True
     if stream._inline_at is not None:
         entry["inline_at"] = stream._inline_at
+    if stream._logical_to is not None:
+        entry["logical_to"] = [stream._logical_to.owner.name, stream._logical_to.name]
     return entry
 
 

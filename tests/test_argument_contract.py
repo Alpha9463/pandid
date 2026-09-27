@@ -700,6 +700,13 @@ _sheet_case(
     ),
 )
 _sheet_case(
+    "Flowsheet.place_on",
+    Flowsheet.place_on,
+    lambda fs, kw: (
+        fs.place_on(**_default(kw, run=fs.streams[0], device=U.Valve("HV-2"), at=0.5)).name
+    ),
+)
+_sheet_case(
     "Flowsheet.add_valve_station[placed]",
     Flowsheet.add_valve_station,
     lambda fs, kw: [

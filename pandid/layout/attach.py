@@ -146,6 +146,29 @@ def stream_path(stream: "Stream") -> list[Point]:
             + [port_point(dst_u, dst_u.frame, stream.dest.name)])
 
 
+def logical_stream_path(stream: "Stream") -> list[Point]:
+    """Trace a logical run through its inserted physical segments.
+
+    Parameters
+    ----------
+    stream : Stream
+        Original run handle or an ordinary physical segment.
+
+    Returns
+    -------
+    list[Point]
+        Routed points with each inline device's inlet and outlet joined.
+    """
+    segments = stream._logical_segments or [stream]
+    points: list[Point] = []
+    for segment in segments:
+        physical = stream_path(segment)
+        if not physical:
+            return []
+        points.extend(physical)
+    return points
+
+
 def _along(points: list[Point], fraction: float) -> tuple[Point, Point]:
     """Point at ``fraction`` along a polyline, and the direction."""
     lengths = [math.dist(points[i], points[i + 1]) for i in range(len(points) - 1)]
@@ -167,11 +190,17 @@ def _along(points: list[Point], fraction: float) -> tuple[Point, Point]:
 
 
 def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
-    """The tap point, and the direction the branch angle is off.
+    """Find an attached instrument's tap point and flow direction.
 
-    On a stream that reference is the flow direction; on a unit face it
-    is the face's tangent, chosen so a 90 degree branch again points
-    straight out of the host.
+    Parameters
+    ----------
+    inst : Instrument
+        Instrument with a unit or stream host.
+
+    Returns
+    -------
+    tuple[Point, Point] or None
+        Tap point and reference direction, or None before placement.
     """
     from pandid.portgeom import face_point
     from pandid.streams import Stream
@@ -183,7 +212,7 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     # said yes to.
     assert host is not None
     if isinstance(host, Stream):
-        points = stream_path(host)
+        points = logical_stream_path(host)
         if len(points) < 2:
             return None
         return _along(points, float(inst.at if inst.at is not None else 0.5))

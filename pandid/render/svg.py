@@ -1641,29 +1641,23 @@ class StreamNumber(NamedTuple):
 
 def stream_numbers(fs, placed: list, joints: "str | None",
                    direction: str) -> "list[StreamNumber]":
-    """Where every line number on the sheet goes.
+    """Choose one readable label position for each named material run.
 
-    Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
-    :func:`stream_polyline` and :func:`boundary_flag` were, and with
-    more at stake: this is a *search*, not a formula, so a second
-    implementation would not merely drift, it would answer differently
-    on the first crowded corridor.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed drawing whose stream names are placed.
+    placed : list
+        Occupied label boxes; selected boxes are appended to this list.
+    joints : str or None
+        Sheet-wide connection style.
+    direction : str
+        Preferred direction for crossing jumps.
 
-    ``placed`` is the list of opaque plates already on the sheet, and it
-    is **appended to**: each number's halo, and each leader's box, is
-    seeded as occupied so the next number does not delete it. The caller
-    passes the equipment tags it has laid down and gets back the whole
-    set, which is what :meth:`SvgRenderer._draw_streams` hands to the
-    debugging overlay. An exporter with no equipment-tag pass of its own
-    passes an empty list and gets a placement that dodges every symbol
-    and every line but may still land under a tag -- the one thing about
-    this the two backends do not share, and a difference of a seed
-    rather than of a method.
-
-    Everything else the search needs is derived here from the flowsheet,
-    so the two callers cannot disagree about it: :func:`_ink` for the
-    lines, and :func:`~pandid.portgeom.unit_box` through
-    :func:`_obstacle` for the symbols.
+    Returns
+    -------
+    list[StreamNumber]
+        Label placements shared by SVG and draw.io output.
     """
     from pandid.portgeom import unit_box
 
@@ -1694,14 +1688,18 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     for s in fs.streams:
         if s.kind in _SIGNAL_KINDS or s.name in labeled_names:
             continue
-        points = stream_polyline(s)
         longest_seg, max_len = None, -1.0
-        for i in range(len(points) - 1):
-            x1, y1 = points[i]
-            x2, y2 = points[i + 1]
-            seg = abs(x2 - x1) + abs(y2 - y1)
-            if seg > max_len:
-                max_len, longest_seg = seg, ((x1, y1), (x2, y2))
+        carrier, carrier_points = s, []
+        candidates = [part for part in s._logical_segments if part.name == s.name] or [s]
+        for part in candidates:
+            points = stream_polyline(part)
+            for i in range(len(points) - 1):
+                x1, y1 = points[i]
+                x2, y2 = points[i + 1]
+                length = abs(x2 - x1) + abs(y2 - y1)
+                if length > max_len:
+                    max_len, longest_seg = length, ((x1, y1), (x2, y2))
+                    carrier, carrier_points = part, points
         if not longest_seg:
             continue
         labeled_names.add(s.name)
@@ -1712,7 +1710,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         (mx1, my1), (mx2, my2) = longest_seg
         keep = FLANGE_STANDOFF + FLANGE_GAP / 2 if any(
             _near_segment((m.x, m.y), (mx1, my1), (mx2, my2))
-            for m in flange_marks(s, points, resolve_connections(s, joints))
+            for m in flange_marks(carrier, carrier_points, resolve_connections(carrier, joints))
         ) else 0.0
         label_items.append((longest_seg, s.name, s.color or "black", keep))
 

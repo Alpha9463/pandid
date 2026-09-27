@@ -1020,6 +1020,35 @@ class Flowsheet:
         stream._inline_at = float(at)
         self._invalidate_layout()
 
+    def place_on(self, run: Stream, device: _UnitT, *, at: float) -> _UnitT:
+        """Insert a simple inline device on a material run.
+
+        The original stream remains the run's stable handle. Its physical
+        segments and the device are added to this flowsheet in flow order.
+
+        Parameters
+        ----------
+        run : Stream
+            Existing material run or handle returned by an earlier insertion.
+        device : Unit
+            Fresh two-port valve, reducer, or fitting.
+        at : float
+            Preferred fraction of the complete run, from source to destination.
+
+        Returns
+        -------
+        Unit
+            The inserted device.
+
+        Raises
+        ------
+        ValueError
+            If the run, device, or fraction cannot be inserted safely.
+        """
+        from pandid.inline import insert_device
+
+        return insert_device(self, run, device, at=at)
+
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """The one anchor an ``add_instrument`` call named, and its use.
 

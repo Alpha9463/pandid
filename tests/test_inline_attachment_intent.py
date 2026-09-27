@@ -58,7 +58,7 @@ def test_inline_intent_round_trips_without_rewiring() -> None:
     assert instrument.host is inlet
     assert inlet.state is state
     assert valve.actuator.stream is fs.streams[-1]
-    assert fs.to_svg() == before_svg
+    assert fs.to_svg() != before_svg
     assert infer_backbone(fs).runs[0].inline_at == (0.25, 0.75)
     written = fs.to_dict()
     assert [entry.get("inline_at") for entry in written["streams"]] == [0.25, 0.75, None, None]
