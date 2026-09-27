@@ -259,6 +259,38 @@ def test_search_aligns_clean_route_endpoints_without_a_hard_conflict() -> None:
     assert measure_final(fs).length < before.length
 
 
+def test_search_aligns_a_distant_free_terminal_without_regression() -> None:
+    """Align a distant single-stream block while retaining authored pins.
+
+    Returns
+    -------
+    None
+        Fresh builds agree on a shorter, bend-free completed route.
+    """
+    drawings = []
+    for _ in range(2):
+        fs = Flowsheet("Distant terminal")
+        source = fs.add(Block("Source", inputs=0, outputs=["E"])).pin(x=100, y=100)
+        dest = fs.add(Block("Dest", inputs=["W"], outputs=0)).pin(x=400)
+        fs.connect(source.out_1, dest.in_1)
+        fs.layout()
+        assert dest.frame is not None
+        dest.frame.y += 195
+        fs.route(DefaultRouter())
+        before = measure_final(fs)
+        pins = tuple(unit.pin_ for unit in fs.units)
+
+        result = search_layout(fs, SearchBudget(2, 8, 18))
+
+        assert result.accepted_moves == 1
+        assert dest.frame is not None and dest.frame.x == 400 and dest.frame.y == 100
+        assert measure_final(fs).bends < before.bends
+        assert measure_final(fs).length < before.length
+        assert tuple(unit.pin_ for unit in fs.units) == pins
+        drawings.append(_geometry(fs))
+    assert drawings[0] == drawings[1]
+
+
 def test_search_can_select_a_better_automatic_nozzle_face() -> None:
     """Retain a better nozzle face while a later route alignment moves.
 

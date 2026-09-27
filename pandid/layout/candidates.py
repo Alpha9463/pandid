@@ -794,6 +794,60 @@ def _manual_endpoint_follows_move(fs: Flowsheet, moved: set[int]) -> bool:
     return False
 
 
+def _long_terminal_alignment(fs: Flowsheet, part: Translation) -> bool:
+    """Allow a process leaf to align with its sole peer within one band.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed drawing that owns the proposed translation.
+    part : Translation
+        Single-unit move beyond the ordinary local search span.
+
+    Returns
+    -------
+    bool
+        Whether the move aligns matching nozzle axes in one paper band.
+    """
+    from pandid.layout.coordinates import _bands, _columns, _wrappable
+    from pandid.layout.stages import is_process_stream
+
+    if len(part.units) != 1 or bool(part.dx) == bool(part.dy):
+        return False
+    unit = fs.units[part.units[0]]
+    streams = [stream for stream in fs.streams
+               if stream.source.owner is unit or stream.dest.owner is unit]
+    if len(streams) != 1 or not is_process_stream(streams[0]):
+        return False
+    stream = streams[0]
+    if stream.route is None or stream.route.manual:
+        return False
+    mine, theirs = ((stream.source, stream.dest) if stream.source.owner is unit
+                    else (stream.dest, stream.source))
+    peer = theirs.owner
+    if unit.frame is None or peer is None or peer.frame is None:
+        return False
+    first = resolve_port(unit, unit.frame, mine.name)
+    second = resolve_port(peer, peer.frame, theirs.name)
+    if part.dy:
+        aligned = first.face in ("E", "W") and second.face in ("E", "W")
+        aligned = aligned and abs(first.anchor[1] + part.dy - second.anchor[1]) <= 1e-6
+    else:
+        aligned = first.face in ("N", "S") and second.face in ("N", "S")
+        aligned = aligned and abs(first.anchor[0] + part.dx - second.anchor[0]) <= 1e-6
+    if not aligned:
+        return False
+
+    units = process_units(fs)
+    pads = balloon_pads(fs)
+    columns = _columns(units, pads)
+    for band in _bands(units, columns, pads, _wrappable(fs, units)):
+        members = {member for column in band for member in columns[column].units}
+        if unit in members:
+            return peer in members
+    return False
+
+
 def _move_preflight(fs: Flowsheet, move: Move, groups: dict[int, tuple[int, ...]],
                     pads: dict[Unit, Pad]) -> bool:
     """Reject translations that violate pins, bodies, or authored lines.
@@ -820,7 +874,8 @@ def _move_preflight(fs: Flowsheet, move: Move, groups: dict[int, tuple[int, ...]
     for part in move.translations:
         if not part.units or not (_MIN_SHIFT <= max(abs(part.dx), abs(part.dy))):
             return False
-        if abs(part.dx) > _MAX_COLUMN_SHIFT or abs(part.dy) > _MAX_SHIFT:
+        if ((abs(part.dx) > _MAX_COLUMN_SHIFT or abs(part.dy) > _MAX_SHIFT)
+                and not _long_terminal_alignment(fs, part)):
             return False
         if part.units != groups.get(part.units[0]) or moved.intersection(part.units):
             return False
