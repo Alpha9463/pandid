@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pandid import Feed, Flowsheet, Product, Valve
+from pandid import Feed, Flowsheet, Product, Reactor, Valve
 from pandid.layout.attach import logical_stream_path
 from pandid.portgeom import port_point
 from pandid.spec import SpecError
@@ -49,6 +49,67 @@ def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
     assert [(unit.name, unit.frame.x, unit.frame.y) for unit in rebuilt.units] == [
         (unit.name, unit.frame.x, unit.frame.y) for unit in fs.units
     ]
+
+
+def test_station_uses_receiver_axis_after_a_south_discharge() -> None:
+    """Place a station on the horizontal leg after an elbow.
+
+    Returns
+    -------
+    None
+        The assembly aligns with the receiver and retains clear routing.
+    """
+    fs = Flowsheet("Reactor outlet station")
+    reactor = fs.add(Reactor("R-101"))
+    product = fs.add(Product("Product"))
+    run = fs.connect(reactor.outlet, product.inlet)
+    station = fs.place_valve_station_on(run, "CV-101")
+
+    fs.layout()
+    first = [(unit.frame.x, unit.frame.y) for unit in fs.units]
+    fs.layout()
+    assert [(unit.frame.x, unit.frame.y) for unit in fs.units] == first
+    assert reactor.frame is not None and product.frame is not None
+    assert reactor.frame.y != product.frame.y
+    receiver_y = port_point(product, product.frame, "inlet")[1]
+    main = [
+        unit
+        for unit in station.members
+        if unit not in (station.bypass, station.upstream_drain, station.downstream_drain)
+    ]
+    assert all(
+        unit.frame is not None
+        and port_point(unit, unit.frame, "inlet")[1] == pytest.approx(receiver_y)
+        for unit in main
+    )
+    fs.route()
+    assert not any(issue.code in ("unit-overlap", "route-crosses-unit") for issue in fs.validate())
+
+
+def test_station_does_not_force_an_outward_facing_elbow() -> None:
+    """Keep a station off a leg that reverses its source nozzle.
+
+    Returns
+    -------
+    None
+        A westbound host does not form a westbound leg from an east nozzle.
+    """
+    fs = Flowsheet("Reverse outlet station")
+    feed = fs.add(Feed("Feed")).pin(x=1300, y=300)
+    reactor = fs.add(Reactor("R-101")).pin(x=100, y=100, orientation=90)
+    run = fs.connect(feed.outlet, reactor.feed)
+    station = fs.place_valve_station_on(run, "CV-101")
+
+    fs.layout()
+    assert feed.frame is not None and reactor.frame is not None
+    assert port_point(feed, feed.frame, "outlet") == (1300, 300)
+    assert (reactor.frame.x, reactor.frame.y, reactor.frame.orientation) == (100, 100, 90)
+    main = [
+        unit
+        for unit in station.members
+        if unit not in (station.bypass, station.upstream_drain, station.downstream_drain)
+    ]
+    assert len({round(port_point(unit, unit.frame, "inlet")[1]) for unit in main}) > 1
 
 
 def test_place_valve_station_on_retains_run_and_fraction() -> None:

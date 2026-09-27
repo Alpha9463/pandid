@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
 from pandid.layout.stages import process_units, slot
-from pandid.portgeom import port_point, resolve_size, unit_box
+from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
 from pandid.stations import StationAssembly, member_mirror
 
 if TYPE_CHECKING:
@@ -165,6 +165,41 @@ def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
     return True
 
 
+def _centerline(source: Unit, source_port: str, dest: Unit, dest_port: str,
+                start: tuple[float, float], end: tuple[float, float]) -> float | None:
+    """Choose a station axis from its external nozzle geometry.
+
+    Parameters
+    ----------
+    source, dest : Unit
+        Equipment at the ends of the host run.
+    source_port, dest_port : str
+        Connected nozzle names on that equipment.
+    start, end : tuple[float, float]
+        Resolved nozzle coordinates.
+
+    Returns
+    -------
+    float or None
+        Axis of a horizontal leg, or ``None`` without a clear leg.
+    """
+    if abs(start[1] - end[1]) <= 1:
+        return start[1]
+    assert source.frame is not None and dest.frame is not None
+    source_face = resolve_port(source, source.frame, source_port).face
+    dest_face = resolve_port(dest, dest.frame, dest_port).face
+    forward = 1 if end[0] > start[0] else -1
+    source_forward = (source_face == "E" and forward > 0) or (
+        source_face == "W" and forward < 0)
+    dest_forward = (dest_face == "W" and forward > 0) or (
+        dest_face == "E" and forward < 0)
+    if source_forward and dest_face not in ("E", "W"):
+        return start[1]
+    if dest_forward and source_face not in ("E", "W"):
+        return end[1]
+    return None
+
+
 def place_stations(fs: Flowsheet) -> None:
     """Move feasible unpinned stations onto their external material runs.
 
@@ -203,7 +238,11 @@ def place_stations(fs: Flowsheet) -> None:
             continue
         start = port_point(source, source.frame, source_port.name)
         end = port_point(dest, dest.frame, dest_port.name)
-        if abs(start[1] - end[1]) > 1 or abs(start[0] - end[0]) < 1:
+        if abs(start[0] - end[0]) < 1:
+            continue
+        centerline = _centerline(source, source_port.name, dest, dest_port.name,
+                                 start, end)
+        if centerline is None:
             continue
         mirrored = start[0] > end[0]
         low, high = sorted((start[0], end[0]))
@@ -227,7 +266,7 @@ def place_stations(fs: Flowsheet) -> None:
             fraction = assembly.at if assembly.at is not None else 0.5
             target = start[0] + fraction * (end[0] - start[0])
             left = min(max(target - width / 2, low + 8), high - width - 8)
-            frames = _station_frames(assembly, left, start[1], mirrored)
+            frames = _station_frames(assembly, left, centerline, mirrored)
             if not _fits(frames, obstacles) or any(
                 not _separated(frames, earlier) for earlier in proposed
             ):
