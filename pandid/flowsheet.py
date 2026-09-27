@@ -7,6 +7,7 @@ one-stream-per-port rule.
 
 from __future__ import annotations
 from contextlib import contextmanager
+from math import isfinite
 from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
@@ -978,6 +979,46 @@ class Flowsheet:
             f"flowsheet. A balloon taps a line this sheet draws; a line drawn "
             f"elsewhere has no entry in this sheet's spec to tap"
         )
+
+    def _set_inline_at(self, stream: Stream, at: float) -> None:
+        """Record a wired inline device's preferred position on its run.
+
+        Parameters
+        ----------
+        stream : Stream
+            Material segment entering the inline device.
+        at : float
+            Preferred fraction of the complete run from source to destination.
+
+        Returns
+        -------
+        None
+            The preference is stored on the existing segment.
+
+        Raises
+        ------
+        ValueError
+            If the segment or its destination is ineligible.
+        """
+        self._refuse_foreign("stream", stream)
+        if (isinstance(at, bool) or not isinstance(at, (int, float))
+                or not isfinite(at) or not 0 < at < 1):
+            raise ValueError("inline position must be a finite number between 0 and 1")
+        unit = stream.dest.owner
+        if (stream.kind != "material" or stream.draw_as_recycle
+                or stream.is_recycle or unit is None
+                or unit.kind not in {"valve", "reducer", "fitting"}):
+            raise ValueError("inline position requires a material stream entering an inline device")
+        if stream.dest.name != "inlet" or stream.dest.stream is not stream:
+            raise ValueError("inline position requires the device inlet stream")
+        process_ports = {port.name for port in unit.ports.values() if port.role == "process"}
+        outgoing = unit.ports.get("outlet")
+        if (process_ports != {"inlet", "outlet"} or outgoing is None or outgoing.stream is None
+                or outgoing.stream.source is not outgoing or outgoing.stream.kind != "material"
+                or outgoing.stream.draw_as_recycle or outgoing.stream.is_recycle):
+            raise ValueError("inline position requires one material inlet and outlet")
+        stream._inline_at = float(at)
+        self._invalidate_layout()
 
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """The one anchor an ``add_instrument`` call named, and its use.

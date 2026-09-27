@@ -378,7 +378,7 @@ _QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
-    "color", "dasharray", "ends",
+    "color", "dasharray", "ends", "inline_at",
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
@@ -478,8 +478,20 @@ _KIND_KEYS = {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT, **_KIND_FLAGS,
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     """Build a :class:`~pandid.flowsheet.Flowsheet` from a mapping.
 
-    Raises :class:`SpecError` (a :class:`ValueError`) naming the
-    offending entry for anything it cannot honour.
+    Parameters
+    ----------
+    spec : Mapping[str, Any]
+        Declarative flowsheet data.
+
+    Returns
+    -------
+    Flowsheet
+        Connected sheet reconstructed from the data.
+
+    Raises
+    ------
+    SpecError
+        If an entry cannot be honored. The error names its location.
     """
     where = "the flowsheet spec"
     data = _mapping(spec, where)
@@ -535,8 +547,17 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
             continue
         pending.append((_read_instrument(fs, entry, where_i), mapping, where_i))
 
+    pending_inline = []
     for i, entry in enumerate(_sequence(data.get("streams", []), "streams")):
-        _read_stream(fs, entry, f"streams[{i}]")
+        stream = _read_stream(fs, entry, f"streams[{i}]")
+        if "inline_at" in entry:
+            pending_inline.append((stream, entry["inline_at"], f"streams[{i}].inline_at"))
+
+    for stream, value, where_i in pending_inline:
+        try:
+            fs._set_inline_at(stream, _number(value, where_i))
+        except ValueError as e:
+            raise _fail_from(e, where_i) from None
 
     for inst, entry, where_i in pending:
         _attach_instrument(fs, inst, entry, where_i)
@@ -1354,6 +1375,16 @@ def to_dict(fs: Flowsheet) -> dict:
     routed paths, computed stream numbers) are left out: they are the
     engine's output, not the author's intent, and re-deriving them is
     the whole point of the engine.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to serialize.
+
+    Returns
+    -------
+    dict
+        Declarative representation of the sheet.
     """
     if not isinstance(fs.stream_naming_scheme, str):
         raise SpecError(
@@ -1725,6 +1756,18 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
 
 
 def _write_stream(stream: Stream) -> dict[str, Any]:
+    """Serialize one physical stream and its authored intent.
+
+    Parameters
+    ----------
+    stream : Stream
+        Connection to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        Declarative stream entry.
+    """
     entry: dict[str, Any] = {
         "from": [stream.source.owner.name, stream.source.name],
         "to": [stream.dest.owner.name, stream.dest.name],
@@ -1763,6 +1806,8 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["properties"] = dict(stream.properties)
     if stream.tabulate:
         entry["tabulate"] = True
+    if stream._inline_at is not None:
+        entry["inline_at"] = stream._inline_at
     return entry
 
 

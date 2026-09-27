@@ -150,6 +150,36 @@ def check_dasharray(value: str, stream: "Stream | None" = None) -> None:
 
 @dataclass
 class Stream:
+    """One physical connection between two ports.
+
+    Parameters
+    ----------
+    name : str
+        Stream label.
+    source, dest : Port
+        Connected source and destination ports.
+    kind : str, default="material"
+        Connection type.
+    draw_as_recycle : bool, default=False
+        Prefer this segment as a recycle cut.
+    route : Route or None, default=None
+        Resolved or manually supplied route.
+    color, dasharray : str or None, default=None
+        Optional line appearance.
+    ends : str, tuple[str, str], or None, default=None
+        Joint styles at the two ends.
+    auto_named : bool, default=True
+        Whether the flowsheet assigns the label.
+    size, schedule, service, sequence, spec, insulation : str, float, or None, default=None
+        Components of the line number.
+    properties : dict[str, str | float], optional
+        Values displayed in the stream table.
+    tabulate : bool, default=False
+        Prefer this segment's values in a shared line column.
+    state : State or None, default=None
+        Material state held by this segment.
+    """
+
     name: str
     source: Port
     dest: Port
@@ -199,6 +229,7 @@ class Stream:
     # there instead is recognised and left alone however often numbering
     # re-runs.
     _auto_sequence: str | None = field(default=None, init=False, repr=False)
+    _inline_at: float | None = field(default=None, init=False, repr=False, compare=False)
 
     #: The two fields that are checked as they are written, and why they
     #: are the only two. Everything else on a stream is *lettering* --

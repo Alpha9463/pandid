@@ -27,7 +27,15 @@ def test_backbone_contracts_a_free_inline_chain() -> None:
     backbone = infer_backbone(fs)
 
     assert backbone.nodes == (0, 3)
-    assert backbone.runs == (BackboneRun(source=0, dest=3, inline_units=(1, 2), streams=(0, 1, 2)),)
+    assert backbone.runs == (
+        BackboneRun(
+            source=0,
+            dest=3,
+            inline_units=(1, 2),
+            streams=(0, 1, 2),
+            inline_at=(None, None),
+        ),
+    )
     assert valve.pin_ is not None and valve.pin_.orientation == 90
     assert all(unit.frame is None for unit in fs.units)
     assert all(stream.route is None for stream in fs.streams)
@@ -66,7 +74,7 @@ def test_backbone_retains_tees_pins_and_recycle_boundaries() -> None:
     assert backbone.runs == (
         BackboneRun(source=0, dest=1, inline_units=(), streams=(0,)),
         BackboneRun(source=1, dest=2, inline_units=(), streams=(1,)),
-        BackboneRun(source=2, dest=4, inline_units=(3,), streams=(2, 3)),
+        BackboneRun(source=2, dest=4, inline_units=(3,), streams=(2, 3), inline_at=(None,)),
         BackboneRun(source=4, dest=6, inline_units=(), streams=(4,)),
         BackboneRun(source=2, dest=5, inline_units=(), streams=(5,)),
         BackboneRun(source=5, dest=1, inline_units=(), streams=(6,)),

@@ -25,12 +25,15 @@ class BackboneRun:
         Contracted unit indices in flow order.
     streams : tuple[int, ...]
         Original indices in ``process_streams(fs)`` in flow order.
+    inline_at : tuple[float | None, ...]
+        Preferred run fractions for the corresponding inline units.
     """
 
     source: int
     dest: int
     inline_units: tuple[int, ...]
     streams: tuple[int, ...]
+    inline_at: tuple[float | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -156,7 +159,10 @@ def infer_backbone(fs: Flowsheet) -> Backbone:
         if covered.intersection(path):
             raise ValueError("material stream appears in more than one backbone run")
         covered.update(path)
-        runs.append(BackboneRun(source_index, dest_index, tuple(members), tuple(path)))
+        runs.append(BackboneRun(
+            source_index, dest_index, tuple(members), tuple(path),
+            tuple(streams[index]._inline_at for index in path[:-1]),
+        ))
     if len(covered) != len(streams):
         raise ValueError("material cycle requires cycle breaking before inference")
     return Backbone(len(units), len(streams), nodes, tuple(runs))
