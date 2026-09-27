@@ -239,6 +239,52 @@ def admissible(before: Quality, after: Quality) -> bool:
     )
 
 
+def search_admissible(seed: Quality, incumbent: Quality, after: Quality) -> bool:
+    """Apply current-conflict and fixed-seed limits to a search trial.
+
+    Parameters
+    ----------
+    seed : Quality
+        Initial settled drawing for this search run.
+    incumbent : Quality
+        Current accepted drawing.
+    after : Quality
+        Completed detached trial.
+
+    Returns
+    -------
+    bool
+        Whether the trial preserves author intent, fixed-seed limits,
+        and current route costs when no defect is removed.
+    """
+    same_conflicts = (
+        after.hard_conflicts == incumbent.hard_conflicts
+        and after.crossing_pairs == incumbent.crossing_pairs
+    )
+    return (
+        seed.author_intent == after.author_intent
+        and seed.frame_transform == after.frame_transform
+        and seed.pin_geometry == after.pin_geometry
+        and seed.manual_endpoint_geometry == after.manual_endpoint_geometry
+        and all(new <= old for old, new in zip(incumbent.hard, after.hard))
+        and after.hard_conflicts <= incumbent.hard_conflicts
+        and after.crossing_pairs <= incumbent.crossing_pairs
+        and after.hard[_NONCONVERGENCE_INDEX] == 0
+        and after.crossings <= incumbent.crossings
+        and after.bends <= min(seed.bends + 1, seed.bends * 1.03)
+        and after.length <= seed.length * 1.02 + 0.1
+        and after.area <= seed.area * 1.02 + 1.0
+        and (
+            not same_conflicts
+            or (
+                after.bends <= incumbent.bends
+                and after.length <= incumbent.length + 1e-6
+                and after.area <= incumbent.area + 1e-6
+            )
+        )
+    )
+
+
 def improves(before: Quality, after: Quality) -> bool:
     """Check for a measured gain large enough to justify a trial.
 

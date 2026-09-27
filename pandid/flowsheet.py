@@ -28,7 +28,9 @@ if TYPE_CHECKING:
 
     from pandid.components import Component
     from pandid.document import TitleBlock
+    from pandid.geometry import Frame
     from pandid.loops import ControlLoop, Loop
+    from pandid.layout.search import SearchResult
     from pandid.ports import Port
     from pandid.stations import ValveStation
     from pandid.units import Instrument, Unit
@@ -383,6 +385,27 @@ class Flowsheet:
             DEFAULT_VALVE_STATION_TAG_SCHEME),
         auto_faces: bool = True,
     ):
+        """Create an empty flowsheet with its author-facing defaults.
+
+        Parameters
+        ----------
+        name : str
+            Drawing title.
+        stream_naming_scheme : str or callable, optional
+            Format for generated stream names.
+        stream_number_start : int, optional
+            First generated stream number.
+        line_numbering_scheme : str or callable, optional
+            Format for process line numbers.
+        line_number_start : int, optional
+            First generated line sequence number.
+        loop_number_start : int, optional
+            First automatically numbered control loop.
+        valve_station_tag_scheme : str or callable, optional
+            Format for valve station member tags.
+        auto_faces : bool, optional
+            Whether movable nozzle faces are selected automatically.
+        """
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
         # The ``{n}`` in ``stream_naming_scheme``, offset. Not its
@@ -442,6 +465,8 @@ class Flowsheet:
         # out of passes still moving them? Read by validate(), which
         # carries the answer onto `warnings`.
         self.route_converged: bool = True
+        self._layout_search_result: SearchResult | None = None
+        self._search_seed_frames: tuple[Frame, ...] | None = None
         # The attached instruments the last placement sweep could put
         # nowhere, because nothing in their host chain ever resolved.
         # Set by `pandid.layout.attach.place_attached`, which is the
@@ -527,9 +552,16 @@ class Flowsheet:
         should call it anyway. Re-laying out costs time and comes out
         the same drawing, because the solver is reseeded from ``pin_``
         on every run; not re-laying out draws the previous sheet.
+
+        Returns
+        -------
+        None
+            Layout, routes, and opt-in search status become stale.
         """
         self._layout_stale = True
         self._route_stale = True
+        self._layout_search_result = None
+        self._search_seed_frames = None
 
     @property
     def auto_faces(self) -> bool:
@@ -1870,6 +1902,8 @@ class Flowsheet:
         """
         self._default_layout = engine is None
         self._refinement_attempted = False
+        self._layout_search_result = None
+        self._search_seed_frames = None
         if engine is None:
             from pandid.layout import default_layout_engine
             engine = default_layout_engine
@@ -1905,6 +1939,8 @@ class Flowsheet:
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
+        self._layout_search_result = None
+        self._search_seed_frames = None
         default_router = router is None
         if router is None:
             from pandid.routing import DefaultRouter

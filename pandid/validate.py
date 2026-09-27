@@ -1063,6 +1063,18 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     that the spelling of that name stays one question, asked in
     :func:`pandid.render.svg.draws_arrowheads`.
     :meth:`pandid.flowsheet.Flowsheet.validate` resolves it.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Drawing whose resolved geometry is checked.
+    arrows : bool, optional
+        Whether process stream arrows appear on this rendering.
+
+    Returns
+    -------
+    list[Issue]
+        Geometry findings with errors before warnings.
     """
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces,
@@ -1089,6 +1101,20 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"attached instruments were still moving after {MAX_PLACEMENT_PASSES} "
             "routing passes; a balloon may sit slightly off the line it taps. "
             "Pin the balloon-carrying lines with via() to settle it"))
+
+    search_result = getattr(fs, "_layout_search_result", None)
+    if search_result is not None and search_result.status != "converged":
+        code = (
+            "layout-search-budget-exhausted"
+            if search_result.status == "budget_exhausted"
+            else "layout-search-unresolved"
+        )
+        warnings.append(Issue(
+            "warning", code,
+            f"layout search {search_result.status} with "
+            f"{len(search_result.conflicts)} named conflicts after "
+            f"{search_result.exact_trials} exact trials"
+        ))
 
     # --- a balloon nothing could place (recorded by layout, not
     # --- recomputed here) --- An attached instrument takes its frame
