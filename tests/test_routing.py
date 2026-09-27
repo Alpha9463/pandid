@@ -23,9 +23,7 @@ def test_router_uses_a_reachable_lane_before_a_blocked_projection() -> None:
     fs = Flowsheet("reachable escape")
     feed = fs.add(Feed("F")).pin(x=60, y=100)
     product = fs.add(Product("P")).pin(x=400, y=100)
-    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(
-        x=83, y=78
-    )
+    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=83, y=78)
     stream = fs.connect(feed.outlet, product.inlet)
     fs.layout()
     graph = VisibilityGraph(fs)
@@ -35,10 +33,11 @@ def test_router_uses_a_reachable_lane_before_a_blocked_projection() -> None:
 
     assert stream.route is not None and not stream.route.used_fallback
     assert feed.frame is not None and product.frame is not None and blocker.frame is not None
-    assert [(feed.frame.x, feed.frame.y), (product.frame.x, product.frame.y),
-            (blocker.frame.x, blocker.frame.y)] == [
-        (10.0, 75.0), (400.0, 75.0), (83, 78)
-    ]
+    assert [
+        (feed.frame.x, feed.frame.y),
+        (product.frame.x, product.frame.y),
+        (blocker.frame.x, blocker.frame.y),
+    ] == [(10.0, 75.0), (400.0, 75.0), (83, 78)]
     assert not any(issue.code == "route-crosses-unit" for issue in fs.validate())
 
 
@@ -53,19 +52,18 @@ def test_router_reports_a_sealed_fixed_nozzle() -> None:
     fs = Flowsheet("sealed escape")
     feed = fs.add(Feed("F")).pin(x=60, y=100)
     product = fs.add(Product("P")).pin(x=400, y=100)
-    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(
-        x=60, y=78
-    )
+    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=60, y=78)
     stream = fs.connect(feed.outlet, product.inlet)
     fs.layout()
     fs.route(DefaultRouter(recover_exits=True))
 
     assert stream.route is not None and stream.route.used_fallback
     assert feed.frame is not None and product.frame is not None and blocker.frame is not None
-    assert [(feed.frame.x, feed.frame.y), (product.frame.x, product.frame.y),
-            (blocker.frame.x, blocker.frame.y)] == [
-        (10.0, 75.0), (400.0, 75.0), (60, 78)
-    ]
+    assert [
+        (feed.frame.x, feed.frame.y),
+        (product.frame.x, product.frame.y),
+        (blocker.frame.x, blocker.frame.y),
+    ] == [(10.0, 75.0), (400.0, 75.0), (60, 78)]
     assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
 
 

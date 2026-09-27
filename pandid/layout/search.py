@@ -66,7 +66,7 @@ class SearchResult:
     status : SearchStatus
         Whether hard rules are satisfied, unresolved, or budget-limited.
     accepted_moves : int
-        Number of published placement moves.
+        Number of accepted placement or automatic-face choices.
     exact_trials : int
         Number of detached drawings settled and routed.
     conflicts : tuple[Conflict, ...]
@@ -388,8 +388,53 @@ def _search_result(
     return result
 
 
+def _combined_faces(
+    current: tuple[tuple[int, str, str], ...],
+    proposed: tuple[tuple[int, str, str], ...],
+) -> tuple[tuple[int, str, str], ...]:
+    """Combine retained automatic faces with a trial's new choices.
+
+    Parameters
+    ----------
+    current, proposed : tuple[tuple[int, str, str], ...]
+        Global unit index, port name, and drawn face preferences.
+
+    Returns
+    -------
+    tuple[tuple[int, str, str], ...]
+        Stable preferences with the trial's choices taking precedence.
+    """
+    merged = {(index, port): face for index, port, face in current}
+    merged.update({(index, port): face for index, port, face in proposed})
+    return tuple((index, port, face) for (index, port), face in sorted(merged.items()))
+
+
+def _held_faces(
+    fs: Flowsheet, choices: tuple[tuple[int, str, str], ...]
+) -> tuple[tuple[int, str, str], ...]:
+    """Keep only trial preferences present on final settled frames.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed detached trial drawing.
+    choices : tuple[tuple[int, str, str], ...]
+        Search-local automatic face preferences.
+
+    Returns
+    -------
+    tuple[tuple[int, str, str], ...]
+        Preferences still selected after face and control settlement.
+    """
+    return tuple(
+        (index, port, face)
+        for index, port, face in choices
+        if fs.units[index].frame is not None and fs.units[index].frame.port_faces.get(port) == face
+    )
+
+
 def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
-    """Search legal placements against completed routes without reseeding.
+    """Search legal placements and automatic faces against completed routes.
 
     Parameters
     ----------
@@ -424,6 +469,7 @@ def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
     structure = infer(working)
     seed_frames = tuple(copy.deepcopy(frame) for frame in _process_frames(working))
     seen = {_fingerprint(working)}
+    preferred_faces: tuple[tuple[int, str, str], ...] = ()
     accepted = 0
     exact = 0
     exhausted = False
@@ -454,13 +500,20 @@ def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
         best_score = _score(incumbent_quality, structure, seed_frames, incumbent_frames)
         best_drawing = None
         best_quality = None
+        best_faces = preferred_faces
         examined: set[tuple] = set()
         for move in proposals:
             if exact >= budget.max_exact_trials:
                 exhausted = True
                 break
-            trial, drawing = _evaluate_candidate(working, move.apply, canonical=True)
+            choices = _combined_faces(preferred_faces, move.face_choices)
+            trial, drawing = _evaluate_candidate(
+                working, move.apply, face_choices=choices, canonical=True
+            )
             exact += 1
+            held_faces = _held_faces(drawing, choices)
+            if any(choice not in held_faces for choice in move.face_choices):
+                continue
             fingerprint = _fingerprint(drawing)
             if fingerprint in seen or fingerprint in examined:
                 continue
@@ -475,10 +528,12 @@ def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
                 best_score = score
                 best_drawing = drawing
                 best_quality = trial.after
+                best_faces = held_faces
         if best_drawing is None or best_quality is None:
             exhausted = exhausted or len(available) > len(proposals)
             break
         working = best_drawing
+        preferred_faces = best_faces
         accepted += 1
         incumbent_quality = best_quality
         seen.add(_fingerprint(working))

@@ -35,6 +35,7 @@ MAX_CANDIDATES = 24
 MAX_PREFLIGHTS = 24
 _TRIGGER_ORDER = {"unit-overlap": 0, "blocked-exit": 1,
                   "route-crosses-unit": 2, "fallback": 3, "crossing": 4}
+_HARD_TRIGGERS = frozenset({"unit-overlap", "blocked-exit", "route-crosses-unit", "fallback"})
 _MIN_SHIFT = 5.0
 _MAX_SHIFT = 2.0 * ROW_GAP
 _MAX_COLUMN_SHIFT = 2.0 * COL_GAP
@@ -616,11 +617,14 @@ class Move:
         Final-drawing conflict or costly route that led to the proposal.
     estimate : float
         Cheap ranking estimate; final routing decides acceptance.
+    face_choices : tuple[tuple[int, str, str], ...]
+        Trial-only automatic nozzle choices, never author intent.
     """
 
     translations: tuple[Translation, ...]
     trigger: Conflict
     estimate: float
+    face_choices: tuple[tuple[int, str, str], ...] = ()
 
     def apply(self, frames: list[Frame | None]) -> None:
         """Apply the proposed translation to detached frames.
@@ -896,10 +900,13 @@ def _move_key(move: Move) -> tuple:
     Returns
     -------
     tuple
-        Translation values independent of object identities.
+        Translation and face values independent of object identities.
     """
-    return tuple((part.units, round(part.dx, 6), round(part.dy, 6))
-                 for part in move.translations)
+    return (
+        tuple((part.units, round(part.dx, 6), round(part.dy, 6))
+              for part in move.translations),
+        move.face_choices,
+    )
 
 
 def _offer_move(fs: Flowsheet, proposals: dict[tuple, Move], groups: dict[int, tuple[int, ...]],
@@ -1115,9 +1122,81 @@ def _offer_overlap(fs: Flowsheet, trigger: Conflict,
         proposals[_move_key(move)] = move
 
 
+def _offer_axis_alignments(
+    fs: Flowsheet,
+    proposals: dict[tuple, Move],
+    groups: dict[int, tuple[int, ...]],
+    pads: dict[Unit, Pad],
+) -> None:
+    """Offer beneficial nozzle alignments on matching endpoint faces.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed drawing whose process routes may be shortened.
+    proposals : dict[tuple, Move]
+        Deduplicated pool of legal trial moves.
+    groups : dict[int, tuple[int, ...]]
+        Movable groups keyed by global unit index.
+    pads : dict[Unit, Pad]
+        Control clearance used by translation preflight.
+
+    Returns
+    -------
+    None
+        The most promising legal alignments are added to ``proposals``.
+    """
+    streams = process_streams(fs)
+    unit_index = {unit: index for index, unit in enumerate(fs.units)}
+    stream_index = {id(stream): index for index, stream in enumerate(fs.streams)}
+    touching: dict[Unit, list[int]] = {}
+    for index, stream in enumerate(streams):
+        for port in (stream.source, stream.dest):
+            if port.owner is not None:
+                touching.setdefault(port.owner, []).append(index)
+    opportunities: list[tuple[float, int, int, float, float]] = []
+    for stream in streams:
+        if stream.is_recycle or stream.route is None or stream.route.manual:
+            continue
+        source, dest = stream.source.owner, stream.dest.owner
+        if source is None or dest is None or source.frame is None or dest.frame is None:
+            continue
+        first = resolve_port(source, source.frame, stream.source.name)
+        second = resolve_port(dest, dest.frame, stream.dest.name)
+        if first.face in ("E", "W") and second.face in ("E", "W"):
+            if source.frame.col == dest.frame.col:
+                continue
+            axis, coordinate = "y", 1
+        elif first.face in ("N", "S") and second.face in ("N", "S"):
+            if source.frame.row == dest.frame.row:
+                continue
+            axis, coordinate = "x", 0
+        else:
+            continue
+        for unit, delta in (
+            (dest, first.anchor[coordinate] - second.anchor[coordinate]),
+            (source, second.anchor[coordinate] - first.anchor[coordinate]),
+        ):
+            index = unit_index[unit]
+            group = groups.get(index)
+            if group is None or (unit_index[source] in group and unit_index[dest] in group):
+                continue
+            gain = _estimate(set(fs.units[item] for item in group), delta, axis,
+                             touching, streams)
+            if gain <= 0:
+                continue
+            dx, dy = (delta, 0.0) if axis == "x" else (0.0, delta)
+            opportunities.append((gain, stream_index[id(stream)], index, dx, dy))
+    for gain, route_index, target, dx, dy in sorted(
+        opportunities, key=lambda row: (-row[0], row[1], row[2], row[3], row[4])
+    )[:MAX_PREFLIGHTS]:
+        trigger = Conflict("route-cost", streams=(route_index,))
+        _offer_move(fs, proposals, groups, pads, target, dx, dy, trigger, gain + 100.0)
+
+
 def generate_moves(fs: Flowsheet, conflicts: tuple[Conflict, ...] | None = None,
                    limit: int = MAX_CANDIDATES) -> tuple[Move, ...]:
-    """Generate bounded translations from final conflicts and route cost.
+    """Generate bounded translations and automatic faces from final routes.
 
     Parameters
     ----------
@@ -1131,7 +1210,7 @@ def generate_moves(fs: Flowsheet, conflicts: tuple[Conflict, ...] | None = None,
     Returns
     -------
     tuple[Move, ...]
-        Stable, legal translations for detached exact-route trials.
+        Stable, legal proposals for detached exact-route trials.
 
     Raises
     ------
@@ -1172,7 +1251,26 @@ def generate_moves(fs: Flowsheet, conflicts: tuple[Conflict, ...] | None = None,
     for detour, index in sorted(costly, key=lambda item: (-item[0], item[1]))[:MAX_PREFLIGHTS]:
         trigger = Conflict("route-cost", streams=(index,))
         _offer_alignment(fs, index, trigger, proposals, groups, pads, detour + 100.0)
+    _offer_axis_alignments(fs, proposals, groups, pads)
     ordered = sorted(proposals.values(),
                      key=lambda move: (-move.estimate, move.trigger,
                                        _move_key(move)))
-    return tuple(ordered[:min(limit, MAX_CANDIDATES)])
+    hard = next((move for move in ordered if move.trigger.kind in _HARD_TRIGGERS), None)
+    if hard is not None:
+        ordered = [hard, *(move for move in ordered if move is not hard)]
+    face_candidates = _face_candidates(fs, limit=2)
+    cap = min(limit, MAX_CANDIDATES)
+    face_moves = tuple(
+        Move((), Conflict("route-cost", streams=(choice.stream,)),
+             choice.estimated_gain, choice.face_choices)
+        for choice in face_candidates
+    )
+    if not face_moves:
+        return tuple(ordered[:cap])
+    if cap == 1:
+        return (hard if hard is not None else face_moves[0],)
+    face_slots = min(len(face_moves), max(0, cap - 1 - int(hard is not None)))
+    move_slots = cap - 1 - face_slots
+    selected = [*ordered[:move_slots], *face_moves[:face_slots]]
+    remaining = [*ordered[move_slots:], *face_moves[face_slots:]]
+    return tuple((*selected, *remaining[:cap - len(selected)]))

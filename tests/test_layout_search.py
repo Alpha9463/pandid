@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from pandid import Block, Flowsheet
+from pandid import Block, Feed, Flowsheet, Product, Separator
 from pandid.layout.candidates import Move, Translation, generate_moves
 from pandid.layout.conflicts import Conflict
 from pandid.layout.quality import measure_final
 from pandid.layout.search import SearchBudget, search_layout
+from pandid.portgeom import port_anchor
+from pandid.routing import DefaultRouter
 
 
 def _two_obstructions() -> Flowsheet:
@@ -197,3 +199,78 @@ def test_canonical_settlement_can_repair_without_a_placement_move() -> None:
     assert result.exact_trials == 0
     assert not stream.route.used_fallback
     assert not measure_final(fs).hard_conflicts
+
+
+def test_search_aligns_clean_route_endpoints_without_a_hard_conflict() -> None:
+    """Shorten a clear route by moving its free endpoint onto the same lane.
+
+    Returns
+    -------
+    None
+        The horizontal pin stays exact while the free axis aligns.
+    """
+    fs = Flowsheet("Endpoint alignment")
+    source = fs.add(Block("Source", inputs=0, outputs=["E"])).pin(x=100, y=100)
+    dest = fs.add(Block("Dest", inputs=["W"], outputs=0)).pin(x=400)
+    fs.connect(source.out_1, dest.in_1)
+    fs.layout()
+    assert dest.frame is not None
+    dest.frame.y += 60
+    fs.route(DefaultRouter())
+    before = measure_final(fs)
+    assert not before.hard_conflicts
+
+    result = search_layout(fs, SearchBudget(2, 8, 18))
+
+    assert result.accepted_moves == 1
+    assert dest.frame is not None and dest.frame.x == 400 and dest.frame.y == 100
+    assert measure_final(fs).bends < before.bends
+    assert measure_final(fs).length < before.length
+
+
+def test_search_can_select_a_better_automatic_nozzle_face() -> None:
+    """Retain a better nozzle face while a later route alignment moves.
+
+    Returns
+    -------
+    None
+        Both improvements compose without changing author intent.
+    """
+    fs = Flowsheet("Face choice")
+    feed = fs.add(Feed("Feed")).pin(x=220, y=300)
+    separator = fs.add(Separator("Separator", variant="horizontal")).pin(x=200, y=200)
+    product = fs.add(Product("Product")).pin(x=500, y=215)
+    fs.connect(feed.outlet, separator.feed)
+    fs.connect(separator.vapor, product.inlet)
+    source = fs.add(Block("Source", inputs=0, outputs=["E"])).pin(x=100, y=900)
+    dest = fs.add(Block("Dest", inputs=["W"], outputs=0)).pin(x=400)
+    fs.connect(source.out_1, dest.in_1)
+    fs.layout()
+    assert dest.frame is not None
+    dest.frame.y += 60
+    fs.route(DefaultRouter())
+    before = measure_final(fs)
+    assert separator.frame is not None
+    assert port_anchor(separator, separator.frame, "feed")[2] == "N"
+    pins = tuple(unit.pin_ for unit in fs.units)
+
+    result = search_layout(fs, SearchBudget(2, 8, 18))
+
+    assert result.accepted_moves == 2
+    assert separator.frame is not None
+    selected_face = port_anchor(separator, separator.frame, "feed")[2]
+    assert selected_face != "N"
+    assert measure_final(fs).crossings < before.crossings
+    assert dest.frame is not None and dest.frame.x == 400 and dest.frame.y == 900
+    assert tuple(unit.pin_ for unit in fs.units) == pins
+    paths = tuple(tuple(stream.route.waypoints) for stream in fs.streams)
+
+    fs.layout()
+    assert dest.frame is not None
+    dest.frame.y += 60
+    fs.route(DefaultRouter())
+    search_layout(fs, SearchBudget(2, 8, 18))
+
+    assert separator.frame is not None
+    assert port_anchor(separator, separator.frame, "feed")[2] == selected_face
+    assert tuple(tuple(stream.route.waypoints) for stream in fs.streams) == paths
