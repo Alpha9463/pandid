@@ -139,6 +139,37 @@ def test_search_keeps_incumbent_when_trial_breaks_a_pin(monkeypatch) -> None:
     assert any(issue.code == "layout-search-unresolved" for issue in fs.validate())
 
 
+def test_search_rejects_a_reversed_process_claim_before_routing(monkeypatch) -> None:
+    """Leave exact-route budget intact for a structurally invalid move.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Temporary proposal source with a reversed process edge.
+
+    Returns
+    -------
+    None
+        The drawing remains unchanged without an exact route trial.
+    """
+    fs = _two_obstructions()
+    before = _geometry(fs)
+    reversed_edge = Move(
+        (Translation((1,), dx=-600),),
+        Conflict("blocked-exit", streams=(0,), units=(0, 2)),
+        1000.0,
+    )
+    monkeypatch.setattr(
+        "pandid.layout.search.generate_moves", lambda *args, **kwargs: (reversed_edge,)
+    )
+
+    result = search_layout(fs, SearchBudget(1, 1, 1))
+
+    assert result.accepted_moves == 0
+    assert result.exact_trials == 0
+    assert _geometry(fs) == before
+
+
 def test_search_reports_unexamined_proposals_after_rejection(monkeypatch) -> None:
     """Distinguish a proposal cap from an exhausted local neighbourhood.
 

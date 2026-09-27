@@ -119,6 +119,7 @@ def _evaluate_candidate(
     *,
     face_choices: tuple[tuple[int, str, str], ...] = (),
     canonical: bool = False,
+    before: Quality | None = None,
 ) -> tuple[TrialResult, Flowsheet]:
     """Settle and score a proposed drawing on an isolated copy.
 
@@ -136,6 +137,8 @@ def _evaluate_candidate(
         nozzle choices and must survive final face selection to qualify.
     canonical : bool, optional
         Use the opt-in final-box settlement contract when true.
+    before : Quality or None, optional
+        Already-measured quality of ``fs`` for repeated search trials.
 
     Returns
     -------
@@ -150,7 +153,8 @@ def _evaluate_candidate(
     """
     from pandid.layout.faces import eligible_faces
 
-    before = measure_final(fs)
+    if before is None:
+        before = measure_final(fs)
     seen: set[tuple[int, str]] = set()
     for index, port, face in face_choices:
         if not 0 <= index < len(fs.units):
@@ -164,7 +168,7 @@ def _evaluate_candidate(
         ):
             raise ValueError("trial face is not an eligible automatic choice")
     candidate = copy.deepcopy(fs)
-    frames = [copy.deepcopy(unit.frame) for unit in candidate.units]
+    frames = [unit.frame for unit in candidate.units]
     move(frames)
     if len(frames) != len(candidate.units):
         raise ValueError("a layout trial must preserve the number of unit frames")

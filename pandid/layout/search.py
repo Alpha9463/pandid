@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
-from pandid.layout.candidates import MAX_CANDIDATES, generate_moves
+from pandid.layout.candidates import MAX_CANDIDATES, Move, generate_moves
 from pandid.layout.conflicts import Conflict
 from pandid.layout.quality import Quality, measure_final, search_admissible
 from pandid.layout.settle import settle
-from pandid.layout.stages import process_units
+from pandid.layout.stages import is_control, process_units
 from pandid.layout.structure import Structure, infer
 from pandid.layout.trials import _evaluate_candidate, _publish_candidate
 
@@ -433,6 +433,28 @@ def _held_faces(
     )
 
 
+def _proposed_process_frames(fs: Flowsheet, move: Move) -> tuple[Frame, ...]:
+    """Project a move onto process frames without routing a drawing.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Settled drawing whose process frames are complete.
+    move : Move
+        Translation to assess against route-independent structure rules.
+
+    Returns
+    -------
+    tuple[Frame, ...]
+        Detached process frames in structure order.
+    """
+    frames = [copy.copy(unit.frame) for unit in fs.units]
+    move.apply(frames)
+    return tuple(
+        cast("Frame", frame) for unit, frame in zip(fs.units, frames) if not is_control(unit)
+    )
+
+
 def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
     """Search legal placements and automatic faces against completed routes.
 
@@ -503,12 +525,19 @@ def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
         best_faces = preferred_faces
         examined: set[tuple] = set()
         for move in proposals:
+            proposed_frames = _proposed_process_frames(working, move)
+            if not _structure_admissible(structure, seed_frames, incumbent_frames, proposed_frames):
+                continue
             if exact >= budget.max_exact_trials:
                 exhausted = True
                 break
             choices = _combined_faces(preferred_faces, move.face_choices)
             trial, drawing = _evaluate_candidate(
-                working, move.apply, face_choices=choices, canonical=True
+                working,
+                move.apply,
+                face_choices=choices,
+                canonical=True,
+                before=incumbent_quality,
             )
             exact += 1
             held_faces = _held_faces(drawing, choices)
