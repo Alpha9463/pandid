@@ -51,6 +51,33 @@ No coordinates anywhere. `render()` infers the format from the extension
 hand). `fs.to_svg()` returns the SVG string, `fs.show()` opens it in a browser,
 and a flowsheet renders inline in Jupyter.
 
+### Place devices on a stream
+
+Keep the stream returned by `connect()` to place an inline valve or a complete
+control-valve station. Both calls default to the midpoint of their stream.
+
+```python
+from pandid import Feed, Flowsheet, Heater, Product, Valve
+
+fs = Flowsheet("Stream-relative placement")
+feed = fs.add(Feed("Feed"))
+heater = fs.add(Heater("E-101"))
+product = fs.add(Product("Product"))
+
+feed_run = fs.connect(feed.outlet, heater.inlet)
+fs.place_on(feed_run, Valve("HV-101"))
+product_run = fs.connect(heater.outlet, product.inlet)
+station = fs.place_valve_station_on(product_run, "CV-101")
+
+fs.render("stream_relative.svg")
+```
+
+Pass `at=0.25`, for example, to prefer a quarter of the way along a run. The
+original stream remains the handle for additional devices at distinct fractions.
+See [stream-relative attachments](docs/api.md#stream-relative-attachments)
+for placement and pin behavior. The [ethanol P&ID](examples/11_ethanol_pid.py)
+shows a manually pinned station as a fixed visual reference.
+
 ## What it does
 
 - **Topology-first API.** Declare typed units and connect their named ports.
@@ -188,7 +215,8 @@ covers a `Unit` subclass of your own.
 
 `Tee` is the fitting that branches a line, drawn as three lines meeting with
 nothing at the junction. `add_valve_station()` builds the whole arrangement a
-control valve sits in, twelve units and twelve streams, in one call.
+control valve sits in, twelve units and twelve streams, in one call;
+`place_valve_station_on()` also attaches it to an existing material stream.
 
 ## Declaring a flowsheet as data
 
