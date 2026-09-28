@@ -144,9 +144,26 @@ def test_automatic_ethanol_keeps_all_stations_compact(monkeypatch: pytest.Monkey
     fs.route()
     quality = measure_final(fs)
     assert quality.hard == (0,) * len(quality.hard)
-    assert quality.crossings <= 16
-    assert quality.bends <= 60
-    assert quality.length < 19000
+    prior_pairs = {
+        (9, 78),
+        (21, 82),
+        (33, 86),
+        (44, 90),
+        (51, 55),
+        (53, 60),
+        (53, 81),
+        (55, 77),
+        (57, 58),
+        (64, 68),
+        (70, 91),
+        (71, 92),
+        (81, 83),
+    }
+    assert quality.crossing_pairs < prior_pairs
+    assert quality.crossings <= 10
+    assert quality.bends <= 55
+    assert quality.length < 17000
+    assert quality.area < 5300000
     assert all(issue.code != "lines-crowded" for issue in fs.validate())
     product = next(unit for unit in fs.units if unit.name == "Azeotropic Ethanol")
     exchanger = next(unit for unit in fs.units if unit.name == "FE-305")
@@ -183,8 +200,10 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
     assert [(unit.frame.x, unit.frame.y) for unit in fs.units] == first
     assert reactor.frame is not None and product.frame is not None
     assert reactor.frame.y != product.frame.y
-    nozzle_span = (port_point(product, product.frame, "inlet")[0]
-                   - port_point(reactor, reactor.frame, "outlet")[0])
+    nozzle_span = (
+        port_point(product, product.frame, "inlet")[0]
+        - port_point(reactor, reactor.frame, "outlet")[0]
+    )
     assert nozzle_span == pytest.approx(_station_width(fs._station_assemblies) + 41)
     receiver_y = port_point(product, product.frame, "inlet")[1]
     main = [

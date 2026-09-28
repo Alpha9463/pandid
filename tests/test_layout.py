@@ -814,10 +814,8 @@ def test_a_protected_fold_rechecks_deferred_columns():
     from pandid.layout.stages import process_units, slot
 
     fs = Flowsheet("Protected fold")
-    blocks = [fs.add(U.Block(str(index), inputs=["W"], outputs=["E"]))
-              for index in range(20)]
-    streams = [fs.connect(source.out_1, dest.in_1)
-               for source, dest in zip(blocks, blocks[1:])]
+    blocks = [fs.add(U.Block(str(index), inputs=["W"], outputs=["E"])) for index in range(20)]
+    streams = [fs.connect(source.out_1, dest.in_1) for source, dest in zip(blocks, blocks[1:])]
     _seed_slots(fs)
     assign_positions(fs)
     for block in blocks:

@@ -52,9 +52,7 @@ def test_default_route_preserves_the_qualified_settled_drawing(stem: str) -> Non
     ]
 
 
-@pytest.mark.parametrize(
-    "stem", ["04_control_loop", "08_from_data", "16_demineralised_water"]
-)
+@pytest.mark.parametrize("stem", ["04_control_loop", "08_from_data", "16_demineralised_water"])
 def test_refinement_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     """Rebuilds make the same choice without using prior derived geometry.
 

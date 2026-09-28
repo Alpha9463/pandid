@@ -86,7 +86,8 @@ class ConstraintLayoutEngine:
 
     def layout(self, fs: "Flowsheet", *, use_coarse: bool = True,
                reservation: Literal["conservative", "compact", "shared"] = "shared",
-               row_compaction: float = 0.0) -> None:
+               row_compaction: float = 0.0,
+               directional_station: bool = False) -> None:
         """Resolve process, inline, and control geometry for a sheet.
 
         Parameters
@@ -99,6 +100,8 @@ class ConstraintLayoutEngine:
             Attachment-corridor estimate for an isolated equipment trial.
         row_compaction : float, optional
             Fraction of independent column-row compaction to apply.
+        directional_station : bool, optional
+            Follow explicitly mirrored station flow in a detached trial.
 
         Returns
         -------
@@ -118,7 +121,9 @@ class ConstraintLayoutEngine:
 
         _seed_slots(fs)
         break_cycles(fs)
-        station_coarse = use_coarse and place_equipment_first(fs, reservation=reservation)
+        station_coarse = use_coarse and place_equipment_first(
+            fs, reservation=reservation, directional=directional_station
+        )
         inline_coarse = False
         if (use_coarse and not station_coarse and not has_free_station(fs)
                 and any(stream._logical_to is not None for stream in fs.streams)):
