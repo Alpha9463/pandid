@@ -85,7 +85,8 @@ class ConstraintLayoutEngine:
     """
 
     def layout(self, fs: "Flowsheet", *, use_coarse: bool = True,
-               reservation: Literal["conservative", "compact", "shared"] = "shared") -> None:
+               reservation: Literal["conservative", "compact", "shared"] = "shared",
+               row_compaction: float = 0.0) -> None:
         """Resolve process, inline, and control geometry for a sheet.
 
         Parameters
@@ -96,6 +97,8 @@ class ConstraintLayoutEngine:
             Try equipment-first placement for stream-relative stations.
         reservation : {"conservative", "compact", "shared"}, optional
             Attachment-corridor estimate for an isolated equipment trial.
+        row_compaction : float, optional
+            Fraction of independent column-row compaction to apply.
 
         Returns
         -------
@@ -124,7 +127,7 @@ class ConstraintLayoutEngine:
         if not fs._coarse_layout_candidate:
             _seed_slots(fs)
             assign_positions(fs)
-            assign_coordinates(fs)
+            assign_coordinates(fs, row_compaction=row_compaction)
             place_stations(fs)
             place_inline(fs)
         elif not inline_coarse:

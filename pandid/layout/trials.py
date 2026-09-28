@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, cast
 
@@ -304,3 +305,103 @@ def refine_default(fs: Flowsheet, *, max_trials: int = 1) -> bool:
             _publish_candidate(fs, candidate)
             return True
     return False
+
+
+def refine_rows(fs: Flowsheet) -> bool:
+    """Try independent column-row spacing against completed routes.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed default drawing to improve without changing its model.
+
+    Returns
+    -------
+    bool
+        Whether a routed compact-row trial replaced the current drawing.
+    """
+    from pandid.layout import default_layout_engine
+    from pandid.layout.coarse import has_free_station
+    from pandid.layout.stages import process_units, slot
+
+    if has_free_station(fs) or any(stream._logical_to is not None for stream in fs.streams):
+        return False
+
+    before = measure_final(fs)
+    warnings = Counter(issue.code for issue in fs.validate() if issue.severity == "warning")
+    seed_y = tuple(slot(unit).y for unit in process_units(fs))
+    winner: Flowsheet | None = None
+    best = (before.hard, before.crossings, before.bends, before.length, before.area)
+    for fraction in (0.25, 0.5, 0.75, 1.0):
+        trial = copy.deepcopy(fs)
+        default_layout_engine.layout(trial, row_compaction=fraction)
+        if tuple(slot(unit).y for unit in process_units(trial)) == seed_y:
+            continue
+        trial._layout_stale = False
+        trial._route_stale = True
+        settle(trial)
+        after = measure_final(trial)
+        trial_warnings = Counter(
+            issue.code for issue in trial.validate() if issue.severity == "warning"
+        )
+        if not _row_quality_better(before, after, warnings, trial_warnings):
+            continue
+        rank = (after.hard, after.crossings, after.bends, after.length, after.area)
+        if rank < best:
+            best = rank
+            winner = trial
+    if winner is None:
+        return False
+    _publish_candidate(fs, winner)
+    fs._search_seed_frames = None
+    return True
+
+
+def _row_quality_better(before: Quality, after: Quality,
+                        old_warnings: Counter[str], new_warnings: Counter[str]) -> bool:
+    """Apply the completed-drawing gate to a row-spacing candidate.
+
+    Parameters
+    ----------
+    before, after : Quality
+        Baseline and proposed final geometry measurements.
+    old_warnings, new_warnings : Counter[str]
+        Validation warning counts by code for each drawing.
+
+    Returns
+    -------
+    bool
+        Whether every measured rule is preserved and one improves.
+    """
+    return (
+        admissible(before, after)
+        and after.bends <= before.bends
+        and after.excess_bends <= before.excess_bends
+        and after.length <= before.length + 1e-6
+        and after.area <= before.area + 1e-6
+        and all(count <= old_warnings[code] for code, count in new_warnings.items())
+        and improves(before, after)
+    )
+
+
+def row_final_better(reference: Flowsheet, candidate: Flowsheet) -> bool:
+    """Compare a compact-row drawing with the fully searched baseline.
+
+    Parameters
+    ----------
+    reference, candidate : Flowsheet
+        Completed baseline and compact-row drawings of the same model.
+
+    Returns
+    -------
+    bool
+        Whether the candidate improves without any measured regression.
+    """
+    before, after = measure_final(reference), measure_final(candidate)
+    old_warnings = Counter(
+        issue.code for issue in reference.validate() if issue.severity == "warning"
+    )
+    new_warnings = Counter(
+        issue.code for issue in candidate.validate() if issue.severity == "warning"
+    )
+    return _row_quality_better(before, after, old_warnings, new_warnings)

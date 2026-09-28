@@ -2061,6 +2061,13 @@ class Flowsheet:
         self._layout_search_result = None
         self._search_seed_frames = None
         default_router = router is None
+        from pandid.layout.stages import process_units
+
+        canonical_frames = all(
+            unit.frame is not None and unit._slot is not None
+            and unit.frame.x == unit._slot.x and unit.frame.y == unit._slot.y
+            for unit in process_units(self)
+        )
         if router is None:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
@@ -2093,9 +2100,28 @@ class Flowsheet:
             from pandid.layout.coarse import keep_if_better
             keep_if_better(self)
         if default_router and getattr(self, "_default_layout", False):
+            row_baseline = None
+            if canonical_frames:
+                import copy
+
+                from pandid.layout.coarse import has_free_station
+                from pandid.layout.trials import refine_rows
+
+                if (not has_free_station(self)
+                        and not any(stream._logical_to is not None for stream in self.streams)):
+                    row_baseline = copy.deepcopy(self)
+                    if not refine_rows(self):
+                        row_baseline = None
             from pandid.layout.search import SearchBudget, search_layout
 
-            search_layout(self, SearchBudget(4, 4, 16))
+            budget = SearchBudget(4, 4, 16)
+            search_layout(self, budget)
+            if row_baseline is not None:
+                from pandid.layout.trials import _publish_candidate, row_final_better
+
+                search_layout(row_baseline, budget)
+                if not row_final_better(row_baseline, self):
+                    _publish_candidate(self, row_baseline)
             # Only explicit searches report budget status during validation.
             self._layout_search_result = None
 

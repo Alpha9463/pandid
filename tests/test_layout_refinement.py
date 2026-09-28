@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from unittest.mock import Mock
 
 import pytest
 
@@ -81,6 +82,60 @@ def test_refinement_repeats_from_author_intent_and_fresh_builds(stem: str) -> No
     fresh.layout()
     fresh.route()
     assert _fingerprint(fresh) == fingerprint
+
+
+def test_column_row_compaction_shortens_a_control_sheet() -> None:
+    """Accept a routed row change only when the drawing improves.
+
+    Returns
+    -------
+    None
+        The default drawing is shorter with no new crossing or hard finding.
+    """
+    fs, _ = layout_quality.build("04_control_loop", True)
+    fs.layout()
+    fs.route(DefaultRouter())
+    before = measure_final(fs)
+    fs.layout()
+    fs.route()
+    after = measure_final(fs)
+
+    assert after.length < before.length
+    assert after.area < before.area
+    assert after.crossing_pairs <= before.crossing_pairs
+    assert all(new <= old for old, new in zip(before.hard, after.hard))
+
+
+def test_row_trial_does_not_replace_a_better_final_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the ordinary result when its final routing is better.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Disables row trials for the comparison drawing.
+
+    Returns
+    -------
+    None
+        The dewatering sheet retains its shorter baseline route.
+    """
+    with monkeypatch.context() as patch:
+        patch.setattr(trials, "refine_rows", Mock(return_value=False))
+        baseline, _ = layout_quality.build("13_mineral_dewatering", True)
+        baseline.layout()
+        baseline.route()
+    actual, _ = layout_quality.build("13_mineral_dewatering", True)
+    actual.layout()
+    actual.route()
+
+    before, after = measure_final(baseline), measure_final(actual)
+    assert after.hard == before.hard
+    assert after.crossing_pairs == before.crossing_pairs
+    assert after.bends == before.bends
+    assert after.length == before.length
+    assert after.area == before.area
 
 
 @pytest.mark.parametrize("stem", ["04_control_loop", "10_ethanol_pfd"])

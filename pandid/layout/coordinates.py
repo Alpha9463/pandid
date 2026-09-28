@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from pandid.layout.halo import Pad
 from pandid.layout.stages import slot
@@ -82,7 +82,8 @@ BAND_WIDTH = 3200.0
 def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
                        extra_gap: dict[int, float] | None = None,
                        links: list[tuple["Unit", "Unit", float]] | None = None,
-                       hosts: list["Host"] | None = None) -> None:
+                       hosts: list["Host"] | None = None,
+                       row_compaction: float = 0.0) -> None:
     """Map selected process-unit grid ranks to pixels.
 
     Parameters
@@ -97,6 +98,8 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
         Contracted connections used when resolving absolute pins.
     hosts : list[Host] or None
         Contracted runs whose endpoint nozzles guide pixel alignment.
+    row_compaction : float, optional
+        Fraction of independent column-row compaction to apply.
 
     Returns
     -------
@@ -120,7 +123,7 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
     cursor = float(MARGIN_Y)
     for index, group in enumerate(bands):
         cursor = _lay_band(columns, group, cursor, pads, anchored=not index,
-                           extra_gap=extra_gap)
+                           extra_gap=extra_gap, row_compaction=row_compaction)
 
     moved: dict[str, list["Unit"]] = {}
     if not _wrappable(fs, units):
@@ -128,7 +131,8 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
         cursor = float(MARGIN_Y)
         for index, group in enumerate(bands):
             cursor = _lay_band(columns, group, cursor, pads, anchored=not index,
-                               positions=nominal, extra_gap=extra_gap)
+                               positions=nominal, extra_gap=extra_gap,
+                               row_compaction=row_compaction)
         reference = {u: (s.x or 0.0, s.y or 0.0) for u, s in nominal.items()}
         moved = refine(fs, units, reference, links)
 
@@ -373,7 +377,8 @@ def _lay_columns(columns: dict[int, _Column], band: list[int],
 def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
               pads: dict["Unit", Pad], anchored: bool,
               positions: dict["Unit", "_Slot"] | None = None,
-              extra_gap: dict[int, float] | None = None) -> float:
+              extra_gap: dict[int, float] | None = None,
+              row_compaction: float = 0.0) -> float:
     """Place the units of one band.
 
     Parameters
@@ -392,6 +397,8 @@ def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
         Alternate slots receiving assigned coordinates.
     extra_gap : dict[int, float] or None
         Additional width reserved after each column.
+    row_compaction : float, optional
+        Fraction of the unused vertical row space to recover per column.
 
     Returns
     -------
@@ -456,7 +463,55 @@ def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
     for u in members:
         if position(u).y is None:
             position(u).y = axis[position(u).row or 0] - position(u).h / 2.0
-    return max([cursor_y + body[rows[-1]], *floor.values()], default=top) + BAND_GAP
+    next_top = max([cursor_y + body[rows[-1]], *floor.values()], default=top) + BAND_GAP
+    if row_compaction:
+        compacted_top = _compact_column_rows(columns, band, top, pads, position,
+                                              row_compaction)
+        return min(next_top, compacted_top)
+    return next_top
+
+
+def _compact_column_rows(columns: dict[int, _Column], band: list[int], top: float,
+                         pads: dict["Unit", Pad], position: Callable[["Unit"], "_Slot"],
+                         fraction: float) -> float:
+    """Recover row space that no unit in a column reserves.
+
+    Parameters
+    ----------
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    band : list[int]
+        Columns in the current paper band.
+    top : float
+        Start of the paper band.
+    pads : dict[Unit, Pad]
+        Per-unit clearances for attached controls and labels.
+    position : callable
+        Slot lookup for the current coordinate assignment.
+    fraction : float
+        Share of the available vertical slack to remove.
+
+    Returns
+    -------
+    float
+        Start of the next band after the compacted columns.
+    """
+    end = top
+    for column in band:
+        ordered = sorted(columns[column].units,
+                         key=lambda unit: (position(unit).row or 0, position(unit).y or 0.0))
+        floor = top
+        for unit in ordered:
+            placed = position(unit)
+            pad = pads.get(unit, Pad())
+            if placed.y is None:
+                continue
+            if unit.pin_ is None or (unit.pin_.y is None and unit.pin_.row is None):
+                proposed = max(top + pad.north, floor + pad.north)
+                placed.y += fraction * (proposed - placed.y)
+            floor = max(floor, placed.y + placed.h + pad.south + ROW_GAP)
+        end = max(end, floor)
+    return end + BAND_GAP
 
 
 # ---------------------------------------------------------------------------
