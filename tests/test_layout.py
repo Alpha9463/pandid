@@ -986,6 +986,18 @@ def test_pixel_clearance_does_not_move_a_separator_into_a_free_pump():
 
 @pytest.mark.parametrize("skip", ["s103", "dirty_water"])
 def test_biodiesel_unpin_matches_a_fresh_build_and_keeps_remaining_pins(skip):
+    """Keep the same final drawing after an unpin and fresh reconstruction.
+
+    Parameters
+    ----------
+    skip : str
+        Name of the unit whose placement pin is removed.
+
+    Returns
+    -------
+    None
+        Pin positions and completed layout agree across rerenders.
+    """
     from _layout_cases import build
     from pandid.portgeom import pin_intent, port_point
 
@@ -1001,6 +1013,7 @@ def test_biodiesel_unpin_matches_a_fresh_build_and_keeps_remaining_pins(skip):
             assert point[0 if axis == "x" else 1] == pytest.approx(value)
     positions = [(u.frame.x, u.frame.y) for u in live.units]
     live.layout()
+    live.route()
     assert [(u.frame.x, u.frame.y) for u in live.units] == positions
 
 

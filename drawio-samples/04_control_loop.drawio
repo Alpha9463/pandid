@@ -111,11 +111,10 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="s7" value="" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1;dashed=1;dashPattern=7 4;fixDash=1;endArrow=none;startArrow=none;" edge="1" parent="1" source="u9" target="u10">
+        <mxCell id="s7" value="" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1;dashed=1;dashPattern=7 4;fixDash=1;endArrow=none;startArrow=none;" edge="1" parent="1" source="u9" target="u10">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="229.36" y="104.5" />
-              <mxPoint x="229.36" y="19.41" />
+              <mxPoint x="186.25" y="19.41" />
             </Array>
           </mxGeometry>
         </mxCell>

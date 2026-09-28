@@ -31,7 +31,7 @@ def _two_obstructions() -> Flowsheet:
     fs.layout()
     for branch in range(2):
         fs.units[3 * branch + 2].frame.y = 90 + 800 * branch
-    fs.route()
+    fs.route(DefaultRouter())
     return fs
 
 

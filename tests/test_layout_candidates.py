@@ -14,6 +14,7 @@ from pandid.layout.candidates import (
 from pandid.layout.conflicts import Conflict, analyze_conflicts
 from pandid.layout.halo import balloon_pads
 from pandid.layout.trials import evaluate_trial
+from pandid.routing import DefaultRouter
 
 
 def _closed_arms() -> Flowsheet:
@@ -47,7 +48,7 @@ def _closed_arms() -> Flowsheet:
     fs.layout()
     upper_first.frame.y += 100
     upper_second.frame.y += 100
-    fs.route()
+    fs.route(DefaultRouter())
     return fs
 
 
@@ -112,7 +113,7 @@ def test_mixed_face_blocker_offers_a_clear_adjacent_lane() -> None:
     fs.connect(source.out_1, dest.in_1)
     fs.layout()
     blocker.frame.y = 90
-    fs.route()
+    fs.route(DefaultRouter())
     before = (blocker.frame.x, blocker.frame.y)
     findings = analyze_conflicts(fs)
     assert any(item.kind == "blocked-exit" for item in findings)
@@ -143,7 +144,7 @@ def test_fixed_blocker_can_be_cleared_by_a_free_endpoint() -> None:
     fs.connect(source.out_1, dest.in_1)
     fs.layout()
     source.frame.y = 0
-    fs.route()
+    fs.route(DefaultRouter())
 
     moves = generate_moves(fs)
     assert any(part.units == (0,) and part.dy == 50 for move in moves for part in move.translations)

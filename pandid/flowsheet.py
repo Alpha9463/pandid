@@ -2092,6 +2092,12 @@ class Flowsheet:
         if default_router and self._coarse_layout_candidate:
             from pandid.layout.coarse import keep_if_better
             keep_if_better(self)
+        if default_router and getattr(self, "_default_layout", False):
+            from pandid.layout.search import SearchBudget, search_layout
+
+            search_layout(self, SearchBudget(4, 4, 16))
+            # Only explicit searches report budget status during validation.
+            self._layout_search_result = None
 
     def _resolve_geometry(self) -> None:
         """Bring the frames and routes up to date with the model.

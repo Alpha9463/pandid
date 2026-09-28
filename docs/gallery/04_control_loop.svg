@@ -66,7 +66,7 @@
     <path d="M 664.5,195.0 L 790.0,195.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 451.0,145.0 L 451.0,77.1" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 451.0,55.0 L 451.0,30.0 L 630.0,30.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 208.25,104.5 L 229.35672487178908,104.5 L 229.35672487178908,19.406592001384936 L 254.35672487178908,19.406592001384936" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 186.25,82.5 L 186.25,19.406592001384936 L 254.35672487178908,19.406592001384936" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 276.3567248717891,41.40659200138494 L 276.3567248717891,157.6 L 282.2,157.6 L 282.2,182.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="271.4" y1="74.6" x2="281.4" y2="80.6" stroke="black" stroke-width="1" />
     <line x1="271.4" y1="78.6" x2="281.4" y2="84.6" stroke="black" stroke-width="1" />

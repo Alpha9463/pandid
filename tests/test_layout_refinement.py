@@ -8,7 +8,7 @@ import pytest
 
 from pandid import Flowsheet
 from pandid.layout.candidates import generate
-from pandid.layout.quality import measure_final
+from pandid.layout.quality import admissible, measure_final
 from pandid.layout.trials import _evaluate_candidate
 from pandid.layout import trials
 from pandid.routing import DefaultRouter
@@ -19,8 +19,8 @@ from scripts.layout_compare import _fingerprint
 @pytest.mark.parametrize(
     "stem", ["10_ethanol_pfd", "16_demineralised_water", "17_stirred_reactor_train"]
 )
-def test_default_route_publishes_the_qualified_settled_drawing(stem: str) -> None:
-    """The live drawing takes all derived geometry from its accepted trial.
+def test_default_route_preserves_the_qualified_settled_drawing(stem: str) -> None:
+    """The final search preserves the accepted trial and model identities.
 
     Parameters
     ----------
@@ -30,7 +30,7 @@ def test_default_route_publishes_the_qualified_settled_drawing(stem: str) -> Non
     Returns
     -------
     None
-        Geometry, quality, and object identities match the accepted trial.
+        Final quality is admissible against the trial and identities survive.
     """
     fs, _ = layout_quality.build(stem, True)
     fs.layout()
@@ -42,8 +42,7 @@ def test_default_route_publishes_the_qualified_settled_drawing(stem: str) -> Non
     ports = tuple(tuple(unit.ports.values()) for unit in fs.units)
     fs.route()
 
-    assert _fingerprint(fs) == _fingerprint(accepted)
-    assert measure_final(fs) == result.after
+    assert admissible(result.after, measure_final(fs))
     assert all(live is original for live, original in zip(fs.units, units))
     assert all(live is original for live, original in zip(fs.streams, streams))
     assert all(tuple(unit.ports.values()) == original for unit, original in zip(fs.units, ports))
@@ -52,15 +51,23 @@ def test_default_route_publishes_the_qualified_settled_drawing(stem: str) -> Non
     ]
 
 
-def test_refinement_repeats_from_author_intent_and_fresh_builds() -> None:
+@pytest.mark.parametrize(
+    "stem", ["04_control_loop", "08_from_data", "16_demineralised_water"]
+)
+def test_refinement_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     """Rebuilds make the same choice without using prior derived geometry.
+
+    Parameters
+    ----------
+    stem : str
+        Example with or without an accepted bounded search move.
 
     Returns
     -------
     None
         Routing again, laying out again, and constructing anew agree.
     """
-    fs, _ = layout_quality.build("16_demineralised_water", True)
+    fs, _ = layout_quality.build(stem, True)
     fs.layout()
     fs.route()
     fingerprint = _fingerprint(fs)
@@ -70,7 +77,7 @@ def test_refinement_repeats_from_author_intent_and_fresh_builds() -> None:
     fs.route()
     assert _fingerprint(fs) == fingerprint
 
-    fresh, _ = layout_quality.build("16_demineralised_water", True)
+    fresh, _ = layout_quality.build(stem, True)
     fresh.layout()
     fresh.route()
     assert _fingerprint(fresh) == fingerprint
