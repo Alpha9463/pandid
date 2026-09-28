@@ -46,15 +46,33 @@ if TYPE_CHECKING:
     from pandid.units import Unit
 
 
-def assign_positions(fs: "Flowsheet") -> None:
-    """Fill in ``_slot.col`` and ``_slot.row`` for every process unit."""
+def assign_positions(fs: "Flowsheet", *, units: list["Unit"] | None = None,
+                     claims: list[claims_mod.Claim] | None = None) -> None:
+    """Assign grid ranks from process claims.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose process graph supplies the default units and claims.
+    units : list[Unit] or None
+        Placement nodes, or all process units by default.
+    claims : list[Claim] or None
+        Claims between those nodes, or all process claims by default.
+
+    Returns
+    -------
+    None
+        The selected unit slots receive column and row ranks.
+    """
     from pandid.layout.stages import process_streams, process_units
 
-    units = process_units(fs)
+    if units is None:
+        units = process_units(fs)
     if not units:
         return
     at = {u: i for i, u in enumerate(units)}
-    claims = claims_mod.read(process_streams(fs))
+    if claims is None:
+        claims = claims_mod.read(process_streams(fs))
 
     pulls = {step: [(at[c.author], at[c.subject], c.confidence, float(getattr(c, step)))
                     for c in claims] for step in ("eastward", "southward")}

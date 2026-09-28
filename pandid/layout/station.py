@@ -200,7 +200,7 @@ def _centerline(source: Unit, source_port: str, dest: Unit, dest_port: str,
     return None
 
 
-def place_stations(fs: Flowsheet) -> None:
+def place_stations(fs: Flowsheet) -> int:
     """Move feasible unpinned stations onto their external material runs.
 
     Parameters
@@ -210,12 +210,13 @@ def place_stations(fs: Flowsheet) -> None:
 
     Returns
     -------
-    None
-        Member frames and slots change only for complete feasible stations.
+    int
+        Number of complete station assemblies placed.
     """
     if not fs._station_assemblies:
-        return
+        return 0
     units = process_units(fs)
+    placed_count = 0
     groups: dict[int, list[StationAssembly]] = {}
     for assembly in fs._station_assemblies:
         key = id(assembly.run) if assembly.run is not None else id(assembly)
@@ -274,6 +275,7 @@ def place_stations(fs: Flowsheet) -> None:
             proposed.append(frames)
         if len(proposed) != len(group):
             continue
+        placed_count += len(proposed)
         for frames in proposed:
             for unit, frame in frames.items():
                 unit.frame = frame
@@ -282,3 +284,4 @@ def place_stations(fs: Flowsheet) -> None:
                 placed.w, placed.h = frame.w, frame.h
                 placed.orientation = frame.orientation
                 placed.mirrored, placed.mirror_y = frame.mirrored, frame.mirror_y
+    return placed_count

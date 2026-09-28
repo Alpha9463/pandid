@@ -77,24 +77,45 @@ BAND_GAP = 160.0
 BAND_WIDTH = 3200.0
 
 
-def assign_coordinates(fs: "Flowsheet") -> None:
-    """Map every process unit's ``(column, row)`` to pixels."""
+def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
+                       extra_gap: dict[int, float] | None = None,
+                       links: list[tuple["Unit", "Unit", float]] | None = None) -> None:
+    """Map selected process-unit grid ranks to pixels.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet containing the process units.
+    units : list[Unit] or None
+        Units to coordinate, or every process unit by default.
+    extra_gap : dict[int, float] or None
+        Additional paper reserved after each grid column.
+    links : list[tuple[Unit, Unit, float]] or None
+        Contracted connections used when resolving absolute pins.
+
+    Returns
+    -------
+    None
+        Frames are assigned to the selected units.
+    """
     from pandid.geometry import Frame
     from pandid.layout.halo import balloon_pads
     from pandid.layout.pixel import clear_pins, refine
     from pandid.layout.stages import process_units
 
-    units = process_units(fs)
+    if units is None:
+        units = process_units(fs)
     if not units:
         return
     pads = balloon_pads(fs)
     columns = _columns(units, pads)
-    bands = _bands(units, columns, pads, _wrappable(fs, units))
+    bands = _bands(units, columns, pads, _wrappable(fs, units), extra_gap)
     band_of = {u: b for b, group in enumerate(bands) for c in group for u in columns[c].units}
 
     cursor = float(MARGIN_Y)
     for index, group in enumerate(bands):
-        cursor = _lay_band(columns, group, cursor, pads, anchored=not index)
+        cursor = _lay_band(columns, group, cursor, pads, anchored=not index,
+                           extra_gap=extra_gap)
 
     moved: dict[str, list["Unit"]] = {}
     if not _wrappable(fs, units):
@@ -102,9 +123,9 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         cursor = float(MARGIN_Y)
         for index, group in enumerate(bands):
             cursor = _lay_band(columns, group, cursor, pads, anchored=not index,
-                               positions=nominal)
+                               positions=nominal, extra_gap=extra_gap)
         reference = {u: (s.x or 0.0, s.y or 0.0) for u, s in nominal.items()}
-        moved = refine(fs, units, reference)
+        moved = refine(fs, units, reference, links)
 
     _straighten(fs, units, band_of, pads)
     if moved:
@@ -184,32 +205,38 @@ def _wrappable(fs: "Flowsheet", units: list["Unit"]) -> bool:
 
 
 def _bands(units: list["Unit"], columns: dict[int, _Column],
-           pads: dict["Unit", Pad], wrappable: bool) -> list[list[int]]:
-    """The columns of the grid, cut into bands that fit the paper.
+           pads: dict["Unit", Pad], wrappable: bool,
+           extra_gap: dict[int, float] | None = None) -> list[list[int]]:
+    """Partition grid columns into bands within the paper width.
 
-    Greedy from the left, then the cut is slid to the nearest column
-    boundary with the fewest runs across it -- a fold through a seam in
-    the process rather than through the middle of a train. Sliding only
-    backwards keeps every band inside the width; a fold that made one
-    band wider to tidy the seam would be a fold that did not fit.
+    Parameters
+    ----------
+    units : list[Unit]
+        Process units used to score fold boundaries.
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    pads : dict[Unit, Pad]
+        Attached label and balloon clearance around each unit.
+    wrappable : bool
+        Whether the drawing may use multiple bands.
+    extra_gap : dict[int, float] or None
+        Additional width reserved after each column.
 
-    A candidate band is measured by :func:`_lay_columns`, the same pass
-    that will place it. Measuring it by adding up the columns' own
-    widths instead over-counts, badly: a balloon standing east of a
-    valve in one row does not push the column after it away from every
-    *other* row, so a sheet 2370 px across measured 3400 and was folded
-    in two -- with three units in the second band and an empty quarter
-    of the page between them.
+    Returns
+    -------
+    list[list[int]]
+        Ordered column numbers in each band.
     """
     order = sorted(columns)
-    if not wrappable or _lay_columns(columns, order, pads) <= BAND_WIDTH:
+    if not wrappable or _lay_columns(columns, order, pads, extra_gap=extra_gap) <= BAND_WIDTH:
         return [order]
 
     crossings = _seam_cost(units)
     bands: list[list[int]] = []
     band: list[int] = []
     for column in order:
-        if band and _lay_columns(columns, [*band, column], pads) > BAND_WIDTH:
+        if band and _lay_columns(columns, [*band, column], pads,
+                                extra_gap=extra_gap) > BAND_WIDTH:
             band = _slide(band, crossings)
             bands.append(band)
             band = []
@@ -272,16 +299,29 @@ def _refill(order: list[int], bands: list[list[int]]) -> list[list[int]]:
 
 def _lay_columns(columns: dict[int, _Column], band: list[int],
                  pads: dict["Unit", Pad], place: bool = False,
-                 positions: dict["Unit", "_Slot"] | None = None) -> float:
-    """How wide this run of columns comes out, and optionally place it.
+                 positions: dict["Unit", "_Slot"] | None = None,
+                 extra_gap: dict[int, float] | None = None) -> float:
+    """Measure a column band and optionally assign horizontal positions.
 
-    The balloon demand is settled **per row**, the way the rows settle
-    theirs per column: a bubble standing east of a valve in row 2 wants
-    paper east of *row 2*, not a gap driven through every row the column
-    has. ``wall`` is how far east each row is already spoken for.
+    Parameters
+    ----------
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    band : list[int]
+        Columns to measure or place.
+    pads : dict[Unit, Pad]
+        Attached-object clearance around each unit.
+    place : bool
+        Assign horizontal coordinates when true.
+    positions : dict[Unit, _Slot] or None
+        Alternate slots receiving assigned coordinates.
+    extra_gap : dict[int, float] or None
+        Additional width reserved after each column.
 
-    Measuring and placing are one function so that the width a band is
-    cut to and the width it is drawn at cannot come apart.
+    Returns
+    -------
+    float
+        Width of the band in pixels.
     """
     # A row with nothing to its west yet reserves nothing: the first
     # column starts on the margin, and a boundary flag whose pennant
@@ -301,7 +341,7 @@ def _lay_columns(columns: dict[int, _Column], band: list[int],
             for u in held.units:
                 if position(u).x is None:
                     position(u).x = x
-        cursor = x + held.body + COL_GAP
+        cursor = x + held.body + COL_GAP + (extra_gap or {}).get(column, 0.0)
         for u in held.units:
             row = position(u).row or 0
             wall[row] = max(wall.get(row, 0.0),
@@ -311,14 +351,39 @@ def _lay_columns(columns: dict[int, _Column], band: list[int],
 
 def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
               pads: dict["Unit", Pad], anchored: bool,
-              positions: dict["Unit", "_Slot"] | None = None) -> float:
-    """Place one band's units and return where the next band starts."""
+              positions: dict["Unit", "_Slot"] | None = None,
+              extra_gap: dict[int, float] | None = None) -> float:
+    """Place the units of one band.
+
+    Parameters
+    ----------
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    band : list[int]
+        Columns in this band.
+    top : float
+        Vertical starting coordinate.
+    pads : dict[Unit, Pad]
+        Attached-object clearance around each unit.
+    anchored : bool
+        Keep empty rows before the first occupied row when true.
+    positions : dict[Unit, _Slot] or None
+        Alternate slots receiving assigned coordinates.
+    extra_gap : dict[int, float] or None
+        Additional width reserved after each column.
+
+    Returns
+    -------
+    float
+        Vertical starting coordinate for the next band.
+    """
     position = slot if positions is None else positions.__getitem__
     members = [u for c in band for u in columns[c].units]
     if not members:
         return top
 
-    _lay_columns(columns, band, pads, place=True, positions=positions)
+    _lay_columns(columns, band, pads, place=True, positions=positions,
+                 extra_gap=extra_gap)
 
     # Bands are built for every row the sheet names between the band's
     # own first and last, and a pin can name one above row 0:

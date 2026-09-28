@@ -80,21 +80,19 @@ def _seed_slots(fs: "Flowsheet") -> None:
 class ConstraintLayoutEngine:
     """The default auto-layout engine.
 
-    Named for what decides a position: every unit's claim about where
-    its neighbours belong, fitted at once. Nothing is ranked and nothing
-    is dropped -- two claims that disagree settle on the compromise
-    their weights buy, which is why there is no crossing-reduction sweep
-    here either. A barycentre pass approximates by iteration the average
-    the fit computes exactly.
+    Equipment and stream-relative stations are placed in separate passes
+    when a station can be contracted. Other sheets use the full unit graph.
     """
 
-    def layout(self, fs: "Flowsheet") -> None:
+    def layout(self, fs: "Flowsheet", *, use_coarse: bool = True) -> None:
         """Resolve process, inline, and control geometry for a sheet.
 
         Parameters
         ----------
         fs : Flowsheet
             Sheet to lay out.
+        use_coarse : bool, optional
+            Try equipment-first placement for stream-relative stations.
 
         Returns
         -------
@@ -103,6 +101,7 @@ class ConstraintLayoutEngine:
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
+        from pandid.layout.coarse import place_equipment_first
         from pandid.layout.coordinates import assign_coordinates, assign_labels
         from pandid.layout.cycles import break_cycles
         from pandid.layout.faces import select_faces
@@ -112,9 +111,12 @@ class ConstraintLayoutEngine:
 
         _seed_slots(fs)
         break_cycles(fs)
-        assign_positions(fs)
-        assign_coordinates(fs)
-        place_stations(fs)
+        fs._coarse_layout_candidate = use_coarse and place_equipment_first(fs)
+        if not fs._coarse_layout_candidate:
+            _seed_slots(fs)
+            assign_positions(fs)
+            assign_coordinates(fs)
+            place_stations(fs)
         place_inline(fs)
         # Choose the faces, and place again where that moved a balloon.
         # The loop ends on a selection made against boxes nothing has

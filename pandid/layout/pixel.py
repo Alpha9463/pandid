@@ -15,14 +15,32 @@ if TYPE_CHECKING:
 
 
 def refine(fs: Flowsheet, units: list[Unit],
-           reference: dict[Unit, tuple[float, float]]) -> dict[str, list[Unit]]:
-    """Resolve free coordinates against pinned corners and nominal grid spacing."""
+           reference: dict[Unit, tuple[float, float]],
+           links: list[tuple[Unit, Unit, float]] | None = None) -> dict[str, list[Unit]]:
+    """Resolve free coordinates against pins and nominal graph spacing.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with authored coordinate pins.
+    units : list[Unit]
+        Units included in the pixel solve.
+    reference : dict[Unit, tuple[float, float]]
+        Nominal grid coordinates for each unit.
+    links : list[tuple[Unit, Unit, float]] or None
+        Contracted host connections absent from physical streams.
+
+    Returns
+    -------
+    dict[str, list[Unit]]
+        Free units moved on each pixel axis.
+    """
     at = {u: i for i, u in enumerate(units)}
     pulls: dict[str, list[solver.Pull]] = {"x": [], "y": []}
     for stream in process_streams(fs):
         src, dst = stream.source.owner, stream.dest.owner
         assert src is not None and dst is not None
-        if src is dst:
+        if src is dst or src not in at or dst not in at:
             continue
         weight = sum(c.confidence for c in claims.read([stream]))
         source, dest = slot(src), slot(dst)
@@ -38,6 +56,11 @@ def refine(fs: Flowsheet, units: list[Unit],
                     and all(face in directions for face in faces)):
                 step = offsets[0][index] - offsets[1][index]
             pulls[axis].append((at[src], at[dst], weight, step))
+
+    for host_source, host_dest, weight in links or []:
+        for axis, index in (("x", 0), ("y", 1)):
+            step = reference[host_dest][index] - reference[host_source][index]
+            pulls[axis].append((at[host_source], at[host_dest], weight, step))
 
     groups = solver.components(len(units), pulls["x"])
     moved: dict[str, list[Unit]] = {"x": [], "y": []}
