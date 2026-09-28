@@ -101,7 +101,8 @@ class ConstraintLayoutEngine:
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
-        from pandid.layout.coarse import place_equipment_first
+        from pandid.layout.coarse import (place_equipment_first,
+                                          place_inline_equipment_first)
         from pandid.layout.coordinates import assign_coordinates, assign_labels
         from pandid.layout.cycles import break_cycles
         from pandid.layout.faces import select_faces
@@ -111,13 +112,20 @@ class ConstraintLayoutEngine:
 
         _seed_slots(fs)
         break_cycles(fs)
-        fs._coarse_layout_candidate = use_coarse and place_equipment_first(fs)
+        station_coarse = use_coarse and place_equipment_first(fs)
+        inline_coarse = False
+        if (use_coarse and not station_coarse and not fs._station_assemblies
+                and any(stream._logical_to is not None for stream in fs.streams)):
+            inline_coarse = place_inline_equipment_first(fs)
+        fs._coarse_layout_candidate = station_coarse or inline_coarse
         if not fs._coarse_layout_candidate:
             _seed_slots(fs)
             assign_positions(fs)
             assign_coordinates(fs)
             place_stations(fs)
-        place_inline(fs)
+            place_inline(fs)
+        elif not inline_coarse:
+            place_inline(fs)
         # Choose the faces, and place again where that moved a balloon.
         # The loop ends on a selection made against boxes nothing has
         # moved since, so the sheet it hands on is a function of the

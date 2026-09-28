@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from pandid import Feed, Flowsheet, Product, Tee, Valve
+from pandid import Feed, Flowsheet, Product, Reactor, Tee, Valve
 from pandid.layout.backbone import infer_backbone
+from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
 from pandid.state import State
 
@@ -78,6 +79,135 @@ def test_place_on_orders_repeated_insertions_by_fraction() -> None:
     assert rebuilt.to_dict() == fs.to_dict()
     rebuilt.place_on(rebuilt.streams[0], Valve("HV-3"), at=0.5)
     assert [s._inline_at for s in rebuilt.streams] == [0.25, 0.5, 0.75, None]
+
+
+def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
+    """Place two attached valves after solving their external equipment.
+
+    Returns
+    -------
+    None
+        The routed train is compact, clear, and stable across layout runs.
+    """
+    fs = Flowsheet("Inline equipment train")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    run = fs.connect(feed.outlet, product.inlet)
+    first = fs.place_on(run, Valve("HV-1"), at=0.25)
+    second = fs.place_on(run, Valve("HV-2"), at=0.75)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is True
+    fs.route()
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+    assert quality.crossings == 0
+    assert quality.length < 200
+    assert first.frame is not None and second.frame is not None
+    assert feed.frame is not None and product.frame is not None
+    assert feed.frame.x < first.frame.x < second.frame.x < product.frame.x
+    frames = [(unit.frame.x, unit.frame.y) for unit in fs.units]
+    fs.layout()
+    fs.route()
+    assert [(unit.frame.x, unit.frame.y) for unit in fs.units] == frames
+
+
+def test_south_discharge_inline_chain_keeps_the_full_layout() -> None:
+    """Retain full placement when a short host has no straight valve leg.
+
+    Returns
+    -------
+    None
+        The reactor train routes without a new fallback or hard finding.
+    """
+    fs = Flowsheet("South outlet inline train")
+    feed = fs.add(Feed("Feed"))
+    reactor = fs.add(Reactor("R-101"))
+    product = fs.add(Product("Product"))
+    fs.connect(feed.outlet, reactor.feed)
+    run = fs.connect(reactor.outlet, product.inlet)
+    fs.place_on(run, Valve("HV-1"), at=0.25)
+    fs.place_on(run, Valve("HV-2"), at=0.75)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is False
+    fs.route()
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+
+
+def test_inline_chain_preserves_a_pinned_branch_origin() -> None:
+    """Propagate a feed's absolute pin through a contracted branch run.
+
+    Returns
+    -------
+    None
+        The tee and valve follow the feed without a routing defect.
+    """
+    fs = Flowsheet("Pinned branch inline")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=450, y=300)
+    tee = fs.add(Tee())
+    product = fs.add(Product("Product"))
+    branch = fs.add(Product("Branch"))
+    run = fs.connect(feed.outlet, tee.inlet)
+    valve = fs.place_on(run, Valve("HV-1"), at=0.5)
+    fs.connect(tee.outlet, product.inlet)
+    fs.connect(tee.branch, branch.inlet)
+
+    fs.route()
+    assert fs._coarse_layout_candidate is False
+    assert feed.frame is not None and tee.frame is not None and valve.frame is not None
+    assert port_point(feed, feed.frame, "outlet") == (450, 300)
+    assert feed.frame.x < valve.frame.x < tee.frame.x
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+    assert quality.crossings == 0
+
+
+def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
+    """Require every contracted device to fit its own host corridor.
+
+    Returns
+    -------
+    None
+        A separate placed device cannot make a failed chain look complete.
+    """
+    fs = Flowsheet("Separate inline runs")
+    feed_a = fs.add(Feed("Feed A"))
+    product_a = fs.add(Product("Product A"))
+    run = fs.connect(feed_a.outlet, product_a.inlet)
+    fs.place_on(run, Valve("HV-A").pin(orientation=90), at=0.5)
+
+    feed_b = fs.add(Feed("Feed B"))
+    valve_b = fs.add(Valve("HV-B"))
+    product_b = fs.add(Product("Product B"))
+    preferred = fs.connect(feed_b.outlet, valve_b.inlet)
+    fs.connect(valve_b.outlet, product_b.inlet)
+    fs._set_inline_at(preferred, 0.5)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is False
+
+
+def test_adjacent_logical_runs_are_not_contracted_as_one() -> None:
+    """Keep separate attachment fractions tied to their own root runs.
+
+    Returns
+    -------
+    None
+        A backbone merged across an inline endpoint uses full placement.
+    """
+    fs = Flowsheet("Adjacent logical runs")
+    feed = fs.add(Feed("Feed"))
+    middle = fs.add(Valve("HV-M"))
+    product = fs.add(Product("Product"))
+    upstream = fs.connect(feed.outlet, middle.inlet)
+    downstream = fs.connect(middle.outlet, product.inlet)
+    fs.place_on(upstream, Valve("HV-A"), at=0.25)
+    fs.place_on(downstream, Valve("HV-B"), at=0.75)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is False
 
 
 def test_place_on_refuses_invalid_calls_without_mutation() -> None:

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
 from pandid.layout import claims as claims_mod
+from pandid.layout.backbone import infer_backbone
 from pandid.layout.coordinates import COL_GAP, assign_coordinates
 from pandid.layout.place import assign_positions
 from pandid.layout.stages import process_streams, process_units, slot
@@ -60,18 +61,18 @@ def _groups(fs: Flowsheet) -> list[tuple[Stream, list[StationAssembly]]] | None:
     return list(by_root.values())
 
 
-def _claims(fs: Flowsheet, groups: list[tuple[Stream, list[StationAssembly]]],
+def _claims(fs: Flowsheet, roots: list[Stream],
             retained: list[Unit]) -> list[claims_mod.Claim]:
-    """Replace each station's internal claims with its endpoint claims.
+    """Replace each attachment chain's internal claims with endpoint claims.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet whose material graph is inspected.
-    groups : list[tuple[Stream, list[StationAssembly]]]
-        Complete station groups by host run.
+    roots : list[Stream]
+        Logical host runs with contracted attachments.
     retained : list[Unit]
-        Process units outside the station assemblies.
+        Process units outside the attachment chains.
 
     Returns
     -------
@@ -82,7 +83,7 @@ def _claims(fs: Flowsheet, groups: list[tuple[Stream, list[StationAssembly]]],
     streams = [stream for stream in process_streams(fs)
                if stream.source.owner in active and stream.dest.owner in active]
     out = claims_mod.read(streams)
-    for root, _ in groups:
+    for root in roots:
         destination = root._logical_to
         assert destination is not None and destination.stream is not None
         first, last = root, destination.stream
@@ -146,8 +147,61 @@ def _end_clearance(source: Unit, source_port: str, dest: Unit,
     return body + 41.0  # one 25px nozzle exit and 8px body clearance at each end
 
 
+def _equipment_frames(fs: Flowsheet, widths: list[tuple[Stream, float]],
+                      members: set[Unit]) -> bool:
+    """Resolve equipment positions while reserving attachment footprints.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose slots have been seeded from authored pins.
+    widths : list[tuple[Stream, float]]
+        Host runs and their required horizontal attachment space.
+    members : set[Unit]
+        Attachment units excluded from the equipment solve.
+
+    Returns
+    -------
+    bool
+        Whether each host has distinct equipment grid columns.
+    """
+    roots = [root for root, _ in widths]
+    retained = [unit for unit in process_units(fs) if unit not in members]
+    assign_positions(fs, units=retained, claims=_claims(fs, roots, retained))
+    gap: dict[int, float] = {}
+    for root, width in widths:
+        destination = root._logical_to
+        assert destination is not None
+        source_unit, dest_unit = root.source.owner, destination.owner
+        assert source_unit is not None and dest_unit is not None
+        source_col, dest_col = slot(source_unit).col, slot(dest_unit).col
+        assert source_col is not None and dest_col is not None
+        span = abs(dest_col - source_col)
+        if span == 0:
+            return False
+        column = min(source_col, dest_col)
+        clearance = _end_clearance(source_unit, root.source.name,
+                                   dest_unit, destination.name, source_col < dest_col)
+        need = max(0.0, width + clearance - span * COL_GAP)
+        gap[column] = max(gap.get(column, 0.0), need)
+    links = []
+    for root in roots:
+        destination = root._logical_to
+        assert destination is not None
+        source_unit, dest_unit = root.source.owner, destination.owner
+        assert source_unit is not None and dest_unit is not None
+        links.append((source_unit, dest_unit, claims_mod.LINE))
+    assign_coordinates(fs, units=retained, extra_gap=gap, links=links)
+    for unit in members:
+        placed = slot(unit)
+        unit.frame = Frame(x=0.0, y=0.0, w=placed.w, h=placed.h,
+                           orientation=placed.orientation, mirrored=placed.mirrored,
+                           mirror_y=placed.mirror_y)
+    return True
+
+
 def place_equipment_first(fs: Flowsheet) -> bool:
-    """Try a station-contracted equipment solve without changing user intent.
+    """Place eligible station assemblies after their external equipment.
 
     Parameters
     ----------
@@ -164,38 +218,84 @@ def place_equipment_first(fs: Flowsheet) -> bool:
         return False
     members = {unit for assembly in fs._station_assemblies
                for unit in assembly.station.members}
-    retained = [unit for unit in process_units(fs) if unit not in members]
-    assign_positions(fs, units=retained, claims=_claims(fs, groups, retained))
-    gap: dict[int, float] = {}
-    for root, assemblies in groups:
-        destination = root._logical_to
-        assert destination is not None
-        source_unit, dest_unit = root.source.owner, destination.owner
-        assert source_unit is not None and dest_unit is not None
-        source_col, dest_col = slot(source_unit).col, slot(dest_unit).col
-        assert source_col is not None and dest_col is not None
-        span = abs(dest_col - source_col)
-        if span == 0:
-            return False
-        column = min(source_col, dest_col)
-        clearance = _end_clearance(source_unit, root.source.name,
-                                   dest_unit, destination.name, source_col < dest_col)
-        need = max(0.0, _station_width(assemblies) + clearance - span * COL_GAP)
-        gap[column] = max(gap.get(column, 0.0), need)
-    links = []
-    for root, _ in groups:
-        destination = root._logical_to
-        assert destination is not None
-        source_unit, dest_unit = root.source.owner, destination.owner
-        assert source_unit is not None and dest_unit is not None
-        links.append((source_unit, dest_unit, claims_mod.LINE))
-    assign_coordinates(fs, units=retained, extra_gap=gap, links=links)
-    for unit in members:
-        placed = slot(unit)
-        unit.frame = Frame(x=0.0, y=0.0, w=placed.w, h=placed.h,
-                           orientation=placed.orientation, mirrored=placed.mirrored,
-                           mirror_y=placed.mirror_y)
+    if not _equipment_frames(fs, [(root, _station_width(assemblies))
+                                  for root, assemblies in groups], members):
+        return False
     return place_stations(fs) == len(fs._station_assemblies)
+
+
+def _inline_groups(fs: Flowsheet) -> list[tuple[Stream, list[Unit]]] | None:
+    """Collect complete unpinned logical runs of simple inline devices.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with possible stream-relative inline devices.
+
+    Returns
+    -------
+    list[tuple[Stream, list[Unit]]] or None
+        Eligible logical runs, or ``None`` when the full solver is required.
+    """
+    if fs._station_assemblies:
+        return None
+    roots = [stream for stream in fs.streams if stream._logical_to is not None]
+    if not roots:
+        return None
+    units = process_units(fs)
+    streams = process_streams(fs)
+    backbone = infer_backbone(fs)
+    inline = {units[index] for run in backbone.runs for index in run.inline_units}
+    groups: list[tuple[Stream, list[Unit]]] = []
+    for root in roots:
+        segments = root._logical_segments
+        matching = next((run for run in backbone.runs
+                         if run.streams and streams[run.streams[0]] is root), None)
+        if (matching is None or len(matching.streams) != len(segments)
+                or any(streams[index] is not segment
+                       for index, segment in zip(matching.streams, segments))):
+            return None
+        members = [segment.dest.owner for segment in segments[:-1]]
+        if not members or any(unit is None or unit not in inline for unit in members):
+            return None
+        if any(segment._inline_at is None for segment in segments[:-1]) or any(
+            segment.is_recycle or (segment.route is not None and segment.route.manual)
+            for segment in segments
+        ):
+            return None
+        destination = root._logical_to
+        assert destination is not None
+        source, dest = root.source.owner, destination.owner
+        if source is None or dest is None or source is dest:
+            return None
+        groups.append((root, [unit for unit in members if unit is not None]))
+    return groups
+
+
+def place_inline_equipment_first(fs: Flowsheet) -> bool:
+    """Place opted-in inline chains after their external equipment.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose slots have been seeded from authored pins.
+
+    Returns
+    -------
+    bool
+        Whether every contracted inline device received a host placement.
+    """
+    from pandid.layout.inline import place_inline
+
+    groups = _inline_groups(fs)
+    if groups is None:
+        return False
+    members = {unit for _, chain in groups for unit in chain}
+    widths = [(root, sum(resolve_size(unit)[0] for unit in chain)
+               + 8.0 * (len(chain) + 1)) for root, chain in groups]
+    if not _equipment_frames(fs, widths, members):
+        return False
+    return members <= place_inline(fs)
 
 
 def keep_if_better(fs: Flowsheet) -> bool:

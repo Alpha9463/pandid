@@ -100,7 +100,7 @@ def _on_corridor(
             and (outlet[axis] - inlet[axis]) * forward > 0)
 
 
-def place_inline(fs: Flowsheet) -> None:
+def place_inline(fs: Flowsheet) -> set[Unit]:
     """Resolve preferred inline positions within straight equipment runs.
 
     Parameters
@@ -110,16 +110,17 @@ def place_inline(fs: Flowsheet) -> None:
 
     Returns
     -------
-    None
-        Feasible device frames and solver slots are updated in place.
+    set[Unit]
+        Devices placed on their host runs.
     """
     if not any(stream._inline_at is not None for stream in fs.streams):
-        return
+        return set()
     units = process_units(fs)
     streams = process_streams(fs)
     backbone = infer_backbone(fs)
     station_members = {unit for assembly in fs._station_assemblies
                        for unit in assembly.station.members}
+    placed_units: set[Unit] = set()
     for run in backbone.runs:
         movable = [
             units[index] for index, at in zip(run.inline_units, run.inline_at)
@@ -195,5 +196,7 @@ def place_inline(fs: Flowsheet) -> None:
                 placed.w, placed.h = candidate.w, candidate.h
                 placed.orientation = candidate.orientation
                 last_outlet = outlet[axis]
+                placed_units.add(unit)
                 break
             obstacles.append(unit)
+    return placed_units
