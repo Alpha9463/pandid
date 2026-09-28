@@ -69,6 +69,7 @@ def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
     fs.connect(station.outlet, product.inlet)
 
     fs.layout()
+    assert fs._coarse_layout_candidate is True
     main = [
         unit
         for unit in station.members
@@ -92,6 +93,31 @@ def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
     assert [(unit.name, unit.frame.x, unit.frame.y) for unit in rebuilt.units] == [
         (unit.name, unit.frame.x, unit.frame.y) for unit in fs.units
     ]
+
+
+def test_hand_wired_station_contracts_before_equipment_placement() -> None:
+    """Keep an unpinned hand-wired station out of the equipment grid.
+
+    Returns
+    -------
+    None
+        The station settles as one compact, clear material-run assembly.
+    """
+    fs = Flowsheet("Hand-wired station")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    station = fs.add_valve_station("CV-101")
+    fs.connect(feed.outlet, station.inlet)
+    fs.connect(station.outlet, product.inlet)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is True
+    fs.route()
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+    assert quality.crossings == 0
+    assert quality.length < 1000
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
 
 def test_station_uses_receiver_axis_after_a_south_discharge() -> None:

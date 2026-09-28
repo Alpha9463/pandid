@@ -101,7 +101,7 @@ class ConstraintLayoutEngine:
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
-        from pandid.layout.coarse import (place_equipment_first,
+        from pandid.layout.coarse import (has_free_station, place_equipment_first,
                                           place_inline_equipment_first)
         from pandid.layout.coordinates import assign_coordinates, assign_labels
         from pandid.layout.cycles import break_cycles
@@ -114,7 +114,7 @@ class ConstraintLayoutEngine:
         break_cycles(fs)
         station_coarse = use_coarse and place_equipment_first(fs)
         inline_coarse = False
-        if (use_coarse and not station_coarse and not fs._station_assemblies
+        if (use_coarse and not station_coarse and not has_free_station(fs)
                 and any(stream._logical_to is not None for stream in fs.streams)):
             inline_coarse = place_inline_equipment_first(fs)
         fs._coarse_layout_candidate = station_coarse or inline_coarse

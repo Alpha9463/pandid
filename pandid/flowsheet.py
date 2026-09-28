@@ -1678,14 +1678,15 @@ class Flowsheet:
             tees=tuple(t for t in (t_bya, t_dra, t_drb, t_byb) if t is not None),
             members=tuple(members), inlet=run[0].inlet, outlet=run[-1].outlet,
         )
-        if x is None:
-            from pandid.stations import StationAssembly
+        from pandid.stations import StationAssembly
 
-            self._station_assemblies.append(StationAssembly(
-                station=station, mirrored=mirrored,
-                gap=DEFAULT_GAP, bypass_rise=DEFAULT_BYPASS_RISE,
-                drain_drop=DEFAULT_DRAIN_DROP, bypass_over=bypass_over,
-            ))
+        self._station_assemblies.append(StationAssembly(
+            station=station, mirrored=mirrored,
+            gap=DEFAULT_GAP if gap is None else gap,
+            bypass_rise=DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise,
+            drain_drop=DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop,
+            bypass_over=bypass_over,
+        ))
         return station
 
     def add_component(self, component: "Component") -> "Component":

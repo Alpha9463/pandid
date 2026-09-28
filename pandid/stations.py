@@ -172,7 +172,7 @@ class ValveStation:
 
 @dataclass(frozen=True)
 class StationAssembly:
-    """Retain the members and relative placement of one unpinned station.
+    """Retain the members and relative placement of one station.
 
     Attributes
     ----------

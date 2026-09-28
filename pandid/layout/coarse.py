@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from pandid.geometry import Frame
 from pandid.layout import claims as claims_mod
@@ -15,13 +15,67 @@ from pandid.portgeom import port_offset, resolve_size
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.ports import Port
     from pandid.stations import StationAssembly
     from pandid.streams import Stream
     from pandid.units import Unit
 
 
-def _groups(fs: Flowsheet) -> list[tuple[Stream, list[StationAssembly]]] | None:
-    """Collect complete, position-free stations by logical host run.
+class Host(NamedTuple):
+    """External nozzles and physical ends of a contracted material run.
+
+    Attributes
+    ----------
+    source, dest : Port
+        External nozzles retained in the equipment solve.
+    first, last : Stream
+        Physical segments carrying each endpoint's placement claims.
+    """
+
+    source: Port
+    dest: Port
+    first: Stream
+    last: Stream
+
+
+def _position_pinned(unit: Unit) -> bool:
+    """Check whether a station member has an exact placement constraint.
+
+    Parameters
+    ----------
+    unit : Unit
+        Station member to inspect.
+
+    Returns
+    -------
+    bool
+        Whether a grid or pixel position is pinned.
+    """
+    pin = unit.pin_
+    return pin is not None and any(
+        getattr(pin, axis) is not None for axis in ("col", "row", "x", "y")
+    )
+
+
+def has_free_station(fs: Flowsheet) -> bool:
+    """Check whether any registered station still needs placement.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet containing station assemblies.
+
+    Returns
+    -------
+    bool
+        Whether at least one member of an assembly has no position pin.
+    """
+    return any(not all(_position_pinned(unit) for unit in assembly.station.members)
+               for assembly in fs._station_assemblies)
+
+
+def _groups(fs: Flowsheet) -> list[tuple[Host, list[StationAssembly]]] | None:
+    """Collect complete, position-free stations by external host run.
 
     Parameters
     ----------
@@ -30,29 +84,43 @@ def _groups(fs: Flowsheet) -> list[tuple[Stream, list[StationAssembly]]] | None:
 
     Returns
     -------
-    list[tuple[Stream, list[StationAssembly]]] or None
+    list[tuple[Host, list[StationAssembly]]] or None
         Eligible groups, or ``None`` when the full solver is required.
     """
     if not fs._station_assemblies:
         return None
-    by_root: dict[int, tuple[Stream, list[StationAssembly]]] = {}
+    by_root: dict[int, tuple[Host, list[StationAssembly]]] = {}
     for assembly in fs._station_assemblies:
-        if assembly.run is None or assembly.run._logical_to is None:
+        pinned = [_position_pinned(unit) for unit in assembly.station.members]
+        if all(pinned):
+            continue
+        if any(pinned):
             return None
-        if any(unit.pin_ is not None for unit in assembly.station.members):
+        root = assembly.run
+        if root is not None:
+            dest = root._logical_to
+            first = root
+            last = dest.stream if dest is not None else None
+        else:
+            first = assembly.station.inlet.stream
+            last = assembly.station.outlet.stream
+            dest = last.dest if last is not None else None
+        if first is None or last is None or dest is None:
             return None
-        key = id(assembly.run)
+        host = Host(first.source, dest, first, last)
+        key = id(root) if root is not None else id(assembly)
         if key not in by_root:
-            by_root[key] = (assembly.run, [])
+            by_root[key] = (host, [])
         by_root[key][1].append(assembly)
-    members = {unit for assembly in fs._station_assemblies
-               for unit in assembly.station.members}
-    for root, _ in by_root.values():
-        assert root._logical_to is not None
-        source = root.source.owner
-        dest = root._logical_to.owner
+    if not by_root:
+        return None
+    members = {unit for _, assemblies in by_root.values()
+               for assembly in assemblies for unit in assembly.station.members}
+    for host, _ in by_root.values():
+        source = host.source.owner
+        dest = host.dest.owner
         if (source is None or dest is None or source in members or dest in members
-                or source is dest or root.is_recycle):
+                or source is dest or host.first.is_recycle or host.last.is_recycle):
             return None
     if any(stream.is_recycle or (stream.route is not None and stream.route.manual)
            for stream in process_streams(fs)
@@ -61,7 +129,7 @@ def _groups(fs: Flowsheet) -> list[tuple[Stream, list[StationAssembly]]] | None:
     return list(by_root.values())
 
 
-def _claims(fs: Flowsheet, roots: list[Stream],
+def _claims(fs: Flowsheet, roots: list[Host],
             retained: list[Unit]) -> list[claims_mod.Claim]:
     """Replace each attachment chain's internal claims with endpoint claims.
 
@@ -69,8 +137,8 @@ def _claims(fs: Flowsheet, roots: list[Stream],
     ----------
     fs : Flowsheet
         Sheet whose material graph is inspected.
-    roots : list[Stream]
-        Logical host runs with contracted attachments.
+    roots : list[Host]
+        External host runs with contracted attachments.
     retained : list[Unit]
         Process units outside the attachment chains.
 
@@ -84,10 +152,8 @@ def _claims(fs: Flowsheet, roots: list[Stream],
                if stream.source.owner in active and stream.dest.owner in active]
     out = claims_mod.read(streams)
     for root in roots:
-        destination = root._logical_to
-        assert destination is not None and destination.stream is not None
-        first, last = root, destination.stream
-        source_unit, dest_unit = root.source.owner, destination.owner
+        first, last = root.first, root.last
+        source_unit, dest_unit = root.source.owner, root.dest.owner
         assert source_unit is not None and dest_unit is not None
         for stream, author, subject in ((first, source_unit, dest_unit),
                                         (last, dest_unit, source_unit)):
@@ -147,7 +213,7 @@ def _end_clearance(source: Unit, source_port: str, dest: Unit,
     return body + 41.0  # one 25px nozzle exit and 8px body clearance at each end
 
 
-def _equipment_frames(fs: Flowsheet, widths: list[tuple[Stream, float]],
+def _equipment_frames(fs: Flowsheet, widths: list[tuple[Host, float]],
                       members: set[Unit]) -> bool:
     """Resolve equipment positions while reserving attachment footprints.
 
@@ -155,7 +221,7 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Stream, float]],
     ----------
     fs : Flowsheet
         Sheet whose slots have been seeded from authored pins.
-    widths : list[tuple[Stream, float]]
+    widths : list[tuple[Host, float]]
         Host runs and their required horizontal attachment space.
     members : set[Unit]
         Attachment units excluded from the equipment solve.
@@ -170,9 +236,7 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Stream, float]],
     assign_positions(fs, units=retained, claims=_claims(fs, roots, retained))
     gap: dict[int, float] = {}
     for root, width in widths:
-        destination = root._logical_to
-        assert destination is not None
-        source_unit, dest_unit = root.source.owner, destination.owner
+        source_unit, dest_unit = root.source.owner, root.dest.owner
         assert source_unit is not None and dest_unit is not None
         source_col, dest_col = slot(source_unit).col, slot(dest_unit).col
         assert source_col is not None and dest_col is not None
@@ -181,14 +245,12 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Stream, float]],
             return False
         column = min(source_col, dest_col)
         clearance = _end_clearance(source_unit, root.source.name,
-                                   dest_unit, destination.name, source_col < dest_col)
+                                   dest_unit, root.dest.name, source_col < dest_col)
         need = max(0.0, width + clearance - span * COL_GAP)
         gap[column] = max(gap.get(column, 0.0), need)
     links = []
     for root in roots:
-        destination = root._logical_to
-        assert destination is not None
-        source_unit, dest_unit = root.source.owner, destination.owner
+        source_unit, dest_unit = root.source.owner, root.dest.owner
         assert source_unit is not None and dest_unit is not None
         links.append((source_unit, dest_unit, claims_mod.LINE))
     assign_coordinates(fs, units=retained, extra_gap=gap, links=links, hosts=roots)
@@ -216,12 +278,12 @@ def place_equipment_first(fs: Flowsheet) -> bool:
     groups = _groups(fs)
     if groups is None:
         return False
-    members = {unit for assembly in fs._station_assemblies
-               for unit in assembly.station.members}
+    members = {unit for _, assemblies in groups
+               for assembly in assemblies for unit in assembly.station.members}
     if not _equipment_frames(fs, [(root, _station_width(assemblies))
                                   for root, assemblies in groups], members):
         return False
-    return place_stations(fs) == len(fs._station_assemblies)
+    return place_stations(fs) == sum(len(assemblies) for _, assemblies in groups)
 
 
 def _inline_groups(fs: Flowsheet) -> list[tuple[Stream, list[Unit]]] | None:
@@ -237,7 +299,7 @@ def _inline_groups(fs: Flowsheet) -> list[tuple[Stream, list[Unit]]] | None:
     list[tuple[Stream, list[Unit]]] or None
         Eligible logical runs, or ``None`` when the full solver is required.
     """
-    if fs._station_assemblies:
+    if has_free_station(fs):
         return None
     roots = [stream for stream in fs.streams if stream._logical_to is not None]
     if not roots:
@@ -293,8 +355,13 @@ def place_inline_equipment_first(fs: Flowsheet) -> bool:
     if groups is None:
         return False
     members = {unit for _, chain in groups for unit in chain}
-    widths = [(root, sum(resolve_size(unit)[0] for unit in chain)
-               + 8.0 * (len(chain) + 1)) for root, chain in groups]
+    widths = []
+    for root, chain in groups:
+        dest = root._logical_to
+        assert dest is not None and dest.stream is not None
+        host = Host(root.source, dest, root, dest.stream)
+        widths.append((host, sum(resolve_size(unit)[0] for unit in chain)
+                       + 8.0 * (len(chain) + 1)))
     if not _equipment_frames(fs, widths, members):
         return False
     return members <= place_inline(fs, allow_elbows=True)

@@ -32,8 +32,8 @@ from pandid.layout.stages import slot
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import _Slot
+    from pandid.layout.coarse import Host
     from pandid.ports import Port
-    from pandid.streams import Stream
     from pandid.units import Unit
 
 #: Clear paper between one column of boxes and the next, which is where
@@ -82,7 +82,7 @@ BAND_WIDTH = 3200.0
 def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
                        extra_gap: dict[int, float] | None = None,
                        links: list[tuple["Unit", "Unit", float]] | None = None,
-                       hosts: list["Stream"] | None = None) -> None:
+                       hosts: list["Host"] | None = None) -> None:
     """Map selected process-unit grid ranks to pixels.
 
     Parameters
@@ -95,7 +95,7 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
         Additional paper reserved after each grid column.
     links : list[tuple[Unit, Unit, float]] or None
         Contracted connections used when resolving absolute pins.
-    hosts : list[Stream] or None
+    hosts : list[Host] or None
         Contracted runs whose endpoint nozzles guide pixel alignment.
 
     Returns
@@ -484,7 +484,7 @@ def _target_y(other_u: Unit, other_port: Port, contracted: bool) -> float:
 
 
 def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int],
-                pads: dict["Unit", Pad], hosts: list["Stream"] | None = None) -> None:
+                pads: dict["Unit", Pad], hosts: list["Host"] | None = None) -> None:
     """Turn staircase jogs into straight runs, within one band.
 
     Walk units left to right and, where a unit has a single horizontal
@@ -523,7 +523,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         Paper band assigned to each unit.
     pads : dict[Unit, Pad]
         Reserved clearance around equipment.
-    hosts : list[Stream] or None
+    hosts : list[Host] or None
         Contracted material runs between retained equipment.
 
     Returns
@@ -554,7 +554,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         if src is not dst:
             touching[src].append((st.source, dst, st.dest, False))
     for host in hosts or []:
-        dest = host._logical_to
+        dest = host.dest
         src = host.source.owner
         assert src is not None and dest is not None and dest.owner is not None
         touching[dest.owner].append((dest, src, host.source, True))
