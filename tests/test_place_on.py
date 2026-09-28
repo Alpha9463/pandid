@@ -112,28 +112,66 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
     assert [(unit.frame.x, unit.frame.y) for unit in fs.units] == frames
 
 
-def test_south_discharge_inline_chain_keeps_the_full_layout() -> None:
-    """Retain full placement when a short host has no straight valve leg.
+@pytest.mark.parametrize("pinned_origin", [False, True])
+def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> None:
+    """Place inline valves on the clear leg after a south discharge.
+
+    Parameters
+    ----------
+    pinned_origin : bool
+        Fix the reactor's absolute frame position when true.
 
     Returns
     -------
     None
-        The reactor train routes without a new fallback or hard finding.
+        The reactor train uses contracted placement with a clear elbow.
     """
     fs = Flowsheet("South outlet inline train")
     feed = fs.add(Feed("Feed"))
     reactor = fs.add(Reactor("R-101"))
+    if pinned_origin:
+        reactor.pin(x=350, y=250)
     product = fs.add(Product("Product"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_on(run, Valve("HV-1"), at=0.25)
-    fs.place_on(run, Valve("HV-2"), at=0.75)
+    first = fs.place_on(run, Valve("HV-1"), at=0.25)
+    second = fs.place_on(run, Valve("HV-2"), at=0.75)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is True
+    fs.route()
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+    assert quality.bends <= 1
+    assert reactor.frame is not None and product.frame is not None
+    assert first.frame is not None and second.frame is not None
+    if pinned_origin:
+        assert (reactor.frame.x, reactor.frame.y) == (350, 250)
+    receiver_y = port_point(product, product.frame, "inlet")[1]
+    assert receiver_y > port_point(reactor, reactor.frame, "outlet")[1]
+    assert port_point(first, first.frame, "inlet")[1] == pytest.approx(receiver_y)
+    assert port_point(second, second.frame, "inlet")[1] == pytest.approx(receiver_y)
+
+
+def test_south_discharge_does_not_put_inline_valves_above_its_outlet() -> None:
+    """Reject a receiver leg that opposes the reactor's south nozzle.
+
+    Returns
+    -------
+    None
+        A pinned upstream receiver keeps the full placement path.
+    """
+    fs = Flowsheet("Pinned receiver")
+    reactor = fs.add(Reactor("R-101"))
+    product = fs.add(Product("Product")).pin(y=50)
+    run = fs.connect(reactor.outlet, product.inlet)
+    fs.place_on(run, Valve("HV-1"), at=0.5)
 
     fs.layout()
     assert fs._coarse_layout_candidate is False
     fs.route()
-    quality = measure_final(fs)
-    assert quality.hard == (0,) * len(quality.hard)
+    assert product.frame is not None
+    assert port_point(product, product.frame, "inlet")[1] == 50
 
 
 def test_inline_chain_preserves_a_pinned_branch_origin() -> None:

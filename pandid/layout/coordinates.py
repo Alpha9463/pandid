@@ -32,6 +32,8 @@ from pandid.layout.stages import slot
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import _Slot
+    from pandid.ports import Port
+    from pandid.streams import Stream
     from pandid.units import Unit
 
 #: Clear paper between one column of boxes and the next, which is where
@@ -79,7 +81,8 @@ BAND_WIDTH = 3200.0
 
 def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
                        extra_gap: dict[int, float] | None = None,
-                       links: list[tuple["Unit", "Unit", float]] | None = None) -> None:
+                       links: list[tuple["Unit", "Unit", float]] | None = None,
+                       hosts: list["Stream"] | None = None) -> None:
     """Map selected process-unit grid ranks to pixels.
 
     Parameters
@@ -92,6 +95,8 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
         Additional paper reserved after each grid column.
     links : list[tuple[Unit, Unit, float]] or None
         Contracted connections used when resolving absolute pins.
+    hosts : list[Stream] or None
+        Contracted runs whose endpoint nozzles guide pixel alignment.
 
     Returns
     -------
@@ -127,7 +132,7 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
         reference = {u: (s.x or 0.0, s.y or 0.0) for u, s in nominal.items()}
         moved = refine(fs, units, reference, links)
 
-    _straighten(fs, units, band_of, pads)
+    _straighten(fs, units, band_of, pads, hosts)
     if moved:
         clear_pins(units, moved, STACK_CLEAR, pads)
     for u in units:
@@ -449,8 +454,37 @@ def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
 STACK_LEAD = 25.0
 
 
+def _target_y(other_u: Unit, other_port: Port, contracted: bool) -> float:
+    """Aim at a neighbour's nozzle or its vertical exit lane.
+
+    Parameters
+    ----------
+    other_u : Unit
+        Equipment providing the alignment target.
+    other_port : Port
+        Connected nozzle on that equipment.
+    contracted : bool
+        Reserve a full router exit for a contracted host run.
+
+    Returns
+    -------
+    float
+        Absolute height of the horizontal connection leg.
+    """
+    from pandid.portgeom import resolve_port
+
+    s = slot(other_u)
+    (_, py), _, direction = resolve_port(other_u, s, other_port.name)
+    clearance = STACK_LEAD if contracted else 15.0
+    if direction == "N":
+        return (s.y or 0.0) - clearance
+    if direction == "S":
+        return (s.y or 0.0) + s.h + clearance
+    return py
+
+
 def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int],
-                pads: dict["Unit", Pad]) -> None:
+                pads: dict["Unit", Pad], hosts: list["Stream"] | None = None) -> None:
     """Turn staircase jogs into straight runs, within one band.
 
     Walk units left to right and, where a unit has a single horizontal
@@ -478,21 +512,29 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
     are emitted. That is the point: a target read off the symbol instead
     ignores the resize, the mirror and any ``nozzle()`` choice, and aims
     at the wrong height.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose material connections guide alignment.
+    units : list[Unit]
+        Equipment eligible for pixel adjustment.
+    band_of : dict[Unit, int]
+        Paper band assigned to each unit.
+    pads : dict[Unit, Pad]
+        Reserved clearance around equipment.
+    hosts : list[Stream] or None
+        Contracted material runs between retained equipment.
+
+    Returns
+    -------
+    None
+        Eligible slots receive adjusted coordinates.
     """
     from pandid.layout import claims as claims_mod
     from pandid.layout.pixel import grid_limits, occupied_box
     from pandid.layout.stages import process_streams
     from pandid.portgeom import resolve_port
-
-    def target_y(other_u: "Unit", other_port) -> float:
-        """Absolute Y to aim a run at, honouring N/S escape lanes."""
-        s = slot(other_u)
-        (_, py), _, d = resolve_port(other_u, s, other_port.name)
-        if d == "N":
-            return (s.y or 0.0) - 15.0
-        if d == "S":
-            return (s.y or 0.0) + s.h + 15.0
-        return py
 
     # Both questions below are asked of a *neighbourhood* -- the runs on
     # one unit, and the boxes in one column -- and both used to be
@@ -508,9 +550,15 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
             continue
         src, dst = st.source.owner, st.dest.owner
         assert src is not None and dst is not None
-        touching[dst].append((st.dest, src, st.source))
+        touching[dst].append((st.dest, src, st.source, False))
         if src is not dst:
-            touching[src].append((st.source, dst, st.dest))
+            touching[src].append((st.source, dst, st.dest, False))
+    for host in hosts or []:
+        dest = host._logical_to
+        src = host.source.owner
+        assert src is not None and dest is not None and dest.owner is not None
+        touching[dest.owner].append((dest, src, host.source, True))
+        touching[src].append((host.source, dest.owner, dest, True))
 
     boxes = {u: occupied_box(u, pads) for u in units}
     pixel_pins = not _wrappable(fs, units)
@@ -564,7 +612,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         anchor = ups[0] if len(ups) == 1 else (downs[0] if not ups and len(downs) == 1 else None)
         if anchor is None:
             continue
-        my_port, other_u, other_port = anchor
+        my_port, other_u, other_port, contracted = anchor
         if slot(other_u).y is None:
             continue
         # Only straighten horizontal runs: the port must face the
@@ -572,7 +620,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         (_, my_y), _, my_d = resolve_port(u, s, my_port.name)
         if my_d not in ("E", "W"):
             continue
-        shift = target_y(other_u, other_port) - my_y
+        shift = _target_y(other_u, other_port, contracted) - my_y
         riding = set(group)
         if any(overlaps(v, (slot(v).y or 0.0) + shift, riding) for v in group):
             continue

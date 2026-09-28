@@ -1,4 +1,4 @@
-"""Place opted-in inline devices on clear straight material corridors."""
+"""Place opted-in inline devices on clear material corridors."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
 from pandid.layout.backbone import infer_backbone
+from pandid.layout.corridor import horizontal_centerline
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.portgeom import port_point, resolve_size, unit_box
 
@@ -100,13 +101,15 @@ def _on_corridor(
             and (outlet[axis] - inlet[axis]) * forward > 0)
 
 
-def place_inline(fs: Flowsheet) -> set[Unit]:
-    """Resolve preferred inline positions within straight equipment runs.
+def place_inline(fs: Flowsheet, *, allow_elbows: bool = False) -> set[Unit]:
+    """Resolve preferred inline positions along equipment run legs.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet whose ordinary process frames have already been assigned.
+    allow_elbows : bool, optional
+        Use a legal horizontal leg after a vertical endpoint nozzle.
 
     Returns
     -------
@@ -140,16 +143,21 @@ def place_inline(fs: Flowsheet) -> set[Unit]:
             continue
         start = port_point(source_unit, source_unit.frame, source.source.name)
         end = port_point(dest_unit, dest_unit.frame, final.dest.name)
-        horizontal = abs(start[1] - end[1]) < 1.0
+        centerline = (horizontal_centerline(
+            source_unit, source.source.name, dest_unit, final.dest.name,
+            start, end, require_clear_exit=True,
+        ) if allow_elbows else None)
+        horizontal = (centerline is not None if allow_elbows
+                      else abs(start[1] - end[1]) < 1.0)
         vertical = abs(start[0] - end[0]) < 1.0
         if not horizontal and not vertical:
             continue
         axis = 0 if horizontal else 1
-        other = 1 - axis
         forward = 1 if end[axis] > start[axis] else -1
         if end[axis] == start[axis]:
             continue
         direction = (forward, 0) if horizontal else (0, forward)
+        ordinate = (centerline if centerline is not None else start[1]) if horizontal else start[0]
         default_orientation = (0 if forward > 0 else 180) if horizontal else (
             90 if forward > 0 else 270
         )
@@ -161,7 +169,7 @@ def place_inline(fs: Flowsheet) -> set[Unit]:
             unit = units[unit_index]
             if preferred is None or unit not in movable:
                 if unit.frame is not None and _on_corridor(
-                    unit, unit.frame, direction, start[other]
+                    unit, unit.frame, direction, ordinate
                 ):
                     held_outlet = port_point(unit, unit.frame, "outlet")[axis]
                     if (held_outlet - last_outlet) * forward > 0:
@@ -198,9 +206,10 @@ def place_inline(fs: Flowsheet) -> set[Unit]:
                              ), value))
             for fraction in choices:
                 point = (start[0] + fraction * (end[0] - start[0]),
+                         ordinate if horizontal else
                          start[1] + fraction * (end[1] - start[1]))
                 candidate = _candidate(unit, point, orientation)
-                if not _on_corridor(unit, candidate, direction, start[other]):
+                if not _on_corridor(unit, candidate, direction, ordinate):
                     continue
                 inlet = port_point(unit, candidate, "inlet")
                 outlet = port_point(unit, candidate, "outlet")

@@ -191,7 +191,7 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Stream, float]],
         source_unit, dest_unit = root.source.owner, destination.owner
         assert source_unit is not None and dest_unit is not None
         links.append((source_unit, dest_unit, claims_mod.LINE))
-    assign_coordinates(fs, units=retained, extra_gap=gap, links=links)
+    assign_coordinates(fs, units=retained, extra_gap=gap, links=links, hosts=roots)
     for unit in members:
         placed = slot(unit)
         unit.frame = Frame(x=0.0, y=0.0, w=placed.w, h=placed.h,
@@ -297,7 +297,7 @@ def place_inline_equipment_first(fs: Flowsheet) -> bool:
                + 8.0 * (len(chain) + 1)) for root, chain in groups]
     if not _equipment_frames(fs, widths, members):
         return False
-    return members <= place_inline(fs)
+    return members <= place_inline(fs, allow_elbows=True)
 
 
 def keep_if_better(fs: Flowsheet) -> bool:
