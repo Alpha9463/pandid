@@ -140,17 +140,6 @@ def place_inline(fs: Flowsheet) -> set[Unit]:
             continue
         start = port_point(source_unit, source_unit.frame, source.source.name)
         end = port_point(dest_unit, dest_unit.frame, final.dest.name)
-        logical_root = source._logical_root or source
-        logical_end = logical_root._logical_to
-        if logical_end is not None:
-            root_owner, end_owner = logical_root.source.owner, logical_end.owner
-            assert root_owner is not None and end_owner is not None
-            if root_owner.frame is None or end_owner.frame is None:
-                continue
-            run_start = port_point(root_owner, root_owner.frame, logical_root.source.name)
-            run_end = port_point(end_owner, end_owner.frame, logical_end.name)
-        else:
-            run_start, run_end = start, end
         horizontal = abs(start[1] - end[1]) < 1.0
         vertical = abs(start[0] - end[0]) < 1.0
         if not horizontal and not vertical:
@@ -166,12 +155,41 @@ def place_inline(fs: Flowsheet) -> set[Unit]:
         )
         obstacles = [u for u in units if u not in movable]
         last_outlet = start[axis]
-        for unit, preferred in zip((units[index] for index in run.inline_units), run.inline_at):
-            if preferred is None or unit not in movable or unit.frame is None:
+        for unit_index, stream_index, preferred in zip(
+            run.inline_units, run.streams[:-1], run.inline_at
+        ):
+            unit = units[unit_index]
+            if preferred is None or unit not in movable:
+                if unit.frame is not None and _on_corridor(
+                    unit, unit.frame, direction, start[other]
+                ):
+                    held_outlet = port_point(unit, unit.frame, "outlet")[axis]
+                    if (held_outlet - last_outlet) * forward > 0:
+                        last_outlet = held_outlet
+                continue
+            if unit.frame is None:
                 continue
             pin = unit.pin_
             orientation = int(unit.frame.orientation) if pin is not None else default_orientation
-            target = run_start[axis] + float(preferred) * (run_end[axis] - run_start[axis])
+            incoming = streams[stream_index]
+            logical_root = incoming._logical_root or incoming
+            logical_end = logical_root._logical_to
+            scope_start, scope_end = start, end
+            if logical_end is not None:
+                root_owner, end_owner = logical_root.source.owner, logical_end.owner
+                assert root_owner is not None and end_owner is not None
+                if root_owner.frame is None or end_owner.frame is None:
+                    obstacles.append(unit)
+                    continue
+                scope_start = port_point(root_owner, root_owner.frame,
+                                         logical_root.source.name)
+                scope_end = port_point(end_owner, end_owner.frame, logical_end.name)
+            if (scope_end[axis] - scope_start[axis]) * forward <= 0:
+                obstacles.append(unit)
+                continue
+            target = scope_start[axis] + float(preferred) * (
+                scope_end[axis] - scope_start[axis]
+            )
             local = (target - start[axis]) / (end[axis] - start[axis])
             choices = sorted({max(0.0, min(1.0, local)),
                               *(step / 100 for step in range(1, 100))},
@@ -187,6 +205,8 @@ def place_inline(fs: Flowsheet) -> set[Unit]:
                 inlet = port_point(unit, candidate, "inlet")
                 outlet = port_point(unit, candidate, "outlet")
                 if ((inlet[axis] - last_outlet) * forward < 8
+                        or (inlet[axis] - scope_start[axis]) * forward < 8
+                        or (scope_end[axis] - outlet[axis]) * forward < 8
                         or (end[axis] - outlet[axis]) * forward < 8
                         or not _clear(candidate, unit, obstacles)):
                     continue

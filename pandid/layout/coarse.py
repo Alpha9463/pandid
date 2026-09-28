@@ -243,18 +243,20 @@ def _inline_groups(fs: Flowsheet) -> list[tuple[Stream, list[Unit]]] | None:
     if not roots:
         return None
     units = process_units(fs)
-    streams = process_streams(fs)
     backbone = infer_backbone(fs)
     inline = {units[index] for run in backbone.runs for index in run.inline_units}
+    streams = process_streams(fs)
+    logical_segments = {id(segment) for root in roots for segment in root._logical_segments}
+    for run in backbone.runs:
+        path = [streams[index] for index in run.streams]
+        if any(id(stream) in logical_segments for stream in path) and any(
+            stream._inline_at is not None and id(stream) not in logical_segments
+            for stream in path
+        ):
+            return None
     groups: list[tuple[Stream, list[Unit]]] = []
     for root in roots:
         segments = root._logical_segments
-        matching = next((run for run in backbone.runs
-                         if run.streams and streams[run.streams[0]] is root), None)
-        if (matching is None or len(matching.streams) != len(segments)
-                or any(streams[index] is not segment
-                       for index, segment in zip(matching.streams, segments))):
-            return None
         members = [segment.dest.owner for segment in segments[:-1]]
         if not members or any(unit is None or unit not in inline for unit in members):
             return None

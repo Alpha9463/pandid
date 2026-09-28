@@ -189,13 +189,13 @@ def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
     assert fs._coarse_layout_candidate is False
 
 
-def test_adjacent_logical_runs_are_not_contracted_as_one() -> None:
-    """Keep separate attachment fractions tied to their own root runs.
+def test_adjacent_logical_runs_use_their_own_fractions() -> None:
+    """Keep each attachment's fraction tied to its own logical run.
 
     Returns
     -------
     None
-        A backbone merged across an inline endpoint uses full placement.
+        Both devices appear between the endpoints of their own root runs.
     """
     fs = Flowsheet("Adjacent logical runs")
     feed = fs.add(Feed("Feed"))
@@ -203,11 +203,57 @@ def test_adjacent_logical_runs_are_not_contracted_as_one() -> None:
     product = fs.add(Product("Product"))
     upstream = fs.connect(feed.outlet, middle.inlet)
     downstream = fs.connect(middle.outlet, product.inlet)
-    fs.place_on(upstream, Valve("HV-A"), at=0.25)
-    fs.place_on(downstream, Valve("HV-B"), at=0.75)
+    first = fs.place_on(upstream, Valve("HV-A"), at=0.25)
+    second = fs.place_on(downstream, Valve("HV-B"), at=0.75)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is True
+    fs.route()
+    assert feed.frame is not None and middle.frame is not None and product.frame is not None
+    assert first.frame is not None and second.frame is not None
+    feed_exit = port_point(feed, feed.frame, "outlet")[0]
+    middle_inlet = port_point(middle, middle.frame, "inlet")[0]
+    middle_exit = port_point(middle, middle.frame, "outlet")[0]
+    product_inlet = port_point(product, product.frame, "inlet")[0]
+    assert feed_exit < first.frame.cx < middle_inlet
+    assert middle_exit < second.frame.cx < product_inlet
+    assert first.frame.cx == pytest.approx(feed_exit + 0.25 * (middle_inlet - feed_exit))
+    assert second.frame.cx == pytest.approx(middle_exit + 0.75 * (product_inlet - middle_exit))
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+    assert quality.crossings == 0
+    assert quality.length < 400
+
+
+def test_adjacent_roots_with_handwired_preference_keep_full_placement() -> None:
+    """Exclude a merged run containing a separately positioned valve.
+
+    Returns
+    -------
+    None
+        The mixed run remains on the established full placement path.
+    """
+    fs = Flowsheet("Mixed inline preferences")
+    feed = fs.add(Feed("Feed"))
+    first_boundary = fs.add(Valve("HV-M"))
+    handwired = fs.add(Valve("HV-H"))
+    product = fs.add(Product("Product"))
+    upstream = fs.connect(feed.outlet, first_boundary.inlet)
+    middle = fs.connect(first_boundary.outlet, handwired.inlet)
+    downstream = fs.connect(handwired.outlet, product.inlet)
+    fs.place_on(upstream, Valve("HV-A"), at=0.1)
+    fs.place_on(downstream, Valve("HV-B"), at=0.9)
+    fs._set_inline_at(middle, 0.25)
 
     fs.layout()
     assert fs._coarse_layout_candidate is False
+    fs.route()
+    assert first_boundary.frame is not None and handwired.frame is not None
+    assert first_boundary.frame.x < handwired.frame.x
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+    assert quality.crossings == 0
+    assert quality.bends < 12
 
 
 def test_place_on_refuses_invalid_calls_without_mutation() -> None:
