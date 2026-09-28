@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple
+from collections import Counter
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from pandid.geometry import Frame
 from pandid.layout import claims as claims_mod
@@ -36,6 +37,9 @@ class Host(NamedTuple):
     dest: Port
     first: Stream
     last: Stream
+
+
+Reservation = Literal["conservative", "compact", "shared"]
 
 
 def _position_pinned(unit: Unit) -> bool:
@@ -213,8 +217,39 @@ def _end_clearance(source: Unit, source_port: str, dest: Unit,
     return body + 41.0  # one 25px nozzle exit and 8px body clearance at each end
 
 
+def _nominal_nozzle_span(host: Host, bodies: dict[int, float]) -> float:
+    """Measure the minimum nozzle span supplied by occupied grid columns.
+
+    Parameters
+    ----------
+    host : Host
+        External ports of a contracted material run.
+    bodies : dict[int, float]
+        Widest retained equipment body in each occupied column.
+
+    Returns
+    -------
+    float
+        Horizontal nozzle separation before attachment reservations.
+    """
+    source, dest = host.source.owner, host.dest.owner
+    assert source is not None and dest is not None
+    source_col, dest_col = slot(source).col, slot(dest).col
+    assert source_col is not None and dest_col is not None
+    left_col, right_col = sorted((source_col, dest_col))
+    left_port, right_port = ((host.source, host.dest) if source_col < dest_col
+                             else (host.dest, host.source))
+    left, right = left_port.owner, right_port.owner
+    assert left is not None and right is not None
+    columns = sum(body + COL_GAP for col, body in bodies.items()
+                  if left_col <= col < right_col)
+    left_x = port_offset(left, left_port.name, slot(left))[0]
+    right_x = port_offset(right, right_port.name, slot(right))[0]
+    return columns + right_x - left_x
+
+
 def _equipment_frames(fs: Flowsheet, widths: list[tuple[Host, float]],
-                      members: set[Unit]) -> bool:
+                      members: set[Unit], reservation: Reservation = "shared") -> bool:
     """Resolve equipment positions while reserving attachment footprints.
 
     Parameters
@@ -225,6 +260,8 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Host, float]],
         Host runs and their required horizontal attachment space.
     members : set[Unit]
         Attachment units excluded from the equipment solve.
+    reservation : {"conservative", "compact", "shared"}, optional
+        Attachment-corridor estimate to use for this isolated layout.
 
     Returns
     -------
@@ -234,6 +271,22 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Host, float]],
     roots = [root for root, _ in widths]
     retained = [unit for unit in process_units(fs) if unit not in members]
     assign_positions(fs, units=retained, claims=_claims(fs, roots, retained))
+    bodies: dict[int, float] = {}
+    for unit in retained:
+        column = slot(unit).col
+        assert column is not None
+        bodies[column] = max(bodies.get(column, 0.0), slot(unit).w)
+    absolute_pin = any(unit.pin_ is not None
+                       and (unit.pin_.x is not None or unit.pin_.y is not None)
+                       for unit in retained)
+    boundaries: dict[tuple[int, int], int] = {}
+    for root in roots:
+        source, dest = root.source.owner, root.dest.owner
+        assert source is not None and dest is not None
+        source_col, dest_col = slot(source).col, slot(dest).col
+        assert source_col is not None and dest_col is not None
+        boundary = (min(source_col, dest_col), max(source_col, dest_col))
+        boundaries[boundary] = boundaries.get(boundary, 0) + 1
     gap: dict[int, float] = {}
     for root, width in widths:
         source_unit, dest_unit = root.source.owner, root.dest.owner
@@ -244,9 +297,15 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Host, float]],
         if span == 0:
             return False
         column = min(source_col, dest_col)
-        clearance = _end_clearance(source_unit, root.source.name,
-                                   dest_unit, root.dest.name, source_col < dest_col)
-        need = max(0.0, width + clearance - span * COL_GAP)
+        if absolute_pin or reservation == "conservative":
+            clearance = _end_clearance(source_unit, root.source.name,
+                                       dest_unit, root.dest.name, source_col < dest_col)
+            need = max(0.0, width + clearance - span * COL_GAP)
+        else:
+            boundary = (min(source_col, dest_col), max(source_col, dest_col))
+            shared = boundaries[boundary] - 1 if reservation == "shared" else 0
+            clearance = 41.0 + shared * bodies[column]
+            need = max(0.0, width + clearance - _nominal_nozzle_span(root, bodies))
         gap[column] = max(gap.get(column, 0.0), need)
     links = []
     for root in roots:
@@ -262,13 +321,16 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Host, float]],
     return True
 
 
-def place_equipment_first(fs: Flowsheet) -> bool:
+def place_equipment_first(fs: Flowsheet, *,
+                          reservation: Reservation = "shared") -> bool:
     """Place eligible station assemblies after their external equipment.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet whose slots have been seeded from authored pins.
+    reservation : {"conservative", "compact", "shared"}, optional
+        Attachment-corridor estimate for this placement trial.
 
     Returns
     -------
@@ -281,7 +343,7 @@ def place_equipment_first(fs: Flowsheet) -> bool:
     members = {unit for _, assemblies in groups
                for assembly in assemblies for unit in assembly.station.members}
     if not _equipment_frames(fs, [(root, _station_width(assemblies))
-                                  for root, assemblies in groups], members):
+                                  for root, assemblies in groups], members, reservation):
         return False
     return place_stations(fs) == sum(len(assemblies) for _, assemblies in groups)
 
@@ -336,13 +398,16 @@ def _inline_groups(fs: Flowsheet) -> list[tuple[Stream, list[Unit]]] | None:
     return groups
 
 
-def place_inline_equipment_first(fs: Flowsheet) -> bool:
+def place_inline_equipment_first(fs: Flowsheet, *,
+                                 reservation: Reservation = "shared") -> bool:
     """Place opted-in inline chains after their external equipment.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet whose slots have been seeded from authored pins.
+    reservation : {"conservative", "compact", "shared"}, optional
+        Attachment-corridor estimate for this placement trial.
 
     Returns
     -------
@@ -362,13 +427,135 @@ def place_inline_equipment_first(fs: Flowsheet) -> bool:
         host = Host(root.source, dest, root, dest.stream)
         widths.append((host, sum(resolve_size(unit)[0] for unit in chain)
                        + 8.0 * (len(chain) + 1)))
-    if not _equipment_frames(fs, widths, members):
+    if not _equipment_frames(fs, widths, members, reservation):
         return False
     return members <= place_inline(fs, allow_elbows=True)
 
 
+def _routed_reservation(fs: Flowsheet, reservation: Reservation) -> Flowsheet | None:
+    """Settle one detached equipment-first spacing proposal.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed drawing whose model is reused for the trial.
+    reservation : {"conservative", "compact", "shared"}
+        Attachment-corridor estimate to evaluate.
+
+    Returns
+    -------
+    Flowsheet or None
+        Completed candidate, or ``None`` if contraction failed.
+    """
+    import copy
+
+    from pandid.layout import default_layout_engine
+
+    trial = copy.deepcopy(fs)
+    default_layout_engine.layout(trial, reservation=reservation)
+    if not trial._coarse_layout_candidate:
+        return None
+    trial._coarse_layout_candidate = False
+    trial._layout_stale = False
+    trial._route_stale = True
+    trial._refinement_attempted = False
+    trial.route()
+    return trial
+
+
+def _frame_size(fs: Flowsheet) -> tuple[float, float]:
+    """Measure the horizontal and vertical span of resolved units.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed drawing to measure.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height in drawing pixels.
+    """
+    frames = [unit.frame for unit in fs.units if unit.frame is not None]
+    if not frames:
+        return 0.0, 0.0
+    return (max(frame.x_max for frame in frames) - min(frame.x for frame in frames),
+            max(frame.y_max for frame in frames) - min(frame.y for frame in frames))
+
+
+def _warning_counts(fs: Flowsheet) -> Counter[str]:
+    """Count completed-drawing warnings by code.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed drawing to inspect.
+
+    Returns
+    -------
+    Counter[str]
+        Number of each warning reported by validation.
+    """
+    return Counter(issue.code for issue in fs.validate() if issue.severity == "warning")
+
+
+def _acceptable(reference: Flowsheet, candidate: Flowsheet, *,
+                preserve_size: bool = False) -> bool:
+    """Require a routed proposal to improve without a measured regression.
+
+    Parameters
+    ----------
+    reference, candidate : Flowsheet
+        Completed drawings with the same authored model.
+    preserve_size : bool, optional
+        Keep both dimensions within the established drawing's extent.
+
+    Returns
+    -------
+    bool
+        Whether the proposal is safe and materially better.
+    """
+    from pandid.layout.quality import admissible, improves, measure_final
+
+    before, after = measure_final(reference), measure_final(candidate)
+    old_warnings, new_warnings = _warning_counts(reference), _warning_counts(candidate)
+    old_size, new_size = _frame_size(reference), _frame_size(candidate)
+    return (
+        admissible(before, after, preserve_crossing_pairs=False)
+        and after.bends <= before.bends
+        and after.excess_bends <= before.excess_bends
+        and after.length <= before.length + 1e-6
+        and after.area <= before.area + 1e-6
+        and all(count <= old_warnings[code] for code, count in new_warnings.items())
+        and (not preserve_size or all(new <= old + 1e-6
+                                      for old, new in zip(old_size, new_size)))
+        and improves(before, after)
+    )
+
+
+def _rank(fs: Flowsheet) -> tuple:
+    """Order admissible routed layouts by visible drawing costs.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed drawing to rank.
+
+    Returns
+    -------
+    tuple
+        Lexicographic defect, warning, crossing, bend, length, and size costs.
+    """
+    from pandid.layout.quality import measure_final
+
+    quality = measure_final(fs)
+    return (quality.hard, len(quality.hard_conflicts),
+            sum(_warning_counts(fs).values()), quality.crossings, quality.bends,
+            quality.excess_bends, quality.length, quality.area, *_frame_size(fs))
+
+
 def keep_if_better(fs: Flowsheet) -> bool:
-    """Keep a routed coarse layout only if it improves the legacy result.
+    """Keep the best routed corridor trial that improves the old layout.
 
     Parameters
     ----------
@@ -378,33 +565,38 @@ def keep_if_better(fs: Flowsheet) -> bool:
     Returns
     -------
     bool
-        Whether the coarse drawing passed the per-sheet quality gate.
+        Whether an equipment-first drawing passed the per-sheet quality gate.
     """
     import copy
 
     from pandid.layout import default_layout_engine
-    from pandid.layout.quality import admissible, improves, measure_final
     from pandid.layout.trials import _publish_candidate
 
-    candidate_quality = measure_final(fs)
     baseline = copy.deepcopy(fs)
     default_layout_engine.layout(baseline, use_coarse=False)
     baseline._layout_stale = False
     baseline._route_stale = True
     baseline._refinement_attempted = False
     baseline.route()
-    baseline_quality = measure_final(baseline)
-    # A whole-equipment move can exchange crossing pairs while reducing their total.
-    accepted = (
-        admissible(baseline_quality, candidate_quality,
-                   preserve_crossing_pairs=False)
-        and candidate_quality.bends <= baseline_quality.bends
-        and candidate_quality.excess_bends <= baseline_quality.excess_bends
-        and candidate_quality.length <= baseline_quality.length + 1e-6
-        and candidate_quality.area <= baseline_quality.area + 1e-6
-        and improves(baseline_quality, candidate_quality)
-    )
-    if not accepted:
-        _publish_candidate(fs, baseline)
+    absolute_pin = any(unit.pin_ is not None
+                       and (unit.pin_.x is not None or unit.pin_.y is not None)
+                       for unit in process_units(fs))
+    if absolute_pin:
+        accepted = _acceptable(baseline, fs)
+        if not accepted:
+            _publish_candidate(fs, baseline)
+        fs._coarse_layout_candidate = False
+        return accepted
+    conservative = _routed_reservation(fs, "conservative")
+    old = (conservative if conservative is not None
+           and _acceptable(baseline, conservative) else baseline)
+    compact = _routed_reservation(fs, "compact")
+    winner = old
+    for trial in (compact, fs):
+        if (trial is not None and _acceptable(old, trial, preserve_size=True)
+                and _rank(trial) < _rank(winner)):
+            winner = trial
+    if winner is not fs:
+        _publish_candidate(fs, winner)
     fs._coarse_layout_candidate = False
-    return accepted
+    return winner is not baseline

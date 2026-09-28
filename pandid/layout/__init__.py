@@ -41,7 +41,7 @@ sheet out twice did not draw it twice the same.
 two balloons, moved 16px on the second run.
 """
 
-from typing import Protocol, TYPE_CHECKING
+from typing import Literal, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -84,7 +84,8 @@ class ConstraintLayoutEngine:
     when a station can be contracted. Other sheets use the full unit graph.
     """
 
-    def layout(self, fs: "Flowsheet", *, use_coarse: bool = True) -> None:
+    def layout(self, fs: "Flowsheet", *, use_coarse: bool = True,
+               reservation: Literal["conservative", "compact", "shared"] = "shared") -> None:
         """Resolve process, inline, and control geometry for a sheet.
 
         Parameters
@@ -93,6 +94,8 @@ class ConstraintLayoutEngine:
             Sheet to lay out.
         use_coarse : bool, optional
             Try equipment-first placement for stream-relative stations.
+        reservation : {"conservative", "compact", "shared"}, optional
+            Attachment-corridor estimate for an isolated equipment trial.
 
         Returns
         -------
@@ -112,11 +115,11 @@ class ConstraintLayoutEngine:
 
         _seed_slots(fs)
         break_cycles(fs)
-        station_coarse = use_coarse and place_equipment_first(fs)
+        station_coarse = use_coarse and place_equipment_first(fs, reservation=reservation)
         inline_coarse = False
         if (use_coarse and not station_coarse and not has_free_station(fs)
                 and any(stream._logical_to is not None for stream in fs.streams)):
-            inline_coarse = place_inline_equipment_first(fs)
+            inline_coarse = place_inline_equipment_first(fs, reservation=reservation)
         fs._coarse_layout_candidate = station_coarse or inline_coarse
         if not fs._coarse_layout_candidate:
             _seed_slots(fs)

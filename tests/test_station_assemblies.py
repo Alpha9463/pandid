@@ -9,6 +9,7 @@ import pytest
 from pandid import Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
 from pandid.layout.attach import logical_stream_path
 from pandid.layout import default_layout_engine
+from pandid.layout.coarse import _station_width
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
 from pandid.routing import DefaultRouter
@@ -136,20 +137,34 @@ def test_automatic_ethanol_keeps_all_stations_compact(monkeypatch: pytest.Monkey
         The completed automatic drawing has short, clear material runs.
     """
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
-    from layout_quality import build
+    from layout_quality import build, sheet_extent
 
     fs, _ = build("11_ethanol_pid", True)
     fs.layout()
     fs.route()
     quality = measure_final(fs)
     assert quality.hard == (0,) * len(quality.hard)
-    assert quality.crossings < 30
-    assert quality.bends < 80
-    assert quality.length < 30000
+    assert quality.crossings <= 16
+    assert quality.bends <= 60
+    assert quality.length < 19000
+    assert all(issue.code != "lines-crowded" for issue in fs.validate())
+    product = next(unit for unit in fs.units if unit.name == "Azeotropic Ethanol")
+    exchanger = next(unit for unit in fs.units if unit.name == "FE-305")
+    assert product.frame is not None and exchanger.frame is not None
+    assert product.frame.x > exchanger.frame.x
+    extent = sheet_extent(fs)
+    assert extent is not None
+    assert extent[2] - extent[0] <= 3030
 
 
-def test_station_uses_receiver_axis_after_a_south_discharge() -> None:
+@pytest.mark.parametrize("product_col", [1, 3])
+def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) -> None:
     """Place a station on the horizontal leg after an elbow.
+
+    Parameters
+    ----------
+    product_col : int
+        Receiver rank, including a skipped grid column.
 
     Returns
     -------
@@ -157,8 +172,8 @@ def test_station_uses_receiver_axis_after_a_south_discharge() -> None:
         The assembly aligns with the receiver and retains clear routing.
     """
     fs = Flowsheet("Reactor outlet station")
-    reactor = fs.add(Reactor("R-101"))
-    product = fs.add(Product("Product"))
+    reactor = fs.add(Reactor("R-101")).pin(col=0)
+    product = fs.add(Product("Product")).pin(col=product_col)
     run = fs.connect(reactor.outlet, product.inlet)
     station = fs.place_valve_station_on(run, "CV-101")
 
@@ -168,6 +183,9 @@ def test_station_uses_receiver_axis_after_a_south_discharge() -> None:
     assert [(unit.frame.x, unit.frame.y) for unit in fs.units] == first
     assert reactor.frame is not None and product.frame is not None
     assert reactor.frame.y != product.frame.y
+    nozzle_span = (port_point(product, product.frame, "inlet")[0]
+                   - port_point(reactor, reactor.frame, "outlet")[0])
+    assert nozzle_span == pytest.approx(_station_width(fs._station_assemblies) + 41)
     receiver_y = port_point(product, product.frame, "inlet")[1]
     main = [
         unit
