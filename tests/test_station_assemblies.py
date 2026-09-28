@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from pandid import Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
@@ -118,6 +120,32 @@ def test_hand_wired_station_contracts_before_equipment_placement() -> None:
     assert quality.crossings == 0
     assert quality.length < 1000
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
+def test_automatic_ethanol_keeps_all_stations_compact(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Settle the dense hand-wired station example without route defects.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Adds the example tools to the temporary module search path.
+
+    Returns
+    -------
+    None
+        The completed automatic drawing has short, clear material runs.
+    """
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
+    from layout_quality import build
+
+    fs, _ = build("11_ethanol_pid", True)
+    fs.layout()
+    fs.route()
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
+    assert quality.crossings < 30
+    assert quality.bends < 80
+    assert quality.length < 30000
 
 
 def test_station_uses_receiver_axis_after_a_south_discharge() -> None:

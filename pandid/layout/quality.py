@@ -209,13 +209,16 @@ def measure_final(fs: Flowsheet) -> Quality:
     )
 
 
-def admissible(before: Quality, after: Quality) -> bool:
+def admissible(before: Quality, after: Quality, *,
+               preserve_crossing_pairs: bool = True) -> bool:
     """Check the per-sheet hard and soft regression limits.
 
     Parameters
     ----------
     before, after : Quality
         Measurements of the current and proposed completed drawing.
+    preserve_crossing_pairs : bool, optional
+        Require every crossed stream pair to have existed before the move.
 
     Returns
     -------
@@ -230,7 +233,7 @@ def admissible(before: Quality, after: Quality) -> bool:
         and before.manual_endpoint_geometry == after.manual_endpoint_geometry
         and all(new <= old for old, new in zip(before.hard, after.hard))
         and after.hard_conflicts <= before.hard_conflicts
-        and after.crossing_pairs <= before.crossing_pairs
+        and (not preserve_crossing_pairs or after.crossing_pairs <= before.crossing_pairs)
         and after.hard[_NONCONVERGENCE_INDEX] == 0
         and after.crossings <= before.crossings
         and after.bends <= min(before.bends + 1, before.bends * 1.03)

@@ -114,7 +114,7 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
         return
     pads = balloon_pads(fs)
     columns = _columns(units, pads)
-    bands = _bands(units, columns, pads, _wrappable(fs, units), extra_gap)
+    bands = _bands(units, columns, pads, _wrappable(fs, units), extra_gap, hosts)
     band_of = {u: b for b, group in enumerate(bands) for c in group for u in columns[c].units}
 
     cursor = float(MARGIN_Y)
@@ -211,7 +211,8 @@ def _wrappable(fs: "Flowsheet", units: list["Unit"]) -> bool:
 
 def _bands(units: list["Unit"], columns: dict[int, _Column],
            pads: dict["Unit", Pad], wrappable: bool,
-           extra_gap: dict[int, float] | None = None) -> list[list[int]]:
+           extra_gap: dict[int, float] | None = None,
+           hosts: list["Host"] | None = None) -> list[list[int]]:
     """Partition grid columns into bands within the paper width.
 
     Parameters
@@ -226,6 +227,8 @@ def _bands(units: list["Unit"], columns: dict[int, _Column],
         Whether the drawing may use multiple bands.
     extra_gap : dict[int, float] or None
         Additional width reserved after each column.
+    hosts : list[Host] or None
+        Contracted runs whose attachments should stay within one band.
 
     Returns
     -------
@@ -237,20 +240,29 @@ def _bands(units: list["Unit"], columns: dict[int, _Column],
         return [order]
 
     crossings = _seam_cost(units)
+    protected: set[int] = set()
+    for host in hosts or []:
+        source, dest = host.source.owner, host.dest.owner
+        assert source is not None and dest is not None
+        left, right = slot(source).col, slot(dest).col
+        assert left is not None and right is not None
+        low, high = sorted((left, right))
+        protected.update(column for column in order if low <= column < high)
     bands: list[list[int]] = []
-    band: list[int] = []
-    for column in order:
-        if band and _lay_columns(columns, [*band, column], pads,
-                                extra_gap=extra_gap) > BAND_WIDTH:
-            band = _slide(band, crossings)
-            bands.append(band)
-            band = []
-        band.append(column)
-    if band:
+    first = 0
+    while first < len(order):
+        end = first + 1
+        while end < len(order) and _lay_columns(
+            columns, order[first:end + 1], pads, extra_gap=extra_gap
+        ) <= BAND_WIDTH:
+            end += 1
+        if end == len(order):
+            bands.append(order[first:end])
+            break
+        band = _slide(order[first:end], crossings, protected)
         bands.append(band)
-    # A column dropped by the slide is not lost: the slide hands back a
-    # prefix, and the loop carries on from the column after it.
-    return _refill(order, bands)
+        first += len(band)
+    return bands
 
 
 def _seam_cost(units: list["Unit"]) -> dict[int, int]:
@@ -271,30 +283,34 @@ def _seam_cost(units: list["Unit"]) -> dict[int, int]:
     return cost
 
 
-def _slide(band: list[int], crossings: dict[int, int]) -> list[int]:
+def _slide(band: list[int], crossings: dict[int, int],
+           protected: set[int] | None = None) -> list[int]:
     """Pull a band's last column back to the quietest seam near it.
 
     At most a quarter of the band, so a seam is looked for where one
     plausibly is and the fold never walks back to the start of a band it
     has just filled.
+
+    Parameters
+    ----------
+    band : list[int]
+        Candidate columns in the current band.
+    crossings : dict[int, int]
+        Material connections crossing each possible seam.
+    protected : set[int] or None
+        Seams inside contracted attachment runs.
+
+    Returns
+    -------
+    list[int]
+        Prefix ending at the preferred fold seam.
     """
     reach = max(1, len(band) // 4)
+    protected = protected or set()
     best = min(range(len(band) - reach, len(band)),
-               key=lambda i: (crossings.get(band[i], 0), len(band) - 1 - i))
+               key=lambda i: (band[i] in protected,
+                              crossings.get(band[i], 0), len(band) - 1 - i))
     return band[:best + 1]
-
-
-def _refill(order: list[int], bands: list[list[int]]) -> list[list[int]]:
-    """Re-cut the column list at the boundaries the bands settled on."""
-    out: list[list[int]] = []
-    seen = 0
-    for band in bands[:-1]:
-        end = order.index(band[-1]) + 1
-        out.append(order[seen:end])
-        seen = end
-    if seen < len(order):
-        out.append(order[seen:])
-    return [band for band in out if band]
 
 
 # ---------------------------------------------------------------------------

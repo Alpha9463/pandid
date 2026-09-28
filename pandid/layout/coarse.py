@@ -394,8 +394,10 @@ def keep_if_better(fs: Flowsheet) -> bool:
     baseline._refinement_attempted = False
     baseline.route()
     baseline_quality = measure_final(baseline)
+    # A whole-equipment move can exchange crossing pairs while reducing their total.
     accepted = (
-        admissible(baseline_quality, candidate_quality)
+        admissible(baseline_quality, candidate_quality,
+                   preserve_crossing_pairs=False)
         and candidate_quality.bends <= baseline_quality.bends
         and candidate_quality.excess_bends <= baseline_quality.excess_bends
         and candidate_quality.length <= baseline_quality.length + 1e-6

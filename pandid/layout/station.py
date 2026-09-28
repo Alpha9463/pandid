@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from pandid.geometry import Frame
 from pandid.layout.corridor import horizontal_centerline
 from pandid.layout.stages import process_units, slot
-from pandid.portgeom import port_point, resolve_size, unit_box
+from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
 from pandid.stations import StationAssembly, member_mirror
 
 if TYPE_CHECKING:
@@ -166,6 +166,58 @@ def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
     return True
 
 
+def _station_centerline(source: Unit, source_port: str, dest: Unit,
+                        dest_port: str, start: tuple[float, float],
+                        end: tuple[float, float]) -> float | None:
+    """Find a horizontal station leg after the host nozzles can exit.
+
+    Parameters
+    ----------
+    source, dest : Unit
+        Equipment at the ends of the station's external run.
+    source_port, dest_port : str
+        Connected nozzle names.
+    start, end : tuple[float, float]
+        Resolved nozzle points.
+
+    Returns
+    -------
+    float or None
+        A reachable horizontal axis, or ``None`` without one.
+    """
+    axis = horizontal_centerline(source, source_port, dest, dest_port, start, end)
+    if axis is not None:
+        return axis
+    assert source.frame is not None and dest.frame is not None
+    source_face = resolve_port(source, source.frame, source_port).face
+    dest_face = resolve_port(dest, dest.frame, dest_port).face
+    forward = 1 if end[0] > start[0] else -1
+    if source_face in ("E", "W") and source_face != ("E" if forward > 0 else "W"):
+        return None
+    if dest_face in ("E", "W") and dest_face != ("W" if forward > 0 else "E"):
+        return None
+
+    lower, upper = float("-inf"), float("inf")
+    for face, point in ((source_face, start), (dest_face, end)):
+        if face == "N":
+            upper = min(upper, point[1] - 25.0)
+        elif face == "S":
+            lower = max(lower, point[1] + 25.0)
+    if lower > upper:
+        return None
+    if source_face in ("E", "W"):
+        preferred = start[1]
+    elif dest_face in ("E", "W"):
+        preferred = end[1]
+    elif lower == float("-inf"):
+        preferred = upper
+    elif upper == float("inf"):
+        preferred = lower
+    else:
+        preferred = (lower + upper) / 2
+    return max(lower, min(preferred, upper))
+
+
 def place_stations(fs: Flowsheet) -> int:
     """Move feasible unpinned stations onto their external material runs.
 
@@ -207,8 +259,8 @@ def place_stations(fs: Flowsheet) -> int:
         end = port_point(dest, dest.frame, dest_port.name)
         if abs(start[0] - end[0]) < 1:
             continue
-        centerline = horizontal_centerline(source, source_port.name, dest,
-                                           dest_port.name, start, end)
+        centerline = _station_centerline(source, source_port.name, dest,
+                                         dest_port.name, start, end)
         if centerline is None:
             continue
         mirrored = start[0] > end[0]

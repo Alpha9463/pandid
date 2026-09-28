@@ -764,6 +764,40 @@ def test_a_ribbon_wider_than_the_paper_is_folded_into_bands():
     assert len({round(f.cy) for f in frames}) > 1
 
 
+def test_a_protected_fold_rechecks_deferred_columns():
+    """Keep each band within paper after moving a fold off a host run.
+
+    Returns
+    -------
+    None
+        Deferred columns are included in the next band's width check.
+    """
+    from pandid.layout import _seed_slots
+    from pandid.layout.coarse import Host
+    from pandid.layout.coordinates import BAND_WIDTH, _bands, _columns, _lay_columns
+    from pandid.layout.place import assign_positions
+    from pandid.layout.stages import process_units, slot
+
+    fs = Flowsheet("Protected fold")
+    blocks = [fs.add(U.Block(str(index), inputs=["W"], outputs=["E"]))
+              for index in range(20)]
+    streams = [fs.connect(source.out_1, dest.in_1)
+               for source, dest in zip(blocks, blocks[1:])]
+    _seed_slots(fs)
+    assign_positions(fs)
+    for block in blocks:
+        slot(block).w = 200
+    units = process_units(fs)
+    columns = _columns(units, {})
+    run = streams[9]
+    host = Host(run.source, run.dest, run, run)
+
+    bands = _bands(units, columns, {}, True, hosts=[host])
+    assert [column for band in bands for column in band] == list(range(20))
+    assert all(_lay_columns(columns, band, {}) <= BAND_WIDTH for band in bands)
+    assert any(9 in band and 10 in band for band in bands)
+
+
 def test_a_ribbon_that_fits_the_paper_is_left_alone():
     """The fold is for a sheet nobody could read, not for every sheet."""
     fs = _long_train(6)
