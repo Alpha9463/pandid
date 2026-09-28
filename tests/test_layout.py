@@ -5,6 +5,8 @@ from pandid.layout import _seed_slots
 from pandid.layout.cycles import break_cycles
 from pandid.layout.coordinates import assign_coordinates
 from pandid.layout.place import assign_positions
+from pandid.portgeom import port_point
+from pandid.routing.metrics import real_bends
 
 
 def test_cycle_breaking():
@@ -89,6 +91,39 @@ def test_coordinates():
     # Only one column (col 1) exists, so it starts at MARGIN_X
     assert u1.frame.x == 50
     assert u1.frame.y == 50 + 2 * 120
+
+
+def test_vertical_vent_terminal_aligns_without_overriding_exact_pins():
+    """Align a free vent nozzle while retaining authored pixel coordinates.
+
+    Returns
+    -------
+    None
+        The free connection is straight and both explicit x pins remain exact.
+    """
+    free = Flowsheet("Free vent")
+    vessel = free.add(U.Vessel("V-1", variant="horizontal", width=150, height=48))
+    vent = free.add(U.Vent("VT-1"))
+    stream = free.connect(vessel.vent, vent.inlet)
+    free.layout()
+    free.route()
+
+    assert port_point(vessel, vessel.frame, "vent")[0] == pytest.approx(
+        port_point(vent, vent.frame, "inlet")[0]
+    )
+    assert real_bends(stream.route.waypoints) == 0
+
+    pinned = Flowsheet("Pinned vent")
+    vessel = pinned.add(U.Vessel("V-2", variant="horizontal", width=150, height=48))
+    vent = pinned.add(U.Vent("VT-2"))
+    vessel.pin(x=100)
+    vent.pin(x=50)
+    pinned.connect(vessel.vent, vent.inlet)
+    pinned.layout()
+    pinned.route()
+
+    assert vessel.frame.x == 100
+    assert vent.frame.x == 50
 
 
 def test_full_layout_via_render(tmp_path):

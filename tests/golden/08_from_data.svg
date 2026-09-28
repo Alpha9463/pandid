@@ -261,7 +261,7 @@
     <use href="#sym_splitter" x="942" y="278.5" width="50.0" height="50.0" />
     <use href="#sym_valve_control" x="1112" y="185.1" width="24.5" height="19.8" />
     <use href="#sym_vessel_horizontal_s150x48" x="1112" y="299.5" width="150" height="48" />
-    <use href="#sym_vent" x="1112" y="57.5" width="20.0" height="35.0" />
+    <use href="#sym_vent" x="1192.16" y="57.5" width="20.0" height="35.0" />
     <use href="#sym_valve_control" x="1466" y="355.1" width="24.5" height="19.8" transform="translate(0, 730) scale(1, -1)" />
     <polygon points="1610.5,349.5 1697.5,349.5 1712.5,362.5 1697.5,375.5 1610.5,375.5" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1654.0" y="358.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">To Boiler</text>
@@ -275,8 +275,8 @@
     <path d="M 822.0,303.5 L 942.0,303.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 992.0,313.5 L 1097.0,313.5 L 1097.0,274.5 L 1144.7868852459017,274.5 L 1144.7868852459017,299.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 992.0,293.5 L 1087.0,293.5 L 1087.0,197.5 L 1112.0,197.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1136.5,197.5 L 1161.5,197.5 L 1161.5,122.5 M 1161.5,112.5 L 1161.5,-2.5 L 557.0,-2.5 L 557.0,306.0 L 582.0,306.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1202.1639344262294,299.5 L 1202.1639344262294,117.5 L 1122.0,117.5 L 1122.0,92.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1136.5,197.5 L 1161.5,197.5 L 1161.5,-2.5 L 557.0,-2.5 L 557.0,306.0 L 582.0,306.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1202.1639344262294,299.5 L 1202.1639344262294,92.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1223.4754098360656,347.5 L 1223.4754098360656,362.5 L 1466.0,362.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1490.5,362.5 L 1610.5,362.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1187.0,427.5 L 1187.0,465.5" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
@@ -296,8 +296,8 @@
     <text x="1044.5" y="313.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S5</text>
     <rect x="1080.5" y="236.3" width="13.0" height="18.4" fill="white" />
     <text x="1087.0" y="245.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1087.0, 245.5)">S6</text>
-    <rect x="1195.7" y="199.3" width="13.0" height="18.4" fill="white" />
-    <text x="1202.2" y="208.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1202.2, 208.5)">S7</text>
+    <rect x="1195.7" y="186.8" width="13.0" height="18.4" fill="white" />
+    <text x="1202.2" y="196.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1202.2, 196.0)">S7</text>
     <rect x="1335.5" y="356.0" width="18.4" height="13.0" fill="white" />
     <text x="1344.7" y="362.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
   </g>
@@ -328,8 +328,8 @@
     <text x="1124.25" y="175.1" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">FV-201</text>
     <rect x="1272.0" y="316.0" width="41.0" height="15.0" fill="white" />
     <text x="1272.0" y="323.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-201</text>
-    <rect x="1098.2" y="35.5" width="47.6" height="15.0" fill="white" />
-    <text x="1122.0" y="47.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">VT-201</text>
+    <rect x="1178.4" y="35.5" width="47.6" height="15.0" fill="white" />
+    <text x="1202.1639344262294" y="47.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">VT-201</text>
     <rect x="1454.5" y="333.1" width="47.6" height="15.0" fill="white" />
     <text x="1478.25" y="345.1" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">CV-201</text>
   </g>

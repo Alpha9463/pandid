@@ -654,15 +654,21 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
 
 def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
                    band_of: dict["Unit", int]) -> list[tuple["Unit", float]]:
-    """``(unit, x)`` for every stacked unit worth shifting sideways.
+    """Propose same-column nozzle alignment for safe process units.
 
-    Ranking has put a vertically connected pair in one column, which is
-    not the same as putting the nozzles in one line, and 10 px out is
-    enough for a run to leave east, drop, and come back west. Aim the
-    leaving nozzle a stand-off short of the arriving one and that
-    becomes one turn. Only a nozzle facing sideways is aimed: one
-    already facing the peer it is stacked against drops straight onto
-    it, and moving the box would be the thing that bent the run.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet supplying material connections.
+    units : list[Unit]
+        Equipment eligible for pixel adjustment.
+    band_of : dict[Unit, int]
+        Paper band assigned to each unit.
+
+    Returns
+    -------
+    list[tuple[Unit, float]]
+        Unit and proposed left coordinate, before pin and overlap checks.
     """
     from pandid.layout.claims import fixed_face
     from pandid.layout.stages import process_streams
@@ -670,7 +676,13 @@ def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
 
     placed = set(units)
     out: list[tuple["Unit", float]] = []
-    for st in process_streams(fs):
+    streams = process_streams(fs)
+    degree: dict["Unit", int] = defaultdict(int)
+    for stream in streams:
+        degree[stream.source.owner] += 1
+        if stream.dest.owner is not stream.source.owner:
+            degree[stream.dest.owner] += 1
+    for st in streams:
         src, dst = st.source.owner, st.dest.owner
         assert src is not None and dst is not None
         if st.is_recycle or src is dst or src not in placed or dst not in placed:
@@ -683,12 +695,15 @@ def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
             if my_x0 is None or (u.pin_ is not None and u.pin_.x is not None):
                 continue
             face = fixed_face(u, mine.name, slot(u))
-            if face not in ("E", "W"):
-                continue
             (my_x, _), _, _ = resolve_port(u, slot(u), mine.name)
             (their_x, _), _, _ = resolve_port(peer, slot(peer), theirs.name)
-            lead = STACK_LEAD if face == "E" else -STACK_LEAD
-            out.append((u, their_x - lead - (my_x - my_x0)))
+            if face in ("E", "W"):
+                lead = STACK_LEAD if face == "E" else -STACK_LEAD
+                out.append((u, their_x - lead - (my_x - my_x0)))
+            elif (face in ("N", "S") and u.kind in {"feed", "product", "vent"}
+                  and peer.kind not in {"feed", "product", "vent"} and degree[u] == 1
+                  and fixed_face(peer, theirs.name, slot(peer)) in ("N", "S")):
+                out.append((u, their_x - (my_x - my_x0)))
     return out
 
 
