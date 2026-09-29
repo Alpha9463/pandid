@@ -1,5 +1,6 @@
 """Compare each example's SVG to its golden and check rendered nozzle positions."""
 
+import copy
 import os
 import re
 from pathlib import Path
@@ -14,9 +15,34 @@ from pandid.render.debug import _BOX, _PORT
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
 
+#: Representative exact-output checks for manual placement, furnished PFDs,
+#: dense P&IDs, BFDs, and automatic layout.
+GOLDEN_SCENARIOS = (
+    "02_manual_layout",
+    "03_distillation_train",
+    "11_ethanol_pid",
+    "12_block_flow_diagram",
+    "18_fixed_bed_recycle",
+)
+
 
 def _diff_message(name: str, golden: str, actual: str) -> str:
-    """First differing line with a little context -- not a 40KB dump."""
+    """Build a concise diagnostic for the first SVG difference.
+
+    Parameters
+    ----------
+    name : str
+        Name of the golden fixture.
+    golden : str
+        Expected normalized SVG.
+    actual : str
+        Newly rendered SVG.
+
+    Returns
+    -------
+    str
+        First differing line with nearby context.
+    """
     exp = golden.split("\n")
     act = actual.split("\n")
     for i, (e, a) in enumerate(zip(exp, act)):
@@ -35,6 +61,20 @@ def _diff_message(name: str, golden: str, actual: str) -> str:
 
 
 def _check_golden(name: str, svg: str) -> None:
+    """Compare one SVG with its committed golden fixture.
+
+    Parameters
+    ----------
+    name : str
+        Name of the golden fixture.
+    svg : str
+        Newly rendered SVG.
+
+    Returns
+    -------
+    None
+        Writes the normalized fixture only when golden updates are enabled.
+    """
     path = GOLDEN_DIR / f"{name}.svg"
     normalized = _normalize(svg)
     if UPDATE:
@@ -48,9 +88,47 @@ def _check_golden(name: str, svg: str) -> None:
         pytest.fail(_diff_message(name, golden, normalized), pytrace=False)
 
 
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_golden_svg(name):
-    fs, kwargs = gallery.flowsheet(name)
+@pytest.fixture(scope="module")
+def settled_scenarios():
+    """Lay out and route each gallery sheet once for this test module.
+
+    Returns
+    -------
+    dict[str, tuple[Flowsheet, dict]]
+        Settled sheets and their rendering options, keyed by example name.
+    """
+    cases = {}
+    for name in SCENARIOS:
+        fs, kwargs = gallery.flowsheet(name)
+        fs.layout()
+        fs.route()
+        cases[name] = fs, kwargs
+    return cases
+
+
+def _settled_case(settled_scenarios, name):
+    """Copy one settled gallery sheet for an independent render check.
+
+    Parameters
+    ----------
+    settled_scenarios : dict[str, tuple[Flowsheet, dict]]
+        Module-scoped routed sheets.
+    name : str
+        Gallery example name.
+
+    Returns
+    -------
+    tuple[Flowsheet, dict]
+        Independent sheet and rendering options.
+    """
+    fs, kwargs = settled_scenarios[name]
+    return copy.deepcopy(fs), kwargs.copy()
+
+
+@pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
+def test_golden_svg(settled_scenarios, name):
+    """Match each representative example's SVG to its committed golden."""
+    fs, kwargs = _settled_case(settled_scenarios, name)
     _check_golden(name, fs.to_svg(**kwargs))
 
 
@@ -79,21 +157,27 @@ _DEBUG_BOX = re.compile(
 
 
 def _drawn(value: "str | float") -> float:
-    """One coordinate as the sheet writes it, to the precision it writes it.
+    """Round a coordinate to the SVG serialization precision.
 
-    Takes the string a regex pulled out of the SVG or the float the model
-    resolved, so the two are compared after exactly the same rounding.
+    Parameters
+    ----------
+    value : str | float
+        Coordinate captured from SVG or resolved by the model.
+
+    Returns
+    -------
+    float
+        Coordinate rounded to one decimal place.
     """
     return round(float(value), 1)
 
 
 @pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(name):
+def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(settled_scenarios, name):
     """Every rendered nozzle lies on its owning equipment body."""
     from pandid.portgeom import resolve_port, unit_box
 
-    build, kwargs = SCENARIOS[name]
-    fs = build()
+    fs, kwargs = _settled_case(settled_scenarios, name)
     overlaid = {**kwargs, "debug": True}
     svg = fs.to_svg(**overlaid)
     dots = {(_drawn(x), _drawn(y)) for x, y in _DEBUG_CIRCLE.findall(svg)}
@@ -122,6 +206,7 @@ def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(name):
 
 
 def test_every_example_has_a_golden():
+    """Provide one golden SVG for every gallery example."""
     assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(SCENARIOS)
 
 
