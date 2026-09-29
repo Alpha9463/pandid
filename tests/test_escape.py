@@ -123,6 +123,29 @@ FIELDS = (
     "table cell",
 )
 
+#: Representative fields for each renderer path that escapes user text.
+ESCAPE_CONTEXTS = {
+    "document title": "flowsheet name",
+    "unit tag": "unit name",
+    "equipment description": "unit description",
+    "off-page flag": "off-page reference",
+    "instrument letters": "instrument letters",
+    "instrument loop number": "loop number",
+    "stream label": "stream name",
+    "line number": "line-number size",
+    "stream-table heading": "stream property name",
+    "stream-table value": "stream property value",
+    "title fallback": "title",
+    "title-block cell": "project",
+    "revision-history cell": "revision",
+    "note": "note text",
+    "legend": "legend entry",
+    "annotation title": "annotation title",
+    "table title": "table title",
+    "table header": "table header",
+    "table cell": "table cell",
+}
+
 #: How the sheet is drawn while it is attacked. Two settings, because a
 #: field only leaks through the furniture that draws it: the stream
 #: table draws the properties, the zone border and the title strip draw
@@ -218,6 +241,48 @@ def _plant(payload: str, field: str) -> Flowsheet:
     return fs
 
 
+def _svg_document(payload: str, field: str) -> str:
+    """Render a hostile value through the SVG backend.
+
+    Parameters
+    ----------
+    payload : str
+        User-controlled value to render.
+    field : str
+        Name of the model field containing the value.
+
+    Returns
+    -------
+    str
+        Rendered SVG document.
+    """
+    return _plant(payload, field).to_svg(**RENDERED)
+
+
+def _drawio_document(payload: str, field: str) -> str:
+    """Render a hostile value through the Draw.io backend.
+
+    Parameters
+    ----------
+    payload : str
+        User-controlled value to render.
+    field : str
+        Name of the model field containing the value.
+
+    Returns
+    -------
+    str
+        Rendered Draw.io XML document.
+    """
+    return _plant(payload, field).to_drawio(
+        border="zone",
+        diagram="p&id",
+        connections="flanged",
+        show_stream_table=True,
+        check=False,
+    )
+
+
 def _parsed(document: str) -> ET.Element:
     """*document*, parsed, or a failure saying it did not parse."""
     try:
@@ -250,20 +315,23 @@ def _every_reference_resolves(root: ET.Element) -> None:
             assert href[1:] in ids, f"href={href!r} names no id in the document"
 
 
-@pytest.mark.parametrize("field", FIELDS)
+@pytest.mark.parametrize("field", ESCAPE_CONTEXTS.values(), ids=tuple(ESCAPE_CONTEXTS))
 @pytest.mark.parametrize("payload", PAYLOADS.values(), ids=list(PAYLOADS))
-def test_a_hostile_value_cannot_break_the_sheet(field, payload):
-    svg = _plant(payload, field).to_svg(**RENDERED)
+def test_a_hostile_value_cannot_break_the_svg_document(field, payload):
+    """Keep each SVG escaping context well formed and internally linked."""
+    svg = _svg_document(payload, field)
     root = _parsed(svg)
     _carries_no_injected_markup(root)
     _every_reference_resolves(root)
 
 
-@pytest.mark.parametrize("field", FIELDS)
+@pytest.mark.parametrize("field", ESCAPE_CONTEXTS.values(), ids=tuple(ESCAPE_CONTEXTS))
 @pytest.mark.parametrize("payload", PAYLOADS.values(), ids=list(PAYLOADS))
-def test_a_hostile_value_cannot_break_the_drawio_export(field, payload):
-    export = _plant(payload, field).to_drawio(**RENDERED)
-    _carries_no_injected_markup(_parsed(export))
+def test_a_hostile_value_cannot_break_the_drawio_document(field, payload):
+    """Keep each Draw.io escaping context free of XML and HTML injection."""
+    root = _parsed(_drawio_document(payload, field))
+    _carries_no_injected_markup(root)
+    _carries_no_html_beyond_br(root)
 
 
 def _carries_no_html_beyond_br(root: ET.Element) -> None:
@@ -290,40 +358,30 @@ def _carries_no_html_beyond_br(root: ET.Element) -> None:
 
 
 @pytest.mark.parametrize("field", FIELDS)
-@pytest.mark.parametrize("payload", PAYLOADS.values(), ids=list(PAYLOADS))
-def test_a_hostile_value_cannot_become_html_in_the_drawio_export(field, payload):
-    """draw.io interprets a cell's ``value`` as HTML, so a tag an author's
-    field carries -- ``<script>alert(1)</script>`` as a unit's own
-    description, say -- must survive as the literal characters, not
-    render as markup. Well-formed XML is not enough to say that; see
-    :func:`_carries_no_html_beyond_br`."""
-    # Spelled out rather than `**RENDERED`: the dict's mixed str/bool
-    # values type as a plain `dict[str, str | bool]`, which a checker
-    # cannot match back against `to_drawio`'s per-parameter types once
-    # unpacked, on this call site or the ones above it (pre-existing).
-    export = _plant(payload, field).to_drawio(
-        border="zone",
-        diagram="p&id",
-        connections="flanged",
-        show_stream_table=True,
-        check=False,
+def test_every_field_reaches_the_svg_document(field):
+    """Render every user-controlled field through SVG.
+
+    A field renamed in :func:`_plant` must fail here instead of falling out of
+    the representative escaping matrix.
+    """
+    marker = "ZQX"
+    assert marker in _svg_document(marker, field), (
+        f"{field!r} put nothing on the sheet: the name in FIELDS and the name "
+        f"in _plant have drifted apart"
     )
-    _carries_no_html_beyond_br(_parsed(export))
 
 
 @pytest.mark.parametrize("field", FIELDS)
-def test_every_field_reaches_the_sheet(field):
-    """Each name in :data:`FIELDS` really does put a value on a drawing.
+def test_every_field_reaches_the_drawio_document(field):
+    """Render every user-controlled field through Draw.io.
 
-    Without this the property tests above pass by drawing nothing: a
-    field renamed in one place and not the other stops carrying the
-    payload, and a suite that never notices is a suite that has stopped
-    testing that field.
+    A field renamed in :func:`_plant` must fail here instead of falling out of
+    the representative escaping matrix.
     """
     marker = "ZQX"
-    assert marker in _plant(marker, field).to_svg(**RENDERED), (
-        f"{field!r} put nothing on the sheet: the name in FIELDS and the name "
-        f"in _plant have drifted apart"
+    assert marker in _drawio_document(marker, field), (
+        f"{field!r} put nothing on the Draw.io document: the name in FIELDS and "
+        f"the name in _plant have drifted apart"
     )
 
 
