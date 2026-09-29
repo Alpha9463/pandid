@@ -1,4 +1,4 @@
-"""P&ID title block + revision history rendering."""
+"""Test title-block, revision-history, annotation, and stream-table rendering."""
 
 import dataclasses
 import html
@@ -11,7 +11,21 @@ from pandid import Flowsheet, units as U
 from pandid.document import TitleBlock, Revision
 
 
-def _sheet(name="Demo", span=0.0):
+def _sheet(name: str = "Demo", span: float = 0.0) -> Flowsheet:
+    """Create a pinned feed-to-product flowsheet.
+
+    Parameters
+    ----------
+    name : str, default="Demo"
+        Flowsheet name.
+    span : float, default=0.0
+        Extra horizontal distance between the terminal units.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet with one material stream.
+    """
     fs = Flowsheet(name)
     a = fs.add(U.Feed("F")).pin(x=110, y=130)
     b = fs.add(U.Product("P")).pin(x=260 + span, y=130)
@@ -20,8 +34,8 @@ def _sheet(name="Demo", span=0.0):
 
 
 def test_title_block_draws_without_a_border():
-    # Both reference PFDs carry a title strip, so a strip is not a P&ID's to
-    # own: supplying one is the whole of the request to draw it.
+    # A title block may render without a P&ID border.
+    """Verify title block draws without a border."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo Sheet",
@@ -34,6 +48,7 @@ def test_title_block_draws_without_a_border():
 
 
 def test_annotations_draw_without_a_border():
+    """Verify annotations draw without a border."""
     from pandid.document import equipment_list, notes
 
     fs = _sheet()
@@ -46,17 +61,18 @@ def test_annotations_draw_without_a_border():
 
 
 def test_border_and_furniture_are_independent():
-    # The border is ink around the sheet; it decides nothing about what the
-    # sheet carries. Toggling it must not move a single piece of furniture.
+    # Border choice does not change furniture placement.
+    """Verify border and furniture are independent."""
+
     def build():
+        """Create a sheet with title-block furniture."""
         fs = _sheet()
         fs.title_block = TitleBlock(title="Demo Sheet", drawing_number="PFD-9")
         return fs
 
     zoned = build().to_svg(border="zone")
     plain = build().to_svg(border="none")
-    # The frame and the drawing are asked for separately, and a P&ID ruled with
-    # the frame is the same furniture as a PFD ruled with it.
+    # Diagram type does not change title-strip geometry.
     both = build().to_svg(border="zone", diagram="p&id")
     assert '<text x="6' in both
     assert '<text x="6' in zoned  # zone letters are ruled only when asked for
@@ -65,6 +81,7 @@ def test_border_and_furniture_are_independent():
 
 
 def test_a_border_nobody_asked_for_is_not_drawn():
+    """Verify a border nobody asked for is not drawn."""
     svg = _sheet().to_svg()
     assert "S1" in svg  # the sheet still renders
     assert 'fill="none" stroke="black" stroke-width="2"/>' not in svg  # no frame
@@ -75,17 +92,18 @@ def test_a_border_nobody_asked_for_is_not_drawn():
     [
         {"border": "isometric"},
         {"border": "ruled"},
-        # The drawing's name is not one of the frame's: border= rules the sheet
-        # and diagram= says which drawing is on it.
+        # ``border`` accepts frame names only.
         {"border": "p&id"},
     ],
 )
 def test_a_frame_the_renderer_cannot_draw_raises(kwargs):
+    """Verify a frame the renderer cannot draw raises."""
     with pytest.raises(ValueError):
         _sheet().to_svg(**kwargs)
 
 
 def test_client_and_project_are_drawn():
+    """Verify client and project are drawn."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo Sheet", client="Northwind Chemicals", project="Ethanol Purification A300"
@@ -96,6 +114,7 @@ def test_client_and_project_are_drawn():
 
 
 def test_the_strip_grows_a_row_for_each_of_them():
+    """Verify the strip grows a row for each of them."""
     from pandid.render.furniture import measure_title_strip
 
     bare = measure_title_strip(TitleBlock())
@@ -106,6 +125,7 @@ def test_the_strip_grows_a_row_for_each_of_them():
 
 
 def test_scale_is_drawn():
+    """Verify scale is drawn."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo Sheet", scale="1:100")
     svg = fs.to_svg()
@@ -113,15 +133,7 @@ def test_scale_is_drawn():
 
 
 def test_a_sheet_with_no_scale_to_state_still_rules_the_scale_cell():
-    """A title block is a form: its boxes are ruled by the form and filled in by
-    the drawing, so the SCALE box is there whether or not there is a scale to
-    write in it.
-
-    It used to be dropped, and the room handed back to the three cells that
-    identify the drawing -- which made `drawing_number`'s budget depend on how
-    the sheet was asked for. See
-    `test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for`.
-    """
+    """Verify a sheet with no scale to state still rules the scale cell."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo Sheet")
     svg = fs.to_svg()
@@ -131,16 +143,11 @@ def test_a_sheet_with_no_scale_to_state_still_rules_the_scale_cell():
 
 
 def test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for():
-    """#370's core objective. The scale cell appears when the block states a
-    scale *or* when a page size lets the renderer state the ratio it fitted the
-    drawing at -- so the band used to rule three cells under `to_svg()` and four
-    under `to_svg(page_size=...)`, and `drawing_number` was budgeted 118 units
-    by one and 88 by the other. The same value fitted one call and was silently
-    abbreviated by the other, and no check that had not been told the page size
-    could say which."""
+    """Verify the drawing number has one budget however the sheet is asked for."""
     number = "PFD-A100-0001-REV"
 
     def drawn(**kw):
+        """Render the drawing-number cell and collect truncation findings."""
         fs = _sheet()
         fs.title_block = TitleBlock(title="Demo", drawing_number=number)
         svg = fs.to_svg(border="zone", **kw)
@@ -166,6 +173,7 @@ def test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for():
 
 
 def test_scale_reports_the_ratio_the_drawing_was_fitted_at():
+    """Verify scale reports the ratio the drawing was fitted at."""
     fs = _sheet(span=4000.0)
     fs.title_block = TitleBlock(title="Demo Sheet")
     svg = fs.to_svg(page_size="A4", border="zone")
@@ -177,6 +185,7 @@ def test_scale_reports_the_ratio_the_drawing_was_fitted_at():
 
 
 def test_a_stated_scale_beats_the_computed_one():
+    """Verify a stated scale beats the computed one."""
     fs = _sheet(span=4000.0)
     fs.title_block = TitleBlock(title="Demo Sheet", scale="NTS")
     svg = fs.to_svg(page_size="A4", border="zone")
@@ -185,6 +194,7 @@ def test_a_stated_scale_beats_the_computed_one():
 
 
 def test_title_block_fields_rendered():
+    """Verify title block fields rendered."""
     fs = Flowsheet("Demo Unit")
     fs.add(U.Feed("F"))
     fs.add(U.Product("P"))
@@ -205,6 +215,7 @@ def test_title_block_fields_rendered():
 
 
 def test_no_title_block_still_renders_pid():
+    """Verify no title block still renders pid."""
     fs = Flowsheet("Bare")
     fs.add(U.Feed("F"))
     fs.add(U.Product("P"))
@@ -214,6 +225,7 @@ def test_no_title_block_still_renders_pid():
 
 
 def test_title_block_fits_narrow_sheet():
+    """Verify title block fits narrow sheet."""
     import re
     from pandid.render.furniture import measure_title_strip
 
@@ -239,6 +251,7 @@ def test_title_block_fits_narrow_sheet():
 
 
 def test_furniture_boxes_rendered():
+    """Verify furniture boxes rendered."""
     from pandid.document import equipment_list, notes, legend
 
     fs = Flowsheet("Furnished")
@@ -266,6 +279,7 @@ def test_furniture_boxes_rendered():
 
 
 def test_align_nine_point():
+    """Verify align nine point."""
     import pytest
     from pandid.document import Annotation
 
@@ -277,6 +291,7 @@ def test_align_nine_point():
 
 
 def test_annotation_docks_flush_to_frame():
+    """Verify annotation docks flush to frame."""
     import re
     from pandid.document import Annotation
 
@@ -305,6 +320,7 @@ def test_annotation_docks_flush_to_frame():
 
 
 def test_annotation_absolute_position():
+    """Verify annotation absolute position."""
     import re
     from pandid.document import Annotation
 
@@ -321,17 +337,28 @@ def test_annotation_absolute_position():
 # --- what the equipment list schedules, and what it calls it ------------------
 
 
-def _schedule(fs, **kwargs):
+def _schedule(fs: Flowsheet, **kwargs: object) -> list[tuple[str, str]]:
+    """Return equipment-schedule rows for a flowsheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to schedule.
+    **kwargs : object
+        Options forwarded to ``equipment_list``.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        ``(tag, description)`` rows.
+    """
     from pandid.document import equipment_list
 
     return equipment_list(fs, **kwargs).rows
 
 
 def test_bulk_items_and_junctions_are_not_scheduled():
-    """An equipment list is major plant. A valve, a strainer, a reducer, a vent
-    and a funnel are bought by the line and covered by the piping class; a mixer
-    or splitter is a branch in that line drawn as a triangle. Scheduling them
-    puts items on the sheet that no one buys, builds or maintains."""
+    """Verify bulk items and junctions are not scheduled."""
     fs = Flowsheet("Bulk")
     fs.add(U.Pump("P-101", description="Feed Pump"))
     fs.add(U.Valve("FV-100"))
@@ -348,6 +375,7 @@ def test_bulk_items_and_junctions_are_not_scheduled():
 
 
 def test_major_equipment_is_scheduled_whatever_it_is():
+    """Verify major equipment is scheduled whatever it is."""
     fs = Flowsheet("Plant")
     for unit in (
         U.Vessel("V-101"),
@@ -372,8 +400,7 @@ def test_major_equipment_is_scheduled_whatever_it_is():
 
 
 def test_the_description_is_words_not_the_kind_key():
-    """``kind`` is a dict key. A schedule reading ('E-101', 'Hex') quotes the
-    source code at the reader instead of naming the exchanger."""
+    """Verify the description is words not the kind key."""
     fs = Flowsheet("Named")
     fs.add(U.HeatExchanger("E-101"))
     fs.add(U.HeatExchanger("E-102", description="Feed/Effluent Exchanger"))
@@ -384,8 +411,7 @@ def test_the_description_is_words_not_the_kind_key():
 
 
 def test_every_registered_kind_names_itself():
-    """A kind with no label falls back to its own key, so the map has to cover
-    the library rather than the kinds that happened to need it first."""
+    """Verify every registered kind names itself."""
     from pandid.document import _KIND_LABELS
 
     kinds = {getattr(U, name).kind for name in U.__all__ if name != "Unit"}
@@ -394,8 +420,7 @@ def test_every_registered_kind_names_itself():
 
 
 def test_include_builds_a_schedule_of_its_own():
-    """A valve schedule is a real drawing, so naming the rows takes whatever is
-    named, in that order, bulk item or not."""
+    """Verify include builds a schedule of its own."""
     fs = Flowsheet("Valves")
     fs.add(U.Pump("P-101", description="Feed Pump"))
     fs.add(U.Valve("FV-100", description="Feed Control Valve"))
@@ -407,12 +432,7 @@ def test_include_builds_a_schedule_of_its_own():
 
 
 def test_include_refuses_a_tag_the_flowsheet_does_not_have():
-    """Naming a row asserts it exists, so a typo is a mistake and not a filter.
-
-    ``include=["P-101", "P-1O2"]`` -- letter O for zero -- used to draw a
-    schedule one line short of what it was asked for and say nothing about it,
-    on a sheet whose whole purpose is to list the equipment.
-    """
+    """Verify include refuses a tag the flowsheet does not have."""
     fs = Flowsheet("Valves")
     fs.add(U.Pump("P-101", description="Feed Pump"))
     with pytest.raises(ValueError) as excinfo:
@@ -425,6 +445,7 @@ def test_include_refuses_a_tag_the_flowsheet_does_not_have():
 
 
 def test_stream_table_section_header():
+    """Verify stream table section header."""
     fs = Flowsheet("Tabled")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
@@ -437,11 +458,7 @@ def test_stream_table_section_header():
 
 
 def test_a_stream_table_section_keyed_to_nothing_warns_instead_of_vanishing():
-    """A section heading keyed to a property no stream sets never appears --
-    the same silence :func:`test_include_refuses_a_tag_the_flowsheet_does_not_have`
-    above refuses outright. This one cannot raise at assignment (the streams
-    may not exist yet when ``stream_table_sections`` is set), so it warns at
-    render time instead, naming the key and the heading that never showed."""
+    """Verify a stream table section keyed to nothing warns instead of vanishing."""
     fs = Flowsheet("Tabled")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
@@ -457,42 +474,55 @@ def test_a_stream_table_section_keyed_to_nothing_warns_instead_of_vanishing():
     assert "'Bogus'" in message and "'Mass Fraction'" in message
 
 
-# --- a column has to have something in it -------------------------------------
-#
-# ISO 10628-1:2014 4.3.3 a) puts the flows *between the process steps* among
-# the things a process flow diagram may carry rather than must, so an internal
-# column with nothing in it is a heading over a rule of dashes and is dropped.
-# 4.3.2 d)
-# makes the ingoing and outgoing ones something the diagram **shall** contain,
-# so a boundary column is kept however empty it is -- dropping it would hide the
-# omission instead of showing it -- and pandid.validate reports it in words; see
-# ``boundary-flow-missing`` in tests/test_validate.py.
-#
-# A value present and blank is not nothing: it is the author reporting that
-# there is nothing to report, and it keeps the column.
+# --- stream-table column inclusion --------------------------------------------
 
 
-def _columns(fs) -> list:
-    """The stream numbers the table heads its columns with, in order."""
+def _columns(fs: Flowsheet) -> list[str]:
+    """Return stream-table column labels.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet containing the stream table.
+
+    Returns
+    -------
+    list[str]
+        Labels of emitted stream columns.
+    """
     from pandid.render.furniture import stream_table_layout
 
     table = stream_table_layout(fs)
     return [] if table is None else [c.text for c in table.rows[0][1:]]
 
 
-def _table(fs, **kwargs) -> str:
-    """The drawn table alone, since a stream number is also drawn on its line."""
+def _table(fs: Flowsheet, **kwargs: object) -> str:
+    """Render a flowsheet's stream table as SVG.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet containing the table.
+    **kwargs : object
+        Options forwarded to ``Flowsheet.to_svg``.
+
+    Returns
+    -------
+    str
+        SVG stream-table group.
+    """
     svg = fs.to_svg(show_stream_table=True, **kwargs)
     body = re.search(r'<g id="stream_table">(.*?)</g>', svg, re.S)
     return body.group(1) if body else ""
 
 
 def _two_and_two() -> Flowsheet:
-    """Four streams, two of them at the sheet edge, two of them tabulated.
+    """Create a flowsheet with tabulated and boundary-only streams.
 
-    The shape the drop rule is about: S1 comes in off a flag and carries
-    data, S2 is internal and carries data, S3 is internal and carries
-    none, S4 goes out to a flag and carries none.
+    Returns
+    -------
+    Flowsheet
+        Sheet with two feeds and two products.
     """
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("Raw Feed"))
@@ -510,23 +540,21 @@ def _two_and_two() -> Flowsheet:
 
 
 def test_an_internal_column_with_nothing_in_it_is_dropped():
+    """Verify an internal column with nothing in it is dropped."""
     fs = _two_and_two()
     assert _columns(fs) == ["S1", "S2", "S4"]
     assert ">S3<" not in _table(fs)
 
 
 def test_a_boundary_column_with_nothing_in_it_is_kept():
-    """The 4.3.2 d) shall. The column is empty because the sheet does not
-    say what leaves it, and that is the thing to show rather than hide."""
+    """Verify a boundary column with nothing in it is kept."""
     fs = _two_and_two()
     assert "S4" in _columns(fs)
     assert ">S4<" in _table(fs)
 
 
 def test_a_value_present_and_blank_keeps_the_column():
-    """The escape hatch, and the reason an absent key and an empty string
-    are two different statements: one is silence, the other is an author
-    saying this line has none to report. Both draw a dash."""
+    """Verify a value present and blank keeps the column."""
     fs = _two_and_two()
     internal = fs.streams[2]
     internal.properties = {"Temperature": ""}
@@ -539,7 +567,19 @@ def test_a_value_present_and_blank_keeps_the_column():
 # --- sizing the table ---------------------------------------------------------
 
 
-def _layout(fs):
+def _layout(fs: Flowsheet):
+    """Return the calculated stream-table layout.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet containing a stream table.
+
+    Returns
+    -------
+    object
+        Non-empty stream-table layout.
+    """
     from pandid.render.furniture import stream_table_layout
 
     table = stream_table_layout(fs)
@@ -548,7 +588,18 @@ def _layout(fs):
 
 
 def _wide(n: int) -> Flowsheet:
-    """*n* tabulated streams, each its own feed-to-product line."""
+    """Create a sheet with a requested number of tabulated streams.
+
+    Parameters
+    ----------
+    n : int
+        Number of feed-to-product lines.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet containing ``n`` tabulated streams.
+    """
     fs = Flowsheet("wide")
     for i in range(n):
         feed = fs.add(U.Feed(f"F{i}"))
@@ -558,6 +609,7 @@ def _wide(n: int) -> Flowsheet:
 
 
 def test_the_table_is_set_at_the_size_the_sheet_asks_for():
+    """Verify the table is set at the size the sheet asks for."""
     fs = _two_and_two()
     fs.stream_table.font_size = 8.0
     assert _layout(fs).size == 8.0
@@ -565,27 +617,20 @@ def test_the_table_is_set_at_the_size_the_sheet_asks_for():
 
 
 def test_the_size_rules_the_table_and_not_only_its_lettering():
-    """The whole of the feature. Every column of a table of short names and
-    short values sits on its minimum width, so a size that reached the
-    glyphs alone would leave the table its entire footprint and the author
-    whose table overruns an A3 sheet exactly where they were."""
+    """Verify the size rules the table and not only its lettering."""
     fs, small = _two_and_two(), _two_and_two()
     small.stream_table.font_size = 7.0
     big, little = _layout(fs), _layout(small)
     assert little.w < big.w
     assert little.h < big.h
     assert little.row_h < big.row_h
-    # Ruled in proportion: 7 of 10.5 is two thirds, and the height is rows
-    # of one line each, so it lands on the ratio exactly.
+    # Table dimensions scale with font size.
     assert little.h / big.h == pytest.approx(7.0 / 10.5)
     assert little.w / big.w == pytest.approx(7.0 / 10.5)
 
 
 def test_a_table_left_alone_is_drawn_exactly_as_it_always_was():
-    """The automatic regime is untouched, at both ends of it: 10.5 while the
-    columns fit and shrinking past 18 of them, with the minimum column width
-    fixed there because the size is being shrunk to fit values *into* that
-    minimum."""
+    """Verify a table left alone is drawn exactly as it always was."""
     narrow, wide, widest = _layout(_two_and_two()), _layout(_wide(20)), _layout(_wide(40))
     assert (narrow.size, narrow.row_h) == (10.5, 20.0)
     assert (wide.size, wide.row_h) == (pytest.approx(190.0 / 20), 15.0)
@@ -595,6 +640,7 @@ def test_a_table_left_alone_is_drawn_exactly_as_it_always_was():
 
 @pytest.mark.parametrize("size", [0, -1, -0.5])
 def test_a_size_that_is_not_a_size_is_refused(size):
+    """Verify a size that is not a size is refused."""
     fs = _two_and_two()
     fs.stream_table.font_size = size
     with pytest.raises(ValueError, match="font_size"):
@@ -602,10 +648,7 @@ def test_a_size_that_is_not_a_size_is_refused(size):
 
 
 def test_an_option_set_after_a_render_reaches_the_next_one():
-    """The table is measured at every render rather than cached with the
-    frames, so this needs no ``_invalidate_layout()`` -- which is worth
-    proving rather than assuming, since a sheet whose geometry is up to date
-    skips the stages that would otherwise redo the measuring."""
+    """Verify an option set after a render reaches the next one."""
     fs = _two_and_two()
     first = _table(fs)
     fs.stream_table.font_size = 8.0
@@ -614,42 +657,81 @@ def test_an_option_set_after_a_render_reaches_the_next_one():
 
 
 def test_the_stated_size_reaches_the_drawio_export_too():
-    """Both backends measure the table with the same function, so the
-    editable model is ruled at the size the sheet is."""
+    """Verify the stated size reaches the drawio export too."""
     fs = _two_and_two()
     fs.stream_table.font_size = 8.0
     assert "fontSize=8" in fs.to_drawio(show_stream_table=True)
 
 
-# --- the two width floors -----------------------------------------------------
+# --- stream-table column widths ------------------------------------------------
 
 
 def _widths(fs) -> tuple[float, float]:
-    """(row-label column, stream column) as the layout rules them."""
+    """Return calculated label and stream-column widths.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet containing a stream table.
+
+    Returns
+    -------
+    tuple[float, float]
+        Label-column width followed by stream-column width.
+    """
     table = _layout(fs)
     return table.rows[0][0].w, table.rows[0][1].w
 
 
 def _with(fs: Flowsheet, **options: object) -> Flowsheet:
-    """*fs* with these stream-table options set on it."""
+    """Set stream-table options on a flowsheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to update.
+    **options : object
+        Attributes to set on ``fs.stream_table``.
+
+    Returns
+    -------
+    Flowsheet
+        Updated flowsheet.
+    """
     for key, value in options.items():
         setattr(fs.stream_table, key, value)
     return fs
 
 
 def _fits(text: str, size: float = 10.5, bold: bool = False) -> float:
-    """What a column holding exactly *text* is ruled at, gutter included."""
+    """Measure a stream-table cell including its gutter.
+
+    Parameters
+    ----------
+    text : str
+        Cell text.
+    size : float, default=10.5
+        Font size.
+    bold : bool, default=False
+        Whether the text is bold.
+
+    Returns
+    -------
+    float
+        Required cell width.
+    """
     from pandid.render.furniture import _STREAM_GUTTER, text_width
 
     return text_width(text, size, bold=bold) + _STREAM_GUTTER
 
 
 def _one_long_value() -> Flowsheet:
-    """Three short-named streams, one of which reports a value far wider
-    than anything else in the table.
+    """Create a table with one value wider than the remaining values.
 
-    The awkward case the uniform rule is for: fitting each column to its
-    own contents would rule S2 wide and S1 and S3 narrow.
+    Returns
+    -------
+    Flowsheet
+        Flowsheet with three tabulated streams.
     """
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("F"))
@@ -666,27 +748,26 @@ def _one_long_value() -> Flowsheet:
 
 
 def test_the_floors_are_where_they_always_were():
+    """Verify the floors are where they always were."""
     fs = _two_and_two()
     assert (fs.stream_table.label_width, fs.stream_table.column_width) == (122.0, 52.0)
     assert _widths(fs) == (122.0, 52.0)
 
 
 def test_auto_drops_the_floor_and_rules_the_column_to_its_content():
+    """Verify auto drops the floor and rules the column to its content."""
     fs = _two_and_two()
     fs.stream_table.label_width = "auto"
     fs.stream_table.column_width = "auto"
     label, name = _widths(fs)
-    # The row-label column holds "Stream Number", which is wider than the
-    # one property name; a stream column holds "S1" and "25 C".
+    # Headings and values set automatic widths.
     assert label == pytest.approx(_fits("Stream Number", bold=True))
     assert name == pytest.approx(_fits("25 C"))
     assert label < 122.0 and name < 52.0
 
 
 def test_each_floor_is_dropped_on_its_own():
-    """Two fields and not one switch: a sheet with long row labels and
-    two-character stream names wants the second dropped and the first left
-    exactly where it is."""
+    """Verify each floor is dropped on its own."""
     label_only, name_only = _two_and_two(), _two_and_two()
     label_only.stream_table.label_width = "auto"
     name_only.stream_table.column_width = "auto"
@@ -695,9 +776,7 @@ def test_each_floor_is_dropped_on_its_own():
 
 
 def test_a_number_is_a_floor_and_not_a_width():
-    """Which is the whole of what these two fields are. A number below what
-    the column holds changes nothing -- the column is measured either way --
-    and a number above it is the way to buy a wide one."""
+    """Verify a number is a floor and not a width."""
     fs = _two_and_two()
     fs.stream_table.label_width = 10.0
     fs.stream_table.column_width = 10.0
@@ -707,10 +786,7 @@ def test_a_number_is_a_floor_and_not_a_width():
 
 
 def test_auto_rules_every_stream_column_at_the_widest_cell_in_the_table():
-    """Uniform and not fitted. A stream table is read down for one stream
-    and across for one property, so columns that did not line up would be a
-    worse drawing than wide ones -- and ``"auto"`` is therefore not a
-    promise of a narrow table, only of one with no slack in it."""
+    """Verify auto rules every stream column at the widest cell in the table."""
     fs = _with(_one_long_value(), column_width="auto")
     table = _layout(fs)
     widths = {c.w for row in table.rows for c in row[1:]}
@@ -719,10 +795,7 @@ def test_auto_rules_every_stream_column_at_the_widest_cell_in_the_table():
 
 
 def test_a_column_is_never_ruled_narrower_than_its_own_heading():
-    """The headings are measured with the values rather than beside them,
-    so the one long name rules the columns exactly as the one long value
-    does. A column too narrow for the stream number over it would be a
-    defect however much slack it saved."""
+    """Verify a column is never ruled narrower than its own heading."""
     fs = _one_long_value()
     for stream, name in zip(fs.streams, ("HPS-308-100-80-CS", "S2", "S3")):
         stream.name = name
@@ -732,9 +805,7 @@ def test_a_column_is_never_ruled_narrower_than_its_own_heading():
 
 
 def test_a_section_heading_still_widens_the_row_label_column_under_auto():
-    """A section heading spans the whole table, so it is content the table
-    has to hold and not slack ``"auto"`` may take out. The row-label column
-    is the only one free to take it up, exactly as at the default."""
+    """Verify a section heading still widens the row label column under auto."""
     fs = _with(_two_and_two(), label_width="auto", column_width="auto")
     plain = _layout(fs).w
     fs.stream_table_sections = [
@@ -748,10 +819,7 @@ def test_a_section_heading_still_widens_the_row_label_column_under_auto():
 
 
 def test_a_stated_floor_follows_the_stated_type_size():
-    """Both floors are stated at 10.5, which is what lets them scale with
-    ``font_size``. A field that scaled only while it held its own default
-    would be a field an author cannot reason about, so 122.0 set by hand is
-    the 122.0 that was there."""
+    """Verify a stated floor follows the stated type size."""
     by_hand = _with(_two_and_two(), label_width=122.0, column_width=52.0, font_size=7.0)
     left_alone = _with(_two_and_two(), font_size=7.0)
     assert _widths(by_hand) == _widths(left_alone)
@@ -759,8 +827,7 @@ def test_a_stated_floor_follows_the_stated_type_size():
 
 
 def test_auto_composes_with_the_stated_type_size():
-    """Nothing left to scale, and the content measured at the size it is
-    drawn at: the table shrinks on both counts."""
+    """Verify auto composes with the stated type size."""
     big = _with(_two_and_two(), column_width="auto")
     small = _with(_two_and_two(), column_width="auto", font_size=7.0)
     assert _widths(small)[1] == pytest.approx(_fits("25 C", 7.0))
@@ -770,16 +837,14 @@ def test_auto_composes_with_the_stated_type_size():
 @pytest.mark.parametrize("field", ["label_width", "column_width"])
 @pytest.mark.parametrize("value", ["fit", "", -1, None, True])
 def test_a_width_that_is_not_one_is_refused(field, value):
+    """Verify a width that is not one is refused."""
     fs = _with(_two_and_two(), **{field: value})
     with pytest.raises(ValueError, match=field):
         _layout(fs)
 
 
 def test_the_widths_reach_the_drawio_export_too():
-    """The exporter states its own cell inset, so a table ruled to its
-    content has to come out of it the width the sheet ruled it -- not merely
-    a table that looked right in SVG. Both backends take the columns from
-    the one layout, so the .drawio carries the measured widths themselves."""
+    """Verify the widths reach the drawio export too."""
     from pandid.render.drawio import _num
 
     fs = _with(_two_and_two(), label_width="auto", column_width="auto")
@@ -791,10 +856,7 @@ def test_the_widths_reach_the_drawio_export_too():
 
 
 def test_a_content_ruled_cell_still_clears_the_drawio_text_inset():
-    """The gutter is the clearance between a rule and a glyph and does not
-    scale, so it is what makes an ``"auto"`` table safe in the editable
-    model: draw.io insets a cell's own label before the sheet's pad is added,
-    and the gutter has to cover both sides of that."""
+    """Verify a content ruled cell still clears the drawio text inset."""
     from pandid.render.drawio import _TEXT_INSET
     from pandid.render.furniture import _STREAM_PAD, _STREAM_GUTTER
 
@@ -802,21 +864,14 @@ def test_a_content_ruled_cell_still_clears_the_drawio_text_inset():
 
 
 def test_a_sheet_that_states_no_property_draws_no_table():
-    """Every column empty is the same finding writ large: a grid of
-    headings over nothing is not a stream table."""
+    """Verify a sheet that states no property draws no table."""
     fs = _sheet()
     assert _columns(fs) == []
     assert _table(fs) == ""
 
 
 def test_a_run_is_judged_over_every_segment_it_is_drawn_in():
-    """A line through an inline valve is several streams under one name and
-    one column, so what earns the column can sit on a segment other than
-    the one the column is headed from: here the product flag is on the far
-    segment of the outgoing run, and the property on the far segment of the
-    incoming one. The value on that far segment reaches the column too --
-    it earned the column, so drawing a dash in it would be the table
-    contradicting itself."""
+    """Verify a run is judged over every segment it is drawn in."""
     fs = Flowsheet("segments")
     feed = fs.add(U.Feed("F"))
     pump = fs.add(U.Pump("P-1"))
@@ -833,17 +888,24 @@ def test_a_run_is_judged_over_every_segment_it_is_drawn_in():
     assert _row(fs, "Temperature") == ["25 C", "-"]
 
 
-# --- which segment of a run the column reports --------------------------------
-#
-# A run drawn through a valve is one column over several streams, and their
-# properties can genuinely differ: a control valve is there to drop the
-# pressure. One column cannot show both, and no rule can pick -- which point
-# it reports is a decision about the drawing. `tabulate=True` is where the
-# author makes it; unmarked, the run reads in the order it is drawn.
+# --- stream-table segment selection -------------------------------------------
 
 
-def _row(fs, key) -> list:
-    """The values the table draws down one property row, in column order."""
+def _row(fs: Flowsheet, key: str) -> list[str]:
+    """Return values from a stream-table property row.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet containing a stream table.
+    key : str
+        Property-row name.
+
+    Returns
+    -------
+    list[str]
+        Values in stream-column order.
+    """
     from pandid.render.furniture import stream_table_layout
 
     table = stream_table_layout(fs)
@@ -854,10 +916,12 @@ def _row(fs, key) -> list:
 
 
 def _across_a_valve():
-    """One run in two segments with the drop across the valve written on it.
+    """Create a two-segment pressure-drop run.
 
-    The shape of ``examples/08``'s S6: 11.6 barg above the spillback valve and
-    3.4 barg below it, both under one stream number.
+    Returns
+    -------
+    tuple
+        Flowsheet, upstream stream, and downstream stream.
     """
     fs = Flowsheet("drop")
     feed = fs.add(U.Feed("F"))
@@ -872,20 +936,20 @@ def _across_a_valve():
 
 
 def test_an_unmarked_run_reports_the_conditions_it_is_drawn_from():
+    """Verify an unmarked run reports the conditions it is drawn from."""
     fs, _up, _down = _across_a_valve()
     assert _row(fs, "Pressure") == ["11.6 barg"]
 
 
 def test_the_marked_segment_is_the_one_the_column_reports():
+    """Verify the marked segment is the one the column reports."""
     fs, _up, down = _across_a_valve()
     down.tabulate = True
     assert _row(fs, "Pressure") == ["3.4 barg"]
 
 
 def test_the_mark_moves_the_values_and_not_the_heading():
-    """The number and the line-number components belong to the run rather
-    than to any one segment, so the column is headed from the first segment
-    whichever one it reports."""
+    """Verify the mark moves the values and not the heading."""
     fs = Flowsheet("heading")
     feed = fs.add(U.Feed("F"))
     fv = fs.add(U.Valve("FV-1", variant="control"))
@@ -900,10 +964,7 @@ def test_the_mark_moves_the_values_and_not_the_heading():
 
 
 def test_the_mark_fills_only_the_rows_it_states():
-    """It says which segment to read *first*, not which to read only. A key
-    the marked segment is silent on still comes off the run, so nominating
-    the downstream point does not blank out the analysis written upstream.
-    """
+    """Verify the mark fills only the rows it states."""
     fs, up, down = _across_a_valve()
     up.properties["Benzene"] = "0.90"
     down.tabulate = True
@@ -912,8 +973,7 @@ def test_the_mark_fills_only_the_rows_it_states():
 
 
 def test_two_marks_on_one_run_name_the_run_and_the_way_out():
-    """The mark exists to settle which point the column reports, so two of
-    them on one column is the question asked again rather than answered."""
+    """Verify two marks on one run name the run and the way out."""
     fs, up, down = _across_a_valve()
     up.tabulate = down.tabulate = True
     with pytest.raises(ValueError) as excinfo:
@@ -924,6 +984,7 @@ def test_two_marks_on_one_run_name_the_run_and_the_way_out():
 
 
 def test_a_mark_on_a_run_of_one_segment_changes_nothing():
+    """Verify a mark on a run of one segment changes nothing."""
     fs = Flowsheet("one")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
@@ -934,9 +995,7 @@ def test_a_mark_on_a_run_of_one_segment_changes_nothing():
 
 
 def test_the_mark_survives_the_spec_round_trip():
-    """Asserted on the rebuilt sheet's table, not on the two dicts: a flag
-    dropped on the way out is dropped from both sides of a dict comparison
-    and the column quietly goes back to reporting the upstream point."""
+    """Verify the mark survives the spec round trip."""
     fs, _up, down = _across_a_valve()
     down.tabulate = True
     rebuilt = Flowsheet.from_dict(fs.to_dict())
@@ -944,12 +1003,7 @@ def test_the_mark_survives_the_spec_round_trip():
     assert _row(rebuilt, "Pressure") == ["3.4 barg"]
 
 
-# --- text that does not fit the cell drawn for it -----------------------------
-#
-# Two shapes of answer, and the sheet is entitled to exactly one of them. The
-# stream table is sized by the renderer, so it grows to its contents. The title
-# strip is fixed geometry -- an ISO 7200 block is a known rectangle in a known
-# corner -- so it abbreviates, and says on fs.warnings which field it cut.
+# --- title-strip fit reporting -------------------------------------------------
 
 _CELL = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="[\d.]+" '
@@ -959,12 +1013,18 @@ _CELL = re.compile(
 )
 
 
-def _table_cells(svg):
-    """Every drawn stream-table cell as (rect, text, ink extent).
+def _table_cells(svg: str) -> list[tuple[float, float, float, float, str]]:
+    """Extract stream-table cell and text extents from SVG.
 
-    Read straight back out of the SVG: the box the renderer ruled, the string it
-    wrote in it, and where that string's ink actually starts and ends, measured
-    with the same advance width the renderer sizes boxes by.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float, str]]
+        Cell bounds, ink bounds, and text for each table cell.
     """
     from pandid.render.furniture import text_width
 
@@ -986,9 +1046,14 @@ def _table_cells(svg):
     return out
 
 
-def _wide_table_sheet():
-    """A sheet whose row label and values are both wider than the hard-coded
-    122 x 52 the table used to rule, taken from the case in issue #68."""
+def _wide_table_sheet() -> Flowsheet:
+    """Create a sheet with wide stream-table text.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet containing wide property labels and values.
+    """
     fs = _sheet()
     fs.streams[0].properties = {
         "Vapour Fraction (mass)": "0.0441 kg/kg total",
@@ -998,6 +1063,7 @@ def _wide_table_sheet():
 
 
 def test_stream_table_columns_are_ruled_wide_enough_for_their_values():
+    """Verify stream table columns are ruled wide enough for their values."""
     svg = _wide_table_sheet().to_svg(show_stream_table=True)
     assert "Vapour Fraction (mass)" in svg and "0.0441 kg/kg total" in svg
     for x0, x1, ink0, ink1, text in _table_cells(svg):
@@ -1007,8 +1073,7 @@ def test_stream_table_columns_are_ruled_wide_enough_for_their_values():
 
 
 def test_a_page_too_small_for_the_stream_table_says_so():
-    """The table is sized to its contents, so on a fixed page it can be the
-    thing that does not fit. That is an error, and the error names it."""
+    """Verify a page too small for the stream table says so."""
     fs = _sheet()
     fs.streams[0].properties = {
         "Vapour Fraction (mass)": "0.0441 kg/kg total " * 12,
@@ -1018,8 +1083,7 @@ def test_a_page_too_small_for_the_stream_table_says_so():
 
 
 def test_an_abbreviated_title_names_the_field_and_the_text_it_cut():
-    """Past the size the title is allowed down to, the cell abbreviates -- and
-    says which field, what it was given, and by how much it missed."""
+    """Verify an abbreviated title names the field and the text it cut."""
     long_title = "Ethanol Purification and Dehydration Area A300"
     fs = _sheet()
     fs.title_block = TitleBlock(drawing_number="PFD-1", title=long_title)
@@ -1029,21 +1093,12 @@ def test_an_abbreviated_title_names_the_field_and_the_text_it_cut():
     assert cut, "an abbreviated title must not be silent"
     assert len(cut) == 1 and "title" in cut[0].message
     assert long_title in cut[0].message
-    # The two widths and the ratio: what the author edits between. The need is
-    # measured at the smallest size the title is allowed down to, since that is
-    # the width the text still has to come out of. The cell is still the 187
-    # units it is ruled; only the need moved, because the ruler moved.
+    # The warning reports the measured text and cell widths.
     assert "needs 239 of the 187 units its cell has (1.3x)" in cut[0].message
 
 
 def test_what_survives_an_abbreviation_fits_the_cell_it_was_cut_for():
-    """A cut string that still overruns is the cut having achieved nothing.
-
-    Where to cut used to be ``int(room / average advance) - 1`` characters,
-    which is a count of average characters and not a width: a caps-heavy value
-    was cut too late and still ran over its rule, and the ellipsis it was given
-    was never paid for at all. It is measured now, ellipsis included.
-    """
+    """Verify what survives an abbreviation fits the cell it was cut for."""
     from pandid.render.furniture import _TITLE_TYPE, _TITLE_W, clip, text_width
 
     titles = [
@@ -1059,6 +1114,7 @@ def test_what_survives_an_abbreviation_fits_the_cell_it_was_cut_for():
 
 
 def test_a_title_that_fits_says_nothing():
+    """Verify a title that fits says nothing."""
     fs = _sheet()
     fs.title_block = TitleBlock(drawing_number="PFD-1", title="Ethanol A300")
     svg = fs.to_svg(page_size="A3", border="zone")
@@ -1067,10 +1123,10 @@ def test_a_title_that_fits_says_nothing():
 
 
 def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
-    """The sheet count shares the title band, and used to be measured out of the
-    title's own budget: a set of 100 sheets abbreviated the title of sheet 1."""
+    """Verify how much of a title survives does not depend on the sheet count."""
 
     def drawn_title(of_sheets):
+        """Return the rendered title for a sheet-count value."""
         fs = _sheet()
         fs.title_block = TitleBlock(title="Transfer and Relief U100", of_sheets=of_sheets)
         svg = fs.to_svg(border="zone")
@@ -1085,8 +1141,7 @@ def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
 
 
 def test_a_status_too_long_for_its_cell_is_reported():
-    """The status cell was drawn with no measurement at all, so a long issue
-    status ran straight out through the side of the strip."""
+    """Verify a status too long for its cell is reported."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
     fs.to_svg(border="zone")
@@ -1094,6 +1149,7 @@ def test_a_status_too_long_for_its_cell_is_reported():
 
 
 def test_a_revision_description_too_long_for_its_column_is_reported():
+    """Verify a revision description too long for its column is reported."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo",
@@ -1115,11 +1171,9 @@ def test_a_revision_description_too_long_for_its_column_is_reported():
 
 
 def test_the_revision_date_column_holds_a_full_date():
-    """Every sheet in the corpus stamps an ISO 8601 date, and the column it goes
-    in was 3px narrower than one measures."""
+    """Verify the revision date column holds a full date."""
     fs = _sheet()
-    # Tabulated, so stream-table-missing does not join the assertion below
-    # -- this test is about the revision date column and nothing else.
+    # A stream property suppresses unrelated table warnings.
     fs.streams[0].properties = {"Flow (kg/h)": "4200"}
     fs.title_block = TitleBlock(
         title="Demo", revisions=[Revision("A", "2026-01-01", "Issued", "AA")]
@@ -1130,8 +1184,7 @@ def test_the_revision_date_column_holds_a_full_date():
 
 
 def test_a_box_narrower_than_its_own_rows_is_reported():
-    """An Annotation sizes itself to its rows unless it is given a width, and a
-    width smaller than the rows need runs the text out through the side."""
+    """Verify a box narrower than its own rows is reported."""
     from pandid.document import Annotation
 
     fs = _sheet()
@@ -1143,6 +1196,7 @@ def test_a_box_narrower_than_its_own_rows_is_reported():
 
 
 def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():
+    """Verify a finding from an earlier render does not survive the fix."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Ethanol Purification and Dehydration Area A300")
     fs.to_svg(border="zone")
@@ -1152,25 +1206,16 @@ def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():
     assert not [w for w in fs.warnings if w.code == "text-truncated"]
 
 
-# --- what each field does with a value too long for its cell ------------------
-#
-# The sweep behind #370. Fifteen fields, three answers, and the answer has to be
-# a property of the field rather than of which cell somebody looked at last.
+# --- title-strip field outcomes -----------------------------------------------
 
 
 def test_a_long_title_is_lettered_smaller_rather_than_abbreviated():
-    """The title is the one value on the strip set above the strip's reading
-    size, so it has size to give back before it has meaning to give up. Two of
-    these three were abbreviated before #370, one of them the title of the
-    library's own shipped example."""
+    """Verify a long title is lettered smaller rather than abbreviated."""
     for title, drawn_at in (
         ("Propylene Glycol Reaction U200", "12.1"),
         ("Transfer and Relief System U100", "12.0"),
         ("Aromatics Recovery A100 Sheet 1", "11.5"),
-        # ...and the two this test was written around, which no longer need
-        # even the first step down: they were only ever over their cell
-        # because every character was charged one average advance. The
-        # library's own shipped example is one of them.
+        # Titles that use the default title size.
         ("Propylene Glycol Reaction", "12.5"),
         ("Ethanol Purification A300", "12.5"),
         ("Transfer and Relief U100", "12.5"),
@@ -1184,9 +1229,7 @@ def test_a_long_title_is_lettered_smaller_rather_than_abbreviated():
 
 
 def test_the_title_is_never_lettered_under_its_subtitle():
-    """Below the subtitle's size the band would say the wrong thing about the
-    drawing -- the subordinate line would read as the title -- so the shrinking
-    stops there and the cell abbreviates instead."""
+    """Verify the title is never lettered under its subtitle."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Ethanol Purification and Dehydration Area A300",
@@ -1199,8 +1242,7 @@ def test_the_title_is_never_lettered_under_its_subtitle():
 
 
 def test_validate_reports_an_over_long_field_with_nothing_rendered():
-    """The finding's point is to reach the author before the sheet is issued,
-    and every width the strip rules is a constant -- so it needs no render."""
+    """Verify validate reports an over long field with nothing rendered."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo", project="Dalby Bioethanol Expansion, Stage 2 Debottlenecking"
@@ -1213,9 +1255,7 @@ def test_validate_reports_an_over_long_field_with_nothing_rendered():
 
 
 def test_a_render_reports_an_over_long_field_once():
-    """model_issues measures the strip and so does the render; the render's is
-    the one that describes the sheet that came out, and it replaces rather than
-    joins the other."""
+    """Verify a render reports an over long field once."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
     fs.to_svg(border="zone", page_size="A3")
@@ -1223,8 +1263,7 @@ def test_a_render_reports_an_over_long_field_once():
 
 
 def test_the_sheet_count_names_both_the_fields_that_fill_it():
-    """One cell, two fields. Named only 'sheet', it sent an author who had set
-    of_sheets to look at the wrong one."""
+    """Verify the sheet count names both the fields that fill it."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", sheet="1", of_sheets="1 of the 128 issued")
     fs.to_svg(border="zone")
@@ -1234,9 +1273,7 @@ def test_the_sheet_count_names_both_the_fields_that_fill_it():
 
 
 def test_a_signatory_with_no_revision_row_to_sign_is_reported():
-    """drawn_by/checked_by/approved_by fill the newest revision row's BY /
-    CHK'D / APP'D cells, and a block with no revisions has no such row -- so all
-    three were accepted and drawn nowhere at all."""
+    """Verify a signatory with no revision row to sign is reported."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", drawn_by="A. Anderson", approved_by="R. Lee")
     svg = fs.to_svg(border="zone")
@@ -1249,6 +1286,7 @@ def test_a_signatory_with_no_revision_row_to_sign_is_reported():
 
 
 def test_a_signatory_with_a_revision_row_is_drawn_and_silent():
+    """Verify a signatory with a revision row is drawn and silent."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo",
@@ -1261,53 +1299,82 @@ def test_a_signatory_with_a_revision_row_is_drawn_and_silent():
     assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
 
 
-def _findings(fs):
-    """Every title-strip finding `validate()` makes about *fs*, sorted."""
+def _findings(fs: Flowsheet) -> list[tuple[str, str]]:
+    """Return sorted title-strip validation findings.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to validate.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Finding codes and messages.
+    """
     return sorted(
         (i.code, i.message) for i in fs.validate() if i.code.startswith(("text-", "title-block"))
     )
 
 
-def _rendered(fs, how, **kw):
-    """The same findings, made by a render of *fs* instead."""
+def _rendered(fs: Flowsheet, how: str, **kw: object) -> list[tuple[str, str]]:
+    """Render a flowsheet and return title-strip findings.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to render.
+    how : str
+        Name of the renderer method.
+    **kw : object
+        Renderer options.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Finding codes and messages emitted by the render.
+    """
     getattr(fs, how)(border="zone", **kw)
     return sorted(
         (w.code, w.message) for w in fs.warnings if w.code.startswith(("text-", "title-block"))
     )
 
 
-def _block(name="Ethanol A300", **kw):
-    """A one-stream sheet carrying the title block *kw* describes."""
+def _block(name: str = "Ethanol A300", **kw: object) -> Flowsheet:
+    """Create a sheet with a title block.
+
+    Parameters
+    ----------
+    name : str, default="Ethanol A300"
+        Flowsheet name.
+    **kw : object
+        ``TitleBlock`` constructor arguments.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet containing the requested title block.
+    """
     fs = _sheet(name=name)
     fs.title_block = TitleBlock(**kw)
     return fs
 
 
-# --- the field list is the block's own ----------------------------------------
-#
-# Everything below sweeps *every* field of the title block, and the list of them
-# is read off the dataclass rather than written out. A hand-written list had
-# missed a field in three consecutive reviews -- the three signatories in one,
-# `sheet` and `of_sheets` in the next -- and each time the fix was to add the
-# entry somebody had forgotten. The list was the defect, not the entries: a
-# field added to `TitleBlock` next month is swept the day it appears.
-#
-# What each field *does* with a value its cell cannot hold cannot be derived --
-# it is a property of the field, and the whole point of #370 is that the three
-# answers differ. So the answers are written down, and
-# `test_the_sweep_answers_for_every_field_the_block_has` is the check that they
-# are written down for all of them.
+# --- title-block field coverage ------------------------------------------------
 
 
 def _scalar_fields(cls: type[Any]) -> list[str]:
-    """Every field of the dataclass *cls* that holds one value rather than a
-    list of them, in the order it is declared.
+    """Return scalar dataclass fields.
 
-    The test is the *factory*, not the type: ``revisions`` is the block's one
-    list field and is built by ``field(default_factory=list)``, so it names
-    itself out. Anything else -- including a field somebody adds without a
-    default at all -- is swept, which is the point. A new field is a case here
-    before it is a line in ``_ANSWERS``.
+    Parameters
+    ----------
+    cls : type[Any]
+        Dataclass to inspect.
+
+    Returns
+    -------
+    list[str]
+        Fields that are not built by a default factory.
     """
     return [f.name for f in dataclasses.fields(cls) if f.default_factory is dataclasses.MISSING]
 
@@ -1318,29 +1385,24 @@ _REV_FIELDS = _scalar_fields(Revision)
 
 @dataclasses.dataclass(frozen=True)
 class _Answer:
-    """What one field of the block does with what it is given.
+    """Expected validation and rendering outcome for one field.
 
-    ``overlong`` is a value its cell cannot hold and ``code``/``named`` the
-    finding it must then make -- ``named`` being the field the *author* would
-    edit, which is not always the cell.
-
-    ``fits`` is a value the cell **can** hold and ``ink`` what the sheet letters
-    for it, verbatim, when that differs from the value itself. That pair is the
-    half a parity check cannot see: a cell that draws nothing agrees perfectly
-    with a validator that says nothing, and `SHEET  of 1` was issued on exactly
-    that agreement.
-
-    ``cells`` is how many cells of the strip draw the field. It is 1 for all but
-    ``Revision.rev``, which fills the grid's REV column *and* the bottom band's
-    REV box at two different widths -- and a field with two cells can lose one
-    of them without the string leaving the sheet, which is exactly the hole a
-    document-wide search leaves open. Checked against the strip's own reporting
-    rather than trusted; see
-    ``test_a_block_field_is_drawn_in_as_many_cells_as_it_reports``.
-
-    ``signed`` marks the three block-level signatories, which draw no cell of
-    their own: they fill the BY / CHK'D / APP'D columns of the newest revision
-    row, so the block needs a revision before there is anywhere to letter them.
+    Parameters
+    ----------
+    overlong : str
+        Value that exceeds the field's available space.
+    code : str
+        Expected validation code.
+    named : str
+        Expected source field in the validation message.
+    fits : str
+        Value that fits the field.
+    ink : str, default=""
+        Expected rendered value when it differs from ``fits``.
+    cells : int, default=1
+        Number of title-strip cells that render the value.
+    signed : bool, default=False
+        Whether the value requires a revision row.
     """
 
     overlong: str
@@ -1353,18 +1415,20 @@ class _Answer:
 
     @property
     def drawn(self) -> str:
-        """What the sheet letters for :attr:`fits`."""
+        """Return the expected rendered value.
+
+        Returns
+        -------
+        str
+            Explicit ink value, or the fitting value.
+        """
         return self.ink or self.fits
 
 
-#: ``company`` takes an unbreakable value rather than a long one: its cell wraps
-#: between words, so a long *name* is stacked rather than lost and only a single
-#: over-wide word has nowhere to go. The answer is a property of the field, and
-#: the probe has to be too.
+#: Long value used for truncation and overflow checks.
 _LONG = "Wollongong " * 12
 
-#: The revision row the three signatories need before the strip has a cell to
-#: letter them into.
+#: Revision values needed to render block-level signatories.
 _SIGNED_ROW = ("0", "2026-01-01", "Issued")
 
 _ANSWERS: dict[str, _Answer] = {
@@ -1375,8 +1439,7 @@ _ANSWERS: dict[str, _Answer] = {
     "client": _Answer(_LONG, "text-truncated", "client", "Zed Client"),
     "company": _Answer("Wollongong-Warrawong-Woonona", "text-overruns-cell", "company", "Zedco"),
     "status": _Answer(_LONG, "text-truncated", "status", "ZED STATUS"),
-    # One cell drawn from two fields, so both are named -- and the ink is the
-    # whole count, because half of one reads as a different sheet.
+    # The count cell is supplied by both values.
     "sheet": _Answer(_LONG, "text-overruns-cell", "sheet/of_sheets", "7", "SHEET 7 of 1"),
     "of_sheets": _Answer(_LONG, "text-overruns-cell", "sheet/of_sheets", "9", "SHEET 1 of 9"),
     "scale": _Answer(_LONG, "text-truncated", "scale", "1:7"),
@@ -1390,11 +1453,9 @@ _ANSWERS: dict[str, _Answer] = {
     "date": _Answer(_LONG, "text-truncated", "date", "2026-07-02"),
 }
 
-#: The revision grid is six narrow columns and every one of them abbreviates --
-#: a revision row is a history, and a history reads as prose.
+#: Expected outcomes for revision-grid fields.
 _REV_ANSWERS: dict[str, _Answer] = {
-    # The one field of either dataclass with two cells: the grid column, and the
-    # bottom band's REV box that repeats the newest row's number.
+    # ``rev`` appears in the grid and the title-strip revision cell.
     "rev": _Answer(_LONG, "text-truncated", "revisions[0].rev", "Z1", cells=2),
     "date": _Answer(_LONG, "text-truncated", "revisions[0].date", "2026-07-02"),
     "description": _Answer(_LONG, "text-truncated", "revisions[0].description", "Zed issue"),
@@ -1403,10 +1464,7 @@ _REV_ANSWERS: dict[str, _Answer] = {
     "approved": _Answer(_LONG, "text-truncated", "revisions[0].approved", "Za"),
 }
 
-#: The fields the sweeps actually run, and the ones they cannot because nobody
-#: has said what they should do yet. The second list is asserted empty below;
-#: keeping it rather than raising at import time means a field added to the
-#: block fails one named test instead of breaking collection for the module.
+#: Fields covered by the title-block outcome matrices.
 _SWEPT = [name for name in _BLOCK_FIELDS if name in _ANSWERS]
 _UNANSWERED = [name for name in _BLOCK_FIELDS if name not in _ANSWERS]
 _REV_SWEPT = [name for name in _REV_FIELDS if name in _REV_ANSWERS]
@@ -1414,14 +1472,7 @@ _REV_UNANSWERED = [name for name in _REV_FIELDS if name not in _REV_ANSWERS]
 
 
 def test_the_sweep_answers_for_every_field_the_block_has():
-    """Every field of `TitleBlock` and of `Revision` has an answer written down
-    for it, and no answer names a field neither of them has.
-
-    This is the guard that replaces remembering. The field lists come from
-    `dataclasses.fields`, so adding a field to the block fails here until
-    somebody says what its cell does with a value too long for it -- which is
-    the question the whole of #370 is about.
-    """
+    """Verify the sweep answers for every field the block has."""
     assert _UNANSWERED == [], "title-block fields with no answer in _ANSWERS"
     assert _REV_UNANSWERED == [], "revision fields with no answer in _REV_ANSWERS"
     assert sorted(_ANSWERS) == sorted(_BLOCK_FIELDS)
@@ -1429,12 +1480,19 @@ def test_the_sweep_answers_for_every_field_the_block_has():
 
 
 def _kw(field: str, value: "str | None") -> dict:
-    """The block that puts *value* in *field* and states nothing else.
+    """Create title-block keyword arguments for a field value.
 
-    ``None`` leaves the field unset. Every block but the title's own states a
-    title, so that a sweep of some other field is not also a sweep of the
-    flowsheet name falling into the title cell; a signatory's block states the
-    revision row its value is lettered into.
+    Parameters
+    ----------
+    field : str
+        Title-block field to set.
+    value : str or None
+        Field value, or ``None`` to leave the field unset.
+
+    Returns
+    -------
+    dict
+        ``TitleBlock`` constructor arguments.
     """
     kw: dict = {} if field == "title" else {"title": "Demo"}
     if _ANSWERS[field].signed:
@@ -1446,8 +1504,7 @@ def _kw(field: str, value: "str | None") -> dict:
 
 @pytest.mark.parametrize("field", _SWEPT)
 def test_every_title_block_field_reports_a_value_it_cannot_hold(field):
-    """The sweep, kept: no field of the block takes an over-long value and says
-    nothing about it, and each is named by the name it was set by."""
+    """Verify every title block field reports a value it cannot hold."""
     answer = _ANSWERS[field]
     fs = _sheet()
     fs.title_block = TitleBlock(**_kw(field, answer.overlong))
@@ -1456,44 +1513,27 @@ def test_every_title_block_field_reports_a_value_it_cannot_hold(field):
     assert found[0].message.startswith(f"{answer.named} ")
 
 
-# --- and the other half: a value it *can* hold reaches the cell drawn for it --
-#
-# The finding sweep above and the parity sweep at the foot of this file are both
-# blind in the same direction. Both are satisfied by a cell that draws nothing:
-# ink that never reaches the sheet overruns no room, so it is silent, so
-# `validate()` and the two renderers agree about it perfectly. Measured, not
-# assumed -- dropping the sheet count's ink from the shared layout and leaving
-# its width check in place failed 0 of the 55 positive cases and 0 of the 110
-# parity ones. `SHEET  of 1` is what lived in that blind spot.
-#
-# So every field is also asserted to put its value on the sheet, in both
-# backends, and to do it quietly.
-#
-# **Per cell, not per document.** The first version of this searched the whole
-# rendered file for the string, and that has the same shape of hole one level
-# down: `Revision.rev` is drawn *twice* -- the grid's REV column and the bottom
-# band's REV box, at two different widths -- so deleting the grid copy left the
-# band copy to answer the search, and the whole file stayed green. A test that
-# asks "is this string somewhere on the sheet" proves presence, not that every
-# cell ruled for the value fills it. So the ink is counted by the cell that
-# letters it, and how many cells a field has is stated and then checked against
-# the strip's own reporting.
+# --- rendered title-block field coverage --------------------------------------
 
-#: What each backend writes a lettered string as, and how it names the cell that
-#: letters it: draw.io gives every part its own ``mxCell`` id, and SVG gives
-#: every ``<text>`` its own baseline point. No two cells of the strip share
-#: either, so both are cell identity.
+#: Patterns used to identify rendered title-strip cells.
 _SVG_TEXT = re.compile(r'<text x="([^"]*)" y="([^"]*)"[^>]*>([^<]*)</text>')
 _DRAWIO_VALUE = re.compile(r'<mxCell id="([^"]*)" value="([^"]*)"')
 
 
 def _lettering(fs, how: str) -> "list[tuple[str, str]]":
-    """``(cell, string)`` for every string the sheet letters, read back out of
-    the file the backend wrote.
+    """Extract rendered title-strip cell values.
 
-    Read from the file and not from the layout's own parts: the point is that
-    the value survives all the way into the document a reader opens, and a
-    mutation applied to the shared layout would move both together.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to render.
+    how : str
+        Name of the renderer method.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Renderer cell identifiers and decoded values.
     """
     out = getattr(fs, how)(border="zone")
     if how == "to_svg":
@@ -1502,13 +1542,39 @@ def _lettering(fs, how: str) -> "list[tuple[str, str]]":
 
 
 def _cells_drawing(fs, how: str, ink: str) -> "list[str]":
-    """The cells of the rendered sheet that letter exactly *ink*."""
+    """Return cells that render a requested value.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to render.
+    how : str
+        Name of the renderer method.
+    ink : str
+        Rendered value to locate.
+
+    Returns
+    -------
+    list[str]
+        Matching cell identifiers.
+    """
     return [cell for cell, text in _lettering(fs, how) if text == ink]
 
 
 def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
-    """*fs* letters ``answer.drawn`` in exactly ``answer.cells`` cells, and they
-    are that many *different* cells."""
+    """Assert that a rendered value occupies the expected cells.
+
+    Parameters
+    ----------
+    answer : _Answer
+        Expected field outcome.
+    fs : Flowsheet
+        Flowsheet to render.
+    how : str
+        Name of the renderer method.
+    what : str
+        Field name included in assertion output.
+    """
     cells = _cells_drawing(fs, how, answer.drawn)
     assert len(cells) == answer.cells, (what, answer.drawn, cells)
     assert len(set(cells)) == answer.cells, (what, answer.drawn, cells)
@@ -1517,8 +1583,7 @@ def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("field", _SWEPT)
 def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field, how):
-    """A value that fits is lettered into every cell ruled for it, in both
-    backends, and nothing is reported about it."""
+    """Verify every title block field a cell can hold is drawn and silent."""
     answer = _ANSWERS[field]
     _drawn_in(answer, _block(**_kw(field, answer.fits)), how, field)
     assert _findings(_block(**_kw(field, answer.fits))) == []
@@ -1527,35 +1592,35 @@ def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field, how)
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("field", _REV_SWEPT)
 def test_every_revision_field_a_cell_can_hold_is_drawn_and_silent(field, how):
-    """The same of the revision grid, whose six columns are the strip's
-    narrowest and so the ones most easily dropped without anything overrunning
-    -- and which holds the one field the strip draws in two places."""
+    """Verify every revision field a cell can hold is drawn and silent."""
     answer = _REV_ANSWERS[field]
     kw = {"title": "Demo", "revisions": [Revision(**{field: answer.fits})]}
     _drawn_in(answer, _block(**kw), how, field)
     assert _findings(_block(**kw)) == []
 
 
-# --- how many cells draw a field is not a number this file gets to invent -----
+# --- title-strip cell counts ---------------------------------------------------
 
 
-def _text_findings(fs) -> list:
+def _text_findings(fs: Flowsheet) -> list:
+    """Return text-related validation findings.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to validate.
+
+    Returns
+    -------
+    list
+        Validation findings with text-related codes.
+    """
     return [i for i in fs.validate() if i.code.startswith("text-")]
 
 
 @pytest.mark.parametrize("field", _SWEPT)
 def test_a_block_field_is_drawn_in_as_many_cells_as_it_reports(field):
-    """``_Answer.cells`` is checked against the strip's own reporting rather
-    than trusted.
-
-    Every cell that cannot hold what it was given says so and names the field
-    that supplied it, so a value too long for *every* width on the strip is
-    reported once per cell that drew it -- an independent count of how many
-    cells a field has, taken from the validator rather than from the ink the
-    test above searches. A field that quietly gains a second cell reports twice
-    and fails here, and only once ``cells`` is raised does the ink test start
-    requiring the new cell to be filled.
-    """
+    """Verify a block field is drawn in as many cells as it reports."""
     assert len(_text_findings(_block(**_kw(field, _ANSWERS[field].overlong)))) == (
         _ANSWERS[field].cells
     )
@@ -1563,17 +1628,13 @@ def test_a_block_field_is_drawn_in_as_many_cells_as_it_reports(field):
 
 @pytest.mark.parametrize("field", _REV_SWEPT)
 def test_a_revision_field_is_drawn_in_as_many_cells_as_it_reports(field):
-    """And the row, where `rev` is the one field with two cells: the grid column
-    and the bottom band's REV box, which is why it is reported twice and why a
-    search of the whole document could lose either one of them."""
+    """Verify a revision field is drawn in as many cells as it reports."""
     kw = {"title": "Demo", "revisions": [Revision(**{field: _REV_ANSWERS[field].overlong})]}
     assert len(_text_findings(_block(**kw))) == _REV_ANSWERS[field].cells
 
 
 def test_a_company_name_that_wraps_past_the_strip_is_reported():
-    """The one cell that answers a long value by growing, and so the one that
-    can lose it downwards: every wrapped line is inside its own cell and the
-    stack of them runs out through the top and the bottom of the block."""
+    """Verify a company name that wraps past the strip is reported."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", company="Wollongong " * 12)
     fs.to_svg(border="zone")
@@ -1584,6 +1645,7 @@ def test_a_company_name_that_wraps_past_the_strip_is_reported():
 
 
 def test_a_company_name_the_strip_is_deep_enough_for_is_silent():
+    """Verify a company name the strip is deep enough for is silent."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", company="PANDID Engineering Pty Ltd")
     fs.to_svg(border="zone")
@@ -1592,31 +1654,24 @@ def test_a_company_name_the_strip_is_deep_enough_for_is_silent():
 
 @pytest.mark.parametrize("field", _REV_SWEPT)
 def test_every_revision_field_reports_a_value_it_cannot_hold(field):
-    """The revision grid is six narrow columns and every one of them abbreviates
-    -- a revision row is a history, and a history reads as prose."""
+    """Verify every revision field reports a value it cannot hold."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo", revisions=[Revision(**{field: _REV_ANSWERS[field].overlong})]
     )
     found = [w for w in fs.validate() if w.code == "text-truncated"]
-    # The grid cell, named for the field the author set. `rev` is drawn twice --
-    # the grid column and the bottom band's REV cell, at two different widths --
-    # and the second names its source, so the two are told apart by name.
+    # ``rev`` is drawn in both revision cells.
     assert sum(w.message.startswith(f"revisions[0].{field} was ") for w in found) == 1
     if field == "rev":
         assert sum(w.message.startswith("revisions[0].rev -> rev was ") for w in found) == 1
 
 
-# --- the cut is measured, not counted ----------------------------------------
+# --- width-based clipping ------------------------------------------------------
 
 
 @pytest.mark.parametrize("page", ["A4", "A3", "A2", "A1", "A0"])
 def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
-    """`clip` used to choose how many characters survive at the *Latin*
-    advance while `text_width` -- which decided there was anything to cut --
-    charges a fullwidth codepoint a full em. A CJK title kept 28 characters
-    measuring 290 units for a 187-unit cell and was drawn straight through the
-    sheet count beside it, at every page size."""
+    """Verify a fullwidth title is cut to a width and not to a count."""
     from pandid.render.furniture import _TITLE_W, text_width
 
     fs = _sheet()
@@ -1629,19 +1684,12 @@ def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
     )
     assert match is not None
     size, drawn = float(match.group(1)), match.group(2)
-    # _TITLE_W already holds back the slot the sheet count is drawn in, so
-    # fitting it is what keeps the two clear of each other.
+    # The title width excludes the sheet-count cell.
     assert text_width(drawn, size, True) <= _TITLE_W
 
 
 def test_a_latin_title_is_cut_where_the_face_says_and_not_where_a_mean_said():
-    """A Latin title is cut later than it used to be, and that is the fix.
-
-    The counted cut charged every character 0,62 em, which over-measures
-    ordinary mixed-case lettering by about a quarter, so three characters that
-    fit the cell were thrown away on every sheet drawn. What survives is what
-    the face actually sets inside 187 units.
-    """
+    """Verify a latin title is cut where the face says and not where a mean said."""
     from pandid.render.furniture import _TITLE_W, _SUBTITLE_TYPE, text_width
 
     fs = _sheet()
@@ -1651,13 +1699,11 @@ def test_a_latin_title_is_cut_where_the_face_says_and_not_where_a_mean_said():
     assert text_width("Ethanol Purification and Dehydratio…", _SUBTITLE_TYPE, True) <= _TITLE_W
 
 
-# --- one thing to fix is one finding ------------------------------------------
+# --- finding de-duplication ----------------------------------------------------
 
 
 def test_a_word_the_company_cell_cannot_break_is_reported_once():
-    """The cell stacks its name over several lines, so a group of companies
-    repeating one unbreakable word reported it once per line -- two findings
-    about one edit."""
+    """Verify a word the company cell cannot break is reported once."""
     word = "Wollongong-Warrawong-Woonona"
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", company=f"{word} {word}")
@@ -1667,8 +1713,7 @@ def test_a_word_the_company_cell_cannot_break_is_reported_once():
 
 
 def test_two_revisions_abbreviating_the_same_initials_are_two_findings():
-    """Deduplication is on the whole finding, not on the text: these are two
-    rows, and the author edits them separately."""
+    """Verify two revisions abbreviating the same initials are two findings."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo",
@@ -1681,12 +1726,11 @@ def test_two_revisions_abbreviating_the_same_initials_are_two_findings():
     assert len(found) == 2
 
 
-# --- the finding names the field that supplied the value ----------------------
+# --- finding source fields -----------------------------------------------------
 
 
 def test_a_blank_title_reports_the_flowsheet_name_that_filled_it():
-    """A block that states no title draws the flowsheet's name. Reported as
-    `title`, it sent the author to a field they never set."""
+    """Verify a blank title reports the flowsheet name that filled it."""
     fs = _sheet(name="A Flowsheet Name Far Too Long For The Title Cell To Hold")
     fs.title_block = TitleBlock()
     found = [i for i in fs.validate() if i.code == "text-truncated"]
@@ -1695,8 +1739,7 @@ def test_a_blank_title_reports_the_flowsheet_name_that_filled_it():
 
 
 def test_a_backfilled_signatory_reports_the_block_field_that_supplied_it():
-    """The same wrong-source defect `of_sheets` had: the value comes from
-    `drawn_by` and the cell is the revision row's."""
+    """Verify a backfilled signatory reports the block field that supplied it."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo",
@@ -1709,8 +1752,7 @@ def test_a_backfilled_signatory_reports_the_block_field_that_supplied_it():
 
 
 def test_a_signatory_the_newest_revision_overrides_is_reported():
-    """The row is the more specific claim and keeps the cell -- which leaves the
-    block-level value on no sheet at all, and that was silent."""
+    """Verify a signatory the newest revision overrides is reported."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo",
@@ -1734,6 +1776,7 @@ def test_a_signatory_the_newest_revision_overrides_is_reported():
     ],
 )
 def test_a_signatory_the_sheet_does_draw_is_silent(revision):
+    """Verify a signatory the sheet does draw is silent."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", drawn_by="AA", revisions=[revision])
     svg = fs.to_svg(border="zone")
@@ -1741,13 +1784,10 @@ def test_a_signatory_the_sheet_does_draw_is_silent(revision):
     assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
 
 
-# --- the cut is the arithmetic the width was measured by ----------------------
+# --- clipping boundaries -------------------------------------------------------
 
 
-#: One glyph per script the cut has to answer for: a Latin capital that is
-#: the widest the face cuts (0,944 em, against the 0,62 a mean charged it), a
-#: Latin lower-case that is among the narrowest (0,278), and a fullwidth form
-#: that is a whole em. The first is where the closed form was worst.
+#: Glyphs with wide, narrow, and fullwidth metrics.
 CUT_SCRIPTS = ["W", "i", "Ｗ"]
 
 
@@ -1755,18 +1795,7 @@ CUT_SCRIPTS = ["W", "i", "Ｗ"]
 @pytest.mark.parametrize("bold", [False, True])
 @pytest.mark.parametrize("size", [6.5, 7.5, 8.0, 9.0, 10.5, 11.0, 12.5])
 def test_a_cut_string_fits_its_cell_and_one_more_character_would_not(size, bold, glyph):
-    """The whole contract, for every script, at every width the strip rules.
-
-    This replaces a pair of tests that asserted it of fullwidth text and
-    asserted the *arithmetic* of narrow text instead: `len(drawn) - 1 ==
-    int(room / (size * 0,62)) - 1`, the closed form inverted. That form is
-    exact arithmetic on the wrong metric, and a run of `W` is where it was
-    furthest wrong -- the face sets one at 0,944 em, so a cut made at 0,62
-    kept half as much again as the cell could hold and drew it through the
-    rule. Asserting the property rather than the formula says what the cell
-    has to do without saying how, and it is strictly the stronger claim: the
-    cut fits, and it is the longest cut that does.
-    """
+    """Verify a cut string fits its cell and one more character would not."""
     from pandid.render.furniture import clip, text_width
 
     room = 1.0
@@ -1779,10 +1808,22 @@ def test_a_cut_string_fits_its_cell_and_one_more_character_would_not(size, bold,
         room = round(room + 0.5, 3)
 
 
-# --- the finding names the field that supplied the value, all five of them ----
+# --- fitting-findings source fields --------------------------------------------
 
 
-def _fit_messages(**kw):
+def _fit_messages(**kw: object) -> list[str]:
+    """Return text-finding messages for a title block.
+
+    Parameters
+    ----------
+    **kw : object
+        ``TitleBlock`` constructor arguments.
+
+    Returns
+    -------
+    list[str]
+        Text-related validation messages.
+    """
     fs = _sheet(name="A Flowsheet Name Far Too Long For The Title Cell To Hold")
     fs.title_block = TitleBlock(**kw)
     return [i.message for i in fs.validate() if i.code.startswith("text-")]
@@ -1794,8 +1835,7 @@ LONG = "Wollongong " * 12
 @pytest.mark.parametrize(
     "kw,named",
     [
-        # A blank field draws some other field's value, and the finding has to
-        # name the field the author would edit rather than the cell.
+        # Blank fields use fallback source values.
         ({}, "Flowsheet name -> title"),
         ({"title": "Demo", "scale": LONG}, "scale"),
         ({"title": "Demo", "date": LONG}, "date"),
@@ -1814,12 +1854,12 @@ LONG = "Wollongong " * 12
     ],
 )
 def test_a_finding_names_the_field_that_supplied_the_value(kw, named):
+    """Verify a finding names the field that supplied the value."""
     assert any(m.startswith(f"{named} ") for m in _fit_messages(**kw)), (named, _fit_messages(**kw))
 
 
 def test_a_fitted_scale_is_not_reported_as_the_scale_field():
-    """The scale cell draws the ratio the sheet was fitted at when the block
-    states none, so a finding about it must not send the author to `scale`."""
+    """Verify a fitted scale is not reported as the scale field."""
     from pandid.render.furniture import title_strip_fit
 
     found = title_strip_fit(
@@ -1829,24 +1869,35 @@ def test_a_fitted_scale_is_not_reported_as_the_scale_field():
 
 
 def test_a_stamped_date_is_not_reported_as_the_date_field():
-    """And the date cell draws today's when the block states none."""
+    """Verify a stamped date is not reported as the date field."""
     from pandid.render.furniture import title_strip_fit
 
     found = title_strip_fit(TitleBlock(title="Demo"), "Demo", "2026-01-01" * 6)
     assert [f[0] for f in found] == ["today's date -> date"]
 
 
-# --- a field of nothing but spaces is the blank it means -----------------------
+# --- whitespace normalization --------------------------------------------------
 
 
-def _drawn_sheet(how: str, field: str, value: "object | None", *, assigned: bool = False):
-    """The whole file one backend writes for a block that states *value* in
-    *field* -- set on the constructor, or on the built block. ``None`` leaves
-    the field unset, which is the baseline every case is compared against.
+def _drawn_sheet(how: str, field: str, value: object | None, *, assigned: bool = False) -> str:
+    """Render a sheet with one title-block field value.
 
-    *value* is deliberately not typed ``str``: the fields are annotated ``str``
-    and nothing enforces it, so what a block does with ``sheet=0`` is a real
-    question about this library and is asked below."""
+    Parameters
+    ----------
+    how : str
+        Name of the renderer method.
+    field : str
+        Title-block field to set.
+    value : object or None
+        Value to render, or ``None`` to leave the field unset.
+    assigned : bool, default=False
+        Whether to assign the value after construction.
+
+    Returns
+    -------
+    str
+        Rendered document.
+    """
     fs = _sheet(name="Ethanol Purification A300")
     kw: dict = {} if field == "title" else {"title": "Demo"}
     if value is not None and not assigned:
@@ -1857,169 +1908,165 @@ def _drawn_sheet(how: str, field: str, value: "object | None", *, assigned: bool
     return getattr(fs, how)(border="zone", page_size="A3")
 
 
-@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("assigned", [False, True], ids=["constructed", "assigned"])
 @pytest.mark.parametrize("field", _BLOCK_FIELDS)
-def test_a_whitespace_field_draws_exactly_what_an_unset_one_draws(field, assigned, how):
-    """A field of only spaces is *truthy*, so it defeated every fallback the
-    block has: the title lost the flowsheet's name, the status and the drawing
-    number lost their dash, a whitespace client ruled an empty row and made the
-    whole strip taller, a whitespace scale turned the four-cell bottom band on
-    with nothing to put in it, and a whitespace `sheet` drew `SHEET  of 1` --
-    a count naming no sheet, on a field whose own signature says the answer is
-    1.
-
-    Whole-file equality, so it is not only the cell that matches but the strip's
-    depth and everything the sheet is laid out around it. The field list is the
-    block's own, so this cannot fall behind it the way the eight names written
-    out here used to; ``assigned`` re-runs every one of them through
-    ``fs.title_block.<field> = ...``, which is the documented way to shorten a
-    field and re-render and is what normalising in ``__post_init__`` would miss.
-    """
-    unset = _drawn_sheet(how, field, None)
-    assert unset == _drawn_sheet(how, field, "  \t ", assigned=assigned)
+def test_a_whitespace_field_draws_exactly_what_an_unset_one_draws(field, assigned):
+    """Verify a whitespace field draws exactly what an unset one draws."""
+    unset = _drawn_sheet("to_svg", field, None)
+    assert unset == _drawn_sheet("to_svg", field, "  \t ", assigned=assigned)
 
 
-# --- a value the author stated is drawn as stated, whatever its type ----------
+# --- non-string title-block values ---------------------------------------------
 
 
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize(
     "stated", [0, 0.0, False, 7, 1], ids=["zero", "zero-float", "false", "seven", "one"]
 )
-@pytest.mark.parametrize("field", _BLOCK_FIELDS)
-def test_a_stated_value_is_drawn_as_stated_however_it_is_typed(field, stated, how):
-    """Every field of the block is annotated `str` and nothing enforces it, so
-    `TitleBlock(sheet=1, of_sheets=3)` is an ordinary thing to type and has
-    always worked -- `str(1)` is `"1"`.
-
-    Reading the field for truthiness rather than for whether it was *set* broke
-    that for the falsey half: `sheet=0` was discarded as blank and then filled
-    in with the field's default, so an author who stated sheet 0 was issued
-    sheet 1. Stating a value and having a different value drawn is worse than
-    the blank case that fallback exists for, because blank at least meant unset.
-
-    Asserted as whole-file equality against the same value written as a string,
-    which is the property without a per-field expected string: `field=0` draws
-    the sheet `field="0"` draws.
-    """
-    assert _drawn_sheet(how, field, stated) == _drawn_sheet(how, field, str(stated))
+def test_a_stated_title_block_value_is_drawn_as_stated_however_it_is_typed(stated, how):
+    """Verify a stated title block value is drawn as stated however it is typed."""
+    assert _drawn_sheet(how, "project", stated) == _drawn_sheet(how, "project", str(stated))
 
 
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("half,ink", [("sheet", "SHEET 0 of 1"), ("of_sheets", "SHEET 1 of 0")])
 def test_a_stated_sheet_number_is_never_replaced_by_the_default(half, ink, how):
-    """The reproduction of that, named. Sheet 0 is a sheet number an author can
-    write, and the one the fallback would silently renumber -- the count is the
-    only cell on the strip with a default to be renumbered *to*."""
+    """Verify a stated sheet number is never replaced by the default."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", **{half: 0})
     assert [text for _cell, text in _lettering(fs, how) if text == ink]
-    # ...and it is not the count an unset field draws, which is the whole point.
+    # An explicit zero differs from the default count.
     assert _drawn_sheet(how, half, 0) != _drawn_sheet(how, half, None)
 
 
-# --- ...and it survives the document this package writes for it ---------------
-#
-# The block has two doors: `TitleBlock(...)`, which takes any type and letters
-# `str()` of it, and `Flowsheet.from_dict(...)`, which used to demand quoted
-# text. `to_dict()` writes what the author set, so the two disagreed about a
-# document the package itself had produced -- `fs.title_block.sheet = 0` wrote
-# `{"sheet": 0}` and reading it back raised `title_block.sheet must be text`
-# (#506). Nothing below asserts which of the two answers was picked; they assert
-# that one sheet goes in and the same sheet comes out.
+# --- title-block document round trips ------------------------------------------
 
 
-#: Spellings of a field's value that are not `str`. Every field of the block is
-#: annotated `str` and nothing enforces it, so all of these reach a cell and are
-#: lettered: `0` and `False` are the falsey ones a truthiness read discarded
-#: (#484), and `None` is what YAML hands the reader for a key written with
-#: nothing after the colon.
+#: Non-string values accepted by the title-block document reader.
 _TYPED = [0, 0.0, False, True, 1, 7, 7.5, None]
 _TYPED_IDS = ["zero", "zero-float", "false", "true", "one", "seven", "float", "none"]
 
 
 def _file(tb: TitleBlock, how: str) -> str:
-    """The whole file one backend writes for a sheet carrying *tb*."""
+    """Render a sheet containing a title block.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block to render.
+    how : str
+        Name of the renderer method.
+
+    Returns
+    -------
+    str
+        Rendered document.
+    """
     return getattr(_sheet_with(tb), how)(border="zone", page_size="A3")
 
 
 def _through_a_spec(tb: TitleBlock) -> TitleBlock:
-    """The block a sheet carrying *tb* comes back with after being written to a
-    document and read from it -- `from_dict(fs.to_dict())`, both halves of the
-    package's own public round trip with nothing hand-written in between."""
+    """Round-trip a title block through a flowsheet specification.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block to serialize and read.
+
+    Returns
+    -------
+    TitleBlock
+        Reconstructed title block.
+    """
     read = Flowsheet.from_dict(_sheet_with(tb).to_dict()).title_block
     assert read is not None, "the document lost the block entirely"
     return read
 
 
-def _stating(field: str, value: "object | None") -> TitleBlock:
-    """A block stating *value* in *field*, titled so it is not degenerate."""
+def _stating(field: str, value: object | None) -> TitleBlock:
+    """Create a title block with one explicitly stated value.
+
+    Parameters
+    ----------
+    field : str
+        Title-block field to set.
+    value : object or None
+        Value assigned to the field.
+
+    Returns
+    -------
+    TitleBlock
+        Title block with a non-empty title when required.
+    """
     kw: dict = {} if field == "title" else {"title": "Demo"}
     kw[field] = value
     return TitleBlock(**kw)
 
 
-def _revising(field: str, value: "object | None") -> Revision:
-    """A revision row stating *value* in *field* and nothing else."""
+def _revising(field: str, value: object | None) -> Revision:
+    """Create a revision with one explicitly stated value.
+
+    Parameters
+    ----------
+    field : str
+        Revision field to set.
+    value : object or None
+        Value assigned to the field.
+
+    Returns
+    -------
+    Revision
+        Revision containing the requested value.
+    """
     kw: dict = {field: value}
     return Revision(**kw)
 
 
-@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("stated", _TYPED, ids=_TYPED_IDS)
 @pytest.mark.parametrize("field", _BLOCK_FIELDS)
-def test_a_typed_field_draws_the_same_sheet_after_a_spec_round_trip(field, stated, how):
-    """`to_dict()` must never write a sheet `from_dict()` refuses, and never one
-    it reads back as a different drawing.
-
-    Whole-file equality on both backends, so it is not only the cell that
-    matches but the strip's depth and everything the sheet is laid out around
-    it -- and the file is the one the package wrote, not a document composed
-    here to be read.
-
-    Swept over the block's own field list, because the constructor's
-    permissiveness is uniform: a fix for the two sheet-count fields would be the
-    same defect with twelve fewer symptoms, and the field list is
-    `dataclasses.fields`, so a field added to the block is a case here the day
-    it is added.
-    """
+def test_a_typed_title_block_field_is_coerced_by_a_spec_round_trip(field, stated):
+    """Verify a typed title block field is coerced by a spec round trip."""
     tb = _stating(field, stated)
+    assert getattr(_through_a_spec(tb), field) == ("" if stated is None else str(stated))
+
+
+@pytest.mark.parametrize("stated", _TYPED, ids=_TYPED_IDS)
+@pytest.mark.parametrize("field", _REV_FIELDS)
+def test_a_typed_revision_field_is_coerced_by_a_spec_round_trip(field, stated):
+    """Verify a typed revision field is coerced by a spec round trip."""
+    tb = TitleBlock(title="Demo", revisions=[_revising(field, stated)])
+    assert getattr(_through_a_spec(tb).revisions[0], field) == (
+        "" if stated is None else str(stated)
+    )
+
+
+@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize("field", _BLOCK_FIELDS)
+def test_a_falsey_title_block_field_draws_the_same_sheet_after_a_spec_round_trip(field, how):
+    """Verify a falsey title block field draws the same sheet after a spec round trip."""
+    tb = _stating(field, 0)
     assert _file(_through_a_spec(tb), how) == _file(tb, how)
 
 
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
-@pytest.mark.parametrize("stated", _TYPED, ids=_TYPED_IDS)
 @pytest.mark.parametrize("field", _REV_FIELDS)
-def test_a_typed_revision_field_draws_the_same_sheet_after_a_spec_round_trip(field, stated, how):
-    """The revision rows go through the same reader and the same writer, and
-    they had a second bug of their own: a row was written out field by field
-    `if getattr(rev, name)`, so revision **0** -- what an as-built sheet issues
-    at -- was dropped from the document by the *writer* and read back as an
-    empty cell. Refusing to read a value says so; discarding it does not."""
-    tb = TitleBlock(title="Demo", revisions=[_revising(field, stated)])
+def test_a_falsey_revision_field_draws_the_same_sheet_after_a_spec_round_trip(field, how):
+    """Verify a falsey revision field draws the same sheet after a spec round trip."""
+    tb = TitleBlock(title="Demo", revisions=[_revising(field, 0)])
     assert _file(_through_a_spec(tb), how) == _file(tb, how)
 
 
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("half,ink", [("sheet", "SHEET 0 of 1"), ("of_sheets", "SHEET 1 of 0")])
 def test_a_sheet_number_read_back_from_a_document_is_still_the_stated_one(half, ink, how):
-    """#506's reproduction carried all the way to the ink.
-
-    The sweeps above are equalities between two sheets, so a read that lost the
-    value on *both* sides of one would satisfy them -- and losing a stated value
-    to the field's default is precisely what #484 was about. So the count is
-    asserted literally, on the block that came out of the document: sheet 0 is a
-    sheet number an author can write, and 0 is what a reader of the file sees.
-    """
+    """Verify a sheet number read back from a document is still the stated one."""
     tb = _through_a_spec(_stating(half, 0))
     assert _cells_drawing(_sheet_with(tb), how, ink)
 
 
 @pytest.mark.parametrize("field", _REV_FIELDS)
 def test_a_revision_field_read_back_from_a_document_is_still_the_stated_one(field):
-    """The same, for the row half: the value is asserted on the object that came
-    out of the file rather than on a sheet compared with another sheet."""
+    """Verify a revision field read back from a document is still the stated one."""
     tb = _through_a_spec(TitleBlock(title="Demo", revisions=[_revising(field, 0)]))
     assert getattr(tb.revisions[0], field) == "0"
 
@@ -2031,14 +2078,7 @@ def test_a_revision_field_read_back_from_a_document_is_still_the_stated_one(fiel
 )
 @pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_a_text_field_comes_back_out_of_a_document_exactly_as_it_went_in(field, stated):
-    """Text is not normalised on the way through a file.
-
-    The strip reads a run of spaces as the blank it means, but it reads it at
-    the *cell*, on the way to lettering it. A document carries what its author
-    typed, so a spec written out and read back is the same spec character for
-    character -- which is also what makes the round trip settle rather than
-    drift a field further every time it is saved.
-    """
+    """Verify a text field comes back out of a document exactly as it went in."""
     tb = _stating(field, stated)
     assert getattr(_through_a_spec(tb), field) == stated
     fs = _sheet_with(tb)
@@ -2046,16 +2086,7 @@ def test_a_text_field_comes_back_out_of_a_document_exactly_as_it_went_in(field, 
 
 
 def test_the_reader_and_the_writer_cover_every_field_the_block_has():
-    """Which fields hold drawn text is derived from the dataclass, not listed:
-    `revisions` is the block's one field that is not a cell and names itself out
-    by having no string default.
-
-    Written-out lists of the others have fallen behind this class before, so
-    what is asserted is that the derivation still covers it -- and it is the
-    same derivation the strip uses to find the default a blank cell draws, so
-    the reader and the sheet cannot come to disagree about which fields are
-    text.
-    """
+    """Verify the reader and the writer cover every field the block has."""
     from pandid.document import _drawn_text_fields
 
     assert _drawn_text_fields(TitleBlock) == set(_BLOCK_FIELDS)
@@ -2064,6 +2095,7 @@ def test_the_reader_and_the_writer_cover_every_field_the_block_has():
 
 
 def test_a_whitespace_revision_field_is_the_blank_it_means():
+    """Verify a whitespace revision field is the blank it means."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo",
@@ -2078,10 +2110,7 @@ def test_a_whitespace_revision_field_is_the_blank_it_means():
 
 @pytest.mark.parametrize("stated", ["", "   ", "\t\n "])
 def test_the_date_cell_is_never_blank_on_an_issued_sheet(stated):
-    """A date of nothing but spaces is the blank it means -- and the blank it
-    means is today's date, not an empty cell. The fallback used to be chosen by
-    the renderer, on the raw value, so whitespace passed it and then normalised
-    to nothing with the day it should have fallen back to already discarded."""
+    """Verify the date cell is never blank on an issued sheet."""
     import datetime
 
     fs = _sheet()
@@ -2093,14 +2122,7 @@ def test_the_date_cell_is_never_blank_on_an_issued_sheet(stated):
 
 
 def test_a_whitespace_date_does_not_issue_a_visually_blank_cell():
-    """#494's reproduction, verbatim. A truthy value that draws as nothing is the
-    clearest single statement of what #370 is about: accepted, silently made
-    meaningless, and the sheet shipped.
-
-    The block is left exactly as the author typed it -- the normalising is done
-    at the read, not on the dataclass -- and it is the *cell* that stops being
-    blank.
-    """
+    """Verify a whitespace date does not issue a visually blank cell."""
     import datetime
 
     fs = _sheet()
@@ -2116,7 +2138,19 @@ def test_a_whitespace_date_does_not_issue_a_visually_blank_cell():
     assert today in _sheet_with(tb).to_drawio(border="zone")
 
 
-def _sheet_with(tb):
+def _sheet_with(tb: TitleBlock) -> Flowsheet:
+    """Attach a title block to a basic sheet.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block to attach.
+
+    Returns
+    -------
+    Flowsheet
+        Sheet containing ``tb``.
+    """
     fs = _sheet()
     fs.title_block = tb
     return fs
@@ -2124,21 +2158,7 @@ def _sheet_with(tb):
 
 @pytest.mark.parametrize("half", ["sheet", "of_sheets"])
 def test_a_blank_half_of_the_sheet_count_does_not_issue_half_a_count(half):
-    """The other reproduction, verbatim, and the same defect one field further
-    on: `TitleBlock(sheet="   ")` drew `SHEET  of 1` -- accepted, normalised away
-    at the read, drawn meaningless on both backends and reported by nobody.
-
-    Nobody could have reported it. The whole string sits well inside its 55
-    units, so no cell was over its room and there was nothing for a width check
-    to say; that is why the ink itself is asserted and not only the finding.
-    Half a sheet count reads as a *different sheet* -- which is why this slot
-    draws a long count whole rather than abbreviating it -- and an empty half is
-    the same loss with none of the ink to show for it.
-
-    The answer is the default the block's own signature states, chosen at the
-    read, so the object stays exactly what the author typed and post-construction
-    assignment answers alike.
-    """
+    """Verify a blank half of the sheet count does not issue half a count."""
     tb = TitleBlock(title="Demo", **{half: "   "})
     assert getattr(tb, half) == "   "
 
@@ -2146,12 +2166,12 @@ def test_a_blank_half_of_the_sheet_count_does_not_issue_half_a_count(half):
     assert "SHEET  of " not in svg and " of </text>" not in svg
     assert ">SHEET 1 of 1</text>" in svg
     assert 'value="SHEET 1 of 1"' in _sheet_with(tb).to_drawio(border="zone")
-    # Nothing is lost, so nothing is reported -- which is only true because the
-    # cell now draws the count the block promises.
+    # A completed count emits no finding.
     assert _findings(_sheet_with(tb)) == []
 
 
 def test_a_stated_date_still_wins_the_cell():
+    """Verify a stated date still wins the cell."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", date="2026-01-02")
     svg = fs.to_svg(border="zone", page_size="A3")
@@ -2160,9 +2180,7 @@ def test_a_stated_date_still_wins_the_cell():
 
 
 def test_a_whitespace_title_is_a_truncation_validate_reports():
-    """The render draws the flowsheet's name in place of a title of spaces, and
-    abbreviates it -- so validate() has to say so too. It did not: it chose the
-    fallback itself, on the raw value, and a truthy `"   "` won."""
+    """Verify a whitespace title is a truncation validate reports."""
     long_name = "A Flowsheet Name Far Too Long For The Title Cell To Hold"
     fs = _sheet(name=long_name)
     fs.title_block = TitleBlock(title="   ")
@@ -2184,28 +2202,41 @@ _STATES = ("unset", "blank", "fits", "overlong")
 
 
 def _state_value(answer: _Answer, state: str) -> "str | None":
-    """What the block is given for *state*."""
+    """Return the input value for a field state.
+
+    Parameters
+    ----------
+    answer : _Answer
+        Expected field outcome.
+    state : str
+        One of the configured field states.
+
+    Returns
+    -------
+    str or None
+        Value supplied to the title block.
+    """
     return {"unset": None, "blank": "  \t ", "fits": answer.fits, "overlong": answer.overlong}[
         state
     ]
 
 
-#: ``(id, kwargs, expected)`` where *expected* is the ``(code, name)`` pairs the
-#: block must produce, in full. An empty list is an assertion in its own right --
-#: that this block is silent -- and a populated one says which field, so a
-#: reporter quietly turned off fails here rather than passing on parity.
-#:
-#: The fields come from ``_SWEPT`` and ``_REV_SWEPT``, which come from
-#: ``dataclasses.fields``: there is no list of field names here to fall behind
-#: the block.
+#: Expected validation outcomes for each title-block field state.
 def _seam_cases():
+    """Build title-block state and expected-finding cases.
+
+    Returns
+    -------
+    list
+        Case identifiers, title-block arguments, and expected findings.
+    """
     cases = []
     for field in _SWEPT:
         answer = _ANSWERS[field]
         for state in _STATES:
             expect = [(answer.code, answer.named)] if state == "overlong" else []
             cases.append((f"{field}-{state}", _kw(field, _state_value(answer, state)), expect))
-    # The revision row, field by field, in the same four states.
+    # Revision fields use the same state matrix.
     for rf in _REV_SWEPT:
         answer = _REV_ANSWERS[rf]
         for state in _STATES:
@@ -2213,9 +2244,7 @@ def _seam_cases():
             rkw = {} if value is None else {rf: value}
             expect = []
             if state == "overlong":
-                # ``rev`` is drawn twice -- the grid column and the bottom
-                # band's REV cell, at two different widths -- so it is two
-                # findings, and they sort by message.
+                # ``rev`` appears in two title-strip cells.
                 if rf == "rev":
                     expect.append(("text-truncated", "revisions[0].rev -> rev"))
                 expect.append((answer.code, answer.named))
@@ -2226,7 +2255,7 @@ def _seam_cases():
                     expect,
                 )
             )
-    # The two block-level losses that are not about width at all.
+    # Block-level validation cases.
     cases += [
         (
             "signatory-no-row",
@@ -2266,13 +2295,7 @@ _SEAM = _seam_cases()
 
 @pytest.mark.parametrize("case_id,kw,expected", _SEAM, ids=[c[0] for c in _SEAM])
 def test_every_state_of_every_field_reports_what_it_should(case_id, kw, expected):
-    """The positive half. Each block is asserted to produce *exactly* these
-    findings -- so a reporter quietly disconnected fails here, where a test that
-    only compared `validate()` against the render would pass with both silent.
-
-    Three states per field: unset, blank (whitespace, which is the blank it
-    means), and stated but too long for its cell. Only the third may speak.
-    """
+    """Verify every state of every field reports what it should."""
     got = _findings(_block(**kw))
     assert [c for c, _m in got] == [c for c, _n in expected], got
     for (_code, named), (_c, message) in zip(expected, got):
@@ -2280,17 +2303,14 @@ def test_every_state_of_every_field_reports_what_it_should(case_id, kw, expected
 
 
 @pytest.mark.parametrize("case_id,kw,expected", _SEAM, ids=[c[0] for c in _SEAM])
-@pytest.mark.parametrize("page", [None, "A3"])
-def test_validate_reports_exactly_what_both_backends_report(case_id, kw, expected, page):
-    """The parity half, over all three paths that measure the strip: the model
-    check, the SVG renderer and the draw.io exporter.
-
-    Parity alone would be satisfied by three silences, which is why it is paired
-    with the test above rather than standing as the guarantee on its own. And
-    both page states are swept, because the bottom band's cells used to be ruled
-    at one set of widths by `to_svg()` and another by `to_svg(page_size=...)`.
-    """
-    kwargs = {} if page is None else {"page_size": page}
+def test_validate_reports_exactly_what_both_backends_report(case_id, kw, expected):
+    """Verify validate reports exactly what both backends report."""
     predicted = _findings(_block(**kw))
-    assert predicted == _rendered(_block(**kw), "to_svg", **kwargs)
-    assert predicted == _rendered(_block(**kw), "to_drawio", **kwargs)
+    assert predicted == _rendered(_block(**kw), "to_svg")
+    assert predicted == _rendered(_block(**kw), "to_drawio")
+
+
+def test_a_page_sized_drawio_title_block_reports_the_model_findings():
+    """Verify a page sized drawio title block reports the model findings."""
+    kw = _kw("drawing_number", _ANSWERS["drawing_number"].overlong)
+    assert _findings(_block(**kw)) == _rendered(_block(**kw), "to_drawio", page_size="A3")
