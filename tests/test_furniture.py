@@ -10,9 +10,7 @@ total :func:`~pandid.render.furniture.draw_table` keeps as it walks the
 columns. A column whose widest cell is 5 characters is 48,1 units wide, and
 half of that -- where a centred cell's text-anchor lands -- is an exact
 ``.1f`` rounding tie, so the same sheet drew 0,1 unit differently depending
-only on which Python drew it. See issue #334, and the golden fixture
-``tests/golden/19_absorber_stripper.svg``, which used to work around it by
-choosing headers off the tie.
+only on which Python drew it. See issue #334.
 """
 
 import builtins

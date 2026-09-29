@@ -351,32 +351,30 @@ nozzles that do own a face, and equipment nozzles are never faceless.
 
 ## 3. Goldens: a changed golden means changed rendering
 
-`tests/golden/*.svg` are committed SVG fixtures, one per fixed scenario, and
-`tests/test_golden.py` renders each scenario and compares. They are *source*,
-not build output, which is why `.gitignore`'s blanket `*.svg` rule carries a
-`!tests/golden/*.svg` negation.
+`tests/golden/*.svg` are five representative committed SVG fixtures.
+`tests/test_golden.py` renders and compares those scenarios; gallery tests
+render every example and compare it directly with `docs/gallery/`. The fixtures
+are source, not build output, which is why `.gitignore`'s blanket `*.svg` rule
+carries a `!tests/golden/*.svg` negation.
 
 The comparison uses `normalize` in `tests/_svg_compare.py` to sort `<defs>`
 and remove fenced renderer provenance. Geometry, visible labels and title-block
 fields compare verbatim.
 
-After an *intentional* rendering change:
+After an intentional rendering change:
 
 ```bash
+python scripts/gallery.py
 PANDID_UPDATE_GOLDEN=1 python -m pytest tests/test_golden.py -q
 ```
 
-(on Windows PowerShell: `$env:PANDID_UPDATE_GOLDEN=1; python -m pytest tests/test_golden.py -q`)
+(on Windows PowerShell: `python scripts/gallery.py; $env:PANDID_UPDATE_GOLDEN=1; python -m pytest tests/test_golden.py -q`)
 
-Then **read `git diff tests/golden/` before committing**. A golden diff is the
-diagram changing for every user, so the PR has to say what changed and why, with
-the before/after visible. "the test was red" is not a reason. If you cannot
-explain the diff, you have found a bug, not a golden that needed updating.
+Then inspect `git diff tests/golden/ docs/gallery/` before committing. Explain
+every drawing change in the commit or PR description.
 
-`tests/golden/README.md` describes how `scripts/gallery.py` captures the examples
-without writing files and stamps blank dates from their revision history. Each
-example is rendered against its golden once; the committed gallery SVG is then
-compared to that golden. Read it before adding a scenario.
+`tests/golden/README.md` describes fixture selection and regeneration. Read it
+before changing a golden scenario.
 
 ## 4. Port geometry goes through `pandid/portgeom.py`
 

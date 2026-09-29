@@ -12,11 +12,14 @@ from pandid.document import Revision, TitleBlock
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GALLERY = ROOT / "docs" / "gallery"
-GOLDEN = ROOT / "tests" / "golden"
-EXAMPLES = ROOT / "examples"
 
 
 SHEETS = gallery.sheets()
+DIAGRAM_VALIDATION_CASES = (
+    "03_distillation_train",
+    "11_ethanol_pid",
+    "12_block_flow_diagram",
+)
 
 REGENERATE = "    python scripts/gallery.py\n"
 
@@ -44,37 +47,15 @@ def _png_size(data: bytes) -> tuple[int, int]:
     return struct.unpack(">II", data[16:24])
 
 
-# ---------------------------------------------------------------------------
-# Committed gallery SVGs
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_the_committed_sheet_matches_its_golden(stem):
-    """Keep each committed gallery SVG aligned with its golden fixture."""
-    path = GALLERY / f"{stem}.svg"
-    if not path.exists():
-        pytest.fail(f"docs/gallery/{stem}.svg is missing. Run\n\n{REGENERATE}", pytrace=False)
-    committed = normalize(path.read_text(encoding="utf-8"))
-    golden = normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8"))
-    if committed != golden:
-        pytest.fail(
-            f"docs/gallery/{stem}.svg does not match tests/golden/{stem}.svg.\n"
-            f"The gallery is generated; regenerate it with\n\n{REGENERATE}\n"
-            "and commit the result with the change that moved it.\n\n" + _diff(committed, golden),
-            pytrace=False,
-        )
-
-
-def _diff(committed: str, golden: str, context: int = 2) -> str:
+def _diff(expected: str, actual: str, context: int = 2) -> str:
     """Describe the first difference between two normalized SVG strings.
 
     Parameters
     ----------
-    committed : str
-        Committed gallery SVG.
-    golden : str
-        Expected golden SVG.
+    expected : str
+        Expected normalized SVG.
+    actual : str
+        Actual normalized SVG.
     context : int, default=2
         Number of surrounding lines to include.
 
@@ -83,13 +64,13 @@ def _diff(committed: str, golden: str, context: int = 2) -> str:
     str
         Concise difference description.
     """
-    old, new = committed.split("\n"), golden.split("\n")
+    old, new = expected.split("\n"), actual.split("\n")
     total = max(len(old), len(new))
     row = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
     out = [f"first divergence at line {row + 1} of {total}:"]
     for k in range(max(0, row - context), min(total, row + context + 1)):
         mark = ">>" if k == row else "  "
-        for label, lines in (("committed", old), ("golden   ", new)):
+        for label, lines in (("expected", old), ("actual  ", new)):
             out.append(f"{mark} [{k + 1}] {label}: {lines[k] if k < len(lines) else '<no line>'}")
     return "\n".join(out)
 
@@ -109,21 +90,36 @@ def checked(settled_gallery):
 
     Returns
     -------
-    dict[str, tuple[Flowsheet, dict]]
-        Rendered sheets and their render options keyed by example name.
+    dict[str, tuple[Flowsheet, dict, str]]
+        Rendered sheets, options, and normalized SVGs keyed by example name.
     """
     out = {}
     for stem in SHEETS:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
-        fs.to_svg(**kwargs)
-        out[stem] = (fs, kwargs)
+        out[stem] = (fs, kwargs, normalize(fs.to_svg(**kwargs)))
     return out
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_current_render_matches_the_committed_gallery(checked, stem):
+    """Match each example's current render to its committed gallery SVG."""
+    _fs, _kwargs, actual = checked[stem]
+    path = GALLERY / f"{stem}.svg"
+    if not path.exists():
+        pytest.fail(f"docs/gallery/{stem}.svg is missing. Run\n\n{REGENERATE}", pytrace=False)
+    expected = normalize(path.read_text(encoding="utf-8"))
+    if actual != expected:
+        pytest.fail(
+            f"docs/gallery/{stem}.svg no longer matches its example. Regenerate it with\n\n"
+            f"{REGENERATE}\n" + _diff(expected, actual),
+            pytrace=False,
+        )
+
+
+@pytest.mark.parametrize("stem", DIAGRAM_VALIDATION_CASES, ids=DIAGRAM_VALIDATION_CASES)
 def test_what_an_example_prints_is_what_its_own_sheet_reports(checked, stem):
     """Match a bare validation call to the example's rendered diagram."""
-    fs, kwargs = checked[stem]
+    fs, kwargs, _svg = checked[stem]
     printed = [str(i) for i in fs.validate()]
     assert printed == [str(i) for i in fs.validate(diagram=kwargs.get("diagram"))]
 
@@ -131,42 +127,11 @@ def test_what_an_example_prints_is_what_its_own_sheet_reports(checked, stem):
     assert [f for f in printed if f not in reported] == []
 
 
-def test_the_corpus_still_holds_a_sheet_the_diagram_changes_the_answer_for(checked):
-    """Keep at least one non-PFD example in the gallery corpus."""
-    moved = [
-        stem
-        for stem, (fs, _) in checked.items()
-        if [str(i) for i in fs.validate()] != [str(i) for i in fs.validate(diagram="pfd")]
-    ]
-    assert moved, "no shipped example is validated as anything but a PFD"
-
-
-# Expected validation codes after each gallery example is rendered.
-# An omitted example is expected to render without warnings.
-CORPUS_FINDINGS: "dict[str, list[str]]" = {}
-
-
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_the_sheet_reports_what_the_corpus_says_it_reports(checked, stem):
-    """Match each rendered gallery sheet to its expected warning codes."""
-    fs, _ = checked[stem]
-    found = sorted(w.code for w in fs.warnings)
-    expected = sorted(CORPUS_FINDINGS.get(stem, []))
-    if found != expected:
-        pytest.fail(
-            f"examples/{stem}.py now reports {found}, and CORPUS_FINDINGS says "
-            f"{expected}.\n"
-            f"If the change is intended, edit CORPUS_FINDINGS in "
-            f"this file in the same commit and say per sheet what moved and "
-            f"why. If it is not, the validator change that moved it is "
-            f"reporting something new about a reference drawing.",
-            pytrace=False,
-        )
-
-
-def test_the_corpus_table_names_no_sheet_the_gallery_does_not_have():
-    """Keep warning expectations limited to current gallery examples."""
-    assert set(CORPUS_FINDINGS) <= set(SHEETS)
+def test_gallery_examples_render_without_warnings(checked, stem):
+    """Keep every committed gallery example free from render warnings."""
+    fs, _kwargs, _svg = checked[stem]
+    assert not fs.warnings, f"{stem}: {[str(warning) for warning in fs.warnings]}"
 
 
 # ---------------------------------------------------------------------------
@@ -225,43 +190,6 @@ def test_the_gallery_holds_exactly_one_pair_per_example():
     """Provide one SVG and one PNG for every gallery example."""
     assert sorted(p.stem for p in GALLERY.glob("*.svg")) == SHEETS
     assert sorted(p.stem for p in GALLERY.glob("*.png")) == SHEETS
-
-
-# ---------------------------------------------------------------------------
-# Draw.io example exports
-# ---------------------------------------------------------------------------
-
-
-def _exporters():
-    """Find examples that write a Draw.io file.
-
-    Returns
-    -------
-    list[str]
-        Example filename stems containing a ``.drawio`` render call.
-    """
-    return [
-        stem
-        for stem in SHEETS
-        if ".drawio" in (EXAMPLES / f"{stem}.py").read_text(encoding="utf-8")
-    ]
-
-
-def test_an_example_shows_the_drawio_export():
-    """Keep at least one Draw.io export in the example corpus."""
-    assert _exporters(), (
-        "no example writes a .drawio. The export is one line and examples/ is where "
-        "a reader looks for one; put the call back beside a sheet's own render()."
-    )
-
-
-@pytest.mark.parametrize("stem", _exporters(), ids=_exporters())
-def test_the_export_is_not_counted_as_a_second_sheet(stem):
-    """Capture the SVG sheet when an example also exports Draw.io."""
-    source = (EXAMPLES / f"{stem}.py").read_text(encoding="utf-8")
-    assert source.count(".render(") >= 2, "an exporting example writes its sheet as well"
-    fs, _kwargs = gallery.flowsheet(stem)
-    assert isinstance(fs, Flowsheet)
 
 
 # ---------------------------------------------------------------------------

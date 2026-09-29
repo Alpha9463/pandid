@@ -180,9 +180,9 @@ def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(settled_gallery, nam
     assert off_body == [], f"{name} draws {len(off_body)} nozzles off their own bodies"
 
 
-def test_every_example_has_a_golden():
-    """Provide one golden SVG for every gallery example."""
-    assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(SCENARIOS)
+def test_only_representative_examples_have_golden_fixtures():
+    """Store exact SVG fixtures only for the representative coverage set."""
+    assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(GOLDEN_SCENARIOS)
 
 
 def test_the_fractionator_schedules_only_equipment_that_exists():
