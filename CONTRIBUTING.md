@@ -352,9 +352,8 @@ nozzles that do own a face, and equipment nozzles are never faceless.
 ## 3. Goldens: a changed golden means changed rendering
 
 `tests/golden/*.svg` are five representative committed SVG fixtures.
-`tests/test_golden.py` renders and compares those scenarios; gallery tests
-render every example and compare it directly with `docs/gallery/`. The fixtures
-are source, not build output, which is why `.gitignore`'s blanket `*.svg` rule
+`tests/test_golden.py` renders and compares those scenarios. The fixtures are
+source, not build output, which is why `.gitignore`'s blanket `*.svg` rule
 carries a `!tests/golden/*.svg` negation.
 
 The comparison uses `normalize` in `tests/_svg_compare.py` to sort `<defs>`
@@ -424,10 +423,9 @@ them by `scripts/gallery.py`, as `docs/gallery/README.md` describes:
 python scripts/gallery.py
 ```
 
-`tests/test_gallery.py` holds the committed sheets to a fresh render, the same
-way `_vendored_symbols.py` and `pandid/devices.py` are held to their generators,
-so a rendering change that moves a sheet turns the suite red until the gallery
-is rebuilt and committed with it. If you add an example, run that command and
+`tests/test_gallery.py` checks the gallery asset inventory, dimensions, and
+generator safeguards. Regenerate and review gallery images when an example or
+rendering change affects them. If you add an example, run that command and
 commit its two files in the same PR, add a section for it to
 `docs/gallery/README.md`, and consider adding the scenario to
 `tests/test_golden.py`.
