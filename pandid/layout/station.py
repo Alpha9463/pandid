@@ -130,7 +130,8 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
         ):
             return False
         if pin is not None and any(
-            getattr(pin, axis) is not None and getattr(frame, axis) != getattr(pin, axis)
+            getattr(pin, axis) is not None
+            and abs(getattr(frame, axis) - getattr(pin, axis)) > 1e-6
             for axis in ("x", "y")
         ):
             return False
@@ -142,6 +143,54 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
             if right + 8 > o_left and o_right + 8 > left and bottom + 8 > o_top and o_bottom + 8 > top:
                 return False
     return True
+
+
+def _anchored_origin(assembly: StationAssembly, preferred_left: float,
+                     centerline: float, mirrored: bool) -> tuple[float, float] | None:
+    """Derive a station origin from its exact member coordinates.
+
+    Parameters
+    ----------
+    assembly : StationAssembly
+        Station whose member pins constrain its footprint.
+    preferred_left, centerline : float
+        Unconstrained station origin on the host corridor.
+    mirrored : bool
+        Whether the station runs right to left.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Compatible footprint origin, or ``None`` for conflicting pins.
+    """
+    base = _station_frames(assembly, 0.0, 0.0, mirrored)
+    left, y = preferred_left, centerline
+    pinned_x: float | None = None
+    pinned_y: float | None = None
+    for unit, frame in base.items():
+        pin = unit.pin_
+        if pin is None:
+            continue
+        if pin.col is not None or pin.row is not None:
+            return None
+        if (frame.orientation != pin.orientation or frame.mirrored != pin.mirrored
+                or frame.mirror_y != pin.mirror_y):
+            return None
+        if pin.x is not None:
+            candidate_x = pin.x - frame.x
+            if pinned_x is not None and abs(candidate_x - pinned_x) > 1e-6:
+                return None
+            pinned_x = candidate_x
+        if pin.y is not None:
+            candidate_y = pin.y - frame.y
+            if pinned_y is not None and abs(candidate_y - pinned_y) > 1e-6:
+                return None
+            pinned_y = candidate_y
+    if pinned_x is not None:
+        left = pinned_x
+    if pinned_y is not None:
+        y = pinned_y
+    return left, y
 
 
 def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
@@ -219,7 +268,7 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
 
 
 def place_stations(fs: Flowsheet) -> int:
-    """Move feasible unpinned stations onto their external material runs.
+    """Move feasible stations together around their member pins.
 
     Parameters
     ----------
@@ -285,11 +334,22 @@ def place_stations(fs: Flowsheet) -> int:
             fraction = assembly.at if assembly.at is not None else 0.5
             target = start[0] + fraction * (end[0] - start[0])
             left = min(max(target - width / 2, low + 8), high - width - 8)
-            frames = _station_frames(assembly, left, centerline, mirrored)
+            origin = _anchored_origin(assembly, left, centerline, mirrored)
+            if origin is None or not low + 8 <= origin[0] <= high - width - 8:
+                break
+            frames = _station_frames(assembly, *origin, mirrored)
             if not _fits(frames, obstacles) or any(
                 not _separated(frames, earlier) for earlier in proposed
             ):
                 break
+            for unit, frame in frames.items():
+                pin = unit.pin_
+                if pin is not None and (pin.x is not None or pin.y is not None):
+                    frames[unit] = replace(
+                        frame,
+                        x=pin.x if pin.x is not None else frame.x,
+                        y=pin.y if pin.y is not None else frame.y,
+                    )
             proposed.append(frames)
         if len(proposed) != len(group):
             continue

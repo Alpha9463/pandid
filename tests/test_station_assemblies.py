@@ -501,6 +501,48 @@ def test_station_member_pin_remains_exact() -> None:
     fs.layout()
     assert station.control.frame is not None
     assert (station.control.frame.x, station.control.frame.y) == (750, 150)
+    main = [
+        unit
+        for unit in station.members
+        if unit not in (station.bypass, station.upstream_drain, station.downstream_drain)
+    ]
+    assert max(unit.frame.x for unit in main) - min(unit.frame.x for unit in main) < 600
+
+
+def test_feasible_member_pin_anchors_the_complete_station() -> None:
+    """Keep a station compact around an exact control-valve position.
+
+    Returns
+    -------
+    None
+        Every main member follows the pinned control on the host run.
+    """
+    fs = Flowsheet("Pinned station assembly")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
+    product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=300)
+    station = fs.add_valve_station("CV-1")
+    station.control.pin(x=700, y=287.75)
+    fs.connect(feed.outlet, station.inlet)
+    fs.connect(station.outlet, product.inlet)
+
+    fs.route()
+
+    assert station.control.frame is not None
+    assert (station.control.frame.x, station.control.frame.y) == (700, 287.75)
+    main = [
+        unit
+        for unit in station.members
+        if unit not in (station.bypass, station.upstream_drain, station.downstream_drain)
+    ]
+    assert max(unit.frame.x for unit in main) - min(unit.frame.x for unit in main) < 600
+    run_y = port_point(station.control, station.control.frame, "inlet")[1]
+    assert run_y == pytest.approx(300, abs=1)
+    for unit in main:
+        assert unit.frame is not None
+        assert port_point(unit, unit.frame, "inlet")[1] == pytest.approx(run_y)
+        assert port_point(unit, unit.frame, "outlet")[1] == pytest.approx(run_y)
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
 
 
 def test_station_member_nearby_pin_remains_exact_after_render() -> None:

@@ -101,6 +101,36 @@ def _on_corridor(
             and (outlet[axis] - inlet[axis]) * forward > 0)
 
 
+def _crosses_corridor(
+    unit: Unit, candidate: Frame, direction: tuple[int, int], ordinate: float,
+) -> bool:
+    """Check whether a turned device forms a jog through the host leg.
+
+    Parameters
+    ----------
+    unit : Unit
+        Inline device to inspect.
+    candidate : Frame
+        Proposed geometry.
+    direction : tuple[int, int]
+        Host run's axis and flow direction.
+    ordinate : float
+        Coordinate perpendicular to the host flow.
+
+    Returns
+    -------
+    bool
+        Whether the device's ports straddle the host centerline.
+    """
+    inlet = port_point(unit, candidate, "inlet")
+    outlet = port_point(unit, candidate, "outlet")
+    axis = 0 if direction[0] else 1
+    cross = 1 - axis
+    return (abs(inlet[axis] - outlet[axis]) < 1.0
+            and min(inlet[cross], outlet[cross]) < ordinate
+            < max(inlet[cross], outlet[cross]))
+
+
 def place_inline(fs: Flowsheet, *, allow_elbows: bool = False) -> set[Unit]:
     """Resolve preferred inline positions along equipment run legs.
 
@@ -209,7 +239,10 @@ def place_inline(fs: Flowsheet, *, allow_elbows: bool = False) -> set[Unit]:
                          ordinate if horizontal else
                          start[1] + fraction * (end[1] - start[1]))
                 candidate = _candidate(unit, point, orientation)
-                if not _on_corridor(unit, candidate, direction, ordinate):
+                if not (_on_corridor(unit, candidate, direction, ordinate)
+                        or (pin is not None and _crosses_corridor(
+                            unit, candidate, direction, ordinate
+                        ))):
                     continue
                 inlet = port_point(unit, candidate, "inlet")
                 outlet = port_point(unit, candidate, "outlet")

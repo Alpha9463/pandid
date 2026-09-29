@@ -214,7 +214,7 @@ def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
     feed_a = fs.add(Feed("Feed A"))
     product_a = fs.add(Product("Product A"))
     run = fs.connect(feed_a.outlet, product_a.inlet)
-    fs.place_on(run, Valve("HV-A").pin(orientation=90), at=0.5)
+    fs.place_on(run, Valve("HV-A").pin(orientation=180), at=0.5)
 
     feed_b = fs.add(Feed("Feed B"))
     valve_b = fs.add(Valve("HV-B"))
@@ -225,6 +225,32 @@ def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
 
     fs.layout()
     assert fs._coarse_layout_candidate is False
+
+
+def test_rotation_only_pin_places_inline_valve_on_its_host_run() -> None:
+    """Keep a rotated valve at its requested fraction of the host run.
+
+    Returns
+    -------
+    None
+        The valve remains on the material path with its turn respected.
+    """
+    fs = Flowsheet("Rotated inline valve")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100)
+    product = fs.add(Product("Product")).pin(port="inlet", x=900, y=100)
+    run = fs.connect(feed.outlet, product.inlet)
+    valve = fs.place_on(run, Valve("V").pin(orientation=90), at=0.5)
+
+    fs.layout()
+    assert fs._coarse_layout_candidate is True
+    fs.route()
+
+    assert valve.frame is not None
+    assert valve.frame.orientation == 90
+    assert valve.frame.cx == pytest.approx(500)
+    assert valve.frame.cy == pytest.approx(100)
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
 
 
 def test_adjacent_logical_runs_use_their_own_fractions() -> None:
