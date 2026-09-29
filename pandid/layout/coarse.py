@@ -586,7 +586,8 @@ def _crossing_repair_moves(fs: Flowsheet, pairs: frozenset[tuple[int, int]],
             material, signal = second, first
         else:
             continue
-        if material.route is None or signal.route is None:
+        if (material.route is None or signal.route is None
+                or len(signal.route.waypoints) < 2):
             continue
         verticals = [(a, b) for a, b, axis in waypoint_segments(material.route.waypoints)
                      if axis == "v"]

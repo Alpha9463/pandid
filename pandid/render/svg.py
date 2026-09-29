@@ -11,6 +11,7 @@ from pandid.render.escape import escaped, ident
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.render.weights import LineWeight
+from pandid.route_geometry import stream_polyline
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -1212,42 +1213,6 @@ def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
         if rank < score:
             best, score = lead, rank
     return best, score[0]
-
-
-def stream_polyline(s) -> "list[tuple[float, float]]":
-    """Every point a stream's line is drawn through, ends included.
-
-    The route's waypoints are the middle of the answer and not the whole
-    of it: a route runs between two *anchors* on the units' bounding
-    boxes, and what gets drawn runs between the two nozzles those
-    anchors stand for. So the ends come from
-    :func:`~pandid.portgeom.port_point` and the waypoints go in between.
-
-    Collinear middle points are dropped. The router emits a point per
-    grid step it turned at, and three points on one straight length are
-    harmless as ink but not as *structure*: every consumer downstream
-    asks how long a segment is -- the stream label picks the longest to
-    write itself in, a draw.io edge carries one waypoint per real turn
-    -- and a run chopped into pieces answers wrongly.
-
-    Lifted out of the SVG renderer so the draw.io exporter draws the
-    same line rather than a second opinion about it.
-    """
-    from pandid.portgeom import port_point
-
-    src_u, dst_u = s.source.owner, s.dest.owner
-    start = port_point(src_u, src_u.frame, s.source.name)
-    end = port_point(dst_u, dst_u.frame, s.dest.name)
-    points = [start] + list(s.route.waypoints if s.route and s.route.waypoints else []) + [end]
-
-    simplified = [points[0]]
-    for i in range(1, len(points) - 1):
-        p_prev, p_curr, p_next = simplified[-1], points[i], points[i + 1]
-        if (p_prev[0] == p_curr[0] == p_next[0]) or (p_prev[1] == p_curr[1] == p_next[1]):
-            continue
-        simplified.append(p_curr)
-    simplified.append(points[-1])
-    return simplified
 
 
 class _Hop(NamedTuple):

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pandid.portgeom import resolve_port, unit_box
+from pandid.route_geometry import stream_polyline
 from pandid.routing.metrics import crossing_pairs
 
 if TYPE_CHECKING:
@@ -262,13 +263,7 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
         route = stream.route
         if route is None or stream.source.owner.frame is None or stream.dest.owner.frame is None:
             paths.append(None)
-        elif route.manual and stream.source.owner.frame and stream.dest.owner.frame:
-            start = resolve_port(
-                stream.source.owner, stream.source.owner.frame, stream.source.name
-            ).point
-            end = resolve_port(stream.dest.owner, stream.dest.owner.frame, stream.dest.name).point
-            paths.append([start, *route.waypoints, end])
         else:
-            paths.append(route.waypoints)
+            paths.append(stream_polyline(stream))
     conflicts.update(Conflict("crossing", streams=pair) for pair in crossing_pairs(paths))
     return tuple(sorted(conflicts))

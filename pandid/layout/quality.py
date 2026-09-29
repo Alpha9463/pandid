@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from pandid.layout.conflicts import Conflict, analyze_conflicts
 from pandid.portgeom import pin_intent, port_anchor, port_point
+from pandid.route_geometry import stream_polyline
 from pandid.routing.metrics import crossing_count, min_bends, path_length, real_bends
 
 if TYPE_CHECKING:
@@ -113,7 +114,13 @@ def measure_final(fs: Flowsheet) -> Quality:
     issues = fs.validate()
     codes = [issue.code for issue in issues]
     routes = [stream.route for stream in fs.streams]
-    paths = [route.waypoints for route in routes if route is not None]
+    drawn_paths = [
+        stream_polyline(stream)
+        if stream.route is not None and stream.source.owner.frame is not None
+        and stream.dest.owner.frame is not None else None
+        for stream in fs.streams
+    ]
+    paths = [path for path in drawn_paths if path is not None]
     conflicts = analyze_conflicts(fs)
     hard_conflicts = frozenset(conflict for conflict in conflicts if conflict.kind != "crossing")
     pairs = frozenset(
@@ -130,11 +137,11 @@ def measure_final(fs: Flowsheet) -> Quality:
 
     bends = 0
     excess = 0
-    for stream in fs.streams:
+    for stream, path in zip(fs.streams, drawn_paths):
         route = stream.route
-        if route is None or not route.waypoints:
+        if route is None or path is None:
             continue
-        actual = real_bends(route.waypoints)
+        actual = real_bends(path)
         bends += actual
         if route.manual:
             continue

@@ -103,6 +103,40 @@ def test_crossing_pairs_keep_indices_of_undrawn_streams() -> None:
     assert crossing_pairs(paths) == frozenset({(1, 2)})
 
 
+def test_manual_endpoint_legs_count_as_drawn_crossings() -> None:
+    """Measure crossings on the complete displayed manual paths.
+
+    Returns
+    -------
+    None
+        Crossing and length measurements match the rendered lines.
+    """
+    from pandid.render.svg import stream_polyline
+    from pandid.routing.metrics import crossing_count, path_length
+    from scripts.route_quality import find_crossings_and_overlaps
+
+    fs = Flowsheet("Manual crossing")
+    west = fs.add(Feed("West"))
+    east = fs.add(Product("East"))
+    north = fs.add(Feed("North"))
+    south = fs.add(Product("South"))
+    west.pin(port="outlet", x=100, y=250)
+    east.pin(port="inlet", x=400, y=250)
+    north.pin(port="outlet", x=250, y=100)
+    south.pin(port="inlet", x=250, y=400)
+    fs.connect(west.outlet, east.inlet).via([])
+    fs.connect(north.outlet, south.inlet).via([(250, 250)])
+    fs.layout()
+    fs.route()
+
+    paths = [stream_polyline(stream) for stream in fs.streams]
+    quality = measure_final(fs)
+    assert quality.crossings == crossing_count(paths) == 1
+    assert quality.crossing_pairs == frozenset({(0, 1)})
+    assert quality.length == sum(path_length(path) for path in paths) == 600
+    assert len(find_crossings_and_overlaps(fs)[0]) == 1
+
+
 def test_manual_waypoints_remain_authored_routes() -> None:
     """Keep a valid short manual path out of automatic conflicts.
 
