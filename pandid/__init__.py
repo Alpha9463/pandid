@@ -17,14 +17,8 @@ anyone who would rather qualify, and for the ``units.Kind(variant=...)`` escape
 hatch that reaches the drawings no class of their own is named for.
 
 The handles the topology hands back -- a :class:`~pandid.streams.Stream` from
-``connect()``, a :class:`~pandid.loops.Loop` from ``add_loop()`` -- are here for
-the same reason the classes are: ``docs/api.md`` names them, and a name the
-reference puts in a return position is a name the reader annotates with. The
-rule the reference and this list are held to, by
-``tests/test_documented_types.py``, is that a type the documentation names
-*bare* is importable from ``pandid``, and a type that is not is named with the
-module it lives in -- ``pandid.state.State``,
-``pandid.document.StreamTableOptions``, ``pandid.render.symbols.Symbol``.
+``connect()``, a :class:`~pandid.loops.Loop` from ``add_loop()`` -- are also
+available at the package root for imports and type annotations.
 """
 
 # The one place the version is written: hatchling reads this literal at build
@@ -73,9 +67,7 @@ from pandid.spec import SpecError
 # A list and not a star, because these modules are not the units/devices pair:
 # each holds internals beside the one or two classes the reference names, and a
 # star would export the module's whole namespace on every future addition.
-# tests/test_documented_types.py is what keeps the list in step -- it re-derives
-# the documented types from docs/api.md and fails on a name this list has not
-# caught up with.
+# tests/test_units_api.py checks these root bindings.
 from pandid.ports import Port
 from pandid.streams import Stream
 from pandid.geometry import Pin, Frame, Route

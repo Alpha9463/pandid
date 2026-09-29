@@ -1931,10 +1931,8 @@ def unrecognised_callables(namespaces: Mapping[str, Mapping[str, object]]) -> li
 def _surface_namespaces() -> dict[str, Mapping[str, object]]:
     """What a user imports: the package root, and the spec module beside it.
 
-    ``pandid.__all__`` is every name the reference tells a reader to import
-    bare -- ``tests/test_documented_types.py`` is what holds those two
-    together. ``pandid.spec`` is the second door, named in full by the
-    reference because it is not on the root.
+    ``pandid.__all__`` is the package's public root surface.
+    ``pandid.spec`` exposes the spec implementation separately.
     """
     return {
         "pandid": {name: getattr(pandid, name) for name in pandid.__all__},

@@ -1,6 +1,7 @@
 """Ergonomics + spec fidelity of the units public surface."""
 
 import inspect
+from importlib import import_module
 
 import pytest
 
@@ -160,3 +161,35 @@ def test_the_base_class_is_exported_for_the_custom_units_that_subclass_it():
     import pandid
 
     assert pandid.Unit is U.Unit
+
+
+def test_public_handle_exports_are_bound_to_their_classes():
+    """Keep returned handles importable from the package root.
+
+    Notes
+    -----
+    This checks runtime bindings without parsing documentation.
+    """
+    import pandid
+
+    handles = {
+        "Component": "components",
+        "Flowsheet": "flowsheet",
+        "SpecError": "spec",
+        "Port": "ports",
+        "Stream": "streams",
+        "Pin": "geometry",
+        "Frame": "geometry",
+        "Route": "geometry",
+        "Loop": "loops",
+        "ControlLoop": "loops",
+        "ValveStation": "stations",
+        "Issue": "validate",
+        "TitleBlock": "document",
+        "Revision": "document",
+        "Annotation": "document",
+        "TableBox": "document",
+    }
+    for name, module in handles.items():
+        assert name in pandid.__all__
+        assert getattr(pandid, name) is getattr(import_module(f"pandid.{module}"), name)

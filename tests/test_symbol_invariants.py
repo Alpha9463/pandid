@@ -3344,7 +3344,7 @@ def test_every_drawing_survives_being_scaled(name, svg):
 
     Two did: items 28.6 and 28.10, the propeller and the impeller, are the only
     vendored artwork drawn with a cubic, and ``Reactor(agitator="propeller")``
-    -- a spelling ``docs/api.md`` lists -- raised ``RuntimeError`` for every
+    raised ``RuntimeError`` for every
     author who tried it. The path table said in a comment that the library
     emitted no curve; the library had changed under it.
 
@@ -3362,8 +3362,8 @@ def test_every_drawing_survives_being_scaled(name, svg):
 def test_every_agitator_a_reactor_offers_can_be_drawn(agitator):
     """The bug above, from the side an author meets it.
 
-    ``docs/api.md`` lists ten names for ``agitator=``; two of them raised. A
-    name the documentation offers has to reach a sheet.
+    Every supported ``agitator=`` value must reach a rendered sheet; two
+    previously raised at render time.
     """
     from pandid import Flowsheet
 

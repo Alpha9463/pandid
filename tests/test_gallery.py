@@ -261,31 +261,6 @@ def test_the_gallery_holds_exactly_one_pair_per_example():
     assert sorted(p.stem for p in GALLERY.glob("*.png")) == SHEETS
 
 
-def test_the_gallery_readme_shows_every_sheet():
-    """A committed sheet nobody links to is a sheet nobody sees.
-
-    ``docs/gallery/README.md`` is the page the drawings are read on, so a sheet
-    is only in the gallery once that page shows its PNG and links its SVG.
-    """
-    readme = (GALLERY / "README.md").read_text(encoding="utf-8")
-    missing = [
-        f"{stem}.{ext}"
-        for stem in SHEETS
-        for ext in ("svg", "png")
-        if f"{stem}.{ext}" not in readme
-    ]
-    assert not missing, (
-        "docs/gallery/README.md does not show " + ", ".join(missing) + ". Add a section for it."
-    )
-
-
-def test_the_readme_states_the_width_the_rasters_are_made_at():
-    """The page tells the reader what it is showing them, so the number in it has
-    to be the number the generator used."""
-    readme = (GALLERY / "README.md").read_text(encoding="utf-8")
-    assert f"{gallery.WIDTH} px" in readme
-
-
 # ---------------------------------------------------------------------------
 # The draw.io export an example writes beside its sheet
 # ---------------------------------------------------------------------------

@@ -3074,7 +3074,7 @@ def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Sy
     the casing feeds and discharges on the same horizontal axis, which
     is an attitude rather than a functionality, and it is exactly the
     reasoning that already leaves ``dryer/default`` (the rotary drum)
-    off ``docs/api.md``'s marked-symbol table despite tumbling its
+    unmarked despite tumbling its
     solids under gravity too, and that leaves the belt and screw
     conveyors off it beside the drier group -- "a belt ... runs
     whichever way the plant needs". A caller passes ``True`` only where

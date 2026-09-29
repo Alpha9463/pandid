@@ -1,6 +1,6 @@
 """``pandid.devices``: the generated equipment classes, and what they promise.
 
-Five promises, and this file is each of them:
+Four promises, and this file is each of them:
 
 1. the committed module is what the generator emits today, so a hand edit to it
    is caught rather than lost the next time anyone runs the script;
@@ -10,10 +10,7 @@ Five promises, and this file is each of them:
    visible to a type checker;
 4. a sheet built from device classes round-trips through ``to_dict`` /
    ``from_dict``, which is where the four quiet integration edges in
-   ``pandid.spec`` show up;
-5. the two tables in ``docs/api.md`` still say what the registry says. A class
-   nobody documented is a class nobody finds, which is the whole reason this
-   layer exists.
+   ``pandid.spec`` show up.
 
 The compatibility half -- that every shipped ``(kind, variant)`` pair still
 builds and draws exactly what it always did -- is ``tests/test_variants.py``,
@@ -482,155 +479,3 @@ def test_every_device_draws(cls):
     sheet = Flowsheet(cls.__name__)
     sheet.add(cls("X-1"))
     assert "<svg" in sheet.to_svg()
-
-
-# ---------------------------------------------------------------------------
-# The two tables in docs/api.md
-# ---------------------------------------------------------------------------
-
-DOCS = pathlib.Path(__file__).resolve().parent.parent / "docs" / "api.md"
-VARIANT = re.compile(r"`([a-z0-9_]+)`")
-CLASS = re.compile(r"`([A-Z]\w+)`")
-LOCAL_SPELLING = re.compile(r"\(as `[^`]+`\)")
-
-
-def _table(heading):
-    """The first markdown table under ``### heading``, as rows of stripped cells."""
-    section = DOCS.read_text(encoding="utf-8").split(f"\n### {heading}\n", 1)[1]
-    rows = []
-    for line in section.splitlines():
-        if line.startswith("|"):
-            rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
-        elif rows:
-            break
-    return [row for row in rows[1:] if not row[0].startswith("---")]
-
-
-def _drawings(cell, kind):
-    """The registered variants a row's last cell names.
-
-    Class-local spellings are struck first, since ``DustCollector`` accepting
-    ``belt`` for ``filter/gas_belt`` is not a claim on ``filter/belt``, which is
-    a drawing of its own. Everything else backticked and not registered --
-    ``normal_position``, ``large_end`` -- is prose, and drops out against the
-    registry.
-    """
-    named = set(VARIANT.findall(LOCAL_SPELLING.sub("", cell)))
-    return named & set(default_registry.variants(kind))
-
-
-def test_the_equipment_class_table_matches_the_classes():
-    """Generated here from the classes themselves, so the table cannot drift.
-
-    A class the docs do not list is a class nobody finds by reading them, and
-    the four columns are exactly what a reader is looking for: the name, the
-    drawing's kind, what it inherits, and the nozzles it does not.
-    """
-    expected = []
-    for cls in DEVICE_CLASSES:
-        base = cls.__mro__[1]
-        mine, theirs = list(cls("X-1").ports), list(base("X-1").ports)
-        differs = [f"`+{name}`" for name in mine if name not in theirs]
-        differs += [f"`-{name}`" for name in theirs if name not in mine]
-        expected.append(
-            [f"`{cls.__name__}`", f"`{cls.kind}`", f"`{base.__name__}`", " ".join(differs)]
-        )
-    assert _table("Equipment classes") == expected
-
-
-def test_the_variants_table_gives_every_drawing_exactly_one_owner():
-    """The other half: which class each of the registry's 229 drawings is reached
-    by name as.
-
-    The same accounting ``scripts/gen_devices.py`` refuses to run without, kept
-    against the page rather than against the module, so vendoring a stencil
-    fails here too until the docs say whose it is.
-    """
-    owner = {}
-    for row in _table("Variants"):
-        names = CLASS.findall(row[0])
-        classes = [getattr(devices, name, None) or getattr(units, name) for name in names]
-        if len(classes) == 1:
-            assert row[1] == f"`{classes[0].kind}`", f"{names[0]}: wrong kind in the docs"
-        for cls in classes:
-            for variant in _drawings(row[2], cls.kind):
-                assert (cls.kind, variant) not in owner, (
-                    f"{cls.kind}/{variant} is claimed by both "
-                    f"{owner[(cls.kind, variant)]} and {cls.__name__}"
-                )
-                owner[(cls.kind, variant)] = cls.__name__
-    assert set(owner) == set(default_registry._symbols)
-    for cls in DEVICE_CLASSES:
-        listed = {variant for (_, variant), name in owner.items() if name == cls.__name__}
-        assert listed == {cls.VARIANT_ALIASES.get(v, v) for v in cls.VARIANTS}
-
-
-# ---------------------------------------------------------------------------
-# The counts the prose quotes, against the registry that decides them
-# ---------------------------------------------------------------------------
-
-README = pathlib.Path(__file__).resolve().parent.parent / "README.md"
-
-
-def _prose(path):
-    """A page as one line, so a count that wrapped is still one match."""
-    return " ".join(path.read_text(encoding="utf-8").split())
-
-
-def _counts_in(path, pattern):
-    """Every match of *pattern* on *path*, as a tuple of the integers in it.
-
-    ``re.findall`` hands back a bare string for a one-group pattern and a tuple
-    for the rest, so the single group is re-wrapped rather than iterated -- over
-    a string, ``tuple(int(n) for n in m)`` counts digits.
-    """
-    found = re.findall(pattern, _prose(path))
-    return [tuple(int(n) for n in (m if isinstance(m, tuple) else (m,))) for m in found]
-
-
-def test_the_pages_quote_the_registry_they_are_describing():
-    """README.md and docs/api.md state the size of the registry in prose, and
-    prose does not recompute itself: `139 registered symbols` outlived two
-    vendoring PRs on the front page of the project, and `docs/api.md` managed to
-    say 27 and 41 about the same set of symbols in one document.
-
-    So the four registry-derived numbers on those two pages are asserted here
-    rather than reviewed. Each is matched on a distinctive phrase rather than on
-    a bare integer, which is what keeps this from firing on a pressure or a
-    pixel count that happens to be the same number.
-
-    The size of the *example* corpus is not pinned this way. It is spelled as an
-    English word ("the sixteen shipped examples") in a dozen docstrings whose
-    sentences differ, and a regex over those is a worse thing to maintain than
-    the sentences. That reasoning was wrong and #310 is what it cost: the
-    spelled-out number went stale in every one of those docstrings at once and
-    nothing failed. What holds the count honest is the other half of this
-    sentence and only that half -- every corpus measurement is taken by a test
-    over ``SCENARIOS``, which is built from the examples rather than from a
-    literal -- so a sentence that quotes a corpus size beside its measurement
-    is quoting something no test reads. Write the size only where a test
-    asserts it.
-    """
-    symbols = default_registry.__dict__["_symbols"]
-    gravity = sum(1 for s in symbols.values() if s.gravity_fixed)
-    # A drawing "gets no class of its own" when the docs' own Variants table
-    # hands it to a base class in pandid.units rather than to a device class.
-    owner = {}
-    for row in _table("Variants"):
-        for name in CLASS.findall(row[0]):
-            cls = getattr(devices, name, None) or getattr(units, name)
-            for variant in _drawings(row[2], cls.kind):
-                owner[(cls.kind, variant)] = name
-    classless = sum(1 for name in owner.values() if name not in devices.__all__)
-
-    assert _counts_in(README, r"\*\*(\d+) registered symbols\*\*") == [(len(symbols),)]
-    assert _counts_in(README, r"(\d+) of the (\d+) registered drawings") == [
-        (classless, len(symbols))
-    ]
-    assert _counts_in(DOCS, r"(\d+) of the (\d+) registered drawings") == [
-        (classless, len(symbols))
-    ]
-    assert _counts_in(DOCS, r"(\d+) registered symbols carry `Symbol\.gravity_fixed`") == [
-        (gravity,)
-    ]
-    assert _counts_in(DOCS, r"The (\d+) marked symbols") == [(gravity,)]

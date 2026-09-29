@@ -33,13 +33,14 @@ pip install pre-commit && pre-commit install
 
 ## The gates
 
-All four must pass. CI (`.github/workflows/ci.yml`) runs the same four.
+CI (`.github/workflows/ci.yml`) runs these checks:
 
 ```bash
 python -m pytest -q                 # tests (CI: pytest -q on 3.10/3.11/3.12/3.13/3.14)
 python -m ruff check .              # lint the whole tree
 python -m ruff format --check tests # tests/ must stay ruff-formatted
-python -m mypy pandid                  # type check (blocking, not advisory)
+python -m mypy pandid               # type check the package
+python -m pyright pandid            # second type check of the package
 ```
 
 `ruff format` is enforced on `tests/` only. The rest of the tree is linted but
@@ -47,9 +48,9 @@ not auto-formatted, so don't reformat `pandid/` in a feature PR.
 
 ### A test you add must type-check clean
 
-`mypy` is a gate; Pyright is not, but a great many users run it through Pylance
-and it is stricter. **Any test written from now on must produce nothing from
-it**, on the new code:
+Both `mypy` and Pyright gate `pandid/`. CI does not run Pyright on `tests/`,
+which has a separate backlog. **Any test written from now on should produce no
+new Pyright findings** on the new code:
 
 ```bash
 python -m pyright tests/test_your_thing.py
@@ -61,7 +62,7 @@ findings that is deliberately not being cleaned up — a user never opens
 carelessly adds to a pile nobody will ever clear cheaply. Holding the line where
 the test is written is free; a sweep is not.
 
-`pandid/` and `examples/` **are** Pyright-clean, and should stay that way — the
+`pandid/` and `examples/` have no Pyright errors, and should stay that way — the
 examples are what a user copies, so a warning there lands in their editor.
 
 When the checker complains, the fix is almost never a `cast` or a
@@ -74,6 +75,44 @@ by hand — the checker was right, seventy-two times over.
 
 Keep a PR to one concern. If a change touches rendering, say so and show what
 moved (see *Goldens* below).
+
+## Git and GitHub workflow
+
+`main` is the only maintained branch and the base for pull requests. The
+maintainer may commit small documentation and repository-maintenance changes
+directly to `main` after self-review and applicable checks. Use a short-lived
+branch and a pull request for work that needs separate review or a clear
+integration point. Open a draft pull request while a large change is still
+being developed.
+
+Start working branches from current `main`. Use `type/issue-number-short-summary`
+when an issue tracks the work, or `type/short-summary` otherwise. The summary is
+lowercase kebab-case and names the change. Common types are `feat`, `fix`,
+`docs`, `refactor`, `test`, `chore`, and `spike`. For example:
+
+```text
+fix/456-compact-valve-stations
+docs/github-conventions
+```
+
+Write commit subjects in [Conventional Commits](https://www.conventionalcommits.org/)
+form: `type(scope): imperative subject`. Use a scope such as `layout`, `routing`,
+`render`, `units`, `docs`, `ci`, or `repo` when useful; omit it for a change that
+spans the repository. Keep the subject lowercase after the colon, without a
+trailing full stop, and at most 72 characters. An optional body explains why
+the change was needed. For tracked work, add `Refs: #123` as a footer. A pull
+request description uses `Closes #123` only when it fully resolves that issue.
+
+Keep each pull request focused and target `main`. Use the pull request template
+to give a concrete summary, verification steps, and visual evidence for drawing
+changes. Review the complete diff before requesting review. Resolve blocking
+feedback and wait for all CI jobs to pass before merging. An independent code
+review is useful for substantial algorithm or API changes; a second human
+maintainer is not required in this single-maintainer repository.
+
+Releases are cut from `main` after the release checks below. Tag the version
+that was tested and let `.github/workflows/release.yml` publish it. Avoid
+rewriting shared branch history after review begins.
 
 ## Where things live
 
@@ -151,9 +190,8 @@ To add or change an equipment symbol:
    or by a `STAYS_ON_BASE` entry giving the word from the rule — a support, a
    roof, a cladding, an attitude, a drawn internal, a certification rating, a
    body style — that makes it a style rather than a device. Regenerate with
-   `python scripts/gen_devices.py` and commit that file too; one test holds it
-   to its generator, and another holds `docs/api.md`'s two class tables to the
-   registry.
+   `python scripts/gen_devices.py` and commit that file too. Tests hold it to
+   its generator and check that each registered drawing has one owner.
 
 The shape's `aspect` comes across with it, as `Symbol.stretchable`. The stencil
 author has already answered whether the drawing may be reshaped to fill a box of
