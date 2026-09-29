@@ -1,13 +1,12 @@
 """Compare each example's SVG to its golden and check rendered nozzle positions."""
 
-import copy
 import os
 import re
 from pathlib import Path
 
 import pytest
 
-from _render_cases import SCENARIOS as SCENARIOS, gallery
+from _render_cases import SCENARIOS as SCENARIOS, copy_settled_case
 from _svg_compare import normalize as _normalize
 from pandid.document import equipment_list
 from pandid.render.debug import _BOX, _PORT
@@ -24,6 +23,19 @@ GOLDEN_SCENARIOS = (
     "12_block_flow_diagram",
     "18_fixed_bed_recycle",
 )
+
+
+def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
+    """Keep cached routes and render options unchanged after a copy is mutated."""
+    source, source_options = settled_gallery["11_ethanol_pid"]
+    copied, copied_options = copy_settled_case(settled_gallery, "11_ethanol_pid")
+
+    copied.streams[0].route = None
+    copied_options["diagram"] = "pfd"
+
+    assert copied is not source
+    assert source.streams[0].route is not None
+    assert source_options.get("diagram") != "pfd"
 
 
 def _diff_message(name: str, golden: str, actual: str) -> str:
@@ -88,47 +100,10 @@ def _check_golden(name: str, svg: str) -> None:
         pytest.fail(_diff_message(name, golden, normalized), pytrace=False)
 
 
-@pytest.fixture(scope="module")
-def settled_scenarios():
-    """Lay out and route each gallery sheet once for this test module.
-
-    Returns
-    -------
-    dict[str, tuple[Flowsheet, dict]]
-        Settled sheets and their rendering options, keyed by example name.
-    """
-    cases = {}
-    for name in SCENARIOS:
-        fs, kwargs = gallery.flowsheet(name)
-        fs.layout()
-        fs.route()
-        cases[name] = fs, kwargs
-    return cases
-
-
-def _settled_case(settled_scenarios, name):
-    """Copy one settled gallery sheet for an independent render check.
-
-    Parameters
-    ----------
-    settled_scenarios : dict[str, tuple[Flowsheet, dict]]
-        Module-scoped routed sheets.
-    name : str
-        Gallery example name.
-
-    Returns
-    -------
-    tuple[Flowsheet, dict]
-        Independent sheet and rendering options.
-    """
-    fs, kwargs = settled_scenarios[name]
-    return copy.deepcopy(fs), kwargs.copy()
-
-
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
-def test_golden_svg(settled_scenarios, name):
+def test_golden_svg(settled_gallery, name):
     """Match each representative example's SVG to its committed golden."""
-    fs, kwargs = _settled_case(settled_scenarios, name)
+    fs, kwargs = copy_settled_case(settled_gallery, name)
     _check_golden(name, fs.to_svg(**kwargs))
 
 
@@ -173,11 +148,11 @@ def _drawn(value: "str | float") -> float:
 
 
 @pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(settled_scenarios, name):
+def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(settled_gallery, name):
     """Every rendered nozzle lies on its owning equipment body."""
     from pandid.portgeom import resolve_port, unit_box
 
-    fs, kwargs = _settled_case(settled_scenarios, name)
+    fs, kwargs = copy_settled_case(settled_gallery, name)
     overlaid = {**kwargs, "debug": True}
     svg = fs.to_svg(**overlaid)
     dots = {(_drawn(x), _drawn(y)) for x, y in _DEBUG_CIRCLE.findall(svg)}

@@ -6,7 +6,6 @@ derived stencil keys. They do not open documents in the Draw.io application.
 
 from __future__ import annotations
 
-import copy
 import html
 import importlib.util
 from decimal import Decimal
@@ -16,6 +15,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+from _render_cases import copy_settled_case, gallery
 from pandid import units
 from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
@@ -2371,50 +2371,16 @@ def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path,
 # ---------------------------------------------------------------------------
 
 
-def _gallery():
-    """Load the gallery script as a module.
-
-    Returns
-    -------
-    ModuleType
-        Gallery module.
-    """
-    path = ROOT / "scripts" / "gallery.py"
-    spec = importlib.util.spec_from_file_location("_pandid_script_gallery_drawio", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-gallery = _gallery()
 SHEETS = gallery.sheets()
 
 
-@pytest.fixture(scope="module")
-def settled_gallery():
-    """Layout and route each gallery sheet once per test module.
-
-    Returns
-    -------
-    dict[str, tuple[Flowsheet, dict]]
-        Routed sheets and rendering options keyed by example name.
-    """
-    cases = {}
-    for stem in SHEETS:
-        fs, kwargs = gallery.flowsheet(stem)
-        fs.layout()
-        fs.route()
-        cases[stem] = fs, kwargs
-    return cases
-
-
 def _gallery_case(settled_gallery, stem):
-    """Copy a routed gallery sheet for an independent export check.
+    """Copy a shared routed gallery sheet for an independent export check.
 
     Parameters
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Module-scoped routed sheets.
+        Session-scoped routed source sheets.
     stem : str
         Gallery example name.
 
@@ -2423,8 +2389,7 @@ def _gallery_case(settled_gallery, stem):
     tuple[Flowsheet, dict]
         Independent sheet and rendering options.
     """
-    fs, kwargs = settled_gallery[stem]
-    return copy.deepcopy(fs), kwargs.copy()
+    return copy_settled_case(settled_gallery, stem)
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
