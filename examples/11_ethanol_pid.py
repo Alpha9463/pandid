@@ -45,6 +45,13 @@ from pandid.portgeom import port_offset, resolve_size
 
 
 def main():
+    """Build and render the ethanol purification P&ID.
+
+    Returns
+    -------
+    None
+        The SVG and draw.io drawings are written to the examples directory.
+    """
     # Size and schedule are separate fields in the scheme, so nothing on
     # the sheet reads as a second size.
     fs = Flowsheet(
@@ -207,8 +214,6 @@ def main():
     cv306.pin(mirrored="y").pin(port="inlet", x=900, y=bottoms_y)
     nrv306.pin(port="inlet", x=1000, y=bottoms_y)
     cooler.pin(x=1100, y=720)
-    cooler_shell_in_x = 1100 + port_offset(cooler, "shell_in")[0]
-    cooler_shell_out_x = 1100 + port_offset(cooler, "shell_out")[0]
     cw_cool_y = 720 + port_offset(cooler, "tube_in")[1]
     cooled_y = 805.0
     cws_cool.pin(port="outlet", x=200, y=cw_cool_y)
@@ -239,7 +244,7 @@ def main():
     fs.connect(hv311.outlet, cond.tube_in)
     cw_return = fs.connect(cond.tube_out, cwr_cond.inlet, service="CWR",
                            sequence=312, size=150,
-                           schedule=40, spec="CS").via([(1300, cw_cond_y)])
+                           schedule=40, spec="CS")
 
     fs.connect(drum.outlet, t_draw.inlet, service="AE", sequence=309, size=100,
                schedule=80, spec="SS")
@@ -272,9 +277,9 @@ def main():
     fs.connect(reb.bottoms, cv306.inlet, service="FB", sequence=306, size=100,
                schedule=160, spec="SS")
     fs.connect(cv306.outlet, nrv306.inlet)
-    fs.connect(nrv306.outlet, cooler.shell_in).via([(cooler_shell_in_x, bottoms_y)])
+    fs.connect(nrv306.outlet, cooler.shell_in)
     fs.connect(cooler.shell_out, bottoms_prod.inlet, service="FB", sequence=314,
-               size=100, schedule=160, spec="SS").via([(cooler_shell_out_x, cooled_y)])
+               size=100, schedule=160, spec="SS")
     fs.connect(cws_cool.outlet, hv315.inlet, service="CWS", sequence=315, size=100,
                schedule=40, spec="CS")
     fs.connect(hv315.outlet, cooler.tube_in)

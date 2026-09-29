@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from pandid.layout.halo import Pad
 from pandid.layout.stages import slot
@@ -32,6 +32,8 @@ from pandid.layout.stages import slot
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import _Slot
+    from pandid.layout.coarse import Host
+    from pandid.ports import Port
     from pandid.units import Unit
 
 #: Clear paper between one column of boxes and the next, which is where
@@ -77,24 +79,51 @@ BAND_GAP = 160.0
 BAND_WIDTH = 3200.0
 
 
-def assign_coordinates(fs: "Flowsheet") -> None:
-    """Map every process unit's ``(column, row)`` to pixels."""
+def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
+                       extra_gap: dict[int, float] | None = None,
+                       links: list[tuple["Unit", "Unit", float]] | None = None,
+                       hosts: list["Host"] | None = None,
+                       row_compaction: float = 0.0) -> None:
+    """Map selected process-unit grid ranks to pixels.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet containing the process units.
+    units : list[Unit] or None
+        Units to coordinate, or every process unit by default.
+    extra_gap : dict[int, float] or None
+        Additional paper reserved after each grid column.
+    links : list[tuple[Unit, Unit, float]] or None
+        Contracted connections used when resolving absolute pins.
+    hosts : list[Host] or None
+        Contracted runs whose endpoint nozzles guide pixel alignment.
+    row_compaction : float, optional
+        Fraction of independent column-row compaction to apply.
+
+    Returns
+    -------
+    None
+        Frames are assigned to the selected units.
+    """
     from pandid.geometry import Frame
     from pandid.layout.halo import balloon_pads
     from pandid.layout.pixel import clear_pins, refine
     from pandid.layout.stages import process_units
 
-    units = process_units(fs)
+    if units is None:
+        units = process_units(fs)
     if not units:
         return
     pads = balloon_pads(fs)
     columns = _columns(units, pads)
-    bands = _bands(units, columns, pads, _wrappable(fs, units))
+    bands = _bands(units, columns, pads, _wrappable(fs, units), extra_gap, hosts)
     band_of = {u: b for b, group in enumerate(bands) for c in group for u in columns[c].units}
 
     cursor = float(MARGIN_Y)
     for index, group in enumerate(bands):
-        cursor = _lay_band(columns, group, cursor, pads, anchored=not index)
+        cursor = _lay_band(columns, group, cursor, pads, anchored=not index,
+                           extra_gap=extra_gap, row_compaction=row_compaction)
 
     moved: dict[str, list["Unit"]] = {}
     if not _wrappable(fs, units):
@@ -102,11 +131,12 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         cursor = float(MARGIN_Y)
         for index, group in enumerate(bands):
             cursor = _lay_band(columns, group, cursor, pads, anchored=not index,
-                               positions=nominal)
+                               positions=nominal, extra_gap=extra_gap,
+                               row_compaction=row_compaction)
         reference = {u: (s.x or 0.0, s.y or 0.0) for u, s in nominal.items()}
-        moved = refine(fs, units, reference)
+        moved = refine(fs, units, reference, links)
 
-    _straighten(fs, units, band_of, pads)
+    _straighten(fs, units, band_of, pads, hosts)
     if moved:
         clear_pins(units, moved, STACK_CLEAR, pads)
     for u in units:
@@ -184,41 +214,59 @@ def _wrappable(fs: "Flowsheet", units: list["Unit"]) -> bool:
 
 
 def _bands(units: list["Unit"], columns: dict[int, _Column],
-           pads: dict["Unit", Pad], wrappable: bool) -> list[list[int]]:
-    """The columns of the grid, cut into bands that fit the paper.
+           pads: dict["Unit", Pad], wrappable: bool,
+           extra_gap: dict[int, float] | None = None,
+           hosts: list["Host"] | None = None) -> list[list[int]]:
+    """Partition grid columns into bands within the paper width.
 
-    Greedy from the left, then the cut is slid to the nearest column
-    boundary with the fewest runs across it -- a fold through a seam in
-    the process rather than through the middle of a train. Sliding only
-    backwards keeps every band inside the width; a fold that made one
-    band wider to tidy the seam would be a fold that did not fit.
+    Parameters
+    ----------
+    units : list[Unit]
+        Process units used to score fold boundaries.
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    pads : dict[Unit, Pad]
+        Attached label and balloon clearance around each unit.
+    wrappable : bool
+        Whether the drawing may use multiple bands.
+    extra_gap : dict[int, float] or None
+        Additional width reserved after each column.
+    hosts : list[Host] or None
+        Contracted runs whose attachments should stay within one band.
 
-    A candidate band is measured by :func:`_lay_columns`, the same pass
-    that will place it. Measuring it by adding up the columns' own
-    widths instead over-counts, badly: a balloon standing east of a
-    valve in one row does not push the column after it away from every
-    *other* row, so a sheet 2370 px across measured 3400 and was folded
-    in two -- with three units in the second band and an empty quarter
-    of the page between them.
+    Returns
+    -------
+    list[list[int]]
+        Ordered column numbers in each band.
     """
     order = sorted(columns)
-    if not wrappable or _lay_columns(columns, order, pads) <= BAND_WIDTH:
+    if not wrappable or _lay_columns(columns, order, pads, extra_gap=extra_gap) <= BAND_WIDTH:
         return [order]
 
     crossings = _seam_cost(units)
+    protected: set[int] = set()
+    for host in hosts or []:
+        source, dest = host.source.owner, host.dest.owner
+        assert source is not None and dest is not None
+        left, right = slot(source).col, slot(dest).col
+        assert left is not None and right is not None
+        low, high = sorted((left, right))
+        protected.update(column for column in order if low <= column < high)
     bands: list[list[int]] = []
-    band: list[int] = []
-    for column in order:
-        if band and _lay_columns(columns, [*band, column], pads) > BAND_WIDTH:
-            band = _slide(band, crossings)
-            bands.append(band)
-            band = []
-        band.append(column)
-    if band:
+    first = 0
+    while first < len(order):
+        end = first + 1
+        while end < len(order) and _lay_columns(
+            columns, order[first:end + 1], pads, extra_gap=extra_gap
+        ) <= BAND_WIDTH:
+            end += 1
+        if end == len(order):
+            bands.append(order[first:end])
+            break
+        band = _slide(order[first:end], crossings, protected)
         bands.append(band)
-    # A column dropped by the slide is not lost: the slide hands back a
-    # prefix, and the loop carries on from the column after it.
-    return _refill(order, bands)
+        first += len(band)
+    return bands
 
 
 def _seam_cost(units: list["Unit"]) -> dict[int, int]:
@@ -239,30 +287,34 @@ def _seam_cost(units: list["Unit"]) -> dict[int, int]:
     return cost
 
 
-def _slide(band: list[int], crossings: dict[int, int]) -> list[int]:
+def _slide(band: list[int], crossings: dict[int, int],
+           protected: set[int] | None = None) -> list[int]:
     """Pull a band's last column back to the quietest seam near it.
 
     At most a quarter of the band, so a seam is looked for where one
     plausibly is and the fold never walks back to the start of a band it
     has just filled.
+
+    Parameters
+    ----------
+    band : list[int]
+        Candidate columns in the current band.
+    crossings : dict[int, int]
+        Material connections crossing each possible seam.
+    protected : set[int] or None
+        Seams inside contracted attachment runs.
+
+    Returns
+    -------
+    list[int]
+        Prefix ending at the preferred fold seam.
     """
     reach = max(1, len(band) // 4)
+    protected = protected or set()
     best = min(range(len(band) - reach, len(band)),
-               key=lambda i: (crossings.get(band[i], 0), len(band) - 1 - i))
+               key=lambda i: (band[i] in protected,
+                              crossings.get(band[i], 0), len(band) - 1 - i))
     return band[:best + 1]
-
-
-def _refill(order: list[int], bands: list[list[int]]) -> list[list[int]]:
-    """Re-cut the column list at the boundaries the bands settled on."""
-    out: list[list[int]] = []
-    seen = 0
-    for band in bands[:-1]:
-        end = order.index(band[-1]) + 1
-        out.append(order[seen:end])
-        seen = end
-    if seen < len(order):
-        out.append(order[seen:])
-    return [band for band in out if band]
 
 
 # ---------------------------------------------------------------------------
@@ -272,16 +324,29 @@ def _refill(order: list[int], bands: list[list[int]]) -> list[list[int]]:
 
 def _lay_columns(columns: dict[int, _Column], band: list[int],
                  pads: dict["Unit", Pad], place: bool = False,
-                 positions: dict["Unit", "_Slot"] | None = None) -> float:
-    """How wide this run of columns comes out, and optionally place it.
+                 positions: dict["Unit", "_Slot"] | None = None,
+                 extra_gap: dict[int, float] | None = None) -> float:
+    """Measure a column band and optionally assign horizontal positions.
 
-    The balloon demand is settled **per row**, the way the rows settle
-    theirs per column: a bubble standing east of a valve in row 2 wants
-    paper east of *row 2*, not a gap driven through every row the column
-    has. ``wall`` is how far east each row is already spoken for.
+    Parameters
+    ----------
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    band : list[int]
+        Columns to measure or place.
+    pads : dict[Unit, Pad]
+        Attached-object clearance around each unit.
+    place : bool
+        Assign horizontal coordinates when true.
+    positions : dict[Unit, _Slot] or None
+        Alternate slots receiving assigned coordinates.
+    extra_gap : dict[int, float] or None
+        Additional width reserved after each column.
 
-    Measuring and placing are one function so that the width a band is
-    cut to and the width it is drawn at cannot come apart.
+    Returns
+    -------
+    float
+        Width of the band in pixels.
     """
     # A row with nothing to its west yet reserves nothing: the first
     # column starts on the margin, and a boundary flag whose pennant
@@ -301,7 +366,7 @@ def _lay_columns(columns: dict[int, _Column], band: list[int],
             for u in held.units:
                 if position(u).x is None:
                     position(u).x = x
-        cursor = x + held.body + COL_GAP
+        cursor = x + held.body + COL_GAP + (extra_gap or {}).get(column, 0.0)
         for u in held.units:
             row = position(u).row or 0
             wall[row] = max(wall.get(row, 0.0),
@@ -311,14 +376,42 @@ def _lay_columns(columns: dict[int, _Column], band: list[int],
 
 def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
               pads: dict["Unit", Pad], anchored: bool,
-              positions: dict["Unit", "_Slot"] | None = None) -> float:
-    """Place one band's units and return where the next band starts."""
+              positions: dict["Unit", "_Slot"] | None = None,
+              extra_gap: dict[int, float] | None = None,
+              row_compaction: float = 0.0) -> float:
+    """Place the units of one band.
+
+    Parameters
+    ----------
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    band : list[int]
+        Columns in this band.
+    top : float
+        Vertical starting coordinate.
+    pads : dict[Unit, Pad]
+        Attached-object clearance around each unit.
+    anchored : bool
+        Keep empty rows before the first occupied row when true.
+    positions : dict[Unit, _Slot] or None
+        Alternate slots receiving assigned coordinates.
+    extra_gap : dict[int, float] or None
+        Additional width reserved after each column.
+    row_compaction : float, optional
+        Fraction of the unused vertical row space to recover per column.
+
+    Returns
+    -------
+    float
+        Vertical starting coordinate for the next band.
+    """
     position = slot if positions is None else positions.__getitem__
     members = [u for c in band for u in columns[c].units]
     if not members:
         return top
 
-    _lay_columns(columns, band, pads, place=True, positions=positions)
+    _lay_columns(columns, band, pads, place=True, positions=positions,
+                 extra_gap=extra_gap)
 
     # Bands are built for every row the sheet names between the band's
     # own first and last, and a pin can name one above row 0:
@@ -370,7 +463,55 @@ def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
     for u in members:
         if position(u).y is None:
             position(u).y = axis[position(u).row or 0] - position(u).h / 2.0
-    return max([cursor_y + body[rows[-1]], *floor.values()], default=top) + BAND_GAP
+    next_top = max([cursor_y + body[rows[-1]], *floor.values()], default=top) + BAND_GAP
+    if row_compaction:
+        compacted_top = _compact_column_rows(columns, band, top, pads, position,
+                                              row_compaction)
+        return min(next_top, compacted_top)
+    return next_top
+
+
+def _compact_column_rows(columns: dict[int, _Column], band: list[int], top: float,
+                         pads: dict["Unit", Pad], position: Callable[["Unit"], "_Slot"],
+                         fraction: float) -> float:
+    """Recover row space that no unit in a column reserves.
+
+    Parameters
+    ----------
+    columns : dict[int, _Column]
+        Occupied grid columns.
+    band : list[int]
+        Columns in the current paper band.
+    top : float
+        Start of the paper band.
+    pads : dict[Unit, Pad]
+        Per-unit clearances for attached controls and labels.
+    position : callable
+        Slot lookup for the current coordinate assignment.
+    fraction : float
+        Share of the available vertical slack to remove.
+
+    Returns
+    -------
+    float
+        Start of the next band after the compacted columns.
+    """
+    end = top
+    for column in band:
+        ordered = sorted(columns[column].units,
+                         key=lambda unit: (position(unit).row or 0, position(unit).y or 0.0))
+        floor = top
+        for unit in ordered:
+            placed = position(unit)
+            pad = pads.get(unit, Pad())
+            if placed.y is None:
+                continue
+            if unit.pin_ is None or (unit.pin_.y is None and unit.pin_.row is None):
+                proposed = max(top + pad.north, floor + pad.north)
+                placed.y += fraction * (proposed - placed.y)
+            floor = max(floor, placed.y + placed.h + pad.south + ROW_GAP)
+        end = max(end, floor)
+    return end + BAND_GAP
 
 
 # ---------------------------------------------------------------------------
@@ -384,8 +525,37 @@ def _lay_band(columns: dict[int, _Column], band: list[int], top: float,
 STACK_LEAD = 25.0
 
 
+def _target_y(other_u: Unit, other_port: Port, contracted: bool) -> float:
+    """Aim at a neighbour's nozzle or its vertical exit lane.
+
+    Parameters
+    ----------
+    other_u : Unit
+        Equipment providing the alignment target.
+    other_port : Port
+        Connected nozzle on that equipment.
+    contracted : bool
+        Reserve a full router exit for a contracted host run.
+
+    Returns
+    -------
+    float
+        Absolute height of the horizontal connection leg.
+    """
+    from pandid.portgeom import resolve_port
+
+    s = slot(other_u)
+    (_, py), _, direction = resolve_port(other_u, s, other_port.name)
+    clearance = STACK_LEAD if contracted else 15.0
+    if direction == "N":
+        return (s.y or 0.0) - clearance
+    if direction == "S":
+        return (s.y or 0.0) + s.h + clearance
+    return py
+
+
 def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int],
-                pads: dict["Unit", Pad]) -> None:
+                pads: dict["Unit", Pad], hosts: list["Host"] | None = None) -> None:
     """Turn staircase jogs into straight runs, within one band.
 
     Walk units left to right and, where a unit has a single horizontal
@@ -413,21 +583,29 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
     are emitted. That is the point: a target read off the symbol instead
     ignores the resize, the mirror and any ``nozzle()`` choice, and aims
     at the wrong height.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose material connections guide alignment.
+    units : list[Unit]
+        Equipment eligible for pixel adjustment.
+    band_of : dict[Unit, int]
+        Paper band assigned to each unit.
+    pads : dict[Unit, Pad]
+        Reserved clearance around equipment.
+    hosts : list[Host] or None
+        Contracted material runs between retained equipment.
+
+    Returns
+    -------
+    None
+        Eligible slots receive adjusted coordinates.
     """
     from pandid.layout import claims as claims_mod
     from pandid.layout.pixel import grid_limits, occupied_box
     from pandid.layout.stages import process_streams
     from pandid.portgeom import resolve_port
-
-    def target_y(other_u: "Unit", other_port) -> float:
-        """Absolute Y to aim a run at, honouring N/S escape lanes."""
-        s = slot(other_u)
-        (_, py), _, d = resolve_port(other_u, s, other_port.name)
-        if d == "N":
-            return (s.y or 0.0) - 15.0
-        if d == "S":
-            return (s.y or 0.0) + s.h + 15.0
-        return py
 
     # Both questions below are asked of a *neighbourhood* -- the runs on
     # one unit, and the boxes in one column -- and both used to be
@@ -443,9 +621,15 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
             continue
         src, dst = st.source.owner, st.dest.owner
         assert src is not None and dst is not None
-        touching[dst].append((st.dest, src, st.source))
+        touching[dst].append((st.dest, src, st.source, False))
         if src is not dst:
-            touching[src].append((st.source, dst, st.dest))
+            touching[src].append((st.source, dst, st.dest, False))
+    for host in hosts or []:
+        dest = host.dest
+        src = host.source.owner
+        assert src is not None and dest is not None and dest.owner is not None
+        touching[dest.owner].append((dest, src, host.source, True))
+        touching[src].append((host.source, dest.owner, dest, True))
 
     boxes = {u: occupied_box(u, pads) for u in units}
     pixel_pins = not _wrappable(fs, units)
@@ -499,7 +683,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         anchor = ups[0] if len(ups) == 1 else (downs[0] if not ups and len(downs) == 1 else None)
         if anchor is None:
             continue
-        my_port, other_u, other_port = anchor
+        my_port, other_u, other_port, contracted = anchor
         if slot(other_u).y is None:
             continue
         # Only straighten horizontal runs: the port must face the
@@ -507,7 +691,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
         (_, my_y), _, my_d = resolve_port(u, s, my_port.name)
         if my_d not in ("E", "W"):
             continue
-        shift = target_y(other_u, other_port) - my_y
+        shift = _target_y(other_u, other_port, contracted) - my_y
         riding = set(group)
         if any(overlaps(v, (slot(v).y or 0.0) + shift, riding) for v in group):
             continue
@@ -525,15 +709,21 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
 
 def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
                    band_of: dict["Unit", int]) -> list[tuple["Unit", float]]:
-    """``(unit, x)`` for every stacked unit worth shifting sideways.
+    """Propose same-column nozzle alignment for safe process units.
 
-    Ranking has put a vertically connected pair in one column, which is
-    not the same as putting the nozzles in one line, and 10 px out is
-    enough for a run to leave east, drop, and come back west. Aim the
-    leaving nozzle a stand-off short of the arriving one and that
-    becomes one turn. Only a nozzle facing sideways is aimed: one
-    already facing the peer it is stacked against drops straight onto
-    it, and moving the box would be the thing that bent the run.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet supplying material connections.
+    units : list[Unit]
+        Equipment eligible for pixel adjustment.
+    band_of : dict[Unit, int]
+        Paper band assigned to each unit.
+
+    Returns
+    -------
+    list[tuple[Unit, float]]
+        Unit and proposed left coordinate, before pin and overlap checks.
     """
     from pandid.layout.claims import fixed_face
     from pandid.layout.stages import process_streams
@@ -541,7 +731,13 @@ def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
 
     placed = set(units)
     out: list[tuple["Unit", float]] = []
-    for st in process_streams(fs):
+    streams = process_streams(fs)
+    degree: dict["Unit", int] = defaultdict(int)
+    for stream in streams:
+        degree[stream.source.owner] += 1
+        if stream.dest.owner is not stream.source.owner:
+            degree[stream.dest.owner] += 1
+    for st in streams:
         src, dst = st.source.owner, st.dest.owner
         assert src is not None and dst is not None
         if st.is_recycle or src is dst or src not in placed or dst not in placed:
@@ -554,12 +750,15 @@ def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
             if my_x0 is None or (u.pin_ is not None and u.pin_.x is not None):
                 continue
             face = fixed_face(u, mine.name, slot(u))
-            if face not in ("E", "W"):
-                continue
             (my_x, _), _, _ = resolve_port(u, slot(u), mine.name)
             (their_x, _), _, _ = resolve_port(peer, slot(peer), theirs.name)
-            lead = STACK_LEAD if face == "E" else -STACK_LEAD
-            out.append((u, their_x - lead - (my_x - my_x0)))
+            if face in ("E", "W"):
+                lead = STACK_LEAD if face == "E" else -STACK_LEAD
+                out.append((u, their_x - lead - (my_x - my_x0)))
+            elif (face in ("N", "S") and u.kind in {"feed", "product", "vent"}
+                  and peer.kind not in {"feed", "product", "vent"} and degree[u] == 1
+                  and fixed_face(peer, theirs.name, slot(peer)) in ("N", "S")):
+                out.append((u, their_x - (my_x - my_x0)))
     return out
 
 

@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pandid.layout.conflicts import Conflict, analyze_conflicts
 from pandid.portgeom import pin_intent, port_anchor, port_point
+from pandid.route_geometry import stream_polyline
 from pandid.routing.metrics import crossing_count, min_bends, path_length, real_bends
 
 if TYPE_CHECKING:
@@ -42,6 +44,12 @@ class Quality:
         Resolved orientation and mirror choices for each unit.
     pin_geometry : tuple
         Drawn values of each pinned coordinate or rank, by unit and axis.
+    hard_conflicts : frozenset[Conflict]
+        Named automatic routing and placement defects.
+    crossing_pairs : frozenset[tuple[int, int]]
+        Crossing stream identities in global flowsheet order.
+    manual_endpoint_geometry : tuple
+        Drawn source and destination points of each hand-routed stream.
     """
 
     hard: tuple[int, ...]
@@ -53,6 +61,9 @@ class Quality:
     author_intent: tuple
     frame_transform: tuple
     pin_geometry: tuple
+    hard_conflicts: frozenset[Conflict] = frozenset()
+    crossing_pairs: frozenset[tuple[int, int]] = frozenset()
+    manual_endpoint_geometry: tuple = ()
 
 
 def _author_intent(fs: Flowsheet) -> tuple:
@@ -103,7 +114,20 @@ def measure_final(fs: Flowsheet) -> Quality:
     issues = fs.validate()
     codes = [issue.code for issue in issues]
     routes = [stream.route for stream in fs.streams]
-    paths = [route.waypoints for route in routes if route is not None]
+    drawn_paths = [
+        stream_polyline(stream)
+        if stream.route is not None and stream.source.owner.frame is not None
+        and stream.dest.owner.frame is not None else None
+        for stream in fs.streams
+    ]
+    paths = [path for path in drawn_paths if path is not None]
+    conflicts = analyze_conflicts(fs)
+    hard_conflicts = frozenset(conflict for conflict in conflicts if conflict.kind != "crossing")
+    pairs = frozenset(
+        (conflict.streams[0], conflict.streams[1])
+        for conflict in conflicts
+        if conflict.kind == "crossing"
+    )
     frames = [unit.frame for unit in fs.units if unit.frame is not None]
     area = 0.0
     if frames:
@@ -113,11 +137,11 @@ def measure_final(fs: Flowsheet) -> Quality:
 
     bends = 0
     excess = 0
-    for stream in fs.streams:
+    for stream, path in zip(fs.streams, drawn_paths):
         route = stream.route
-        if route is None or not route.waypoints:
+        if route is None or path is None:
             continue
-        actual = real_bends(route.waypoints)
+        actual = real_bends(path)
         bends += actual
         if route.manual:
             continue
@@ -134,7 +158,8 @@ def measure_final(fs: Flowsheet) -> Quality:
         sum(issue.severity == "error" for issue in issues),
         sum(route is not None and not route.manual and route.used_fallback for route in routes),
         *(codes.count(code) for code in _HARD_CODES),
-        sum(route is None or len(route.waypoints) < 2 for route in routes),
+        sum(route is None or (not route.manual and len(route.waypoints) < 2)
+            for route in routes),
     )
     return Quality(
         hard=hard,
@@ -173,16 +198,34 @@ def measure_final(fs: Flowsheet) -> Quality:
             )
             for unit in fs.units
         ),
+        hard_conflicts=hard_conflicts,
+        crossing_pairs=pairs,
+        manual_endpoint_geometry=tuple(
+            (
+                index,
+                None if stream.source.owner.frame is None else port_point(
+                    stream.source.owner, stream.source.owner.frame, stream.source.name
+                ),
+                None if stream.dest.owner.frame is None else port_point(
+                    stream.dest.owner, stream.dest.owner.frame, stream.dest.name
+                ),
+            )
+            for index, stream in enumerate(fs.streams)
+            if stream.route is not None and stream.route.manual
+        ),
     )
 
 
-def admissible(before: Quality, after: Quality) -> bool:
+def admissible(before: Quality, after: Quality, *,
+               preserve_crossing_pairs: bool = True) -> bool:
     """Check the per-sheet hard and soft regression limits.
 
     Parameters
     ----------
     before, after : Quality
         Measurements of the current and proposed completed drawing.
+    preserve_crossing_pairs : bool, optional
+        Require every crossed stream pair to have existed before the move.
 
     Returns
     -------
@@ -194,12 +237,61 @@ def admissible(before: Quality, after: Quality) -> bool:
         before.author_intent == after.author_intent
         and before.frame_transform == after.frame_transform
         and before.pin_geometry == after.pin_geometry
+        and before.manual_endpoint_geometry == after.manual_endpoint_geometry
         and all(new <= old for old, new in zip(before.hard, after.hard))
+        and after.hard_conflicts <= before.hard_conflicts
+        and (not preserve_crossing_pairs or after.crossing_pairs <= before.crossing_pairs)
         and after.hard[_NONCONVERGENCE_INDEX] == 0
         and after.crossings <= before.crossings
         and after.bends <= min(before.bends + 1, before.bends * 1.03)
         and after.length <= before.length * 1.02 + 0.1
         and after.area <= before.area * 1.02 + 1.0
+    )
+
+
+def search_admissible(seed: Quality, incumbent: Quality, after: Quality) -> bool:
+    """Apply current-conflict and fixed-seed limits to a search trial.
+
+    Parameters
+    ----------
+    seed : Quality
+        Initial settled drawing for this search run.
+    incumbent : Quality
+        Current accepted drawing.
+    after : Quality
+        Completed detached trial.
+
+    Returns
+    -------
+    bool
+        Whether the trial preserves author intent, fixed-seed limits,
+        and current route costs when no defect is removed.
+    """
+    same_conflicts = (
+        after.hard_conflicts == incumbent.hard_conflicts
+        and after.crossing_pairs == incumbent.crossing_pairs
+    )
+    return (
+        seed.author_intent == after.author_intent
+        and seed.frame_transform == after.frame_transform
+        and seed.pin_geometry == after.pin_geometry
+        and seed.manual_endpoint_geometry == after.manual_endpoint_geometry
+        and all(new <= old for old, new in zip(incumbent.hard, after.hard))
+        and after.hard_conflicts <= incumbent.hard_conflicts
+        and after.crossing_pairs <= incumbent.crossing_pairs
+        and after.hard[_NONCONVERGENCE_INDEX] == 0
+        and after.crossings <= incumbent.crossings
+        and after.bends <= min(seed.bends + 1, seed.bends * 1.03)
+        and after.length <= seed.length * 1.02 + 0.1
+        and after.area <= seed.area * 1.02 + 1.0
+        and (
+            not same_conflicts
+            or (
+                after.bends <= incumbent.bends
+                and after.length <= incumbent.length + 1e-6
+                and after.area <= incumbent.area + 1e-6
+            )
+        )
     )
 
 
@@ -219,6 +311,7 @@ def improves(before: Quality, after: Quality) -> bool:
     """
     return (
         any(new < old for old, new in zip(before.hard, after.hard))
+        or after.hard_conflicts < before.hard_conflicts
         or after.crossings < before.crossings
         or after.excess_bends < before.excess_bends
         or after.length < before.length * 0.98 - 0.1

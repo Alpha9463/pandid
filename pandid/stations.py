@@ -28,13 +28,10 @@ isolation valves at all, and nothing about the drawing says so.
 So the assembly is declared once, here, and
 :meth:`~pandid.flowsheet.Flowsheet.add_valve_station` builds it.
 
-**A station is not a unit.** It has no symbol, no ports of its own and
-no tag; it never enters :attr:`~pandid.flowsheet.Flowsheet.units` and so
-reaches no equipment list, and nothing in layout, routing, rendering or
-:mod:`pandid.spec` has to know it exists. What it is is a *constructor
-and a handle*: after the call the flowsheet holds twelve ordinary units
-and twelve ordinary streams, and :class:`ValveStation` is the names by
-which the author reaches them to pin, re-tag or instrument any one::
+**A station is not a unit.** It has no symbol, ports, or equipment-list
+entry. Its members are ordinary units and streams. Unpinned stations
+also retain assembly membership for layout and spec round-trips.
+:class:`ValveStation` gives the author access to every member::
 
     station = fs.add_valve_station("CV-303", x=670, y=440,
                                    mirrored=True)
@@ -42,11 +39,8 @@ which the author reaches them to pin, re-tag or instrument any one::
                kind="pneumatic")
     station.bypass.pin(x=station.reduction.pin_.x)
 
-That is also why a station needs no spec section and no round-trip of
-its own: :meth:`~pandid.flowsheet.Flowsheet.to_dict` writes the members
-out, and reading them back gives the same drawing. Nothing is lost
-because after the call there is nothing left of the station that the
-drawing depends on.
+Pinned stations round-trip through their member pins. Unpinned stations
+also write their assembly record so their relative geometry survives.
 
 Tags
 ----
@@ -73,6 +67,7 @@ from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from pandid.ports import Port
+    from pandid.streams import Stream
     from pandid.units import Reducer, Tee, Unit, Valve
 
 #: How a station's members are tagged from the control valve's.
@@ -173,6 +168,36 @@ class ValveStation:
 
     def __repr__(self) -> str:
         return f"ValveStation({self.control.name!r}, members={len(self.members)})"
+
+
+@dataclass(frozen=True)
+class StationAssembly:
+    """Retain the members and relative placement of one station.
+
+    Attributes
+    ----------
+    station : ValveStation
+        Wired station whose members move together.
+    mirrored : bool
+        Whether material flows from right to left through the station.
+    gap, bypass_rise, drain_drop : float
+        Local spacing between main members and branch members.
+    bypass_over : str or None
+        Optional main member beneath the bypass valve.
+    run : Stream or None
+        Original material run handle when inserted with the station API.
+    at : float or None
+        Preferred fraction of that complete run.
+    """
+
+    station: ValveStation
+    mirrored: bool
+    gap: float
+    bypass_rise: float
+    drain_drop: float
+    bypass_over: str | None
+    run: Stream | None = None
+    at: float | None = None
 
 
 def member_tag(scheme: "str | Callable[[str, str], str]", role: str,

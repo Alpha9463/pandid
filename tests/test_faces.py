@@ -1,8 +1,11 @@
 """Automatic port-face selection: the engine picking which face a movable port
 is piped from, given where the unit at the other end of the stream landed."""
 
+import pytest
+
 from pandid import Flowsheet, units
 from pandid.portgeom import port_anchor
+from pandid.routing import DefaultRouter
 
 
 def _drum_fed_from(x, y, *, fs=None, **drum_pin):
@@ -137,6 +140,43 @@ def test_the_kill_switch_restores_the_symbols_own_nozzles():
     fs.layout()
     assert port_anchor(drum, drum.frame, "feed")[2] == "W"
     assert drum.frame.port_faces == {}
+
+
+@pytest.mark.parametrize(
+    ("auto_faces", "explicit", "face"),
+    [(True, False, "N"), (True, True, "E"), (False, False, "W")],
+)
+def test_recovered_escape_preserves_selected_and_authored_faces(
+    auto_faces: bool, explicit: bool, face: str
+) -> None:
+    """Keep the resolved nozzle face while recovering an outward escape.
+
+    Parameters
+    ----------
+    auto_faces : bool
+        Whether automatic face selection is enabled.
+    explicit : bool
+        Whether the author fixed the nozzle to the east face.
+    face : str
+        Expected drawn face before and after routing.
+
+    Returns
+    -------
+    None
+        The opt-in router leaves the face choice unchanged.
+    """
+    fs, drum = _drum_fed_from(220, 60, fs=Flowsheet("faces", auto_faces=auto_faces))
+    if explicit:
+        drum.nozzle("feed", "E")
+    fs.layout()
+    assert drum.frame is not None
+    before = dict(drum.frame.port_faces)
+    assert port_anchor(drum, drum.frame, "feed")[2] == face
+
+    fs.route(DefaultRouter(recover_exits=True))
+
+    assert port_anchor(drum, drum.frame, "feed")[2] == face
+    assert drum.frame.port_faces == before
 
 
 # --- the choice is a result, not intent --------------------------------------

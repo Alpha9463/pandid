@@ -11,6 +11,7 @@ from pandid.render.escape import escaped, ident
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.render.weights import LineWeight
+from pandid.route_geometry import stream_polyline
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -1214,42 +1215,6 @@ def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
     return best, score[0]
 
 
-def stream_polyline(s) -> "list[tuple[float, float]]":
-    """Every point a stream's line is drawn through, ends included.
-
-    The route's waypoints are the middle of the answer and not the whole
-    of it: a route runs between two *anchors* on the units' bounding
-    boxes, and what gets drawn runs between the two nozzles those
-    anchors stand for. So the ends come from
-    :func:`~pandid.portgeom.port_point` and the waypoints go in between.
-
-    Collinear middle points are dropped. The router emits a point per
-    grid step it turned at, and three points on one straight length are
-    harmless as ink but not as *structure*: every consumer downstream
-    asks how long a segment is -- the stream label picks the longest to
-    write itself in, a draw.io edge carries one waypoint per real turn
-    -- and a run chopped into pieces answers wrongly.
-
-    Lifted out of the SVG renderer so the draw.io exporter draws the
-    same line rather than a second opinion about it.
-    """
-    from pandid.portgeom import port_point
-
-    src_u, dst_u = s.source.owner, s.dest.owner
-    start = port_point(src_u, src_u.frame, s.source.name)
-    end = port_point(dst_u, dst_u.frame, s.dest.name)
-    points = [start] + list(s.route.waypoints if s.route and s.route.waypoints else []) + [end]
-
-    simplified = [points[0]]
-    for i in range(1, len(points) - 1):
-        p_prev, p_curr, p_next = simplified[-1], points[i], points[i + 1]
-        if (p_prev[0] == p_curr[0] == p_next[0]) or (p_prev[1] == p_curr[1] == p_next[1]):
-            continue
-        simplified.append(p_curr)
-    simplified.append(points[-1])
-    return simplified
-
-
 class _Hop(NamedTuple):
     """One line jump: the crossing it stands over, and who draws it.
 
@@ -1641,29 +1606,23 @@ class StreamNumber(NamedTuple):
 
 def stream_numbers(fs, placed: list, joints: "str | None",
                    direction: str) -> "list[StreamNumber]":
-    """Where every line number on the sheet goes.
+    """Choose one readable label position for each named material run.
 
-    Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
-    :func:`stream_polyline` and :func:`boundary_flag` were, and with
-    more at stake: this is a *search*, not a formula, so a second
-    implementation would not merely drift, it would answer differently
-    on the first crowded corridor.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed drawing whose stream names are placed.
+    placed : list
+        Occupied label boxes; selected boxes are appended to this list.
+    joints : str or None
+        Sheet-wide connection style.
+    direction : str
+        Preferred direction for crossing jumps.
 
-    ``placed`` is the list of opaque plates already on the sheet, and it
-    is **appended to**: each number's halo, and each leader's box, is
-    seeded as occupied so the next number does not delete it. The caller
-    passes the equipment tags it has laid down and gets back the whole
-    set, which is what :meth:`SvgRenderer._draw_streams` hands to the
-    debugging overlay. An exporter with no equipment-tag pass of its own
-    passes an empty list and gets a placement that dodges every symbol
-    and every line but may still land under a tag -- the one thing about
-    this the two backends do not share, and a difference of a seed
-    rather than of a method.
-
-    Everything else the search needs is derived here from the flowsheet,
-    so the two callers cannot disagree about it: :func:`_ink` for the
-    lines, and :func:`~pandid.portgeom.unit_box` through
-    :func:`_obstacle` for the symbols.
+    Returns
+    -------
+    list[StreamNumber]
+        Label placements shared by SVG and draw.io output.
     """
     from pandid.portgeom import unit_box
 
@@ -1694,14 +1653,18 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     for s in fs.streams:
         if s.kind in _SIGNAL_KINDS or s.name in labeled_names:
             continue
-        points = stream_polyline(s)
         longest_seg, max_len = None, -1.0
-        for i in range(len(points) - 1):
-            x1, y1 = points[i]
-            x2, y2 = points[i + 1]
-            seg = abs(x2 - x1) + abs(y2 - y1)
-            if seg > max_len:
-                max_len, longest_seg = seg, ((x1, y1), (x2, y2))
+        carrier, carrier_points = s, []
+        candidates = [part for part in s._logical_segments if part.name == s.name] or [s]
+        for part in candidates:
+            points = stream_polyline(part)
+            for i in range(len(points) - 1):
+                x1, y1 = points[i]
+                x2, y2 = points[i + 1]
+                length = abs(x2 - x1) + abs(y2 - y1)
+                if length > max_len:
+                    max_len, longest_seg = length, ((x1, y1), (x2, y2))
+                    carrier, carrier_points = part, points
         if not longest_seg:
             continue
         labeled_names.add(s.name)
@@ -1712,7 +1675,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         (mx1, my1), (mx2, my2) = longest_seg
         keep = FLANGE_STANDOFF + FLANGE_GAP / 2 if any(
             _near_segment((m.x, m.y), (mx1, my1), (mx2, my2))
-            for m in flange_marks(s, points, resolve_connections(s, joints))
+            for m in flange_marks(carrier, carrier_points, resolve_connections(carrier, joints))
         ) else 0.0
         label_items.append((longest_seg, s.name, s.color or "black", keep))
 

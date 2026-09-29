@@ -184,6 +184,24 @@ def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
 
 
 class DefaultRouter:
+    """Route automatic streams on a visibility graph.
+
+    Parameters
+    ----------
+    recover_exits : bool, optional
+        Try connected lanes before a blocked nominal nozzle projection.
+    """
+
+    def __init__(self, *, recover_exits: bool = False) -> None:
+        """Set the opt-in outward-stub recovery policy.
+
+        Parameters
+        ----------
+        recover_exits : bool, optional
+            Enable clearance checks and shorter reachable escape nodes.
+        """
+        self.recover_exits = recover_exits
+
     def route(self, fs: "Flowsheet") -> None:
         """Compute and separate all automatic stream paths.
 
@@ -317,11 +335,22 @@ class DefaultRouter:
                 start, start_dir, start_proj, goal, goal_dir, goal_proj, graph.obstacles
             )
 
+            clear_stubs = True
+            if self.recover_exits:
+                clear_start = graph.reachable_projection(start, start_proj, start_dir, src_u)
+                clear_goal = graph.reachable_projection(goal, goal_proj, goal_dir, dst_u)
+                if clear_start is not None and clear_goal is not None:
+                    start_proj, goal_proj = clear_start, clear_goal
+                else:
+                    clear_stubs = False
+
             is_recycle = getattr(stream, "is_recycle", False)
-            path = find_path(
-                graph, start_proj, goal_proj, start_dir, goal_dir,
-                edge_penalties, is_recycle, crossing_index,
-            )
+            path = []
+            if clear_stubs:
+                path = find_path(
+                    graph, start_proj, goal_proj, start_dir, goal_dir,
+                    edge_penalties, is_recycle, crossing_index,
+                )
             path_found = bool(path)
 
             if path:

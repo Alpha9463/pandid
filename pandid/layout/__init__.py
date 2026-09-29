@@ -41,7 +41,7 @@ sheet out twice did not draw it twice the same.
 two balloons, moved 16px on the second run.
 """
 
-from typing import Protocol, TYPE_CHECKING
+from typing import Literal, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -80,26 +80,63 @@ def _seed_slots(fs: "Flowsheet") -> None:
 class ConstraintLayoutEngine:
     """The default auto-layout engine.
 
-    Named for what decides a position: every unit's claim about where
-    its neighbours belong, fitted at once. Nothing is ranked and nothing
-    is dropped -- two claims that disagree settle on the compromise
-    their weights buy, which is why there is no crossing-reduction sweep
-    here either. A barycentre pass approximates by iteration the average
-    the fit computes exactly.
+    Equipment and stream-relative stations are placed in separate passes
+    when a station can be contracted. Other sheets use the full unit graph.
     """
 
-    def layout(self, fs: "Flowsheet") -> None:
+    def layout(self, fs: "Flowsheet", *, use_coarse: bool = True,
+               reservation: Literal["conservative", "compact", "shared"] = "shared",
+               row_compaction: float = 0.0,
+               directional_station: bool = False) -> None:
+        """Resolve process, inline, and control geometry for a sheet.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Sheet to lay out.
+        use_coarse : bool, optional
+            Try equipment-first placement for stream-relative stations.
+        reservation : {"conservative", "compact", "shared"}, optional
+            Attachment-corridor estimate for an isolated equipment trial.
+        row_compaction : float, optional
+            Fraction of independent column-row compaction to apply.
+        directional_station : bool, optional
+            Follow explicitly mirrored station flow in a detached trial.
+
+        Returns
+        -------
+        None
+            Unit frames and chosen faces are updated in place.
+        """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
+        from pandid.layout.coarse import (has_free_station, place_equipment_first,
+                                          place_inline_equipment_first)
         from pandid.layout.coordinates import assign_coordinates, assign_labels
         from pandid.layout.cycles import break_cycles
         from pandid.layout.faces import select_faces
+        from pandid.layout.inline import place_inline
+        from pandid.layout.station import place_stations
         from pandid.layout.place import assign_positions
 
         _seed_slots(fs)
         break_cycles(fs)
-        assign_positions(fs)
-        assign_coordinates(fs)
+        station_coarse = use_coarse and place_equipment_first(
+            fs, reservation=reservation, directional=directional_station
+        )
+        inline_coarse = False
+        if (use_coarse and not station_coarse and not has_free_station(fs)
+                and any(stream._logical_to is not None for stream in fs.streams)):
+            inline_coarse = place_inline_equipment_first(fs, reservation=reservation)
+        fs._coarse_layout_candidate = station_coarse or inline_coarse
+        if not fs._coarse_layout_candidate:
+            _seed_slots(fs)
+            assign_positions(fs)
+            assign_coordinates(fs, row_compaction=row_compaction)
+            place_stations(fs)
+            place_inline(fs)
+        elif not inline_coarse:
+            place_inline(fs)
         # Choose the faces, and place again where that moved a balloon.
         # The loop ends on a selection made against boxes nothing has
         # moved since, so the sheet it hands on is a function of the

@@ -34,8 +34,8 @@ no worse than a roomy one for the same quality of routing:
   search that nearly ran out reads as different from one that walked away
   from most of its ceiling.
 
-Every metric reads ``stream.route.waypoints`` after ``route()`` returns --
-the drawn geometry, offsets from ``separate_streams`` included -- except the
+Every metric reads the complete drawn stream path after ``route()`` returns --
+the nozzle points and separated route waypoints -- except the
 avoidability re-route, which necessarily replays the pre-separation search
 (see :class:`Recorder`'s docstring for why that is the more honest ground to
 test on, and why it does not change the headline crossing count).
@@ -66,6 +66,8 @@ sys.path.insert(0, str(HERE))
 import gallery  # noqa: E402
 
 from pandid.flowsheet import Flowsheet  # noqa: E402
+from pandid.portgeom import port_point  # noqa: E402
+from pandid.route_geometry import stream_polyline  # noqa: E402
 from pandid.units import Feed, Product, Pump, Valve  # noqa: E402
 import pandid.routing.astar as astar_mod  # noqa: E402
 from pandid.routing import DefaultRouter  # noqa: E402
@@ -104,19 +106,24 @@ class Overlap:
 
 
 def find_crossings_and_overlaps(fs: Flowsheet) -> tuple[list[Crossing], list[Overlap], int]:
-    """Every proper crossing and every residual overlap between two
-    *different* streams' final, drawn segments, plus a count of self-crossings
-    (a stream's own route crossing itself -- rare, and reported but not
-    otherwise analysed).
+    """Find crossings and overlapping tracks on complete drawn paths.
 
-    O(streams^2 x segments^2) per sheet; the largest example in the corpus
-    (11_ethanol_pid, 93 streams) is comfortably small for that.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed drawing whose stream paths are inspected.
+
+    Returns
+    -------
+    tuple[list[Crossing], list[Overlap], int]
+        Between-stream crossings, overlaps, and self-crossing count.
     """
     entries: list[tuple[object, tuple[Point, Point, str]]] = []
     for s in fs.streams:
-        if not s.route or not s.route.waypoints:
+        if (s.route is None or s.source.owner.frame is None
+                or s.dest.owner.frame is None):
             continue
-        for seg in waypoint_segments(s.route.waypoints):
+        for seg in waypoint_segments(stream_polyline(s)):
             entries.append((s, seg))
 
     crossings: list[Crossing] = []
@@ -553,12 +560,14 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
 
     rows: list[StreamRow] = []
     for s in fs.streams:
-        if s.route is None or len(s.route.waypoints) < 2:
+        if (s.route is None or s.source.owner.frame is None
+                or s.dest.owner.frame is None
+                or not s.route.manual and len(s.route.waypoints) < 2):
             continue
-        wp = s.route.waypoints
+        wp = stream_polyline(s)
         src_u, dst_u = s.source.owner, s.dest.owner
-        a = graph.port_anchors.get((src_u.name, s.source.name))
-        b = graph.port_anchors.get((dst_u.name, s.dest.name))
+        a = port_point(src_u, src_u.frame, s.source.name)
+        b = port_point(dst_u, dst_u.frame, s.dest.name)
         dir_a = graph.port_dirs.get((src_u.name, s.source.name))
         dir_b = graph.port_dirs.get((dst_u.name, s.dest.name))
         call = stream_call.get(id(s))

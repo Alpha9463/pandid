@@ -5,6 +5,8 @@ from pandid.layout import _seed_slots
 from pandid.layout.cycles import break_cycles
 from pandid.layout.coordinates import assign_coordinates
 from pandid.layout.place import assign_positions
+from pandid.portgeom import port_point
+from pandid.routing.metrics import real_bends
 
 
 def test_cycle_breaking():
@@ -89,6 +91,39 @@ def test_coordinates():
     # Only one column (col 1) exists, so it starts at MARGIN_X
     assert u1.frame.x == 50
     assert u1.frame.y == 50 + 2 * 120
+
+
+def test_vertical_vent_terminal_aligns_without_overriding_exact_pins():
+    """Align a free vent nozzle while retaining authored pixel coordinates.
+
+    Returns
+    -------
+    None
+        The free connection is straight and both explicit x pins remain exact.
+    """
+    free = Flowsheet("Free vent")
+    vessel = free.add(U.Vessel("V-1", variant="horizontal", width=150, height=48))
+    vent = free.add(U.Vent("VT-1"))
+    stream = free.connect(vessel.vent, vent.inlet)
+    free.layout()
+    free.route()
+
+    assert port_point(vessel, vessel.frame, "vent")[0] == pytest.approx(
+        port_point(vent, vent.frame, "inlet")[0]
+    )
+    assert real_bends(stream.route.waypoints) == 0
+
+    pinned = Flowsheet("Pinned vent")
+    vessel = pinned.add(U.Vessel("V-2", variant="horizontal", width=150, height=48))
+    vent = pinned.add(U.Vent("VT-2"))
+    vessel.pin(x=100)
+    vent.pin(x=50)
+    pinned.connect(vessel.vent, vent.inlet)
+    pinned.layout()
+    pinned.route()
+
+    assert vessel.frame.x == 100
+    assert vent.frame.x == 50
 
 
 def test_full_layout_via_render(tmp_path):
@@ -764,6 +799,38 @@ def test_a_ribbon_wider_than_the_paper_is_folded_into_bands():
     assert len({round(f.cy) for f in frames}) > 1
 
 
+def test_a_protected_fold_rechecks_deferred_columns():
+    """Keep each band within paper after moving a fold off a host run.
+
+    Returns
+    -------
+    None
+        Deferred columns are included in the next band's width check.
+    """
+    from pandid.layout import _seed_slots
+    from pandid.layout.coarse import Host
+    from pandid.layout.coordinates import BAND_WIDTH, _bands, _columns, _lay_columns
+    from pandid.layout.place import assign_positions
+    from pandid.layout.stages import process_units, slot
+
+    fs = Flowsheet("Protected fold")
+    blocks = [fs.add(U.Block(str(index), inputs=["W"], outputs=["E"])) for index in range(20)]
+    streams = [fs.connect(source.out_1, dest.in_1) for source, dest in zip(blocks, blocks[1:])]
+    _seed_slots(fs)
+    assign_positions(fs)
+    for block in blocks:
+        slot(block).w = 200
+    units = process_units(fs)
+    columns = _columns(units, {})
+    run = streams[9]
+    host = Host(run.source, run.dest, run, run)
+
+    bands = _bands(units, columns, {}, True, hosts=[host])
+    assert [column for band in bands for column in band] == list(range(20))
+    assert all(_lay_columns(columns, band, {}) <= BAND_WIDTH for band in bands)
+    assert any(9 in band and 10 in band for band in bands)
+
+
 def test_a_ribbon_that_fits_the_paper_is_left_alone():
     """The fold is for a sheet nobody could read, not for every sheet."""
     fs = _long_train(6)
@@ -917,6 +984,18 @@ def test_pixel_clearance_does_not_move_a_separator_into_a_free_pump():
 
 @pytest.mark.parametrize("skip", ["s103", "dirty_water"])
 def test_biodiesel_unpin_matches_a_fresh_build_and_keeps_remaining_pins(skip):
+    """Keep the same final drawing after an unpin and fresh reconstruction.
+
+    Parameters
+    ----------
+    skip : str
+        Name of the unit whose placement pin is removed.
+
+    Returns
+    -------
+    None
+        Pin positions and completed layout agree across rerenders.
+    """
     from _layout_cases import build
     from pandid.portgeom import pin_intent, port_point
 
@@ -932,6 +1011,7 @@ def test_biodiesel_unpin_matches_a_fresh_build_and_keeps_remaining_pins(skip):
             assert point[0 if axis == "x" else 1] == pytest.approx(value)
     positions = [(u.frame.x, u.frame.y) for u in live.units]
     live.layout()
+    live.route()
     assert [(u.frame.x, u.frame.y) for u in live.units] == positions
 
 

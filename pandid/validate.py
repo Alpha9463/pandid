@@ -48,6 +48,8 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
@@ -171,8 +173,19 @@ class Issue:
 
 def _overlap(a: tuple[float, float, float, float],
              b: tuple[float, float, float, float]) -> bool:
-    return not (a[2] - _TOL <= b[0] or b[2] - _TOL <= a[0]
-                or a[3] - _TOL <= b[1] or b[3] - _TOL <= a[1])
+    """Check overlap with the shared drawing-box predicate.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float, float, float]
+        Unit box coordinates.
+
+    Returns
+    -------
+    bool
+        Whether the unit interiors overlap.
+    """
+    return boxes_overlap(a, b)
 
 
 def _is_control_function(letters: str, i: int) -> bool:
@@ -273,17 +286,21 @@ def _square(x1, y1, x2, y2) -> bool:
 
 
 def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
-    """True if an orthogonal segment passes through a box's interior.
+    """Check whether an orthogonal segment passes through a unit box.
 
-    A sloping one answers ``False`` whatever it runs over, which is why
-    ``route-diagonal`` exists: see :data:`_SQUARE_TOL`.
+    Parameters
+    ----------
+    x1, y1, x2, y2 : float
+        Segment coordinates.
+    box : tuple[float, float, float, float]
+        Unit box coordinates.
+
+    Returns
+    -------
+    bool
+        Whether the segment crosses the box interior.
     """
-    bx0, by0, bx1, by1 = box
-    if abs(x1 - x2) < _SQUARE_TOL:  # vertical
-        return bx0 + _TOL < x1 < bx1 - _TOL and min(y1, y2) < by1 - _TOL and max(y1, y2) > by0 + _TOL
-    if abs(y1 - y2) < _SQUARE_TOL:  # horizontal
-        return by0 + _TOL < y1 < by1 - _TOL and min(x1, x2) < bx1 - _TOL and max(x1, x2) > bx0 + _TOL
-    return False
+    return segment_crosses_box((x1, y1), (x2, y2), box)
 
 
 def _pinned_y(unit) -> bool:
@@ -1046,6 +1063,18 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     that the spelling of that name stays one question, asked in
     :func:`pandid.render.svg.draws_arrowheads`.
     :meth:`pandid.flowsheet.Flowsheet.validate` resolves it.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Drawing whose resolved geometry is checked.
+    arrows : bool, optional
+        Whether process stream arrows appear on this rendering.
+
+    Returns
+    -------
+    list[Issue]
+        Geometry findings with errors before warnings.
     """
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces,
@@ -1072,6 +1101,20 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"attached instruments were still moving after {MAX_PLACEMENT_PASSES} "
             "routing passes; a balloon may sit slightly off the line it taps. "
             "Pin the balloon-carrying lines with via() to settle it"))
+
+    search_result = getattr(fs, "_layout_search_result", None)
+    if search_result is not None and search_result.status != "converged":
+        code = (
+            "layout-search-budget-exhausted"
+            if search_result.status == "budget_exhausted"
+            else "layout-search-unresolved"
+        )
+        warnings.append(Issue(
+            "warning", code,
+            f"layout search {search_result.status} with "
+            f"{len(search_result.conflicts)} named conflicts after "
+            f"{search_result.exact_trials} exact trials"
+        ))
 
     # --- a balloon nothing could place (recorded by layout, not
     # --- recomputed here) --- An attached instrument takes its frame

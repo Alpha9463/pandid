@@ -81,7 +81,6 @@ gallery = _gallery()
 #: passes by having nothing to draw. Asserted rather than trusted: each case
 #: checks its sheet really does mark something before it compares anything.
 MARKED = (
-    "08_from_data",
     "11_ethanol_pid",
     "15_condensing_turbine",
     "16_demineralised_water",

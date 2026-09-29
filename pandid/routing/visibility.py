@@ -4,6 +4,7 @@ from typing import Optional, Set, Tuple, List, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.units import Unit
 
 @dataclass
 class Rect:
@@ -148,11 +149,35 @@ def share_escape_room(
 
 
 class VisibilityGraph:
+    """Orthogonal routing lanes around placed units and labels.
+
+    Attributes
+    ----------
+    obstacles : list[Rect]
+        Unit and label rectangles excluded from ordinary graph edges.
+    body_obstacles : list[tuple[Unit, Rect]]
+        Unit bodies used to check outward nozzle stubs.
+    nodes : set[tuple[float, float]]
+        Unblocked routing-lane intersections.
+    edges : dict[tuple[float, float], list[tuple[float, float]]]
+        Clear connections between adjacent nodes.
+    """
+
     def __init__(self, fs: "Flowsheet", margin: float = 15.0):
+        """Build a visibility graph for resolved drawing geometry.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Sheet with placed frames and selected nozzle faces.
+        margin : float, optional
+            Clearance between body boxes and outer routing lanes.
+        """
         from pandid.layout.attach import is_attached
         from pandid.portgeom import port_anchor
 
         self.obstacles: List[Rect] = []
+        self.body_obstacles: List[Tuple["Unit", Rect]] = []
         x_set: Set[float] = set()
         y_set: Set[float] = set()
 
@@ -183,10 +208,11 @@ class VisibilityGraph:
             # port-at-(x+50) convention: the drawn box extends left from there.
             if not inline:
                 if u.kind == "feed" and not mirrored:
-                    self.obstacles.append(
-                        Rect(f.x + 50.0 - u_width, f.x + 50.0, f.y, f.y + u_height))
+                    body = Rect(f.x + 50.0 - u_width, f.x + 50.0, f.y, f.y + u_height)
                 else:
-                    self.obstacles.append(Rect(f.x, f.x + u_width, f.y, f.y + u_height))
+                    body = Rect(f.x, f.x + u_width, f.y, f.y + u_height)
+                self.obstacles.append(body)
+                self.body_obstacles.append((u, body))
 
             # The label's own obstacle rect and the lanes that clear it were
             # two separately-guarded blocks that happened to test the same
@@ -345,3 +371,56 @@ class VisibilityGraph:
                     y1, y2 = valid_y[k], valid_y[k+1]
                     self.edges[(x, y1)].append((x, y2))
                     self.edges[(x, y2)].append((x, y1))
+
+    def reachable_projection(
+        self,
+        anchor: Tuple[float, float],
+        projection: Tuple[float, float],
+        direction: str | None,
+        owner: "Unit",
+    ) -> Tuple[float, float] | None:
+        """Find the furthest connected lane on a clear outward nozzle stub.
+
+        Parameters
+        ----------
+        anchor : tuple[float, float]
+            Nozzle anchor on the owner's body boundary.
+        projection : tuple[float, float]
+            Maximum outward escape coordinate.
+        direction : str or None
+            Drawn outward nozzle face.
+        owner : Unit
+            Unit carrying the nozzle.
+
+        Returns
+        -------
+        tuple[float, float] or None
+            Reachable lane with a clear stub, or None for a sealed exit.
+        """
+        travel = TRAVEL.get(direction) if direction is not None else None
+        if travel is None:
+            return projection
+        axis, sign = travel
+        distance = sign * (projection[axis] - anchor[axis])
+        if distance <= 0:
+            return projection
+        lanes = self.xs if axis == 0 else self.ys
+        ordered = reversed(lanes) if sign > 0 else iter(lanes)
+        for coordinate in ordered:
+            reach = sign * (coordinate - anchor[axis])
+            if reach <= 0:
+                break
+            if reach > distance:
+                continue
+            candidate = (
+                (coordinate, anchor[1]) if axis == 0 else (anchor[0], coordinate)
+            )
+            if not self.edges.get(candidate):
+                continue
+            if any(
+                other is not owner and body.intersects_segment(*anchor, *candidate)
+                for other, body in self.body_obstacles
+            ):
+                continue
+            return candidate
+        return None

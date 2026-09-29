@@ -13,6 +13,28 @@ from pandid import Flowsheet, units as U
 from pandid.routing.visibility import VisibilityGraph
 
 
+def test_route_report_uses_drawn_nozzles_for_length_baseline() -> None:
+    """Compare a route's drawn length with its nozzle-to-nozzle minimum.
+
+    Returns
+    -------
+    None
+        An inset nozzle does not inflate the reported length ratio.
+    """
+    from scripts import gallery, route_quality
+    from pandid.portgeom import port_point
+
+    fs, _ = gallery.flowsheet("05_reactor_recycle")
+    report = route_quality.measure_sheet(fs, "05_reactor_recycle")
+    stream = next(stream for stream in fs.streams if stream.name == "S4")
+    row = next(row for row in report.rows if row.name == stream.name)
+    source = port_point(stream.source.owner, stream.source.owner.frame, stream.source.name)
+    dest = port_point(stream.dest.owner, stream.dest.owner.frame, stream.dest.name)
+    minimum = abs(dest[0] - source[0]) + abs(dest[1] - source[1])
+    assert row.manhattan == pytest.approx(minimum)
+    assert row.length / row.manhattan == pytest.approx(1.0)
+
+
 def _ammonia_loop():
     fs = Flowsheet("Ammonia Loop")
     feed = fs.add(U.Feed("Natural Gas"))

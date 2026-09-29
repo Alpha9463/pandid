@@ -6,10 +6,85 @@ import pytest
 
 from pandid.flowsheet import Flowsheet
 from pandid.units import Feed, HeatExchanger, Product, Pump, Valve, Vessel
-from pandid.routing import get_outward_dir, _fallback_path
+from pandid.routing import DefaultRouter, get_outward_dir, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
 from pandid.routing.visibility import Rect, VisibilityGraph, clear_gaps
+
+
+def test_router_uses_a_reachable_lane_before_a_blocked_projection() -> None:
+    """Reach the graph before an obstacle blocks the nominal nozzle stub.
+
+    Returns
+    -------
+    None
+        The automatic route clears the unrelated body without moving pins.
+    """
+    fs = Flowsheet("reachable escape")
+    feed = fs.add(Feed("F")).pin(x=60, y=100)
+    product = fs.add(Product("P")).pin(x=400, y=100)
+    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=83, y=78)
+    stream = fs.connect(feed.outlet, product.inlet)
+    fs.layout()
+    graph = VisibilityGraph(fs)
+    assert graph.port_projs[("F", "outlet")] not in graph.nodes
+
+    fs.route(DefaultRouter(recover_exits=True))
+
+    assert stream.route is not None and not stream.route.used_fallback
+    assert feed.frame is not None and product.frame is not None and blocker.frame is not None
+    assert [
+        (feed.frame.x, feed.frame.y),
+        (product.frame.x, product.frame.y),
+        (blocker.frame.x, blocker.frame.y),
+    ] == [(10.0, 75.0), (400.0, 75.0), (83, 78)]
+    assert not any(issue.code == "route-crosses-unit" for issue in fs.validate())
+
+
+def test_router_reports_a_sealed_fixed_nozzle() -> None:
+    """Keep a fully blocked outward nozzle unresolved.
+
+    Returns
+    -------
+    None
+        Fixed equipment stays put and the route records fallback.
+    """
+    fs = Flowsheet("sealed escape")
+    feed = fs.add(Feed("F")).pin(x=60, y=100)
+    product = fs.add(Product("P")).pin(x=400, y=100)
+    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=60, y=78)
+    stream = fs.connect(feed.outlet, product.inlet)
+    fs.layout()
+    fs.route(DefaultRouter(recover_exits=True))
+
+    assert stream.route is not None and stream.route.used_fallback
+    assert feed.frame is not None and product.frame is not None and blocker.frame is not None
+    assert [
+        (feed.frame.x, feed.frame.y),
+        (product.frame.x, product.frame.y),
+        (blocker.frame.x, blocker.frame.y),
+    ] == [(10.0, 75.0), (400.0, 75.0), (60, 78)]
+    assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
+
+
+def test_router_does_not_call_a_blocked_stub_successful() -> None:
+    """Reject a graph path whose anchor lead crosses another body.
+
+    Returns
+    -------
+    None
+        The drawn fallback remains explicitly unresolved.
+    """
+    fs = Flowsheet("blocked stub")
+    feed = fs.add(Feed("F")).pin(x=60, y=100)
+    product = fs.add(Product("P")).pin(x=400, y=100)
+    fs.add(Pump("Blocker", width=12, height=40, label_pos="center")).pin(x=68, y=80)
+    stream = fs.connect(feed.outlet, product.inlet)
+    fs.layout()
+    fs.route(DefaultRouter(recover_exits=True))
+
+    assert stream.route is not None and stream.route.used_fallback
+    assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
 
 
 def test_rect_intersection():
@@ -999,22 +1074,13 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
 
 
 def test_a_later_streams_recording_uses_separated_not_raw_geometry():
-    # #483's round-5 review, point 2: the router recorded every route's
-    # *raw*, pre-separation geometry into ``crossing_index``, then only
-    # afterwards ran ``separate_streams`` -- once, on the whole sheet -- to
-    # nudge overlapping parallel runs apart. So a later stream's search was
-    # always pricing crossings against a drawing that was never actually
-    # made: the true, on-sheet position of an earlier run could be a few
-    # pixels off whatever the index had recorded for it.
-    #
-    # Two manual routes share an unfixed middle run at y=100, overlapping
-    # in x (see the preview test above), so ``separate_streams`` moves the
-    # second one to y=106 once both are on the sheet -- confirmed against
-    # s2's own final waypoints below, not assumed. What gets *recorded* for
-    # s2 has to show that same y=106, not the raw y=100 that s2 never
-    # actually draws by the time the sheet is finished; a spy on
-    # ``CrossingIndex.record`` reads that off directly rather than needing
-    # a downstream routing decision to flip.
+    """Record the separated route so later streams price its drawn path.
+
+    Returns
+    -------
+    None
+        The second manual route is recorded at its separated y coordinate.
+    """
     recorded: list[list[tuple[float, float]]] = []
     original_record = CrossingIndex.record
 
@@ -1035,7 +1101,8 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry():
     fs.layout()
     CrossingIndex.record = spy
     try:
-        fs.route()
+        # Keep layout-search trials out of the router's recording spy.
+        fs.route(router=DefaultRouter())
     finally:
         CrossingIndex.record = original_record
 

@@ -7,6 +7,7 @@ one-stream-per-port rule.
 
 from __future__ import annotations
 from contextlib import contextmanager
+from math import isfinite
 from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
@@ -28,7 +29,9 @@ if TYPE_CHECKING:
 
     from pandid.components import Component
     from pandid.document import TitleBlock
+    from pandid.geometry import Frame
     from pandid.loops import ControlLoop, Loop
+    from pandid.layout.search import SearchResult
     from pandid.ports import Port
     from pandid.stations import ValveStation
     from pandid.units import Instrument, Unit
@@ -383,6 +386,27 @@ class Flowsheet:
             DEFAULT_VALVE_STATION_TAG_SCHEME),
         auto_faces: bool = True,
     ):
+        """Create an empty flowsheet with its author-facing defaults.
+
+        Parameters
+        ----------
+        name : str
+            Drawing title.
+        stream_naming_scheme : str or callable, optional
+            Format for generated stream names.
+        stream_number_start : int, optional
+            First generated stream number.
+        line_numbering_scheme : str or callable, optional
+            Format for process line numbers.
+        line_number_start : int, optional
+            First generated line sequence number.
+        loop_number_start : int, optional
+            First automatically numbered control loop.
+        valve_station_tag_scheme : str or callable, optional
+            Format for valve station member tags.
+        auto_faces : bool, optional
+            Whether movable nozzle faces are selected automatically.
+        """
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
         # The ``{n}`` in ``stream_naming_scheme``, offset. Not its
@@ -410,6 +434,7 @@ class Flowsheet:
         self.valve_station_tag_scheme = valve_station_tag_scheme
         self.auto_faces = auto_faces
         self.units: list = []
+        self._station_assemblies: list = []
         self.streams: list[Stream] = []
         self.components: list = []
         # Declared control loops, in declaration order. Kept apart from
@@ -442,6 +467,9 @@ class Flowsheet:
         # out of passes still moving them? Read by validate(), which
         # carries the answer onto `warnings`.
         self.route_converged: bool = True
+        self._layout_search_result: SearchResult | None = None
+        self._search_seed_frames: tuple[Frame, ...] | None = None
+        self._coarse_layout_candidate = False
         # The attached instruments the last placement sweep could put
         # nowhere, because nothing in their host chain ever resolved.
         # Set by `pandid.layout.attach.place_attached`, which is the
@@ -527,9 +555,16 @@ class Flowsheet:
         should call it anyway. Re-laying out costs time and comes out
         the same drawing, because the solver is reseeded from ``pin_``
         on every run; not re-laying out draws the previous sheet.
+
+        Returns
+        -------
+        None
+            Layout, routes, and opt-in search status become stale.
         """
         self._layout_stale = True
         self._route_stale = True
+        self._layout_search_result = None
+        self._search_seed_frames = None
 
     @property
     def auto_faces(self) -> bool:
@@ -947,6 +982,140 @@ class Flowsheet:
             f"elsewhere has no entry in this sheet's spec to tap"
         )
 
+    def _set_inline_at(self, stream: Stream, at: float) -> None:
+        """Record a wired inline device's preferred position on its run.
+
+        Parameters
+        ----------
+        stream : Stream
+            Material segment entering the inline device.
+        at : float
+            Preferred fraction of the complete run from source to destination.
+
+        Returns
+        -------
+        None
+            The preference is stored on the existing segment.
+
+        Raises
+        ------
+        ValueError
+            If the segment or its destination is ineligible.
+        """
+        self._refuse_foreign("stream", stream)
+        if (isinstance(at, bool) or not isinstance(at, (int, float))
+                or not isfinite(at) or not 0 < at < 1):
+            raise ValueError("inline position must be a finite number between 0 and 1")
+        unit = stream.dest.owner
+        station = next((assembly for assembly in self._station_assemblies
+                        if assembly.station.inlet is stream.dest and assembly.run is not None), None)
+        if station is not None:
+            if (stream.kind != "material" or stream.dest.stream is not stream
+                    or station.at != float(at) or station.station.outlet.stream is None):
+                raise ValueError("inline position differs from its station attachment")
+            stream._inline_at = float(at)
+            self._invalidate_layout()
+            return
+        if (stream.kind != "material" or stream.draw_as_recycle
+                or stream.is_recycle or unit is None
+                or unit.kind not in {"valve", "reducer", "fitting"}):
+            raise ValueError("inline position requires a material stream entering an inline device")
+        if stream.dest.name != "inlet" or stream.dest.stream is not stream:
+            raise ValueError("inline position requires the device inlet stream")
+        process_ports = {port.name for port in unit.ports.values() if port.role == "process"}
+        outgoing = unit.ports.get("outlet")
+        if (process_ports != {"inlet", "outlet"} or outgoing is None or outgoing.stream is None
+                or outgoing.stream.source is not outgoing or outgoing.stream.kind != "material"
+                or outgoing.stream.draw_as_recycle or outgoing.stream.is_recycle):
+            raise ValueError("inline position requires one material inlet and outlet")
+        stream._inline_at = float(at)
+        self._invalidate_layout()
+
+    def place_on(self, run: Stream, device: _UnitT, *, at: float = 0.5) -> _UnitT:
+        """Insert a simple inline device on a material run.
+
+        The original stream remains the run's stable handle. Its physical
+        segments and the device are added to this flowsheet in flow order.
+
+        Parameters
+        ----------
+        run : Stream
+            Existing material run or handle returned by an earlier insertion.
+        device : Unit
+            Fresh two-port valve, reducer, or fitting.
+        at : float, optional
+            Preferred fraction of the complete run. Defaults to its midpoint.
+
+        Returns
+        -------
+        Unit
+            The inserted device.
+
+        Raises
+        ------
+        ValueError
+            If the run, device, or fraction cannot be inserted safely.
+        """
+        from pandid.inline import insert_device
+
+        return insert_device(self, run, device, at=at)
+
+    def place_valve_station_on(self, run: Stream, tag: str, *, at: float = 0.5,
+                               **station_options) -> "ValveStation":
+        """Build and place a valve station on a material run.
+
+        Parameters
+        ----------
+        run : Stream
+            Original material run handle.
+        tag : str
+            Control valve tag used to name the station members.
+        at : float, optional
+            Preferred fraction of the complete run. Defaults to its midpoint.
+        **station_options : Any
+            Options accepted by ``add_valve_station`` other than coordinates.
+
+        Returns
+        -------
+        ValveStation
+            The station handle with its members wired into the run.
+
+        Raises
+        ------
+        ValueError
+            If the run, fraction, or station options are invalid.
+        """
+        from dataclasses import replace
+
+        from pandid.inline import insert_station
+
+        if (isinstance(at, bool) or not isinstance(at, (int, float))
+                or not isfinite(at) or not 0 < at < 1):
+            raise ValueError("station fraction must be a finite number between 0 and 1")
+        if "x" in station_options or "y" in station_options:
+            raise ValueError("stream-relative stations do not accept x or y")
+        local = {}
+        for key, default in (("gap", DEFAULT_GAP),
+                             ("bypass_rise", DEFAULT_BYPASS_RISE),
+                             ("drain_drop", DEFAULT_DRAIN_DROP)):
+            value = station_options.pop(key, default)
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not isfinite(value) or value <= 0):
+                raise ValueError(f"{key} must be a positive finite number")
+            local[key] = float(value)
+        mirrored = station_options.pop("mirrored", False)
+        if not isinstance(mirrored, bool):
+            raise ValueError("mirrored must be a boolean")
+        with self._unchanged_if_it_raises():
+            station = self.add_valve_station(tag, **station_options)
+            index = next(i for i, assembly in enumerate(self._station_assemblies)
+                         if assembly.station is station)
+            self._station_assemblies[index] = replace(
+                self._station_assemblies[index], mirrored=mirrored, **local,
+            )
+            insert_station(self, run, station, at=at)
+        return station
+
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """The one anchor an ``add_instrument`` call named, and its use.
 
@@ -1270,85 +1439,49 @@ class Flowsheet:
         sequence: str | float | None = None, spec: str | float | None = None,
         insulation: str | float | None = None,
     ) -> "ValveStation":
-        """Build the standard assembly a control valve is installed in.
+        """Build a wired control-valve station.
 
-        Two isolation valves, two drain valves, one bypass valve on a
-        leg tapped outside the isolations, and a size change at each
-        end: the arrangement the CHEE4001/7103 guidelines draw and
-        :mod:`pandid.stations` quotes. The units are added, tagged,
-        described, pinned along a run at ``y`` and wired to each other;
-        what is left for the author is the piping either side of it,
-        which is what :attr:`~pandid.stations.ValveStation.inlet` and
-        :attr:`~pandid.stations.ValveStation.outlet` are for::
+        The returned handle exposes the main run, bypass, and drain
+        members. With ``x`` and ``y``, member positions are pinned.
+        Without them, the layout engine places a connected station as
+        one assembly when its external run has a clear straight corridor.
 
-            station = fs.add_valve_station(
-                "CV-303", x=670, y=440, mirrored=True,
-                description="Reflux", service="AE", sequence=303,
-                size=80, schedule=80, spec="SS")
-            fs.connect(t_draw.branch, station.inlet, service="AE",
-                       sequence=303, size=80, schedule=80, spec="SS")
-            fs.connect(station.outlet, fe303.inlet)
+        Parameters
+        ----------
+        tag : str
+            Control valve tag used to derive member names.
+        x, y : float or None
+            Optional absolute station left edge and run centerline.
+        mirrored : bool
+            Reverse the pinned run's flow direction.
+        variant : str
+            Control valve symbol variant.
+        number : str, int, or None
+            Optional number for derived member tags.
+        isolation, reducers, bypass : bool
+            Include the corresponding station components.
+        drains : int
+            Number of drain valves, from zero to two.
+        description : str
+            Service description for member labels.
+        bypass_over : str or None
+            Main member beneath the bypass valve.
+        tag_scheme : str, callable, or None
+            Optional member tag format.
+        gap, bypass_rise, drain_drop : float or None
+            Local spacing for an absolutely positioned station.
+        size, schedule, service, sequence, spec, insulation : str, float, or None
+            Line-number components for bypass and drain branches.
 
-        The returned :class:`~pandid.stations.ValveStation` is a handle,
-        not a unit: it draws nothing, reaches no equipment list, and its
-        members are ordinary units that can be re-pinned, re-tagged or
-        instrumented.
+        Returns
+        -------
+        ValveStation
+            Handle to the connected station members and external ports.
 
-        Args:
-            tag: The control valve's tag, and what the other members'
-                tags are derived from.
-            x: Left edge of the drawn station; ``y`` is the run's
-                **centreline**, so each device lands on the line
-                whatever its artwork measures. Give both or neither;
-                without them the members lay out like any other units,
-                and the four arguments that describe the drawn run --
-                ``mirrored``, ``gap``, ``bypass_rise``, ``drain_drop``
-                -- have no run to describe and are refused.
-            mirrored: Pipe the run east to west. The station still
-                occupies ``x`` rightwards; what reverses is which end
-                the flow enters.
-            variant: The control valve's variant.
-            number: The number the members are tagged from, defaulting
-                to the one in ``tag``. The escape hatch for a control
-                valve whose own number is not what its station is
-                numbered by: ``CV-301-1`` with ``number=301`` gives
-                ``HV-301A``, not ``HV-301-1A``.
-            isolation: Draw the two isolation valves.
-            reducers: Draw the reduction in and the expansion out.
-            bypass: Draw the bypass leg and its normally closed
-                throttling valve.
-            drains: How many drain valves, 0, 1 or 2. One goes upstream.
-            description: The service in words. Each member's description
-                is this plus what it does: ``"Reflux Isolation Valve"``.
-            bypass_over: The member the bypass valve stands over, one of
-                :data:`~pandid.stations.BYPASS_ANCHORS`; by default it
-                sits in the middle of its own leg, where the reference
-                figure draws it. Move it when something else already
-                crosses there, most often a controller's output dropping
-                onto the actuator.
-            tag_scheme: Overrides :attr:`valve_station_tag_scheme` for
-                this station only.
-            gap: Edge to edge between devices along the run;
-                :data:`~pandid.stations.DEFAULT_GAP` by default.
-            bypass_rise: How far the bypass leg stands off the run;
-                :data:`~pandid.stations.DEFAULT_BYPASS_RISE` by default.
-            drain_drop: How far a drain leg hangs below it;
-                :data:`~pandid.stations.DEFAULT_DRAIN_DROP` by default.
-            size, schedule, service, sequence, spec, insulation: The
-                line number's components, put on the bypass and drain
-                branches. A branch off a tee starts a number of its own,
-                and a bypass is the same service, size and spec as the
-                run it goes round. The run through the station carries
-                the number of whatever is connected to :attr:`inlet`.
-
-        Raises:
-            ValueError: for a station that cannot mean what it says: a
-                bypass with nothing to bypass around, a drain count that
-                is not 0, 1 or 2, one of ``x``/``y`` without the other,
-                a ``bypass_over`` naming a member this station was told
-                to leave out, or any of ``mirrored``/``gap``/
-                ``bypass_rise``/``drain_drop`` on a station with no
-                ``x``/``y`` to draw a run along.
+        Raises
+        ------
+        ValueError
+            If the requested components or coordinates are inconsistent.
         """
         from pandid.portgeom import port_offset, resolve_size
         from pandid.stations import (
@@ -1538,13 +1671,23 @@ class Flowsheet:
             branch = hanging.get(id(unit))
             if branch is not None:
                 members.append(branch)
-        return ValveStation(
+        station = ValveStation(
             control=control, upstream_isolation=iso_a, downstream_isolation=iso_b,
             reduction=red, expansion=exp, bypass=byp,
             upstream_drain=dr_a, downstream_drain=dr_b,
             tees=tuple(t for t in (t_bya, t_dra, t_drb, t_byb) if t is not None),
             members=tuple(members), inlet=run[0].inlet, outlet=run[-1].outlet,
         )
+        from pandid.stations import StationAssembly
+
+        self._station_assemblies.append(StationAssembly(
+            station=station, mirrored=mirrored,
+            gap=DEFAULT_GAP if gap is None else gap,
+            bypass_rise=DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise,
+            drain_drop=DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop,
+            bypass_over=bypass_over,
+        ))
+        return station
 
     def add_component(self, component: "Component") -> "Component":
         """Register a chemical component. Returns it, for chaining."""
@@ -1860,18 +2003,22 @@ class Flowsheet:
         Parameters
         ----------
         engine : object or None, optional
-            Layout engine. ``None`` selects the default engine and enables
-            bounded refinement after routing.
+            Layout engine. ``None`` selects the default engine. The built-in
+            engine enables bounded refinement after routing.
 
         Returns
         -------
         None
             Resolved frames are stored on the drawing.
         """
-        self._default_layout = engine is None
+        from pandid.layout import default_layout_engine
+
+        self._default_layout = engine is None or engine is default_layout_engine
+        self._coarse_layout_candidate = False
         self._refinement_attempted = False
+        self._layout_search_result = None
+        self._search_seed_frames = None
         if engine is None:
-            from pandid.layout import default_layout_engine
             engine = default_layout_engine
         engine.layout(self)
         self._layout_stale = False
@@ -1905,7 +2052,22 @@ class Flowsheet:
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
+        if router is not None and self._coarse_layout_candidate:
+            from pandid.layout import default_layout_engine
+
+            default_layout_engine.layout(self, use_coarse=False)
+            self._layout_stale = False
+            self._route_stale = True
+        self._layout_search_result = None
+        self._search_seed_frames = None
         default_router = router is None
+        from pandid.layout.stages import process_units
+
+        canonical_frames = all(
+            unit.frame is not None and unit._slot is not None
+            and unit.frame.x == unit._slot.x and unit.frame.y == unit._slot.y
+            for unit in process_units(self)
+        )
         if router is None:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
@@ -1934,6 +2096,34 @@ class Flowsheet:
             from pandid.layout.trials import refine_default
             self._refinement_attempted = True
             refine_default(self)
+        if default_router and self._coarse_layout_candidate:
+            from pandid.layout.coarse import keep_if_better
+            keep_if_better(self)
+        if default_router and getattr(self, "_default_layout", False):
+            row_baseline = None
+            if canonical_frames:
+                import copy
+
+                from pandid.layout.coarse import has_free_station
+                from pandid.layout.trials import refine_rows
+
+                if (not has_free_station(self)
+                        and not any(stream._logical_to is not None for stream in self.streams)):
+                    row_baseline = copy.deepcopy(self)
+                    if not refine_rows(self):
+                        row_baseline = None
+            from pandid.layout.search import SearchBudget, search_layout
+
+            budget = SearchBudget(4, 4, 16)
+            search_layout(self, budget)
+            if row_baseline is not None:
+                from pandid.layout.trials import _publish_candidate, row_final_better
+
+                search_layout(row_baseline, budget)
+                if not row_final_better(row_baseline, self):
+                    _publish_candidate(self, row_baseline)
+            # Only explicit searches report budget status during validation.
+            self._layout_search_result = None
 
     def _resolve_geometry(self) -> None:
         """Bring the frames and routes up to date with the model.

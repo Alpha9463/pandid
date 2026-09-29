@@ -201,6 +201,14 @@ auto-numbering unless it is given here. See [Line numbers](#line-numbers).
 [Flanged connections](#flanged-connections).
 
 ```text
+place_on(run: Stream, device: Unit, *, at: float = 0.5) -> Unit
+place_valve_station_on(run: Stream, tag: str, *, at: float = 0.5,
+                       **station_options) -> ValveStation
+```
+
+See [Stream-relative attachments](#stream-relative-attachments).
+
+```text
 add_component(component: Component) -> Component
 ```
 Registers a chemical species. `Component(name: str, formula: str | None = None)`
@@ -2066,6 +2074,25 @@ follows it — a turbine or a generator is a unit with a tag of its own.
 
 ## Placement
 
+### Stream-relative attachments
+
+`place_on(run, device, *, at=0.5)` inserts a fresh, unconnected two-process-port
+valve, reducer or fitting into a material run. `place_valve_station_on(run, tag,
+*, at=0.5, **station_options)` builds a valve station and inserts it into the
+same kind of run. Both return the inserted device or station. The original
+`Stream` returned by `connect()` remains the handle for later insertions.
+Multiple devices on one run need distinct `at` values; the sheet orders them
+by fraction along the flow.
+
+`at` is a preferred fraction of the complete run, strictly between 0 and 1;
+both calls default to `0.5`. Placement uses the available straight corridor,
+so the drawn fraction can vary. Exact unit pins still fix coordinates. These
+calls reject recycle runs, manually routed runs and runs with explicit end-joint
+styles, and leave the sheet unchanged when an insertion fails.
+`place_valve_station_on()` accepts the station options of `add_valve_station()`
+except `x` and `y`; use `add_valve_station()` with external `connect()` calls
+for direct wiring and optional absolute coordinates.
+
 ### What places a unit you have not pinned
 
 Every stream states two things about where its ends are drawn, one from each
@@ -3013,6 +3040,8 @@ fs.add_valve_station(
     size=None, schedule=None, service=None, sequence=None, spec=None,
     insulation=None,
 ) -> ValveStation
+fs.place_valve_station_on(run: Stream, tag: str, *, at: float = 0.5,
+                          **station_options) -> ValveStation
 ```
 
 Builds the assembly a control valve is installed in: two isolation valves, two
@@ -3053,9 +3082,9 @@ already connected, so any of them can be re-pinned, re-tagged or instrumented.
 | `members` | every member, in the order the run meets it |
 | `inlet`, `outlet` | the `Port`s the piping either side connects to |
 
-A member left out is `None`. Nothing of the station itself is serialized,
-because after the call there is nothing left of it the drawing depends on:
-`to_dict()` writes the members out and reading them back gives the same sheet.
+A member left out is `None`. `to_dict()` records the station's membership,
+geometry options and stream attachment alongside its member units and streams;
+`from_dict()` restores the assembly and its placement intent.
 
 **Tags.** `valve_station_tag_scheme` on the `Flowsheet`, or `tag_scheme` for one
 station, spells the members out of the control valve's tag. The default
@@ -3079,7 +3108,7 @@ tags none of these valves at all. `number=` overrides the number the scheme
 fills in, for a control valve whose own tag carries a suffix its hand valves do
 not (`add_valve_station("CV-301-1", number=301)` → `HV-301A`).
 
-**Placement.** With `x` and `y` the station pins its own members: `x` is the
+**Placement.** With `x` and `y`, `add_valve_station()` pins its members: `x` is the
 left edge of the drawn assembly and `y` is the run's **centreline**, so each
 device lands on the line whatever its artwork measures. `mirrored=True` pipes
 the run east to west, the same run drawn the other way round, still occupying
@@ -3088,18 +3117,15 @@ run, the height of the bypass leg and the depth of a drain leg; left unsaid they
 are 30, 45 and 36. `bypass_over` stands the bypass valve over a named member
 instead of in the middle of its own leg, which is what a station wants when a
 controller's output crosses the leg on its way down to the actuator. Give `x`
-and `y` together or not at all; without them the members lay out like any other
-unit.
+and `y` together or not at all. Without coordinates, a station connected to
+external piping can be placed as one assembly when the layout finds a clear
+straight corridor.
 
-**Those four describe a run that is drawn, so they need one.** `mirrored`,
-`gap`, `bypass_rise` and `drain_drop` say which way round the run is piped and
-how far apart its devices stand, and an unplaced station has no run: its members
-go to the layout engine one at a time, like everything else on the sheet, and
-the engine ranks and faces them from the graph. Writing one of them without `x`
-and `y` **raises**, naming the word — including `mirrored`, which reads as if it
-might survive but does not. Flipping every member of an unplaced station only
-turns each nozzle away from the neighbour the engine put beside it, and the
-sheet comes back doubling back on itself.
+`place_valve_station_on()` attaches the station to a material run at a preferred
+fraction, `0.5` by default. It accepts `mirrored`, `gap`, `bypass_rise` and
+`drain_drop` without `x` or `y`; these describe the station's local geometry.
+Direct `add_valve_station()` calls require both `x` and `y` when any of those
+four options is supplied.
 
 **Line numbers.** The run through the station takes the number of whatever is
 connected to `inlet`, carried through the valves, reducers and tees as any
@@ -3111,11 +3137,9 @@ spec as the run it goes round.
 **Refusals.** A bypass with `isolation=False` raises: a bypass exists so the
 unit keeps running while the control valve is isolated, and there is nothing to
 isolate it with. So does a `drains` that is not 0, 1 or 2, one of `x`/`y`
-without the other, a `bypass_over` naming a member the station was told to
-leave out, and any of `mirrored`/`gap`/`bypass_rise`/`drain_drop` on a station
-with no `x`/`y` to draw a run along. Every one of them is checked before a
-member joins the sheet, so a call that raises has built nothing at all and the
-tag is free to be used again.
+without the other, or a `bypass_over` naming a member the station was told to
+leave out. Direct `add_valve_station()` calls also reject
+`mirrored`/`gap`/`bypass_rise`/`drain_drop` without `x`/`y`.
 
 ### Anchoring a balloon
 

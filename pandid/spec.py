@@ -82,7 +82,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import fields as dataclass_fields
 from difflib import get_close_matches
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
+from math import isfinite
 
 from pandid import devices as device_types
 from pandid import units as unit_types
@@ -342,7 +343,7 @@ _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
     "line_numbering_scheme", "line_number_start", "loop_number_start",
     "auto_faces", "components", "units", "loops",
-    "instruments", "streams", "stream_table_sections", "stream_table",
+    "instruments", "streams", "stations", "stream_table_sections", "stream_table",
     "stream_labels", "title_block", "annotations",
 }
 # Keys the format no longer has. A file written against the old one
@@ -378,7 +379,7 @@ _QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
-    "color", "dasharray", "ends",
+    "color", "dasharray", "ends", "inline_at", "logical_to",
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
@@ -478,8 +479,20 @@ _KIND_KEYS = {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT, **_KIND_FLAGS,
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     """Build a :class:`~pandid.flowsheet.Flowsheet` from a mapping.
 
-    Raises :class:`SpecError` (a :class:`ValueError`) naming the
-    offending entry for anything it cannot honour.
+    Parameters
+    ----------
+    spec : Mapping[str, Any]
+        Declarative flowsheet data.
+
+    Returns
+    -------
+    Flowsheet
+        Connected sheet reconstructed from the data.
+
+    Raises
+    ------
+    SpecError
+        If an entry cannot be honored. The error names its location.
     """
     where = "the flowsheet spec"
     data = _mapping(spec, where)
@@ -535,8 +548,46 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
             continue
         pending.append((_read_instrument(fs, entry, where_i), mapping, where_i))
 
+    pending_inline = []
+    pending_logical = []
     for i, entry in enumerate(_sequence(data.get("streams", []), "streams")):
-        _read_stream(fs, entry, f"streams[{i}]")
+        stream = _read_stream(fs, entry, f"streams[{i}]")
+        if "inline_at" in entry:
+            pending_inline.append((stream, entry["inline_at"], f"streams[{i}].inline_at"))
+        if "logical_to" in entry:
+            pending_logical.append((stream, entry["logical_to"], f"streams[{i}].logical_to"))
+
+    for i, entry in enumerate(_sequence(data.get("stations", []), "stations")):
+        _read_station_assembly(fs, entry, f"stations[{i}]")
+
+    for stream, value, where_i in pending_inline:
+        try:
+            fs._set_inline_at(stream, _number(value, where_i))
+        except ValueError as e:
+            raise _fail_from(e, where_i) from None
+
+    from pandid.inline import restore_logical_run
+    for stream, value, where_i in pending_logical:
+        endpoint = _read_endpoint(fs, value, where_i)
+        try:
+            restore_logical_run(fs, stream, endpoint)
+        except ValueError as e:
+            raise _fail_from(e, where_i) from None
+
+    for i, assembly in enumerate(fs._station_assemblies):
+        root = assembly.run
+        if root is None:
+            continue
+        segments = root._logical_segments
+        incoming = assembly.station.inlet.stream
+        outgoing = assembly.station.outlet.stream
+        position = next((index for index, segment in enumerate(segments)
+                         if segment is incoming), None)
+        if (root._logical_to is None or incoming is None or position is None
+                or position + 1 >= len(segments)
+                or segments[position + 1] is not outgoing
+                or incoming._inline_at != assembly.at):
+            raise SpecError(f"stations[{i}]: run does not contain this station attachment")
 
     for inst, entry, where_i in pending:
         _attach_instrument(fs, inst, entry, where_i)
@@ -652,6 +703,138 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
                                                    unit_types.Vessel)):
         _read_port_order(unit, data["port_order"], f"{where}.port_order")
     return unit
+
+
+_STATION_ROLES = (
+    "control", "upstream_isolation", "downstream_isolation", "reduction", "expansion",
+    "bypass", "upstream_drain", "downstream_drain",
+)
+_STATION_KEYS = {
+    "members", "tees", "inlet", "outlet", "mirrored", "gap", "bypass_rise",
+    "drain_drop", "bypass_over", "run", "at", *_STATION_ROLES,
+}
+
+
+def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
+    """Restore the identity and local geometry of a wired station.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet containing the station's units and streams.
+    entry : Any
+        Station record from a declarative spec.
+    where : str
+        Location used in validation errors.
+
+    Returns
+    -------
+    None
+        The reconstructed assembly is registered on the sheet.
+
+    Raises
+    ------
+    SpecError
+        If a member, port, or placement option is invalid.
+    """
+    from pandid.stations import (
+        BYPASS_ANCHORS, DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP,
+        StationAssembly, ValveStation,
+    )
+    from pandid.units import Reducer, Tee, Valve
+
+    data = _mapping(entry, where)
+    _check_keys(data, _STATION_KEYS, where)
+    required = {"members", "tees", "inlet", "outlet", "control"}
+    if missing := required - data.keys():
+        raise SpecError(f"{where}: missing {sorted(missing)}")
+    members = tuple(_find_unit(fs, _text(name, f"{where}.members"), where)
+                    for name in _sequence(data["members"], f"{where}.members"))
+    tees = tuple(_find_unit(fs, _text(name, f"{where}.tees"), where)
+                 for name in _sequence(data["tees"], f"{where}.tees"))
+    roles = {role: (_find_unit(fs, _text(data[role], f"{where}.{role}"), where)
+                    if role in data else None) for role in _STATION_ROLES}
+    if (not members or len(set(members)) != len(members)
+            or any(unit not in members for unit in tees)
+            or any(unit not in members for unit in roles.values() if unit is not None)
+            or any(not isinstance(unit, Tee) for unit in tees)
+            or not isinstance(roles["control"], Valve)
+            or any(not isinstance(roles[key], Valve) for key in (
+                "upstream_isolation", "downstream_isolation", "bypass",
+                "upstream_drain", "downstream_drain") if roles[key] is not None)
+            or any(not isinstance(roles[key], Reducer) for key in (
+                "reduction", "expansion") if roles[key] is not None)):
+        raise SpecError(f"{where}: members and roles must identify one station")
+    inlet = _read_endpoint(fs, data["inlet"], f"{where}.inlet")
+    outlet = _read_endpoint(fs, data["outlet"], f"{where}.outlet")
+    if inlet.owner not in members or outlet.owner not in members:
+        raise SpecError(f"{where}: station endpoints must belong to its members")
+    station = ValveStation(
+        control=cast(Valve, roles["control"]),
+        upstream_isolation=cast("Valve | None", roles["upstream_isolation"]),
+        downstream_isolation=cast("Valve | None", roles["downstream_isolation"]),
+        reduction=cast("Reducer | None", roles["reduction"]),
+        expansion=cast("Reducer | None", roles["expansion"]),
+        bypass=cast("Valve | None", roles["bypass"]),
+        upstream_drain=cast("Valve | None", roles["upstream_drain"]),
+        downstream_drain=cast("Valve | None", roles["downstream_drain"]),
+        tees=tuple(cast(Tee, tee) for tee in tees), members=members,
+        inlet=inlet, outlet=outlet,
+    )
+    branch_members = {station.bypass, station.upstream_drain, station.downstream_drain}
+    main = [unit for unit in members if unit not in branch_members]
+    if (not main or inlet is not main[0].ports.get("inlet")
+            or outlet is not main[-1].ports.get("outlet")
+            or tees != tuple(unit for unit in main if isinstance(unit, Tee))):
+        raise SpecError(f"{where}: station members and tees must follow the wired main run")
+    for before, after in zip(main, main[1:]):
+        connection = before.ports["outlet"].stream
+        if (connection is None or connection.kind != "material"
+                or connection.dest is not after.ports.get("inlet")):
+            raise SpecError(f"{where}: station main members are not wired in order")
+    if station.bypass is not None:
+        bypass_in = station.bypass.inlet.stream
+        bypass_out = station.bypass.outlet.stream
+        if (len(tees) < 2 or bypass_in is None or bypass_out is None
+                or bypass_in.source is not tees[0].ports.get("branch")
+                or bypass_out.dest is not tees[-1].ports.get("branch")):
+            raise SpecError(f"{where}: bypass must connect the station's outer tees")
+    for drain in (station.upstream_drain, station.downstream_drain):
+        if drain is None:
+            continue
+        connection = drain.inlet.stream
+        if (connection is None or connection.source.owner not in tees
+                or connection.source.name != "branch"):
+            raise SpecError(f"{where}: drain must connect to a station tee")
+    run = None
+    if "run" in data:
+        index = _integer(data["run"], f"{where}.run")
+        if index < 0 or index >= len(fs.streams):
+            raise SpecError(f"{where}.run: stream index is out of range")
+        run = fs.streams[index]
+    at = _number(data["at"], f"{where}.at") if "at" in data else None
+    if (run is None) != (at is None) or (at is not None and not 0 < at < 1):
+        raise SpecError(f"{where}: run and an interior at fraction must occur together")
+    options = {key: _number(data[key], f"{where}.{key}") if key in data else default
+               for key, default in (("gap", DEFAULT_GAP),
+                                    ("bypass_rise", DEFAULT_BYPASS_RISE),
+                                    ("drain_drop", DEFAULT_DRAIN_DROP))}
+    if any(not isfinite(value) or value <= 0 for value in options.values()):
+        raise SpecError(f"{where}: station spacing must be positive")
+    bypass_over = (_text(data["bypass_over"], f"{where}.bypass_over")
+                   if "bypass_over" in data else None)
+    if bypass_over is not None and (
+        bypass_over not in BYPASS_ANCHORS or roles[bypass_over] is None
+    ):
+        raise SpecError(f"{where}.bypass_over: named station member is unavailable")
+    assembly = StationAssembly(
+        station=station, mirrored=_flag(data.get("mirrored", False), f"{where}.mirrored"),
+        gap=options["gap"], bypass_rise=options["bypass_rise"],
+        drain_drop=options["drain_drop"],
+        bypass_over=bypass_over,
+        run=run, at=at,
+    )
+    fs._station_assemblies.append(assembly)
 
 
 def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
@@ -1354,6 +1537,16 @@ def to_dict(fs: Flowsheet) -> dict:
     routed paths, computed stream numbers) are left out: they are the
     engine's output, not the author's intent, and re-deriving them is
     the whole point of the engine.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to serialize.
+
+    Returns
+    -------
+    dict
+        Declarative representation of the sheet.
     """
     if not isinstance(fs.stream_naming_scheme, str):
         raise SpecError(
@@ -1401,6 +1594,9 @@ def to_dict(fs: Flowsheet) -> dict:
         spec["instruments"] = [_write_instrument(u) for u in instruments]
     if fs.streams:
         spec["streams"] = [_write_stream(s) for s in fs.streams]
+    if fs._station_assemblies:
+        spec["stations"] = [_write_station_assembly(fs, assembly)
+                            for assembly in fs._station_assemblies]
     if fs.stream_table_sections:
         spec["stream_table_sections"] = [list(sec) for sec in fs.stream_table_sections]
     # Only what was changed, so a spec written by a sheet that left the
@@ -1724,7 +1920,64 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
     return _write_placement(inst, entry)
 
 
+def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
+    """Write one station's members and relative placement intent.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet containing the station's original run, if any.
+    assembly : StationAssembly
+        Registered station assembly.
+
+    Returns
+    -------
+    dict[str, Any]
+        Declarative membership and local spacing.
+    """
+    from pandid.stations import DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP
+
+    station = assembly.station
+    entry: dict[str, Any] = {
+        "members": [unit.name for unit in station.members],
+        "tees": [unit.name for unit in station.tees],
+        "inlet": [station.inlet.owner.name, station.inlet.name],
+        "outlet": [station.outlet.owner.name, station.outlet.name],
+    }
+    for role in _STATION_ROLES:
+        unit = getattr(station, role)
+        if unit is not None:
+            entry[role] = unit.name
+    if assembly.mirrored:
+        entry["mirrored"] = True
+    for key, default in (("gap", DEFAULT_GAP),
+                         ("bypass_rise", DEFAULT_BYPASS_RISE),
+                         ("drain_drop", DEFAULT_DRAIN_DROP)):
+        value = getattr(assembly, key)
+        if value != default:
+            entry[key] = value
+    if assembly.bypass_over is not None:
+        entry["bypass_over"] = assembly.bypass_over
+    if assembly.run is not None:
+        entry["run"] = next(i for i, stream in enumerate(fs.streams)
+                            if stream is assembly.run)
+        entry["at"] = assembly.at
+    return entry
+
+
 def _write_stream(stream: Stream) -> dict[str, Any]:
+    """Serialize one physical stream and its authored intent.
+
+    Parameters
+    ----------
+    stream : Stream
+        Connection to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        Declarative stream entry.
+    """
     entry: dict[str, Any] = {
         "from": [stream.source.owner.name, stream.source.name],
         "to": [stream.dest.owner.name, stream.dest.name],
@@ -1763,6 +2016,10 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["properties"] = dict(stream.properties)
     if stream.tabulate:
         entry["tabulate"] = True
+    if stream._inline_at is not None:
+        entry["inline_at"] = stream._inline_at
+    if stream._logical_to is not None:
+        entry["logical_to"] = [stream._logical_to.owner.name, stream._logical_to.name]
     return entry
 
 
