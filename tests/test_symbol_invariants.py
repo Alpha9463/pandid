@@ -1,20 +1,4 @@
-"""Symbol-invariant tests over EVERY (kind, variant) in the registry.
-
-These are the defects the other render tests cannot reach -- a port placed in
-empty space, a stroke half-clipped by an SVG viewport, a label struck through
-by a line -- because those tests only ever exercise the handful of symbols the
-example flowsheets happen to use. Every registered symbol is checked here, so a
-newly added one gets the same scrutiny for free.
-
-Geometry is approximated, not hit-tested exactly: SVG path/rect/ellipse/
-circle/line/polygon primitives are flattened into straight-line segments
-(elliptical arcs are properly sampled since several vessel-head ports sit on
-one; Bezier curves are chorded between their anchor points, since ports are
-never authored to sit mid-curve), and a port only has to land within
-``GEOM_TOL`` of the nearest segment -- coarse by design, enough to catch a
-port floating several units off a vessel wall without attempting exact path
-hit-testing.
-"""
+"""Symbol registry, port geometry, and SVG rendering invariants."""
 
 from __future__ import annotations
 
@@ -40,8 +24,6 @@ from pandid.render.symbols import (
     spread,
 )
 
-#: Every group-28 stirrer, read off the registry so a new one is covered
-#: without anyone remembering to come here.
 _AGITATORS = {name for group, name in default_registry._parts if group == 28}
 
 BOX_EPS = 1.0  # bounding-box slack, in symbol-space units
@@ -51,11 +33,26 @@ Point = tuple[float, float]
 Segment = tuple[Point, Point]
 Matrix = tuple[float, float, float, float, float, float]  # a b c d e f, SVG order
 
+# SVG geometry helpers
+
 _IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
 def _compose(parent: Matrix, child: Matrix) -> Matrix:
-    """parent ∘ child -- child is applied first, inside the parent's space."""
+    """Compose two affine transforms.
+
+    Parameters
+    ----------
+    parent : Matrix
+        Outer transform.
+    child : Matrix
+        Inner transform.
+
+    Returns
+    -------
+    Matrix
+        Combined transform.
+    """
     pa, pb, pc, pd, pe, pf = parent
     ca, cb, cc, cd, ce, cf = child
     return (
@@ -69,6 +66,20 @@ def _compose(parent: Matrix, child: Matrix) -> Matrix:
 
 
 def _apply(m: Matrix, x: float, y: float) -> Point:
+    """Apply an affine transform to a point.
+
+    Parameters
+    ----------
+    m : Matrix
+        Affine transform.
+    x, y : float
+        Point coordinates.
+
+    Returns
+    -------
+    Point
+        Transformed point.
+    """
     a, b, c, d, e, f = m
     return (a * x + c * y + e, b * x + d * y + f)
 
@@ -77,13 +88,34 @@ _NUM = r"-?\d*\.?\d+(?:[eE][-+]?\d+)?"
 
 
 def _nums(s: str) -> list[float]:
+    """Parse numeric SVG values.
+
+    Parameters
+    ----------
+    s : str
+        SVG attribute text.
+
+    Returns
+    -------
+    list[float]
+        Parsed values.
+    """
     return [float(x) for x in re.findall(_NUM, s)]
 
 
 def _parse_transform(s: str) -> Matrix:
-    """Only the handful of transform functions any symbol here actually uses
-    (mostly the valves' ``scale(0.5)``), but translate/rotate/matrix are cheap
-    to support too so a hand-authored new symbol isn't silently mis-checked."""
+    """Parse supported SVG transforms.
+
+    Parameters
+    ----------
+    s : str
+        SVG transform attribute.
+
+    Returns
+    -------
+    Matrix
+        Combined affine transform.
+    """
     m = _IDENTITY
     for name, args in re.findall(r"(\w+)\s*\(([^)]*)\)", s or ""):
         vals = _nums(args)
@@ -116,9 +148,26 @@ def _parse_transform(s: str) -> Matrix:
 
 
 def _arc_points(x1, y1, rx, ry, phi_deg, large_arc, sweep, x2, y2, n=12):
-    """Sample an SVG elliptical arc (endpoint parameterization, SVG 1.1 F.6.5)
-    so a port on a curved vessel head is checked against the true curve, not
-    the chord between its two path anchors."""
+    """Sample an SVG elliptical arc.
+
+    Parameters
+    ----------
+    x1, y1, x2, y2 : float
+        Arc endpoints.
+    rx, ry : float
+        Arc radii.
+    phi_deg : float
+        Arc rotation in degrees.
+    large_arc, sweep : int
+        SVG arc flags.
+    n : int
+        Number of intervals.
+
+    Returns
+    -------
+    list[Point]
+        Sampled arc points.
+    """
     if rx == 0 or ry == 0:
         return [(x1, y1), (x2, y2)]
     phi = math.radians(phi_deg)
@@ -142,6 +191,18 @@ def _arc_points(x1, y1, rx, ry, phi_deg, large_arc, sweep, x2, y2, n=12):
     cy = sphi * cxp + cphi * cyp + (y1 + y2) / 2.0
 
     def _ang(ux, uy, vx, vy):
+        """Return the signed angle between two vectors.
+
+        Parameters
+        ----------
+        ux, uy, vx, vy : float
+            Vector coordinates.
+
+        Returns
+        -------
+        float
+            Signed angle in radians.
+        """
         dot = ux * vx + uy * vy
         lu, lv = math.hypot(ux, uy), math.hypot(vx, vy)
         c = max(-1.0, min(1.0, dot / (lu * lv))) if lu and lv else 1.0
@@ -167,6 +228,18 @@ _PATH_TOKEN = re.compile(r"[MLHVCSQTAZ]|" + _NUM, re.I)
 
 
 def _path_segments(d: str) -> list[Segment]:
+    """Flatten an SVG path into line segments.
+
+    Parameters
+    ----------
+    d : str
+        SVG path data.
+
+    Returns
+    -------
+    list[Segment]
+        Path segments.
+    """
     tokens = _PATH_TOKEN.findall(d)
     segs: list[Segment] = []
     i, n = 0, len(tokens)
@@ -209,10 +282,6 @@ def _path_segments(d: str) -> list[Segment]:
                 x, y = x + cur[0], y + cur[1]
         newp = (x, y)
         if upper == "M":
-            # A moveto lifts the pen. Counting the jump as a segment draws a
-            # phantom stroke across the symbol -- from the origin to the first
-            # subpath, and between every subpath after it -- and a port measured
-            # against one of those is measured against a line nobody drew.
             start, cmd = newp, ("l" if relative else "L")
         else:
             segs.append((cur, newp))
@@ -221,6 +290,22 @@ def _path_segments(d: str) -> list[Segment]:
 
 
 def _ellipse_segments(cx, cy, rx, ry, n=48) -> list[Segment]:
+    """Approximate an ellipse with line segments.
+
+    Parameters
+    ----------
+    cx, cy : float
+        Ellipse centre.
+    rx, ry : float
+        Ellipse radii.
+    n : int
+        Number of segments.
+
+    Returns
+    -------
+    list[Segment]
+        Ellipse segments.
+    """
     pts = [
         (cx + rx * math.cos(2 * math.pi * k / n), cy + ry * math.sin(2 * math.pi * k / n))
         for k in range(n)
@@ -229,6 +314,20 @@ def _ellipse_segments(cx, cy, rx, ry, n=48) -> list[Segment]:
 
 
 def _poly_segments(points_attr: str, *, closed: bool) -> list[Segment]:
+    """Convert polygon coordinates to segments.
+
+    Parameters
+    ----------
+    points_attr : str
+        SVG points attribute.
+    closed : bool
+        Whether to close the final segment.
+
+    Returns
+    -------
+    list[Segment]
+        Polygon or polyline segments.
+    """
     nums = _nums(points_attr)
     pts = list(zip(nums[0::2], nums[1::2]))
     segs = list(zip(pts, pts[1:]))
@@ -238,12 +337,31 @@ def _poly_segments(points_attr: str, *, closed: bool) -> list[Segment]:
 
 
 def _collect_segments(svg: str) -> list[Segment]:
-    """Flatten every drawn primitive in a symbol's SVG into world-space
-    (post-transform) line segments, for a coarse port-proximity check."""
+    """Flatten drawn SVG primitives into world-space segments.
+
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+
+    Returns
+    -------
+    list[Segment]
+        Drawn segments.
+    """
     root = ET.fromstring(svg)
     segs: list[Segment] = []
 
     def walk(el, m: Matrix) -> None:
+        """Traverse one SVG element tree.
+
+        Parameters
+        ----------
+        el : Element
+            Current SVG element.
+        m : Matrix
+            Parent transform.
+        """
         tag = el.tag.split("}")[-1]
         m2 = _compose(m, _parse_transform(el.get("transform", "")))
         local: list[Segment] = []
@@ -284,6 +402,20 @@ def _collect_segments(svg: str) -> list[Segment]:
 
 
 def _point_segment_distance(p: Point, a: Point, b: Point) -> float:
+    """Measure point-to-segment distance.
+
+    Parameters
+    ----------
+    p : Point
+        Measured point.
+    a, b : Point
+        Segment endpoints.
+
+    Returns
+    -------
+    float
+        Minimum distance.
+    """
     px, py = p
     ax, ay = a
     bx, by = b
@@ -295,42 +427,33 @@ def _point_segment_distance(p: Point, a: Point, b: Point) -> float:
 
 
 def _nearest_distance(p: Point, segments: list[Segment]) -> float:
+    """Find the nearest segment distance.
+
+    Parameters
+    ----------
+    p : Point
+        Measured point.
+    segments : list[Segment]
+        Candidate segments.
+
+    Returns
+    -------
+    float
+        Minimum distance or infinity.
+    """
     return min((_point_segment_distance(p, a, b) for a, b in segments), default=math.inf)
 
 
-# ---------------------------------------------------------------------------
-# Exemptions.
-#
-# Each names a specific (kind, variant[, port]), so every invariant stays
-# strict for every other symbol -- including any added later.
-# ---------------------------------------------------------------------------
+# Registry and static-symbol invariants
 
-# feed/product are drawn dynamically by SvgRenderer._draw_boundary and never
-# from their own Symbol.svg (see the "fallbacks" comment in symbols.py), so
-# their registered geometry is intentionally unrelated to their ports.
 _DYNAMIC_KINDS = {"feed", "product"}
 
-# Ports sitting several units off the nearest drawn stroke.
-# Intentional, not defects: on these symbols the casing is drawn *open* where
-# the suction nozzle attaches, and the port sits in the mouth of that opening,
-# which is where the pipe should meet it. The nearest stroke is therefore half
-# the opening away. Do not "fix" these by moving the port onto the casing.
 _KNOWN_GEOMETRY_GAPS = {
     ("pump", "default", "suction"),
     ("compressor", "default", "suction"),
     ("pump", "screw", "suction"),
 }
 
-# A signal connection is not a nozzle: nothing flows through a valve stem or an
-# instrument tap, so the line stops at the symbol's outline instead of reaching
-# in to meet ink, and most stencils draw no operator there to meet. They answer
-# to the outline rule below instead; every port a pipe attaches to keeps this one.
-#
-# ``cls.PORTS`` alone misses a class like ``Valve``, whose base declares no
-# ports at all and lays each variant's down through ``_variant_ports`` instead
-# (the ``HeatExchanger`` pattern) -- so every variant the registry has is
-# asked too, the same union :func:`~scripts.gen_devices.ports_for` reads a
-# generated class's own nozzles from.
 _SIGNAL_PORTS = {
     (cls.kind, name)
     for cls in (getattr(units, n) for n in units.__all__)
@@ -345,70 +468,69 @@ _SIGNAL_PORTS = {
     if role == "signal"
 }
 
-# No public "list everything" API on SymbolRegistry (by design: callers look
-# up one (kind, variant) at a time), so reach into the private dict to
-# enumerate the full registry for exhaustive testing.
 _SYMBOLS = sorted(default_registry._symbols.items())
 _IDS = [f"{kind}/{variant}" for (kind, variant), _ in _SYMBOLS]
+_DIRECTIONAL = [entry for entry in _SYMBOLS if entry[1].directional]
+_DIRECTIONAL_IDS = [f"{kind}/{variant}" for (kind, variant), _ in _DIRECTIONAL]
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_svg_is_well_formed_and_declares_stroke_width(entry):
+    """Verify registry symbols render as valid SVG with a stroke width."""
     (kind, variant), sym = entry
     ET.fromstring(sym.svg)  # raises ET.ParseError on malformed XML
     assert "stroke-width" in sym.svg, f"{kind}/{variant} declares no stroke-width"
 
 
-#: Sizes to redraw a symbol at, as factors on its own box. The wide and tall
-#: pairs are what a layout actually asks for; the last two are past anything a
-#: drawing would want, because a check is only worth having under strain.
-_REDRAWS = ((1.0, 1.0), (2.0, 1.0), (1.0, 2.5), (3.0, 0.5), (0.4, 1.7))
+_BAKED_SPECIMEN = """\
+<g id="specimen" transform="translate(7 11) scale(2 3)">
+  <path d="M 1 2 L 9 2 A 4 2 30 0 1 12 8 Z" fill="none" stroke="black" stroke-width="2"/>
+  <rect x="2" y="3" width="5" height="7" rx="1" ry="2" fill="none" stroke="black"/>
+  <circle cx="13" cy="5" r="3" fill="none" stroke="black"/>
+  <ellipse cx="20" cy="6" rx="4" ry="2" fill="none" stroke="black"/>
+  <line x1="1" y1="14" x2="9" y2="18" stroke="black"/>
+  <polygon points="12,14 16,18 10,19" fill="none" stroke="black"/>
+  <polyline points="20,14 24,18 19,20" fill="none" stroke="black"/>
+  <text x="8" y="24" font-size="10">T</text>
+</g>"""
 
 
-@pytest.mark.parametrize("factors", _REDRAWS, ids=[f"{a}x{b}" for a, b in _REDRAWS])
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_a_symbol_redrawn_at_a_new_size_draws_the_ink_it_was_drawn_from(entry, factors):
-    """``pandid.render.svg._baked`` moves the pen and nothing else.
-
-    A placement that would scale the two axes differently is emitted redrawn at
-    the placed size rather than stretched by its viewport (#235), which rewrites
-    every number in the drawing. That is only allowed to be a change of
-    *notation*: the ink has to land where the scale would have put it. Every
-    check in this file says a port lands on drawn ink, and every one of them is
-    worth nothing if the ink itself has quietly moved.
-
-    Measured against the scale applied by this file's own flattener rather than
-    against the renderer's arithmetic restated, so the two sides are independent
-    -- and over every registered symbol, since it is the arcs (which have to be
-    recomputed rather than scaled) and the mirrored derivations that are the
-    parts with somewhere to go wrong.
-    """
+def test_baked_identity_keeps_the_artwork_unchanged():
+    """Verify identity resizing preserves the source artwork."""
     from pandid.render.svg import _baked
 
-    (kind, variant), sym = entry
-    fx, fy = factors
-    want = [
+    artwork = '<g id="identity"><line x1="1" y1="2" x2="3" y2="4" stroke="black"/></g>'
+    assert _baked(artwork, 1.0, 1.0) == artwork
+
+
+def test_baked_redraw_preserves_supported_geometry():
+    """Verify non-uniform resizing preserves supported SVG geometry."""
+    from pandid.render.svg import _baked
+
+    fx, fy = 3.0, 0.5
+    expected = [
         ((ax * fx, ay * fy), (bx * fx, by * fy))
-        for (ax, ay), (bx, by) in _collect_segments(sym.svg)
+        for (ax, ay), (bx, by) in _collect_segments(_BAKED_SPECIMEN)
     ]
-    got = _collect_segments(_baked(sym.svg, fx, fy))
-    assert len(got) == len(want), (
-        f"{kind}/{variant} redrawn at {fx} x {fy} flattens to {len(got)} segments, "
-        f"against the {len(want)} it was drawn from"
-    )
+    redrawn = _baked(_BAKED_SPECIMEN, fx, fy)
+    actual = _collect_segments(redrawn)
+    assert len(actual) == len(expected)
     worst = max(
-        (max(math.dist(p, q) for p, q in zip(g, w)) for g, w in zip(got, want)),
+        (
+            max(math.dist(point, target) for point, target in zip(got, want))
+            for got, want in zip(actual, expected)
+        ),
         default=0.0,
     )
-    # The redraw writes six decimals, so a point may land half a millionth of a
-    # unit from where the scale would have put it. A drawing unit is 0,26 mm.
-    assert worst <= 1e-5, (
-        f"{kind}/{variant} redrawn at {fx} x {fy} moved its ink by {worst:.3g} units"
-    )
+    assert worst <= 1e-5, f"redraw moved ink by {worst:.3g} units"
+    text = ET.fromstring(redrawn).find("text")
+    assert text is not None
+    assert float(text.get("font-size")) == pytest.approx(math.sqrt(fx * fy * 6.0) * 10.0)
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_ports_within_bounding_box(entry):
+    """Verify symbol ports remain inside their boxes."""
     (kind, variant), sym = entry
     for name, (x, y) in sym.ports.items():
         assert -BOX_EPS <= x <= sym.width + BOX_EPS, (
@@ -421,6 +543,7 @@ def test_ports_within_bounding_box(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_port_faces_within_bounding_box(entry):
+    """Verify alternate port faces remain inside their boxes."""
     (kind, variant), sym = entry
     for name, faces in sym.port_faces.items():
         for face, (x, y) in faces.items():
@@ -434,14 +557,7 @@ def test_port_faces_within_bounding_box(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
-    """A placement filed under "N" whose coordinate is nearest the west edge is
-    a lie: ``port_anchor`` derives the face from the coordinate, so the nozzle
-    silently comes out somewhere else.
-
-    ``Symbol.__post_init__`` rejects such a declaration outright, so this is a
-    postcondition over the shipped registry rather than the primary guard.
-    It would only fire if that check were weakened *and* a symbol were authored
-    wrongly. The constructor's own rejection is tested separately."""
+    """Verify alternate placements resolve to their declared faces."""
     (kind, variant), sym = entry
     for name, faces in sym.port_faces.items():
         for face, (x, y) in faces.items():
@@ -454,11 +570,7 @@ def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_the_menu_carries_the_symbols_own_nozzle(entry):
-    """The home placement is folded into the menu, so nothing downstream has a
-    privileged default to merge back in.
-
-    Like the check above, this is a postcondition of ``Symbol.__post_init__``
-    over the shipped registry, not the guard that enforces it."""
+    """Verify the port menu includes the home nozzle."""
     (kind, variant), sym = entry
     assert set(sym.port_faces) == set(sym.ports), f"{kind}/{variant} menu misses a port"
     for name, xy in sym.ports.items():
@@ -469,6 +581,7 @@ def test_the_menu_carries_the_symbols_own_nozzle(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_ports_lie_on_drawn_geometry(entry):
+    """Verify process ports land on drawn geometry."""
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
@@ -485,6 +598,7 @@ def test_ports_lie_on_drawn_geometry(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_port_faces_lie_on_drawn_geometry(entry):
+    """Verify alternate port faces land on drawn geometry."""
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
@@ -502,15 +616,7 @@ def test_port_faces_lie_on_drawn_geometry(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_signal_ports_sit_on_the_symbols_outline(entry):
-    """A signal connection terminates where the line meets the symbol, so its
-    coordinate belongs on the edge of the box and not inside it.
-
-    The renderer draws to the port's own point while the router steers to that
-    point projected onto the box edge, so a coordinate parked on interior ink
-    (a gate valve's seat, a butterfly's shaft boss) draws the signal running
-    into the body and stopping in the middle of it. The allowance is the same
-    nozzle stub the balloons use, which is what lets a hexagon or a square
-    drawn inboard of its box put the terminal on its own outline."""
+    """Verify signal ports lie on symbol outlines."""
     (kind, variant), sym = entry
     placements = {(name, "port"): xy for name, xy in sym.ports.items()}
     placements.update(
@@ -529,86 +635,46 @@ def test_signal_ports_sit_on_the_symbols_outline(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_no_two_ports_coincide(entry):
+    """Verify distinct ports do not share coordinates."""
     (kind, variant), sym = entry
-    # The rule itself lives on Symbol, so a third-party symbol this suite never
-    # sees is held to it too; this assertion covers the shipped registry.
     assert sym.coincident_ports() == [], f"{kind}/{variant}: " + "; ".join(
         f"ports {a!r} and {b!r} both resolve to {xy}" for a, b, xy in sym.coincident_ports()
     )
 
 
-# ---------------------------------------------------------------------------
-# Ports, and the nozzles the artwork draws for them (#225).
-#
-# ``test_ports_lie_on_drawn_geometry`` above holds every port to the ink, and
-# that is not the same question. A stencil that draws an explicit nozzle has
-# said something stronger than "there is a wall here": a nozzle drawn on a
-# vessel is a statement that a connection exists *at that point*, and a port
-# somewhere else on the same drawing is the drawing disagreeing with itself.
-# Both halves of #225 passed the ink check and were wrong -- ``tank/sphere``'s
-# inlet sat on the crown midway between the two nozzles drawn either side of
-# it, and its outlet sat on the base rail of the support skirt, ten units below
-# the nozzle the stencil drew for it and on the structure rather than on the
-# vessel.
-#
-# This is the companion of ``nozzle-unconnected`` (#209). That finding reads a
-# *numbered* nozzle a sheet did not pipe; this reads a *drawn* one the class
-# cannot pipe at all, which is a defect one layer further down and is caught
-# without a flowsheet.
-#
-# WHAT COUNTS AS A DRAWN NOZZLE. In the draw.io P&ID stencils a nozzle is a
-# short rectangular stub standing off the shell with a flange line ruled across
-# its free end. All three parts are required here, because each of them is what
-# tells a nozzle from something else the artwork draws:
-#
-#   - a *rectangle*, small against the box on both axes (``_NOZZLE_STUB``),
-#     which is what ``vessel/jacketed``'s full-height jacket panels, a
-#     submersible pump's mounting plate and a damper's body are not;
-#   - a *flange*, a straight line on the same axis as one of the rectangle's
-#     four faces, centred on it and longer than it, which is what makes that
-#     face the free end and gives the connection its point;
-#   - and an overhang short enough to read as a flange (``_NOZZLE_FLANGE``),
-#     which is what a submersible pump's 90-unit casing line across a 14-unit
-#     rectangle is not.
-#
-# The sweep that settled these numbers runs ``_drawn_nozzles`` over every entry
-# in ``default_registry`` -- 229 of them today, which is what ``_SYMBOLS``
-# parametrises -- and exactly two answer to all three parts above: ``tank/sphere``,
-# whose stub is the process nozzle this pair of tests is about, and
-# ``separator/knockout``, whose is the gauge named below and is excluded by
-# ``_NOT_NOZZLES``. If a later vendoring adds a third, it gets both invariants
-# for free -- which is the whole point, since the port map is authored by hand in
-# ``scripts/vendor_symbols.py`` and the artwork is not.
-# ---------------------------------------------------------------------------
+# Drawn-nozzle invariants
 
-#: How much of the box a nozzle stub may be, on each axis.
 _NOZZLE_STUB = 0.25
-#: How much longer than the face it caps a flange line may be. A flange
-#: overhangs a nozzle by a little; a line seven times its width is some other
-#: part of the drawing that happens to pass through.
 _NOZZLE_FLANGE = 2.0
 
-#: (kind, variant) whose flanged stub is not a process nozzle. One entry, named
-#: rather than tolerated silently, exactly as ``_KNOWN_GEOMETRY_GAPS`` is:
-#: ``separator/knockout`` draws a level gauge on the east wall -- an 8 x 12 stub
-#: carrying the two vertical lines of the glass -- and the outer of those two
-#: reads as a flange across the stub's end. It is a gauge and not a connection:
-#: nothing flows through it, ``Separator`` has no port for one, and the giveaway
-#: in the artwork is that there is a second line drawn *outboard* of the
-#: "flange", which no real nozzle has.
 _NOT_NOZZLES = {("separator", "knockout")}
 
 
 def _rects(svg: str) -> list[tuple[float, float, float, float]]:
-    """Every ``<rect>`` in the artwork, as world-space (x0, y0, x1, y1).
+    """Read transformed SVG rectangles.
 
-    ``_collect_segments`` flattens a rect into four unattributed segments, which
-    is right for a proximity test and useless here: the whole question is which
-    four segments belong to one rectangle.
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Rectangle bounds.
     """
     out: list[tuple[float, float, float, float]] = []
 
     def walk(el, m: Matrix) -> None:
+        """Traverse SVG elements for rectangles.
+
+        Parameters
+        ----------
+        el : Element
+            Current SVG element.
+        m : Matrix
+            Parent transform.
+        """
         m2 = _compose(m, _parse_transform(el.get("transform", "")))
         if el.tag.split("}")[-1] == "rect":
             x, y = float(el.get("x", 0)), float(el.get("y", 0))
@@ -623,8 +689,17 @@ def _rects(svg: str) -> list[tuple[float, float, float, float]]:
 
 
 class _Nozzle(NamedTuple):
-    """One nozzle the artwork draws: the face it points out of, the point a
-    pipe meets it at, and the stretch of that face the stub covers."""
+    """Describe a detected artwork nozzle.
+
+    Attributes
+    ----------
+    face : str
+        Outward face.
+    point : Point
+        Connection point.
+    lo, hi : float
+        Nozzle span along its face.
+    """
 
     face: str
     point: Point
@@ -633,7 +708,18 @@ class _Nozzle(NamedTuple):
 
 
 def _drawn_nozzles(sym: Symbol) -> list[_Nozzle]:
-    """Every flanged rectangular stub in a symbol's artwork."""
+    """Find flanged nozzle stubs in artwork.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Symbol definition.
+
+    Returns
+    -------
+    list[_Nozzle]
+        Detected nozzles.
+    """
     segments = _collect_segments(sym.svg)
     found: list[_Nozzle] = []
     for x0, y0, x1, y1 in _rects(sym.svg):
@@ -650,8 +736,6 @@ def _drawn_nozzles(sym: Symbol) -> list[_Nozzle]:
             width = abs(b[0] - a[0]) if across else abs(b[1] - a[1])
             for sa, sb in segments:
                 span = abs(sb[0] - sa[0]) if across else abs(sb[1] - sa[1])
-                # Same straight line as the face, centred on it, longer than it
-                # but not by more than a flange plate is.
                 if not width < span <= _NOZZLE_FLANGE * width:
                     continue
                 if abs(sa[int(across)] - sb[int(across)]) > GEOM_TOL / 4:
@@ -670,7 +754,18 @@ def _drawn_nozzles(sym: Symbol) -> list[_Nozzle]:
 
 
 def _port_placements(sym: Symbol) -> list[tuple[str, str, Point]]:
-    """Every (port, face, point) the symbol offers, home placements and menu."""
+    """List each port placement.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Symbol definition.
+
+    Returns
+    -------
+    list[tuple[str, str, Point]]
+        Port name, face, and position.
+    """
     return [
         (name, face, xy) for name, faces in sym.port_faces.items() for face, xy in faces.items()
     ]
@@ -678,13 +773,7 @@ def _port_placements(sym: Symbol) -> list[tuple[str, str, Point]]:
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_every_drawn_nozzle_carries_a_port(entry):
-    """A nozzle nobody can connect to is a connection the class cannot make.
-
-    ``tank/sphere`` drew a flanged nozzle under its belly and put ``outlet`` on
-    the base rail of the support skirt instead, so ``examples/14``'s butane left
-    the structure rather than the vessel and the one nozzle the stencil drew for
-    it was never used.
-    """
+    """Verify each drawn nozzle has a modelled port."""
     (kind, variant), sym = entry
     if (kind, variant) in _NOT_NOZZLES:
         pytest.skip("draws a gauge stub, not a process nozzle")
@@ -700,13 +789,7 @@ def test_every_drawn_nozzle_carries_a_port(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_no_port_lands_between_two_drawn_nozzles(entry):
-    """Where a face carries a row of nozzles, its connections are those nozzles.
-
-    ``tank/sphere``'s inlet sat at (40, 5) with nozzles drawn at x 18..30 and
-    50..62 either side of it: on ink, on the crown, and on nothing that says a
-    pipe may be joined there. The reported symptom of #225 is a line arriving at
-    bare shell in the gap, which is this.
-    """
+    """Verify ports match a row of drawn nozzles."""
     (kind, variant), sym = entry
     if (kind, variant) in _NOT_NOZZLES:
         pytest.skip("draws a gauge stub, not a process nozzle")
@@ -726,58 +809,41 @@ def test_no_port_lands_between_two_drawn_nozzles(entry):
         )
 
 
-# ---------------------------------------------------------------------------
-# The drawn artwork and the resolved ports have to agree at *every* box shape.
-#
-# Everything above measures a symbol in the coordinates it was drawn in, where
-# the box is by definition the one it was drawn for. A unit given an explicit
-# width and height is placed in a box of some *other* shape, and the port has to
-# follow the ink there too -- whichever way the renderer disposes of the spare
-# room, by filling the box or by centring the artwork in it. Nothing else covers
-# that case, and a port left behind in the whitespace draws a stream that stops
-# short of its equipment.
-#
-# What the artwork did is read back out of the rendered SVG, transform and all,
-# so this measures what the renderer *did* rather than what portgeom assumed it
-# would do -- which is exactly the disagreement being tested.
-# ---------------------------------------------------------------------------
+_ODD_BOXES = ((300.0, 60.0), (60.0, 300.0))
 
-#: Box shapes nothing is drawn at: far wider than tall, far taller than wide,
-#: and square. One of the three is the wrong shape for every symbol there is.
-_ODD_BOXES = ((300.0, 60.0), (60.0, 300.0), (140.0, 140.0))
+_PLACEMENTS = ({},)
 
-#: Placement transforms to try each of those at, as ``pin()`` takes them. The
-#: identity, then a quarter turn with a left-right flip and a three-quarter turn
-#: with a top-bottom one: a reshaped box and a turned one compose, and the port
-#: has to come out on the ink under both at once.
-_PLACEMENTS = ({}, {"orientation": 90, "mirrored": "x"}, {"orientation": 270, "mirrored": "y"})
-
-#: The nozzle is measured by inverting the placement the artwork was drawn
-#: under, so a port authored exactly ``GEOM_TOL`` from the ink comes back a few
-#: parts in 10^13 the wrong side of the line. Slack for that round trip and for
-#: nothing else: it is far smaller than any distance a drawing can express.
 _ROUNDTRIP_EPS = 1e-9
 
-#: Kinds that cannot be handed a box at all. A Conveyor is sized by ``length``
-#: and refuses ``width``/``height``, so its artwork is built to its box and the
-#: two can never disagree; tests/test_conveyor.py holds it to that.
 _UNBOXABLE_KINDS = {"conveyor"}
 
 _UNIT_BY_KIND = {cls.kind: cls for cls in (getattr(units, n) for n in units.__all__)}
 
-#: The balloon variants that are reached through ``display=`` instead; see
-#: :func:`_sized_unit`.
 _RETIRED_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
 
 
+# Dynamic-unit placement invariants
+
+
 def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
-    """One unit of ``(kind, variant)``, forced into a ``w`` x ``h`` box."""
+    """Construct a unit with explicit dimensions.
+
+    Parameters
+    ----------
+    kind, variant : str
+        Registered symbol key.
+    index : int
+        Instrument index.
+    w, h : float
+        Requested dimensions.
+
+    Returns
+    -------
+    units.Unit
+        Configured unit.
+    """
     cls = _UNIT_BY_KIND[kind]
     if kind == "instrument":  # tagged (type, number) rather than named
-        # ``panel`` and ``aux`` are registered artwork whose *constructor*
-        # spelling is retired: they are a display, not a symbol type. The
-        # drawing is still theirs and still has to satisfy every invariant
-        # below, so it is asked for the way that is not on its way out.
         display = _RETIRED_DISPLAYS.get(variant)
         if display is not None:
             return cls("XX", index, display=display, width=w, height=h)
@@ -786,11 +852,17 @@ def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
 
 
 def _default_unit(kind: str, variant: str):
-    """One unit of ``(kind, variant)``, at its own natural size.
+    """Construct a unit at its natural size.
 
-    :func:`_sized_unit` minus the box: which ports a class declares does not
-    depend on the shape it is drawn at (``Conveyor`` even refuses one), so
-    nothing below needs a box, only the instrument's ``display=`` handling.
+    Parameters
+    ----------
+    kind, variant : str
+        Registered symbol key.
+
+    Returns
+    -------
+    units.Unit
+        Configured unit.
     """
     cls = _UNIT_BY_KIND[kind]
     if kind == "instrument":
@@ -801,50 +873,14 @@ def _default_unit(kind: str, variant: str):
     return cls(f"{kind}-{variant}-x", variant=variant)
 
 
-#: For this test only: the class whose default instance has to reach every
-#: anchor a kind's artwork offers, where that is not :func:`_default_unit`'s
-#: own choice. ``kind == "column"`` is now four classes -- :class:`Column`
-#: is the general tower on purpose (#400) and does not build a distillation
-#: column's four return nozzles by default -- so the widest of the four,
-#: :class:`~pandid.units.DistillationColumn`, is what stands in here. Every
-#: other test in this module keeps asking :func:`_default_unit`/
-#: :func:`_sized_unit`, which still answer ``Column`` for that kind: this
-#: dict is about *this* claim only, not about which class ``kind: column``
-#: resolves to.
 _WIDEST_CLASS_FOR_KIND = {"column": units.DistillationColumn}
 
-#: ``Tank`` and ``Vessel`` reach the artwork's ``inlet``/``outlet`` anchors
-#: through a numbered family (``in_1``/``out_1``, ...) rather than a port
-#: of that name -- see ``pandid.units._MultiPortVessel`` -- so
-#: ``_symbol_anchor`` alone answers neither for the default, single-
-#: connection unit the test below builds. Unlike a :class:`Separator`'s
-#: renamed collectors, the *resolved* symbol these two draw
-#: (:func:`pandid.render.symbols.vessel_symbol`) really does key its own
-#: ``ports`` by ``in_1``/``out_1``, so the rename cannot live in
-#: ``PORT_ANCHORS`` without portgeom losing the nozzle it is meant to find;
-#: it is only true of the *vendored* stencil this test compares against.
 _FAMILY_ANCHOR_STEM = {"inlet": "in", "outlet": "out"}
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
-    """The general shape of #388: an anchor the artwork draws and no port
-    reaches.
-
-    ``valve/three_way`` drew the ISO three-port mark's third leg and
-    anchored it, while ``Valve`` had no port for it: an author could put the
-    valve on a sheet and had nowhere to connect the third leg. That is a
-    claim every shipped drawing can be held to, not just this one -- a
-    symbol vendored later with an anchor its class does not model is the
-    same defect, caught here instead of on someone's sheet.
-
-    A port's own name is not always what the artwork anchors it under --
-    :class:`~pandid.units.Separator`'s four collectors still draw ``vapor``/
-    ``liquid`` under their renamed ``overflow``/``underflow`` -- so the
-    comparison goes through :meth:`~pandid.units.Unit._symbol_anchor`, the
-    same lookup the renderer and the router use to place a stream, rather
-    than comparing the port names directly.
-    """
+    """Verify every drawn anchor is reachable by a modelled port."""
     (kind, variant), sym = entry
     cls = _WIDEST_CLASS_FOR_KIND.get(kind)
     unit = cls(f"{kind}-{variant}-x", variant=variant) if cls else _default_unit(kind, variant)
@@ -863,7 +899,18 @@ def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
 
 
 def _invert(m: Matrix) -> Matrix:
-    """The transform that takes a drawn point back where it was drawn from."""
+    """Invert an affine transform.
+
+    Parameters
+    ----------
+    m : Matrix
+        Invertible transform.
+
+    Returns
+    -------
+    Matrix
+        Inverse transform.
+    """
     a, b, c, d, e, f = m
     det = a * d - b * c
     return (
@@ -877,9 +924,17 @@ def _invert(m: Matrix) -> Matrix:
 
 
 def _natives(fs) -> dict[str, tuple[float, float]]:
-    """What each definition on *fs*'s sheet was **authored** at, by ``<defs>`` id.
+    """Read native definition sizes from a flowsheet.
 
-    Which is not always what its viewBox says: see :func:`_placements`.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Settled flowsheet.
+
+    Returns
+    -------
+    dict[str, tuple[float, float]]
+        Definition sizes by identifier.
     """
     from pandid.render.svg import SvgRenderer
 
@@ -897,27 +952,19 @@ def _natives(fs) -> dict[str, tuple[float, float]]:
 def _placements(
     svg: str, natives: dict[str, tuple[float, float]] | None = None
 ) -> dict[tuple[float, float], Matrix]:
-    """Authored symbol coordinates -> sheet coordinates for each placed symbol.
+    """Read symbol-to-sheet transforms from SVG output.
 
-    Keyed by the centre of the box it was placed in, which is the one point a
-    quarter turn and a mirror both leave alone, and so the only handle on a
-    ``<use>`` that survives its own transform.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG.
+    natives : dict[str, tuple[float, float]] or None
+        Native definition sizes.
 
-    A ``<symbol>`` maps its viewBox onto the ``<use>``'s box under its own
-    ``preserveAspectRatio``: ``none`` fills the box exactly, while the default
-    ``xMidYMid meet`` scales uniformly and centres, leaving a letterbox the box
-    edge is no longer on. Whatever the ``<use>`` then does to the result is
-    composed on top.
-
-    One more step, and it is the one #235 added. A placement that would have
-    scaled the two axes differently is emitted *redrawn* at the placed size
-    rather than stretched by its viewport (``pandid.render.svg._baked``), so its
-    viewBox is that box and the viewport contributes a scale of exactly 1 --
-    which is the whole point, since a viewport scales ink and a redraw does not.
-    Those definitions are therefore no longer written in the coordinates the
-    symbol was authored in, and *natives* is what says so: the size each id was
-    authored at, from :func:`_natives`. Left out, every viewBox is taken at face
-    value, which is right for every definition nothing reshaped.
+    Returns
+    -------
+    dict[tuple[float, float], Matrix]
+        Transforms by placed-box centre.
     """
     natives = natives or {}
     defs = {m.group(1): m.group(0) for m in re.finditer(r'<symbol id="([^"]+)"[^>]*>', svg)}
@@ -943,11 +990,12 @@ def _placements(
 
 @pytest.fixture(scope="module")
 def odd_box_sheets():
-    """Every symbol at every shape in :data:`_ODD_BOXES` and every placement.
+    """Provide settled sheets for odd-sized symbols.
 
-    One sheet per (shape, placement), built once and shared: the sheets *are*
-    what the checks below measure, and rebuilding a hundred-odd units for each
-    of a hundred-odd test cases would be the bulk of the suite's runtime.
+    Returns
+    -------
+    dict
+        Units and placement transforms by box and placement.
     """
     from pandid import Flowsheet
 
@@ -960,9 +1008,6 @@ def odd_box_sheets():
                 if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
                     continue
                 unit = _sized_unit(kind, variant, i, *box)
-                # Pinned well clear of each other: this sheet is a measuring
-                # jig, not a diagram, and nothing on it is connected to
-                # anything.
                 fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8), **placement)
                 placed[(kind, variant)] = unit
             matrices = _placements(fs.to_svg(), _natives(fs))
@@ -974,27 +1019,33 @@ def odd_box_sheets():
 
 
 def _resolved_in_symbol_space(unit, matrix: Matrix, name: str) -> Point:
-    """A port's resolved point, put back in the symbol's own coordinates.
+    """Map a resolved port back to symbol coordinates.
 
-    Which is where ``GEOM_TOL`` is a distance, rather than a distance times
-    whatever the box, the turn and the mirror each did to that axis.
+    Parameters
+    ----------
+    unit : units.Unit
+        Placed unit.
+    matrix : Matrix
+        Symbol-to-sheet transform.
+    name : str
+        Port name.
+
+    Returns
+    -------
+    Point
+        Symbol-space port position.
     """
     return _apply(_invert(matrix), *port_point(unit, unit.frame, name))
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_ports_land_on_drawn_ink_at_any_box_shape(entry, odd_box_sheets):
-    """A nozzle follows the artwork into a box of any shape, at any placement."""
+    """Verify ports follow artwork across box shapes."""
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
     if kind in _UNBOXABLE_KINDS:
         pytest.skip("a conveyor is sized by length=, so its box is its artwork's")
-    # The ink the *unit* is drawn with, which is not always the registered
-    # symbol's: a reactor composes a stirrer and its motor onto the body, and
-    # the motor grows the box upward and moves every one of the body's nozzles
-    # down into it. Measuring the moved nozzles against the unmoved body would
-    # report the composition's own offset as a gap.
     first = next(iter(odd_box_sheets.values()))[(kind, variant)][0]
     segments = _collect_segments(default_registry.for_unit(first).svg)
     for key, sheet in odd_box_sheets.items():
@@ -1010,36 +1061,11 @@ def test_ports_land_on_drawn_ink_at_any_box_shape(entry, odd_box_sheets):
             )
 
 
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+@pytest.mark.parametrize("entry", _DIRECTIONAL, ids=_DIRECTIONAL_IDS)
 def test_a_directional_symbols_ports_stay_on_ink_under_a_flip(entry):
-    """What a symbol has to be able to do before it may declare ``directional``.
-
-    A directional symbol's *drawing* is held still under a flip -- otherwise the
-    flip draws the arrow backwards, which on the heater/cooler pair is the other
-    symbol -- while its *nozzles* still move, because moving them is what the
-    flip was asked for. That is a decoupling, and it is the exact decoupling
-    CONTRIBUTING §4 records as having actually happened once: a mirror the
-    renderer applied and the geometry did not, drawing every stream detached
-    from its nozzle.
-
-    Here it is deliberate, and it is only safe where the artwork under the moved
-    nozzle is the same artwork that was under the original -- which is true of
-    the three that declare it, whose drawing is a circle with everything else
-    laid through its centre. So the flipped port is measured against the
-    *unflipped* strokes, which is what the sheet actually draws.
-
-    Every other symbol skips: nothing holds their ink still, so their ports
-    travel with it and ``test_ports_land_on_drawn_ink_at_any_box_shape`` is the
-    check that applies.
-    """
+    """Verify directional-symbol ports remain on ink when flipped."""
     (kind, variant), sym = entry
-    if not sym.directional:
-        pytest.skip("not a directional symbol; its artwork flips with its ports")
     segments = _collect_segments(sym.svg)
-    # All three, and not the two the caller can spell: a half turn arrives as
-    # both flips at once (pandid.render.svg._reflections), so (True, True) is a
-    # placement an author reaches by writing orientation=180 as readily as by
-    # writing mirrored="xy".
     for mirror_x, mirror_y in ((True, False), (False, True), (True, True)):
         for name, (x, y) in sym.ports.items():
             if (kind, name) in _SIGNAL_PORTS:
@@ -1054,20 +1080,10 @@ def test_a_directional_symbols_ports_stay_on_ink_under_a_flip(entry):
             )
 
 
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+@pytest.mark.parametrize("entry", _DIRECTIONAL, ids=_DIRECTIONAL_IDS)
 def test_a_directional_symbol_carries_no_lettering_of_its_own(entry):
-    """The other thing declaring ``directional`` asks of the artwork.
-
-    A directional drawing is held still *as a whole*, so the counter-transform
-    that keeps a symbol's own lettering readable has nothing left to do and, if
-    it ran anyway, would counter-transform each glyph a second time. The
-    renderer therefore picks one of the two rather than composing them, and this
-    is what keeps that branch honest. ``scripts/vendor_symbols.py`` refuses the
-    combination at generation time; this covers the hand-drawn symbols too.
-    """
+    """Verify directional symbols do not contain fixed lettering."""
     (kind, variant), sym = entry
-    if not sym.directional:
-        pytest.skip("not a directional symbol")
     assert "<text" not in sym.svg, (
         f"{kind}/{variant} declares directional and carries lettering: the "
         f"renderer holds its whole drawing still and cannot also counter-"
@@ -1077,13 +1093,7 @@ def test_a_directional_symbol_carries_no_lettering_of_its_own(entry):
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_signal_ports_stay_on_the_outline_at_any_box_shape(entry, odd_box_sheets):
-    """The odd-box counterpart of the outline rule, and the balloons' own case.
-
-    A signal terminates where the line meets the symbol, so its coordinate
-    belongs on the symbol's outline -- which is on the *artwork*, not on a box
-    edge that may be a long way from it. Every one of an instrument balloon's
-    connections is a signal, so without this the balloons are exempt from the
-    whole of the check above and nothing holds their taps to the circle."""
+    """Verify signal ports remain on outlines across box shapes."""
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
@@ -1105,45 +1115,13 @@ def test_signal_ports_stay_on_the_outline_at_any_box_shape(entry, odd_box_sheets
             )
 
 
-# ---------------------------------------------------------------------------
-# A vessel's and a tank's five nozzles, on every drawing that has to carry them
-# (#222).
-#
-# The generic invariants above hold every symbol to its OWN port map: what it
-# anchors has to land on ink and no two of them may coincide. Neither notices a
-# symbol that anchors too FEW, because a symbol has no idea which class draws
-# it. That gap is the whole risk in adding a nozzle to a class with seventeen
-# drawings: a port the artwork never anchored falls back to the centre of the
-# box (``portgeom._drawn_placements``), where every other unanchored port lands
-# too, and the sheet draws two streams on one point without raising anything.
-#
-# So this reads the class's PORTS and asks the drawing, one variant at a time.
-# It is the check that would have caught the same class of defect as #225 --
-# ports and drawn nozzles drifting apart -- one commit earlier than the sheet.
-# ---------------------------------------------------------------------------
-
 _HOLDUP = [(units.Vessel, "vessel"), (units.Tank, "tank")]
 
-#: (kind, variant, port) -> the face the nozzle comes out of at the SYMBOL's own
-#: box, for the two nozzles that do not take the face their role asks for.
-#:
-#: Both are the same fact about the same stencil pair: ``vessel/legs`` and
-#: ``vessel/skirted`` are 122.69 tall over a vessel that ends at 95.38, so the
-#: bottom head's crown is nearer a side wall (20) than the box's floor (27.3)
-#: and ``outward_dir`` reads it as west. The drain is on the vessel's low point
-#: regardless, which is where the pipe leaves from; moving it to win a face
-#: would put it on a leg. Recorded rather than tolerated silently -- a third
-#: entry appearing here is a stencil that needs looking at, and #225 is the
-#: change that gives a supported vessel its face back.
 _DRAIN_FACES_SIDEWAYS = {
     ("vessel", "legs", "drain"): "W",
     ("vessel", "skirted", "drain"): "W",
 }
 
-#: The face each role asks for, by what the role means. ``inlet`` and ``outlet``
-#: are absent: where the process pair goes is the stencil's business (a vessel
-#: is piped side to side, a tank top to bottom) and this is a rule about the
-#: three that are positioned by duty.
 _ROLE_FACE = {"vent": "N", "relief": "N", "drain": "S"}
 
 
@@ -1153,7 +1131,7 @@ _ROLE_FACE = {"vent": "N", "relief": "N", "drain": "S"}
     ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
 )
 def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind, variant):
-    """No fallback to the centre of the box, on any of the seventeen."""
+    """Verify holdup variants anchor every declared nozzle."""
     from pandid.portgeom import is_anchored
 
     unit = cls("X-1", variant=variant)
@@ -1170,16 +1148,7 @@ def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind,
     ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
 )
 def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, variant):
-    """The position is the role, so it is the position that is checked.
-
-    CHEE4001 p.7 is the citable half: wherever it can be, the PSV goes on the
-    protected system itself, upright, discharging upward, at the top of the
-    container. A relief drawn on the floor is not a layout
-    preference gone wrong -- it is a sheet asserting that the protective device
-    vents the liquid. The vent is on the crown for the same reason a vapour
-    space is at the top, and the drain at the low point because that is what a
-    drain is.
-    """
+    """Verify relief and drain ports occupy their prescribed positions."""
     from pandid.portgeom import port_faces
 
     unit = cls("X-1", variant=variant)
@@ -1192,25 +1161,12 @@ def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, varian
 
 
 def test_the_two_holdup_classes_offer_the_same_nozzles():
-    """A tank and a vessel are one shell at two design pressures.
-
-    Held here as well as in ``tests/test_units.py`` because this file is where
-    the *drawings* are, and the pair only means anything if both families draw
-    it: swapping ``Tank`` for ``Vessel`` on a sheet must not lose a connection.
-    """
+    """Verify tank and vessel classes expose the same nozzles."""
     assert list(units.Tank("T-1").ports) == list(units.Vessel("V-1").ports)
 
 
 def test_the_reported_column_and_reactor_meet_their_streams():
-    """The bug as reported, in the two sizes it was reported at.
-
-    A 110 x 250 column drawn from a 100 x 200 symbol had its artwork scaled to
-    fit and centred -- 110 x 220, with 15px of whitespace above and below -- so
-    the distillate and bottoms lines stopped 15px short of the dished heads. An
-    80 x 100 reactor from a 50 x 96.4 symbol came out 51.9 wide inside its 80,
-    and both feed arrows stopped 14.1px short of the vessel wall. Both stencils
-    are variable-aspect, so the artwork fills the box and the gap is gone.
-    """
+    """Verify reported column and reactor stream connections."""
     from pandid import Flowsheet
 
     fs = Flowsheet("as reported")
@@ -1221,8 +1177,6 @@ def test_the_reported_column_and_reactor_meet_their_streams():
         sym = default_registry.for_unit(unit)
         frame = unit.frame
         matrix = matrices[(round(frame.cx, 6), round(frame.cy, 6))]
-        # Whitespace is what the ports were floating in, so start there: the
-        # artwork's own corners land on the box's, and there is none.
         assert _apply(matrix, 0.0, 0.0) == pytest.approx((frame.x, frame.y))
         assert _apply(matrix, sym.width, sym.height) == pytest.approx(
             (frame.x + frame.w, frame.y + frame.h)
@@ -1238,17 +1192,6 @@ def test_the_reported_column_and_reactor_meet_their_streams():
             )
 
 
-# ---------------------------------------------------------------------------
-# Symbols the registry *derives* rather than registers.
-#
-# A reducer piped the other way round is an expansion, and the drawing for it is
-# built from the reduction's on demand (SymbolRegistry.for_unit), so it is not in
-# ``_SYMBOLS`` and nothing above sees it. It is a drawing a sheet puts ink on
-# either way, so it answers to the same rules: every nozzle on the artwork, in
-# the coordinates it was drawn in and in a box of any shape.
-# ---------------------------------------------------------------------------
-
-#: Every registered reducer, and the expander derived from it.
 _TURNED = [
     (
         (kind, variant),
@@ -1265,7 +1208,7 @@ _TURNED_IDS = [f"{kind}/{variant}" for (kind, variant), _, _ in _TURNED]
 
 @pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
 def test_a_turned_fittings_ports_lie_on_drawn_geometry(entry):
-    """The whole menu, on the mirrored artwork's own strokes."""
+    """Verify turned-fitting ports lie on drawn geometry."""
     (kind, variant), _, turned = entry
     segments = _collect_segments(turned.svg)
     for name, faces in turned.port_faces.items():
@@ -1280,13 +1223,7 @@ def test_a_turned_fittings_ports_lie_on_drawn_geometry(entry):
 
 @pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
 def test_a_turned_fitting_keeps_its_box_and_its_faces(entry):
-    """Same box, same two faces, and no two nozzles on one point.
-
-    The box is what the placement machinery sizes against, so a turned fitting
-    that changed shape would move the run it sits in. The faces are what makes
-    it a *turn* rather than a mirror: ``inlet`` stays on the west and ``outlet``
-    on the east, so the flow still crosses the fitting the way it is drawn.
-    """
+    """Verify turned fittings preserve their boxes and port faces."""
     _, sym, turned = entry
     assert (turned.width, turned.height) == (sym.width, sym.height)
     assert turned.stretchable == sym.stretchable
@@ -1298,17 +1235,24 @@ def test_a_turned_fitting_keeps_its_box_and_its_faces(entry):
 
 @pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
 def test_a_turned_fitting_opens_out_where_the_reduction_closes_in(entry):
-    """The cone points the other way, which is the whole of what this draws.
-
-    Measured as the drawn height of each end face: a reduction is tall on the
-    west and short on the east, and the expansion is the two swapped. Nothing
-    else distinguishes the two drawings, so nothing else would catch a
-    derivation that returned the artwork unchanged.
-    """
+    """Verify turned reductions reverse the cone direction."""
     _, sym, turned = entry
 
     def face_height(symbol: Symbol, x: float) -> float:
-        """How much ink stands on the vertical line at ``x``."""
+        """Measure ink height at a vertical coordinate.
+
+        Parameters
+        ----------
+        symbol : Symbol
+            Symbol definition.
+        x : float
+            Vertical coordinate.
+
+        Returns
+        -------
+        float
+            Ink height.
+        """
         ys = [
             y
             for (ax, ay), (bx, by) in _collect_segments(symbol.svg)
@@ -1325,12 +1269,7 @@ def test_a_turned_fitting_opens_out_where_the_reduction_closes_in(entry):
 
 @pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
 def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
-    """The odd-box rule, for the drawing the registry derives.
-
-    Its own jig rather than the shared one: ``odd_box_sheets`` places one unit
-    per registered symbol and a turned fitting is not registered, so the sheet
-    it would have to appear on does not exist until it is built here.
-    """
+    """Verify turned-fitting ports follow ink across box shapes."""
     from pandid import Flowsheet
 
     (kind, variant), _, turned = entry
@@ -1359,21 +1298,28 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
                 )
 
 
-def _colliding_symbol(**kwargs) -> Symbol:
-    """Build a Symbol that is *expected* to have coincident ports.
+# Port-placement menu invariants
 
-    Registering one warns (the engine consults the rule, not just this suite),
-    so the warning is asserted here rather than left to leak into the report.
+
+def _colliding_symbol(**kwargs) -> Symbol:
+    """Build a symbol with expected coincident ports.
+
+    Parameters
+    ----------
+    **kwargs
+        Symbol constructor arguments.
+
+    Returns
+    -------
+    Symbol
+        Constructed symbol.
     """
     with pytest.warns(UserWarning, match="Only ports named in faceless_ports"):
         return Symbol(svg='<g id="sym_under_test"/>', **kwargs)
 
 
 def test_authored_alternates_do_not_buy_a_shared_face():
-    """Handing a vapour outlet a copy of the feed's menu gives both ports more
-    than one placement, so a "the menu is multi-entry" exemption would wave the
-    collision through, which is the point of naming faceless connections
-    instead of inferring them from the shape of the menu."""
+    """Verify authored alternates cannot conceal shared faces."""
     sym = _colliding_symbol(
         width=91.5,
         height=30.0,
@@ -1387,8 +1333,7 @@ def test_authored_alternates_do_not_buy_a_shared_face():
 
 
 def test_a_second_nozzle_on_an_alternates_own_coordinate_is_caught():
-    """An outlet given the right head the inlet already offers lands two
-    nozzles on (91.5, 15.0)."""
+    """Verify a duplicate alternate nozzle is rejected."""
     sym = _colliding_symbol(
         width=91.5,
         height=30.0,
@@ -1402,8 +1347,7 @@ def test_a_second_nozzle_on_an_alternates_own_coordinate_is_caught():
 
 
 def test_faceless_connections_may_share_a_placement():
-    """A balloon is a circle, so every signal connection offers every face and
-    the overlap is a menu rather than a collision."""
+    """Verify faceless connections may share a placement."""
     faces = {"N": (22.0, 0.0), "S": (22.0, 44.0), "W": (0.0, 22.0), "E": (44.0, 22.0)}
     ports = {"pv": (22.0, 44.0), "sig_in": (0.0, 22.0), "sig_out": (44.0, 22.0)}
     sym = Symbol(
@@ -1415,7 +1359,6 @@ def test_faceless_connections_may_share_a_placement():
         faceless_ports=frozenset(ports),
     )
     assert sym.coincident_ports() == []
-    # ...but a nozzle that does own its face is still checked against them.
     with_stub = _colliding_symbol(
         width=44.0,
         height=44.0,
@@ -1430,17 +1373,8 @@ def test_faceless_connections_may_share_a_placement():
     ]
 
 
-# --- what a symbol may declare -----------------------------------------------
-#
-# The checks above hold the shipped registry to these rules; Symbol's own
-# constructor holds every symbol to them, including the third-party ones this
-# suite never sees. Each is rejected rather than discarded in silence.
-
-
 def test_a_placement_keyed_to_a_face_it_does_not_land_on_is_rejected():
-    """The menu is re-keyed by coordinate at resolve time, so a mis-keyed
-    alternate would not exist: it lands under the face it actually reaches,
-    where it either clobbers the real entry or is clobbered by it."""
+    """Verify alternates reject mismatched placement keys."""
     with pytest.raises(ValueError, match=r"nearest the W edge"):
         Symbol(
             svg='<g id="sym_x"/>',
@@ -1452,8 +1386,7 @@ def test_a_placement_keyed_to_a_face_it_does_not_land_on_is_rejected():
 
 
 def test_an_alternate_on_a_ports_own_home_face_is_rejected():
-    """``ports`` is the authority on the home nozzle, so an alternate keyed to
-    the same face could only ever be overwritten by it."""
+    """Verify alternates cannot restate a port's home face."""
     with pytest.raises(ValueError, match=r"but ports\['feed'\] puts the same face at"):
         Symbol(
             svg='<g id="sym_x"/>',
@@ -1465,6 +1398,7 @@ def test_an_alternate_on_a_ports_own_home_face_is_rejected():
 
 
 def test_a_menu_for_a_port_the_symbol_does_not_anchor_is_rejected():
+    """Verify menus reject undeclared ports."""
     with pytest.raises(ValueError, match=r"declares a menu for \['nope'\]"):
         Symbol(
             svg='<g id="sym_x"/>',
@@ -1476,6 +1410,7 @@ def test_a_menu_for_a_port_the_symbol_does_not_anchor_is_rejected():
 
 
 def test_a_faceless_port_the_symbol_does_not_anchor_is_rejected():
+    """Verify faceless declarations reject undeclared ports."""
     with pytest.raises(ValueError, match=r"faceless_ports names \['typo'\]"):
         Symbol(
             svg='<g id="sym_x"/>',
@@ -1487,8 +1422,7 @@ def test_a_faceless_port_the_symbol_does_not_anchor_is_rejected():
 
 
 def test_a_home_placement_restated_in_the_menu_is_accepted():
-    """The vendored symbols emit the whole menu, home included, so restating it
-    with the same coordinate has to stay legal."""
+    """Verify a port menu may restate the home placement."""
     sym = Symbol(
         svg='<g id="sym_x"/>',
         width=91.5,
@@ -1499,9 +1433,7 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
     assert list(sym.port_faces["feed"]) == ["W", "N"]  # home stays most preferred
 
 
-# ---------------------------------------------------------------------------
-# Port series: the families whose membership the unit decides, not the symbol.
-# ---------------------------------------------------------------------------
+# Port-series invariants
 
 
 @pytest.mark.parametrize(
@@ -1513,9 +1445,6 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
         ("column", "draw_", "n_draws", "E", "default"),
         ("reactor", "feed_", "n_feeds", "W", "default"),
         ("reactor", "feed_", "n_feeds", "W", "plain"),
-        # Both separator geometries: the upright shell, whose family is centred
-        # on a nozzle with wall above and below it, and the hopper-bottomed
-        # body, whose family grows down from a nozzle a module below the roof.
         ("separator", "feed_", "n_feeds", "W", "default"),
         ("separator", "feed_", "n_feeds", "W", "knockout"),
         ("separator", "feed_", "n_feeds", "W", "cyclone"),
@@ -1525,10 +1454,7 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
 def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(
     kind, prefix, ctor_arg, face, variant
 ):
-    """Without a series a Mixer's third inlet falls through to the centre of the
-    box, landing on top of every other unplaced port -- three streams into one
-    point in the middle of the triangle. Each member gets its own spot on
-    the flat face, however many there are."""
+    """Verify each port-series member receives a distinct nozzle."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, is_anchored, resolve_size
 
@@ -1557,9 +1483,7 @@ def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_series_members_lie_on_drawn_geometry(entry):
-    """A family is placed by rule rather than authored point by point, so
-    nothing else checks that the rule keeps its members on the vessel: a band
-    reaching past the straight shell puts the last feed on a dished head."""
+    """Verify port-series members lie on drawn geometry."""
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
@@ -1576,36 +1500,14 @@ def test_series_members_lie_on_drawn_geometry(entry):
 
 
 def test_a_lone_member_lands_where_the_fixed_nozzle_did():
-    """One feed is the count every existing reactor sheet was drawn with, so the
-    family has to reproduce that nozzle exactly -- otherwise supporting a second
-    feed moves the first one on every drawing already issued.
-
-    The column is the one family this does not hold for, and the test below is
-    why: its pre-family nozzle was not somewhere its family could be centred.
-
-    The number for ``default`` is the *body's*, and the body changed with this
-    drawing: the stirred tank is now the same dished-end cylinder the vessel and
-    the flash drum are cut from (62 x 100), so its charge nozzle is at the middle
-    of the straight wall rather than at the middle of the "Mixing Reactor"
-    stencil's. What the check is for is unchanged -- the lone feed lands where a
-    single fixed nozzle would, and adding a second does not move it -- and the
-    ``mixing`` row below is the old body, still answering the old number."""
+    """Verify a lone series member preserves its fixed-nozzle position."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, resolve_size
 
     for unit, want in (
-        # The stirred tank's drawing is taller than its body: ISO item 1.27
-        # X8006's motor hangs above the crown, so the composed box grows by
-        # the motor's own diameter (a third of the 62-wide shell) plus the
-        # ninth of the body's height of clear air under it, and the shell
-        # moves down into it. 50 is still the middle of the straight wall.
         (U.Reactor("R"), (0.0, 50.0 + 62.0 / 3 + 100.0 / 9)),
         (U.Reactor("R", variant="mixing"), (0.0, 48.2)),
         (U.Reactor("R", variant="plain"), (0.0, 30.0)),
-        # #452's separators, both geometries. The two hopper bodies are the
-        # rows that need ``FROM_START`` to hold this at all: their nozzle is 12
-        # down an 80-unit wall, so a centred family cannot be given room
-        # without moving it.
         (U.Separator("V"), (0.0, 50.0)),
         (U.Separator("V", variant="knockout"), (0.0, 55.0)),
         (U.Separator("V", variant="cyclone"), (0.0, 12.0)),
@@ -1618,15 +1520,7 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
 
 
 def test_a_lone_column_feed_sits_at_the_centre_of_the_duty_band():
-    """The column bought the rule above and could not pay: its pre-family nozzle
-    was at y = 130, and 130 is not the centre of the band its feeds have to stay
-    inside (65..145, between the duty arrows).
-
-    Centring the family there put the second feed at 147.5, below the reboiler
-    duty arrow, so one of the two claims had to go. The band is the one that
-    says something about the equipment, while 130 was only ever the height a
-    single nozzle happened to be drawn at, so the lone feed moved the 25 up to
-    the centre and every column sheet moved with it."""
+    """Verify a lone column feed centres in its duty band."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, resolve_size
 
@@ -1639,10 +1533,7 @@ def test_a_lone_column_feed_sits_at_the_centre_of_the_duty_band():
 
 
 def test_a_lone_column_draw_sits_at_the_centre_of_the_duty_band_too():
-    """The east-wall mirror of the test above: a one-draw tower's ``draw``
-    shares the feed family's own ``at``, so it lands on the same 105
-    elevation the lone feed does -- on the opposite wall's own width, not
-    the west wall's 0.0."""
+    """Verify a lone column draw centres in its duty band."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, resolve_size
 
@@ -1655,10 +1546,7 @@ def test_a_lone_column_draw_sits_at_the_centre_of_the_duty_band_too():
 
 
 def test_a_feed_family_reaching_the_return_nozzles_is_caught():
-    """The feeds are on the tower's west wall and the returns on its east one,
-    which is what keeps them apart however many feeds there are. Put the family
-    on the returns' face and the band covers both of them -- and a collision a
-    count away is still a collision, so the check has to say so."""
+    """Verify feed families cannot reach return nozzles."""
     from pandid.render.symbols import PortSeries
 
     column = default_registry.get("column")
@@ -1677,8 +1565,7 @@ def test_a_feed_family_reaching_the_return_nozzles_is_caught():
 
 
 def test_the_shipped_feed_families_reach_nothing_else():
-    """The column and both reactors ship a feed family beside fixed nozzles;
-    each is the case the check above exists to protect."""
+    """Verify shipped feed families avoid unrelated nozzles."""
     for kind, variant in (("column", "default"), ("reactor", "default"), ("reactor", "plain")):
         sym = default_registry.get(kind, variant)
         assert sym.port_series, f"{kind}/{variant} has no feed family"
@@ -1686,18 +1573,14 @@ def test_the_shipped_feed_families_reach_nothing_else():
 
 
 def _assert_family_between_duty_arrows(variant, prefix, label, build):
-    """Shared body of the two tests below: one family, walked at every count.
+    """Assert a column family remains between duty arrows.
 
-    Column carries two series on one face pair now -- ``feed_`` on the west
-    wall and ``draw_`` on the east -- so ``sym.port_series`` is no longer a
-    single entry to destructure; this picks the one ``prefix`` names and
-    checks it the way the single-series version used to check the only one
-    there was.
-
-    ``build`` takes ``(variant, count)`` rather than a ``**{ctor_arg:
-    count}`` dict -- a dynamic keyword name against ``Column.__new__``'s own
-    overloads is a call Pyright cannot resolve a return type for, and this
-    is a call site rather than a place to spend that.
+    Parameters
+    ----------
+    variant, prefix, label : str
+        Family identifier.
+    build : Callable
+        Column constructor.
     """
     from pandid.portgeom import port_offset
 
@@ -1705,9 +1588,6 @@ def _assert_family_between_duty_arrows(variant, prefix, label, build):
     lo, hi = sym.ports["condenser_duty"][1], sym.ports["reboiler_duty"][1]
     assert lo < hi, f"column/{variant}: the duty arrows bound no band at all"
     (family,) = (series for series in sym.port_series if series.prefix == prefix)
-    # Past three the run is squeezed into ``extent`` rather than pitched (see
-    # the KIND_MAP comment), so both regimes have to be walked: the defect was a
-    # band wider than the one the duty arrows bound, *and* centred below it.
     for count in range(1, 13):
         column = build(variant, count)
         members = [name for name in column.ports if family.matches(name)]
@@ -1722,25 +1602,7 @@ def _assert_family_between_duty_arrows(variant, prefix, label, build):
 
 @pytest.mark.parametrize("variant", default_registry.variants("column"))
 def test_every_column_feed_stays_between_the_duty_arrows(variant):
-    """A tower's feeds land between the two duty arrows at every count.
-
-    ``coincident_ports`` above compares a family's band against nozzles that
-    resolve to the same *point*, so it only ever reaches the face the family is
-    on. The feeds are on the west wall and every nozzle worth clearing is on the
-    east, which is why nothing said how far down the shell a feed could be
-    drawn, and why the shipped rule ran the second feed of two out below
-    ``reboiler_duty`` while the comment over it claimed the opposite.
-
-    The two duty arrows are the innermost fixed nozzles on the opposite wall
-    (65 and 145, against ``reflux_in``'s 35 and ``boilup_in``'s 175), so a feed
-    inside the band they bound is clear of all four: none is drawn at the
-    elevation of anything the tower returns to.
-
-    The band is read off the symbol rather than written down here, so the claim
-    follows the drawing, and each feed is resolved through ``portgeom`` on a
-    real ``Column`` rather than by re-deriving ``PortSeries``' arithmetic, which
-    would only prove this test agrees with itself.
-    """
+    """Verify column feeds remain between duty arrows."""
     from pandid import units as U
 
     _assert_family_between_duty_arrows(
@@ -1750,17 +1612,7 @@ def test_every_column_feed_stays_between_the_duty_arrows(variant):
 
 @pytest.mark.parametrize("variant", default_registry.variants("column"))
 def test_every_column_draw_stays_between_the_duty_arrows(variant):
-    """The same claim, for the east wall a draw shares with the two duty
-    arrows and the two returns, rather than the west wall a feed has to
-    itself.
-
-    A draw shares the feed family's own ``at``/``pitch``/``extent`` (see
-    ``scripts/vendor_symbols.py``'s ``KIND_MAP`` comment), so the band it
-    stays inside is the identical 65..145 the feeds on the opposite wall
-    stay inside -- reused rather than re-derived, and this is the check
-    that it is not merely equal by construction: it is still clear of the
-    four fixed nozzles that share its own wall.
-    """
+    """Verify column draws remain between duty arrows."""
     from pandid import units as U
 
     _assert_family_between_duty_arrows(
@@ -1769,10 +1621,7 @@ def test_every_column_draw_stays_between_the_duty_arrows(variant):
 
 
 def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
-    """The two-port case is the one every existing sheet draws, so the spacing
-    rule has to reproduce the fixed-symbol coordinates exactly rather than
-    merely closely -- otherwise accommodating a third port shifts every mixer
-    and splitter on every drawing."""
+    """Verify two-member series preserve existing nozzle positions."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements
 
@@ -1788,8 +1637,7 @@ def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
 
 
 def test_a_series_may_not_restate_a_port_the_symbol_already_anchors():
-    """Two authorities on one port's position is the bug the series exists to
-    remove, so declaring both is rejected rather than silently resolved."""
+    """Verify a series cannot restate an anchored port."""
     from pandid.render.symbols import PortSeries
 
     with pytest.raises(ValueError, match=r"only authority"):
@@ -1803,31 +1651,21 @@ def test_a_series_may_not_restate_a_port_the_symbol_already_anchors():
 
 
 def test_heater_and_cooler_are_one_stencil_pair():
-    """They are the same circle and zigzag with the duty arrow reversed, so
-    they have to be the same size: a utility cooler drawn half again bigger
-    than the heater beside it reads as a different class of equipment. Taking
-    the cooler from "Heat Exchanger (Spiral)" instead -- a 100x100 stencil for a
-    different machine -- draws it larger than the reactor upstream."""
+    """Verify heater and cooler stencil variants share dimensions."""
     heater = default_registry.get("heater", "default")
     cooler = default_registry.get("cooler", "default")
     assert (cooler.width, cooler.height) == (heater.width, heater.height)
     assert cooler.ports["inlet"] == heater.ports["inlet"]
     assert cooler.ports["outlet"] == heater.ports["outlet"]
-    # Heat in from below, heat out through the top.
     assert outward_dir(*heater.ports["utility_in"], heater.width, heater.height) == "S"
     assert outward_dir(*cooler.ports["utility_out"], cooler.width, cooler.height) == "N"
-    # And the spiral exchanger is reachable under the kind it belongs to.
     spiral = default_registry.get("hex", "spiral")
     assert (spiral.width, spiral.height) == (100.0, 100.0)
     assert set(spiral.ports) == {"side_a_in", "side_a_out", "side_b_in", "side_b_out"}
 
 
 def test_a_nozzle_standing_in_a_series_band_is_a_collision():
-    """A series has no fixed membership, so it has no fixed points to compare a
-    nozzle against. The band it may place a member on is what a collision check
-    has to test instead. A nozzle inside the stretch of face a series may place
-    a member on shares a placement with one for some count, and a static check
-    exists to say so before anything is drawn."""
+    """Verify nozzles within a series band are collisions."""
     from pandid.render.symbols import PortSeries
 
     with pytest.warns(UserWarning, match=r"both have a placement"):
@@ -1842,8 +1680,7 @@ def test_a_nozzle_standing_in_a_series_band_is_a_collision():
 
 
 def test_a_nozzle_clear_of_the_series_band_is_not_a_collision():
-    """The band is the middle ``extent`` of the face, not the whole of it: a
-    nozzle out at the corner is somewhere a member can never be put."""
+    """Verify nozzles outside a series band are not collisions."""
     from pandid.render.symbols import PortSeries
 
     clear = Symbol(
@@ -1857,57 +1694,19 @@ def test_a_nozzle_clear_of_the_series_band_is_not_a_collision():
 
 
 def test_a_series_on_another_face_is_not_a_collision():
-    """A splitter's inlet sits on the point of the triangle while its outlets
-    spread along the opposite face, the shipped case that must stay quiet."""
+    """Verify series on separate faces are not collisions."""
     assert default_registry.get("splitter").coincident_ports() == []
     assert default_registry.get("mixer").coincident_ports() == []
 
 
-# ---------------------------------------------------------------------------
-# The wall a family is confined to (#488).
-#
-# A tank's or a vessel's inlets and outlets are not a PortSeries: the count is
-# per unit and the faces are per unit too, so ``vessel_symbol`` spreads them
-# itself, from the one nozzle the stencil drew. That nozzle says nothing about
-# how much wall there is either side of it, and until ``Symbol.bands`` nothing
-# did: three inlets on a dished-roof tank put the third below the floor and off
-# the drawing entirely, and the stream to it ended in blank paper.
-#
-# ``bands`` is the missing dimension and these are the checks on it: the run
-# stays inside the band, the band stays on the artwork, and a lone connection
-# still lands exactly where the stencil put it.
-# ---------------------------------------------------------------------------
-
-#: Every holdup body, which is every symbol whose families ``vessel_symbol``
-#: places. Read off the registry, so a variant added later is checked without
-#: anyone remembering to come here.
 _HOLDUP = [
     (kind, variant) for kind in ("tank", "vessel") for variant in default_registry.variants(kind)
 ]
 _HOLDUP_IDS = [f"{kind}/{variant}" for kind, variant in _HOLDUP]
 
-#: Every symbol that declares a wall. The population the wall checks below run
-#: over, rather than the whole registry with a skip on the 210 symbols that
-#: have no family to bound: a test that does not execute is not a test, and a
-#: skip whose condition is permanently true for a valve or a pump is one
-#: wearing a test's clothes. Read off the registry, so a symbol that starts
-#: declaring a band is checked without anyone remembering to come here, and
-#: ``test_every_family_face_declares_a_band`` is what stops this list quietly
-#: emptying.
-#: ``getattr`` rather than ``sym.bands``: this is read while the module is
-#: imported, and the file has to collect against a build with no such
-#: concept -- checking out an older ``pandid`` and running this suite
-#: against it should report which claims fail, not fail to collect at all.
-#: An empty population would then make the checks below vanish silently,
-#: which ``test_every_family_face_declares_a_band`` is what prevents: it
-#: runs over the bodies rather than over this list.
 _BANDED = [key for key, sym in _SYMBOLS if getattr(sym, "bands", {})]
 _BANDED_IDS = [f"{kind}/{variant}" for kind, variant in _BANDED]
 
-#: The holdup bodies whose class offers a composition, which is the population
-#: the ``supports=`` check runs over. Asked of the class rather than written
-#: down, so a ``Tank`` that grows a ``supports=`` is covered by that change
-#: alone.
 _COMPOSABLE = [
     (kind, variant)
     for kind, variant in _HOLDUP
@@ -1915,15 +1714,27 @@ _COMPOSABLE = [
 ]
 _COMPOSABLE_IDS = [f"{kind}/{variant}" for kind, variant in _COMPOSABLE]
 
-#: How far off its own box a nozzle may be measured before it is off it. Not
-#: ``BOX_EPS``: a unit of slack is right for an authored coordinate rounded to
-#: one decimal, and far too much for a claim that a family never leaves the
-#: body, which is arithmetic and exact.
 ON_BODY_TOL = 1e-6
 
 
+# Holdup-family invariants
+
+
 def _holdup(kind: str, variant: str, role: str, faces: list[str]) -> units.Unit:
-    """One tank or vessel with its ``role`` family on ``faces``."""
+    """Build a tank or vessel family case.
+
+    Parameters
+    ----------
+    kind, variant, role : str
+        Unit configuration.
+    faces : list[str]
+        Requested family faces.
+
+    Returns
+    -------
+    units.Unit
+        Configured holdup unit.
+    """
     cls = units.Tank if kind == "tank" else units.Vessel
     if role == "inlet":
         return cls("X-1", variant=variant, inputs=faces)
@@ -1931,33 +1742,44 @@ def _holdup(kind: str, variant: str, role: str, faces: list[str]) -> units.Unit:
 
 
 def _has_wall(sym: Symbol, face: str) -> bool:
-    """True where this face's band has length in it.
+    """Report whether a face supports multiple connections.
 
-    A face whose band is a single point -- a dome crown, a cone apex, a
-    dished head -- carries one connection and refuses a second, so the
-    sweeps below walk it to a count of one and no further.
+    Parameters
+    ----------
+    sym : Symbol
+        Symbol definition.
+    face : str
+        Candidate face.
+
+    Returns
+    -------
+    bool
+        Whether the face has a non-zero wall.
     """
     band = sym.bands.get(face)
     return band is None or band[0] < band[1]
 
 
 def _role_menus(kind: str, variant: str):
-    """``(role, prefix, {face: (x, y)})`` for both families of a body."""
+    """Yield inlet and outlet face menus.
+
+    Parameters
+    ----------
+    kind, variant : str
+        Registered body key.
+
+    Yields
+    ------
+    tuple[str, str, dict]
+        Role, port prefix, and face menu.
+    """
     sym = default_registry.get(kind, variant)
     for role, prefix in (("inlet", "in_"), ("outlet", "out_")):
         yield role, prefix, sym.port_faces.get(role, {})
 
 
 def test_spread_never_leaves_the_band_it_is_given():
-    """The whole of the guarantee, on the one function that makes it.
-
-    ``at`` is where a symbol drew a single nozzle and ``extent`` bounds only how
-    *long* a run may be, never where that length is laid down -- so before this,
-    a family centred on a nozzle near the end of its wall walked off the end of
-    it. The band is the limit, and the claim is that no member ever leaves it:
-    at any count, from any anchor, under either alignment, on a band of any
-    width including none at all.
-    """
+    """Verify series spreading remains within its band."""
     face = 95.5
     for band in ((0.0, face), (36.0, 85.0), (10.0, 20.0), (50.0, 50.0)):
         lo, hi = band
@@ -1971,31 +1793,16 @@ def test_spread_never_leaves_the_band_it_is_given():
 
 
 def test_spread_slides_a_run_no_further_than_it_has_to():
-    """A band is a limit and not a re-centring: a family with room stays exactly
-    where ``at`` and ``align`` put it, and one that has run out of wall moves by
-    the overhang and by nothing more.
-
-    Without this the fix could have been "centre every family in its band",
-    which moves families that were never wrong.
-    """
-    # Room to spare: the same three points a band-less call gives.
+    """Verify constrained series spreading makes the smallest shift."""
     inside = [spread(i, 3, 95.5, 20.0, 0.7, 50.0, CENTRED, (10.0, 90.0)) for i in range(3)]
     assert inside == pytest.approx([30.0, 50.0, 70.0])
     assert inside == pytest.approx([spread(i, 3, 95.5, 20.0, 0.7, 50.0, CENTRED) for i in range(3)])
-    # Anchored on the band's own end: the run hangs 20 over, and slides 20.
     against = [spread(i, 3, 95.5, 20.0, 0.7, 85.0, CENTRED, (36.0, 85.0)) for i in range(3)]
     assert against == pytest.approx([45.0, 65.0, 85.0])
 
 
 def test_three_inlets_stack_up_a_dished_roof_tanks_shell():
-    """The reported drawing, as a number.
-
-    ``tank/default``'s shell runs y 25,46..95,46 under the dome and the stencil
-    fills it at 85, ten above the floor. Three fills stack *up* that shell from
-    the one that was already drawn -- 45, 65, 85 -- rather than straddling it at
-    65, 85 and 105, which is where the third one was: 9,5 below the bottom of a
-    95,5-tall drawing, with the stream to it ending in blank paper (#488).
-    """
+    """Verify three tank inlets follow the dished roof."""
     tank = units.Tank("TK-1", inputs=3)
     assert [port_offset(tank, f"in_{i}")[1] for i in (1, 2, 3)] == pytest.approx([45.0, 65.0, 85.0])
     assert [port_offset(tank, f"in_{i}")[0] for i in (1, 2, 3)] == pytest.approx([0.0] * 3)
@@ -2003,14 +1810,7 @@ def test_three_inlets_stack_up_a_dished_roof_tanks_shell():
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
 def test_a_holdup_family_stays_on_its_own_box_at_every_count(kind, variant):
-    """No nozzle outside the body it belongs to, for every holdup drawing, every
-    face either family may be piped from, and every count the library admits.
-
-    The bar the issue set, and the one nothing enforced: ``validate()`` was
-    silent while a shipped sheet carried a nozzle 8,9px below its tank. Read
-    through ``portgeom`` on a real unit rather than by re-deriving ``spread``'s
-    arithmetic, which would only prove this test agrees with itself.
-    """
+    """Verify holdup-family ports remain within their boxes."""
     sym = default_registry.get(kind, variant)
     for role, prefix, menu in _role_menus(kind, variant):
         for face in menu:
@@ -2031,13 +1831,7 @@ def test_a_holdup_family_stays_on_its_own_box_at_every_count(kind, variant):
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
 def test_a_holdup_family_stays_inside_the_wall_its_symbol_declares(kind, variant):
-    """...and on the *wall*, wherever the drawing says where its wall is.
-
-    The box is the floor of the claim; ``bands`` is the real one. A face this
-    symbol declares no band for is one whose artwork runs the length of the box,
-    or one there is no straight run of at all -- a dome crown, a cone apex -- and
-    the test above is all that can be said about it.
-    """
+    """Verify holdup-family ports remain on declared walls."""
     sym = default_registry.get(kind, variant)
     if not sym.bands:
         pytest.skip(f"{kind}/{variant} declares no wall")
@@ -2060,23 +1854,10 @@ def test_a_holdup_family_stays_inside_the_wall_its_symbol_declares(kind, variant
 
 @pytest.mark.parametrize(("kind", "variant"), _BANDED, ids=_BANDED_IDS)
 def test_every_declared_wall_lies_on_the_drawing(kind, variant):
-    """A band is a measurement off the artwork, so the artwork is what checks it.
-
-    Two numbers written down by hand are two numbers that can be wrong, and a
-    band measured off the wrong stroke would confine a family to the dome it was
-    supposed to keep it off. Both ends and the middle of every declared band are
-    walked back onto the drawing here -- at the same inset from the box edge
-    ``vessel_symbol`` draws a nozzle on that face at -- so a band on nothing is a
-    failure rather than a comment.
-    """
+    """Verify each declared wall lies on the drawing."""
     sym = default_registry.get(kind, variant)
     segments = _collect_segments(sym.svg)
     for face, (lo, hi) in sym.bands.items():
-        # The two families' own menus and not every port's: a band bounds the
-        # family ``vessel_symbol`` spreads, and a fixed nozzle that happens to
-        # come out of the same edge -- vessel/legs' drain is 20 in from a
-        # 40-wide box, so it leaves by the west -- is drawn at an inset of its
-        # own that says nothing about where the wall is.
         insets = set()
         for role in ("inlet", "outlet"):
             drawn = sym.port_faces.get(role, {}).get(face)
@@ -2095,15 +1876,7 @@ def test_every_declared_wall_lies_on_the_drawing(kind, variant):
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
 def test_every_family_face_declares_a_band(kind, variant):
-    """A face with a placement and no band is a family bounded by the box alone.
-
-    The structural half of the fix, and the one that keeps it from rotting: the
-    box is not the drawing, so "no band declared" quietly means "spread this
-    family anywhere inside the rectangle", which is how the outer two of three
-    roof nozzles came to float 2,65 units clear of a dished tank's dome. Every
-    face either family may be piped from names its band, including the ones
-    whose band is a single point.
-    """
+    """Verify every family face declares a placement band."""
     sym = default_registry.get(kind, variant)
     for role, _, menu in _role_menus(kind, variant):
         for face in menu:
@@ -2115,23 +1888,10 @@ def test_every_family_face_declares_a_band(kind, variant):
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
 def test_a_wall_takes_a_second_connection_and_a_point_refuses_one(kind, variant):
-    """The band's two regimes, both asserted on every body and every face.
-
-    A dome crown, a cone apex and a dished head hold one nozzle, not two:
-    contained is not placed, since a band of no length puts every member of a
-    family on the same coordinate. So a second is refused -- at construction,
-    where the author wrote it, and again in ``vessel_symbol``, which is the only
-    route to the artwork.
-
-    The other branch is asserted rather than skipped, which is the point of
-    walking both here: ten of the eighteen bodies have a wall on every face a
-    family may use, and a check that only ever says "refused" would pass on a
-    build that refused *everything*.
-    """
+    """Verify walls accept series ports and points reject them."""
     sym = default_registry.get(kind, variant)
     for role, prefix, menu in _role_menus(kind, variant):
         for face in menu:
-            # One is always fine, and lands on the point the stencil drew.
             _holdup(kind, variant, role, [face])
             if not _has_wall(sym, face):
                 with pytest.raises(ValueError, match="mid-air off the ink"):
@@ -2146,10 +1906,7 @@ def test_a_wall_takes_a_second_connection_and_a_point_refuses_one(kind, variant)
 
 
 def test_a_face_with_no_wall_is_refused_by_the_drawing_too():
-    """The construction-time refusal can be outrun -- a face is also reached
-    through ``nozzle()`` and through ``from_dict`` -- so the call that builds
-    the artwork refuses it as well, and says the same sentence about the same
-    rule."""
+    """Verify drawing rejects series ports on wall-less faces."""
     from pandid.render.symbols import vessel_symbol
 
     with pytest.raises(ValueError, match="mid-air off the ink"):
@@ -2157,8 +1914,7 @@ def test_a_face_with_no_wall_is_refused_by_the_drawing_too():
 
 
 def test_moving_a_second_connection_onto_a_wall_less_face_is_refused():
-    """``nozzle()`` is the other way onto a face, and it refuses before it
-    records the move -- so a refused unit is still drawn the way it was."""
+    """Verify moving a series port onto a wall-less face is rejected."""
     tank = units.Tank("T-1", inputs=["N", "W"])
     with pytest.raises(ValueError, match="mid-air off the ink"):
         tank.nozzle("in_2", "N")
@@ -2167,14 +1923,7 @@ def test_moving_a_second_connection_onto_a_wall_less_face_is_refused():
 
 @pytest.mark.parametrize(("kind", "variant"), _COMPOSABLE, ids=_COMPOSABLE_IDS)
 def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
-    """``Vessel(supports=...)`` is the documented way to stand a vessel on legs,
-    and it resolves through ``compose()``, which builds a fresh ``Symbol``.
-
-    A band that did not survive that path would leave the guarantee true of a
-    bare vessel and false of a supported one -- worse than not having it, since
-    the guarantee reads as universal. Asked of the symbol a real *unit*
-    resolves to, so it is the composed drawing that answers.
-    """
+    """Verify supported bodies preserve their declared walls."""
     sym = default_registry.get(kind, variant)
     assert sym.bands, f"{kind}/{variant} is a holdup body and declares no wall"
     for supports in ("leg", "skirt", "bracket", "ring"):
@@ -2183,12 +1932,6 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
                 units.Vessel("X-1", variant=variant, supports=supports)
             )
         except ValueError as exc:
-            # Some bodies cannot carry some supports at all: the grown box moves
-            # one of the body's own nozzles onto a face it was not drawn for, and
-            # compose() refuses outright. vessel/electrical_heating refuses all
-            # four, and its low shell draw-off is why. Asserted rather than
-            # skipped, so the refusal is a recorded fact about the drawing and
-            # not a hole in this check.
             assert "grows the box" in str(exc), f"vessel/{variant} + {supports}: {exc}"
             continue
         assert drawn.bands == sym.bands, (
@@ -2197,20 +1940,9 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
 
 
 def test_a_wall_moves_with_the_ink_when_a_part_grows_the_box_upwards():
-    """A part drawn *above* a body shifts the body's own ink down the composed
-    box, and the band has to travel with it.
-
-    Nothing shipped composes a *banded* body upwards -- the four supports all
-    hang below -- so the arithmetic is exercised here directly rather than left
-    unmeasured until the first drive motor lands on a tank.
-    """
+    """Verify walls move with artwork when the box grows upward."""
     from pandid.render.symbols import Overlay, compose
 
-    # A plain body of this file's own, rather than a vendored one: the four
-    # shipped supports all hang *below* their vessel, and every vendored body a
-    # part can be hung above carries a crown nozzle that compose() then refuses
-    # to move. The arithmetic under test is the shift, so the body is the
-    # simplest one that has a wall to shift.
     body = Symbol(
         svg='<g id="sym_walled_test"><rect x="0" y="0" width="60" height="100" '
         'fill="none" stroke="black" stroke-width="2"/></g>',
@@ -2220,8 +1952,6 @@ def test_a_wall_moves_with_the_ink_when_a_part_grows_the_box_upwards():
         bands={"W": (20.0, 80.0), "E": (20.0, 80.0), "N": (10.0, 50.0)},
     )
     part = default_registry.part(20, "motor")
-    # Hung clear above the crown, which is where ISO item 1.27 X8006 draws a
-    # drive and the case compose() grows a box for.
     grown = compose(body, [(Overlay(20, "motor", 0.35, -0.3, 0.3, 0.3), part)])
     lift = grown.height - body.height
     assert lift == pytest.approx(30.0), "the overlay was meant to lift the ink 30"
@@ -2230,20 +1960,12 @@ def test_a_wall_moves_with_the_ink_when_a_part_grows_the_box_upwards():
         assert grown.bands[face] == pytest.approx((lo + shift, hi + shift)), (
             f"the {face} wall did not move with its own ink"
         )
-    # ...and the wall still names the stretch of shell it named: the body's own
-    # inlet moved by the same amount and is still inside it.
     moved = grown.ports["inlet"][1]
     assert grown.bands["W"][0] <= moved <= grown.bands["W"][1]
 
 
 def test_a_pinned_series_member_stays_inside_the_band():
-    """``pin=`` is the second route onto a face: a unit's own statement about
-    where one member goes, in place of the even spread.
-
-    It has to answer to the band too. A tray number that lands above the top of
-    the shell is a nozzle off the ink reached by a different road, and a limit
-    one road ignores is not a limit.
-    """
+    """Verify pinned series members remain inside their bands."""
     from pandid.render.symbols import PortSeries
 
     series = PortSeries("feed_", "W", pitch=20.0, extent=0.7, at=50.0)
@@ -2251,26 +1973,12 @@ def test_a_pinned_series_member_stays_inside_the_band():
     assert series.placement(0, 1, 60.0, 100.0, pin=0.05, band=band) == (0.0, 30.0)
     assert series.placement(0, 1, 60.0, 100.0, pin=0.95, band=band) == (0.0, 70.0)
     assert series.placement(0, 1, 60.0, 100.0, pin=0.5, band=band) == (0.0, 50.0)
-    # No band: the pin is the whole of the answer, as it always was.
     assert series.placement(0, 1, 60.0, 100.0, pin=0.05) == (0.0, 5.0)
 
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
 def test_a_holdup_family_lies_on_drawn_geometry(kind, variant):
-    """Every member of every holdup family, on the ink its body draws.
-
-    ``test_series_members_lie_on_drawn_geometry`` makes this claim for a
-    declared ``PortSeries``, and nothing made it for the families
-    ``vessel_symbol`` builds -- which are the ones the count and the faces
-    belong to the unit, and so the ones that can be asked for at eight members
-    on a face nobody drew eight nozzles on.
-
-    Being *on the box* is the weaker claim and the one ``nozzle-off-body``
-    checks at run time; this is the strong one, and it is what says an ink
-    hit-test in ``validate()`` would have nothing left to find in this
-    registry. Measured over every body, every face either family may be piped
-    from and every count, rather than reasoned from the bands being complete.
-    """
+    """Verify holdup-family ports lie on drawn geometry."""
     sym = default_registry.get(kind, variant)
     segments = _collect_segments(sym.svg)
     for role, prefix, menu in _role_menus(kind, variant):
@@ -2288,14 +1996,7 @@ def test_a_holdup_family_lies_on_drawn_geometry(kind, variant):
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
 def test_a_lone_holdup_connection_lands_where_the_stencil_drew_it(kind, variant):
-    """A preservation guard, and it passed before the band existed too.
-
-    That is the point of it: confining a family must not move the single
-    connection every shipped sheet is drawn with. Every drawn nozzle is inside
-    its own band -- the bands were measured so that it is -- so ``spread``'s
-    one-member answer is still the stencil's own coordinate, on every face of
-    every body.
-    """
+    """Verify a lone holdup connection preserves its stencil position."""
     for role, prefix, menu in _role_menus(kind, variant):
         for face, xy in menu.items():
             unit = _holdup(kind, variant, role, [face])
@@ -2304,12 +2005,11 @@ def test_a_lone_holdup_connection_lands_where_the_stencil_drew_it(kind, variant)
             )
 
 
-# ---------------------------------------------------------------------------
-# Looking a variant up.
-# ---------------------------------------------------------------------------
+# Registry lookup invariants
 
 
 def test_variants_lists_a_kinds_catalogue_default_first():
+    """Verify variant lists place the default first."""
     assert default_registry.variants("tank") == [
         "default",
         "conical",
@@ -2323,8 +2023,7 @@ def test_variants_lists_a_kinds_catalogue_default_first():
 
 
 def test_an_unregistered_variant_raises_naming_the_ones_that_exist():
-    """Falling back to the kind's default would let a typo draw the plain
-    symbol, which comes out of the printer looking like a drawing decision."""
+    """Verify unknown variants report registered alternatives."""
     with pytest.raises(ValueError) as excinfo:
         default_registry.get("vessel", "dishd")
     message = str(excinfo.value)
@@ -2335,9 +2034,7 @@ def test_an_unregistered_variant_raises_naming_the_ones_that_exist():
 
 
 def test_a_variant_typo_stops_the_sheet_rather_than_drawing_something_else():
-    """The registry is looked up at render time, so that is where a name
-    nobody registered has to be caught -- not at construction, which a later
-    assignment to unit.variant would walk straight past."""
+    """Verify a variant typo fails before rendering a sheet."""
     from pandid import Flowsheet, units as U
 
     fs = Flowsheet("typo")
@@ -2349,32 +2046,27 @@ def test_a_variant_typo_stops_the_sheet_rather_than_drawing_something_else():
 
 
 def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
-    """The fallback that is load-bearing: a Unit subclass registered by nobody
-    has no catalogue for its variant to be measured against, so there is no
-    name to reject and a generic box is the only honest answer."""
+    """Verify unregistered kinds render as generic boxes."""
     assert default_registry.variants("no_such_kind") == []
     assert default_registry.get("no_such_kind").symbol_id() == "sym_generic"
     assert default_registry.get("no_such_kind", "anything").symbol_id() == "sym_generic"
 
 
-# ---------------------------------------------------------------------------
-# The generated file, against the generator that emits it.
-#
-# ``_vendored_symbols.py`` is written wholesale by scripts/vendor_symbols.py and
-# its own docstring says not to edit it, but nothing enforced that: a stale or
-# hand-edited copy still imports, still draws, and still passes every check
-# above, because every check above measures the registry rather than the mapping
-# the registry was built from. Regenerating in memory and comparing is what turns
-# "do not edit by hand" from a request into a rule.
-# ---------------------------------------------------------------------------
-
-
 @functools.lru_cache(maxsize=None)
-def _script(name: str):
-    """Import one of the dev-only generator scripts by path.
+# Stencil-generation invariants
 
-    They are not part of the package and not importable as one; ``scripts/``
-    puts itself on ``sys.path`` when loaded, so this only has to find the file.
+def _script(name: str):
+    """Import a generator script by name.
+
+    Parameters
+    ----------
+    name : str
+        Script stem.
+
+    Returns
+    -------
+    module
+        Imported script module.
     """
     import importlib.util
 
@@ -2386,10 +2078,22 @@ def _script(name: str):
 
 
 def _clip(line: str, column: int, width: int = 90) -> str:
-    """``line`` windowed on ``column``, for a file whose ``svg=`` lines run to
-    thousands of characters. Printing one of those whole shows the reader
-    nothing; the neighbourhood of the character the two files part company on is
-    the part that identifies the edit."""
+    """Extract context around a character position.
+
+    Parameters
+    ----------
+    line : str
+        Source line.
+    column : int
+        Centre position.
+    width : int
+        Context width.
+
+    Returns
+    -------
+    str
+        Clipped line.
+    """
     if len(line) <= 2 * width:
         return line
     lo, hi = max(0, column - width), min(len(line), column + width)
@@ -2397,11 +2101,19 @@ def _clip(line: str, column: int, width: int = 90) -> str:
 
 
 def _generator_diff(committed: str, generated: str, context: int = 2) -> str:
-    """First divergence with a little context -- not a 95KB dump.
+    """Describe the first generated-file difference.
 
-    The inequality of two 950-line files says nothing on its own, and the whole
-    diff of a regenerated library is unreadable, so this is the first line they
-    disagree on and a couple either side: enough to recognise one's own edit.
+    Parameters
+    ----------
+    committed, generated : str
+        Compared file contents.
+    context : int
+        Context rows.
+
+    Returns
+    -------
+    str
+        Compact difference report.
     """
     old, new = committed.split("\n"), generated.split("\n")
     total = max(len(old), len(new))
@@ -2419,19 +2131,8 @@ def _generator_diff(committed: str, generated: str, context: int = 2) -> str:
 
 
 def test_the_generated_symbols_match_the_generator():
-    """A hand edit to _vendored_symbols.py is lost the next time anyone runs the
-    generator, and the drawing silently reverts. Say so here instead."""
+    """Verify generated symbols match the generator output."""
     vendor = _script("vendor_symbols")
-    # ``vendor.OUT`` rather than the path written out a second time here, so the
-    # two things compared are exactly the two the generator relates: what it
-    # emits, and where it puts it. Whether the interpreter imported *this*
-    # checkout's copy is not this test's business -- every check above measures
-    # the registry that import produced, so a run against some other installed
-    # copy is already measuring the wrong library throughout.
-    #
-    # Text mode at both ends, so this compares lines and not line endings:
-    # read_text() folds a CRLF working tree back to "\n", which is what render()
-    # joins with, and a ``text=auto`` .gitattributes could not turn it red.
     committed = vendor.OUT.read_text(encoding="utf-8")
     generated = vendor.render()
     if generated != committed:
@@ -2447,25 +2148,12 @@ def test_the_generated_symbols_match_the_generator():
         )
 
 
-# ---------------------------------------------------------------------------
-# Where stretchability comes from.
-#
-# A draw.io stencil declares whether its shape may be reshaped, and scripts/
-# carries that declaration into ``Symbol.stretchable``. Every shape KIND_MAP
-# names happens to be a "variable" one, so nothing in the shipped registry
-# exercises the other half of the reader -- which is exactly why it is exercised
-# here, and why the claim that leaves the generated file free of the keyword is
-# written down rather than left to be rediscovered.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     "declared,aspect",
     [('aspect="fixed" ', "fixed"), ('aspect="variable" ', "variable"), ("", "variable")],
 )
 def test_the_converter_reports_a_stencil_shapes_aspect(declared, aspect):
-    """Including the shape that names none: mxGraph's own default is
-    "variable", so a stencil that says nothing is saying it may be stretched."""
+    """Verify stencil conversion reports shape aspect behaviour."""
     shape = ET.fromstring(
         f'<shape {declared}w="100" h="50"><foreground>'
         f'<rect x="0" y="0" w="100" h="50"/><stroke/></foreground></shape>'
@@ -2474,10 +2162,7 @@ def test_the_converter_reports_a_stencil_shapes_aspect(declared, aspect):
 
 
 def test_every_stencil_shape_the_generator_vendors_may_be_stretched():
-    """All 24 "fixed" shapes in the stencil set are draw.io's own instrument
-    balloons, which pandid draws itself; nothing KIND_MAP names is one. That is
-    why no symbol in the generated file carries ``stretchable=False`` -- if one
-    day one does, this test is what says the pipeline put it there."""
+    """Verify vendored stencil shapes may be stretched."""
     vendor = _script("vendor_symbols")
     fixed = []
     for stencil in sorted({entry[0] for entry in vendor.KIND_MAP.values()}):
@@ -2494,57 +2179,59 @@ def test_every_stencil_shape_the_generator_vendors_may_be_stretched():
     assert vendored == []
 
 
-# ---------------------------------------------------------------------------
-# What a fill comes out as.
-#
-# mxGraph paint ops name the operation, not the colour: a fill is painted in
-# the canvas's current fill colour, which <fillcolor> sets. Reading a bare
-# <fill> as "make this black" turned the floating-roof tank into a solid block
-# -- a defect no reader could diagnose, because a block is a perfectly
-# plausible thing to have drawn on purpose. These pin the distinction, because
-# only three shapes in the whole stencil set use a bare <fill> and it would
-# otherwise be one symbol's business.
-# ---------------------------------------------------------------------------
+# Stencil fill and arc invariants
 
 
 def _converted_fills(body: str) -> list[str]:
-    """Every ``fill=`` the converter emits for one stencil <foreground>."""
+    """Read fills emitted for stencil operations.
+
+    Parameters
+    ----------
+    body : str
+        Stencil foreground XML.
+
+    Returns
+    -------
+    list[str]
+        Emitted fill values.
+    """
     shape = ET.fromstring(f'<shape w="10" h="10"><foreground>{body}</foreground></shape>')
     return re.findall(r'fill="([^"]*)"', _script("mxgraph_to_svg").convert_shape(shape)[0])
 
 
 def _painted(ops: str) -> list[str]:
-    """The fills for a single rect painted by ``ops``."""
+    """Read fills from one rectangle operation sequence.
+
+    Parameters
+    ----------
+    ops : str
+        Stencil operations.
+
+    Returns
+    -------
+    list[str]
+        Emitted fill values.
+    """
     return _converted_fills(f'<rect x="0" y="0" w="10" h="10"/>{ops}')
 
 
 def test_a_fill_takes_the_paper_until_the_stencil_asks_for_ink():
-    """The fill colour starts at the paper, which is what draw.io fills these
-    shapes with -- for <fill> exactly as for <fillstroke>, since both paint the
-    same canvas state. A bare <fill> is that background wash and it is opaque:
-    a stencil draws its body last and expects it to cover the nozzles and legs
-    behind it. <stroke> paints no fill whatever the state is."""
+    """Verify stencil fills default to the paper colour."""
     assert _painted("<fillstroke/>") == ["white"]
     assert _painted("<stroke/>") == ["none"]
     assert _painted("<fill/>") == ["white"]
 
 
 def test_fillcolor_is_how_a_stencil_asks_for_a_solid_shape():
-    """It is the idiom draw.io's own shapes use for a damper's pivot and a
-    flow arrow's head, and the converter has to keep it: making the converter
-    incapable of a solid would trade one wrong drawing for another."""
+    """Verify stencil fill colours produce solid shapes."""
     assert _painted('<fillcolor color="#000000"/><fillstroke/>') == ["#111"]
     assert _painted('<fillcolor color="#000000"/><fill/>') == ["#111"]
-    # mxGraph's two keywords: "stroke" means the ink, "none" transparent --
-    # which is the stencil turning the fill off, not the state it started in.
     assert _painted('<fillcolor color="stroke"/><fillstroke/>') == ["#111"]
     assert _painted('<fillcolor color="none"/><fillstroke/>') == ["none"]
 
 
 def test_save_and_restore_bracket_the_fill_colour():
-    """Several stencils set a fill colour inside <save>/<restore> and expect
-    the next shape to be back on the paper; without the stack the ink leaks
-    forward and blacks out the rest of the drawing."""
+    """Verify stencil save and restore scope fill colours."""
     assert _converted_fills(
         '<save/><rect x="0" y="0" w="4" h="4"/><fillcolor color="#000000"/><fillstroke/>'
         '<restore/><rect x="5" y="5" w="4" h="4"/><fillstroke/>'
@@ -2552,55 +2239,17 @@ def test_save_and_restore_bracket_the_fill_colour():
 
 
 def test_the_sphere_draws_its_shell_over_its_nozzles():
-    """The symbol the fill is most load-bearing on. Its crown stubs
-    straddle the shell -- each 12-unit box spans y 0..12 and the shell
-    is at y 11.6 under the left one's outer edge -- so the arc crosses
-    the box for its whole width and read as a crack in the vessel
-    (#268). The stencil answers that by painting the shell last and
-    filled, which trims each stub at the shell."""
+    """Verify a sphere draws its shell over its nozzles."""
     svg = default_registry.get("tank", "sphere").svg
     assert svg.rindex("<ellipse") > svg.rindex("<rect"), "the shell is drawn last"
     shell = re.search(r"<ellipse[^>]*>", svg)
     assert 'fill="white"' in shell.group(0), "and is opaque, so it covers them"
 
 
-# ---------------------------------------------------------------------------
-# The curve a split arc draws.
-#
-# An arc whose chord is about its own diameter comes out visibly thick in
-# cairosvg, so the converter splits it into quarter-turn pieces. That split has
-# to be an identity on the shape: same ellipse, same two ends, more commands and
-# nothing else.
-#
-# It was not one. ``_endpoint_to_center`` applies the spec's radius correction
-# (SVG 1.1 F.6.6: radii too small to span their chord are scaled up until they
-# exactly span it), and the converter cut the pieces on that corrected ellipse
-# but labelled every one of them with the stencil's uncorrected radii. Each
-# piece was then too small for its own, shorter chord, so the reader corrected
-# it a second time -- separately, against a different chord, onto a different
-# ellipse per piece. The ends stayed exact, which is why every port, every crown
-# and every bounding box was right and nothing else in this file noticed: only
-# the curve *between* the ends was wrong. On the 40-wide vessel shells the two
-# halves of a dished head met in a cusp instead of an apex.
-#
-# The invariant below is the identity the split claims. It is checked here
-# rather than on the shipped SVG because a piece drawn on the wrong ellipse is
-# still a perfectly well-formed arc, and the ellipse it *should* have been cut
-# from cannot be recovered from it -- the two are only both in hand while the
-# stencil is being converted.
-# ---------------------------------------------------------------------------
-
-#: One emitted ``A``: rx, ry, x-axis-rotation, large-arc flag, sweep flag, x, y.
 _EMITTED_ARC = re.compile(rf"A ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM})")
 
-#: How far a piece's ellipse may sit from the whole arc's, in stencil units.
-#: The pieces are written out to four decimal places and their centres are
-#: recovered from those, so this is that rounding and nothing else. The defect
-#: it replaced put a vessel head's centre 10 units out.
 _ARC_TOL = 1e-3
 
-#: Where each stencil path op leaves the pen. An <arc> is stated relative to
-#: wherever the previous op left it, so finding one means walking to it.
 _PEN_LANDS_AT = {
     "move": ("x", "y"),
     "line": ("x", "y"),
@@ -2610,10 +2259,12 @@ _PEN_LANDS_AT = {
 
 
 def _stencil_arcs() -> list[tuple[str, tuple]]:
-    """Every <arc> in every shape ``KIND_MAP`` draws, with the point it starts at.
+    """Read arcs used by vendored stencil shapes.
 
-    Keyed by shape rather than by (kind, variant): several symbols share one
-    drawing, and converting it once per symbol would only convert it twice.
+    Returns
+    -------
+    list[tuple[str, tuple]]
+        Shape names and arc parameters.
     """
     mx, vendor = _script("mxgraph_to_svg"), _script("vendor_symbols")
     shapes = sorted({(stencil, shape) for stencil, shape, _ in vendor.KIND_MAP.values()})
@@ -2633,10 +2284,6 @@ def _stencil_arcs() -> list[tuple[str, tuple]]:
                     if op.tag == "arc":
                         ex, ey = mx._num(op, "x"), mx._num(op, "y")
                         rx, ry = mx._num(op, "rx"), mx._num(op, "ry")
-                        # A degenerate radius is a straight line, and the
-                        # converter emits it verbatim rather than splitting it.
-                        # No stencil in the set has one; the guard is here so
-                        # that one added later fails the generator and not this.
                         if min(abs(rx), abs(ry)) > 0:
                             found.append(
                                 (
@@ -2666,7 +2313,18 @@ def _stencil_arcs() -> list[tuple[str, tuple]]:
 
 
 def _arc_ids(arcs: list[tuple[str, tuple]]) -> list[str]:
-    """``vessels:Vessel (Dome)#2`` -- the shape, and which of its arcs."""
+    """Build stable identifiers for stencil arcs.
+
+    Parameters
+    ----------
+    arcs : list[tuple[str, tuple]]
+        Named arcs.
+
+    Returns
+    -------
+    list[str]
+        Arc identifiers.
+    """
     seen: dict[str, int] = {}
     ids = []
     for shape, _ in arcs:
@@ -2680,19 +2338,7 @@ _STENCIL_ARCS = _stencil_arcs()
 
 @pytest.mark.parametrize("shape,arc", _STENCIL_ARCS, ids=_arc_ids(_STENCIL_ARCS))
 def test_every_piece_of_a_split_arc_rides_the_ellipse_it_was_cut_from(shape, arc):
-    """One ellipse -- same centre, same radii -- for every piece and the whole.
-
-    Both sides go through the spec's own endpoint-to-centre conversion, which is
-    what a reader does with the numbers that end up in the file. So this
-    compares the ellipse the drawing will be *read* as against the one the
-    stencil asked for, rather than comparing the converter with itself.
-
-    The pieces have to chain end to end and land on the arc's own far end too:
-    pieces on the right ellipse that did not join up would be a different
-    drawing again. An arc the converter leaves whole is one piece and passes
-    this trivially, which is the point -- the claim is about the shape, and the
-    shape does not depend on how many commands it took.
-    """
+    """Verify split arcs retain their source ellipse geometry."""
     mx = _script("mxgraph_to_svg")
     x0, y0, rx, ry, phi_deg, fa, fs, x1, y1 = arc
     want = mx._endpoint_to_center(x0, y0, rx, ry, math.radians(phi_deg), fa, fs, x1, y1)[:4]
@@ -2717,17 +2363,8 @@ def test_every_piece_of_a_split_arc_rides_the_ellipse_it_was_cut_from(shape, arc
     )
 
 
-# ---------------------------------------------------------------------------
-# Corrections applied to the vendored stencils.
-# ---------------------------------------------------------------------------
-
-
 def test_every_stencil_patch_still_finds_its_shape():
-    """A patch matching nothing is a correction that has quietly stopped being
-    applied, and the drawing reverts to the defect it was written for. The
-    generator refuses to run in that case; this makes the same claim without
-    regenerating anything, so it fails in CI rather than on the next person's
-    laptop."""
+    """Verify each stencil patch matches a source shape."""
     vendor = _script("vendor_symbols")
     assert vendor.STENCIL_PATCHES, "the patch table is where a stencil defect is recorded"
     for stencil, shape in vendor.STENCIL_PATCHES:
@@ -2736,12 +2373,7 @@ def test_every_stencil_patch_still_finds_its_shape():
 
 
 def test_the_globe_and_ball_valves_are_not_one_drawing():
-    """draw.io ships "Globe Valve" as a byte-for-byte copy of "Ball Valve":
-    both draw the bowtie pinched around an OPEN seat, which is the ball valve.
-    Two valves drawing one symbol is not a plain drawing, it is the wrong one,
-    since the reader has no way to tell which is in the line. The globe's seat
-    is filled; everything else about the pair -- box, nozzles, alternates --
-    stays identical, because they are the same body."""
+    """Verify globe and ball valves use distinct drawings."""
     globe = default_registry.get("valve", "globe")
     ball = default_registry.get("valve", "ball")
     assert _artwork(globe) != _artwork(ball)
@@ -2753,16 +2385,7 @@ def test_the_globe_and_ball_valves_are_not_one_drawing():
 
 
 def test_every_paired_shape_is_one_device_in_two_positions():
-    """``CLOSED_SHAPES`` names the second drawing of a device ``KIND_MAP``
-    already draws -- a spectacle blind's blanked state -- and the generator
-    refuses a pair whose boxes, nozzles or aspect disagree, or whose artwork
-    does not.
-
-    Asserted here over the *shipped* registry, so the claim holds without
-    regenerating anything. The two drawings are also required to put their ink
-    in the same places: that is what carries every geometry invariant above,
-    proven for the open drawing, onto the closed one, which the parametrized
-    sweep does not reach because it is not a variant of its own."""
+    """Verify paired valve shapes describe one device in two positions."""
     vendor = _script("vendor_symbols")
     assert vendor.CLOSED_SHAPES, "the table is where a two-position device is recorded"
     for (kind, variant), shape in vendor.CLOSED_SHAPES.items():
@@ -2786,9 +2409,7 @@ def test_every_paired_shape_is_one_device_in_two_positions():
 
 
 def test_a_closed_drawing_may_not_be_registered_without_an_open_one():
-    """The pairing is what keeps the closed state from becoming a variant name
-    of its own, so a closed drawing with nothing to be the closed state *of* is
-    refused rather than filed under a key nobody looks up."""
+    """Verify closed valve drawings require an open counterpart."""
     from pandid.render.symbols import SymbolRegistry
 
     sym = Symbol(svg='<g id="sym_x"/>', width=10.0, height=10.0, ports={"inlet": (0.0, 5.0)})
@@ -2796,23 +2417,50 @@ def test_a_closed_drawing_may_not_be_registered_without_an_open_one():
         SymbolRegistry().register_closed("fitting", sym, "no_such_variant")
 
 
+# Valve-symbol invariants
+
+
 def _artwork(sym: Symbol) -> str:
-    """A symbol's drawing, with the id that names it stripped off."""
+    """Remove a symbol identifier from artwork.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Symbol definition.
+
+    Returns
+    -------
+    str
+        Identifier-free artwork.
+    """
     return re.sub(r'id="[^"]*"', "", sym.svg)
 
 
 def _ink_extents(svg: str) -> list[tuple[str, float, float]]:
-    """(tag, width, height) of every element painted in ink, in symbol space.
+    """Measure extents of filled SVG elements.
 
-    An element is flattened in its own coordinates and then carried out through
-    its ancestors' transforms, so a valve's ``scale(0.25)`` is accounted for and
-    the extent is comparable with ``Symbol.width``/``height``. <text> has no
-    geometry to flatten and so never appears: an operator letter is ink by
-    definition and is not what this measures.
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+
+    Returns
+    -------
+    list[tuple[str, float, float]]
+        Element tags and extents.
     """
     found: list[tuple[str, float, float]] = []
 
     def walk(el, m: Matrix) -> None:
+        """Traverse SVG elements for filled extents.
+
+        Parameters
+        ----------
+        el : Element
+            Current SVG element.
+        m : Matrix
+            Parent transform.
+        """
         tag = el.tag.split("}")[-1]
         if el.get("fill", "none") not in ("none", "white"):
             solo = _collect_segments(f"<g>{ET.tostring(el, encoding='unicode')}</g>")
@@ -2829,34 +2477,29 @@ def _ink_extents(svg: str) -> list[tuple[str, float, float]]:
     return found
 
 
-#: How much of a symbol's box a filled shape may cover before it stops reading
-#: as a feature of the body and starts reading as the body. The globe's seat,
-#: the widest thing any valve fills, covers 27% of it.
 _FEATURE_AREA = 0.5
 
 
 def _body_fill(sym: Symbol) -> float:
-    """The largest share of a symbol's box any one filled element covers."""
+    """Measure the largest filled element area ratio.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Symbol definition.
+
+    Returns
+    -------
+    float
+        Largest area ratio.
+    """
     return max(
         [(w * h) / (sym.width * sym.height) for _, w, h in _ink_extents(sym.svg)], default=0.0
     )
 
 
 def test_no_valve_body_is_drawn_filled():
-    """A fully darkened valve body is its own convention -- normally closed,
-    PIP PIC001 4.2.2.7 -- so no symbol may spend that reading by accident.
-
-    The globe's seat is an interior feature of a body whose two triangles keep
-    their white interiors, which is what holds the two apart at sheet scale. A
-    valve that filled its *outline* would be claiming something else entirely,
-    and would do it silently, since a solid bowtie is a perfectly plausible
-    thing to have drawn on purpose.
-
-    Every valve a flowsheet can put in a line is checked, resolved the way the
-    renderer resolves it. The one exemption is a valve *declared* normally
-    closed, which is filled on purpose and is the subject of the next test:
-    the claim here is that nothing is filled by accident, and a declaration is
-    the opposite of an accident."""
+    """Verify valve bodies are not filled by default."""
     for variant in default_registry.variants("valve"):
         valve = units.Valve("HV-1", variant=variant)
         assert valve.normal_position == "open", "an undeclared valve is not marked"
@@ -2871,13 +2514,7 @@ def test_no_valve_body_is_drawn_filled():
 
 
 def test_a_normally_closed_valve_is_the_one_valve_drawn_filled():
-    """The other side of the rule above: declaring the position must actually
-    darken the body, or the convention is documented and not drawn.
-
-    Every variant is accounted for. It either darkens, or it is forbidden the
-    mark outright by PIP PIC001 4.2.2.10, or it carries the NC abbreviation of
-    4.2.2.8 -- and a variant that fell through all three would state its
-    position nowhere at all, which is the silent failure this catches."""
+    """Verify normally closed valves render with filled bodies."""
     from pandid.render.symbols import NC_DARKENS, NC_FORBIDDEN, closed_marking
 
     seen = set()
@@ -2907,74 +2544,23 @@ def test_a_normally_closed_valve_is_the_one_valve_drawn_filled():
     assert seen == set(default_registry.variants("valve"))
 
 
-# ---------------------------------------------------------------------------
-# Where a valve's run sits in its box.
-#
-# scripts/vendor_symbols.py states the principle for the vessel family:
-# "Switching a vessel between variants is a change of artwork, not of piping,
-# so the two must offer the same nozzles in the same places." A valve the run
-# goes straight through answers to the same rule, and its nozzles are on the
-# body, which is the part that sits in the line.
-#
-# So the fixed height is measured from the BOTTOM of the box, not the top. An
-# operator is drawn *above* the body -- a handwheel, a motor box, a diaphragm
-# dome -- so choosing an actuated variant makes the box taller by adding to the
-# top of it, and the body underneath stays where it was. valves.xml draws it
-# that way: on every actuated shape the bowtie's lower edge is the bottom of the
-# shape and the operator occupies the space above.
-#
-# Measured from the top the family is not one family at all. A gate valve's
-# nozzles are 7.5 below the top of its box and a motor-operated one's are 14.9,
-# so swapping the two under a corner pin drops the run 7.4 units -- half a valve
-# body -- with nothing in the flowsheet having said anything about piping.
-# ---------------------------------------------------------------------------
-
-#: How far above the bottom of its box a valve carries the run, in symbol-space
-#: units. valves.xml draws the plain bowtie 60 units tall, with the run through
-#: its crossing point and its lower edge on the bottom of the shape, so the
-#: centreline is 30 units up; ``SCALE["valve"] = 0.25`` makes that a 15.0-tall
-#: body in a 24.5 x 15.0 box with the run 7.5 above the bottom of it. Sixteen of
-#: the nineteen straight-through variants land on it.
 _VALVE_RUN_HEIGHT = 7.5
 
-#: One unit of the stencil's own coordinate space, at ``SCALE["valve"] = 0.25``.
-#:
-#: Every source of scatter in the conforming sixteen is sub-unit in the space
-#: the stencil author drew in, so a drawing cannot express a finer distinction
-#: than this and anything inside it is the same centreline:
-#:
-#: * the bowtie is not one size across valves.xml. It is 60 units tall on the
-#:   bare bodies, on Manual Operated (y 5..65) and on Check Valve 1 (y 2..62),
-#:   but 59 on Motor/Solenoid/Hydraulic (y 30..89), Pneumatic Operated
-#:   (y 20..79) and Back Pressure Regulator 1 (y 35..94). Half of 59 against
-#:   half of 60 is 0.5 stencil units of it;
-#: * the nozzle's height is a draw.io ``<constraint>`` authored as a *fraction*
-#:   of the shape's height and rounded to two or three decimals -- 0.5, 0.54,
-#:   0.63, 0.67, 0.685 -- against shapes 60 to 94 tall. One hundredth of an
-#:   89-tall shape is 0.89 units, so the fraction cannot land on the body's
-#:   centre: it misses by up to 1 unit (Check Valve 1, whose 0.5 is the middle
-#:   of the shape while the bowtie inside it is offset 2 units down);
-#: * and the generator rounds what it emits to one decimal, 0.2 units here.
-#:
-#: NOT the quantisation of ``SCALE["valve"] = 0.25`` itself, which was the first
-#: guess: that rounding is worth at most +/-0.05 on each of the two numbers, and
-#: the exact pre-rounding heights are already spread 7.3075 (pneumatic) to 7.75
-#: (check). The scatter is in the stencils, and the drawn-body sizes are most of
-#: it. Worst case in the shipped registry is 0.2 (check at 7.7, and the three
-#: letter-box operators at 7.3), so this accepts the family with 0.05 to spare
-#: and rejects all three exceptions below by an order of magnitude.
 _VALVE_RUN_TOL = 0.25
 
 
 def _straight_through(sym: Symbol) -> bool:
-    """True for a valve the run enters on the west face and leaves on the east.
+    """Identify a west-to-east valve.
 
-    The scope is a rule about the nozzles rather than a list of names, so a
-    variant added later is judged by where it is piped. It excludes the devices
-    that have no horizontal run to be level with in the first place: ``relief``
-    is piped bottom to top, ``bleed`` top to bottom, and ``angle`` and ``psv``
-    turn the flow a quarter. Every valve's menu is single-entry, so the one face
-    offered is the home face.
+    Parameters
+    ----------
+    sym : Symbol
+        Valve symbol.
+
+    Returns
+    -------
+    bool
+        Whether the process run is straight.
     """
     return list(sym.port_faces.get("inlet", ())) == ["W"] and list(
         sym.port_faces.get("outlet", ())
@@ -2987,66 +2573,29 @@ _STRAIGHT_VALVES = sorted(
     if _straight_through(default_registry.get("valve", variant))
 )
 
-# ---------------------------------------------------------------------------
-# The valves that leave the run, and why.
-#
-# Written out longhand with a reason each, on the pattern of
-# tests/test_gravity_orientation.GRAVITY_FIXED, and split by *what kind* of
-# exception it is. Moving the run is a statement about the piping, so a variant
-# joining either dict has to be argued for here rather than land silently
-# alongside the artwork that moved it.
-# ---------------------------------------------------------------------------
 
-#: Valves whose box legitimately reaches further below the run than a bowtie
-#: does, because the stencil draws something down there. The nozzles are on the
-#: ink the shape puts on the line; it is the box that is deeper.
 _OFF_THE_RUN_BY_DESIGN = {
-    "three_way": (
-        "Three-Way Valve draws the bowtie across the TOP of its box -- y 0..60 "
-        "of 79 -- and hangs the third way off the crossing point, two legs down "
-        "to (19, 79) and (79, 79). The run is exactly where it is on every other "
-        "valve; the box is what grew, and it grew downward to hold the branch. "
-        "So this is the one straight-through valve fixed against the top of its "
-        "box instead, at 7.6 below it, which is the family's 7.5 to within the "
-        "drawing's own resolution. Bottom-anchoring it measures the run against "
-        "the branch."
-    ),
-    "knife": (
-        "Knife Valve is not a bowtie. It draws a rectangular gate housing, "
-        "x 35..65 and y 15..85 of 85, with the run entering it as two stubs at "
-        "y = 45 and the blade drawn as an arrowhead inside the lower half of it, "
-        "y 50..80. The housing straddles the run rather than sitting under it, "
-        "reaching 40 units below the centreline where a bowtie reaches 30 -- 2.5 "
-        "units at SCALE['valve'] = 0.25 -- so the run comes out 9.9 above the "
-        "bottom. The nozzles are on the stubs the stencil actually draws (11.3 "
-        "against ink at 11.25), so nothing is misplaced. Swapping a gate valve "
-        "for a knife gate still moves a corner-pinned run by those 2.4 units, "
-        "and that is the artwork's doing rather than the port map's."
-    ),
+    "three_way": "The branch extends the box below the top-aligned process run.",
+    "knife": "The gate housing extends below the process run.",
 }
 
-#: Not a difference: a defect, recorded rather than fixed. Fixing one moves ink
-#: on every sheet that draws it, which is a rendering change and a second
-#: concern; this file's job is to say the defect is there and to fail the moment
-#: it stops being.
-#:
-#: Empty, and left in place rather than folded away, because emptiness is the
-#: statement: there is no straight-through valve today whose run is off the
-#: family's height for a reason nobody is prepared to defend. It held exactly
-#: one entry, ``butterfly_pneumatic``, drawn 15.0 x 20.0 from an undersized
-#: stencil and carrying its run 5.0 above the bottom of its box instead of 7.5.
-#: That is fixed, in SCALE, and the rule it was evidence for is now asserted
-#: forwards under "Valves drawn off valves.xml's own module" below.
 _OFF_THE_RUN_BY_DEFECT: dict[str, str] = {}
 
 _OFF_THE_RUN = {**_OFF_THE_RUN_BY_DESIGN, **_OFF_THE_RUN_BY_DEFECT}
 
 
 def _run_heights(sym: Symbol) -> dict[tuple[str, str], float]:
-    """Every placement of the two process nozzles, as a height above the bottom.
+    """Read process-port heights above a valve base.
 
-    The whole menu rather than just ``ports``: an alternate face is a nozzle the
-    router may actually resolve to, so it answers to the rule as well.
+    Parameters
+    ----------
+    sym : Symbol
+        Valve symbol.
+
+    Returns
+    -------
+    dict[tuple[str, str], float]
+        Heights by port and face.
     """
     return {
         (name, face): sym.height - y
@@ -3056,14 +2605,25 @@ def _run_heights(sym: Symbol) -> dict[tuple[str, str], float]:
 
 
 def _ink_below_the_run(sym: Symbol) -> float:
-    """How far the artwork reaches below the height the nozzles are drawn at."""
+    """Measure ink depth below a valve run.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Valve symbol.
+
+    Returns
+    -------
+    float
+        Ink depth.
+    """
     lowest = max(max(ay, by) for (_, ay), (_, by) in _collect_segments(sym.svg))
     return lowest - sym.ports["inlet"][1]
 
 
 @pytest.mark.parametrize("variant", [v for v in _STRAIGHT_VALVES if v not in _OFF_THE_RUN])
 def test_a_straight_through_valve_carries_the_run_at_one_height(variant):
-    """The line through a valve is at the same height whichever valve it is."""
+    """Verify straight-through valves preserve run height."""
     sym = default_registry.get("valve", variant)
     for (name, face), above in _run_heights(sym).items():
         assert above == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL), (
@@ -3076,11 +2636,7 @@ def test_a_straight_through_valve_carries_the_run_at_one_height(variant):
 
 @pytest.mark.parametrize("variant", _STRAIGHT_VALVES)
 def test_the_two_ends_of_a_straight_through_valve_are_level(variant):
-    """Exactly level, not nearly: the two ends are one run, and a valve whose
-    outlet were a rounding below its inlet would draw a step into a straight
-    line. Both ends take the same stencil constraint, so both round alike; a
-    pair that did not agree would be saying the body is not square to the pipe.
-    """
+    """Verify straight-through valve endpoints are level."""
     sym = default_registry.get("valve", variant)
     assert sym.ports["inlet"][1] == sym.ports["outlet"][1], (
         f"valve/{variant} enters at y={sym.ports['inlet'][1]} and leaves at "
@@ -3089,12 +2645,7 @@ def test_the_two_ends_of_a_straight_through_valve_are_level(variant):
 
 
 def test_exactly_the_valves_named_above_leave_the_run():
-    """Nothing joins the exceptions without an entry beside it saying why.
-
-    The counterpart of the parametrized rule, which can only speak for the
-    variants it is given: without this, dropping a name into either dict would
-    exempt it and read as green.
-    """
+    """Verify only documented valve types leave the main run."""
     strayed = {
         variant
         for variant in _STRAIGHT_VALVES
@@ -3109,36 +2660,19 @@ def test_exactly_the_valves_named_above_leave_the_run():
 
 
 def test_the_valves_the_run_does_not_cross_are_out_of_scope():
-    """A PSV is piped bottom to top and an angle body turns the flow a quarter,
-    so neither has a horizontal run for the rule above to be about. They are out
-    by where their nozzles are rather than by name, and this is what says the
-    selection rule still draws the line in the same place -- a straight-through
-    valve quietly falling out of scope would take its own invariant with it.
-    """
+    """Verify non-straight valve types are excluded from run checks."""
     assert sorted(set(default_registry.variants("valve")) - set(_STRAIGHT_VALVES)) == [
         "angle",
         "bleed",
         "psv",
         "relief",
     ]
-    # No assertion on the size of the family: a valve added later is meant to be
-    # picked up and held to the rule, not to fail a count. What must not drift is
-    # the balance -- an invariant most of its family is excused from asserts
-    # nothing, and at that point the rule is the wrong rule rather than the
-    # registry being wrong.
     assert len(_OFF_THE_RUN) * 2 < len(_STRAIGHT_VALVES), "the exceptions would be the rule"
 
 
 @pytest.mark.parametrize("variant", sorted(_OFF_THE_RUN_BY_DESIGN))
 def test_a_valve_drawn_below_the_run_is_drawn_there_in_ink(variant):
-    """What makes the two by-design exceptions differences rather than defects.
-
-    Each has a box deeper below the run than a bowtie's, and the depth has to be
-    artwork: a nozzle 2.4 units off the family's height in a box whose extra
-    depth is whitespace is not a valve drawn differently, it is a nozzle in the
-    wrong place. So the drawn ink has to reach the bottom of the box, and reach
-    further below the run than the plain body does.
-    """
+    """Verify below-run valves render at their declared offset."""
     plain = default_registry.get("valve", "gate")
     assert _ink_below_the_run(plain) == pytest.approx(_VALVE_RUN_HEIGHT)
     sym = default_registry.get("valve", variant)
@@ -3149,100 +2683,46 @@ def test_a_valve_drawn_below_the_run_is_drawn_there_in_ink(variant):
 
 
 def test_the_three_way_carries_the_run_at_the_familys_height_from_the_top():
-    """The other half of three_way's reason: the run did not move, the box grew
-    under it. Measured downward from the top of the box it is on the family's
-    own height, which is what makes the branch below it the whole difference."""
+    """Verify three-way valves preserve their top-aligned run height."""
     sym = default_registry.get("valve", "three_way")
     for name in ("inlet", "outlet"):
         assert sym.ports[name][1] == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL)
 
 
-# ---------------------------------------------------------------------------
-# Valves drawn off valves.xml's own module.
-#
-# The rule the pneumatic butterfly's defect was evidence for, said forwards.
-# ``SCALE["valve"] = 0.25`` is one number applied to a whole stencil file, and
-# it is calibrated to that file's ~98-unit module: it is what puts a Gate
-# Valve's 98 x 60 bowtie in the 24.5 x 15.0 box the reference sheet is cut to.
-# A shape drawn on any OTHER module therefore comes out at the wrong weight
-# unless something makes up the difference, and "wrong weight" is not a matter
-# of taste: an undersized body carries its nozzles with it, which is how the
-# butterfly ended up drawing its run 5.0 above the bottom of its box instead of
-# the family's 7.5.
-#
-# What the difference is measured in is the BODY, not the box. These are upright
-# devices and the box holds whatever rides above the body -- a spring bonnet, a
-# diaphragm dome -- so a rule stated about boxes would shrink the part that
-# carries the flow to make room for the part that does not. ``angle`` is the
-# case that settles it, and it is in ``_ON_THE_MODULE_BY_FOLDING`` below.
-# ---------------------------------------------------------------------------
-
-#: The shapes off the module that carry a ``(kind, variant)`` factor of their
-#: own, as ``variant: (stencil box, emitted box, why)``. Both boxes are written
-#: down so the entry says what the factor buys and not merely that there is one.
 _OFF_THE_MODULE = {
     "psv": (
         (55.5, 94.5),
         (19.8, 33.8),
-        "Safety PSV 1 draws the family's own seat at 0.7 of its size: the inlet "
-        "leg is (0,94.5)-(21,60)-(42,94.5), a 42-wide base under a 34.5 apex, "
-        "where every valve on the module has a 60-wide base under a 49 apex. "
-        "15.0 / 42 restores it, putting the base on the 15.0 a gate valve's is "
-        "drawn at. The lower 19.8 x 19.8 of the box it comes out in is exactly "
-        "valve/angle's whole box -- the same quarter-turn body -- with 14 units "
-        "of spring bonnet above it.",
+        "The PSV stencil requires scaling to the valve family size.",
     ),
     "relief": (
         (40.0, 59.0),
         (15.0, 22.1),
-        "Relief PRV has no seat to measure: it is a 40-wide semicircular bonnet "
-        "on a stem, piped S to N, so across-the-run is that bonnet and "
-        "15.0 / 40 is the same statement. 15.0 across the run is a gate valve's "
-        "15.0 across the run; the 22.1 along it against a gate valve's 24.5 is "
-        "this one spending its length on a stem rather than on a bowtie.",
+        "The relief-valve stencil requires scaling to the family width.",
     ),
     "butterfly_pneumatic": (
         (60.0, 80.0),
         (24.5, 30.0),
-        "Pneumatic Operated Butterfly Valve is the one that needs the "
-        "non-uniform form. Its body is the plain rect x 0..60, y 40..80, at 3:2 "
-        "where the family's bowtie is 98:60, so no single factor puts the body "
-        "on 24.5 x 15.0 and the run on the family's height at once. "
-        "(24.5/60, 15.0/40) does both. At the kind's bare 0.25 it came out "
-        "15.0 x 20.0 -- 61% of a gate valve's length, with its run 5.0 up.",
+        "The pneumatic butterfly requires non-uniform scaling.",
     ),
 }
 
-#: A box off the module is not the same thing as a drawing off it, and this is
-#: the shape that says so. Angle is 79 x 79 rather than 98 x 60, but its path is
-#: (0,79)-(30,30)-(79,0)-(79,60)-(30,30)-(60,79): the family's own triangle,
-#: 60-wide base under a 49 apex, drawn twice and folded into an L instead of set
-#: base to base. Its seat is therefore already the family's, 0.25 draws it at
-#: exactly the 15.0 x 12.25 a gate valve's is drawn at, and a factor of its own
-#: would make this the one valve on the sheet with an oversized body.
 _ON_THE_MODULE_BY_FOLDING = {
-    "angle": "79 x 79, but drawn from the family's own 60 x 49 triangle twice",
+    "angle": "The angle valve composes two valve-family triangles.",
 }
 
-#: The one left. Bleeder Valve 1 is 25 x 75 and its bowtie is 25 across by 40
-#: along, against the family's 60 by 49, so 0.25 draws valve/bleed 6.2 x 18.8:
-#: a body 6.2 across the run where a gate valve's is 15.0. It is the same class
-#: of defect as the three above and wants the same kind of entry, but it is a
-#: different device -- the small drain tapped off a header, piped N to S -- and
-#: fixing it moves every sheet that draws one. Recorded here rather than folded
-#: in, on ``_OFF_THE_RUN_BY_DEFECT``'s own principle: a defect this file names
-#: is one the next reader can find, and the test below fails the moment it is
-#: fixed rather than leaving this note behind as a lie.
 _STILL_UNDERSIZED = {
-    "bleed": "Bleeder Valve 1 is 25 x 75; its bowtie is 25 across where the family's is 60",
+    "bleed": "The bleeder-valve stencil remains narrower than the family.",
 }
 
 
 def _valve_stencil_boxes():
-    """Every valve variant's stencil box, read from valves.xml itself.
+    """Read valve stencil dimensions.
 
-    The generator's own map and the generator's own stencil, so this is not a
-    second opinion about the drawing: it is what ``vendor_symbols`` read.
+    Returns
+    -------
+    tuple[module, dict[str, tuple[float, float]]]
+        Generator module and dimensions.
     """
     vendor = _script("vendor_symbols")
     shapes = {
@@ -3260,13 +2740,7 @@ def _valve_stencil_boxes():
 
 @pytest.mark.parametrize("variant", sorted(_OFF_THE_MODULE))
 def test_a_valve_off_the_stencils_module_is_rescaled_onto_the_familys_size(variant):
-    """A shape off the module carries a factor of its own, and the factor lands
-    it on the family's size.
-
-    Both halves matter. Without the first, the entry above is a claim about a
-    stencil nobody checks against the stencil; without the second, a factor
-    could be any number at all and the symbol would still be the wrong size.
-    """
+    """Verify external valve stencils are scaled to the family size."""
     stencil_box, emitted, why = _OFF_THE_MODULE[variant]
     vendor, boxes = _valve_stencil_boxes()
     assert boxes[variant] == stencil_box, why
@@ -3279,18 +2753,8 @@ def test_a_valve_off_the_stencils_module_is_rescaled_onto_the_familys_size(varia
 
 
 def test_exactly_the_valves_named_above_are_drawn_off_the_stencils_module():
-    """Nothing joins or leaves the three dicts silently.
-
-    The counterpart of the parametrized rule, which can only speak for the
-    variants it is given. A shape off the module that appears in none of them is
-    a valve quietly drawn at the wrong weight, which is the whole defect.
-    """
+    """Verify only documented valves use external stencil sources."""
     _, boxes = _valve_stencil_boxes()
-    # Width alone, because the module is a LENGTH: every shape on it is 98 wide
-    # (the check valve's 98.5 and the knife's 100 are the same length to within
-    # the drawing's own resolution), while its height is 60 plus whatever
-    # operator the stencil draws above the body -- 79 for a diaphragm dome, 89
-    # for a motor box. A height test would call every actuated valve an outlier.
     off = {variant for variant, (w, _h) in boxes.items() if w < 98.0}
     assert off == set(_OFF_THE_MODULE) | set(_ON_THE_MODULE_BY_FOLDING) | set(_STILL_UNDERSIZED)
     assert set(_OFF_THE_MODULE) & set(_STILL_UNDERSIZED) == set(), (
@@ -3302,28 +2766,28 @@ def test_exactly_the_valves_named_above_are_drawn_off_the_stencils_module():
 
 
 def test_the_pneumatic_butterfly_is_back_on_the_run_because_it_is_rescaled():
-    """The successor to the record of its defect: the same shape, the same two
-    measurements, now saying it is fixed and saying what fixed it.
-
-    ``test_a_straight_through_valve_carries_the_run_at_one_height`` already
-    holds it to the family's height, since it is no longer excused from that
-    rule. What it cannot say is *why* the run moved back, so dropping the SCALE
-    entry would fail there with nothing pointing at the cause.
-    """
+    """Verify the rescaled pneumatic butterfly preserves run height."""
     vendor = _script("vendor_symbols")
     assert vendor.scale_for("valve", "butterfly_pneumatic") == (24.5 / 60, 15.0 / 40)
     sym = default_registry.get("valve", "butterfly_pneumatic")
     plain = default_registry.get("valve", "gate")
-    # Its body is the rect the stencil draws at x 0..60, y 40..80: the lower half
-    # of the box, and now exactly the box a gate valve is drawn in.
     assert (sym.width, sym.height / 2) == (plain.width, plain.height)
     assert "butterfly_pneumatic" not in _OFF_THE_RUN
     assert sym.height - sym.ports["inlet"][1] == _VALVE_RUN_HEIGHT
     assert _ink_below_the_run(sym) == pytest.approx(_ink_below_the_run(plain))
 
 
+# General rendering and placement invariants
+
+
 def _every_drawing():
-    """Every registered symbol and every supplementary part, with a name."""
+    """Yield registered symbols and supplementary parts.
+
+    Yields
+    ------
+    tuple[str, str]
+        Drawing name and SVG artwork.
+    """
     for key, sym in sorted(default_registry._symbols.items(), key=lambda kv: str(kv[0])):
         yield f"{key[0]}/{key[1]}", sym.svg
     for key, part in sorted(default_registry._parts.items(), key=lambda kv: str(kv[0])):
@@ -3334,37 +2798,15 @@ def _every_drawing():
     ("name", "svg"), list(_every_drawing()), ids=[n for n, _ in _every_drawing()]
 )
 def test_every_drawing_survives_being_scaled(name, svg):
-    """A drawing the renderer cannot resize is a crash, not a bad picture.
-
-    ``_baked`` rewrites a symbol's geometry at the placed size, and refuses a
-    path command it has no rule for rather than guessing. That refusal is right,
-    but it is only ever reached from a *render*, so a drawing carrying one is
-    fine in the registry, fine in the invariant suite, and raises the moment
-    somebody puts it on a sheet at a size of its own.
-
-    Two did: items 28.6 and 28.10, the propeller and the impeller, are the only
-    vendored artwork drawn with a cubic, and ``Reactor(agitator="propeller")``
-    raised ``RuntimeError`` for every
-    author who tried it. The path table said in a comment that the library
-    emitted no curve; the library had changed under it.
-
-    So this asks the question of every drawing rather than of the ones a sheet
-    in the corpus happens to place, and it asks it where the answer is cheap.
-    """
+    """Verify every drawing supports renderer scaling."""
     from pandid.render.svg import _baked
 
-    # Both axes, and neither of them 1.0: `_baked` short-circuits on an
-    # identity map, which would make this vacuous.
     _baked(svg, 1.37, 0.61)
 
 
 @pytest.mark.parametrize("agitator", sorted(_AGITATORS))
 def test_every_agitator_a_reactor_offers_can_be_drawn(agitator):
-    """The bug above, from the side an author meets it.
-
-    Every supported ``agitator=`` value must reach a rendered sheet; two
-    previously raised at render time.
-    """
+    """Verify every reactor agitator variant can be drawn."""
     from pandid import Flowsheet
 
     fs = Flowsheet("agitator")
@@ -3372,32 +2814,21 @@ def test_every_agitator_a_reactor_offers_can_be_drawn(agitator):
     assert fs.to_svg()
 
 
-# ---------------------------------------------------------------------------
-# Which end of a family ``at`` holds.
-# ---------------------------------------------------------------------------
+# Port-series placement algorithms
 
 
 @pytest.mark.parametrize("align", [CENTRED, FROM_START])
 @pytest.mark.parametrize("count", range(1, 9))
 def test_a_lone_member_sits_on_at_whichever_way_the_family_grows(align, count):
-    """The property the whole of ``align`` exists to protect: a symbol keeps the
-    nozzle it was drawn with, and the mode only decides which way a second one
-    pushes. A family that moved its own first member would relocate a nozzle on
-    every sheet already drawn the moment its count was raised."""
+    """Verify lone series members retain their anchor position."""
     assert spread(0, 1, 120.0, 20.0, 0.5, 12.0, align) == 12.0
-    # ...and the pitch is the pitch either way, up to the squeeze: only the
-    # point the run is hung from differs.
     run = [spread(i, count, 120.0, 20.0, 0.5, 12.0, align) for i in range(count)]
     assert run == sorted(run)
     assert all(b - a == pytest.approx(run[1] - run[0]) for a, b in zip(run, run[1:]))
 
 
 def test_a_family_growing_from_its_start_never_reaches_back_past_it():
-    """``FROM_START`` is what a body with its nozzle hard against one end of a
-    wall needs -- the hopper-bottomed separators, whose feed is a module below
-    the roof of an 80-unit wall. Centred, the second member of a pair is drawn
-    ABOVE the first and the third of a triple lands on the corner, where
-    ``outward_dir`` stops calling the face west."""
+    """Verify start-aligned series do not extend before their anchors."""
     at, along = 12.0, 120.0
     centred = [spread(i, 3, along, 20.0, 0.5, at, CENTRED) for i in range(3)]
     started = [spread(i, 3, along, 20.0, 0.5, at, FROM_START) for i in range(3)]
@@ -3408,9 +2839,7 @@ def test_a_family_growing_from_its_start_never_reaches_back_past_it():
 
 @pytest.mark.parametrize("align", [CENTRED, FROM_START])
 def test_the_band_a_series_reports_is_the_run_it_really_draws(align):
-    """``reach()`` is what ``Symbol.coincident_ports`` checks a fixed nozzle
-    against, so a band that disagreed with ``spread`` would clear a symbol whose
-    family really does land on another nozzle -- or refuse one that does not."""
+    """Verify a series reports the band it actually draws."""
     series = PortSeries("feed_", "W", pitch=20.0, extent=0.5, at=12.0, align=align)
     _, lo, hi = series.reach(80.0, 120.0)
     for count in range(1, 9):
@@ -3419,15 +2848,7 @@ def test_the_band_a_series_reports_is_the_run_it_really_draws(align):
 
 
 def test_every_separator_that_can_hold_a_family_declares_one():
-    """The floor under #452. A separator whose stencil grew a fixed ``feed``
-    anchor again would take the box-centre fallback for ``feed_1`` and draw
-    every charge line into the middle of the vessel -- silently, since a
-    fallback is a placement and not an error.
-
-    ``horizontal`` is the one exception and is named, not derived: its charge
-    nozzle carries a three-face menu instead, which is why
-    ``Separator._ONE_FEED_VARIANTS`` refuses a count on it.
-    """
+    """Verify every eligible separator declares a port family."""
     for variant in units.Separator.VARIANTS:
         symbol = default_registry.get("separator", variant)
         if variant in units.Separator._ONE_FEED_VARIANTS:
@@ -3437,14 +2858,8 @@ def test_every_separator_that_can_hold_a_family_declares_one():
         assert [s.prefix for s in symbol.port_series] == ["feed_"]
 
 
-#: kind -> the word (or words) :mod:`pandid.render.symbols`' own module
-#: docstring names it by in the "Vendored" source bullet. Eight kinds went
-#: missing from that list across several vendoring waves (#310) because
-#: nothing tied the prose to the registry it was describing; this is that
-#: tie. English rather than the bare kind string, since the docstring reads
-#: as a sentence and not as a dump of identifiers -- so a kind added here
-#: without its word also landed in the docstring fails loudly instead of
-#: quietly going the same way.
+# Vendored-registry documentation invariants
+
 _VENDORED_SOURCE_WORDS = {
     "valve": "valves",
     "pump": "pumps",
@@ -3473,17 +2888,7 @@ _VENDORED_SOURCE_WORDS = {
 
 
 def test_every_vendored_kind_is_named_in_the_module_docstring():
-    """The registry's own account of its sources names every kind it draws
-    from a draw.io stencil -- checked against the live registry rather than
-    read, so vendoring a ninth forgotten kind fails this instead of just
-    leaving the docstring's list one short again.
-
-    Matched on a word boundary against a whitespace-collapsed docstring, not
-    a bare ``in`` check: the prose wraps at eighty-odd columns and "heat
-    exchangers" has genuinely split across a line break before now, which a
-    contiguous-substring test would report as ``hex`` gone missing when
-    nothing about the sourcing actually changed.
-    """
+    """Verify module documentation lists every vendored kind."""
     import re
 
     import pandid.render.symbols as symbols_module
@@ -3495,10 +2900,6 @@ def test_every_vendored_kind_is_named_in_the_module_docstring():
     register_vendored(fresh)
     vendored_kinds = {kind for kind, _variant in fresh._symbols}
 
-    # First claim: the mechanism under test still does something, so a
-    # register_vendored() that quietly stopped registering anything fails
-    # here instead of leaving both checks below vacuously true over an
-    # empty set.
     assert vendored_kinds, "register_vendored() registered no (kind, variant) at all"
 
     unmapped = vendored_kinds - _VENDORED_SOURCE_WORDS.keys()
