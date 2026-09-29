@@ -1508,9 +1508,6 @@ def test_the_finding_is_soft_and_the_default_render_still_draws():
 # `validate()` answers about the last render, exactly as `fs.warnings`
 # already describes the last render and nothing earlier.
 #
-# `tests/test_gallery.py` holds the corpus to it, sheet by sheet.
-
-
 def test_a_sheet_nothing_has_drawn_yet_answers_as_a_pfd():
     """The default is unchanged where there is no render to read."""
     assert len(_no_table(_untabulated())) == 1
