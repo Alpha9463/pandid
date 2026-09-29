@@ -1,408 +1,378 @@
-"""Line weight, as it lands on the page rather than as it is written down.
+"""Verify rendered SVG stroke weights.
 
-A sheet is drawn on the three rungs of ISO 10628-1 §5.3.1 and the ratios
-between them are what tell a reader the main flow from the plant and the plant
-from the instrumentation (:class:`pandid.render.weights.LineWeight`). Every
-check here is therefore about the
-*drawn* weight: what a stroke measures after every viewport and transform
-between it and the drawing has been applied, which is not what its
-``stroke-width`` attribute says. The one transform left out is the fit a fixed
-``page_size`` puts the whole drawing under, since it moves every pen together
-and so says nothing about any of them; ``_walk`` is where that is done.
-
-The difference is where #153 lived. A symbol's weights are compensated once, at
-generation time, for the scale its artwork is drawn at; a ``<use>`` then scales
-the ``<symbol>``'s viewport, ink and all, and nothing scaled it back, so any
-unit given a ``width``/``height`` of its own quietly left the weight every other
-line on the sheet is drawn at. A 90 x 140 surge vessel drew at 2.9 against its
-neighbours' 2.0, and the 40 x 68 relief valve of #152 drew at 5.8 and filled in.
-
-So the invariant is stated as *the box a unit is given does not change the pen*,
-and it is checked against what the symbol library declares rather than against a
-constant: a symbol's own fine detail (a column's trays, an agitator, the
-location bar across a panel balloon) is deliberately finer than its outline, and
-a signal line is deliberately a quarter of a main flow line's weight.
-"2.0 everywhere" is not the invariant. "The weight it should be" is.
-
-And it is one weight, not a range. #235 is the half of #153 that was left: a box
-of another *shape* scales the two axes differently, and this file used to price
-that as an ellipse bounded by the aspect change the placement asked for -- which
-let V-604's shell walls draw 1,53 heavier than its heads inside one outline, and
-let the four vendored families whose own wrapper group is uneven draw an ellipse
-at their natural size with no placement involved at all. ISO 15519-1:2010
-§11.1.3 is a *shall* -- resizing a symbol leaves its line width alone -- and
-§6.2, holding any two widths on a drawing at least 2:1 apart, leaves nothing
-between 1:1 and 2:1 to call it instead. The renderer
-now redraws the artwork at the placed size rather than stretching its viewport
-(``pandid.render.svg._baked``), so every stroke below is checked for being
-*round*, at the weight its definition declares, with no bound and no exception.
+The checks cover symbol strokes, direct sheet lines, flattened export input, and
+resized equipment. Each gallery sheet is rendered once for the three corpus
+checks so that the assertions share identical output.
 """
 
 import math
 import re
 import xml.etree.ElementTree as ET
+from typing import Any
 
 import pytest
 
 from pandid import Flowsheet, units
-from pandid.render.svg import (
-    SvgRenderer,
-    _placement_scale,
-)
+from pandid.render.svg import SvgRenderer, _placement_scale
+from pandid.render.symbols import Symbol, default_registry
 from pandid.render.weights import LineWeight
-from pandid.render.symbols import default_registry
-from test_golden import SCENARIOS
+from _render_cases import copy_settled_case, gallery
+
+Matrix = tuple[float, float, float, float]
+DrawnPen = tuple[str, float, float]
 
 _NS = "{http://www.w3.org/2000/svg}"
 _XFORM = re.compile(r"(translate|scale|rotate|matrix)\(([^)]*)\)")
-_IDENTITY = (1.0, 0.0, 0.0, 1.0)
+_IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0)
+_SHEETS = tuple(gallery.sheets())
 
 
-# --- what a stroke actually measures ------------------------------------------
+def _mul(left: Matrix, right: Matrix) -> Matrix:
+    """Compose two row-major linear transformation matrices.
 
+    Parameters
+    ----------
+    left : Matrix
+        Outer transformation matrix.
+    right : Matrix
+        Inner transformation matrix.
 
-def _mul(p, q):
-    """Two 2x2 row-major matrices, composed the way SVG nests them."""
+    Returns
+    -------
+    Matrix
+        Matrix for applying ``right`` followed by ``left``.
+    """
     return (
-        p[0] * q[0] + p[1] * q[2],
-        p[0] * q[1] + p[1] * q[3],
-        p[2] * q[0] + p[3] * q[2],
-        p[2] * q[1] + p[3] * q[3],
+        left[0] * right[0] + left[1] * right[2],
+        left[0] * right[1] + left[1] * right[3],
+        left[2] * right[0] + left[3] * right[2],
+        left[2] * right[1] + left[3] * right[3],
     )
 
 
-def _linear(transform):
-    """The 2x2 linear part of an SVG transform list.
+def _linear(transform: str | None) -> Matrix:
+    """Extract the linear portion of an SVG transformation list.
 
-    Translation is dropped: it moves a stroke without touching its weight, and
-    weight is the whole of what this file measures.
+    Parameters
+    ----------
+    transform : str or None
+        SVG ``transform`` attribute value.
+
+    Returns
+    -------
+    Matrix
+        Combined two-dimensional linear transformation matrix.
     """
-    m = _IDENTITY
-    for op, args in _XFORM.findall(transform or ""):
-        v = [float(t) for t in re.split(r"[,\s]+", args.strip()) if t]
-        if op == "translate":
+    matrix = _IDENTITY
+    for operation, arguments in _XFORM.findall(transform or ""):
+        values = [float(value) for value in re.split(r"[,\s]+", arguments.strip()) if value]
+        if operation == "translate":
             continue
-        if op == "scale":
-            n = (v[0], 0.0, 0.0, v[1] if len(v) > 1 else v[0])
-        elif op == "rotate":
-            r = math.radians(v[0])
-            n = (math.cos(r), -math.sin(r), math.sin(r), math.cos(r))
-        else:  # matrix(a b c d e f), column-major as SVG writes it
-            n = (v[0], v[2], v[1], v[3])
-        m = _mul(m, n)
-    return m
+        if operation == "scale":
+            next_matrix = (values[0], 0.0, 0.0, values[1] if len(values) > 1 else values[0])
+        elif operation == "rotate":
+            angle = math.radians(values[0])
+            next_matrix = (math.cos(angle), -math.sin(angle), math.sin(angle), math.cos(angle))
+        else:
+            next_matrix = (values[0], values[2], values[1], values[3])
+        matrix = _mul(matrix, next_matrix)
+    return matrix
 
 
-def _pen_axes(m):
-    """The two weights a unit-wide pen comes out at under *m*, smaller first.
+def _pen_axes(matrix: Matrix) -> tuple[float, float]:
+    """Calculate the minor and major transformed pen widths.
 
-    SVG strokes a path by sweeping a circular pen along it, so a transform that
-    scales the axes differently sweeps an elliptical one and the weight depends
-    on which way the line runs: these are that ellipse's axes, which a vertical
-    and a horizontal line respectively land on. Taken as singular values rather
-    than off the diagonal, so a quarter turn or a mirror -- which turn the pen
-    without deforming it -- does not read as a change of weight.
+    Parameters
+    ----------
+    matrix : Matrix
+        Linear transformation applied to a circular pen.
+
+    Returns
+    -------
+    tuple[float, float]
+        Minor and major pen widths, in ascending order.
     """
-    a, b, c, d = m
-    q = math.hypot((a + d) / 2, (c - b) / 2)
-    r = math.hypot((a - d) / 2, (c + b) / 2)
-    return abs(q - r), q + r
+    a, b, c, d = matrix
+    first = math.hypot((a + d) / 2, (c - b) / 2)
+    second = math.hypot((a - d) / 2, (c + b) / 2)
+    return abs(first - second), first + second
 
 
-def _viewport(use, symbol):
-    """The scale a ``<use>`` box applies to a ``<symbol>``'s contents.
+def _viewport(use: ET.Element, symbol: ET.Element) -> Matrix:
+    """Calculate the scale from a ``<use>`` viewport to its symbol.
 
-    The viewport rule, and the same one ``pandid.render.export._placement``
-    resolves for the PDF backend: fill the box where the definition gave up its
-    aspect ratio, and otherwise keep the scale uniform and centre what is left.
+    Parameters
+    ----------
+    use : xml.etree.ElementTree.Element
+        SVG ``<use>`` element.
+    symbol : xml.etree.ElementTree.Element
+        Referenced SVG ``<symbol>`` element.
+
+    Returns
+    -------
+    Matrix
+        Viewport scale applied to the symbol contents.
     """
-    _, _, vw, vh = (float(t) for t in symbol.get("viewBox").split())
-    w = float(use.get("width", vw))
-    h = float(use.get("height", vh))
+    view_box = symbol.get("viewBox")
+    assert view_box is not None, "symbol definitions must declare a viewBox"
+    _, _, view_width, view_height = (float(value) for value in view_box.split())
+    width = float(use.get("width", view_width))
+    height = float(use.get("height", view_height))
     if symbol.get("preserveAspectRatio") == "none":
-        return (w / vw, 0.0, 0.0, h / vh)
-    s = min(w / vw, h / vh)
-    return (s, 0.0, 0.0, s)
+        return (width / view_width, 0.0, 0.0, height / view_height)
+    scale = min(width / view_width, height / view_height)
+    return (scale, 0.0, 0.0, scale)
 
 
-def _walk(el, m, symbols, out, where):
-    for child in el:
+def _walk(
+    element: ET.Element,
+    matrix: Matrix,
+    symbols: dict[str, ET.Element],
+    pens: list[DrawnPen],
+    group: str,
+) -> None:
+    """Collect effective stroke widths from an SVG element tree.
+
+    Parameters
+    ----------
+    element : xml.etree.ElementTree.Element
+        Current SVG element.
+    matrix : Matrix
+        Transformation inherited from parent elements.
+    symbols : dict[str, xml.etree.ElementTree.Element]
+        Symbol definitions indexed by identifier.
+    pens : list[DrawnPen]
+        Effective widths collected during traversal.
+    group : str
+        Current SVG group or symbol identifier.
+    """
+    for child in element:
         tag = child.tag.replace(_NS, "")
         if tag in ("defs", "symbol", "marker"):
-            continue  # a definition is ink only where a <use> puts it
-        cm = _mul(m, _linear(child.get("transform", "")))
+            continue
+        child_matrix = _mul(matrix, _linear(child.get("transform", "")))
         if tag == "g" and child.get("id") == "drawing":
-            # A sheet given a fixed ``page_size`` fits its whole drawing into
-            # what the furniture leaves, under one uniform scale
-            # (``SvgRenderer._fit``). That moves every pen on the drawing
-            # together, so it changes what a stroke measures against the page
-            # and nothing about what the weights say to each other -- which is
-            # the whole of what a line weight is. It is left out here, so the
-            # weights below are the ones the drawing is drawn in and the
-            # invariant reads the same on the A3 sheets as on the rest.
-            lo, hi = _pen_axes(_linear(child.get("transform", "")))
-            assert math.isclose(lo, hi, rel_tol=1e-9), (
-                f"the page fit is not a uniform scale: {lo:.4g} by {hi:.4g}"
+            minor, major = _pen_axes(_linear(child.get("transform", "")))
+            assert math.isclose(minor, major, rel_tol=1e-9), (
+                f"the page fit is not a uniform scale: {minor:.4g} by {major:.4g}"
             )
-            cm = m
+            child_matrix = matrix
         if tag == "use":
-            ref = (child.get("href") or child.get(f"{_NS}href", ""))[1:]
-            sym = symbols[ref]
-            _walk(sym, _mul(cm, _viewport(child, sym)), symbols, out, ref)
+            reference = (child.get("href") or child.get(f"{_NS}href", ""))[1:]
+            _walk(
+                symbols[reference],
+                _mul(child_matrix, _viewport(child, symbols[reference])),
+                symbols,
+                pens,
+                reference,
+            )
             continue
         width = child.get("stroke-width")
         if width is not None and child.get("stroke", "none") != "none":
-            lo, hi = _pen_axes(cm)
-            out.append((where, float(width) * lo, float(width) * hi))
-        _walk(child, cm, symbols, out, where if tag != "g" else child.get("id", where))
+            minor, major = _pen_axes(child_matrix)
+            pens.append((group, float(width) * minor, float(width) * major))
+        next_group = child.get("id", group) if tag == "g" else group
+        _walk(child, child_matrix, symbols, pens, next_group)
 
 
-def drawn_pens(svg):
-    """Every stroke the sheet draws, as ``(group or symbol id, thin, thick)``.
+def drawn_pens(svg: str) -> list[DrawnPen]:
+    """Return the effective widths of all rendered SVG strokes.
 
-    ``thin``/``thick`` are the weights the stroke lands on for the two extreme
-    directions, and are equal for everything drawn under a uniform scale.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    list[DrawnPen]
+        Group or symbol identifier with each stroke's minor and major widths.
     """
     root = ET.fromstring(svg)
-    symbols = {el.get("id", ""): el for el in root.iter(f"{_NS}symbol")}
-    out = []
-    _walk(root, _IDENTITY, symbols, out, "")
-    return out
+    symbols = {element.get("id", ""): element for element in root.iter(f"{_NS}symbol")}
+    pens: list[DrawnPen] = []
+    _walk(root, _IDENTITY, symbols, pens, "")
+    return pens
 
 
-def authored_pens(sym):
-    """The weight a symbol's own definition declares, in document order.
+def authored_pens(symbol: Symbol) -> list[float]:
+    """Return a symbol definition's declared stroke widths.
 
-    Read through the artwork's internal scale group, so this is the weight the
-    symbol draws at in the box it was drawn for: 2.0 for an outline, and
-    whatever finer weight the author chose for a detail line.
+    Parameters
+    ----------
+    symbol : pandid.render.symbols.Symbol
+        Symbol definition to inspect.
 
-    One number per stroke, taken as the geometric mean of the two axes, because
-    four of the vendored families are drawn under an *uneven* scale group and so
-    declare an ellipse rather than a pen -- a plain vessel under
-    ``scale(0.62, 0.5)`` declares 2.23 by 1.80. That is a fact about how the
-    stencil was reproportioned and not a weight anybody chose; the mean is the
-    weight it was centred on, it is what ``scripts/vendor_symbols.py`` divided
-    by to bake it in, and it is exact for the other 138 families, whose two axes
-    agree. The renderer flattens that group into the coordinates and strokes at
-    this number (``pandid.render.svg._baked``), which is why the drawn pens
-    checked against it below are round even for those four.
+    Returns
+    -------
+    list[float]
+        Geometric mean of each definition stroke's transformed widths.
     """
-    root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{sym.svg}</svg>')
-    out = []
-    _walk(root, _IDENTITY, {}, out, "")
-    return [math.sqrt(lo * hi) for _, lo, hi in out]
+    root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{symbol.svg}</svg>')
+    pens: list[DrawnPen] = []
+    _walk(root, _IDENTITY, {}, pens, "")
+    return [math.sqrt(minor * major) for _, minor, major in pens]
 
 
-# --- the invariant ------------------------------------------------------------
+def check_symbol_weights(flowsheet: Flowsheet, svg: str) -> None:
+    """Assert that every placed equipment symbol preserves its declared pens.
 
-
-def check_symbol_weights(fs, svg):
-    """Every symbol on *svg* is drawn with the pen its definition declares.
-
-    Round, and at that weight exactly, whatever box the unit was given: a
-    resize, a reshape, a quarter turn, a mirror or any of them together. Two
-    assertions and no branch, which is the point of #235 -- the version of this
-    function that shipped with #153 checked the *mean* of the two axes exactly
-    and then allowed the axes themselves to spread as far apart as the box was
-    out of the symbol's shape, so V-604's 2.48 by 1.61 passed. ISO 15519-1
-    §11.1.3 does not allow a spread and §6.2 has no name for one under 2:1.
-
-    ``authored_pens`` is a weight per stroke rather than a constant because a
-    symbol's own fine detail is deliberately finer than its outline; the sheet
-    weight itself is pinned separately, both under the definitions
-    (:func:`test_every_symbol_declares_a_pen_centred_on_the_sheet_weight`) and
-    on the lines a sheet draws directly
-    (:func:`test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights`),
-    so "the weight it should be" cannot be satisfied by moving the target.
-
-    Every artwork is authored to one nominal weight, :data:`~pandid.render.svg
-    .weights.LineWeight.EQUIPMENT`, whatever rung it draws on (#305): a
-    valve's ``8.0`` under ``scale(0.25)`` is centred on 2.0 the same as a
-    vessel's bare ``2``. A trimmed symbol -- ISO 10628-1 §5.3.1 c), see
-    :attr:`~pandid.render.symbols.Symbol.trim` -- is halved again once more at
-    render time on top of that, so what ``authored_pens`` declares is scaled
-    down here before it is held to what the sheet actually drew.
+    Parameters
+    ----------
+    flowsheet : pandid.Flowsheet
+        Flowsheet that produced ``svg``.
+    svg : str
+        Rendered SVG document for ``flowsheet``.
     """
     renderer = SvgRenderer()
-    by_id = {}
-    for name, lo, hi in drawn_pens(svg):
-        by_id.setdefault(name, []).append((lo, hi))
+    by_identifier: dict[str, list[tuple[float, float]]] = {}
+    for identifier, minor, major in drawn_pens(svg):
+        by_identifier.setdefault(identifier, []).append((minor, major))
 
     checked = 0
-    for u in fs.units:
-        if u.kind in ("feed", "product"):
-            continue  # a boundary flag is drawn inline, not placed from <defs>
-        sym = default_registry.for_unit(u)
-        sym_id = renderer._sym_id(u)
-        assert sym_id in by_id, f"{u.name}: nothing on the sheet uses {sym_id!r}"
-        class_factor = LineWeight.DETAIL.width / LineWeight.EQUIPMENT.width if sym.trim else 1.0
-        expected = [w * class_factor for w in authored_pens(sym)]
-        drawn = by_id[sym_id][: len(expected)]
-        assert len(drawn) == len(expected), (
-            f"{u.name}: {sym_id} draws {len(drawn)} strokes, its definition "
+    for unit in flowsheet.units:
+        if unit.kind in ("feed", "product"):
+            continue
+        symbol = default_registry.for_unit(unit)
+        identifier = renderer._sym_id(unit)
+        assert identifier in by_identifier, f"{unit.name}: nothing uses {identifier!r}"
+        trim_factor = LineWeight.DETAIL.width / LineWeight.EQUIPMENT.width if symbol.trim else 1.0
+        expected = [width * trim_factor for width in authored_pens(symbol)]
+        rendered = by_identifier[identifier][: len(expected)]
+        assert len(rendered) == len(expected), (
+            f"{unit.name}: {identifier} draws {len(rendered)} strokes, its definition "
             f"declares {len(expected)}"
         )
-        kx, ky = _placement_scale(sym, u)
-        for i, (want, (dlo, dhi)) in enumerate(zip(expected, drawn)):
-            what = f"{u.name} ({sym_id}) stroke {i}"
-            assert math.isclose(dlo, dhi, rel_tol=1e-5), (
-                f"{what}: drawn {dhi:.4g} one way and {dlo:.4g} the other, in a box "
-                f"{kx:.4g} by {ky:.4g} of the symbol's own -- one outline, two "
-                f"widths, and ISO 15519-1 §6.2 has no weight between 1:1 and 2:1"
+        width_scale, height_scale = _placement_scale(symbol, unit)
+        for index, (expected_width, (minor, major)) in enumerate(zip(expected, rendered)):
+            description = f"{unit.name} ({identifier}) stroke {index}"
+            assert math.isclose(minor, major, rel_tol=1e-5), (
+                f"{description}: drawn {minor:.4g} by {major:.4g} after placement "
+                f"at {width_scale:.4g} by {height_scale:.4g}"
             )
-            assert math.isclose(dlo, want, rel_tol=1e-5), (
-                f"{what}: a {kx:.4g} by {ky:.4g} box moved the weight its "
-                f"definition draws at, {want:.4g}, to {dlo:.4g}"
+            assert math.isclose(minor, expected_width, rel_tol=1e-5), (
+                f"{description}: expected {expected_width:.4g}, drawn {minor:.4g} "
+                f"at {width_scale:.4g} by {height_scale:.4g}"
             )
         checked += 1
-    assert checked, "no unit was checked"
+    assert checked, "no equipment symbols were checked"
 
 
-# --- the pen a symbol declares ------------------------------------------------
+@pytest.fixture(scope="module")
+def settled_gallery_svg(
+    settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]],
+) -> dict[str, tuple[Flowsheet, str]]:
+    """Render every settled gallery sheet once for the corpus checks.
 
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[pandid.Flowsheet, dict[str, Any]]]
+        Session-scoped settled gallery flowsheets and render options.
 
-def test_every_symbol_declares_a_pen_centred_on_the_sheet_weight():
-    """The weight the *definitions* are drawn at, which nothing above can see.
-
-    Every check above measures a placement against the definition it draws
-    from, so a definition drawn at the wrong weight passes all of them: both
-    sides of that comparison come from the same symbol. What the definitions
-    are drawn at is settled a level further up, by
-    ``scripts/vendor_symbols.py``, which bakes a compensated ``stroke-width``
-    inside the scale group it wraps each stencil's artwork in.
-
-    That compensation divided by ``sx`` alone until #158. Under a uniform
-    factor there is nothing to choose and the outline landed exactly on the
-    sheet weight; under the four uneven pairs ``SCALE`` reproportions it put
-    the vertical strokes on that weight and left the horizontal ones at
-    ``sy/sx`` of it -- the packed tower's bed grids at 0.93 against its own
-    shell walls' 2.0, a pen a third short of the sheet's by area. It is the
-    geometric mean now, so the sheet weight is the *middle* of every pen in the
-    library rather than one edge of four of them.
-
-    The middle is all a ``stroke-width`` inside an uneven scale group can be,
-    and until #235 that was where it ended: those four families drew 2.23 by
-    1.80 on the page, at their own natural size, and no care taken at the
-    ``<use>`` could have helped. The renderer flattens the group into the
-    coordinates now, so the mean this measures is the weight that reaches the
-    page in both directions -- which is what
-    :func:`test_every_symbol_on_the_corpus_is_drawn_at_its_declared_weight`
-    checks and what makes this the right number to hold the library to.
+    Returns
+    -------
+    dict[str, tuple[pandid.Flowsheet, str]]
+        Independent flowsheets and their rendered SVG documents by sheet name.
     """
+    rendered: dict[str, tuple[Flowsheet, str]] = {}
+    for stem in _SHEETS:
+        flowsheet, options = copy_settled_case(settled_gallery, stem)
+        rendered[stem] = flowsheet, flowsheet.to_svg(**options)
+    return rendered
+
+
+def test_every_symbol_declares_a_pen_centred_on_the_sheet_weight() -> None:
+    """Verify that registered symbol definitions use the equipment-weight rung."""
     checked = 0
-    for (kind, variant), sym in sorted(default_registry._symbols.items()):
-        pens = authored_pens(sym)
-        assert pens, f"{kind}/{variant} declares no stroke at all"
-        # The outline is the heaviest pen, and for the four uneven families that
-        # is a mean rather than a width; see authored_pens.
-        pen = max(pens)
-        # The tolerance is the generator's own rounding: it emits the divided
-        # weight to three decimals, and the packed tower's 0.662 is the
-        # smallest number that lands on, so a part in a thousand there.
-        assert math.isclose(pen, LineWeight.EQUIPMENT.width, rel_tol=2e-3), (
-            f"{kind}/{variant}: its outline is drawn at {pen:.4g} against the "
-            f"ladder's {LineWeight.EQUIPMENT.width}"
+    for (kind, variant), symbol in sorted(default_registry._symbols.items()):
+        pens = authored_pens(symbol)
+        assert pens, f"{kind}/{variant} declares no strokes"
+        assert math.isclose(max(pens), LineWeight.EQUIPMENT.width, rel_tol=2e-3), (
+            f"{kind}/{variant}: outline {max(pens):.4g} differs from {LineWeight.EQUIPMENT.width}"
         )
         checked += 1
-    assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
+    assert checked > 100, f"only {checked} symbols were checked"
 
 
-# --- the golden corpus --------------------------------------------------------
+@pytest.mark.parametrize("stem", _SHEETS, ids=_SHEETS)
+def test_every_symbol_on_the_corpus_is_drawn_at_its_declared_weight(
+    stem: str, settled_gallery_svg: dict[str, tuple[Flowsheet, str]]
+) -> None:
+    """Verify that all gallery equipment preserves its definition stroke widths.
 
-
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_every_symbol_on_the_corpus_is_drawn_at_its_declared_weight(name):
-    build, kwargs = SCENARIOS[name]
-    fs = build()
-    check_symbol_weights(fs, fs.to_svg(**kwargs))
-
-
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights(name):
-    """Streams and impulse lines, against the pair ISO 15519-2 Annex A.1 spends.
-
-    These are drawn straight onto the sheet rather than through a viewport, so
-    they were never at risk from #153; they are the fixed point the symbols are
-    measured against, and a check that says so is what stops a later fix to the
-    symbols from being made by moving the target instead.
+    Parameters
+    ----------
+    stem : str
+        Gallery sheet name.
+    settled_gallery_svg : dict[str, tuple[pandid.Flowsheet, str]]
+        Shared rendered gallery sheets.
     """
-    build, kwargs = SCENARIOS[name]
-    fs = build()
-    rungs = {LineWeight.MAIN_FLOW.width, LineWeight.DETAIL.width}
-    weights = {"streams", "instrument_taps"}
+    flowsheet, svg = settled_gallery_svg[stem]
+    check_symbol_weights(flowsheet, svg)
+
+
+@pytest.mark.parametrize("stem", _SHEETS, ids=_SHEETS)
+def test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights(
+    stem: str, settled_gallery_svg: dict[str, tuple[Flowsheet, str]]
+) -> None:
+    """Verify that gallery stream and instrument lines use defined sheet weights.
+
+    Parameters
+    ----------
+    stem : str
+        Gallery sheet name.
+    settled_gallery_svg : dict[str, tuple[pandid.Flowsheet, str]]
+        Shared rendered gallery sheets.
+    """
+    _, svg = settled_gallery_svg[stem]
+    allowed_widths = {LineWeight.MAIN_FLOW.width, LineWeight.DETAIL.width}
+    groups = {"streams", "instrument_taps"}
     seen = 0
-    for where, lo, hi in drawn_pens(fs.to_svg(**kwargs)):
-        if where not in weights:
+    for group, minor, major in drawn_pens(svg):
+        if group not in groups:
             continue
-        # A signal stream is drawn on the fine rung inside the streams group, so
-        # the weights are checked as a set rather than one per group.
-        assert lo == hi, f"{where}: a sheet line came out {lo:.4g} by {hi:.4g}"
-        assert lo in rungs, f"{where}: drawn at {lo:.4g}, which is on no rung of the ladder"
+        assert minor == major, f"{stem}: {group} is {minor:.4g} by {major:.4g}"
+        assert minor in allowed_widths, f"{stem}: {group} uses unsupported width {minor:.4g}"
         seen += 1
-    assert seen, f"{name} drew no stream or impulse line"
+    assert seen, f"{stem} drew no stream or instrument lines"
 
 
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_the_sheet_the_raster_backend_is_handed_carries_no_uneven_pen(name):
-    """The same corpus, one step further down: what ``.pdf`` and ``.png`` see.
+@pytest.mark.parametrize("stem", _SHEETS, ids=_SHEETS)
+def test_the_sheet_the_raster_backend_is_handed_carries_no_uneven_pen(
+    stem: str, settled_gallery_svg: dict[str, tuple[Flowsheet, str]]
+) -> None:
+    """Verify that flattened gallery SVGs have only circular effective pens.
 
-    This is the check that would have caught the fix that looked like a fix.
-    ``vector-effect="non-scaling-stroke"`` is the direct way to say #235's rule
-    and a browser honours it, so an .svg wearing it measures perfectly here --
-    but the PDF/PNG backend has never heard of the property, drops it in
-    silence, and strokes the scaled geometry anyway (see the argument above
-    ``pandid.render.svg._baked``). Every gallery PNG and every exported sheet
-    would have stayed exactly as wrong as before, and nothing in this file
-    would have said so, because this file reads the .svg.
-
-    So the invariant is asserted on ``export.flatten``'s output, which is the
-    document svglib is actually given: every ``<use>`` resolved into the group
-    and transform it stands for. A pen that is round *there* is round on any
-    backend that can draw a transform at all, which is the property a redraw
-    has and an attribute the renderer has to be told about does not.
+    Parameters
+    ----------
+    stem : str
+        Gallery sheet name.
+    settled_gallery_svg : dict[str, tuple[pandid.Flowsheet, str]]
+        Shared rendered gallery sheets.
     """
     from pandid.render.export import flatten
 
-    build, kwargs = SCENARIOS[name]
-    fs = build()
-    seen = 0
-    for where, lo, hi in drawn_pens(flatten(fs.to_svg(**kwargs))):
-        assert math.isclose(lo, hi, rel_tol=1e-9), (
-            f"{name}: a stroke under {where!r} reaches the raster backend {hi:.4g} "
-            f"one way and {lo:.4g} the other"
+    _, svg = settled_gallery_svg[stem]
+    pens = drawn_pens(flatten(svg))
+    for group, minor, major in pens:
+        assert math.isclose(minor, major, rel_tol=1e-9), (
+            f"{stem}: {group!r} reaches the raster backend as {minor:.4g} by {major:.4g}"
         )
-        seen += 1
-    assert seen > 10, f"{name} flattened to {seen} strokes, which is not a sheet"
+    assert len(pens) > 10, f"{stem} flattened to only {len(pens)} strokes"
 
 
-# --- deliberately resized units -----------------------------------------------
-
-# One specimen per way a placement can meet a symbol: a plain vendored drawing;
-# two of the four families the generator reproportions unevenly, whose declared
-# pen is already an ellipse before any placement touches it; a symbol drawn by
-# hand rather than vendored; one carrying fine detail at a deliberate fraction
-# of its outline weight; one whose heads are vendored as arcs at a *tilt*, so
-# the redraw has to recompute the ellipse rather than scale it; one the registry
-# derives by mirroring, so the redraw meets a negative scale; and a symbol that
-# may not be stretched at all, which keeps its aspect and is centred, so its pen
-# stays round however odd the box.
 _SPECIMENS = {
-    "valve": lambda **kw: units.Valve("FV-1", **kw),
-    "vessel": lambda **kw: units.Vessel("V-1", **kw),
-    "vessel/horizontal": lambda **kw: units.Vessel("V-2", variant="horizontal", **kw),
-    "vessel/dome": lambda **kw: units.Vessel("V-3", variant="dome", **kw),
-    "hex/kettle": lambda **kw: units.HeatExchanger("E-1", variant="kettle", **kw),
-    "column/packed": lambda **kw: units.Column("T-1", variant="packed", **kw),
-    "reducer": lambda **kw: units.Reducer("RD-1", large_end="outlet", **kw),
-    "mixer": lambda **kw: units.Mixer("M-1", **kw),
-    "instrument": lambda **kw: units.Instrument("PI-101", **kw),
+    "valve": lambda **kwargs: units.Valve("FV-1", **kwargs),
+    "vessel": lambda **kwargs: units.Vessel("V-1", **kwargs),
+    "vessel/horizontal": lambda **kwargs: units.Vessel("V-2", variant="horizontal", **kwargs),
+    "vessel/dome": lambda **kwargs: units.Vessel("V-3", variant="dome", **kwargs),
+    "hex/kettle": lambda **kwargs: units.HeatExchanger("E-1", variant="kettle", **kwargs),
+    "column/packed": lambda **kwargs: units.Column("T-1", variant="packed", **kwargs),
+    "reducer": lambda **kwargs: units.Reducer("RD-1", large_end="outlet", **kwargs),
+    "mixer": lambda **kwargs: units.Mixer("M-1", **kwargs),
+    "instrument": lambda **kwargs: units.Instrument("PI-101", **kwargs),
 }
 
-# Factors on the symbol's own box. The uniform pair is the case that shipped
-# wrong and the one the invariant pins exactly; the rest reshape as well, one of
-# them past anything a drawing would ask for, since a bound is only worth having
-# where it is under strain.
 _BOXES = {
     "natural": (1.0, 1.0),
     "twice": (2.0, 2.0),
@@ -413,46 +383,48 @@ _BOXES = {
 }
 
 
-@pytest.mark.parametrize("box", list(_BOXES), ids=list(_BOXES))
-@pytest.mark.parametrize("spec", list(_SPECIMENS), ids=list(_SPECIMENS))
-def test_a_resized_unit_is_drawn_with_the_pen_its_symbol_declares(spec, box):
-    fx, fy = _BOXES[box]
-    sym = default_registry.get(*(spec.split("/") + ["default"])[:2])
-    fs = Flowsheet("weights")
-    fs.add(_SPECIMENS[spec](width=sym.width * fx, height=sym.height * fy))
-    check_symbol_weights(fs, fs.to_svg())
+@pytest.mark.parametrize("box", _BOXES, ids=_BOXES)
+@pytest.mark.parametrize("specimen", _SPECIMENS, ids=_SPECIMENS)
+def test_a_resized_unit_is_drawn_with_the_pen_its_symbol_declares(specimen: str, box: str) -> None:
+    """Verify that each equipment family preserves pens across box shapes.
 
-
-def test_a_uniformly_resized_valve_draws_at_the_sheet_weight_exactly(request):
-    """The bug of #152 and #153, written out in the numbers it went wrong in.
-
-    A gate valve's artwork is drawn under ``scale(0.25)`` and carries an 8.0 so
-    it is authored centred on the sheet's equipment weight, 2.0 -- what every
-    outline in the registry declares, valve included
-    (:func:`test_every_symbol_declares_a_pen_centred_on_the_sheet_weight`).
-    Placed in a box 2.878 times its own -- which is what ``examples/07`` asked
-    of the relief valve, back when a valve drew at that same 2.0 -- it used to
-    come out at 5.8 and merge into a blob. It is one symbol and one number, and
-    no bound or mean is involved: a uniform resize must move the weight not at
-    all.
-
-    A valve is a trimmed symbol since #305 and draws at half that on the page,
-    :attr:`~pandid.render.weights.LineWeight.DETAIL`, 1.0 -- a second, orthogonal
-    halving this test holds just as exactly: the bug above was a resize
-    working loose of *any* weight the symbol should have held, and checking
-    against 1.0 now is what stops a regression of it from hiding behind the
-    class split.
+    Parameters
+    ----------
+    specimen : str
+        Symbol family and optional variant under test.
+    box : str
+        Named width and height scaling factors.
     """
+    width_factor, height_factor = _BOXES[box]
+    symbol = default_registry.get(*(specimen.split("/") + ["default"])[:2])
+    flowsheet = Flowsheet("weights")
+    flowsheet.add(
+        _SPECIMENS[specimen](
+            width=symbol.width * width_factor,
+            height=symbol.height * height_factor,
+        )
+    )
+    check_symbol_weights(flowsheet, flowsheet.to_svg())
+
+
+def test_a_uniformly_resized_valve_draws_at_the_sheet_weight_exactly() -> None:
+    """Verify that uniformly resized valves retain the detail weight exactly."""
+    symbol = default_registry.get("valve", "gate")
+    checked = 0
     for factor in (1.0, 2.878, 0.5, 4.0):
-        sym = default_registry.get("valve", "gate")
-        fs = Flowsheet("weights")
-        fs.add(
+        flowsheet = Flowsheet("weights")
+        flowsheet.add(
             units.Valve(
-                "FV-1", variant="gate", width=sym.width * factor, height=sym.height * factor
+                "FV-1",
+                variant="gate",
+                width=symbol.width * factor,
+                height=symbol.height * factor,
             )
         )
-        for where, lo, hi in drawn_pens(fs.to_svg()):
-            if not where.startswith("sym_valve"):
+        for group, minor, major in drawn_pens(flowsheet.to_svg()):
+            if not group.startswith("sym_valve"):
                 continue
-            assert lo == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)
-            assert hi == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)
+            assert minor == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)
+            assert major == pytest.approx(LineWeight.DETAIL.width, rel=1e-5)
+            checked += 1
+    assert checked, "no valve strokes were checked"
