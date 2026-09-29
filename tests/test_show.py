@@ -11,6 +11,7 @@ import inspect
 import os
 import sys
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -157,6 +158,65 @@ def test_the_display_check_answers_an_unset_display_without_importing_tkinter(mo
     assert "DISPLAY" in P._no_display()
 
 
+def test_macos_without_a_gui_session_does_not_start_tkinter(monkeypatch):
+    """Skip native Tk before it aborts in a headless macOS process.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Overrides the platform, session result, and tkinter import.
+
+    Returns
+    -------
+    None
+        The display check reports the missing session without importing Tk.
+    """
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(P, "_macos_gui_session", lambda: False)
+    monkeypatch.setitem(sys.modules, "tkinter", None)
+    assert "Quartz GUI session" in P._no_display()
+
+
+def test_macos_with_a_gui_session_can_open_tkinter(monkeypatch):
+    """Allow the window path when Quartz reports a GUI session.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Supplies a GUI session and a small Tk root.
+
+    Returns
+    -------
+    None
+        The display check opens and closes the root successfully.
+    """
+    closed = []
+
+    class Root:
+        """Stand in for a Tk root.
+
+        Notes
+        -----
+        Destruction is recorded in ``closed``.
+        """
+
+        def destroy(self) -> None:
+            """Record that the temporary window was closed.
+
+            Returns
+            -------
+            None
+                The root is marked closed.
+            """
+            closed.append(True)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(P, "_macos_gui_session", lambda: True)
+    monkeypatch.setitem(sys.modules, "tkinter", SimpleNamespace(Tk=Root, TclError=Exception))
+    assert P._no_display() == ""
+    assert closed == [True]
+
+
 # --- the temporary file -------------------------------------------------------
 
 
@@ -237,6 +297,16 @@ def test_the_sheet_is_fitted_to_the_window_and_never_stretched(image, into, fitt
 
 
 def _tk_or_skip():
+    """Create a Tk root only when this process has a display.
+
+    Returns
+    -------
+    tkinter.Tk
+        Root window for the GUI test, if one can be opened.
+    """
+    why = P._no_display()
+    if why:
+        pytest.skip(why)
     tkinter = pytest.importorskip("tkinter")
     pytest.importorskip("PIL")
     try:

@@ -29,10 +29,9 @@ it perfectly well:
 
 * no tkinter -- a Python built ``--without-tk``, which is what most slim
   container images ship;
-* no display -- CI, a container, SSH without X11 forwarding. Detected by
-  building the root window and catching :class:`tkinter.TclError`, plus
-  an ``$DISPLAY`` check first on X11 so the common headless case never
-  reaches Tk at all;
+* no display -- CI, a container, SSH without X11 forwarding. Check
+  ``$DISPLAY`` on X11 and the Quartz GUI session on macOS before opening
+  Tk, then catch :class:`tkinter.TclError` for remaining display failures;
 * no rasteriser -- ``pandid`` installed without the ``pdf`` extra.
 
 Each says which way it went and why, on stdout. A call that silently did
@@ -128,20 +127,47 @@ def _discard() -> None:
         shutil.rmtree(_dir, ignore_errors=True)
 
 
-def _no_display() -> str:
-    """Why a window cannot be opened here, or ``""`` if one can.
+def _macos_gui_session() -> bool:
+    """Check whether Quartz exposes a GUI session to this process.
 
-    The X11 check comes first and without importing tkinter, because an
-    unset ``$DISPLAY`` is the headless case that matters -- CI, a
-    container, SSH without forwarding -- and answering it from an
-    environment variable is both instant and incapable of blocking on a
-    socket to a display that is not listening. Windows and macOS have no
-    such variable and are asked the only way they can be asked, by
-    building a root window; :class:`tkinter.TclError` is what a session
-    with no window station of its own answers with.
+    Returns
+    -------
+    bool
+        Whether Core Graphics returned a window server session dictionary.
+    """
+    import ctypes
+
+    try:
+        graphics = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+        foundation = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        session_info = graphics.CGSessionCopyCurrentDictionary
+        session_info.argtypes = []
+        session_info.restype = ctypes.c_void_p
+        release = foundation.CFRelease
+        release.argtypes = [ctypes.c_void_p]
+        release.restype = None
+    except (OSError, AttributeError):
+        return False
+
+    session = session_info()
+    if not session:
+        return False
+    release(session)
+    return True
+
+
+def _no_display() -> str:
+    """Explain why a window is unavailable, or return an empty string.
+
+    Returns
+    -------
+    str
+        A reason for browser fallback, or ``""`` when Tk can open a window.
     """
     if sys.platform not in ("win32", "darwin") and not os.environ.get("DISPLAY"):
         return "no display ($DISPLAY is unset)"
+    if sys.platform == "darwin" and not _macos_gui_session():
+        return "no Quartz GUI session"
     try:
         import tkinter
     except ImportError:

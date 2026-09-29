@@ -130,7 +130,7 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
         ):
             return False
         if pin is not None and any(
-            getattr(pin, axis) is not None and abs(getattr(frame, axis) - getattr(pin, axis)) > 1
+            getattr(pin, axis) is not None and getattr(frame, axis) != getattr(pin, axis)
             for axis in ("x", "y")
         ):
             return False

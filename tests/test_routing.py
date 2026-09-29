@@ -1074,22 +1074,13 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
 
 
 def test_a_later_streams_recording_uses_separated_not_raw_geometry():
-    # #483's round-5 review, point 2: the router recorded every route's
-    # *raw*, pre-separation geometry into ``crossing_index``, then only
-    # afterwards ran ``separate_streams`` -- once, on the whole sheet -- to
-    # nudge overlapping parallel runs apart. So a later stream's search was
-    # always pricing crossings against a drawing that was never actually
-    # made: the true, on-sheet position of an earlier run could be a few
-    # pixels off whatever the index had recorded for it.
-    #
-    # Two manual routes share an unfixed middle run at y=100, overlapping
-    # in x (see the preview test above), so ``separate_streams`` moves the
-    # second one to y=106 once both are on the sheet -- confirmed against
-    # s2's own final waypoints below, not assumed. What gets *recorded* for
-    # s2 has to show that same y=106, not the raw y=100 that s2 never
-    # actually draws by the time the sheet is finished; a spy on
-    # ``CrossingIndex.record`` reads that off directly rather than needing
-    # a downstream routing decision to flip.
+    """Record the separated route so later streams price its drawn path.
+
+    Returns
+    -------
+    None
+        The second manual route is recorded at its separated y coordinate.
+    """
     recorded: list[list[tuple[float, float]]] = []
     original_record = CrossingIndex.record
 
@@ -1110,7 +1101,8 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry():
     fs.layout()
     CrossingIndex.record = spy
     try:
-        fs.route()
+        # Keep layout-search trials out of the router's recording spy.
+        fs.route(router=DefaultRouter())
     finally:
         CrossingIndex.record = original_record
 

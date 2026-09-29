@@ -503,6 +503,32 @@ def test_station_member_pin_remains_exact() -> None:
     assert (station.control.frame.x, station.control.frame.y) == (750, 150)
 
 
+def test_station_member_nearby_pin_remains_exact_after_render() -> None:
+    """Keep a member pin even when its proposed assembly frame is nearby.
+
+    Returns
+    -------
+    None
+        Rendering leaves the pinned coordinate exact and raises no pin warning.
+    """
+    fs = Flowsheet("Nearby pinned member")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=200)
+    product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=200)
+    station = fs.add_valve_station("CV-1")
+    fs.connect(feed.outlet, station.inlet)
+    fs.connect(station.outlet, product.inlet)
+
+    fs.layout()
+    assert station.control.frame is not None
+    requested_x = station.control.frame.x + 0.5
+    station.control.pin(x=requested_x)
+    fs.to_svg()
+
+    assert station.control.frame is not None
+    assert station.control.frame.x == requested_x
+    assert not any(issue.code == "pin-not-honored" for issue in fs.validate())
+
+
 def test_two_stations_use_fractions_of_the_original_run() -> None:
     """Measure every inserted station from the same original endpoints.
 
