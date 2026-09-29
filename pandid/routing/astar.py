@@ -16,6 +16,10 @@ Axis = Literal["h", "v"]
 CROSSING_PENALTY = 10.0
 
 
+#: Crossing queries before a search binds the index's sorted tracks locally.
+_INLINE_CROSSING_QUERY_THRESHOLD = 500
+
+
 _AXIS: Dict[str, Axis] = {"E": "h", "W": "h", "N": "v", "S": "v"}
 
 
@@ -303,6 +307,9 @@ def find_path(
 
     budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
     expansions = 0
+    crossing_queries = 0
+    horizontal_tracks: Optional[List[float]] = None
+    vertical_tracks: Optional[List[float]] = None
 
     queue: list[
         tuple[float, float, int, tuple[float, float], Optional[str], list[tuple[float, float]]]
@@ -347,7 +354,37 @@ def find_path(
             cost = g + dist + edge_penalties.get((current, neighbor), 0.0)
 
             if crossing_index is not None:
-                cost += CROSSING_PENALTY * crossing_index.crossings_along(current, neighbor)
+                crossing_queries += 1
+                if crossing_queries <= _INLINE_CROSSING_QUERY_THRESHOLD:
+                    cost += CROSSING_PENALTY * crossing_index.crossings_along(current, neighbor)
+                else:
+                    if horizontal_tracks is None or vertical_tracks is None:
+                        horizontal_tracks = crossing_index._sorted_keys("h")
+                        vertical_tracks = crossing_index._sorted_keys("v")
+                    if current[1] == neighbor[1] and current[0] != neighbor[0]:
+                        y = current[1]
+                        xlo, xhi = sorted((current[0], neighbor[0]))
+                        i0 = bisect.bisect_right(vertical_tracks, xlo)
+                        i1 = bisect.bisect_left(vertical_tracks, xhi)
+                        if i0 != i1:
+                            cost += CROSSING_PENALTY * sum(
+                                1
+                                for x in vertical_tracks[i0:i1]
+                                for lo, hi in crossing_index.v[x]
+                                if lo < y < hi
+                            )
+                    elif current[0] == neighbor[0] and current[1] != neighbor[1]:
+                        x = current[0]
+                        ylo, yhi = sorted((current[1], neighbor[1]))
+                        i0 = bisect.bisect_right(horizontal_tracks, ylo)
+                        i1 = bisect.bisect_left(horizontal_tracks, yhi)
+                        if i0 != i1:
+                            cost += CROSSING_PENALTY * sum(
+                                1
+                                for y in horizontal_tracks[i0:i1]
+                                for lo, hi in crossing_index.h[y]
+                                if lo < x < hi
+                            )
 
             bend_cost = BEND_PENALTY
             if is_recycle:
