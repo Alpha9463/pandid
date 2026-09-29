@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -328,6 +329,42 @@ def test_builtin_layout_route_checks_coarse_quality(explicit_engine: bool) -> No
     fs.route()
     assert fs._coarse_layout_candidate is False
     assert measure_final(fs).length < 1500
+
+
+def test_coarse_quality_trials_leave_final_search_to_the_live_drawing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Run one final search after choosing a coarse station placement.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Records calls to the bounded final layout search.
+
+    Returns
+    -------
+    None
+        Detached baseline and reservation trials settle without recursive
+        searches; the published drawing receives the one final search.
+    """
+    from pandid.layout import search as search_mod
+
+    fs = Flowsheet("Coarse trial search")
+    feed = fs.add(Feed("Feed"))
+    reactor = fs.add(Reactor("R-101"))
+    product = fs.add(Product("Product"))
+    fs.connect(feed.outlet, reactor.feed)
+    run = fs.connect(reactor.outlet, product.inlet)
+    fs.place_valve_station_on(run, "CV-101")
+
+    search = Mock(wraps=search_mod.search_layout)
+    monkeypatch.setattr(search_mod, "search_layout", search)
+    fs.route()
+
+    assert search.call_count == 1
+    assert fs._coarse_layout_candidate is False
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
 
 
 def test_custom_router_uses_full_station_layout() -> None:
