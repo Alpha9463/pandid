@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 import importlib.util
+from dataclasses import dataclass
 from decimal import Decimal
 import pathlib
 import re
@@ -467,14 +468,26 @@ def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
     assert cells["u0"].get("value") == "FEED<br>P-01"
 
 
-def test_a_label_written_inside_its_shape_fits_inside_it(settled_gallery):
-    """Fit text labels inside their exported shapes."""
+def test_a_label_written_inside_its_shape_fits_inside_it(settled_gallery, rendered_gallery):
+    """Fit text labels inside their exported shapes.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for every exported unit label.
+    """
     from pandid.render.drawio import _LINE_BOX
 
     for stem in SHEETS:
         fs, kwargs = _gallery_case(settled_gallery, stem)
-        fs.to_svg(**kwargs)
-        cells = _drawio_cells(fs, kwargs)
+        cells = _gallery_cells(rendered_gallery, stem)
         for i, unit in enumerate(fs.units):
             cell = cells[f"u{i}"]
             value = cell.get("value") or ""
@@ -1203,8 +1216,21 @@ def _drawio_edge_label(points, geometry) -> tuple[float, float]:
     return (p0[0] + (pe[0] - p0[0]) * factor + dx, p0[1] + (pe[1] - p0[1]) * factor + dy)
 
 
-def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery):
-    """Match exported line-number positions to the sheet."""
+def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, rendered_gallery):
+    """Match exported line-number positions to the sheet.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for unenclosed material-stream numbers.
+    """
     from pandid.render.drawio import _tag_pass
     from pandid.render.svg import sheet_connections, stream_numbers
 
@@ -1213,8 +1239,7 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery):
         # Enclosed numbers use a separate cell, checked in test_stream_label_enclosure.py.
         if fs.stream_labels.enclosure != "none":
             continue
-        fs.to_svg(**kwargs)
-        cells = _drawio_cells(fs, kwargs)
+        cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         plates = _tag_pass(fs, default_registry, None, "vertical").plates
         # The sheet's own joints, because a flange mark is ink the number search
@@ -1263,16 +1288,31 @@ def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
     assert sum(1 for d in offsets if d > 1.0) >= len(offsets) // 2
 
 
-def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(settled_gallery):
-    """Export each function code beside its instrument balloon."""
+def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
+    settled_gallery, rendered_gallery
+):
+    """Export each function code beside its instrument balloon.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for instrument function-code parity.
+    """
     from pandid.render.drawio import _TEXT_INSET
     from pandid.render.svg import quadrant_labels
 
     written, counted = {}, {}
     for stem in SHEETS:
         fs, kwargs = _gallery_case(settled_gallery, stem)
-        svg = fs.to_svg(**kwargs)
-        cells = _drawio_cells(fs, kwargs)
+        svg = rendered_gallery[stem].svg
+        cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         codes = quadrant_labels(fs, "vertical")
         written[stem] = {item[5] for item in codes}
@@ -1550,12 +1590,57 @@ def _drawio_cells(fs, kwargs) -> dict:
     dict[str, ET.Element]
         Exported cells keyed by identifier.
     """
-    return {
-        c.get("id"): c
-        for c in ET.fromstring(
-            fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
-        ).iter("mxCell")
-    }
+    return _drawio_cells_from_document(fs.to_drawio(**_drawio_options(kwargs)))
+
+
+def _drawio_options(kwargs: dict) -> dict:
+    """Select gallery options implemented by the Draw.io renderer.
+
+    Parameters
+    ----------
+    kwargs : dict
+        Complete gallery rendering options.
+
+    Returns
+    -------
+    dict
+        Options accepted by :meth:`Flowsheet.to_drawio`.
+    """
+    return {key: value for key, value in kwargs.items() if key in _DRAWIO_KWARGS}
+
+
+def _drawio_root(document: str) -> ET.Element:
+    """Read the graph root from an exported Draw.io document.
+
+    Parameters
+    ----------
+    document : str
+        Draw.io XML document.
+
+    Returns
+    -------
+    ET.Element
+        ``mxGraphModel`` root containing exported cells.
+    """
+    root = ET.fromstring(document).find("diagram/mxGraphModel/root")
+    assert root is not None, "the Draw.io document has no graph root"
+    return root
+
+
+def _drawio_cells_from_document(document: str) -> dict:
+    """Index cells from an already-rendered Draw.io document.
+
+    Parameters
+    ----------
+    document : str
+        Draw.io XML document.
+
+    Returns
+    -------
+    dict[str, ET.Element]
+        Exported cells keyed by identifier.
+    """
+    return {cell.get("id"): cell for cell in _drawio_root(document).iter("mxCell")}
 
 
 def _drawio_furniture(fs, kwargs):
@@ -1643,34 +1728,63 @@ def _clipped(cells) -> list[str]:
     return out
 
 
-def test_no_table_cell_is_narrower_than_the_text_in_it(settled_gallery):
-    """Size table columns to contain their rendered text."""
+def test_no_table_cell_is_narrower_than_the_text_in_it(rendered_gallery):
+    """Size table columns to contain their rendered text.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for all exported table columns.
+    """
     for stem in SHEETS:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
-        fs.to_svg(**kwargs)
-        clipped = _clipped(_drawio_cells(fs, kwargs))
+        clipped = _clipped(_gallery_cells(rendered_gallery, stem))
         assert not clipped, f"{stem}: " + "; ".join(clipped)
 
 
-def test_every_table_cell_states_the_size_it_is_drawn_at(settled_gallery):
-    """State font size on each table cell."""
+def test_every_table_cell_states_the_size_it_is_drawn_at(rendered_gallery):
+    """State font size on each table cell.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for exported table type sizes.
+    """
     sized = []
     for stem in SHEETS:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
-        fs.to_svg(**kwargs)
         # _cell_font is the assertion: it refuses to fall back to the container.
-        sized += [_cell_font(c) for c, _r, _t in _table_cells(_drawio_cells(fs, kwargs))]
+        sized += [
+            _cell_font(c) for c, _r, _t in _table_cells(_gallery_cells(rendered_gallery, stem))
+        ]
     assert sized, "no sheet in the gallery carries a table"
 
 
-def test_no_table_row_is_shorter_than_the_line_box_of_its_own_text(settled_gallery):
-    """Size table rows to contain their text line boxes."""
+def test_no_table_row_is_shorter_than_the_line_box_of_its_own_text(rendered_gallery):
+    """Size table rows to contain their text line boxes.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for all exported table rows.
+    """
     from pandid.render.drawio import _line_box
 
     for stem in SHEETS:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
-        fs.to_svg(**kwargs)
-        for cell, row, _table in _table_cells(_drawio_cells(fs, kwargs)):
+        for cell, row, _table in _table_cells(_gallery_cells(rendered_gallery, stem)):
             box = _line_box(_cell_font(cell))
             height = float(row.find("mxGeometry").get("height"))
             assert box <= height + 0.01, (
@@ -1679,14 +1793,23 @@ def test_no_table_row_is_shorter_than_the_line_box_of_its_own_text(settled_galle
             )
 
 
-def test_no_furniture_text_is_drawn_under_the_frames_own_rule(settled_gallery):
-    """Keep furniture text clear of the page frame."""
+def test_no_furniture_text_is_drawn_under_the_frames_own_rule(rendered_gallery):
+    """Keep furniture text clear of the page frame.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for framed furniture text.
+    """
     from pandid.render.drawio import _line_box
 
     for stem in SHEETS:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
-        fs.to_svg(**kwargs)
-        cells = _drawio_cells(fs, kwargs)
+        cells = _gallery_cells(rendered_gallery, stem)
         frame = cells.get("z-frame")
         if frame is None:  # an unruled sheet has no frame to be drawn under
             continue
@@ -1707,14 +1830,23 @@ def test_no_furniture_text_is_drawn_under_the_frames_own_rule(settled_gallery):
             )
 
 
-def test_a_column_is_measured_in_the_face_its_text_is_drawn_in(settled_gallery):
-    """Measure each column in its rendered font weight."""
+def test_a_column_is_measured_in_the_face_its_text_is_drawn_in(rendered_gallery):
+    """Measure each column in its rendered font weight.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for bold table columns.
+    """
     from pandid.render.furniture import text_width
 
     for stem in SHEETS:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
-        fs.to_svg(**kwargs)
-        for cell, _row, _table in _table_cells(_drawio_cells(fs, kwargs)):
+        for cell, _row, _table in _table_cells(_gallery_cells(rendered_gallery, stem)):
             if _style(cell).get("fontStyle") != "1":
                 continue
             width = float(cell.find("mxGeometry").get("width"))
@@ -2003,8 +2135,21 @@ def _drawio_stream_table(cells):
 _GRID_SLACK = 0.05 + 0.005 + 0.005 + 1e-9
 
 
-def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery):
-    """Match stream-table cells to SVG geometry, style, and text."""
+def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery, rendered_gallery):
+    """Match stream-table cells to SVG geometry, style, and text.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for each gallery stream table.
+    """
     from pandid.render.drawio import _fill
 
     checked = []
@@ -2012,8 +2157,8 @@ def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery):
         fs, kwargs = _gallery_case(settled_gallery, stem)
         if not kwargs.get("show_stream_table"):
             continue
-        drawn = _svg_stream_table(fs.to_svg(**kwargs))
-        table, exported = _drawio_stream_table(_drawio_cells(fs, kwargs))
+        drawn = _svg_stream_table(rendered_gallery[stem].svg)
+        table, exported = _drawio_stream_table(_gallery_cells(rendered_gallery, stem))
         assert len(exported) == len(drawn), (
             f"{stem}: the sheet rules {len(drawn)} cells and the export writes {len(exported)}"
         )
@@ -2044,8 +2189,23 @@ def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery):
     assert checked, "no example in the gallery draws a stream table"
 
 
-def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(settled_gallery):
-    """Match stream-table rules to the rendered grid."""
+def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(
+    settled_gallery, rendered_gallery
+):
+    """Match stream-table rules to the rendered grid.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+
+    Returns
+    -------
+    None
+        Assertion result for stream-table rules and sections.
+    """
     from pandid.render import furniture as F
 
     checked = []
@@ -2053,8 +2213,7 @@ def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(settled
         fs, kwargs = _gallery_case(settled_gallery, stem)
         if not kwargs.get("show_stream_table"):
             continue
-        fs.to_svg(**kwargs)
-        cells = _drawio_cells(fs, kwargs)
+        cells = _gallery_cells(rendered_gallery, stem)
         table, _drawn = _drawio_stream_table(cells)
         style = _style(table)
         assert style.get("rowLines", "1") != "0"
@@ -2392,6 +2551,70 @@ def _gallery_case(settled_gallery, stem):
     return copy_settled_case(settled_gallery, stem)
 
 
+@dataclass(frozen=True)
+class _GalleryArtifacts:
+    """Rendered outputs shared by read-only gallery export checks.
+
+    Parameters
+    ----------
+    svg : str
+        SVG rendered with the gallery's complete option set.
+    drawio : str
+        Draw.io document rendered with its supported option subset.
+    """
+
+    svg: str
+    drawio: str
+
+
+@pytest.fixture(scope="module")
+def rendered_gallery(settled_gallery) -> dict[str, _GalleryArtifacts]:
+    """Render the default export pair once for each settled gallery sheet.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+
+    Returns
+    -------
+    dict[str, _GalleryArtifacts]
+        Immutable SVG and Draw.io text keyed by gallery sheet name.
+
+    Notes
+    -----
+    Consumers parse fresh XML elements and obtain their own model copy. This
+    fixture only owns identical default renderer calls; variant-specific
+    exports remain local to the contract that changes their options.
+    """
+    artifacts = {}
+    for stem in SHEETS:
+        fs, kwargs = _gallery_case(settled_gallery, stem)
+        artifacts[stem] = _GalleryArtifacts(
+            svg=fs.to_svg(**kwargs),
+            drawio=fs.to_drawio(**_drawio_options(kwargs)),
+        )
+    return artifacts
+
+
+def _gallery_cells(rendered_gallery: dict[str, _GalleryArtifacts], stem: str) -> dict:
+    """Parse a fresh Draw.io cell map from a shared gallery artifact.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Cached default gallery renderer outputs.
+    stem : str
+        Gallery example name.
+
+    Returns
+    -------
+    dict[str, ET.Element]
+        Fresh XML cells from the named Draw.io artifact.
+    """
+    return _drawio_cells_from_document(rendered_gallery[stem].drawio)
+
+
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
 def test_every_example_exports_a_document_that_matches_its_sheet(settled_gallery, stem):
     """Match every gallery export to its rendered sheet."""
@@ -2429,7 +2652,7 @@ def test_every_example_exports_a_document_that_matches_its_sheet(settled_gallery
             assert landed == pytest.approx(stream_end(port), abs=0.01)
 
 
-def _drawn_boxes(fs, kwargs) -> tuple[dict, dict, list]:
+def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
     """Read drawn symbol and label boxes from exported XML.
 
     Parameters
@@ -2438,6 +2661,8 @@ def _drawn_boxes(fs, kwargs) -> tuple[dict, dict, list]:
         Sheet to export.
     kwargs : dict
         Gallery rendering options.
+    cells : dict[str, ET.Element]
+        Parsed cells from the corresponding Draw.io document.
 
     Returns
     -------
@@ -2447,7 +2672,6 @@ def _drawn_boxes(fs, kwargs) -> tuple[dict, dict, list]:
     from pandid.render.drawio import _LINE_BOX, _Fit
     from pandid.render.furniture import text_width
 
-    cells = _drawio_cells(fs, kwargs)
     symbols, tags, numbers = {}, {}, []
     for i, u in enumerate(fs.units):
         cell = cells[f"u{i}"]
@@ -2513,11 +2737,27 @@ def _boxes_overlap(a, b) -> bool:
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(settled_gallery, stem):
-    """Keep line-number labels clear of symbols and equipment tags."""
+def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
+    settled_gallery, rendered_gallery, stem
+):
+    """Keep line-number labels clear of symbols and equipment tags.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+    stem : str
+        Parametrized gallery example name.
+
+    Returns
+    -------
+    None
+        Assertion result for the selected gallery sheet.
+    """
     fs, kwargs = _gallery_case(settled_gallery, stem)
-    fs.to_svg(**kwargs)
-    symbols, tags, numbers = _drawn_boxes(fs, kwargs)
+    symbols, tags, numbers = _drawn_boxes(fs, kwargs, _gallery_cells(rendered_gallery, stem))
     drawn = {**symbols, **{f"{k} tag": v for k, v in tags.items()}}
 
     struck = [
@@ -2530,14 +2770,29 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(settled_gal
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, stem):
-    """Connect a displaced line number to its stream with a leader."""
+def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, rendered_gallery, stem):
+    """Connect a displaced line number to its stream with a leader.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+    stem : str
+        Parametrized gallery example name.
+
+    Returns
+    -------
+    None
+        Assertion result for the selected gallery sheet.
+    """
     from test_label_invariants import _labels
 
     fs, kwargs = _gallery_case(settled_gallery, stem)
-    svg = fs.to_svg(**kwargs)
+    svg = rendered_gallery[stem].svg
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
-    cells = _drawio_cells(fs, kwargs)
+    cells = _gallery_cells(rendered_gallery, stem)
 
     drawn = {label.name: label for label in _labels(svg) if label.leader is not None}
     emitted = {cid: cell for cid, cell in cells.items() if cid.endswith("-lead")}
@@ -2590,13 +2845,29 @@ def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(settled_gallery, stem):
-    """Export each symbol at its rendered stroke width."""
+def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
+    settled_gallery, rendered_gallery, stem
+):
+    """Export each symbol at its rendered stroke width.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+    stem : str
+        Parametrized gallery example name.
+
+    Returns
+    -------
+    None
+        Assertion result for the selected gallery sheet.
+    """
 
     fs, kwargs = _gallery_case(settled_gallery, stem)
-    fs.to_svg(**kwargs)
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
-    cells = _drawio_cells(fs, kwargs)
+    cells = _gallery_cells(rendered_gallery, stem)
     seen = 0
     for i, u in enumerate(fs.units):
         sym = default_registry.for_unit(u)
@@ -2620,13 +2891,22 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(settled_gall
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(settled_gallery, stem):
-    """State a stroke width on each visible exported cell."""
-    fs, kwargs = _gallery_case(settled_gallery, stem)
-    fs.to_svg(**kwargs)
-    root = ET.fromstring(
-        fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
-    ).find("diagram/mxGraphModel/root")
+def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(rendered_gallery, stem):
+    """State a stroke width on each visible exported cell.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+    stem : str
+        Parametrized gallery example name.
+
+    Returns
+    -------
+    None
+        Assertion result for the selected gallery document.
+    """
+    root = _drawio_root(rendered_gallery[stem].drawio)
     silent = []
     for cell in root.findall("mxCell"):
         style = _style(cell)
