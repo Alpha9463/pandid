@@ -423,10 +423,9 @@ them by `scripts/gallery.py`, as `docs/gallery/README.md` describes:
 python scripts/gallery.py
 ```
 
-`tests/test_gallery.py` checks the gallery asset inventory, dimensions, and
-generator safeguards. Regenerate and review gallery images when an example or
-rendering change affects them. If you add an example, run that command and
-commit its two files in the same PR, add a section for it to
+Regenerate and review gallery images when an example or rendering change affects
+them. If you add an example, run that command and commit its two files in the
+same PR, add a section for it to
 `docs/gallery/README.md`, and consider adding the scenario to
 `tests/test_golden.py`.
 
