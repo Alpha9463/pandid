@@ -1,48 +1,26 @@
 #!/usr/bin/env python3
-"""Measure whether the routes ``route()`` draws are *good* drawings, not just fast ones.
-
-``route_bench.py`` times ``layout()`` and ``route()``; this asks the question
-speed says nothing about: given the sheet it was handed, did the router draw a
-line a draughtsman would draw?
+"""Measure the quality of the routes ``route()`` draws.
 
     python scripts/route_quality.py                   # every example
-    python scripts/route_quality.py 11_ethanol_pid     # one of them
+    python scripts/route_quality.py 11_ethanol_pid     # one example
     python scripts/route_quality.py --synthetic        # the probe sheets only
-    python scripts/route_quality.py --worst 15         # widen the offender lists
+    python scripts/route_quality.py --worst 15         # longer offender lists
 
-Five things are measured, each against a bound computed from the geometry
-itself rather than a fixed threshold, so a sheet with tighter equipment reads
-no worse than a roomy one for the same quality of routing:
+Each measure is compared with a bound computed from the sheet's own geometry:
 
-- **bends**, against the fewest an orthogonal path leaving the source nozzle
-  along its outward face and arriving at the destination against its can
-  possibly have (:func:`min_bends`) -- zero for two nozzles facing each other
-  down one lane, and never fewer than the geometry allows regardless of what
-  is in the way;
-- **length**, against the Manhattan distance between the two nozzles, which
-  bounds *every* orthogonal path between them, direction and obstacles alike;
-- **crossings** between two different streams' drawn segments, and, for each,
-  whether the *later*-routed stream (the one whose search saw the earlier
-  one's ``edge_penalties``) had a same-or-near-length alternative that misses
-  it -- found by re-running its own search with that one lane barred, so an
-  "avoidable" verdict is never asserted, only demonstrated;
-- **the fallback path**: how many auto-routed streams got the L
-  ``_fallback_path`` draws because ``find_path`` returned nothing, which is
-  issue #355's territory -- see :class:`Recorder`;
-- **the expansion budget** (``pandid/routing/astar.py``'s
-  ``max(50_000, 16 * nodes)``), as a fraction actually spent per search, so a
-  search that nearly ran out reads as different from one that walked away
-  from most of its ceiling.
+- **bends**, against the fewest an orthogonal path between the two nozzle
+  faces can have (:func:`min_bends`);
+- **length**, against the Manhattan distance between the two nozzles;
+- **crossings** between different streams, and whether the later-routed
+  stream had an alternative of similar length, found by repeating its search
+  with the crossed lane barred;
+- **fallback routes**, drawn when no route was found: a search that returned
+  nothing, or a nozzle exit sealed before any search (#355);
+- **expansion budget**, as the fraction each search spent.
 
-Every metric reads the complete drawn stream path after ``route()`` returns --
-the nozzle points and separated route waypoints -- except the
-avoidability re-route, which necessarily replays the pre-separation search
-(see :class:`Recorder`'s docstring for why that is the more honest ground to
-test on, and why it does not change the headline crossing count).
-
-Nothing here changes a route. This is read-only over what ``route()`` already
-decided; the only extra work it does is a handful of *additional* searches,
-each with one lane barred, purely to answer "was there another way".
+Metrics read the complete drawn paths after ``route()`` returns. The
+alternative-route test replays the search before separation. The script
+changes no route; its only extra work is those repeated searches.
 """
 
 from __future__ import annotations
@@ -76,7 +54,7 @@ from pandid.routing.astar import (  # noqa: E402
     MIN_EXPANSION_BUDGET,
     find_path,
 )
-from pandid.routing.visibility import VisibilityGraph  # noqa: E402
+from pandid.routing.visibility import TRAVEL, VisibilityGraph  # noqa: E402
 from pandid.routing.metrics import (  # noqa: E402
     Point,
     crossing_point,
@@ -90,6 +68,18 @@ from pandid.routing.metrics import (  # noqa: E402
 
 @dataclass
 class Crossing:
+    """One crossing between two different streams.
+
+    Attributes
+    ----------
+    h_stream, v_stream : Stream
+        Streams owning the horizontal and vertical segments.
+    h_seg, v_seg : tuple[Point, Point]
+        Endpoints of the two segments.
+    point : Point
+        Where the segments cross.
+    """
+
     h_stream: object
     h_seg: tuple[Point, Point]
     v_stream: object
@@ -99,6 +89,18 @@ class Crossing:
 
 @dataclass
 class Overlap:
+    """One stretch of track shared by two streams.
+
+    Attributes
+    ----------
+    a, b : Stream
+        Streams drawn on the same track.
+    axis : str
+        ``"h"`` or ``"v"``.
+    length : float
+        Shared length in drawing pixels.
+    """
+
     a: object
     b: object
     axis: str
@@ -153,8 +155,7 @@ def find_crossings_and_overlaps(fs: Flowsheet) -> tuple[list[Crossing], list[Ove
 
 
 # ---------------------------------------------------------------------------
-# Instrumented find_path: fallback, budget headroom, and the raw search state
-# an avoidability re-route needs.
+# Record path searches: budget use and the state a repeated search needs.
 # ---------------------------------------------------------------------------
 
 
@@ -180,6 +181,8 @@ class Call:
         Search result before route separation.
     expansions, budget : int
         Search effort and its limit.
+    route_pass : int
+        Router pass that made the search, counted from one.
     """
 
     sheet: Flowsheet
@@ -193,6 +196,7 @@ class Call:
     result: list[Point]
     expansions: int
     budget: int
+    route_pass: int
 
 
 class Recorder:
@@ -214,6 +218,9 @@ class Recorder:
         """
         self.calls: list[Call] = []
         self._active_sheet: Flowsheet | None = None
+        self._active_pass = 0
+        self._passes = 0
+        self._last_pass: dict[int, int] = {}
         self._count = 0
 
     def __enter__(self) -> "Recorder":
@@ -249,12 +256,30 @@ class Recorder:
         None
             Routes are stored on ``fs`` by the original router.
         """
-        previous = self._active_sheet
-        self._active_sheet = fs
+        previous, previous_pass = self._active_sheet, self._active_pass
+        self._passes += 1
+        self._active_sheet, self._active_pass = fs, self._passes
+        self._last_pass[id(fs)] = self._passes
         try:
             self._original_route(router, fs)
         finally:
-            self._active_sheet = previous
+            self._active_sheet, self._active_pass = previous, previous_pass
+
+    def final_pass(self, sheet: Flowsheet) -> list[Call]:
+        """Return the searches of the last router pass over one drawing.
+
+        Parameters
+        ----------
+        sheet : Flowsheet
+            Live or isolated drawing that was routed.
+
+        Returns
+        -------
+        list[Call]
+            Searches in router order; empty when the pass made none.
+        """
+        last = self._last_pass.get(id(sheet))
+        return [call for call in self.calls if call.sheet is sheet and call.route_pass == last]
 
     def _record_path(self, graph, start, goal, start_dir=None, goal_dir=None,
                      edge_penalties=None, is_recycle=False, crossing_index=None):
@@ -294,7 +319,8 @@ class Recorder:
         budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
         self.calls.append(
             Call(self._active_sheet, graph, start, goal, start_dir, goal_dir,
-                 dict(edge_penalties or {}), is_recycle, list(result), self._count, budget)
+                 dict(edge_penalties or {}), is_recycle, list(result), self._count, budget,
+                 self._active_pass)
         )
         return result
 
@@ -381,12 +407,23 @@ def _same_drawing(first: Flowsheet, second: Flowsheet) -> bool:
 
 
 def eligible_streams(fs: Flowsheet, graph: VisibilityGraph) -> list:
-    """Streams ``route()`` will call ``find_path`` for, in the same order.
+    """Return the streams ``route()`` draws automatically, in router order.
 
-    Replicates ``DefaultRouter.route()``'s filter (manual route, missing
-    frame, missing anchor) so the result lines up 1:1 with ``Recorder``'s
-    call log -- checked by the caller, not assumed, since a drift here would
-    silently misattribute every call downstream of it.
+    The filter copies ``DefaultRouter.route()``: manual routes, unplaced
+    units, and ports without an anchor are excluded. Each stream makes at
+    most one ``find_path`` call per pass.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed drawing.
+    graph : VisibilityGraph
+        Graph of the pass being measured.
+
+    Returns
+    -------
+    list[Stream]
+        Streams in flowsheet order.
     """
     out = []
     for stream in fs.streams:
@@ -405,12 +442,100 @@ def eligible_streams(fs: Flowsheet, graph: VisibilityGraph) -> list:
     return out
 
 
+#: Longest stand-off ``escape_distance`` gives a nozzle, in drawing pixels.
+MAX_ESCAPE = 50.0
+
+
+def _on_exit_ray(anchor: Point, direction: Optional[str], node: Point) -> bool:
+    """Check that a search endpoint lies on a nozzle's outward stub.
+
+    Parameters
+    ----------
+    anchor : Point
+        Nozzle anchor on the unit body.
+    direction : str or None
+        Outward face of the nozzle.
+    node : Point
+        Search start or goal.
+
+    Returns
+    -------
+    bool
+        Whether the node is the anchor's escape node at any permitted reach.
+    """
+    travel = TRAVEL.get(direction) if direction is not None else None
+    if travel is None:
+        return node == anchor
+    axis, sign = travel
+    reach = sign * (node[axis] - anchor[axis])
+    return node[1 - axis] == anchor[1 - axis] and 0.0 <= reach <= MAX_ESCAPE
+
+
+def pair_calls(eligible: list, calls: list[Call], name: str) -> dict[int, Call]:
+    """Match one pass's searches to the streams that made them.
+
+    The router draws a stream whose nozzle exit is sealed without searching,
+    so a pass can log fewer calls than it has streams.
+
+    Parameters
+    ----------
+    eligible : list[Stream]
+        Automatically routed streams in router order.
+    calls : list[Call]
+        Searches logged by one router pass, in order.
+    name : str
+        Sheet name used in the failure message.
+
+    Returns
+    -------
+    dict[int, Call]
+        Search keyed by ``id()`` of its stream; streams drawn without a
+        search have no entry.
+    """
+    paired: dict[int, Call] = {}
+    used = 0
+    for stream in eligible:
+        if used == len(calls):
+            break
+        call = calls[used]
+        source = (stream.source.owner.name, stream.source.name)
+        dest = (stream.dest.owner.name, stream.dest.name)
+        anchors, faces = call.graph.port_anchors, call.graph.port_dirs
+        if (_on_exit_ray(anchors[source], faces.get(source), call.start)
+                and _on_exit_ray(anchors[dest], faces.get(dest), call.goal)):
+            paired[id(stream)] = call
+            used += 1
+    assert used == len(calls), (
+        f"{name}: {len(calls) - used} of {len(calls)} searches match no "
+        f"stream of the {len(eligible)} eligible -- eligibility filter "
+        f"drifted from DefaultRouter.route(); re-check eligible_streams() "
+        f"against pandid/routing/__init__.py."
+    )
+    return paired
+
+
 # ---------------------------------------------------------------------------
-# Avoidability: could the later stream have missed this lane for free?
+# Test whether the later stream could have avoided a crossed lane.
 # ---------------------------------------------------------------------------
 
 
 def lane_edges(graph: VisibilityGraph, axis: str, track: float) -> list[tuple[Point, Point]]:
+    """Return the graph edges that lie on one lane.
+
+    Parameters
+    ----------
+    graph : VisibilityGraph
+        Search graph.
+    axis : str
+        ``"h"`` for a horizontal lane, ``"v"`` for a vertical one.
+    track : float
+        Fixed coordinate of the lane.
+
+    Returns
+    -------
+    list[tuple[Point, Point]]
+        Directed edges whose two nodes are on the lane.
+    """
     idx = 1 if axis == "h" else 0
     edges = []
     for u, neighbors in graph.edges.items():
@@ -423,9 +548,22 @@ def lane_edges(graph: VisibilityGraph, axis: str, track: float) -> list[tuple[Po
 
 
 def track_covering(raw_points: list[Point], axis: str, coord: float) -> Optional[float]:
-    """The pre-separation graph lane whose span covers *coord*, read off the
-    raw search path -- an exact ``graph.xs``/``graph.ys`` value, not the
-    (possibly separation-offset) drawn one."""
+    """Return the lane of the raw search path that covers a coordinate.
+
+    Parameters
+    ----------
+    raw_points : list[Point]
+        Search path before separation, including both endpoints.
+    axis : str
+        ``"h"`` or ``"v"``.
+    coord : float
+        Position along the lane.
+
+    Returns
+    -------
+    float or None
+        Fixed coordinate of the covering segment, or ``None`` if none covers it.
+    """
     for p1, p2 in zip(raw_points, raw_points[1:]):
         if axis == "h" and p1[1] == p2[1]:
             lo, hi = sorted((p1[0], p2[0]))
@@ -439,22 +577,28 @@ def track_covering(raw_points: list[Point], axis: str, coord: float) -> Optional
 
 
 def avoidable(call: Call, axis: str, coord: float) -> tuple[Optional[str], Optional[float]]:
-    """Could *call*'s search have missed the lane its crossing segment is
-    on, for the same length or close to it?
+    """Classify the cost of avoiding one crossed lane.
 
-    Bars every graph edge on that lane (on top of the exact
-    ``edge_penalties`` the real search saw) and re-runs the search. That is
-    a strictly harder problem than the real one, so a path found this way is
-    never better than the real one for a reason unrelated to the ban --
-    only worse or equal, which is what "cost of avoiding it" means.
+    The search is repeated with every edge on that lane barred, on top of
+    the penalties the original search saw.
 
-    Returns ``(None, None)`` when there is nothing to compare (the call
-    itself found no path, or the crossing point cannot be matched back to
-    one of its own segments -- both defensive, neither expected to fire on
-    the corpus); otherwise one of ``"avoidable"`` (an alternative within 2%
-    of the original length exists), ``"costly"`` (one exists but is
-    longer), or ``"forced"`` (no alternative at all), with the length
-    difference in px.
+    Parameters
+    ----------
+    call : Call
+        Search made by the later-routed stream.
+    axis : str
+        Axis of that stream's crossing segment.
+    coord : float
+        Position of the crossing along the segment.
+
+    Returns
+    -------
+    tuple[str or None, float or None]
+        ``"avoidable"`` when an alternative within 2 % of the original
+        length exists, ``"costly"`` when a longer one exists, or
+        ``"forced"`` when none exists, with the added length in pixels.
+        ``(None, None)`` when the call found no path or the crossing
+        matches none of its segments.
     """
     if not call.result:
         return None, None
@@ -477,12 +621,32 @@ def avoidable(call: Call, axis: str, coord: float) -> tuple[Optional[str], Optio
 
 
 # ---------------------------------------------------------------------------
-# One sheet, fully measured
+# Measure one sheet.
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class StreamRow:
+    """Route measurements for one drawn stream.
+
+    Attributes
+    ----------
+    sheet, name : str
+        Sheet and stream names.
+    actual_bends : int
+        Direction changes on the drawn path.
+    min_bends : int or None
+        Fewest bends the two nozzle faces allow.
+    length : float
+        Drawn path length in pixels.
+    manhattan : float or None
+        Manhattan distance between the two nozzles.
+    is_fallback : bool
+        Whether the router drew the fallback route.
+    is_manual : bool
+        Whether the author supplied the waypoints.
+    """
+
     sheet: str
     name: str
     actual_bends: int
@@ -495,6 +659,36 @@ class StreamRow:
 
 @dataclass
 class SheetReport:
+    """Route measurements for one sheet.
+
+    Attributes
+    ----------
+    sheet : str
+        Sheet name.
+    units, streams, nodes : int
+        Counts of units, streams, and visibility-graph nodes.
+    routed : int
+        Streams with a drawn path.
+    undrawn : list[str]
+        One message per stream left without a route.
+    fallback : int
+        Automatically routed streams drawn by the fallback.
+    auto_routed : int
+        Streams the router draws automatically.
+    budget_ratios : list[float]
+        Fraction of the expansion budget each final-pass search spent.
+    rows : list[StreamRow]
+        Per-stream measurements.
+    crossings : list[Crossing]
+        Crossings between different streams.
+    overlaps : list[Overlap]
+        Shared tracks between different streams.
+    self_crossings : int
+        Crossings of a stream with itself.
+    verdicts : list[tuple[str, float or None]]
+        Verdict and added length for each crossing tested for an alternative.
+    """
+
     sheet: str
     units: int
     streams: int
@@ -508,7 +702,7 @@ class SheetReport:
     crossings: list[Crossing]
     overlaps: list[Overlap]
     self_crossings: int
-    verdicts: list[tuple[str, Optional[float]]]  # (verdict, extra px) per testable crossing
+    verdicts: list[tuple[str, Optional[float]]]
 
 
 def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
@@ -536,22 +730,10 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
     # Rejected isolated trials leave no trace in the measured route graph.
     owner = next((call.sheet for call in reversed(rec.calls)
                   if _same_drawing(call.sheet, fs)), fs)
-    calls = [call for call in rec.calls if call.sheet is owner]
-    graph = calls[-1].graph if calls else VisibilityGraph(fs, margin=15.0)
+    final_pass = rec.final_pass(owner)
+    graph = final_pass[-1].graph if final_pass else VisibilityGraph(fs, margin=15.0)
     eligible = eligible_streams(fs, graph)
-    n = len(eligible)
-    if n == 0:
-        assert not calls, f"{name}: no eligible streams but {len(calls)} calls logged"
-        final_pass: list[Call] = []
-    else:
-        assert len(calls) % n == 0, (
-            f"{name}: {len(calls)} calls is not a whole number of "
-            f"{n}-stream passes -- eligibility filter drifted from "
-            f"DefaultRouter.route(); re-check eligible_streams() against "
-            f"pandid/routing/__init__.py."
-        )
-        final_pass = calls[-n:]
-    stream_call = dict(zip((id(s) for s in eligible), final_pass))
+    stream_call = pair_calls(eligible, final_pass, name)
 
     undrawn = [f"stream {stream.name!r} is left unrouted"
                for stream in fs.streams
@@ -570,7 +752,6 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
         b = port_point(dst_u, dst_u.frame, s.dest.name)
         dir_a = graph.port_dirs.get((src_u.name, s.source.name))
         dir_b = graph.port_dirs.get((dst_u.name, s.dest.name))
-        call = stream_call.get(id(s))
         rows.append(StreamRow(
             sheet=name,
             name=s.name,
@@ -578,7 +759,7 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
             min_bends=min_bends(a, dir_a, b, dir_b) if a and b else None,
             length=path_length(wp),
             manhattan=(abs(b[0] - a[0]) + abs(b[1] - a[1])) if a and b else None,
-            is_fallback=bool(call and not call.result),
+            is_fallback=bool(not s.route.manual and s.route.used_fallback),
             is_manual=bool(s.route.manual),
         ))
 
@@ -599,10 +780,10 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
         if verdict is not None:
             verdicts.append((verdict, extra))
 
-    # Fallback and budget both read the final pass only, for the same reason
-    # the call-to-stream matching above does: an earlier pass's search is not
-    # what is on the sheet. ``len(rec.calls)`` includes trial searches too.
-    fallback = sum(1 for c in final_pass if not c.result)
+    # Read budget use from the final pass only; earlier passes and trials are
+    # not drawn. Count fallbacks from the published routes, which include a
+    # stream drawn without a search.
+    fallback = sum(1 for s in eligible if s.route is not None and s.route.used_fallback)
     return SheetReport(
         sheet=name,
         units=len(fs.units),
@@ -611,7 +792,7 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
         routed=len(rows),
         undrawn=undrawn,
         fallback=fallback,
-        auto_routed=len(final_pass),
+        auto_routed=len(eligible),
         budget_ratios=[c.expansions / c.budget for c in final_pass],
         rows=rows,
         crossings=crossings,
@@ -622,30 +803,48 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
 
 
 def measure_stem(stem: str) -> SheetReport:
+    """Measure one shipped example.
+
+    Parameters
+    ----------
+    stem : str
+        Example filename stem.
+
+    Returns
+    -------
+    SheetReport
+        Measurements of the routed example.
+    """
     with contextlib.redirect_stdout(io.StringIO()):
         fs, _kwargs = gallery.flowsheet(stem)
     return measure_sheet(fs, stem)
 
 
 # ---------------------------------------------------------------------------
-# Synthetic probes: controlled two-unit geometries, both to sanity-check
-# min_bends against a hand-verifiable answer and to demonstrate #355's
-# sealed-projection failure mode in isolation.
+# Build probe sheets with known bend counts, a sealed projection (#355), and
+# forced crossings.
 # ---------------------------------------------------------------------------
 
 
 def _facing_pair(bx: float, perp_offset: float, mirror_b: bool = False) -> Flowsheet:
-    """A's discharge to B's suction, B's suction placed *perp_offset* px off
-    A's discharge on the perpendicular axis (0 keeps the two nozzles level).
+    """Build two pumps joined discharge to suction.
 
-    B's suction is placed *by the nozzle*, via ``pin(port="suction", ...)``,
-    rather than by guessing the box corner that would put it there: the
-    two ports sit at different offsets within a pump's own artwork (10px
-    and 30px down from the top, at this writing, and this helper does not
-    hardcode either), so pinning the boxes level does not put the *ports*
-    level. Reading A's actual discharge anchor and asking B for the same y
-    on its suction is what a caller who wants that would do, and it stays
-    correct however the artwork is redrawn.
+    B is pinned by its suction nozzle, because the two ports sit at
+    different heights within the pump symbol.
+
+    Parameters
+    ----------
+    bx : float
+        X coordinate of B's suction.
+    perp_offset : float
+        Vertical offset of B's suction from A's discharge; 0 keeps them level.
+    mirror_b : bool, optional
+        Mirror B so its suction faces east.
+
+    Returns
+    -------
+    Flowsheet
+        Unrouted two-pump sheet.
     """
     from pandid.portgeom import port_anchor
 
@@ -660,41 +859,36 @@ def _facing_pair(bx: float, perp_offset: float, mirror_b: bool = False) -> Flows
 
 
 def synthetic_sheets() -> list[tuple[str, Flowsheet]]:
+    """Build the probe sheets.
+
+    Returns
+    -------
+    list[tuple[str, Flowsheet]]
+        Name and unrouted sheet for each probe.
+    """
     sheets = []
 
-    # Facing, level: A's discharge (E) meets B's suction (W) on the same row.
-    # min_bends must read 0, and a good router should draw a straight line.
+    # Face the nozzles on one row: minimum 0 bends.
     sheets.append(("facing_level", _facing_pair(300, 0)))
 
-    # Facing, offset: same directions, B's suction dropped 150px -- min_bends reads 2.
+    # Face the nozzles with B 150 px lower: minimum 2 bends.
     sheets.append(("facing_offset", _facing_pair(300, 150)))
 
-    # Facing, but B is *behind* A along the direction A leaves in (B's box
-    # sits west of A, though the two still face each other) -- min_bends
-    # reads 4, the one case that needs a full turn-around.
+    # Put B behind A's outward direction: minimum 4 bends.
     sheets.append(("facing_behind", _facing_pair(-300, 150)))
 
-    # Same-side: mirroring B puts its suction on the east face too, so both
-    # nozzles face the same compass direction. min_bends reads 2.
+    # Mirror B so both nozzles face east: minimum 2 bends.
     sheets.append(("same_side", _facing_pair(300, 150, mirror_b=True)))
 
-    # Perpendicular: rotate B a quarter turn so its suction faces north
-    # instead of west. min_bends reads 1 when B sits ahead on both axes.
+    # Rotate B so its suction faces north: minimum 1 bend.
     fs = Flowsheet("probe")
     a = fs.add(Pump("A")).pin(x=0, y=0)
     b = fs.add(Pump("B")).pin(x=300, y=200, orientation=90)
     fs.connect(a.discharge, b.suction)
     sheets.append(("perpendicular", fs))
 
-    # https://github.com/Alpha9463/pandid/issues/355: an instrument balloon
-    # placed close enough to a feed's own outlet that the feed's escape node
-    # lands strictly inside the balloon's own obstacle box. find_path is
-    # handed a start node the graph does not carry and returns nothing; the
-    # stream is drawn by _fallback_path instead, which validate() then
-    # reports as route-crosses-unit. Still open, measured here rather than
-    # fixed: this reproduction crosses zero units from the shipped corpus,
-    # and the one real consequence (S1 crosses FCI-1) is already a warning a
-    # caller sees, not a silent miss.
+    # Place a balloon over the feed's nominal escape node (#355). The router
+    # shortens the stub and routes around the balloon.
     fs = Flowsheet("probe-355")
     f = fs.add(Feed("F")).pin(x=60, y=100)
     p = fs.add(Product("P")).pin(x=400, y=100)
@@ -702,9 +896,7 @@ def synthetic_sheets() -> list[tuple[str, Flowsheet]]:
     fs.add_instrument("FCI", 1, near=f)
     sheets.append(("sealed_projection_355", fs))
 
-    # Crossing stress: three parallel forward streams and one that must jog
-    # across all of them to reach a valve tapped off the far side, to give
-    # the crossing/avoidability analysis something to measure.
+    # Run one stream across three parallel streams to force crossings.
     fs = Flowsheet("probe-cross")
     for i in range(3):
         src = fs.add(Feed(f"F{i}")).pin(x=0, y=i * 60)
@@ -721,19 +913,52 @@ def synthetic_sheets() -> list[tuple[str, Flowsheet]]:
 
 
 # ---------------------------------------------------------------------------
-# Aggregation and reporting
+# Aggregate and report.
 # ---------------------------------------------------------------------------
 
 
 def _pct(n: int, d: int) -> str:
+    """Format a ratio as a whole percentage.
+
+    Parameters
+    ----------
+    n, d : int
+        Numerator and denominator.
+
+    Returns
+    -------
+    str
+        Percentage, or ``"n/a"`` for a zero denominator.
+    """
     return f"{100 * n / d:.0f}%" if d else "n/a"
 
 
 def _fmt(x: Optional[float], nd: int = 2) -> str:
+    """Format an optional number to fixed decimals.
+
+    Parameters
+    ----------
+    x : float or None
+        Value to format.
+    nd : int, optional
+        Decimal places.
+
+    Returns
+    -------
+    str
+        Formatted value, or ``"n/a"`` for ``None``.
+    """
     return f"{x:.{nd}f}" if x is not None else "n/a"
 
 
 def print_sheet_table(reports: list[SheetReport]) -> None:
+    """Print one row of route measurements per sheet.
+
+    Parameters
+    ----------
+    reports : list[SheetReport]
+        Measured sheets.
+    """
     header = (
         f"{'sheet':<24}{'units':>6}{'strm':>6}{'routed':>7}{'undrwn':>7}{'fbck':>6}"
         f"{'bnd~0':>7}{'bnd+avg':>8}{'bnd+max':>8}{'len avg':>9}{'len max':>9}"
@@ -742,11 +967,8 @@ def print_sheet_table(reports: list[SheetReport]) -> None:
     print(header)
     print("-" * len(header))
     for r in reports:
-        # Manual (.via()) routes are excluded: they are the author's own
-        # choice, not the router's, and the stub-direction contract
-        # min_bends and the Manhattan bound both rest on -- first segment
-        # along the source's outward face, last along the destination's --
-        # is the router's, not one a hand-written waypoint list has to keep.
+        # Exclude manual routes: the bend and length bounds assume the
+        # router's outward nozzle stubs.
         with_min = [(row, row.min_bends) for row in r.rows if row.min_bends is not None and not row.is_manual]
         excess = [row.actual_bends - mb for row, mb in with_min]
         optimal = sum(1 for e in excess if e == 0)
@@ -766,6 +988,13 @@ def print_sheet_table(reports: list[SheetReport]) -> None:
 
 
 def print_crossing_summary(reports: list[SheetReport]) -> None:
+    """Print crossing totals and alternative-route verdicts.
+
+    Parameters
+    ----------
+    reports : list[SheetReport]
+        Measured sheets.
+    """
     total = sum(len(r.crossings) for r in reports)
     verdicts: dict[str, int] = {}
     extra_costly = []
@@ -786,6 +1015,15 @@ def print_crossing_summary(reports: list[SheetReport]) -> None:
 
 
 def print_worst(reports: list[SheetReport], n: int) -> None:
+    """Print the worst streams by excess bends and length, then fallbacks.
+
+    Parameters
+    ----------
+    reports : list[SheetReport]
+        Measured sheets.
+    n : int
+        Streams listed per category.
+    """
     all_rows = [row for r in reports for row in r.rows]
     with_min = [(row, row.min_bends) for row in all_rows if row.min_bends is not None and not row.is_manual]
     print(f"\nworst {n} by excess bends (actual - geometric minimum):")
@@ -807,6 +1045,13 @@ def print_worst(reports: list[SheetReport], n: int) -> None:
 
 
 def print_undrawn(reports: list[SheetReport]) -> None:
+    """Print the streams left without a route.
+
+    Parameters
+    ----------
+    reports : list[SheetReport]
+        Measured sheets.
+    """
     undrawn = [(r.sheet, msg) for r in reports for msg in r.undrawn]
     if not undrawn:
         return
@@ -816,6 +1061,13 @@ def print_undrawn(reports: list[SheetReport]) -> None:
 
 
 def main() -> None:
+    """Parse the command line, measure the sheets, and print the report.
+
+    Raises
+    ------
+    SystemExit
+        If a named example does not exist.
+    """
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("sheet", nargs="*", help="example stems; default is all of them")
     ap.add_argument("--synthetic", action="store_true", help="run only the synthetic probe sheets")
