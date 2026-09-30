@@ -1,8 +1,6 @@
 name: Release
 
-# Publishing is driven by the tag, not by a branch: pushing `v0.1.0` cuts the
-# release. The tag must name the version in pandid/__init__.py — the build job
-# below refuses to go on if it does not.
+# A version tag starts a release.
 on:
   push:
     tags: ["v*"]
@@ -11,8 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  # Re-run the full CI matrix against the tagged commit: a tag can point at a
-  # commit that never went through a pull request.
+  # Run reusable CI against the tagged commit.
   gates:
     name: Gates
     uses: ./.github/workflows/ci.yml
@@ -22,8 +19,8 @@ jobs:
     needs: [gates]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Tag must match pandid.__version__
@@ -41,10 +38,6 @@ jobs:
           python -m build
       - name: Check the metadata PyPI will render
         run: twine check --strict dist/*
-      # The purchased BSI/ISO standards may not be redistributed and PyPI has no
-      # undo, so the last thing before the upload job is a look inside what it
-      # would upload. pyproject.toml excludes them and tests/test_packaging.py
-      # builds an sdist to prove it; this is the check on the actual artifacts.
       - name: No artifact may carry a PDF
         run: |
           python - <<'PY'
@@ -73,13 +66,11 @@ jobs:
     name: Publish to PyPI
     needs: [build]
     runs-on: ubuntu-latest
-    # Named environment so the repository owner can require a manual approval,
-    # and so the PyPI trusted publisher can be scoped to it, before any upload.
     environment:
       name: pypi
       url: https://pypi.org/p/pandid
     permissions:
-      id-token: write   # mint the OIDC token PyPI trusted publishing exchanges
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:

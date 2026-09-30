@@ -5,7 +5,7 @@ four things about this codebase a new contributor will otherwise get wrong.
 
 ## Setup
 
-Python 3.10+ (CI tests 3.10 – 3.14). From a checkout:
+Python 3.11 or later. From a checkout:
 
 ```bash
 pip install -e '.[dev]'          # pytest, ruff, mypy
@@ -36,12 +36,15 @@ pip install pre-commit && pre-commit install
 CI (`.github/workflows/ci.yml`) runs these checks:
 
 ```bash
-python -m pytest -q                 # tests (CI: pytest -q on 3.10/3.11/3.12/3.13/3.14)
+python -m pytest -q                 # tests (full-suite CI: Python 3.11 and 3.14)
 python -m ruff check .              # lint the whole tree
 python -m ruff format --check tests # tests/ must stay ruff-formatted
 python -m mypy pandid               # type check the package
 python -m pyright pandid            # second type check of the package
 ```
+
+CI also installs `.[dev,pdf]` from binary wheels and runs public render and CLI
+smoke checks on Python 3.12 and 3.13.
 
 `ruff format` is enforced on `tests/` only. The rest of the tree is linted but
 not auto-formatted, so don't reformat `pandid/` in a feature PR.

@@ -197,8 +197,8 @@ def _own_annotations(cls):
     """The annotations written in ``cls``'s own body, resolved.
 
     ``inspect.get_annotations`` and not ``cls.__dict__["__annotations__"]``,
-    because where a class keeps them is a 3.10-through-3.14 difference and this
-    package supports all five: PEP 649 made them lazy in 3.14, so the dict holds
+    because where a class keeps them differs across supported Python versions:
+    PEP 649 made them lazy in 3.14, so the dict holds
     an ``__annotate_func__`` until something asks. This asks. It is also the one
     reader that answers for a single class rather than for the whole MRO, which
     is the distinction the exemption above turns on.
