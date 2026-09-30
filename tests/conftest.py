@@ -2,27 +2,48 @@
 
 import pytest
 
-from pandid import units as U
+from pandid import Flowsheet, units as U
+
+from _render_cases import gallery
+
+
+@pytest.fixture(scope="session")
+def settled_gallery() -> dict[str, tuple[Flowsheet, dict]]:
+    """Build every gallery flowsheet and settle its geometry once per test run.
+
+    Returns
+    -------
+    dict
+        Routed flowsheets and render options keyed by gallery example name.
+
+    Notes
+    -----
+    Consumers copy a case before rendering or mutating it. The fixture owns
+    cold layout and routing; each test owns its output and mutations.
+    """
+    cases = {}
+    for stem in gallery.sheets():
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.layout()
+        fs.route()
+        cases[stem] = fs, kwargs
+    return cases
 
 
 @pytest.fixture
 def gapped_kind():
-    """A unit kind whose symbol forgets two of the unit's ports.
+    """Provide a unit type with two unanchored ports.
 
-    No shipped symbol has this gap: every port a built-in unit declares is
-    either anchored or placed by a :class:`~pandid.render.symbols.PortSeries`. The
-    centre-of-the-box fallback is still reachable, though: it is what any
-    symbol registered from outside this package gets when it anchors fewer
-    ports than its unit declares. Tests covering that fallback build their own
-    specimen here rather than leaning on a gap in the shipped registry, which
-    would leave them silently exercising nothing once it was closed.
-
-    ``spare_a`` and ``spare_b`` are the unanchored pair; ``inlet``/``outlet``
-    are anchored, so a test can tell the two cases apart on one unit.
+    Yields
+    ------
+    type[U.Unit]
+        Test-only unit class with anchored inlet/outlet and unanchored spares.
     """
     from pandid.render.symbols import Symbol, default_registry
 
     class Gapped(U.Unit):
+        """Test unit that exercises fallback placement for unanchored ports."""
+
         kind = "gapped_test_unit"
         PORTS = [
             ("inlet", "inlet", "process"),

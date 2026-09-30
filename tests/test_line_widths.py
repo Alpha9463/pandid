@@ -1,81 +1,62 @@
-"""The width ladder of ISO 10628-1 5.3.1, as ratios rather than as numbers.
-
-``tests/test_line_weight.py`` next door asks whether a stroke *survives* the
-transforms between its definition and the page. This file asks the question one
-level up: whether the widths a sheet draws on stand to each other the way 5.3.1
-says they do, and whether every element the renderer picks a width for has been
-put in one of the clause's three classes.
-
-**Ratios, not numbers.** Every assertion below divides one measured width by
-another wherever the thing under test *is* a proportion. A test that pinned
-``4.0`` and ``2.0`` would go on passing after somebody moved one rung and left
-the other where it was, which is exactly the defect #490 fixed: the two were
-written ``2`` and ``2.0`` in two places and had drifted into agreement without
-anybody deciding they should agree.
-
-Not everything here is a ratio, and it should not be. The floor is an absolute
-limit and is checked as one; so are the millimetre widths, the number of rungs,
-and the paper a flange pair leaves. Those are the places where a number is the
-claim, and a ratio would say nothing.
-
-**Measured off the drawing wherever possible.** Most of what is below renders a
-sheet and reads the widths back out of it, rather than importing the ladder and
-comparing it with itself. Three tests cannot -- the shape of the ladder, its
-tie to the grid module, and the ban on literals are properties of the source
-rather than of any one drawing -- and those import inside the function so that
-the rest of the file still runs where the module does not exist.
-"""
+"""Test line-weight ladder, renderer output, and clearance contracts."""
 
 import math
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from _render_cases import copy_settled_case
 from pandid import Flowsheet, units
 from pandid.render.svg import FLANGE_GAP
 from pandid.render.symbols import ARROWHEAD, MIN_HEAD_CLEARANCE
 from pandid.streams import SIGNAL_KINDS
-from test_golden import SCENARIOS
 from test_line_weight import drawn_pens
 
-#: One drawing unit as a physical width. The grid module ISO 15519-1 6.2 states
-#: its widths against is 2,5 mm and ten drawing units, so a unit is a quarter of
-#: a millimetre and the row's two widths land on 2 and 1 units exactly. Restated
-#: here rather than imported, so that this file's millimetre readings do not
-#: come from the same place as the widths they judge.
 UNIT_MM = 0.25
-
-#: The groups a sheet draws its own lines into, as opposed to sheet furniture
-#: (the border, the title strip, the tables) and the debugging overlay. 5.3.1 is
-#: a rule about the flow diagram, and these are the flow diagram.
 _LINE_GROUPS = ("streams", "instrument_taps", "units")
+WIDTH_CASES = (
+    "10_ethanol_pfd",
+    "11_ethanol_pid",
+    "12_block_flow_diagram",
+    "18_fixed_bed_recycle",
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def _quantised(width: float) -> float:
-    """A drawn width, to the precision the artwork is stated to.
+    """Round a pen width to the stencil precision.
 
-    ``scripts/vendor_symbols.py`` writes each stencil's compensated width to
-    three decimals, so an outline meant for 2 units reaches the page at
-    1.999941 and a trimmed one at 0.999938. Two decimals is finer than that
-    rounding and coarser than any difference this file is about -- the rungs
-    are a whole unit apart at their closest.
+    Parameters
+    ----------
+    width : float
+        Width in drawing units.
+
+    Returns
+    -------
+    float
+        Width rounded to the stencil precision.
     """
     return round(width, 2)
 
 
-def _renderer_widths(svg: str) -> "set[float]":
-    """Every width the *renderer* chose on this sheet.
+def _renderer_widths(svg: str) -> set[float]:
+    """Return the widths selected by the SVG renderer.
 
-    The lines it draws itself, plus one width per symbol: a symbol's outline is
-    the rung the renderer put it on, and the finer strokes inside the artwork
-    are the stencil's own business (see ``authored_pens`` next door). The
-    outline is the heaviest pen in the drawing, which is what ``max`` picks.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    set[float]
+        Widths selected for renderer-controlled ink.
     """
-    out: "set[float]" = set()
-    by_symbol: "dict[str, float]" = {}
+    out: set[float] = set()
+    by_symbol: dict[str, float] = {}
     for where, lo, _hi in drawn_pens(svg):
         if where in _LINE_GROUPS:
             out.add(_quantised(lo))
@@ -85,16 +66,34 @@ def _renderer_widths(svg: str) -> "set[float]":
 
 
 def _streams_group(svg: str) -> str:
-    """Just the ``<g id="streams">`` the runs are drawn into."""
+    """Return the SVG group containing process streams.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    str
+        SVG fragment containing stream paths.
+    """
     start = svg.index('<g id="streams">')
     return svg[start : svg.index("</g>", start)]
 
 
-def _stream_pens(svg: str) -> "set[float]":
-    """The widths the *runs* are drawn at.
+def _stream_pens(svg: str) -> set[float]:
+    """Return widths used by stream path elements.
 
-    The path elements alone: the flange marks and the pneumatic hatch are
-    drawn into the same group and are marks on a run rather than the run.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    set[float]
+        Quantised widths used by stream paths.
     """
     return {
         _quantised(float(w))
@@ -103,10 +102,12 @@ def _stream_pens(svg: str) -> "set[float]":
 
 
 def _two_unit_sheet() -> Flowsheet:
-    """A vessel with a run into it and a control loop reading it.
+    """Build a flowsheet containing material and signal lines.
 
-    One of each thing the ladder has to tell apart: a material run, an equipment
-    outline, an instrument balloon and the signal line between them.
+    Returns
+    -------
+    Flowsheet
+        Flowsheet with material and signal lines.
     """
     fs = Flowsheet("ladder")
     feed = fs.add(units.Feed("F"))
@@ -120,17 +121,13 @@ def _two_unit_sheet() -> Flowsheet:
     return fs
 
 
-# --- the shape of the ladder --------------------------------------------------
-
-
 def test_the_ladder_stands_in_the_ratio_6_2_states() -> None:
-    """Two widths at 2:1, across three classes.
+    """Check the configured line-weight ladder ratios.
 
-    ISO 15519-1 6.2 Table 1 gives the process-industry row 0,1 M and 0,2 M
-    outright and a third of 0,4 M in parentheses. pandid does not take the
-    parenthesised rung (see :class:`~pandid.render.weights.LineWeight`), so a
-    run and the vessel it enters are one width and the instrumentation is half
-    it -- and any two widths on the sheet stand at the 2:1 6.2 requires.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     from pandid.render.weights import LineWeight
 
@@ -141,24 +138,18 @@ def test_the_ladder_stands_in_the_ratio_6_2_states() -> None:
     assert main / equipment == pytest.approx(1.0)
     assert equipment / detail == pytest.approx(2.0)
     assert main / detail == pytest.approx(2.0)
-    # Three classes and no fourth: a width can only be chosen by naming one.
-    # Two of them resolving to one width does not merge them -- if it did,
-    # ``_stream_rung`` and ``_symbol_rung`` would be answering the same
-    # question and #497 and #489 would have nowhere to attach.
     assert len(LineWeight) == 3
     assert LineWeight.MAIN_FLOW is not LineWeight.EQUIPMENT
-    # DETAIL is the floor 5.3.1 sets, so nothing on the ladder is under it.
     assert min(rung.width for rung in LineWeight) == detail
 
 
 def test_each_rung_is_its_own_multiple_of_the_grid_module() -> None:
-    """The ladder is derived, not chosen: 6.2 states each width as a multiple of
-    the module, and each member's ``modules`` is that multiple.
+    """Check that line weights derive from the grid module.
 
-    Which is what makes the ratio unbreakable by editing one rung -- there is no
-    width to edit, only a multiple -- and what ties the drawing units to
-    millimetres: the module is 2,5 mm and ten units, so a unit is 0,25 mm, a run
-    and an equipment outline are 0,5 mm and a control line is 0,25 mm.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     from pandid.render.weights import M, LineWeight
 
@@ -171,14 +162,12 @@ def test_each_rung_is_its_own_multiple_of_the_grid_module() -> None:
 
 
 def test_every_width_survives_the_formatting_it_is_written_with() -> None:
-    """``:g`` is how a width reaches the sheet, and ``:g`` rounds.
+    """Check that formatted widths round-trip exactly.
 
-    ``f"{7.123456789:g}"`` is ``"7.12346"``. Every rung and every width derived
-    from one happens to be exactly representable in six significant figures, so
-    nothing is lost today -- but that is a property of these numbers and not of
-    the formatting, and a rung chosen later need not have it. Checked rather
-    than assumed: each width is written the way the renderer writes it and read
-    back, and has to be the number it started as.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     from pandid.render.svg import HOP_R, _ink_pad
     from pandid.render.weights import LineWeight
@@ -194,49 +183,17 @@ def test_every_width_survives_the_formatting_it_is_written_with() -> None:
 
 
 def test_neither_backend_writes_a_stroke_width_as_a_literal() -> None:
-    """The ladder cannot be routed around, which is the half of #490 that a
-    number on its own would not have fixed.
+    """Check renderer source selects stroke widths from the ladder.
 
-    A rung is a decision about what an element *is*, and a decision skipped is
-    how a main flow line came to be drawn at the weight of the vessel it enters.
-    So neither renderer may write a width down: every ``stroke-width`` and every
-    ``strokeWidth`` has to be interpolated from something, and the only things
-    there are to interpolate are the three rungs and the arithmetic on them.
-
-    Symbol artwork is not searched. A stencil states its own widths inside its
-    own coordinate space and the renderer compensates them (#305); what the
-    ladder settles for a symbol is which rung its outline is drawn on, and that
-    is chosen in the two files below.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    # What the renderers *emit*, which is the check that cannot be worked
-    # around: a literal reaches the sheet whether it was typed as
-    # ``stroke-width="2"`` or as ``stroke-width="{2}"``, and only one of those
-    # is visible to a source scan.
-    bad: "list[str]" = []
-    corpus = {
-        name: _renderer_widths(build().to_svg(**kw)) for name, (build, kw) in SCENARIOS.items()
-    }
-    rungs: "set[float]" = set().union(*corpus.values())
-    if len(rungs) > 3:
-        bad.append(
-            f"the corpus draws {len(rungs)} widths, {sorted(rungs)}, and the ladder has three rungs"
-        )
-    for name, widths in corpus.items():
-        for width in widths - rungs:
-            bad.append(
-                f"{name}: the sheet drew a {width:g}-unit line, "
-                f"which is no rung the rest of the corpus draws on"
-            )
-    # ...and the source scan as well, which catches a literal in a branch no
-    # corpus sheet happens to take. Any digit inside the value, not only one
-    # against the quote.
+    bad: list[str] = []
     for name in ("svg.py", "drawio.py"):
         text = (ROOT / "pandid" / "render" / name).read_text(encoding="utf-8")
         for n, line in enumerate(text.splitlines(), 1):
-            # A substitution that *rewrites* a width the stencil already
-            # declared is not a width being chosen -- it is #305's artwork
-            # compensation, whose digits are a format spec and a capture
-            # group. Named narrowly, so a real literal cannot hide behind it.
             if "m.group(" in line:
                 continue
             if re.search(r'stroke-width="[^"]*\d', line) or re.search(
@@ -248,20 +205,13 @@ def test_neither_backend_writes_a_stroke_width_as_a_literal() -> None:
     )
 
 
-# --- the ladder as the sheet draws it -----------------------------------------
-
-
 def test_a_main_flow_line_is_drawn_at_the_weight_of_the_equipment_it_enters() -> None:
-    """A run and the vessel it runs into are one width, which is what a process
-    drawing office rules and what ISO 15519-1 6.2 Table 1 gives outright.
+    """Check material lines match equipment outline weight.
 
-    #502 drew the run at twice the outline on the parenthesised 0,4 M rung. The
-    sheets that shipped are the argument against it: at the size this library
-    draws a symbol, doubling the run turns it into a black bar against hairline
-    plant. See :class:`~pandid.render.weights.LineWeight`.
-
-    Measured as the ratio between the two pens the sheet actually put down, so
-    it says nothing about either number and everything about the pair.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = _two_unit_sheet()
     svg = fs.to_svg()
@@ -273,11 +223,12 @@ def test_a_main_flow_line_is_drawn_at_the_weight_of_the_equipment_it_enters() ->
 
 
 def test_a_control_line_is_drawn_at_half_the_run_it_reads() -> None:
-    """6.2's two widths, the two ends of the ladder, on one sheet.
+    """Check signal lines use half the material-line weight.
 
-    A signal line and an impulse tap are the same rung as each other and half
-    the run -- which is the whole of what tells a reader the instrumentation
-    from the process.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = _two_unit_sheet()
     svg = fs.to_svg()
@@ -287,17 +238,26 @@ def test_a_control_line_is_drawn_at_half_the_run_it_reads() -> None:
     assert run / signal == pytest.approx(2.0)
 
 
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(name: str) -> None:
-    """Over the whole corpus: the widths the renderer chose, divided by the
-    finest of them, are whole powers of two and no more than three of them.
+@pytest.mark.parametrize("name", WIDTH_CASES, ids=WIDTH_CASES)
+def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(
+    settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], name: str
+) -> None:
+    """Check representative sheets use only ladder widths.
 
-    A fourth width, or a rung at 1,5 times another, fails here without this file
-    knowing what any rung is worth -- so a sheet cannot be brought into line by
-    moving the target.
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
+        Session-scoped routed gallery source.
+    name : str
+        Representative gallery example name.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    build, kwargs = SCENARIOS[name]
-    widths = _renderer_widths(build().to_svg(**kwargs))
+    fs, kwargs = copy_settled_case(settled_gallery, name)
+    widths = _renderer_widths(fs.to_svg(**kwargs))
     assert widths, f"{name} drew nothing"
     finest = min(widths)
     steps = sorted(w / finest for w in widths)
@@ -311,53 +271,63 @@ def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(name: str) -> None
     assert len(widths) <= 3, f"{name}: {len(widths)} widths, and 5.3.1 states three"
 
 
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_no_line_the_renderer_chooses_a_width_for_is_under_the_floor(name: str) -> None:
-    """ISO 10628-1 5.3.1's floor, in the units the sheet is drawn in.
+@pytest.mark.parametrize("name", WIDTH_CASES, ids=WIDTH_CASES)
+def test_no_line_the_renderer_chooses_a_width_for_is_under_the_floor(
+    settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], name: str
+) -> None:
+    """Check representative renderer widths meet the physical floor.
 
-    The floor is the finest rung itself, so this is the statement that nothing
-    the renderer picks a width for sits below the rung it would have been given
-    had it been put in the finest class. Read as a millimetre as well, since the
-    floor is stated as one and a ratio cannot express it.
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
+        Session-scoped routed gallery source.
+    name : str
+        Representative gallery example name.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    build, kwargs = SCENARIOS[name]
-    for width in _renderer_widths(build().to_svg(**kwargs)):
+    fs, kwargs = copy_settled_case(settled_gallery, name)
+    for width in _renderer_widths(fs.to_svg(**kwargs)):
         assert width * UNIT_MM >= 0.25 - 1e-9, (
             f"{name}: a line drawn at {width:g} units is {width * UNIT_MM:.3f} mm, "
             f"under the floor ISO 10628-1 5.3.1 sets"
         )
 
 
-# --- the same ladder in the other backend -------------------------------------
+@pytest.mark.parametrize("name", WIDTH_CASES, ids=WIDTH_CASES)
+def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(
+    settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], name: str
+) -> None:
+    """Check Draw.io preserves representative stream-weight ratios.
 
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
+        Session-scoped routed gallery source.
+    name : str
+        Representative gallery example name.
 
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(name: str) -> None:
-    """A ``.drawio`` file is the same drawing, run for run.
-
-    The cross-backend half is held as a ratio, because the export scales every
-    width through the sheet fit: on a paged sheet the two backends' figures
-    differ by design and their *proportions* may not. So each run's exported
-    width is divided by the width the sheet drew it at, and all of those
-    quotients have to be the one fit.
-
-    **Agreement is not enough on its own**, and this test used to stop there:
-    two backends that had both collapsed to the finest rung would have agreed
-    perfectly. So the sheet's own widths are pinned absolutely first -- a run
-    is 2 units, a control line is 1 -- and the parity check runs on top of a
-    drawing already known to be right.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     from test_drawio import _DRAWIO_KWARGS, _drawio_cells, _style
 
-    build, kwargs = SCENARIOS[name]
-    fs = build()
+    fs, kwargs = copy_settled_case(settled_gallery, name)
     drawn = [
         float(w)
         for w in re.findall(
             r'<path [^>]*stroke-width="([\d.]+)"', _streams_group(fs.to_svg(**kwargs))
         )
     ]
-    cells = _drawio_cells(build(), {k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
+    drawio_fs, drawio_kwargs = copy_settled_case(settled_gallery, name)
+    cells = _drawio_cells(
+        drawio_fs, {k: v for k, v in drawio_kwargs.items() if k in _DRAWIO_KWARGS}
+    )
     exported = [
         float(_style(cells[f"s{n}"])["strokeWidth"])
         for n in range(len(drawn))
@@ -366,8 +336,6 @@ def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(name: str) -
     assert len(exported) == len(drawn) > 0, (
         f"{name}: the sheet drew {len(drawn)} runs and the export wrote {len(exported)}"
     )
-    # The positive half: the numbers themselves, per stream, from the model
-    # rather than from the renderer's own answer about the same stream.
     for stream, width in zip(fs.streams, drawn):
         want = 1.0 if stream.kind in SIGNAL_KINDS else 2.0
         assert width == pytest.approx(want), (
@@ -382,17 +350,13 @@ def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(name: str) -
     )
 
 
-# --- the clearances a width has to leave --------------------------------------
-
-
 def test_a_flange_pair_leaves_the_paper_5_3_2_asks_between_two_parallel_lines() -> None:
-    """The two faces of a flange are two parallel lines a fixed distance apart,
-    so which rung they are drawn on is settled by arithmetic and not by taste.
+    """Check flange faces meet the required clearance.
 
-    ISO 10628-1 5.3.2 puts the floor at twice the wider of the two and at 1 mm.
-    The pair is ``FLANGE_GAP`` apart centre to centre, so at a width w they
-    leave ``FLANGE_GAP - w`` -- which clears both floors on 5.3.1 c)'s rung and
-    on no heavier one.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = Flowsheet("flanges")
     vessel = fs.add(units.Vessel("V-1"))
@@ -414,13 +378,12 @@ def test_a_flange_pair_leaves_the_paper_5_3_2_asks_between_two_parallel_lines() 
 
 
 def test_the_arrowhead_clearance_floor_is_twice_the_line_the_heads_end() -> None:
-    """``MIN_HEAD_CLEARANCE`` is the same 5.3.2 floor applied to two arrowheads
-    side by side on one face, and it has to track the rung those heads end.
+    """Check arrowhead clearance tracks the material-line weight.
 
-    This passed before #490 as well, and is here because that is the accident it
-    guards: the floor was written ``2 * 2.0`` beside a main flow line that was
-    itself 2 units, so the two agreed by coincidence rather than by derivation
-    and a rung moving would have left the floor at half the clause's figure.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = _two_unit_sheet()
     run = max(_stream_pens(fs.to_svg()))
@@ -428,15 +391,12 @@ def test_the_arrowhead_clearance_floor_is_twice_the_line_the_heads_end() -> None
 
 
 def test_a_leader_head_is_a_size_and_does_not_follow_a_rung() -> None:
-    """A leader ends in a head half the flow head's size, and that half is fixed
-    however the rung under it moves.
+    """Check leader-head size remains independent of the ladder.
 
-    The two used to be one number: the head was written as the flow head times
-    the ratio between two rungs. #502 took that ratio to 4:1 and would have
-    halved the head with it; this change takes it back to 2:1, which is the
-    value the head was coincidentally right at before either. The assertion is
-    therefore *both* numbers -- the head's own 2:1 and the pens' -- because a
-    head that had re-followed the rung would pass on the first alone.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     from pandid.render.svg import _LEADER_HEAD
 

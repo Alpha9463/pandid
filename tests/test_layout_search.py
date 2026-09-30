@@ -232,6 +232,46 @@ def test_canonical_settlement_can_repair_without_a_placement_move() -> None:
     assert not measure_final(fs).hard_conflicts
 
 
+def test_search_reuses_settled_geometry_without_a_seed(monkeypatch) -> None:
+    """Avoid re-settling an unchanged drawing at search start.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the search-only settlement function.
+
+    Returns
+    -------
+    None
+        The search consumes no exact route trial for an unchanged drawing.
+    """
+    fs = Flowsheet("Settled geometry")
+    source = fs.add(Block("Source", inputs=0, outputs=["E"])).pin(x=100, y=100)
+    dest = fs.add(Block("Destination", inputs=["W"], outputs=0)).pin(x=400, y=100)
+    fs.connect(source.out_1, dest.in_1)
+    fs.layout()
+    fs.route()
+
+    assert fs._search_seed_frames is None
+    assert fs.route_converged
+
+    def unexpected_settlement(*_args, **_kwargs) -> None:
+        """Fail if search settles unchanged geometry.
+
+        Raises
+        ------
+        AssertionError
+            Always, because this test path must reuse settled geometry.
+        """
+        raise AssertionError("search settled unchanged geometry")
+
+    monkeypatch.setattr("pandid.layout.search.settle", unexpected_settlement)
+
+    result = search_layout(fs, SearchBudget(0, 0, 0))
+
+    assert result.exact_trials == 0
+
+
 def test_search_aligns_clean_route_endpoints_without_a_hard_conflict() -> None:
     """Shorten a clear route by moving its free endpoint onto the same lane.
 

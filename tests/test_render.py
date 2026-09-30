@@ -3,6 +3,7 @@ import re
 
 import pytest
 
+from _render_cases import copy_settled_case
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
 from pandid.render.svg import HOP_R, _ink, stream_polyline
@@ -339,13 +340,27 @@ def _is_own_run(box, upright, label, name, run):
 
 
 @pytest.fixture(scope="module")
-def drawn():
-    """Every shipped sheet, laid out, routed and rendered once, keyed by name."""
+def drawn(settled_gallery):
+    """Render every general visual-invariant corpus sheet once.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared, routed gallery flowsheets and their render options.
+
+    Returns
+    -------
+    dict
+        Flowsheets and default SVG documents keyed by corpus name.
+    """
     sheets = {}
     for name, build in CORPUS.items():
-        fs = build()
-        fs.layout()
-        fs.route()
+        if name in settled_gallery:
+            fs, _kwargs = copy_settled_case(settled_gallery, name)
+        else:
+            fs = build()
+            fs.layout()
+            fs.route()
         sheets[name] = (fs, fs.to_svg())
     return sheets
 

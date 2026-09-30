@@ -487,6 +487,7 @@ def _routed_reservation(fs: Flowsheet, reservation: Reservation) -> Flowsheet | 
     import copy
 
     from pandid.layout import default_layout_engine
+    from pandid.routing import DefaultRouter
 
     trial = copy.deepcopy(fs)
     default_layout_engine.layout(trial, reservation=reservation)
@@ -496,7 +497,7 @@ def _routed_reservation(fs: Flowsheet, reservation: Reservation) -> Flowsheet | 
     trial._layout_stale = False
     trial._route_stale = True
     trial._refinement_attempted = False
-    trial.route()
+    trial.route(DefaultRouter())
     return trial
 
 
@@ -841,6 +842,7 @@ def keep_if_better(fs: Flowsheet) -> bool:
     import copy
 
     from pandid.layout import default_layout_engine
+    from pandid.routing import DefaultRouter
     from pandid.layout.trials import _publish_candidate
 
     baseline = copy.deepcopy(fs)
@@ -848,7 +850,7 @@ def keep_if_better(fs: Flowsheet) -> bool:
     baseline._layout_stale = False
     baseline._route_stale = True
     baseline._refinement_attempted = False
-    baseline.route()
+    baseline.route(DefaultRouter())
     absolute_pin = any(unit.pin_ is not None
                        and (unit.pin_.x is not None or unit.pin_.y is not None)
                        for unit in process_units(fs))

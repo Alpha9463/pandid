@@ -455,6 +455,29 @@ def _proposed_process_frames(fs: Flowsheet, move: Move) -> tuple[Frame, ...]:
     )
 
 
+def _can_reuse_settlement(fs: Flowsheet) -> bool:
+    """Identify completed geometry that requires no canonical settlement.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Drawing at the start of layout search.
+
+    Returns
+    -------
+    bool
+        Whether search can use the current geometry as its candidate seed.
+    """
+    return (
+        fs._search_seed_frames is None
+        and fs.route_converged
+        and all(
+            stream.route is not None and (stream.route.manual or not stream.route.used_fallback)
+            for stream in fs.streams
+        )
+    )
+
+
 def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
     """Search legal placements and automatic faces against completed routes.
 
@@ -480,13 +503,17 @@ def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
         raise ValueError("search requires completed layout and routing")
     fs._layout_search_result = None
     live_quality = measure_final(fs)
-    working = copy.deepcopy(fs)
-    working._layout_search_result = None
-    if fs._search_seed_frames is not None:
-        for unit, frame in zip(process_units(working), fs._search_seed_frames):
-            unit.frame = copy.deepcopy(frame)
-    settle(working)
-    seed_quality = measure_final(working)
+    if _can_reuse_settlement(fs):
+        working = fs
+        seed_quality = live_quality
+    else:
+        working = copy.deepcopy(fs)
+        working._layout_search_result = None
+        if fs._search_seed_frames is not None:
+            for unit, frame in zip(process_units(working), fs._search_seed_frames):
+                unit.frame = copy.deepcopy(frame)
+        settle(working)
+        seed_quality = measure_final(working)
     incumbent_quality = seed_quality
     structure = infer(working)
     seed_frames = tuple(copy.deepcopy(frame) for frame in _process_frames(working))

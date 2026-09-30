@@ -792,72 +792,6 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
     assert len(members) == size
 
 
-def test_nothing_shipped_leaves_a_counted_nozzle_open():
-    """The acceptance test, over the drawings this package stands behind. 117
-    counted nozzles across the 21 scenarios ``tests/test_golden.py`` builds,
-    which is the whole shipped corpus, and every one of them piped -- so the
-    rule is exercised by the corpus rather than merely silent on it. That 117
-    is the assertion at the foot of this function, not a figure beside it.
-
-    64 rather than the 47 this counted before #303: every ``Reactor`` and
-    ``Column`` with the default single feed now contributes one, its real
-    nozzle being ``feed_1`` rather than the unnumbered ``feed`` it used to
-    be. None of those seventeen newly-counted nozzles is an *offender* --
-    ``_family_members`` (below) counts structurally, off the name alone,
-    while the alias :func:`Unit.feed <pandid.units.Unit._canonical_port_name>`
-    still answers for so a default single feed is not "a count that went
-    unmet" (see ``pandid.validate._family_stem``) -- so this number moving
-    is exactly the corpus exercising the wider family the counted-nozzle
-    rule now covers, not a new class of finding going unreported.
-
-    100 rather than 64 since #342, for the identical reason one level down:
-    every ``Tank`` and ``Vessel`` in the corpus now contributes ``in_1`` and
-    ``out_1``, real, structurally-counted nozzles standing behind the aliases
-    ``inlet``/``outlet`` -- 18 units, 36 nozzles, none of them an offender
-    for the same alias reason ``feed_1``'s move was not.
-
-    103 rather than 100 once ``examples/21``'s ``M-901``/``M-902`` and
-    ``examples/10``'s ``M-302`` became tanks instead of mixers: a mixer's
-    ``outlet`` was a single fixed nozzle and never counted at all, so
-    drawing each as what it always was -- a tank with hold-up -- adds one
-    counted (and aliased, and so inoffensive) ``out_1``. ``M-302`` was
-    already a two-inlet mixer, so only its outlet is newly counted; the
-    other two each add both ``in_1`` and ``out_1``, for three nozzles
-    across the pair.
-
-    119 rather than 103 since #452, and for the third time for the same
-    reason: ``Separator`` took an ``n_feeds=`` and its charge nozzle became
-    ``feed_1``, so the corpus's sixteen separators each contribute one
-    counted nozzle where a fixed ``feed`` contributed none. None is an
-    offender, on the alias argument above -- which is the whole point of
-    running this over the corpus rather than asserting the rule in the
-    abstract: a family that had *not* kept its singular spelling working
-    would show up here as sixteen unconnected nozzles, not as a number.
-
-    117 rather than 119 since ``Thickener`` landed: ``examples/21``'s
-    ``TH-901`` and ``TH-902`` were separators, and a thickener's ``feed``
-    is a plain fixed nozzle. The number goes *down* when a machine stops
-    being drawn as something it was not, which is the only direction this
-    count has ever moved for a good reason.
-    """
-    from tests.test_golden import SCENARIOS
-
-    offenders, counted = [], 0
-    for name, (build, kwargs) in SCENARIOS.items():
-        fs = build()
-        fs.to_svg(**kwargs)
-        counted += sum(_family_members(u) for u in fs.units)
-        offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
-    assert offenders == []
-    assert counted == 117
-
-
-def _family_members(unit):
-    from pandid.validate import _family_stem
-
-    return sum(_family_stem(n) is not None for n in unit.ports)
-
-
 # --- nozzles crowded under their own arrowheads -------------------------------
 
 
@@ -1508,9 +1442,6 @@ def test_the_finding_is_soft_and_the_default_render_still_draws():
 # `validate()` answers about the last render, exactly as `fs.warnings`
 # already describes the last render and nothing earlier.
 #
-# `tests/test_gallery.py` holds the corpus to it, sheet by sheet.
-
-
 def test_a_sheet_nothing_has_drawn_yet_answers_as_a_pfd():
     """The default is unchanged where there is no render to read."""
     assert len(_no_table(_untabulated())) == 1

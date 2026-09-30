@@ -1,42 +1,8 @@
-"""Invariants every routed sheet has to satisfy, over the whole shipped corpus.
+"""Check endpoint and orthogonality invariants for routed flowsheets.
 
-Two properties, checked against the 21 golden scenarios (which are examples
-01 to 21 rebuilt), the two ethanol sheets built here from their own modules
-(examples 10 and 11, the densest drawings in the repo), and a synthetic sheet
-built to be pathological:
-
-**A stream's path begins and ends on its own nozzles.** The router writes the
-port *anchors* as the first and last waypoint and the renderer draws
-``port_point -> waypoints -> port_point``, so an endpoint that has drifted off
-its anchor is a line whose stub no longer leaves the nozzle it belongs to.
-(``via()`` states the intermediate points only, so a hand-routed line has no
-endpoint of its own to check.)
-
-**Nothing is drawn diagonally.** A P&ID line is orthogonal by convention, so a
-sloping segment is never intentional. It is what stale geometry looks like on
-the sheet: the line leaves one port, follows a path aimed at where the other end
-used to be, and closes the gap with a diagonal.
-
-The convention is not a house style. BS ISO 15519-1:2010 §12.1 runs connecting
-lines horizontally or vertically, excepting only a line that goes oblique to
-make the diagram clearer, and §12.4 has connecting lines meet or cross at right
-angles, with no exception clause on the second. §12.1 names conductors and
-functional connections alongside pipelines, BS ISO 15519-2:2015 §6.1 pulls Part
-1's rules into force on a P&ID, and its §5.1.1 calls an instrument's process tap
-a *functional connection line* -- so the rule reaches the tap and not only the
-pipe. The issued reference sheet ``professional_examples/P&ID_301.pdf`` draws 47
-dashed signal segments, every one exactly horizontal or vertical, and no
-diagonal connector of any kind.
-
-So the second invariant sweeps the **impulse lines too**, and not just the
-streams. A tap is drawn by :meth:`SvgRenderer._draw_taps` rather than by the
-stream pass, and for as long as this file checked only ``fs.streams`` the line
-that says *where* an instrument measures was the one line on the sheet exempt
-from the rule the file is named for. Three shipped diagonals, and a fourth in
-this file's own fixture, is what that exemption was worth (issue #155).
-
-Both invariants are cheap. The defect they were written for (issue #71) was a
-routing pass whose result nothing re-checked.
+The corpus contains the gallery examples, author-built ethanol examples, and a
+synthetic control-layout case. Stream paths and impulse lines must begin and
+end at their intended ports and use orthogonal segments.
 """
 
 import importlib.util
@@ -53,6 +19,7 @@ from pandid.portgeom import port_anchor, port_point
 from pandid.render.svg import tap_lines
 from pandid.routing import DefaultRouter
 
+from _render_cases import copy_settled_case
 from test_golden import SCENARIOS
 
 TOL = 0.01
@@ -63,34 +30,19 @@ EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
 def _crowded_taps() -> Flowsheet:
-    """A sheet whose balloons and routes do not agree on the first try.
+    """Build a control layout that needs more than two placement passes.
 
-    Both balloons hang off automatically routed lines, so each one lands at a
-    fraction along a path the router chose; the box it lands in is then an
-    obstacle the *next* routing pass has to avoid, which moves the path, which
-    moves the balloon. Settling it takes three placements, and the signal line
-    between the two balloons is where a placement that is never re-routed shows
-    up, since both of its endpoints are balloon nozzles.
-
-    Minimised from a randomised search: four units and two instruments is the
-    smallest sheet found that needs more than the two fixed passes
-    :meth:`Flowsheet.route` used to run.
-
-    Both branches are perpendicular, because this sheet is in the corpus the
-    diagonal invariant runs over and a fixture that cannot satisfy an invariant
-    it is checked against covers nothing. The controller was drawn at 45 degrees
-    and its ``offset`` is what paid for squaring it: 40 at 90 degrees settles in
-    two placements, and 30 is the nearest value searched that keeps the third
-    that :func:`test_two_placements_are_not_enough_for_a_crowded_sheet` pins.
+    Returns
+    -------
+    Flowsheet
+        Routed-control fixture with two attached instruments.
     """
     fs = Flowsheet("Crowded Taps")
     feed = fs.add(units.Feed("F"))
     drum = fs.add(units.Vessel("V-1"))
     sep = fs.add(units.Separator("V-2"))
     prod = fs.add(units.Product("P"))
-    # Tabulated, so stream-table-missing does not join whatever routing
-    # finding a caller of this fixture is actually asking about; properties
-    # carry no geometry, so the settling behaviour below is untouched.
+    # Tabulate boundary streams to isolate routing findings.
     fs.connect(feed.outlet, drum.inlet).properties = {"Flow (kg/h)": "4200"}
     transfer = fs.connect(drum.outlet, sep.feed)
     overhead = fs.connect(sep.vapor, prod.inlet)
@@ -102,15 +54,17 @@ def _crowded_taps() -> Flowsheet:
 
 
 def _example(stem: str) -> Flowsheet:
-    """Build an example's flowsheet without letting it write its drawing out.
+    """Build an author-written example without writing output files.
 
-    Examples 10 and 11 are the two densest sheets shipped, which is where a
-    routing defect shows first. They are in the golden corpus -- all 21 are,
-    since ``tests/golden/`` grew past 09 -- and are built here from their own
-    modules all the same, so this file reads the example as an author wrote it
-    rather than as a scenario rebuilt it. Their ``main()`` ends in a
-    ``render()``; that one call is stubbed so the flowsheet can be inspected
-    without a test suite dropping files into ``examples/``.
+    Parameters
+    ----------
+    stem : str
+        Example filename stem.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet captured from the example's ``main`` function.
     """
     sys.path.insert(0, str(EXAMPLES))  # the examples' own _bootstrap
     try:
@@ -133,19 +87,32 @@ def _example(stem: str) -> Flowsheet:
 
 
 CORPUS: dict = {name: build for name, (build, _kwargs) in SCENARIOS.items()}
+AUTHOR_EXAMPLE_STEMS = ("10_ethanol_pfd", "11_ethanol_pid")
 CORPUS["10_ethanol_pfd"] = lambda: _example("10_ethanol_pfd")
 CORPUS["11_ethanol_pid"] = lambda: _example("11_ethanol_pid")
 CORPUS["crowded_taps"] = _crowded_taps
 
 
 @pytest.fixture(scope="module")
-def routed():
-    """Every shipped sheet, laid out and routed once, keyed by name."""
+def routed(settled_gallery):
+    """Return isolated routed sheets for the invariant corpus.
+
+    The shared cache supplies ordinary gallery examples. The two ethanol
+    examples and synthetic control-layout fixture remain fresh.
+
+    Returns
+    -------
+    dict[str, Flowsheet]
+        Routed flowsheets keyed by corpus name.
+    """
     sheets = {}
     for name, build in CORPUS.items():
-        fs = build()
-        fs.layout()
-        fs.route()
+        if name in settled_gallery and name not in AUTHOR_EXAMPLE_STEMS:
+            fs, _kwargs = copy_settled_case(settled_gallery, name)
+        else:
+            fs = build()
+            fs.layout()
+            fs.route()
         sheets[name] = fs
     return sheets
 
@@ -155,6 +122,7 @@ def routed():
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_route_endpoints_sit_on_their_ports(routed, name):
+    """Place each automatically routed stream endpoint on its port anchor."""
     fs = routed[name]
     off = []
     for s in fs.streams:
@@ -177,6 +145,7 @@ def test_route_endpoints_sit_on_their_ports(routed, name):
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_nothing_is_drawn_diagonally(routed, name):
+    """Keep stream and impulse-line segments orthogonal."""
     fs = routed[name]
     sloping = []
     for s in fs.streams:
@@ -184,25 +153,18 @@ def test_nothing_is_drawn_diagonally(routed, name):
         for (x1, y1), (x2, y2) in zip(points, points[1:]):
             if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
                 sloping.append(f"{s.name} runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
-    # The impulse line from a tap to the balloon reading it is drawn by a pass of
-    # its own, so it has to be swept by name or it is exempt. ``tap_lines`` is
-    # the renderer's own answer to which taps are drawn at all -- it drops the
-    # ones a stream already joins and the ones sitting on the line at
-    # ``offset=0`` -- so what is checked here is exactly what lands on the sheet.
+    # Check the impulse lines emitted by the renderer.
     for inst, (x1, y1), (x2, y2) in tap_lines(fs):
         if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
             sloping.append(f"{inst.name}'s tap runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
     assert not sloping, f"{name}: " + "; ".join(sloping)
 
 
-# --- the specific defect the synthetic sheet was built for ---------------------
+# Fixed-point routing
 
 
 def test_two_placements_are_not_enough_for_a_crowded_sheet():
-    """Guards the guard: ``crowded_taps`` only earns its place in the corpus
-    while it still outruns the two fixed passes ``route()`` used to run. Should
-    a routing change make it settle sooner, the invariant tests above would
-    still pass on it while no longer covering anything, so say so here."""
+    """Keep the crowded control layout as a multi-pass regression case."""
     fs = _crowded_taps()
     fs.layout()
     router = DefaultRouter()
@@ -213,13 +175,7 @@ def test_two_placements_are_not_enough_for_a_crowded_sheet():
 
 
 def test_a_settled_sheet_says_so():
-    """Default refinement settles the taps without a spacing finding.
-
-    Returns
-    -------
-    None
-        The final route converges and validates cleanly.
-    """
+    """Mark a converged control layout as settled and validation-clean."""
     fs = _crowded_taps()
     fs.layout()
     fs.route()
@@ -227,25 +183,30 @@ def test_a_settled_sheet_says_so():
     assert fs.validate() == []
 
 
-# --- what happens when the passes run out -------------------------------------
+# Bounded non-convergence
 
 
 class _WanderingRouter:
-    """A router that answers differently every pass, so nothing can ever settle.
+    """Router that alternates paths to force bounded non-convergence.
 
-    Placement and routing feed each other, since a balloon is placed on a routed
-    path and the box it lands in is an obstacle that bends paths, so a sheet can
-    trade between two arrangements indefinitely. Real ones that do are
-    fragile specimens that a routing improvement would quietly turn into
-    converging ones, leaving the test passing and covering nothing. Driving the
-    loop from a router that is *defined* not to settle pins the contract
-    instead: bounded work, and the author told.
+    Attributes
+    ----------
+    passes : int
+        Number of route calls.
     """
 
     def __init__(self) -> None:
+        """Initialize the route-call counter."""
         self.passes = 0
 
     def route(self, fs) -> None:
+        """Assign alternating paths to every stream.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose streams receive routes.
+        """
         self.passes += 1
         jog = 40.0 if self.passes % 2 else 90.0
         for s in fs.streams:
@@ -258,6 +219,7 @@ class _WanderingRouter:
 
 
 def test_a_sheet_that_never_settles_is_capped_and_reported():
+    """Cap non-convergent routing and report its validation warning."""
     fs = _crowded_taps()
     fs.layout()
     router = _WanderingRouter()
@@ -272,6 +234,7 @@ def test_a_sheet_that_never_settles_is_capped_and_reported():
 
 
 def test_the_unsettled_warning_reaches_the_caller_after_a_render():
+    """Expose a non-convergence warning through rendered-sheet warnings."""
     fs = _crowded_taps()
     fs.layout()
     fs.route(router=_WanderingRouter())
@@ -280,7 +243,7 @@ def test_the_unsettled_warning_reaches_the_caller_after_a_render():
 
 
 def test_a_sheet_with_no_instruments_costs_one_routing_pass():
-    """The loop must not make the common sheet pay for the pathological one."""
+    """Route a sheet without attached instruments in one pass."""
     fs = Flowsheet("plain")
     feed = fs.add(units.Feed("F"))
     drum = fs.add(units.Vessel("V-1"))

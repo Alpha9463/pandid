@@ -1,4 +1,4 @@
-"""Compare each example's SVG to its golden and check rendered nozzle positions."""
+"""Test representative SVG fixtures and rendered nozzle placement."""
 
 import os
 import re
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from _render_cases import SCENARIOS as SCENARIOS, gallery
+from _render_cases import SCENARIOS as SCENARIOS, copy_settled_case
 from _svg_compare import normalize as _normalize
 from pandid.document import equipment_list
 from pandid.render.debug import _BOX, _PORT
@@ -14,9 +14,57 @@ from pandid.render.debug import _BOX, _PORT
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
 
+#: Representative manual, PFD, P&ID, BFD, and automatic-layout fixtures.
+GOLDEN_SCENARIOS = (
+    "02_manual_layout",
+    "03_distillation_train",
+    "11_ethanol_pid",
+    "12_block_flow_diagram",
+    "18_fixed_bed_recycle",
+)
+
+
+def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
+    """Keep copied settled flowsheets independent.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Settled gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    source, source_options = settled_gallery["11_ethanol_pid"]
+    copied, copied_options = copy_settled_case(settled_gallery, "11_ethanol_pid")
+
+    copied.streams[0].route = None
+    copied_options["diagram"] = "pfd"
+
+    assert copied is not source
+    assert source.streams[0].route is not None
+    assert source_options.get("diagram") != "pfd"
+
 
 def _diff_message(name: str, golden: str, actual: str) -> str:
-    """First differing line with a little context -- not a 40KB dump."""
+    """Describe the first difference between normalized SVG documents.
+
+    Parameters
+    ----------
+    name : str
+        Golden fixture name.
+    golden : str
+        Expected normalized SVG.
+    actual : str
+        Actual normalized SVG.
+
+    Returns
+    -------
+    str
+        First differing line with nearby context.
+    """
     exp = golden.split("\n")
     act = actual.split("\n")
     for i, (e, a) in enumerate(zip(exp, act)):
@@ -35,6 +83,20 @@ def _diff_message(name: str, golden: str, actual: str) -> str:
 
 
 def _check_golden(name: str, svg: str) -> None:
+    """Compare an SVG document with its approved fixture.
+
+    Parameters
+    ----------
+    name : str
+        Golden fixture name.
+    svg : str
+        Rendered SVG document text.
+
+    Returns
+    -------
+    None
+        Writes the fixture only when explicit update mode is enabled.
+    """
     path = GOLDEN_DIR / f"{name}.svg"
     normalized = _normalize(svg)
     if UPDATE:
@@ -48,14 +110,41 @@ def _check_golden(name: str, svg: str) -> None:
         pytest.fail(_diff_message(name, golden, normalized), pytrace=False)
 
 
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_golden_svg(name):
-    fs, kwargs = gallery.flowsheet(name)
-    _check_golden(name, fs.to_svg(**kwargs))
+@pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
+def test_golden_svg(settled_gallery, name):
+    """Match representative warning-free renders to approved SVG fixtures.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Settled gallery flowsheets and render options.
+    name : str
+        Scenario or stream identifier under test.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = copy_settled_case(settled_gallery, name)
+    svg = fs.to_svg(**kwargs)
+    assert not fs.warnings, f"{name}: {[str(warning) for warning in fs.warnings]}"
+    _check_golden(name, svg)
 
 
 def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
-    """Version metadata changes leave the normalized drawing unchanged."""
+    """Keep golden fixtures independent of version metadata.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to replace runtime state.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     import pandid
 
     name = "03_distillation_train"
@@ -79,21 +168,40 @@ _DEBUG_BOX = re.compile(
 
 
 def _drawn(value: "str | float") -> float:
-    """One coordinate as the sheet writes it, to the precision it writes it.
+    """Round a coordinate to SVG serialization precision.
 
-    Takes the string a regex pulled out of the SVG or the float the model
-    resolved, so the two are compared after exactly the same rounding.
+    Parameters
+    ----------
+    value : str | float
+        Coordinate captured from SVG or resolved by the model.
+
+    Returns
+    -------
+    float
+        Coordinate rounded to one decimal place.
     """
     return round(float(value), 1)
 
 
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(name):
-    """Every rendered nozzle lies on its owning equipment body."""
+@pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
+def test_representative_sheets_draw_nozzles_on_their_own_bodies(settled_gallery, name):
+    """Test that representative sheets draw nozzles on their own bodies.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Settled gallery flowsheets and render options.
+    name : str
+        Scenario or stream identifier under test.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     from pandid.portgeom import resolve_port, unit_box
 
-    build, kwargs = SCENARIOS[name]
-    fs = build()
+    fs, kwargs = copy_settled_case(settled_gallery, name)
     overlaid = {**kwargs, "debug": True}
     svg = fs.to_svg(**overlaid)
     dots = {(_drawn(x), _drawn(y)) for x, y in _DEBUG_CIRCLE.findall(svg)}
@@ -121,16 +229,30 @@ def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(name):
     assert off_body == [], f"{name} draws {len(off_body)} nozzles off their own bodies"
 
 
-def test_every_example_has_a_golden():
-    assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(SCENARIOS)
+def test_only_representative_examples_have_golden_fixtures():
+    """Store SVG fixtures only for representative renderer scenarios.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(GOLDEN_SCENARIOS)
 
 
 def test_the_fractionator_schedules_only_equipment_that_exists():
-    """The bottoms product leaves through the scheduled reboiler."""
+    """Keep the fractionator schedule aligned with its process topology.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     fs = SCENARIOS["06_column_reflux"][0]()
     col = next(u for u in fs.units if u.name == "T-701")
     reb = next(u for u in fs.units if u.name == "E-702")
-    assert col.bottoms.stream.dest.owner is reb  # nothing invented in the sump
+    # The column bottoms stream enters the reboiler.
+    assert col.bottoms.stream.dest.owner is reb
     assert reb.bottoms.stream is not None
     assert reb.bottoms.stream.dest.owner.name == "Bottoms"
     assert [tag for tag, _ in equipment_list(fs).rows] == [

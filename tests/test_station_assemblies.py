@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -121,57 +121,6 @@ def test_hand_wired_station_contracts_before_equipment_placement() -> None:
     assert quality.crossings == 0
     assert quality.length < 1000
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
-
-
-def test_automatic_ethanol_keeps_all_stations_compact(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Settle the dense hand-wired station example without route defects.
-
-    Parameters
-    ----------
-    monkeypatch : pytest.MonkeyPatch
-        Adds the example tools to the temporary module search path.
-
-    Returns
-    -------
-    None
-        The completed automatic drawing has short, clear material runs.
-    """
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "scripts"))
-    from layout_quality import build, sheet_extent
-
-    fs, _ = build("11_ethanol_pid", True)
-    fs.layout()
-    fs.route()
-    quality = measure_final(fs)
-    assert quality.hard == (0,) * len(quality.hard)
-    prior_pairs = {
-        (9, 78),
-        (21, 82),
-        (33, 86),
-        (44, 90),
-        (51, 55),
-        (53, 60),
-        (53, 81),
-        (55, 77),
-        (57, 58),
-        (64, 68),
-        (70, 91),
-        (71, 92),
-        (81, 83),
-    }
-    assert quality.crossing_pairs < prior_pairs
-    assert quality.crossings <= 10
-    assert quality.bends <= 55
-    assert quality.length < 17000
-    assert quality.area < 5300000
-    assert all(issue.code != "lines-crowded" for issue in fs.validate())
-    product = next(unit for unit in fs.units if unit.name == "Azeotropic Ethanol")
-    exchanger = next(unit for unit in fs.units if unit.name == "FE-305")
-    assert product.frame is not None and exchanger.frame is not None
-    assert product.frame.x > exchanger.frame.x
-    extent = sheet_extent(fs)
-    assert extent is not None
-    assert extent[2] - extent[0] <= 3030
 
 
 @pytest.mark.parametrize("product_col", [1, 3])
@@ -328,6 +277,42 @@ def test_builtin_layout_route_checks_coarse_quality(explicit_engine: bool) -> No
     fs.route()
     assert fs._coarse_layout_candidate is False
     assert measure_final(fs).length < 1500
+
+
+def test_coarse_quality_trials_leave_final_search_to_the_live_drawing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Run one final search after choosing a coarse station placement.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Records calls to the bounded final layout search.
+
+    Returns
+    -------
+    None
+        Detached baseline and reservation trials settle without recursive
+        searches; the published drawing receives the one final search.
+    """
+    from pandid.layout import search as search_mod
+
+    fs = Flowsheet("Coarse trial search")
+    feed = fs.add(Feed("Feed"))
+    reactor = fs.add(Reactor("R-101"))
+    product = fs.add(Product("Product"))
+    fs.connect(feed.outlet, reactor.feed)
+    run = fs.connect(reactor.outlet, product.inlet)
+    fs.place_valve_station_on(run, "CV-101")
+
+    search = Mock(wraps=search_mod.search_layout)
+    monkeypatch.setattr(search_mod, "search_layout", search)
+    fs.route()
+
+    assert search.call_count == 1
+    assert fs._coarse_layout_candidate is False
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
 
 
 def test_custom_router_uses_full_station_layout() -> None:

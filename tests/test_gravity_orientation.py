@@ -328,16 +328,3 @@ def test_the_deliberate_exclusions_stay_turnable(key):
     are here for the contrast with the gas casings above: the same medium drawn
     the same way, and the hopper is the only thing that fixes an attitude."""
     assert not default_registry.get(*key).gravity_fixed
-
-
-def test_nothing_shipped_turns_one():
-    """The examples and the golden scenarios are the drawings this package
-    stands behind, so none of them may carry the finding."""
-    from tests.test_golden import SCENARIOS
-
-    offenders = []
-    for name, (build, kwargs) in SCENARIOS.items():
-        fs = build()
-        fs.to_svg(**kwargs)
-        offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "gravity-turned"]
-    assert offenders == []

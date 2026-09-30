@@ -1,31 +1,11 @@
-"""``debug=``: the coordinate overlay, and the three things that make it safe.
-
-The overlay exists so an author can read a placement off the sheet and type it
-back into ``pin()``. Three properties decide whether it does that or actively
-misleads, and all three are checked here rather than left to the golden sheet:
-
-**The numbers are drawing coordinates.** A sheet with a fixed ``page_size``
-puts the whole drawing under a uniform fit scale, and an overlay drawn outside
-that group -- or drawn in page units inside it -- would write numbers that are
-not the ones ``pin()`` takes. Getting this wrong makes the feature worse than
-absent: it would teach the wrong coordinate system and be believed.
-
-**The numbers can be read, and belong to something.** The overlay is drawn
-under the sheet, so a label written where a halo lands is a label that is not
-there. One written clear of every halo but two nozzles away from its own is
-worse still. See the last two sections.
-
-**Off leaves no trace.** ``tests/test_golden.py`` compares the corpus byte for
-byte, and every scenario but ``02`` draws with the overlay off; that is the real
-guard. What is here is the same claim made directly, so a failure says which
-property broke rather than pointing at a 70 KB diff.
-"""
+"""Test coordinate-overlay rendering and placement invariants."""
 
 import re
 import xml.etree.ElementTree as ET
 
 import pytest
 
+from _render_cases import copy_settled_case
 from pandid import Flowsheet, units as U
 from pandid.render import debug as D
 from pandid.render.export import flatten
@@ -41,11 +21,12 @@ _FIT = re.compile(
 
 
 def _sheet() -> Flowsheet:
-    """A feed, an exchanger and a product: one corner pin and one nozzle pin.
+    """Build a small flowsheet with corner and port pins.
 
-    Small on purpose. Every assertion below names a coordinate that is written
-    in this function, so a reader can check the test against the sheet the same
-    way an author checks a drawing against their source.
+    Returns
+    -------
+    Flowsheet
+        Flowsheet used for coordinate-overlay checks.
     """
     fs = Flowsheet("overlay")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
@@ -57,7 +38,23 @@ def _sheet() -> Flowsheet:
 
 
 def _group(svg: str) -> ET.Element:
-    """The ``<g id="debug">`` element, or fail saying it is not there."""
+    """Return the coordinate-overlay SVG group.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    ET.Element
+        Coordinate-overlay group.
+
+    Raises
+    ------
+    AssertionError
+        If the SVG does not contain the coordinate overlay.
+    """
     root = ET.fromstring(svg)
     for g in root.iter(f"{SVG}g"):
         if g.get("id") == "debug":
@@ -66,20 +63,45 @@ def _group(svg: str) -> ET.Element:
 
 
 def _texts(g: ET.Element) -> list[str]:
+    """Return text written in the coordinate overlay.
+
+    Parameters
+    ----------
+    g : ET.Element
+        Coordinate-overlay group.
+
+    Returns
+    -------
+    list[str]
+        Text content in drawing order.
+    """
     return [(t.text or "") for t in g.iter(f"{SVG}text")]
 
 
 def _rules(g: ET.Element) -> list[ET.Element]:
-    """The grid rules alone. A crosshair arm is a ``<line>`` too, and a vertical
-    one is indistinguishable from a grid line by its coordinates; the dash is
-    what the grid is drawn with and the markers are not."""
+    """Return dashed grid rules from a coordinate overlay.
+
+    Parameters
+    ----------
+    g : ET.Element
+        Coordinate-overlay group.
+
+    Returns
+    -------
+    list[ET.Element]
+        Dashed grid-rule elements.
+    """
     return [ln for ln in g.iter(f"{SVG}line") if ln.get("stroke-dasharray")]
 
 
 def _wide() -> Flowsheet:
-    """The same drawing, stretched past what an A3 sheet holds, so a fixed page
-    has to scale it down. A drawing smaller than the paper is drawn at 1:1 (see
-    ``svg._fit_scale``), and at 1:1 every fitted-sheet claim below is vacuous."""
+    """Build a flowsheet that requires fixed-page scaling.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet used for fixed-page overlay checks.
+    """
     fs = Flowsheet("wide")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     hx = fs.add(U.HeatExchanger("E-1")).pin(x=1200).pin(port="tube_in", y=330)
@@ -90,34 +112,57 @@ def _wide() -> Flowsheet:
 
 
 # ---------------------------------------------------------------------------
-# off is off
+# Default behavior
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("off", [False, None])
 def test_a_sheet_drawn_without_it_is_the_sheet_that_was_drawn_before_it_existed(off):
-    """Byte for byte, not merely "no grid visible"."""
+    """Test that disabled overlays leave SVG output unchanged.
+
+    Parameters
+    ----------
+    off : bool | None
+        Debug option that disables the overlay.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     assert _sheet().to_svg(debug=off) == _sheet().to_svg()
     assert "debug" not in _sheet().to_svg()
 
 
 def test_it_is_off_by_default_everywhere_a_sheet_can_be_asked_for():
+    """Test that SVG render entry points omit the overlay by default.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     for svg in (_sheet().to_svg(), _sheet()._repr_svg_()):
         assert 'id="debug"' not in svg
 
 
 # ---------------------------------------------------------------------------
-# the numbers are the ones pin() takes
+# Coordinate mapping
 # ---------------------------------------------------------------------------
 
 
 def test_the_marker_sits_on_the_point_pin_set():
-    """The crosshair is drawn at the corner, and says so in words beside it."""
+    """Test that a marker reports a unit corner pin.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     g = _group(_sheet().to_svg(debug=True))
     assert "F-1 60,105" in _texts(g)
     assert "P-1 430,105" in _texts(g)
-    # The exchanger was pinned by its nozzle, so its corner is a number nobody
-    # wrote down. The marker is what tells the author what it came out as.
+    # The exchanger is pinned by its inlet nozzle.
     assert "E-1 210,300" in _texts(g)
     lines = [
         ln
@@ -129,8 +174,13 @@ def test_the_marker_sits_on_the_point_pin_set():
 
 
 def test_a_port_marker_sits_on_the_nozzle_and_not_on_the_corner():
-    """The distinction the overlay exists for: E-1's corner is at y=300 and the
-    nozzle that was pinned is at y=330."""
+    """Test that a port marker reports its nozzle pin.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     g = _group(_sheet().to_svg(debug=True))
     assert "tube_in 210,330" in _texts(g)
     dots = [(float(c.get("cx")), float(c.get("cy"))) for c in g.iter(f"{SVG}circle")]
@@ -139,9 +189,12 @@ def test_a_port_marker_sits_on_the_nozzle_and_not_on_the_corner():
 
 
 def test_the_grid_is_ruled_on_round_multiples_of_the_spacing():
-    """Lines at 100, 200, 300 -- not at the drawing's own left edge plus 100.
+    """Test that grid rules use round spacing multiples.
 
-    A number nobody would type is a number nobody can use.
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
     """
     g = _group(_sheet().to_svg(debug=True))
     verticals = {float(ln.get("x1")) for ln in _rules(g) if ln.get("x1") == ln.get("x2")}
@@ -151,44 +204,72 @@ def test_the_grid_is_ruled_on_round_multiples_of_the_spacing():
 
 
 def test_the_spacing_is_the_one_that_was_asked_for():
+    """Test that the overlay honors an explicit grid spacing.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     g = _group(_sheet().to_svg(debug=25))
     verticals = {float(ln.get("x1")) for ln in _rules(g) if ln.get("x1") == ln.get("x2")}
     assert 225.0 in verticals and 250.0 in verticals
 
 
 def test_the_written_coordinates_stay_a_hundred_apart_at_any_spacing():
-    """Otherwise a fine grid is a wall of numbers and a coarse one is unlabelled."""
+    """Test that coordinate labels retain a readable interval.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     for spacing in (10, 25, 50, 100):
         g = _group(_sheet().to_svg(debug=spacing))
         assert {"100", "200", "300"} <= set(_texts(g))
         assert "150" not in _texts(g)
-    # ...and a pitch coarser than that is still numbered, on its own lines.
+    # Coarser grids label their own grid lines.
     assert "500" in _texts(_group(_sheet().to_svg(debug=500)))
 
 
 def test_the_overlay_is_drawn_before_the_diagram():
-    """Under the sheet's ink, so nothing it draws can obscure the drawing."""
+    """Test that the overlay is placed beneath diagram content.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     svg = _sheet().to_svg(debug=True)
     assert svg.index('<g id="debug">') < svg.index('<g id="units">')
 
 
 def test_the_overlay_stays_inside_the_drawing_it_annotates():
-    """It adds nothing to the extent of the drawing, which is what lets a fixed
-    page fit the sheet exactly as it would have without it."""
+    """Test that an overlay preserves the drawing view box.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     plain, marked = _sheet().to_svg(), _sheet().to_svg(debug=True)
     box = re.search(r'viewBox="([^"]+)"', plain).group(1)
     assert f'viewBox="{box}"' in marked
 
 
 # ---------------------------------------------------------------------------
-# ...on a fixed page too, which is where it would silently go wrong
+# Fixed-page rendering
 # ---------------------------------------------------------------------------
 
 
 def test_a_fixed_page_does_not_move_the_numbers():
-    """The whole drawing is scaled and centred on an A3 sheet. The overlay is
-    inside that group, so it is scaled with it and keeps writing the drawing's
-    own coordinates -- which are the ones ``pin()`` takes."""
+    """Test that fixed-page scaling preserves drawing coordinates.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     svg = _wide().to_svg(page_size="A3", border="zone", debug=True)
     fit = _FIT.search(svg)
     assert fit and float(fit.group(3)) < 1.0, "this sheet is meant to be fitted"
@@ -203,8 +284,13 @@ def test_a_fixed_page_does_not_move_the_numbers():
 
 
 def test_a_fixed_page_holds_the_lettering_to_a_constant_size_on_paper():
-    """The geometry is in drawing units and rides the fit; the type is not, or a
-    sheet fitted to a third of its size would carry lettering nobody can read."""
+    """Test that fixed-page overlays preserve readable text size.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     fitted_svg = _wide().to_svg(page_size="A3", border="zone", debug=True)
     s = float(_FIT.search(fitted_svg).group(3))
     assert s < 1.0
@@ -212,58 +298,91 @@ def test_a_fixed_page_holds_the_lettering_to_a_constant_size_on_paper():
         float(t.get("font-size")) for t in _group(_wide().to_svg(debug=True)).iter(f"{SVG}text")
     }
     fitted = {float(t.get("font-size")) for t in _group(fitted_svg).iter(f"{SVG}text")}
-    # Sizes are written to two decimals, so scaling one back lands near its
-    # unfitted twin rather than exactly on it.
+    # SVG font sizes are rounded to two decimal places.
     assert len(fitted) == len(plain)
     for got, want in zip(sorted(fitted), sorted(plain)):
         assert got * s == pytest.approx(want, abs=0.01)
 
 
 # ---------------------------------------------------------------------------
-# every output format
+# Export compatibility
 # ---------------------------------------------------------------------------
 
 
 def test_the_overlay_survives_the_route_to_pdf_and_png():
-    """``flatten`` refuses anything the export backend would drop silently, so
-    running it is the check that the overlay uses no construct the .pdf and .png
-    cannot carry. It needs no optional package to say so."""
+    """Test that export flattening preserves the coordinate overlay.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     flat = flatten(_wide().to_svg(page_size="A3", border="zone", debug=True))
     assert 'id="debug"' in flat
 
 
 # ---------------------------------------------------------------------------
-# what it refuses
+# Validation
 # ---------------------------------------------------------------------------
 
 
 def test_true_is_the_default_spacing_and_false_is_nothing():
+    """Test the boolean debug options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     assert D.resolve_spacing(True) == D.DEFAULT_SPACING
     assert D.resolve_spacing(False) is None
     assert D.resolve_spacing(None) is None
 
 
 def test_a_spacing_of_nought_is_a_mistake_and_not_an_off_switch():
-    """``0 == False`` in Python. It is not ``False`` here."""
+    """Test that zero is rejected as a grid spacing.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     with pytest.raises(ValueError, match="debug=0"):
         _sheet().to_svg(debug=0)
 
 
 def test_a_spacing_fine_enough_to_be_a_typo_is_refused_by_name():
-    """``debug=1`` meant as "on" would rule a line every drawing unit. The
-    message names the spelling that was meant."""
+    """Test that impractically fine grid spacing is rejected.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     with pytest.raises(ValueError, match="debug=True"):
         _sheet().to_svg(debug=1)
 
 
 def test_something_that_is_not_a_spacing_at_all():
+    """Test that nonnumeric debug options are rejected.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     with pytest.raises(ValueError, match="must be True, False"):
         _sheet().to_svg(debug="fine")
 
 
 def test_the_refusal_comes_before_a_sheet_is_built():
-    """A bad spacing is the caller's mistake, so it is reported rather than
-    half a drawing."""
+    """Test that invalid options leave the flowsheet render unchanged.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     fs = _sheet()
     with pytest.raises(ValueError):
         fs.to_svg(debug=-5)
@@ -271,14 +390,18 @@ def test_the_refusal_comes_before_a_sheet_is_built():
 
 
 # ---------------------------------------------------------------------------
-# placements the marker could get wrong
+# Pin placement
 # ---------------------------------------------------------------------------
 
 
 def test_a_turned_or_mirrored_unit_still_marks_the_point_pin_set():
-    """A quarter turn and a mirror are applied about the box's centre, so the
-    corner does not move. If that ever stops being true the marker would point
-    at a number ``pin()`` does not take, which is the failure worth catching."""
+    """Test that transformed units retain their marker coordinates.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     fs = Flowsheet("turned")
     pump = fs.add(U.Pump("P-1")).pin(x=300, y=200, orientation=90, mirrored=True)
     prod = fs.add(U.Product("P-2")).pin(x=600, y=200)
@@ -287,9 +410,13 @@ def test_a_turned_or_mirrored_unit_still_marks_the_point_pin_set():
 
 
 def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
-    """The one unit whose ink does not start at its own pin: it *ends* there,
-    the pennant growing back from the tip by however long the label is. The box
-    outline is what says so on the sheet, and it is why it is drawn at all."""
+    """Test that a feed symbol ends at its pin coordinate.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     fs = Flowsheet("feed")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     prod = fs.add(U.Product("P-1")).pin(x=430, y=105)
@@ -302,28 +429,22 @@ def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
 
 
 # ---------------------------------------------------------------------------
-# ...and the words can be read once they are there
+# Label placement
 # ---------------------------------------------------------------------------
-#
-# The overlay is drawn *under* the sheet, so every opaque white halo the
-# renderer lays down paints over it, and #200 placed the port labels without
-# ever asking where those halos were. On this module's own sheet the E-1 tag's
-# halo took the leading "s" off "shell_in 240,100"; over the corpus as it stood
-# at ``4333b54``, where these were measured, it took a bite out of 174 of the
-# 830 labels the overlay wrote and 313 of them were written on top of one
-# another. Those two are cited and not re-derivable -- that corpus is a third
-# the size of today's 2040 labels and the pass that fixed them is the pass this
-# file now tests. Both are one defect -- placement that has not
-# been told what is already on the paper -- and the fix is one placement pass,
-# run against the finished sheet. See :mod:`pandid.render.debug`.
 
 
 def _placed(svg: str) -> "list[tuple[tuple[float, float, float, float], str]]":
-    """Every overlay label on a rendered sheet, as the paper it covers.
+    """Return non-axis overlay-label boxes and text.
 
-    The axis coordinates are left out: they are not placed, they name a grid
-    line and go where it is, so they are an obstacle to the rest rather than one
-    of them.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    list[tuple[tuple[float, float, float, float], str]]
+        Bounding boxes and text for placed overlay labels.
     """
     out = []
     for t in _group(svg).iter(f"{SVG}text"):
@@ -346,11 +467,12 @@ def _placed(svg: str) -> "list[tuple[tuple[float, float, float, float], str]]":
 
 
 def test_a_port_label_is_not_written_under_the_unit_tags_halo():
-    """The defect, named: ``shell_in`` against ``E-1``'s opaque tag plate.
+    """Test that a port label avoids a unit-tag halo.
 
-    Both want the paper just above the exchanger's top-left corner, the tag is
-    drawn last and on white, and the overlay is drawn first -- so the tag won and
-    the port label lost its first character to it.
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
     """
     svg = _sheet().to_svg(debug=True)
     halos = _halos(svg)
@@ -362,52 +484,7 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
         )
 
 
-#: How many labels a sheet is allowed to leave sitting under something. What is
-#: bounded is what the sweep below counts, which is one number for two defects:
-#: a label written under a halo **or** over another overlay label. It is zero
-#: everywhere the drawing has room, which is fifteen of the 22 sheets rendered
-#: here; the seven below are where it genuinely runs out. Each is named with
-#: what it draws today in brackets, and each entry keeps headroom over that,
-#: because the point of the numbers is to catch a placement that has stopped
-#: working rather than to pin the corpus to what it draws today.
-#:
-#: ``11_ethanol_pid`` [30 of 383, 28 of them under a halo] writes on a
-#: forty-unit P&ID whose markers are twenty units apart and whose labels are
-#: sixty units long, so some of them have nowhere at all to go. It is also
-#: where the ordering in :func:`pandid.render.debug._settle` earns itself:
-#: take the labels in flowsheet order instead of fewest-places-to-go first --
-#: which is what making ``_options`` return a constant does -- and this sheet
-#: goes to 54 and the corpus from 51 to 78.
-#: ``14_tank_farm`` [10 of 220, 8 under a halo] mounts two faceplates on the
-#: crown of the valve each one strokes, which is what puts a controller's
-#: output on the actuator without a line crossing the run; ``CV-605``'s
-#: ``outlet`` label and ``NRV-602``'s are the two that meet.
-#: ``04_control_loop`` [1 of 51] stands its ``FE-101`` balloon 23 units off the
-#: transmitter above it, which is what makes the primary element and its
-#: reading read as one column; what is left with nowhere clear to go is
-#: ``LIC-101``'s ``sig_out``.
-#:
-#: ``17_stirred_reactor_train`` [4 of 155, all under halos] puts a tee, a
-#: static mixer and a second tee on 70 units of charge line, which is closer
-#: than a port label is long -- that tee's ``inlet`` and ``branch`` are two of
-#: the four, and ``TIC-202``'s and ``PIC-204``'s ``sig_out`` the others.
-#: ``18_fixed_bed_recycle`` [1 of 139] is laid out by the engine, and what one
-#: sheet's worth of that leaves is ``PIC-304``'s ``sig_out`` under a halo. A
-#: wider R-301 -- a converter given a box of the symbol's own shape -- moves
-#: everything the engine ranks after it, which is what put it there.
-#: ``19_absorber_stripper`` [2 of 68, neither under a halo] drains its overhead
-#: condenser into a reflux drum at the same elevation, so ``E-402``'s
-#: ``shell_out`` and ``V-401``'s ``in_1`` share a row and the two labels meet.
-#: ``20_molecular_sieve_dryer`` [3 of 164, all under halos] hangs a sequence
-#: square off each of eight switching valves; the ``KY-501`` anchor label and
-#: ``KC-501``'s and ``AI-502``'s ``sig_out`` are what land under lettering.
-#:
-#: 04 and 14 both grew when the letter codes ISO 15519-2 5.2.5 writes outside a
-#: symbol arrived: a code is haloed lettering like any tag, so it is one more
-#: thing an overlay marker can land under, and the sheets that letter the most
-#: are the ones that moved. ``12_block_flow_diagram`` had an entry here and has
-#: none now: it draws zero, so it is held to zero like every other sheet that
-#: does.
+# Maximum tolerated overlay-label collisions for intentionally dense sheets.
 _CROWDED = {
     "04_control_loop": 3,
     "11_ethanol_pid": 50,
@@ -419,32 +496,48 @@ _CROWDED = {
 }
 
 
-@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
-def test_the_overlay_writes_where_the_sheet_left_it_room(name):
-    """Every label the sheet owes, written, and none of them buried: not under a
-    halo and not under another one of them.
+@pytest.fixture(scope="module")
+def corpus_drawings(settled_gallery):
+    """Render each debug-overlay corpus sheet in both modes.
 
-    One sweep for the last two, because they are one defect: a label that has
-    not been told where the plates and the other labels are lands on whichever
-    it meets first. The obstacles are read out of the drawn SVG rather than off
-    the placement code, for the reason ``test_halo_invariants`` reads them there
-    -- what the invariant is about is what lands on the paper.
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
 
-    The count is checked first, and it is not decoration. "None of them is
-    buried" is satisfied by writing none of them: replacing
-    ``pandid.render.debug._settle`` with ``lambda labels, bounds: ([], [])``
-    passed this on all 22 sheets, ``_CROWDED`` and all, because zero labels
-    trivially overlap nothing. So the placement pass now has to hand back
-    everything the label pass handed it. The expected number is *derived* --
-    one anchor label per placed unit and one port label per nozzle, which is
-    what :func:`pandid.render.debug._labels` builds -- and not a pinned table,
-    so a sheet that gains a unit moves it without anyone editing a constant.
-    What that does not check is the label pass itself: a ``_labels`` that
-    stopped building anchors would move both sides together. It is the
-    placement pass this file is about.
+    Returns
+    -------
+    dict[str, tuple[Flowsheet, str, str]]
+        Flowsheets with debug and plain SVGs by corpus name.
     """
-    fs, kwargs = CORPUS[name]()
-    svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS}, debug=True)
+    drawings = {}
+    for name, build in CORPUS.items():
+        if name in settled_gallery:
+            fs, kwargs = copy_settled_case(settled_gallery, name)
+        else:
+            fs, kwargs = build()
+        options = {key: value for key, value in kwargs.items() if key in _RENDER_OPTS}
+        drawings[name] = (fs, fs.to_svg(**options, debug=True), fs.to_svg(**options))
+    return drawings
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
+    """Test that corpus overlay labels remain visible and distinct.
+
+    Parameters
+    ----------
+    corpus_drawings : dict[str, tuple[Flowsheet, str, str]]
+        Cached flowsheets with debug and plain SVGs.
+    name : str
+        Corpus sheet name.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
+    fs, svg, _plain = corpus_drawings[name]
     halos, labels = _halos(svg), _placed(svg)
     expected = sum(1 + len(u.ports) for u in fs.units if u.frame is not None)
     assert len(labels) == expected, (
@@ -464,22 +557,19 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(name):
 
 
 def test_a_label_that_had_to_move_is_joined_to_the_marker_it_names():
-    """Letting the words walk is only safe because of this line.
+    """Test that displaced labels include a marker tether.
 
-    A coordinate that has stepped clear of a halo has also stepped away from its
-    own dot, and on a crowded sheet the next dot along is nearer. A label read
-    against the wrong nozzle is worse than one that cannot be read at all,
-    because it is a number that gets typed into ``pin()``. So anything written
-    more than a couple of lines from its marker carries a hairline back to it.
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
     """
     svg = _sheet().to_svg(debug=True)
     g = _group(svg)
     (shell_in,) = [b for b, text in _placed(svg) if text.startswith("shell_in")]
     dots = {(float(c.get("cx")), float(c.get("cy"))) for c in g.iter(f"{SVG}circle")}
     assert (240.0, 300.0) in dots
-    # That nozzle is at the middle of the box's top edge, which is exactly where
-    # the renderer centres the unit's own tag, so this is a label that has to
-    # move -- and having moved, it has to say where it came from.
+    # The top-edge nozzle requires a displaced label.
     assert shell_in[0] > 240.0 + 2 * D._MARK_SIZE
     assert [
         ln
@@ -490,8 +580,13 @@ def test_a_label_that_had_to_move_is_joined_to_the_marker_it_names():
 
 
 def test_a_label_still_against_its_own_marker_is_left_alone():
-    """The other half of that rule. A tether saying what the eye already had is
-    clutter, so one is drawn only where the words have actually gone somewhere."""
+    """Test that adjacent labels do not include a tether.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
+    """
     fs = Flowsheet("plain")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     prod = fs.add(U.Product("P-1")).pin(x=430, y=105)
@@ -504,23 +599,26 @@ def test_a_label_still_against_its_own_marker_is_left_alone():
 
 
 # ---------------------------------------------------------------------------
-# ...without the sheet underneath moving a hair
+# Diagram invariants
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
-def test_the_drawing_is_the_same_drawing_with_the_overlay_lifted_off(name):
-    """Cut the ``<g id="debug">`` group out and what is left is the plain sheet.
+def test_the_drawing_is_the_same_drawing_with_the_overlay_lifted_off(corpus_drawings, name):
+    """Test that removing the overlay restores the plain SVG.
 
-    Stronger than "off is off", and it is exactly what the placement above put
-    at risk. The labels are now worked out *after* the drawing exists, so the
-    renderer builds the sheet and splices the overlay onto the head of the list
-    afterwards; get that splice wrong and the overlay reorders the drawing
-    itself. No golden would catch it, because every golden is drawn with the
-    overlay off.
+    Parameters
+    ----------
+    corpus_drawings : dict[str, tuple[Flowsheet, str, str]]
+        Cached flowsheets with debug and plain SVGs.
+    name : str
+        Corpus sheet name.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behavior.
     """
-    fs, kwargs = CORPUS[name]()
-    opts = {k: v for k, v in kwargs.items() if k in _RENDER_OPTS}
-    marked = fs.to_svg(**opts, debug=True)
+    _fs, marked, plain = corpus_drawings[name]
     head, rest = marked.split('  <g id="debug">', 1)
-    assert head + rest.split("  </g>\n", 1)[1] == fs.to_svg(**opts)
+    assert head + rest.split("  </g>\n", 1)[1] == plain

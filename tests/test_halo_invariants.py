@@ -61,6 +61,7 @@ from typing import NamedTuple
 
 import pytest
 
+from _render_cases import copy_settled_case
 from pandid.portgeom import unit_box
 from pandid.render.svg import _PLATE_CLEARANCE, _ink, _obstacle
 from pandid.render.weights import LineWeight
@@ -165,11 +166,25 @@ class Drawn(NamedTuple):
 
 
 @pytest.fixture(scope="module")
-def drawn():
-    """Every sheet in the corpus, rendered once."""
+def drawn(settled_gallery):
+    """Render every halo-invariant corpus sheet once.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared, routed gallery flowsheets and their render options.
+
+    Returns
+    -------
+    dict
+        Rendered flowsheets, label halos, and flange faces keyed by corpus name.
+    """
     out = {}
     for name, build in CORPUS.items():
-        fs, kwargs = build()
+        if name in settled_gallery:
+            fs, kwargs = copy_settled_case(settled_gallery, name)
+        else:
+            fs, kwargs = build()
         svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS})
         out[name] = Drawn(fs, _halos(svg), _flange_bars(fs, kwargs))
     return out

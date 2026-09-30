@@ -60,6 +60,7 @@ from pathlib import Path
 
 import pytest
 
+from _render_cases import copy_settled_case
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
 from pandid.portgeom import unit_box
@@ -329,11 +330,25 @@ def _alongness(box, turned, runs) -> float:
 
 
 @pytest.fixture(scope="module")
-def sheets():
-    """Every sheet in the corpus, rendered once, as (flowsheet, labels)."""
+def sheets(settled_gallery):
+    """Render every visual-label corpus sheet once.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared, routed gallery flowsheets and their render options.
+
+    Returns
+    -------
+    dict
+        Flowsheets and parsed labels keyed by corpus name.
+    """
     out = {}
     for name, build in CORPUS.items():
-        fs, kwargs = build()
+        if name in settled_gallery:
+            fs, kwargs = copy_settled_case(settled_gallery, name)
+        else:
+            fs, kwargs = build()
         svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS})
         out[name] = (fs, _labels(svg))
     return out

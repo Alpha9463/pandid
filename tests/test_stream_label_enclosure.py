@@ -1,49 +1,10 @@
-"""A stream label ruled inside a shape: ``fs.stream_labels.enclosure`` (#480).
+"""Test stream-label enclosure geometry, findings, and exports.
 
-**A drafting convention and not a standard.** A stream number in a diamond is
-widespread in North American practice and in the chemical-engineering
-textbooks, which is why courses and company drawing standards ask for it. No
-clause of ISO 10628 or ISO 15519 prescribes a shape around a stream number, so
-nothing here is asserted as conformance: what is asserted is that the option
-draws what it says, that the default is untouched, and that the two backends
-draw one drawing.
-
-Four things carry the weight.
-
-**The enclosure is what the search reserves.** A stream label sits *on* its
-line and a shape is bigger than the words in it. If the placement search went
-on reserving the words alone, the shape would be drawn over paper nothing had
-accounted for -- so ``StreamNumber.box`` *is* the enclosure, and every check
-here is against that one box.
-
-**An enclosed label never leaves its run** (#480, decided by the owner). The
-displacement path a bare label takes -- beside the line, or out to a leader --
-is not taken, because a diamond off its run has no reading at all while one
-too big for its run is merely crowded. Crowding is the drafter's to fix by
-spacing the sheet, and it is reported so they can.
-
-**No label paints out a line that is not its own**, at any setting. The shape
-is an outline -- a filled one is a plate the size of a diamond and deletes
-whatever run crosses it -- and the plate under the words is laid only where it
-covers the labelled run alone. Where a run offers no such place, no plate is
-laid: the number is written straight onto the sheet and the crossing run is
-drawn through it. A drawing showing a connection that is not there is worse
-than a crowded one, and ``validate()`` cannot see the difference because the
-topology is untouched.
-
-**One size for the whole sheet.** Measured over the longest label and given to
-every label, the way the stream table rules its columns (#477).
-
-``to_drawio()`` cannot rule a diamond round an edge label -- mxGraph has
-``labelBorderColor`` and it draws a rectangle -- so an enclosed number leaves
-the edge and becomes a vertex of its own. The geometry checks below are what
-says the vertex lands where the sheet draws the shape, and reports what the
-sheet reports.
+Small flowsheets test isolated geometry. Selected gallery sheets test dense
+label layouts; representative golden fixtures own default-render integration.
 """
 
-import importlib.util
 import math
-import pathlib
 import re
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
@@ -73,39 +34,34 @@ from pandid.render.svg import (
     stream_numbers,
 )
 from pandid.spec import SpecError, from_dict, to_dict
+from _render_cases import copy_settled_case
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-
-#: Every shape the option takes but ``"none"``, which is the default and is the
-#: absence of one.
+#: Supported non-default stream-label enclosure shapes.
 SHAPES = ("diamond", "circle", "box")
 
-#: A sheet of the shipped corpus that draws vertical labels and leaders both.
-#: The checks needing one are parametrised on it rather than on a fixture that
-#: would have to be kept crowded on purpose.
+#: Gallery sheet with vertical labels and leaders.
 CROWDED = "13_mineral_dewatering"
 
-#: A sheet of the shipped corpus with runs that cross, so it draws line jumps.
-#: ``CROWDED`` draws none: nothing on it crosses anything.
+#: Gallery sheet with crossing runs and line jumps.
 CROSSED = "11_ethanol_pid"
 
-
-def _gallery():
-    path = ROOT / "scripts" / "gallery.py"
-    found = importlib.util.spec_from_file_location("_pandid_gallery_enclosure", path)
-    assert found is not None and found.loader is not None
-    module = importlib.util.module_from_spec(found)
-    found.loader.exec_module(module)
-    return module
-
-
-gallery = _gallery()
-SHEETS = gallery.sheets()
+#: Gallery sheets with label-pair findings across all enclosure shapes.
+LABEL_CASES = ("11_ethanol_pid", "13_mineral_dewatering", "14_tank_farm")
 
 
 def sheet(scheme: "str | Callable[[int], str]" = "S{n}") -> Flowsheet:
-    """A small train, four runs, no crowding: the fixture for the checks about
-    the shape rather than about the search."""
+    """Build a small flowsheet for stream-label enclosure checks.
+
+    Parameters
+    ----------
+    scheme : str | Callable[[int], str]
+        Stream naming scheme for the test flowsheet.
+
+    Returns
+    -------
+    Flowsheet
+        Small flowsheet with connected process streams.
+    """
     fs = Flowsheet("enclosure", stream_naming_scheme=scheme)
     f = fs.add(Feed("Broth"))
     t = fs.add(Tank("T-101"))
@@ -119,44 +75,97 @@ def sheet(scheme: "str | Callable[[int], str]" = "S{n}") -> Flowsheet:
     return fs
 
 
-def numbers(fs: Flowsheet, **kwargs) -> list:
-    """Where the sheet writes each label, the layout having been resolved.
+def placed_numbers(fs: Flowsheet, **kwargs) -> list:
+    """Return resolved stream-label placements from a rendered flowsheet.
 
-    ``to_svg`` first, because the search reads the *drawn* geometry: a
-    flowsheet not yet laid out has no frames to route between and no runs to
-    write a number along.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet with current layout and route geometry.
+    **kwargs : object
+        Render options passed to the target backend.
 
-    Seeded with the equipment tags, and given the sheet's joints, because both
-    are ink the search dodges: asked without them this returns a placement the
-    sheet does not draw, which is a check against a different drawing. It is
-    ``tests/test_drawio.py``'s seed for the same reason.
+    Returns
+    -------
+    list
+        Resolved stream-label placements.
     """
-    fs.to_svg(**kwargs)
     joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
     plates = list(_tag_pass(fs, default_registry, joints, "vertical").plates)
     return list(stream_numbers(fs, plates, joints, "vertical"))
 
 
+def numbers(fs: Flowsheet, **kwargs) -> list:
+    """Render a flowsheet and return its stream-label placements.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet under test.
+    **kwargs : object
+        Render options passed to the SVG backend.
+
+    Returns
+    -------
+    list
+        Resolved stream-label placements.
+    """
+    fs.to_svg(**kwargs)
+    return placed_numbers(fs, **kwargs)
+
+
+def gallery_case(settled_gallery: dict, stem: str) -> tuple[Flowsheet, dict]:
+    """Copy one settled gallery case for an enclosure test.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+    stem : str
+        Gallery example identifier.
+
+    Returns
+    -------
+    tuple[Flowsheet, dict]
+        Independent flowsheet and render options.
+    """
+    return copy_settled_case(settled_gallery, stem)
+
+
 def halo(name: str) -> "tuple[float, float]":
-    """The plate the words alone are written on, which is what every shape is
-    ruled around."""
+    """Return the text-plate dimensions for a stream label.
+
+    Parameters
+    ----------
+    name : str
+        Scenario or stream identifier under test.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height of the label text plate.
+    """
     return len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
 
 
 def drawn(shape: str, box, ink: str = "black", fill: bool = False) -> str:
-    """The one SVG element *shape* is drawn as, ruled around *box*.
+    """Return an SVG enclosure element for a label box.
 
-    Spelled out here rather than taken from ``_enclosure_svg``, so the check is
-    against what a reader's browser is handed and not against the function that
-    writes it. *ink* is the label's own colour: an enclosure is part of the
-    label, like the leader beside it, and a coloured line's number is ruled in
-    the colour it is written in.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    box : tuple[float, float, float, float]
+        Bounding box used by the geometry check.
+    ink : str
+        Stroke colour used by the generated SVG.
+    fill : bool
+        Whether the generated enclosure is filled.
 
-    *fill* is the white a shape is given when it was measured to reach no ink
-    but its own run, which is what a drawing office rules. Filling one blindly
-    is #480's second defect and is still not done: a shape that reaches
-    anything else stays ``fill="none"`` and the run is seen through it. Which
-    shape gets which is :func:`~pandid.render.svg.fillable_enclosures`.
+    Returns
+    -------
+    str
+        SVG element for the requested enclosure.
     """
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -172,7 +181,18 @@ def drawn(shape: str, box, ink: str = "black", fill: bool = False) -> str:
 
 
 def plate(box) -> str:
-    """The opaque white rectangle a label's words are written on."""
+    """Return an SVG text plate for a label box.
+
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Bounding box used by the geometry check.
+
+    Returns
+    -------
+    str
+        SVG rectangle for the label text plate.
+    """
     x0, y0, x1, y1 = box
     return (
         f'<rect x="{x0:.1f}" y="{y0:.1f}" '
@@ -187,23 +207,34 @@ _COMMAND = re.compile(rf"([MLA])\s*((?:{_NUMBER}[,\s]*)+)")
 
 
 def _streams_group(svg: str):
+    """Return the SVG group containing rendered process streams.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document text.
+
+    Returns
+    -------
+    xml.etree.ElementTree.Element
+        Element with the ``streams`` identifier.
+    """
     root = ET.fromstring(svg)
     return next(g for g in root.iter(f"{SVG_NS}g") if g.get("id") == "streams")
 
 
 def drawn_runs(svg: str) -> "list[tuple[list, float]]":
-    """Every run the sheet **drew**, as straight segments and the weight they
-    are stroked at, one entry per stream in ``fs.streams`` order.
+    """Return process-stream segments parsed from rendered SVG.
 
-    Read out of the ``d`` attribute, arcs chopped into chords, because a hop
-    is the one piece of a line whose geometry is in no route: it is added by
-    the drawing pass and the model's own ``_ink`` was blind to it for exactly
-    that reason. A check fed by ``_ink`` cannot fail for that, however bad the
-    drawing gets, so this one is fed by the document.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document text.
 
-    A run is ``fill="none"`` with a ``stroke-width``; an arrowhead and a
-    leader's head are filled paths and carry neither, so this picks out the
-    runs and nothing else.
+    Returns
+    -------
+    list[tuple[list, float]]
+        Stream segments and their stroke widths.
     """
     out = []
     for node in _streams_group(svg).iter(f"{SVG_NS}path"):
@@ -215,23 +246,24 @@ def drawn_runs(svg: str) -> "list[tuple[list, float]]":
 
 
 def drawn_plates(svg: str) -> "list[tuple[float, float, float, float]]":
-    """Every opaque white **plate** the label pass laid down.
+    """Return label plates parsed from rendered SVG.
 
-    A plate is the halo under the words and carries no outline. The ``box``
-    enclosure is also a white rectangle now that a shape clear of foreign ink
-    is filled, and it is *not* a plate -- it is ruled, so it has a ``stroke``,
-    and that is what tells the two apart here. Without the distinction this
-    helper returned the enclosures as well and every ``box`` sheet read as
-    having twice the plates the placement laid.
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document text.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Label plates rendered in the SVG.
     """
     out = []
     for node in _streams_group(svg).iter(f"{SVG_NS}rect"):
         if node.get("fill") != "white" or node.get("stroke"):
             continue
         x, y = float(node.get("x") or 0), float(node.get("y") or 0)
-        # Rounded to the decimal the file is written at, so a plate read back
-        # out compares equal to the same plate reconstructed by `as_drawn`
-        # rather than differing in the last bits of a float sum.
+        # Round to SVG serialization precision.
         out.append(
             (
                 round(x, 4),
@@ -244,8 +276,18 @@ def drawn_plates(svg: str) -> "list[tuple[float, float, float, float]]":
 
 
 def as_drawn(box) -> "tuple[float, float, float, float]":
-    """The rectangle the file carries, which is the one a reader sees: ``x``
-    and ``width`` at one decimal, the way ``_enclosure_svg`` writes them."""
+    """Return an enclosure shape parsed from rendered SVG.
+
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Bounding box used by the geometry check.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Parsed enclosure geometry.
+    """
     x0, y0 = round(box[0], 1), round(box[1], 1)
     return (
         x0,
@@ -256,8 +298,18 @@ def as_drawn(box) -> "tuple[float, float, float, float]":
 
 
 def _segments(d: str) -> "list[tuple[tuple[float, float], tuple[float, float]]]":
-    """The path as straight pieces, every arc chopped fine enough that a chord
-    stands in for it to well under a thousandth of a unit."""
+    """Return straight segments represented by an SVG path.
+
+    Parameters
+    ----------
+    d : str
+        SVG path data.
+
+    Returns
+    -------
+    list[tuple[tuple[float, float], tuple[float, float]]]
+        Straight path segments.
+    """
     pts: list[tuple[float, float]] = []
     here = (0.0, 0.0)
     for cmd, raw in _COMMAND.findall(d):
@@ -274,7 +326,28 @@ def _segments(d: str) -> "list[tuple[tuple[float, float], tuple[float, float]]]"
 
 
 def _chords(start, end, radius, large, sweep, steps=180):
-    """Points along a circular SVG arc, centre worked out from the ends."""
+    """Return chord segments for an SVG arc.
+
+    Parameters
+    ----------
+    start : tuple[float, float]
+        Starting point of an SVG arc.
+    end : tuple[float, float]
+        Ending point of an SVG arc.
+    radius : float
+        Arc radius used to construct chord segments.
+    large : bool
+        Whether the SVG arc uses the large-arc flag.
+    sweep : bool
+        Whether the SVG arc uses the sweep flag.
+    steps : int
+        Number of chord segments used for an SVG arc.
+
+    Returns
+    -------
+    list
+        Chord segments approximating an SVG arc.
+    """
     (x0, y0), (x1, y1) = start, end
     dx, dy = (x1 - x0) / 2, (y1 - y0) / 2
     half = math.hypot(dx, dy)
@@ -300,11 +373,21 @@ def _chords(start, end, radius, large, sweep, steps=180):
 
 
 def stroke_meets(rect, segment, width: float) -> bool:
-    """Does a stroke of *width* along *segment* reach inside *rect*?
+    """Return whether a stroke intersects a label plate.
 
-    The centreline against the rectangle grown by half the stroke, which is
-    where the ink's outer edge lands. Liang--Barsky, strict at the edges for
-    the reason ``_meets`` is.
+    Parameters
+    ----------
+    rect : tuple[float, float, float, float]
+        Label plate rectangle under test.
+    segment : tuple[tuple[float, float], tuple[float, float]]
+        Rendered stream segment under test.
+    width : float
+        Rendered stream stroke width.
+
+    Returns
+    -------
+    bool
+        Whether the stroke reaches the plate.
     """
     half = width / 2
     x0, y0 = rect[0] - half, rect[1] - half
@@ -326,13 +409,19 @@ def stroke_meets(rect, segment, width: float) -> bool:
 
 
 def corners(shape: str, box) -> "list[tuple[float, float]]":
-    """*shape* filling *box*, as a polygon wound so its inside is to the left.
+    """Return the corners of an enclosure box.
 
-    Written out here rather than taken from the renderer, so what follows is a
-    second opinion about the geometry and not the same opinion twice. The
-    circle is not one of these: two circles share area exactly when their
-    centres are closer than the two radii, and a polygon standing in for one
-    would only blur that.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    box : tuple[float, float, float, float]
+        Bounding box used by the geometry check.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Corner coordinates in drawing order.
     """
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -342,11 +431,21 @@ def corners(shape: str, box) -> "list[tuple[float, float]]":
 
 
 def shared(shape: str, box, other) -> float:
-    """The area two polygon enclosures share, exactly.
+    """Return the shared area of two enclosure shapes.
 
-    Sutherland--Hodgman -- one convex polygon clipped by each edge of the other
-    -- and then the shoelace. Zero for two that merely touch, which is the
-    convention :func:`_meets` already keeps for rectangles.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    box : tuple[float, float, float, float]
+        Bounding box used by the geometry check.
+    other : object
+        Second geometry value under test.
+
+    Returns
+    -------
+    float
+        Area shared by the two enclosure shapes.
     """
     poly = corners(shape, box)
     clip = corners(shape, other)
@@ -369,8 +468,22 @@ def shared(shape: str, box, other) -> float:
 
 
 def crosses(shape: str, box, other) -> bool:
-    """Do the two enclosures share any area? The answer worked out from the
-    shapes themselves, which is what ``_shapes_meet`` has to agree with."""
+    """Return whether two enclosure shapes intersect.
+
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    box : tuple[float, float, float, float]
+        Bounding box used by the geometry check.
+    other : object
+        Second geometry value under test.
+
+    Returns
+    -------
+    bool
+        Whether the enclosure shapes intersect.
+    """
     if shape != "circle":
         return shared(shape, box, other) > 0
     ax, ay = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
@@ -380,19 +493,66 @@ def crosses(shape: str, box, other) -> bool:
 
 
 def _left(a, b, p) -> float:
-    """Which side of the directed line *a* -> *b* the point *p* is on."""
+    """Return the signed side of a point relative to a segment.
+
+    Parameters
+    ----------
+    a : tuple[float, float]
+        Point used by the geometry helper.
+    b : tuple[float, float]
+        Second point used by the geometry helper.
+    p : tuple[float, float]
+        Point used by the geometry helper.
+
+    Returns
+    -------
+    float
+        Signed side value for the point and segment.
+    """
     return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
 
 
 def _cut(p, q, a, b) -> "tuple[float, float]":
-    """Where the segment *p* -> *q* crosses the line *a* -> *b*."""
+    """Return the intersection point of two line segments.
+
+    Parameters
+    ----------
+    p : tuple[float, float]
+        Point used by the geometry helper.
+    q : tuple[float, float]
+        Second point used by the geometry helper.
+    a : tuple[float, float]
+        Point used by the geometry helper.
+    b : tuple[float, float]
+        Second point used by the geometry helper.
+
+    Returns
+    -------
+    tuple[float, float] | None
+        Intersection point, when the segments meet.
+    """
     d1, d2 = _left(a, b, p), _left(a, b, q)
     t = d1 / (d1 - d2)
     return (p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1]))
 
 
 def inside(shape: str, box, point) -> bool:
-    """Is *point* within the *shape* ruled around *box*?"""
+    """Return whether a point lies inside an enclosure shape.
+
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    box : tuple[float, float, float, float]
+        Bounding box used by the geometry check.
+    point : tuple[float, float]
+        Point evaluated by the geometry check.
+
+    Returns
+    -------
+    bool
+        Whether the point lies within the shape.
+    """
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     a, b = (x1 - x0) / 2, (y1 - y0) / 2
@@ -405,19 +565,28 @@ def inside(shape: str, box, point) -> bool:
     return dx <= a + tol and dy <= b + tol
 
 
-# ---------------------------------------------------------------------------
-# The default
-# ---------------------------------------------------------------------------
+# Default enclosure behaviour.
 
 
 def test_a_new_flowsheet_rules_nothing_around_its_labels():
+    """Test that a new flowsheet rules nothing around its labels.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     assert Flowsheet("x").stream_labels.enclosure == "none"
 
 
 def test_stating_the_default_draws_the_sheet_the_default_draws():
-    """The check that the option is *off* by default rather than defaulting to
-    a shape that happens to look like nothing. The twenty-one goldens are the
-    wider proof; this is the local one."""
+    """Test that stating the default draws the sheet the default draws.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     plain = sheet().to_svg()
     stated = sheet()
     stated.stream_labels.enclosure = "none"
@@ -425,6 +594,13 @@ def test_stating_the_default_draws_the_sheet_the_default_draws():
 
 
 def test_the_export_is_unchanged_where_no_enclosure_is_asked_for():
+    """Test that the export is unchanged where no enclosure is asked for.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     fs = sheet()
     plain = fs.to_drawio()
     fs.stream_labels.enclosure = "none"
@@ -432,41 +608,27 @@ def test_the_export_is_unchanged_where_no_enclosure_is_asked_for():
     assert "-box" not in plain
 
 
-# ---------------------------------------------------------------------------
-# What is drawn
-# ---------------------------------------------------------------------------
+# Enclosure geometry.
 
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_the_shape_is_ruled_round_the_box_reserved_and_fills_none_of_it(shape):
-    """The shape is drawn, and it is an outline: **one check, because either
-    half alone is passed by a renderer that draws no enclosure at all.** A stub
-    that ruled nothing would satisfy "no white the bare sheet does not lay" and
-    a stub that filled its shapes would satisfy "one element per label", so
-    neither is asked on its own.
+    """Test that the shape is ruled round the box reserved and fills none of it.
 
-    ``StreamNumber.box`` is the enclosure's box, so the paper the placement
-    search reserved and the shape a reader sees are one rectangle: one element
-    per label, in the shape asked for, at the reserved size and place.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
 
-    And the white it fills is decided per label, never taken for granted. A
-    shape filled blindly is a plate the size of a diamond, and on
-    ``14_tank_farm`` it took 8,5 units out of ``MS-605``: a run that stopped
-    and started again for no reason a reader could see, on a sheet whose
-    validator is blind to it because the topology is untouched. So the fill is
-    allowed only where the shape was measured to reach no ink but its own run
-    (:func:`~pandid.render.svg.fillable_enclosures`), and this asserts the two
-    agree label by label rather than that the sheet fills nothing.
-
-    This fixture is uncrowded and every shape on it clears everything, so the
-    ``fillable`` list is expected to be all true -- asserted outright, because a
-    ``fillable_enclosures`` that returned all false would otherwise let the
-    per-label comparison below pass while the sheet drew no fill at all.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = sheet()
     fs.stream_labels.enclosure = shape
     ruled = fs.to_svg()
-    placed = numbers(fs)
+    placed = placed_numbers(fs)
     assert placed
 
     fillable = fillable_enclosures(fs, shape, placed, "vertical")
@@ -478,23 +640,26 @@ def test_the_shape_is_ruled_round_the_box_reserved_and_fills_none_of_it(shape):
         assert ruled.count(drawn(shape, number.box, fill=fill)) == 1, (
             f"{shape}: {number.name} is not drawn to fill the box reserved for it"
         )
-        # This sheet is uncrowded, so every label keeps its plate...
+        # The uncrowded fixture keeps every label plate.
         assert number.words is not None
         assert ruled.count(plate(number.words)) == 1
-        # ...and the plate is strictly inside the shape, so the shape is not
-        # the plate under another name.
+        # The label plate is smaller than its enclosure.
         assert number.words != number.box
 
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_the_words_fit_inside_the_shape_ruled_around_them(shape):
-    """Every corner of every label's own halo lands inside its shape.
+    """Test that the words fit inside the shape ruled around them.
 
-    This is the check that ``enclosure_box`` circumscribes rather than merely
-    enlarges: the minimum-area rhombus around a rectangle is twice it in each
-    direction, and a diamond sized to the rectangle itself would cut both top
-    corners off the number. It is also what lets a leader start inside the
-    words' box and be buried by the shape.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = sheet(scheme=lambda n: str(n) if n % 2 else str(1000 + n))
     fs.stream_labels.enclosure = shape
@@ -510,21 +675,22 @@ def test_the_words_fit_inside_the_shape_ruled_around_them(shape):
                 )
 
 
-# ---------------------------------------------------------------------------
-# One size for the sheet
-# ---------------------------------------------------------------------------
+# Shared enclosure size.
 
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_one_size_rules_every_label_however_long_its_own_name_is(shape):
-    """The decision #480 asked to be argued rather than assumed, in the form a
-    reader would see it: ``1`` and ``1002`` on one sheet.
+    """Test that one size rules every label however long its own name is.
 
-    Per-label sizing rules a 26-unit diamond around ``1`` and a 61,6-unit one
-    around ``1002``, alternating down one process, and a row of shapes that
-    vary reads as a drawing where the shape *means* something. Uniform pays the
-    longest label's width at every label instead, which is the trade the stream
-    table takes for its columns (#477).
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = sheet(scheme=lambda n: str(n) if n % 2 else str(1000 + n))
     fs.stream_labels.enclosure = shape
@@ -543,55 +709,71 @@ def test_one_size_rules_every_label_however_long_its_own_name_is(shape):
 
 
 @pytest.mark.parametrize("shape", SHAPES)
-def test_a_label_on_a_vertical_run_turns_its_shape_with_it(shape):
-    """The shape a label is ruled in follows the **run**, so the paper it takes
-    on a vertical one is the transpose of the paper it takes on a horizontal
-    one. A circle transposes to itself, and so does the diamond now that it is
-    a square on its corner, which is the check that this is measured rather
-    than special-cased.
+def test_a_label_on_a_vertical_run_turns_its_shape_with_it(shape, settled_gallery):
+    """Test that a label on a vertical run turns its shape with it.
 
-    Partitioned on the run's own direction and not on ``n.vertical``. That
-    field says which way the *words* face, and inside a diamond or a circle
-    they stay upright however the line runs -- so asking it put every label in
-    the ``flat`` half and left the other empty, and the test failed on its own
-    guard rather than on the thing it measures.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = shape
     placed = numbers(fs, **kwargs)
-
-    def on_a_vertical_run(n) -> bool:
-        (x1, y1), (x2, y2) = n.seg
-        return abs(x2 - x1) < abs(y2 - y1)
 
     flat = {
         (round(n.box[2] - n.box[0], 6), round(n.box[3] - n.box[1], 6))
         for n in placed
-        if not on_a_vertical_run(n)
+        if not _on_a_vertical_run(n)
     }
     turned = {
         (round(n.box[3] - n.box[1], 6), round(n.box[2] - n.box[0], 6))
         for n in placed
-        if on_a_vertical_run(n)
+        if _on_a_vertical_run(n)
     }
     assert flat and turned, "the fixture has to draw both, or this checks nothing"
     assert flat == turned
 
 
-# ---------------------------------------------------------------------------
-# An enclosed label never leaves its run
-# ---------------------------------------------------------------------------
+# Enclosed-label placement.
+
+
+def _on_a_vertical_run(number) -> bool:
+    """Return whether a stream-number segment is vertical.
+
+    Parameters
+    ----------
+    number : object
+        Resolved stream-number placement.
+
+    Returns
+    -------
+    bool
+        Whether the vertical span exceeds the horizontal span.
+    """
+    (x1, y1), (x2, y2) = number.seg
+    return abs(x2 - x1) < abs(y2 - y1)
 
 
 def _on_its_run(number) -> "tuple[bool, float, float]":
-    """Is the label written *on* its own run, and if so how much run is there
-    against how much label?
+    """Return whether a label remains on its stream run.
 
-    The direction is read off ``seg`` and **not** off ``number.vertical``,
-    which is a fact about the words rather than about the run: inside a
-    diamond or a circle they stay upright on a vertical line. Asking the words
-    gave this the wrong axis for exactly those, so a vertical run measured as
-    ``0.0`` units long and every label on one read as having left it.
+    Parameters
+    ----------
+    number : object
+        Resolved stream-number placement.
+
+    Returns
+    -------
+    tuple[bool, float, float]
+        Run-membership result and measured spans.
     """
     (x1, y1), (x2, y2) = number.seg
     if abs(x2 - x1) < abs(y2 - y1):
@@ -603,22 +785,26 @@ def _on_its_run(number) -> "tuple[bool, float, float]":
     return abs(centre - axis) <= 0.5, span, reach
 
 
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+@pytest.mark.parametrize("stem", LABEL_CASES, ids=LABEL_CASES)
 @pytest.mark.parametrize("shape", SHAPES)
-def test_an_enclosed_label_is_written_on_its_run_and_never_beside_it(shape, stem):
-    """The owner's decision on #480, over the whole shipped corpus.
+def test_an_enclosed_label_is_written_on_its_run_and_never_beside_it(shape, stem, settled_gallery):
+    """Keep enclosed labels on representative dense stream runs.
 
-    > When the diagram is requested to use diamonds, then they have to be
-    > located on the stream no matter what.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    stem : str
+        Gallery example identifier.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
 
-    A diamond's whole visual grammar is *the run passes through me*, so one
-    written beside the line -- or out on a leader -- is a symbol a reader
-    cannot identify at all, while one too big for its run is merely crowded
-    and the author holds the lever that fixes it. So the displacement path is
-    not taken: not on any of the twenty-one sheets, and not for any of the
-    three shapes, including the ones whose bare labels are displaced.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(stem)
+    fs, kwargs = gallery_case(settled_gallery, stem)
     fs.stream_labels.enclosure = shape
     placed = numbers(fs, **kwargs)
     assert placed
@@ -632,17 +818,12 @@ def test_an_enclosed_label_is_written_on_its_run_and_never_beside_it(shape, stem
 
 
 def test_a_shape_too_big_for_its_run_stays_on_the_line_anyway():
-    """The decision from the side that can fail: one train, a label that fits
-    on its run bare and cannot fit in a diamond, and the diamond stays put.
+    """Test that a shape too big for its run stays on the line anyway.
 
-    Without this the check above passes on a corpus where every shape happens
-    to fit, and says nothing about the rule.
-
-    The scheme is longer than it used to need to be. A diamond is a square
-    turned on its corner now rather than a minimum-area rhombus, and a square
-    reaches less far along the run for the same words -- which is the point of
-    the change -- so ``STREAM-{n}00`` no longer overruns anything and the case
-    needs a wider label to have a subject at all.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = sheet(scheme="VERY-LONG-STREAM-{n}00")
     fs.stream_labels.enclosure = "diamond"
@@ -656,118 +837,126 @@ def test_a_shape_too_big_for_its_run_stays_on_the_line_anyway():
     assert overrun, "no diamond here is too big for its run, so nothing is tested"
 
 
-def test_a_bare_label_still_leaves_the_line_where_it_always_did():
-    """The rule is conditional on the option and is not a change to label
-    placement in general: ruled with nothing, the same sheet still takes a
-    label beside the line where the search finds no room on it. Without this
-    the check above could pass by pinning every label on every sheet."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+def test_a_bare_label_still_leaves_the_line_where_it_always_did(settled_gallery):
+    """Test that a bare label still leaves the line where it always did.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     assert any(not _on_its_run(n)[0] for n in numbers(fs, **kwargs)), (
         "the fixture has to displace a bare label, or the pair proves nothing"
     )
 
 
-def test_the_crowded_sheet_keeps_its_leaders_bare_and_drops_them_when_ruled():
-    """A leader stands in for adjacency (ISO 15519-1 §7.2.5) and there is
-    nothing to stand in for once the line goes through the shape. The fixture
-    is the sheet that draws leaders when nothing is ruled."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+def test_the_crowded_sheet_keeps_its_leaders_bare_and_drops_them_when_ruled(settled_gallery):
+    """Test that the crowded sheet keeps its leaders bare and drops them when ruled.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     assert [n for n in numbers(fs, **kwargs) if n.leader is not None], (
         "this sheet is the fixture because its bare labels draw leaders"
     )
 
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     svg = fs.to_svg(**kwargs)
-    assert not [n for n in numbers(fs, **kwargs) if n.leader is not None]
-    # ...and the arrowhead a leader wears is gone from the file with it.
+    assert not [n for n in placed_numbers(fs, **kwargs) if n.leader is not None]
+    # Enclosed labels do not write leader arrowheads.
     assert svg.count("<path d=") == 0 or "leader" not in svg
 
 
-def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo():
-    """Unchanged, and checked because the enclosure pass rewrote the lines
-    that draw it: document order is paint order in SVG, and a halo has no
-    outline for a tail to meet, so the leader goes on top and is seen whole.
+def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
+    """Test that the sheet draws a bare label s leader over its halo.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     svg = fs.to_svg(**kwargs)
-    plain = [n for n in numbers(fs, **kwargs) if n.leader is not None]
+    plain = [n for n in placed_numbers(fs, **kwargs) if n.leader is not None]
     assert plain
     for number in plain:
         (ax, ay), _ = number.leader
         assert svg.index(f'<line x1="{ax:.1f}" y1="{ay:.1f}"') > svg.index(plate(number.box))
 
 
-# ---------------------------------------------------------------------------
-# What a label paints out
-# ---------------------------------------------------------------------------
+# Label plates and crossing streams.
 
-#: The sheet carrying a label whose run has nowhere to put a plate, and that
-#: label. One per sheet, the same one at all three shapes, and its plate is
-#: kept off ``250-CWS-312-CS``.
-#:
-#: This was ``13_mineral_dewatering``/``S-403``, whose 14-unit segment could
-#: not slide a 43-unit plate clear of either run crossing it. It stopped being
-#: plateless at the diamond and the circle when a number inside those two
-#: stopped turning with its line: upright, the plate on a vertical run is short
-#: *along* the run rather than tall down it, and S-403's found room. That is
-#: the change working, and it left this case needing a sheet where the knot is
-#: tight enough to survive it.
+#: Gallery sheet and label with no safe opaque plate.
 PLATELESS_SHEET = "18_fixed_bed_recycle"
 PLATELESS = "350-LG-314-CS"
 
 
 def foreign(fs, name) -> list:
-    """Every rectangle of drawn line on the sheet that is not *name*'s own."""
+    """Return stream ink that belongs to another label.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet under test.
+    name : str
+        Scenario or stream identifier under test.
+
+    Returns
+    -------
+    list
+        Ink boxes belonging to other streams.
+    """
     return [line.box for line in _ink(fs, "vertical") if line.line != name]
 
 
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+@pytest.mark.parametrize("stem", LABEL_CASES, ids=LABEL_CASES)
 @pytest.mark.parametrize("shape", ("none", *SHAPES))
-def test_no_label_paints_out_a_line_that_is_not_its_own(shape, stem):
-    """**The invariant the whole option rests on**, over the whole shipped
-    corpus and at every setting, the default included.
+def test_no_label_paints_out_a_line_that_is_not_its_own(shape, stem, settled_gallery):
+    """Keep label plates clear of unrelated rendered stream ink.
 
-    A stream label is written on an opaque plate, and a plate laid across a
-    passing run draws that run stopping where it does not stop. It says two
-    things that are not true -- that the line ends there, and that the gap is
-    blank paper -- and ``validate()`` sees neither, because the topology is
-    untouched. Ruling a shape is what takes away the search's room to dodge:
-    an enclosed label may not leave its run (#480), and unfilling the shape
-    was not enough on its own, since the plate under the words is opaque too.
-    Thirteen of the 286 plates on this corpus landed across a crossing pipe
-    that way -- thirteen 13-unit breaks in lines the sheet says are continuous
-    -- where the same corpus lettered bare breaks none at all.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    stem : str
+        Gallery example identifier.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
 
-    So the plate is laid only where it covers the labelled run alone, and
-    where the run offers no such place it is not laid at all
-    (``StreamNumber.words`` is ``None``): the number goes straight onto the
-    sheet and the crossing run is drawn through it in full. A number a passing
-    run has to be read across is harder to read; a run with a piece missing is
-    not there.
-
-    **Measured off the rendered document and not off the model**, which is
-    not a detail. Asked of ``_ink`` this check compared the placement against
-    the very function the placement consults, so it agreed with the code by
-    construction and could not fail however bad the drawing got -- and it did
-    not fail while ``S-934``'s plate cut ``S-939``'s hop in two on
-    ``21_alumina_refinery``, because ``_ink`` had no hop in it to compare
-    against. The ``d`` attribute is the only thing on the sheet that can
-    contradict ``_ink``, so it is what this reads: every stroke the sheet drew,
-    arcs and all, against every plate the sheet laid.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(stem)
+    fs, kwargs = gallery_case(settled_gallery, stem)
     fs.stream_labels.enclosure = shape
     svg = fs.to_svg(**kwargs)
-    placed = numbers(fs, **kwargs)
+    placed = placed_numbers(fs, **kwargs)
     assert placed
     runs = drawn_runs(svg)
-    # One drawn run per stream, in order, which is what lets a stroke be
-    # attributed to the line that owns it. Asserted rather than assumed: the
-    # attribution is what "somebody else's ink" means here.
+    # Draw one run per stream in stream order.
     assert len(runs) == len(fs.streams), f"{stem}: {len(runs)} runs drawn"
-    # And every plate the model says it laid is a plate in the file, so
-    # neither side of the comparison is the model's word for the other's.
+    # Every resolved plate is rendered in the SVG.
     assert sorted(drawn_plates(svg)) == sorted(
         as_drawn(n.words) for n in placed if n.words is not None
     ), f"{stem}: the plates in the file are not the plates the placement laid"
@@ -788,12 +977,12 @@ def test_no_label_paints_out_a_line_that_is_not_its_own(shape, stem):
 
 
 def crossing_sheet() -> "tuple[Flowsheet, str]":
-    """Two runs that cross, so the sheet draws exactly one hop, and the sheet
-    it drew.
+    """Build a flowsheet with a stream crossing.
 
-    Pinned rather than laid out, because the fixture's whole job is the
-    crossing: an auto-placed pair of trains is free to stop crossing the next
-    time the layout improves, and then this would check nothing.
+    Returns
+    -------
+    tuple[Flowsheet, str]
+        Crossed flowsheet and rendered SVG.
     """
     fs = Flowsheet("hop")
     west = fs.add(Feed("West")).pin(x=100, y=300)
@@ -802,37 +991,26 @@ def crossing_sheet() -> "tuple[Flowsheet, str]":
     south = fs.add(Tank("T-102")).pin(x=270, y=480)
     fs.connect(west.outlet, east.inlet)  # S1, the horizontal one
     fs.connect(north.outlet, south.inlet)  # S2, the vertical one
-    # Drawn here, because every question below is about the drawing and a
-    # sheet that has not been laid out has no runs to cross.
+    # Render before inspecting stream geometry.
     return fs, fs.to_svg()
 
 
 def test_the_hop_the_sheet_draws_is_the_hop_the_search_is_told_about():
-    """A hop is the one piece of a line whose geometry is in **no route**, so
-    it is the one piece a model of the routes cannot see. ``_ink`` could not,
-    and a plate half a unit clear of a run took a bite out of the arc standing
-    over it.
+    """Test that the hop the sheet draws is the hop the search is told about.
 
-    Both halves now come from :func:`stream_hops`, and this is what says so:
-    the arc in the drawn ``d`` attribute and the rectangle the search reserves
-    are checked against the *same* hop, including which side of the run it
-    leaves -- which is the part a second implementation would get backwards,
-    since it falls out of the sweep flag and the direction of travel rather
-    than out of anything written down in the path.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs, _ = crossing_sheet()
-    # Drawn as an arc on purpose. What is under test is that the ink the
-    # search reserves is the ink the sheet lays down, and the arc is the
-    # mark that can be measured by standing off its own axis; the
-    # interruption takes the same run but leaves nothing to measure there.
-    # It stopped being the default when ISO 10628-1 5.3.4's break became one.
+    # The hopping stream is drawn as an arc.
     svg = fs.to_svg(crossing_style="arc")
     hops = stream_hops(fs, "vertical")
     assert len(hops) == 1, "the fixture has to draw exactly one hop"
     hop = hops[0]
 
-    # The drawing: the hopping run's own path, over the length the arc
-    # occupies, standing off its axis by HOP_R and on the side the hop says.
+    # The rendered hop occupies the expected arc box.
     segments, _width = drawn_runs(svg)[hop.stream]
     near = [
         p
@@ -846,24 +1024,16 @@ def test_the_hop_the_sheet_draws_is_the_hop_the_search_is_told_about():
     assert abs(stand) == pytest.approx(HOP_R, abs=0.01), "no arc stands off the run"
     assert (stand > 0) is (hop.side > 0), "the arc leaves the run the other way"
 
-    # The search: one piece of ink, the hopping run's own, reaching the same
-    # way, and reaching paper the straight route does not reserve.
+    # The placement search reserves the rendered hop ink.
     reserved = [line for line in _ink(fs, "vertical") if line.kind == "hop"]
     assert len(reserved) == 1
     assert reserved[0].line == hop.line
-    # Padded like the run it belongs to, whatever rung that run is drawn on:
-    # a straight length of it is a box `2 * pad` across, the segment itself
-    # having no width. Read off the ink rather than restated here, so a change
-    # of pen weight moves the two together or fails on this line.
+    # The reserved hop box includes stream stroke padding.
     own = [line for line in _ink(fs, "vertical") if line.line == hop.line and line.kind != "hop"]
     assert own, "the hopping run has to have a route, or this proves nothing"
     pad = min((line.x1 - line.x0) if hop.vertical else (line.y1 - line.y0) for line in own) / 2
     assert reserved[0].box == hop_box(hop, pad)
-    # ...and reserving paper the hopping run's own **route** does not, which
-    # is the whole of why a model of the routes could not see it. At the arc's
-    # far point the only ink booked to `S2` is the hop; the straight ink there
-    # is `S1`'s, and `S1`'s own label is entitled to paint over `S1`. That is
-    # exactly how `S-934`'s plate came to cut `S-939`'s hop.
+    # The hop reserves ink outside the stream's straight route.
     tip = (hop.x + hop.side * HOP_R, hop.y) if hop.vertical else (hop.x, hop.y + hop.side * HOP_R)
     route = [
         line.box for line in _ink(fs, "vertical") if line.line == hop.line and line.kind != "hop"
@@ -876,34 +1046,45 @@ def test_the_hop_the_sheet_draws_is_the_hop_the_search_is_told_about():
 
 
 def test_a_hop_belongs_to_the_run_that_draws_it_and_to_no_other():
-    """Which run owns the arc is the whole of the fix. ``S-934``'s plate cut
-    ``S-939``'s hop, and ``S-934`` is the run being *crossed* -- so a hop
-    booked to the crossed run, or to both, would have left the plate free to
-    paint over it as its own ink."""
+    """Test that a hop belongs to the run that draws it and to no other.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     fs, _svg = crossing_sheet()
     hop = stream_hops(fs, "vertical")[0]
     vertical = next(s for s in fs.streams if s.source.owner.name == "North")
     horizontal = next(s for s in fs.streams if s.source.owner.name == "West")
     assert hop.vertical and hop.line == vertical.name
     assert hop.line != horizontal.name
-    # And under the other rule it is the other run's, which is what
-    # `jump_direction` means.
+    # The alternate direction assigns the hop to the other stream.
     other = stream_hops(fs, "horizontal")
     assert len(other) == 1 and not other[0].vertical
     assert other[0].line == horizontal.name
 
 
 @pytest.mark.parametrize("shape", SHAPES)
-def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape):
-    """The check from the side that can fail, and the case the corpus draws.
+def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape, settled_gallery):
+    """Test that a label with nowhere clear for its plate lays none.
 
-    Without it the sweep above passes on a corpus where every plate happens to
-    find clear paper, and says nothing about what happens when none does.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(PLATELESS_SHEET)
+    fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
     svg = fs.to_svg(**kwargs)
-    placed = numbers(fs, **kwargs)
+    placed = placed_numbers(fs, **kwargs)
     assert [n.name for n in placed if n.words is None] == [PLATELESS]
 
     for number in placed:
@@ -912,11 +1093,10 @@ def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape):
             w, h = h, w
         would_be = (number.x - w / 2, number.y - h / 2, number.x + w / 2, number.y + h / 2)
         if number.words is None:
-            # Nothing at all: not the plate it would have had, and not the
-            # shape's box standing in for one either.
+            # The label has no opaque plate.
             assert plate(would_be) not in svg
             assert plate(number.box) not in svg
-            # ...and the crossing runs it is written over are the reason.
+            # Crossing runs prevent a safe plate.
             assert any(_meets(would_be, b) for b in foreign(fs, number.name))
         else:
             assert number.words == pytest.approx(would_be)
@@ -924,44 +1104,45 @@ def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape):
 
 
 @pytest.mark.parametrize("shape", SHAPES)
-def test_the_author_is_told_when_the_number_itself_is_written_across_a_run(shape):
-    """A dropped plate is not silent, and it is not the same news as a crowded
-    shape. "Your diamond has another pipe through it" is
-    ``enclosure-over-line``; "your *number* has another pipe through it" is
-    ``label-over-line``, which names the runs it is written across so the
-    author knows which two to space apart.
+def test_the_author_is_told_when_the_number_itself_is_written_across_a_run(shape, settled_gallery):
+    """Test that the author is told when the number itself is written across a run.
+
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(PLATELESS_SHEET)
+    fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
     fs.to_svg(**kwargs)
     said = {i.message.split("'s ")[0]: i.message for i in findings(fs, {"label-over-line"})}
     assert set(said) == {PLATELESS}, "only the plateless label is written across"
     assert "is written across" in said[PLATELESS]
-    # The runs it names are the ones drawn through it, and no others.
-    crossed = next(n.crossed for n in numbers(fs, **kwargs) if n.name == PLATELESS)
+    # The finding names each crossing stream.
+    crossed = next(n.crossed for n in placed_numbers(fs, **kwargs) if n.name == PLATELESS)
     assert crossed
     for run in crossed:
         assert run in said[PLATELESS]
-    # ...and the shape's own finding no longer says any of it twice.
+    # The enclosure finding does not duplicate the label warning.
     for issue in findings(fs, {"enclosure-over-line"}):
         assert "written on clear paper" not in issue.message
         assert "was dropped" not in issue.message
 
 
 def no_clear_paper() -> Flowsheet:
-    """A sheet with nowhere for one label's plate to go, drawn with **no
-    enclosure at all**.
+    """Build a flowsheet with no clear label plates.
 
-    Thirteen straight runs stacked fourteen apart fill every one of the seven
-    bands either side of the middle ones, and fourteen verticals crossing them
-    fill the run itself, so a twenty-four-character number in the middle of the
-    bundle has no candidate anywhere that misses a line belonging to somebody
-    else. Long names because the plate has to be wide enough that the pickets
-    cannot be threaded between; that is the case ``docs/api.md`` already warns
-    about, a sheet lettered with full line numbers.
-
-    Pinned, so a better layout cannot quietly stop it being crowded and leave
-    this checking nothing.
+    Returns
+    -------
+    Flowsheet
+        Flowsheet with no clear text-plate positions.
     """
     fs = Flowsheet("dense", stream_naming_scheme="L" + "0" * 22 + "{n}")
     for row in range(13):
@@ -977,69 +1158,95 @@ def no_clear_paper() -> Flowsheet:
     return fs
 
 
-def test_the_default_says_so_when_a_label_gives_up_its_plate():
-    """**The rule is unconditional, so the finding has to be.**
+def test_the_default_says_so_when_a_label_gives_up_its_plate(dense_default_render):
+    """Test that the default says so when a label gives up its plate.
 
-    Giving the plate up rather than paint out a neighbour's run is not
-    something ``fs.stream_labels.enclosure`` turns on -- it is how every label
-    on every sheet is drawn, the default included. For a while the reporting
-    *was* conditional: ``label_findings`` returned early at ``"none"``, so the
-    one setting nobody opts into was the one that could drop a plate and say
-    nothing at all. A drawing that quietly stops doing what it did is the
-    defect this whole branch is about, and it does not stop being one because
-    the drawing got more honest rather than less.
+    Parameters
+    ----------
+    dense_default_render : tuple[tuple, tuple, tuple]
+        Cached placements and findings for the dense default-label fixture.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs = no_clear_paper()
-    fs.to_svg(check=False)
-    plateless = [n.name for n in numbers(fs, check=False) if n.words is None]
+    placements, sheet_said, _export_said = dense_default_render
+    plateless = [n.name for n in placements if n.words is None]
     assert plateless, "the fixture has to force a plate off, or this is vacuous"
 
-    said = findings(fs, {"label-over-line"})
+    said = [issue for issue in sheet_said if issue.code == "label-over-line"]
     assert [i.message.split("'s ")[0] for i in said] == plateless
     for issue in said:
         assert issue.severity == "warning"
         assert "is written across" in issue.message
-    # ...and nothing about an enclosure, because none was ruled.
-    assert not findings(fs, set(_LABEL_CODES) - {"label-over-line"})
+    # A bare label has no enclosure findings.
+    assert not [
+        issue for issue in sheet_said if issue.code in set(_LABEL_CODES) - {"label-over-line"}
+    ]
 
 
-def test_both_backends_say_it_at_the_default_too():
-    """The export takes its placement from the same search, so it owes the
-    author the same sentence -- including on the sheet that rules no shape,
-    which is the one the parity check used not to cover."""
-    fs = no_clear_paper()
-    fs.to_svg(check=False)
-    sheet_said = [(i.code, i.message) for i in findings(fs)]
+def test_both_backends_say_it_at_the_default_too(dense_default_render):
+    """Test that both backends say it at the default too.
+
+    Parameters
+    ----------
+    dense_default_render : tuple[tuple, tuple, tuple]
+        Cached placements and findings for the dense default-label fixture.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    _placements, sheet_findings, export_findings = dense_default_render
+    sheet_said = [(i.code, i.message) for i in sheet_findings]
     assert sheet_said, "the fixture has to report something"
-    fs.to_drawio(check=False)
-    assert [(i.code, i.message) for i in findings(fs)] == sheet_said
+    assert [(i.code, i.message) for i in export_findings] == sheet_said
 
 
-def test_a_bare_label_on_the_same_sheet_keeps_every_plate():
-    """The rule is one rule at every setting, and the default still gets a
-    plate under every number: on this corpus the search always finds clear
-    paper for a label free to step off its line, which is why the twenty-one
-    goldens do not move."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+def test_a_bare_label_on_the_same_sheet_keeps_every_plate(settled_gallery):
+    """Test that a bare label on the same sheet keeps every plate.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     placed = numbers(fs, **kwargs)
     assert placed
     assert all(n.words is not None for n in placed)
 
 
-# ---------------------------------------------------------------------------
-# The option itself
-# ---------------------------------------------------------------------------
+# Enclosure option validation.
 
 
 def test_a_shape_nobody_draws_is_refused_at_the_constructor():
+    """Test that a shape nobody draws is refused at the constructor.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     with pytest.raises(ValueError, match="enclosure must be one of"):
         StreamLabelOptions(enclosure="rhombus")  # type: ignore[arg-type]
 
 
 def test_a_shape_nobody_draws_is_refused_at_the_render():
-    """The field is a plain attribute, so the constructor is not the only door
-    in and cannot be the only check. Assigning to it and rendering would
-    otherwise draw the sheet with no enclosure at all and say nothing."""
+    """Test that a shape nobody draws is refused at the render.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     fs = sheet()
     fs.stream_labels.enclosure = "rhombus"  # type: ignore[assignment]
     with pytest.raises(ValueError, match="enclosure must be one of"):
@@ -1051,19 +1258,19 @@ def test_a_shape_nobody_draws_is_refused_at_the_render():
 @pytest.mark.parametrize("draw", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("check", [True, False])
 def test_a_refused_shape_leaves_the_sheet_exactly_as_it_found_it(draw, check):
-    """The defect class of #433 and #451, in this option.
+    """Test that a refused shape leaves the sheet exactly as it found it.
 
-    The check lived in the renderer, and the renderer runs *after*
-    ``_prepare_to_draw`` -- so a name outside the set raised from the far side
-    of ``layout()`` and ``route()``, leaving the caller holding a sheet that
-    had been numbered, laid out, routed, marked current and given this
-    render's warnings, behind a call that had failed. A refused render has to
-    leave the model as it was, or the caller who catches the error cannot tell
-    what they still hold.
+    Parameters
+    ----------
+    draw : str
+        Renderer method under test.
+    check : bool
+        Whether the test expects the operation to fail.
 
-    Under ``check=False`` too: that keyword selects which findings about the
-    *drawing* are looked for, and a shape that does not exist is not a
-    finding, it is an argument no output answers to.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = sheet()
     fs.stream_labels.enclosure = "rhombus"  # type: ignore[assignment]
@@ -1090,19 +1297,24 @@ def test_a_refused_shape_leaves_the_sheet_exactly_as_it_found_it(draw, check):
 
 @pytest.mark.parametrize("draw", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("spelling", ["vertcial", "Vertical", "none", "", "up"])
-def test_a_jump_direction_nobody_draws_is_refused(draw, spelling):
-    """A misspelled ``jump_direction`` used to hop nothing and draw every
-    crossing flat -- two lines shown meeting where they only cross, which is
-    the same lie a severed hop tells and told the other way round. Nothing
-    said so; the value was read against the two names it knows and anything
-    else fell through the bottom.
+def test_a_jump_direction_nobody_draws_is_refused(draw, spelling, settled_gallery):
+    """Test that a jump direction nobody draws is refused.
 
-    ``stream_hops`` refuses it at the point of reading, so no caller reaches
-    the geometry with a name the sheet cannot draw. #492 is moving the refusal
-    forward to ``_prepare_to_draw`` for the parameter as a whole; the two
-    guards compose and neither replaces the other.
+    Parameters
+    ----------
+    draw : str
+        Renderer method under test.
+    spelling : str
+        Configured jump-direction spelling.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     allowed = _DRAWIO_KWARGS if draw == "to_drawio" else kwargs
     passed = {k: v for k, v in kwargs.items() if k in allowed}
     with pytest.raises(ValueError, match="Unknown jump_direction"):
@@ -1110,48 +1322,98 @@ def test_a_jump_direction_nobody_draws_is_refused(draw, spelling):
 
 
 @pytest.mark.parametrize("spelling", list(JUMP_DIRECTIONS))
-def test_both_spellings_the_sheet_draws_are_taken(spelling):
-    """And the check is not simply refusing everything: each of the two names
-    draws a sheet, and they draw *different* ones -- the hop changes hands.
+def test_both_spellings_the_sheet_draws_are_taken(spelling, settled_gallery):
+    """Test that both spellings the sheet draws are taken.
 
-    ``CROWDED`` is no use here: it has no crossing on it at all, so it would
-    pass this with no hop drawn either way.
+    Parameters
+    ----------
+    spelling : str
+        Configured jump-direction spelling.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(CROSSED)
+    fs, kwargs = gallery_case(settled_gallery, CROSSED)
     drawn = fs.to_svg(jump_direction=spelling, **kwargs)
     assert drawn
     hops = stream_hops(fs, spelling)
     assert hops and all(h.vertical is (spelling == "vertical") for h in hops)
 
 
-# ---------------------------------------------------------------------------
-# What the shape was drawn over
-# ---------------------------------------------------------------------------
+# Enclosure collision findings.
 
 
 def findings(fs, codes=None) -> list:
-    """The stream-label pass's own findings. Taken from ``_LABEL_CODES``
-    rather than from a prefix, because one of the four is deliberately not
-    named after an enclosure: a dropped plate is reported at every setting."""
+    """Return label-related render findings for a flowsheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet under test.
+    codes : set[str] | None
+        Finding codes to retain, when provided.
+
+    Returns
+    -------
+    list
+        Matching renderer findings.
+    """
     return [w for w in fs.warnings if w.code in _LABEL_CODES and (codes is None or w.code in codes)]
 
 
-def test_a_bare_sheet_is_told_nothing_about_enclosures():
-    """``"none"`` reserves the plate it always reserved and the search may
-    still step off anything it would cover, so a finding here would be about a
-    placement the sheet has drawn since long before this option existed."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+@pytest.fixture(scope="module")
+def dense_default_render() -> tuple[tuple, tuple, tuple]:
+    """Render the dense default-label fixture through both backends once.
+
+    Returns
+    -------
+    tuple[tuple, tuple, tuple]
+        Resolved placements, SVG findings, and Draw.io findings.
+    """
+    fs = no_clear_paper()
+    fs.to_svg(check=False)
+    placements = placed_numbers(fs)
+    svg_findings = tuple(findings(fs))
+    fs.to_drawio(check=False)
+    return tuple(placements), svg_findings, tuple(findings(fs))
+
+
+def test_a_bare_sheet_is_told_nothing_about_enclosures(settled_gallery):
+    """Test that a bare sheet is told nothing about enclosures.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.to_svg(**kwargs)
     assert not findings(fs)
 
 
-def test_the_author_is_told_which_unit_a_diamond_was_drawn_over():
-    """The decision #480 settled leaves the shape on the line whatever is
-    under it, and hands the author the lever: space the plant. This is the
-    list they need to use it -- ``13_mineral_dewatering`` carries four
-    diamonds over equipment and naming them turns "look carefully at every
-    diamond" into a list."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+def test_the_author_is_told_which_unit_a_diamond_was_drawn_over(settled_gallery):
+    """Test that the author is told which unit a diamond was drawn over.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     over_units = findings(fs, {"enclosure-over-unit"})
@@ -1159,30 +1421,24 @@ def test_the_author_is_told_which_unit_a_diamond_was_drawn_over():
     for issue in over_units:
         assert issue.severity == "warning"
         assert " is drawn over " in issue.message
-        # Names the label and what it landed on, both, or it is not a list.
+        # Each finding names the label and unit.
         assert any(u.name in issue.message for u in fs.units)
 
 
-def test_the_author_is_told_which_line_a_diamond_was_drawn_over():
-    """The finding this file used to have no way of making: every check here
-    measured a label's clearance on its *own* run and looked at no other pipe
-    at all, so a diamond laid across ``CWR-312`` on ``11_ethanol_pid`` passed
-    the lot.
+def test_the_author_is_told_which_line_a_diamond_was_drawn_over(settled_gallery):
+    """Test that the author is told which line a diamond was drawn over.
 
-    A warning and not an error, and that is settled by ``_enclosure_svg``: the
-    shape is an outline *here*, so the crossing line is still drawn and the
-    drawing is crowded rather than false.
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
 
-    A shape clear of foreign ink is filled white now, and this severity does
-    not have to rise with it, because the two conditions cannot both hold: the
-    fill is granted only where ``fillable_enclosures`` measures the shape to
-    reach nothing that is not its own run, and that is exactly the complement
-    of what this finding reports. Every shape named below is hollow. The
-    assertion at the foot of the test is what holds the pair together -- if a
-    reported shape were ever filled, it would be deleting the line it is
-    reported for, and a warning would be the wrong severity.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs, kwargs = gallery_case(settled_gallery, "11_ethanol_pid")
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     over_lines = findings(fs, {"enclosure-over-line"})
@@ -1194,9 +1450,8 @@ def test_the_author_is_told_which_line_a_diamond_was_drawn_over():
     for issue in over_lines:
         assert issue.severity == "warning"
 
-    # The shapes this finding names are the shapes that were refused a fill,
-    # which is what makes "warning" the right severity for all of them.
-    placed = numbers(fs, **kwargs)
+    # Reported shapes remain unfilled.
+    placed = placed_numbers(fs, **kwargs)
     fills = dict(
         zip(
             (n.name for n in placed),
@@ -1211,7 +1466,20 @@ def test_the_author_is_told_which_line_a_diamond_was_drawn_over():
 
 
 def reported_pairs(fs, shape: str) -> set:
-    """Every pair ``enclosure-over-label`` names, unordered."""
+    """Return stream-label pairs reported as intersecting.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet under test.
+    shape : str
+        Enclosure shape under test.
+
+    Returns
+    -------
+    set[frozenset[str]]
+        Reported label-pair intersections.
+    """
     out = set()
     for issue in findings(fs, {"enclosure-over-label"}):
         first, _, rest = issue.message.partition(f"'s {shape} crosses ")
@@ -1222,17 +1490,12 @@ def reported_pairs(fs, shape: str) -> set:
 
 
 def test_two_shapes_that_do_not_touch_are_not_called_a_collision():
-    """The false finding: the corpus named seven crossing pairs of which six
-    touched.
+    """Test that two shapes that do not touch are not called a collision.
 
-    The two rectangles are the pair, as literals, because the placement they
-    came from has since moved on and the geometry is the point. Two diamonds
-    222,8 by 26, centres five units apart across their runs and overlapping
-    2,81 along them: each rhombus reaches into the other's *bounding box*, so
-    asking the shape-against-rectangle test both ways round says yes twice --
-    and over the whole of that 2,81 the two rhombi between them reach 0,328,
-    so they cannot touch. A list the author is asked to work from earns
-    nothing by being generous.
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     a = (753.6273224043716, 647.0, 976.4273224043716, 673.0)
     b = (533.6382513661202, 642.0, 756.4382513661202, 668.0)
@@ -1244,19 +1507,29 @@ def test_two_shapes_that_do_not_touch_are_not_called_a_collision():
 
 
 @pytest.mark.parametrize("shape", SHAPES)
-def test_every_pair_the_sheet_calls_crossed_really_crosses(shape):
-    """Both ways round, over the whole corpus: the shapes the sheet names as
-    crossing share area, and no pair sharing area goes unnamed. Settled
-    against a second implementation of the geometry -- exact polygon clipping
-    for the two polygon shapes, two radii against a distance for the circle --
-    so the renderer's separating-axis answer cannot be checked against itself.
+def test_every_pair_the_sheet_calls_crossed_really_crosses(shape, settled_gallery):
+    """Match reported enclosure intersections with independent geometry.
+
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    for stem in SHEETS:
-        fs, kwargs = gallery.flowsheet(stem)
+    reported = 0
+    for stem in LABEL_CASES:
+        fs, kwargs = gallery_case(settled_gallery, stem)
         fs.stream_labels.enclosure = shape
         fs.to_svg(**kwargs)
         named = reported_pairs(fs, shape)
-        placed = numbers(fs, **kwargs)
+        reported += len(named)
+        placed = placed_numbers(fs, **kwargs)
         for i, number in enumerate(placed):
             for other in placed[:i]:
                 pair = frozenset((number.name, other.name))
@@ -1264,22 +1537,42 @@ def test_every_pair_the_sheet_calls_crossed_really_crosses(shape):
                     f"{stem}: {shape}s of {number.name} and {other.name} "
                     f"{'were' if pair in named else 'were not'} called crossed"
                 )
+    assert reported, f"{shape}: representative sheets have no reported intersections"
 
 
-def test_two_shapes_crossing_are_reported_once():
-    """The pair is one finding, from the second of the two: the first was
-    seeded as occupied before the second was placed, so the search preferred
-    every clear alternative it had and this is what was left."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+def test_two_shapes_crossing_are_reported_once(settled_gallery):
+    """Test that two shapes crossing are reported once.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     assert reported_pairs(fs, "diamond")
 
 
-def test_a_second_render_replaces_the_findings_rather_than_repeating_them():
-    """A sheet spaced out and re-rendered must stop warning about the old
-    one, which is the rule every other renderer finding follows."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+def test_a_second_render_replaces_the_findings_rather_than_repeating_them(settled_gallery):
+    """Test that a second render replaces the findings rather than repeating them.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     once = findings(fs)
@@ -1291,20 +1584,20 @@ def test_a_second_render_replaces_the_findings_rather_than_repeating_them():
     assert not findings(fs)
 
 
-def test_both_backends_report_the_same_findings_and_both_report_some():
-    """One placement, one account of it: the export asks the same function
-    where every number goes, so it owes the author the same list.
+def test_both_backends_report_the_same_findings_and_both_report_some(settled_gallery):
+    """Test that both backends report the same findings and both report some.
 
-    **Two assertions, and the second is not decoration.** Equality alone is
-    satisfied by two empty lists, so a ``stream_numbers`` that returned
-    nothing at all would pass a parity check on its own -- the classic way a
-    "both backends agree" test agrees about nothing. The count is asserted
-    here, in the same test, so the pair cannot be split up and half of it
-    deleted as redundant. ``test_the_author_is_told_which_unit_a_diamond_was_``
-    ``drawn_over`` and its neighbours are what say the list is *right*; this
-    one says both backends have it and it is not empty.
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     sheet_said = [(i.code, i.message) for i in findings(fs)]
@@ -1315,16 +1608,37 @@ def test_both_backends_report_the_same_findings_and_both_report_some():
 
 
 def test_a_shape_nobody_draws_is_refused_in_a_spec():
+    """Test that a shape nobody draws is refused in a spec.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     with pytest.raises(SpecError, match=r"stream_labels\.enclosure"):
         from_dict({"name": "x", "stream_labels": {"enclosure": "hexagon"}})
 
 
 def test_an_unknown_key_under_stream_labels_is_refused():
+    """Test that an unknown key under stream labels is refused.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     with pytest.raises(SpecError, match="stream_labels"):
         from_dict({"name": "x", "stream_labels": {"shape": "diamond"}})
 
 
 def test_the_enclosure_comes_through_a_spec_round_trip():
+    """Test that the enclosure comes through a spec round trip.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     fs = sheet()
     fs.stream_labels.enclosure = "diamond"
     assert to_dict(fs)["stream_labels"] == {"enclosure": "diamond"}
@@ -1332,11 +1646,12 @@ def test_the_enclosure_comes_through_a_spec_round_trip():
 
 
 def test_a_shape_nobody_draws_is_refused_on_the_way_out_to_a_spec():
-    """``enclosure`` is a plain attribute, so it holds whatever it is assigned
-    long after the dataclass checked it. A writer that lets that through
-    writes a file its own reader refuses -- ``from_dict(to_dict(fs))`` raising
-    on a flowsheet nobody edited -- and the author finds out when somebody
-    else opens the file. Same sentence at both doors, and at the render.
+    """Test that a shape nobody draws is refused on the way out to a spec.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     fs = sheet()
     fs.stream_labels.enclosure = "rhombus"  # type: ignore[assignment]
@@ -1349,48 +1664,88 @@ def test_a_shape_nobody_draws_is_refused_on_the_way_out_to_a_spec():
     [("rhombus", "diamond"), ("Oval ", "circle"), ("square", "box"), ("off", "none")],
 )
 def test_the_refusal_names_the_shape_the_author_probably_meant(typed, meant):
-    """``rhombus`` is what the geometry texts call a diamond and ``oval`` what a
-    drawing office calls a circle, so an author who types one has not made a
-    typing mistake -- they have used the other name for the thing they want.
-    The set stays closed and neither spelling is accepted, so one sheet cannot
-    say in one word what the next says in another; the message says which of
-    the four they were reaching for.
+    """Test that the refusal names the shape the author probably meant.
+
+    Parameters
+    ----------
+    typed : str
+        Unsupported enclosure name supplied by the user.
+    meant : str
+        Suggested supported enclosure shape.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
     with pytest.raises(ValueError, match=f"spells that one '{meant}'"):
         StreamLabelOptions(enclosure=typed)
 
 
 def test_a_shape_nobody_has_a_name_for_is_refused_without_a_guess():
+    """Test that a shape nobody has a name for is refused without a guess.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     with pytest.raises(ValueError) as raised:
         StreamLabelOptions(enclosure="hexagon")  # type: ignore[arg-type]
     assert "spells that one" not in str(raised.value)
 
 
 def test_a_sheet_that_left_the_labels_alone_writes_the_spec_it_always_wrote():
-    """Only what was changed, so a spec written before the option existed and
-    one written after are the same file."""
+    """Test that a sheet that left the labels alone writes the spec it always wrote.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     assert "stream_labels" not in to_dict(sheet())
 
 
-# ---------------------------------------------------------------------------
-# draw.io
-# ---------------------------------------------------------------------------
+# draw.io export.
 
 _DRAWIO_KWARGS = ("diagram", "page_size", "border", "show_stream_table", "connections")
 
-#: The built-in each shape is exported as. draw.io's rhombus is the
-#: quadrilateral through its box's four edge-midpoints and its ellipse in a
-#: square box is a circle, so both are the sheet's own geometry rather than an
-#: approximation of it; ``rounded=0`` is the default vertex with square corners.
+#: draw.io cell shape for each stream-label enclosure.
 _EXPORTED = {"diamond": "rhombus", "circle": "ellipse", "box": "rounded"}
 
 
 def cells(fs, **kwargs) -> "list[ET.Element]":
+    """Return draw.io cells produced for a flowsheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet under test.
+    **kwargs : object
+        Render options passed to the target backend.
+
+    Returns
+    -------
+    list[xml.etree.ElementTree.Element]
+        Parsed draw.io cells in document order.
+    """
     text = fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
     return list(ET.fromstring(text).iter("mxCell"))
 
 
 def style(cell) -> dict:
+    """Parse a draw.io cell style into key-value pairs.
+
+    Parameters
+    ----------
+    cell : xml.etree.ElementTree.Element
+        Draw.io cell with an optional style attribute.
+
+    Returns
+    -------
+    dict[str, str]
+        Style entries keyed by draw.io property name.
+    """
     out = {}
     for key in (cell.get("style") or "").split(";"):
         if key:
@@ -1401,10 +1756,18 @@ def style(cell) -> dict:
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_the_export_draws_the_enclosure_the_sheet_draws(shape):
-    """Not a bare label. The number leaves the edge and becomes a vertex, and
-    the vertex is the sheet's own ``StreamNumber.box`` -- so the shape lands
-    where the sheet puts it rather than centred on the run, and the two files
-    are one drawing."""
+    """Test that the export draws the enclosure the sheet draws.
+
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
     fs = sheet()
     fs.stream_labels.enclosure = shape
     placed = {n.name: n for n in numbers(fs)}
@@ -1417,32 +1780,34 @@ def test_the_export_draws_the_enclosure_the_sheet_draws(shape):
         assert name in placed
         seen.add(name)
         assert _EXPORTED[shape] in style(cell)
-        # Unfilled, for the reason the sheet's own shape is: a filled one
-        # deletes the run that crosses it. The white the export lays down is
-        # the label's plate and nothing else.
+        # The enclosure remains unfilled.
         assert style(cell)["fillColor"] == "none"
         assert style(cell)["labelBackgroundColor"] == "#ffffff"
         geometry = cell.find("mxGeometry")
         assert geometry is not None
         x0, y0, x1, y1 = placed[name].box
         got = tuple(float(geometry.get(k) or 0) for k in ("x", "y", "width", "height"))
-        # Two decimals, which is what `_num` writes and all draw.io reads.
+        # draw.io coordinates use two decimal places.
         assert got == pytest.approx((x0, y0, x1 - x0, y1 - y0), abs=0.01)
-        # ...and the edge itself no longer carries the number, or the sheet
-        # would show it twice.
+        # The edge label is removed after creating its enclosure cell.
         assert not found[cid[: -len("-box")]].get("value")
     assert seen == set(placed)
 
 
-def test_the_export_writes_every_enclosure_after_every_run():
-    """Document order is z-order in draw.io. An enclosure written beside its
-    own edge is painted before whichever runs the hop order puts later, and one
-    of those crossing it would be drawn straight through the opaque shape and
-    the number in it -- the one thing the shape exists to prevent. The sheet
-    has the same rule for the same reason: the numbers go on in a pass of their
-    own, after the last pipe.
+def test_the_export_writes_every_enclosure_after_every_run(settled_gallery):
+    """Test that the export writes every enclosure after every run.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     order = [c.get("id") or "" for c in cells(fs, **kwargs)]
     edges = [i for i, cid in enumerate(order) if re.fullmatch(r"s\d+", cid)]
@@ -1451,28 +1816,44 @@ def test_the_export_writes_every_enclosure_after_every_run():
     assert min(boxes) > max(edges)
 
 
-def test_the_export_writes_no_leader_beside_an_enclosure():
-    """An enclosed label never leaves its run, so the export has none of the
-    leader cells the same sheet writes when nothing is ruled."""
-    fs, kwargs = gallery.flowsheet(CROWDED)
+def test_the_export_writes_no_leader_beside_an_enclosure(settled_gallery):
+    """Test that the export writes no leader beside an enclosure.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     plain = [c.get("id") or "" for c in cells(fs, **kwargs)]
     assert [cid for cid in plain if cid.endswith("-lead")], "the fixture draws them"
 
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     order = [c.get("id") or "" for c in cells(fs, **kwargs)]
     assert not [cid for cid in order if cid.endswith("-lead")]
     assert [cid for cid in order if cid.endswith("-box")]
 
 
-def test_the_export_lays_down_no_plate_where_the_sheet_lays_none():
-    """Both files or neither. ``labelBackgroundColor`` is draw.io's spelling of
-    the sheet's opaque plate, so the label the sheet writes with no plate is
-    exported with no ``labelBackgroundColor`` -- otherwise the ``.drawio``
-    deletes the run the ``.svg`` was careful to leave whole, and the two files
-    stop being one drawing.
+def test_the_export_lays_down_no_plate_where_the_sheet_lays_none(settled_gallery):
+    """Test that the export lays down no plate where the sheet lays none.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(PLATELESS_SHEET)
+    fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = "diamond"
     bare = {n.name for n in numbers(fs, **kwargs) if n.words is None}
     assert bare == {PLATELESS}
@@ -1490,19 +1871,24 @@ def test_the_export_lays_down_no_plate_where_the_sheet_lays_none():
     [("box", True), ("diamond", False)],
     ids=["box-turns-with-its-line", "diamond-stays-upright"],
 )
-def test_the_export_turns_exactly_the_numbers_the_sheet_turns(shape, any_turned):
-    """``horizontal=0`` on the vertex, which is the ordinary way to set text on
-    end in draw.io and needs none of the argument the edge-label case does.
+def test_the_export_turns_exactly_the_numbers_the_sheet_turns(shape, any_turned, settled_gallery):
+    """Test that the export turns exactly the numbers the sheet turns.
 
-    Both directions, because the two backends now have a rule to disagree
-    about. A number in a ``box`` follows its line; one in a ``diamond`` stays
-    upright however the line runs, and the export reads
-    :attr:`~pandid.render.svg.StreamNumber.vertical` rather than re-deriving
-    the direction from the geometry, which is what keeps them one drawing. A
-    single-shape check would pass on an exporter that turned everything or
-    nothing, so ``any_turned`` pins which case each shape is.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape under test.
+    any_turned : bool
+        Expected presence of vertically oriented labels.
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Shared routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
     """
-    fs, kwargs = gallery.flowsheet(CROWDED)
+    fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = shape
     turned = {n.name for n in numbers(fs, **kwargs) if n.vertical}
     assert bool(turned) is any_turned, (
