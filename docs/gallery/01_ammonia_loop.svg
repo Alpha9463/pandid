@@ -52,7 +52,7 @@
   <g id="streams">
     <path d="M 100.0,125.8889 L 288.0,125.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 338.0,115.8889 L 458.0,115.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 489.0,165.88892222222225 L 489.0,190.88892222222225 L 535.0,190.88892222222225 L 535.0,60.88890000000001 L 670.0,60.88890000000001 L 670.0,85.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 520.0,148.38892222222222 L 625.0,148.38892222222222 L 625.0,60.88890000000001 L 670.0,60.88890000000001 L 670.0,85.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 670.0,145.8889 L 670.0,301.7778 L 695.0,301.7778" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 726.0,251.7778 L 726.0,236.7778 L 822.0,236.7778" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 892.0,216.7778 L 917.0,216.7778 L 917.0,-25.888877777777765 L 263.0,-25.888877777777765 L 263.0,105.8889 L 288.0,105.8889" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -61,8 +61,8 @@
     <text x="194.0" y="125.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="388.8" y="109.4" width="18.4" height="13.0" fill="white" />
     <text x="398.0" y="115.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
-    <rect x="593.3" y="54.4" width="18.4" height="13.0" fill="white" />
-    <text x="602.5" y="60.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
+    <rect x="563.3" y="141.9" width="18.4" height="13.0" fill="white" />
+    <text x="572.5" y="148.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
     <rect x="663.5" y="214.6" width="13.0" height="18.4" fill="white" />
     <text x="670.0" y="223.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 670.0, 223.8)">S4</text>
     <rect x="764.8" y="230.3" width="18.4" height="13.0" fill="white" />

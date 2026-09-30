@@ -156,8 +156,12 @@ the original stream handle to attach more than one device at distinct fractions.
 ### Automatic face selection
 
 `auto_faces=True` lets the engine choose among a symbol's movable port faces.
-Use `nozzle()` to force a face when the piping convention matters. The choice is
-made on the rendered sheet; a `Block`'s declared faces turn with the block.
+It passes over a face blocked by another unit. Use `nozzle()` to force a face
+when the piping convention matters. The choice is made on the rendered sheet; a
+`Block`'s declared faces turn with the block.
+
+`Reactor` variants `default` and `plain` offer `outlet` on `"S"`, `"E"` or
+`"W"`. `"S"` is used unless a side face gives a more direct run.
 
 Symbols whose function depends on gravity should keep their upright orientation.
 Validation reports `gravity-turned` when one is rotated away from it.

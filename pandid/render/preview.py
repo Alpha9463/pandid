@@ -109,6 +109,22 @@ def _macos_gui_session() -> bool:
     return True
 
 
+def _close(root) -> None:
+    """Destroy a Tk root after running its pending idle tasks.
+
+    Tk 9 on macOS aborts the process when a later root services an idle
+    task queued by a root that no longer exists.
+
+    Parameters
+    ----------
+    root : tkinter.Tk
+        Window to close.
+    """
+    root.withdraw()
+    root.update_idletasks()
+    root.destroy()
+
+
 def _no_display() -> str:
     """Return a display-unavailability reason, if any.
 
@@ -129,7 +145,7 @@ def _no_display() -> str:
         root = tkinter.Tk()
     except tkinter.TclError as e:
         return f"no display ({e})"
-    root.destroy()
+    _close(root)
     return ""
 
 
@@ -250,7 +266,7 @@ def _browser(svg: str, title: str, why: str) -> None:
     """
     global _grace_until
     path = _preview_dir() / f"{_slug(title)}.svg"
-    path.parent.mkdir(parents=True, exist_ok=True)  # a sweep may have taken it
+    path.parent.mkdir(parents=True, exist_ok=True)  # Recreate it after a sweep.
     path.write_text(svg, encoding="utf-8")
     print(f"pandid: no window available ({why}); opened {path} in your browser instead")
     _grace_until = time.monotonic() + _GRACE_S
@@ -306,7 +322,7 @@ def preview(svg: str, *, title: str = "") -> str:
                 _window(root, png, title)
             except tkinter.TclError as e:
                 # Fall back when Tk cannot read PNG data.
-                root.destroy()
+                _close(root)
                 why = f"this Tk cannot display a PNG ({e})"
             else:
                 root.mainloop()

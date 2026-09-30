@@ -1,10 +1,7 @@
-"""``Flowsheet.show()``: the same keywords ``render()`` takes, a window
-where there is one, and the browser where there is not.
+"""Check ``Flowsheet.show()``: its keywords, its window, and its fallback.
 
-Nothing here calls ``mainloop()``. A window that blocks until it is closed
-is the point of the feature and the one thing a test suite must never
-open, so the window is built and inspected and then destroyed, and every
-test of the fallback drives the decision function rather than the display.
+No test calls ``mainloop()``. A window is built, inspected, and closed, and
+the browser fallback is tested through the decision function.
 """
 
 import inspect
@@ -18,7 +15,7 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.render import preview as P
 
-#: A 1x1 PNG, for the tests that need *an* image and not a drawing.
+#: A 1x1 PNG for tests that need an image but not a drawing.
 _PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06"
     b"\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05"
@@ -27,6 +24,13 @@ _PNG = (
 
 
 def _fs() -> Flowsheet:
+    """Build a three-unit sheet with one tabulated stream.
+
+    Returns
+    -------
+    Flowsheet
+        Feed, pump, and product connected in series.
+    """
     fs = Flowsheet("Sheet 1")
     feed = fs.add(U.Feed("F"))
     pump = fs.add(U.Pump("P-101"))
@@ -39,10 +43,35 @@ def _fs() -> Flowsheet:
 
 @pytest.fixture
 def caught(monkeypatch):
-    """``show()`` stopped at the display: the SVG it produced, unshown."""
+    """Capture the SVG and title ``show()`` passes to the preview.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces ``preview`` with a recorder.
+
+    Returns
+    -------
+    dict
+        The ``svg`` and ``title`` of the last call.
+    """
     seen: dict = {}
 
     def fake(svg, *, title=""):
+        """Record one preview call without opening anything.
+
+        Parameters
+        ----------
+        svg : str
+            Rendered SVG markup.
+        title : str, optional
+            Flowsheet title.
+
+        Returns
+        -------
+        str
+            ``"window"``, as a successful preview returns.
+        """
         seen["svg"], seen["title"] = svg, title
         return "window"
 
@@ -50,17 +79,16 @@ def caught(monkeypatch):
     return seen
 
 
-# --- the signature ------------------------------------------------------------
+# --- The signature ------------------------------------------------------------
 
 
 def test_show_takes_exactly_the_keywords_render_takes():
-    """The guard the docstring names.
+    """Hold ``show()`` to the keywords, kinds, and defaults of ``render()``.
 
-    ``show()`` had none of ``render()``'s nine keywords, so the one call an
-    author makes while drafting could not preview a stream table or a P&ID.
-    Restating the list is what let them drift apart in the first place, so
-    the list is restated *once* and held equal here: a keyword added to
-    ``render()`` and not to ``show()`` fails on the day it lands.
+    Returns
+    -------
+    None
+        Every ``render()`` keyword except ``path`` matches on ``show()``.
     """
     render = inspect.signature(Flowsheet.render).parameters
     show = inspect.signature(Flowsheet.show).parameters
@@ -81,35 +109,73 @@ def test_show_takes_exactly_the_keywords_render_takes():
         ("diagram", "p&id", True),
         ("page_size", "A3", True),
         ("debug", True, True),
-        # The three that this sheet cannot show a difference for, and it is the
-        # sheet rather than the forwarding: a PFD marks no joints whatever
-        # ``connections`` says, nothing on it crosses for ``jump_direction`` to
-        # hop, and ``check`` decides what lands on ``fs.warnings`` rather than
-        # what is drawn. Equality with ``to_svg()`` is still the contract.
+        # These three do not change this sheet: a PFD marks no joints, no
+        # lines cross, and ``check`` affects warnings rather than the drawing.
         ("connections", "flanged", False),
         ("jump_direction", "horizontal", False),
         ("check", False, False),
     ],
 )
 def test_every_keyword_reaches_the_drawing(caught, keyword, value, visible):
-    """Taking the keyword is half of it; the sheet shown has to be the sheet
-    ``to_svg()`` would have returned for the same words."""
+    """Forward each keyword to the renderer.
+
+    Parameters
+    ----------
+    caught : dict
+        Captured preview call.
+    keyword : str
+        ``show()`` keyword under test.
+    value : object
+        Value passed for the keyword.
+    visible : bool
+        Whether the value changes this sheet's drawing.
+
+    Returns
+    -------
+    None
+        The previewed SVG equals ``to_svg()`` for the same keyword.
+    """
     _fs().show(**{keyword: value})
     assert caught["svg"] == _fs().to_svg(**{keyword: value})
     assert (caught["svg"] != _fs().to_svg()) is visible
 
 
 def test_the_sheet_is_named_to_whatever_shows_it(caught):
+    """Pass the flowsheet title to the preview.
+
+    Parameters
+    ----------
+    caught : dict
+        Captured preview call.
+
+    Returns
+    -------
+    None
+        The preview receives the sheet's title.
+    """
     _fs().show()
     assert caught["title"] == "Sheet 1"
 
 
-# --- choosing a window or the browser -----------------------------------------
+# --- Choosing a window or the browser -----------------------------------------
 
 
 @pytest.fixture
 def browsed(monkeypatch, tmp_path):
-    """A preview directory under *tmp_path* and the browser stubbed out."""
+    """Redirect preview files to a temporary directory and stub the browser.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the preview directory and ``webbrowser.open``.
+    tmp_path : pathlib.Path
+        Parent of the preview directory.
+
+    Returns
+    -------
+    list[str]
+        URLs the module asked the browser to open.
+    """
     opened: list[str] = []
     monkeypatch.setattr(P, "_dir", str(tmp_path / "preview"))
     (tmp_path / "preview").mkdir()
@@ -118,6 +184,22 @@ def browsed(monkeypatch, tmp_path):
 
 
 def test_a_machine_with_no_display_falls_back_and_says_so(monkeypatch, browsed, capsys):
+    """Open the browser and print the reason when no display exists.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Reports a missing display.
+    browsed : list[str]
+        URLs sent to the browser.
+    capsys : pytest.CaptureFixture
+        Captured standard output.
+
+    Returns
+    -------
+    None
+        One URL is opened and the reason is printed.
+    """
     monkeypatch.setattr(P, "_no_display", lambda: "no display ($DISPLAY is unset)")
     assert P.preview("<svg/>", title="Sheet 1") == "browser"
     out = capsys.readouterr().out
@@ -126,9 +208,22 @@ def test_a_machine_with_no_display_falls_back_and_says_so(monkeypatch, browsed, 
 
 
 def test_a_machine_with_no_rasteriser_falls_back_and_names_the_extra(monkeypatch, browsed, capsys):
-    """The window needs the ``pdf`` extra to turn the SVG into pixels. Without
-    it there is still a drawing to look at, so the browser gets it and the
-    message says what would buy a window."""
+    """Open the browser and name the ``pdf`` extra when it is missing.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Makes rasterisation raise ``ImportError``.
+    browsed : list[str]
+        URLs sent to the browser.
+    capsys : pytest.CaptureFixture
+        Captured standard output.
+
+    Returns
+    -------
+    None
+        One URL is opened and the message names ``pandid[pdf]``.
+    """
     monkeypatch.setattr(P, "_no_display", lambda: "")
     monkeypatch.setattr(P, "_raster", lambda svg: (_ for _ in ()).throw(ImportError("no")))
     assert P.preview("<svg/>") == "browser"
@@ -137,11 +232,37 @@ def test_a_machine_with_no_rasteriser_falls_back_and_names_the_extra(monkeypatch
 
 
 def test_a_rasteriser_that_fails_falls_back_rather_than_raising(monkeypatch, browsed, capsys):
-    """A window that cannot be drawn is not a render that failed: the SVG the
-    browser is handed is the renderer's own output and is unaffected."""
+    """Open the browser when rasterisation raises.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Makes rasterisation raise ``RuntimeError``.
+    browsed : list[str]
+        URLs sent to the browser.
+    capsys : pytest.CaptureFixture
+        Captured standard output.
+
+    Returns
+    -------
+    None
+        The preview falls back and prints the error.
+    """
     monkeypatch.setattr(P, "_no_display", lambda: "")
 
     def boom(svg):
+        """Fail as a broken PNG backend would.
+
+        Parameters
+        ----------
+        svg : str
+            Rendered SVG markup.
+
+        Raises
+        ------
+        RuntimeError
+            Always.
+        """
         raise RuntimeError("the PDF backend could not read the rendered SVG")
 
     monkeypatch.setattr(P, "_raster", boom)
@@ -150,11 +271,21 @@ def test_a_rasteriser_that_fails_falls_back_rather_than_raising(monkeypatch, bro
 
 
 def test_the_display_check_answers_an_unset_display_without_importing_tkinter(monkeypatch):
-    """The headless case is answered from the environment, so nothing can
-    block on a socket to a display that is not listening."""
+    """Report an unset ``DISPLAY`` without importing tkinter.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Sets a Linux platform, unsets ``DISPLAY``, and blocks the import.
+
+    Returns
+    -------
+    None
+        The reason names ``DISPLAY``.
+    """
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
-    monkeypatch.setitem(sys.modules, "tkinter", None)  # an import would raise
+    monkeypatch.setitem(sys.modules, "tkinter", None)  # Make an import raise.
     assert "DISPLAY" in P._no_display()
 
 
@@ -188,17 +319,37 @@ def test_macos_with_a_gui_session_can_open_tkinter(monkeypatch):
     Returns
     -------
     None
-        The display check opens and closes the root successfully.
+        The display check opens the root and closes it with no idle task left.
     """
-    closed = []
+    calls = []
 
     class Root:
         """Stand in for a Tk root.
 
         Notes
         -----
-        Destruction is recorded in ``closed``.
+        Each call is recorded in ``calls``.
         """
+
+        def withdraw(self) -> None:
+            """Record that the temporary window was hidden.
+
+            Returns
+            -------
+            None
+                The call is appended to ``calls``.
+            """
+            calls.append("withdraw")
+
+        def update_idletasks(self) -> None:
+            """Record that pending idle tasks were run.
+
+            Returns
+            -------
+            None
+                The call is appended to ``calls``.
+            """
+            calls.append("update_idletasks")
 
         def destroy(self) -> None:
             """Record that the temporary window was closed.
@@ -206,35 +357,77 @@ def test_macos_with_a_gui_session_can_open_tkinter(monkeypatch):
             Returns
             -------
             None
-                The root is marked closed.
+                The call is appended to ``calls``.
             """
-            closed.append(True)
+            calls.append("destroy")
 
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(P, "_macos_gui_session", lambda: True)
     monkeypatch.setitem(sys.modules, "tkinter", SimpleNamespace(Tk=Root, TclError=Exception))
     assert P._no_display() == ""
-    assert closed == [True]
+    # Tk 9 on macOS aborts when a later root services an idle task left by a
+    # destroyed root, so idle tasks run before the root is destroyed.
+    assert calls == ["withdraw", "update_idletasks", "destroy"]
 
 
-# --- the temporary file -------------------------------------------------------
+# --- The temporary file -------------------------------------------------------
 
 
 def test_the_browser_gets_a_url_a_browser_can_open(browsed):
-    """``"file://" + r"C:\\Users\\..."`` is a URL whose *hostname* is ``C:``,
-    and a browser opens nothing at all from it."""
+    """Give the browser a ``file:///`` URL without backslashes.
+
+    Parameters
+    ----------
+    browsed : list[str]
+        URLs sent to the browser.
+
+    Returns
+    -------
+    None
+        The URL is a valid file URI on every platform.
+    """
     P._browser("<svg/>", "Sheet 1", "testing")
     assert browsed[0].startswith("file:///")
     assert "\\" not in browsed[0]
 
 
 def test_previewing_twenty_drafts_leaves_one_file(browsed, tmp_path):
+    """Reuse one preview file for repeated previews of a sheet.
+
+    Parameters
+    ----------
+    browsed : list[str]
+        URLs sent to the browser.
+    tmp_path : pathlib.Path
+        Parent of the preview directory.
+
+    Returns
+    -------
+    None
+        Twenty previews leave a single file.
+    """
     for _ in range(20):
         P._browser("<svg/>", "Sheet 1", "testing")
     assert len(list((tmp_path / "preview").iterdir())) == 1
 
 
 def test_the_file_is_dropped_on_the_way_out(monkeypatch, browsed, tmp_path):
+    """Remove the preview directory once the grace period has passed.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Expires the grace period.
+    browsed : list[str]
+        URLs sent to the browser.
+    tmp_path : pathlib.Path
+        Parent of the preview directory.
+
+    Returns
+    -------
+    None
+        The directory no longer exists.
+    """
     P._browser("<svg/>", "Sheet 1", "testing")
     monkeypatch.setattr(P, "_grace_until", time.monotonic() - 1)
     P._discard()
@@ -242,15 +435,38 @@ def test_the_file_is_dropped_on_the_way_out(monkeypatch, browsed, tmp_path):
 
 
 def test_a_browser_just_launched_keeps_its_file(browsed, tmp_path):
-    """``webbrowser.open`` returns when the browser is *launched*, which on a
-    cold start is before it has read anything. Deleting then would blank the
-    tab that is opening, so the file is left for the next run's sweep."""
+    """Keep the preview file while the browser may still be reading it.
+
+    Parameters
+    ----------
+    browsed : list[str]
+        URLs sent to the browser.
+    tmp_path : pathlib.Path
+        Parent of the preview directory.
+
+    Returns
+    -------
+    None
+        The file survives a discard inside the grace period.
+    """
     P._browser("<svg/>", "Sheet 1", "testing")
     P._discard()
     assert (tmp_path / "preview" / "Sheet-1.svg").exists()
 
 
 def test_the_sweep_takes_what_an_earlier_run_left(tmp_path):
+    """Remove only stale preview directories.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Directory holding a stale, a fresh, and an unrelated directory.
+
+    Returns
+    -------
+    None
+        The stale directory is removed and the other two remain.
+    """
     stale = tmp_path / f"{P._PREFIX}old"
     fresh = tmp_path / f"{P._PREFIX}new"
     other = tmp_path / "not-ours"
@@ -274,25 +490,53 @@ def test_the_sweep_takes_what_an_earlier_run_left(tmp_path):
     ],
 )
 def test_a_sheet_name_reaching_a_path_keeps_only_what_a_path_takes(title, stem):
+    """Reduce a sheet title to a safe filename stem.
+
+    Parameters
+    ----------
+    title : str
+        Flowsheet title.
+    stem : str
+        Expected filename stem.
+
+    Returns
+    -------
+    None
+        Path separators are removed and an empty result becomes ``sheet``.
+    """
     assert P._slug(title) == stem
 
 
-# --- the window itself --------------------------------------------------------
+# --- The window itself --------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "image,into,fitted",
     [
-        ((1000, 500), (400, 400), (400, 200)),  # wide: width binds
-        ((500, 1000), (400, 400), (200, 400)),  # tall: height binds
-        ((400, 300), (800, 600), (800, 600)),  # smaller than the window: filled
-        ((1000, 500), (1000, 500), (1000, 500)),  # exact
-        ((1000, 500), (3, 1), (2, 1)),  # never rounded away to nothing
+        ((1000, 500), (400, 400), (400, 200)),  # Width limits a wide image.
+        ((500, 1000), (400, 400), (200, 400)),  # Height limits a tall image.
+        ((400, 300), (800, 600), (800, 600)),  # A small image is enlarged.
+        ((1000, 500), (1000, 500), (1000, 500)),  # An exact fit is unchanged.
+        ((1000, 500), (3, 1), (2, 1)),  # Each side stays at least one pixel.
     ],
 )
 def test_the_sheet_is_fitted_to_the_window_and_never_stretched(image, into, fitted):
-    """The window's whole geometry, checked where no display is needed. The
-    shape is the drawing's; only the size is the window's."""
+    """Scale an image into a window while keeping its aspect ratio.
+
+    Parameters
+    ----------
+    image : tuple[int, int]
+        Source width and height.
+    into : tuple[int, int]
+        Available width and height.
+    fitted : tuple[int, int]
+        Expected scaled width and height.
+
+    Returns
+    -------
+    None
+        ``_fit`` returns the expected size.
+    """
     assert P._fit(image, into) == fitted
 
 
@@ -319,9 +563,22 @@ def _tk_or_skip():
 def _drawn(root, canvas, width: int, height: int) -> tuple[int, int]:
     """Resize the window and return the size of the image it settles on.
 
-    The redraw is scheduled rather than immediate (see ``_SETTLE_MS``), so
-    the pending timer is let run -- ``update()`` services one that is due --
-    instead of the event loop being entered, which would not return.
+    The redraw is delayed by ``_SETTLE_MS``, so ``update()`` is called again
+    after that delay instead of entering the event loop.
+
+    Parameters
+    ----------
+    root : tkinter.Tk
+        Preview window.
+    canvas : tkinter.Canvas
+        Canvas holding the sheet image.
+    width, height : int
+        Requested window size in pixels.
+
+    Returns
+    -------
+    tuple[int, int]
+        Width and height of the drawn image.
     """
     root.geometry(f"{width}x{height}")
     root.update()
@@ -334,13 +591,15 @@ def _drawn(root, canvas, width: int, height: int) -> tuple[int, int]:
 
 
 def test_the_window_draws_the_sheet_scaled_to_the_window():
-    """A window and not a fixed-size picture: the image is remade for the
-    size the canvas has, so resizing the window resizes the drawing rather
-    than cropping it or leaving it alone.
+    """Redraw the sheet at the canvas size when the window is resized.
 
-    The one test here that opens a real window (briefly, and closed in a
-    ``finally``); everything it needs a display for is the wiring, since
-    the arithmetic is :func:`_fit`'s and is checked above without one.
+    This test opens a real window and closes it in ``finally``.
+
+    Returns
+    -------
+    None
+        The image fits each window size, keeps its shape, and the title
+        names the sheet.
     """
     from pandid.render import export
 
@@ -352,36 +611,57 @@ def test_the_window_draws_the_sheet_scaled_to_the_window():
         large = _drawn(root, canvas, 700, 550)
         assert small[0] <= 400 and small[1] <= 300
         assert large[0] > small[0] and large[1] > small[1]
-        # The same drawing, so the same shape: fitted, never stretched.
+        # Compare aspect ratios to confirm the image is not stretched.
         assert abs(small[0] / small[1] - large[0] / large[1]) < 0.05
         assert "pandid" in root.title() and "Sheet 1" in root.title()
     finally:
-        root.destroy()
+        P._close(root)
 
 
 def test_the_window_closes_the_ways_an_image_viewer_does():
+    """Bind Escape and ``q`` to close the window.
+
+    Returns
+    -------
+    None
+        Both key bindings exist on the root.
+    """
     root = _tk_or_skip()
     try:
         P._window(root, _PNG, "t")
         assert root.bind("<Escape>") and root.bind("q")
     finally:
-        root.destroy()
+        P._close(root)
 
 
 def test_the_module_never_writes_a_file_for_a_window(monkeypatch, tmp_path):
-    """A window is handed bytes. Only the browser needs somewhere on disk to
-    point at, so the window path leaves nothing behind at all."""
+    """Create no preview directory when a window is shown.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Supplies a display, a raster, and a stand-in Tk root.
+    tmp_path : pathlib.Path
+        Unused temporary directory.
+
+    Returns
+    -------
+    None
+        The preview reports a window and ``_dir`` stays unset.
+    """
     monkeypatch.setattr(P, "_dir", None)
     monkeypatch.setattr(P, "_no_display", lambda: "")
     monkeypatch.setattr(P, "_raster", lambda svg: _PNG)
     monkeypatch.setattr(P, "_window", lambda root, png, title: None)
 
     class Root:
+        """Stand in for a Tk root that returns from ``mainloop`` at once."""
+
         def mainloop(self):
-            pass
+            """Return immediately instead of running the event loop."""
 
         def destroy(self):
-            pass
+            """Accept the close request and do nothing."""
 
     monkeypatch.setattr("tkinter.Tk", Root)
     assert P.preview("<svg/>") == "window"

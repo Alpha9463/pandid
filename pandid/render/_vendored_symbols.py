@@ -347,6 +347,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         # must not be turned: top-entering agitator over a dished bottom
         gravity_fixed=True,
+        port_faces={'outlet': {'S': (31.0, 100.0), 'E': (62.0, 82.5), 'W': (0.0, 82.5)}},
         port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=50.0, singular='feed'),),
     ), 'default')
 
@@ -1097,6 +1098,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.reactor',
         # must not be turned: vent on the top head, outlet in the floor
         gravity_fixed=True,
+        port_faces={'outlet': {'S': (20.0, 95.4), 'E': (40.0, 77.7), 'W': (0.0, 77.7)}},
         port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.4, at=30.0, singular='feed'),),
     ), 'plain')
 

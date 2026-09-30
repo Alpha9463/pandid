@@ -1,44 +1,23 @@
-"""Layout Engine orchestrator.
+"""Compute each unit's frame from the flowsheet topology.
 
-The layout engine computes geometry (each unit's Frame) from topology,
-and it draws the sheet in the order a draughtsman does: the process
-first, then the instrumentation onto it.
+**Stage 1, process.** Units that carry material and streams of kind
+``"material"``:
 
-**Stage 1, process.** Every unit that carries material and every stream
-of kind ``"material"``.
-
-- Cycle breaking, so a return line is known to be one.
-- Placement (:mod:`pandid.layout.place`): two weighted least-squares
-  fits, one per axis, over what the equipment says about where its
-  neighbours are drawn (:mod:`pandid.layout.claims`), solved in closed
-  form by :mod:`pandid.layout.solver`. A column says its condenser is
-  north east of it and its reboiler south east; every stream states two
-  such claims, one from each end, and the fit is the compromise between
-  all of them weighted by how hard each unit insists.
-- Coordinates (:mod:`pandid.layout.coordinates`): grid to pixels, folded
-  into bands where the ribbon is wider than paper, and with the space
-  the instrumentation will need already reserved
+- cycle breaking, which identifies return lines;
+- placement (:mod:`pandid.layout.place`): one weighted least-squares fit per
+  axis over the neighbour positions each unit claims
+  (:mod:`pandid.layout.claims`), solved by :mod:`pandid.layout.solver`;
+- coordinates (:mod:`pandid.layout.coordinates`): grid to pixels, folded
+  into bands, with instrumentation space reserved
   (:mod:`pandid.layout.halo`).
 
-**Stage 2, control.** Every instrument, attached and free-standing, and
-every signal run, placed against stage 1's frozen geometry
-(:mod:`pandid.layout.control`).
+**Stage 2, control.** Instruments and signal runs, placed against the
+stage 1 geometry (:mod:`pandid.layout.control`).
 
-Two phases follow, both of which need every drawn box to be final:
-port-face selection, then label placement. Their order is load-bearing:
-a label goes to a face no connected nozzle occupies, so it has to be
-told which faces those are.
-
-Face selection and stage 2 do not settle in a single pass, and they are
-run to a fixed point rather than in an order. A balloon hung on a
-*stream* lands on that stream's drawn path, and where the path leaves
-each end is the face selection's answer -- while the selection reads the
-boxes, of which the balloon is one. Neither can go first: run once, the
-first ``layout()`` placed such a balloon from the faces a symbol defaults
-to and the second placed it from the faces the first chose, so laying a
-sheet out twice did not draw it twice the same.
-``examples/04_control_loop.py``'s interlock, hung on the signal between
-two balloons, moved 16px on the second run.
+Port-face selection and control placement then repeat until neither moves
+the other, because an attached balloon sits on a drawn path that depends on
+the selected faces. Labels are placed last, on faces no connected nozzle
+uses.
 """
 
 from typing import Literal, Protocol, TYPE_CHECKING
@@ -48,16 +27,38 @@ if TYPE_CHECKING:
 
 
 class LayoutEngine(Protocol):
+    """Define the interface ``Flowsheet.layout`` requires of an engine."""
+
     def layout(self, fs: "Flowsheet") -> None:
-        """Layout the flowsheet by computing a Frame for each unit."""
+        """Compute a frame for each unit.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Sheet to lay out.
+
+        Returns
+        -------
+        None
+            Frames are stored on the units.
+        """
 
 
 def _seed_slots(fs: "Flowsheet") -> None:
-    """Seed each unit's solver ``_Slot`` from its ``Pin`` intent.
+    """Seed each unit's solver slot from its pin.
 
-    Reseeding from ``pin_`` on every run is what makes layout
-    idempotent: the solver never reads back a previous run's
-    coordinates, only the user's intent.
+    Every run starts from author intent, never from earlier coordinates,
+    so layout is idempotent.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose units receive fresh slots.
+
+    Returns
+    -------
+    None
+        ``_slot`` is replaced on every unit.
     """
     from pandid.geometry import _Slot
     from pandid.portgeom import resolve_size
@@ -78,7 +79,7 @@ def _seed_slots(fs: "Flowsheet") -> None:
 
 
 class ConstraintLayoutEngine:
-    """The default auto-layout engine.
+    """Place units with the default automatic layout.
 
     Equipment and stream-relative stations are placed in separate passes
     when a station can be contracted. Other sheets use the full unit graph.
@@ -87,7 +88,8 @@ class ConstraintLayoutEngine:
     def layout(self, fs: "Flowsheet", *, use_coarse: bool = True,
                reservation: Literal["conservative", "compact", "shared"] = "shared",
                row_compaction: float = 0.0,
-               directional_station: bool = False) -> None:
+               directional_station: bool = False,
+               unaligned: frozenset[int] = frozenset()) -> None:
         """Resolve process, inline, and control geometry for a sheet.
 
         Parameters
@@ -102,6 +104,9 @@ class ConstraintLayoutEngine:
             Fraction of independent column-row compaction to apply.
         directional_station : bool, optional
             Follow explicitly mirrored station flow in a detached trial.
+        unaligned : frozenset[int], optional
+            Global indices of units a detached trial keeps on their row
+            axis. Equipment-first placement ignores it.
 
         Returns
         -------
@@ -132,17 +137,13 @@ class ConstraintLayoutEngine:
         if not fs._coarse_layout_candidate:
             _seed_slots(fs)
             assign_positions(fs)
-            assign_coordinates(fs, row_compaction=row_compaction)
+            assign_coordinates(fs, row_compaction=row_compaction, unaligned=unaligned)
             place_stations(fs)
             place_inline(fs)
         elif not inline_coarse:
             place_inline(fs)
-        # Choose the faces, and place again where that moved a balloon.
-        # The loop ends on a selection made against boxes nothing has
-        # moved since, so the sheet it hands on is a function of the
-        # model and not of what the last run left behind. Every sheet in
-        # the corpus settles in one pass and 04 in two; the cap is
-        # ``route()``'s own, for the same reason it has one.
+        # Repeat face selection and control placement until no balloon moves,
+        # up to the pass limit.
         for _ in range(MAX_PLACEMENT_PASSES):
             select_faces(fs)
             if not place_control(fs):

@@ -230,7 +230,7 @@
     <path d="M 920.5,604.0 L 1053.0,604.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1173.0,604.0 L 1268.0,604.0 L 1268.0,629.0 L 1293.0,629.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1373.0,654.0 L 1583.0,654.0 L 1583.0,624.0 L 1608.0,624.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1670.0,724.0 L 1670.0,749.0 L 1593.0,749.0 L 1593.0,629 M 1593.0,619 L 1593.0,541.0 L 1143.0,541.0 L 1143.0,586.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1608.0,689.0 L 1573.25,689.0 L 1573.25,659 M 1573.25,649 L 1573.25,541.0 L 1143.0,541.0 L 1143.0,586.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1083.0,622.0 L 1083.0,693.5 M 1083.0,703.5 L 1083.0,1066.0 L 1108.0,1066.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1228.0,1066.0 L 1293.0,1066.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1318.0,1106.4 L 1318.0,1258.4 L 1608.0,1258.4" fill="none" stroke="black" stroke-width="2" />
@@ -338,8 +338,8 @@
     <text x="1244.5" y="580.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-314-CS</text>
     <rect x="1416.7" y="647.5" width="86.6" height="13.0" fill="white" />
     <text x="1460.0" y="654.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-LT</text>
-    <rect x="1324.7" y="534.5" width="86.6" height="13.0" fill="white" />
-    <text x="1368.0" y="541.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-LT</text>
+    <rect x="1314.8" y="534.5" width="86.6" height="13.0" fill="white" />
+    <text x="1358.1" y="541.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-LT</text>
     <rect x="1076.5" y="800.7" width="13.0" height="86.6" fill="white" />
     <text x="1083.0" y="844.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1083.0, 844.0)">350-LG-306-CS</text>
     <rect x="1199.2" y="1096.0" width="86.6" height="13.0" fill="white" />
