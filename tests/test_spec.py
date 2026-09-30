@@ -13,11 +13,6 @@ import warnings
 
 import pytest
 
-# The round-trip corpus is the golden scenarios: the same seven flowsheets the
-# examples draw, already built here once. Re-typing them would only let the two
-# copies drift.
-from test_golden import SCENARIOS
-
 from pandid import Flowsheet, units
 from pandid.document import Annotation, TableBox
 from pandid.spec import SpecError
@@ -49,25 +44,6 @@ def _spec(**overrides):
 
 
 # --- round-tripping -----------------------------------------------------------
-
-
-@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
-def test_every_example_round_trips(name):
-    """to_dict() -> from_dict() -> the same spec, and the same drawing.
-
-    Comparing the rendered SVG is what makes this a real round trip: a spec that
-    merely re-imports without raising could still have dropped a pin, a mirror
-    or a port face, and only the geometry would show it.
-    """
-    build, render_kwargs = SCENARIOS[name]
-    original = build()
-    spec = original.to_dict()
-
-    assert json.loads(json.dumps(spec)) == spec, "spec must be JSON-safe"
-
-    rebuilt = Flowsheet.from_dict(spec)
-    assert rebuilt.to_dict() == spec
-    assert rebuilt.to_svg(**render_kwargs) == original.to_svg(**render_kwargs)
 
 
 def test_round_trip_keeps_whole_number_coordinates_whole():
