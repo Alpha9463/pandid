@@ -17,7 +17,12 @@ if TYPE_CHECKING:
     from pandid.routing import Router
 
 
+#: Smallest estimated gain, as a fraction of total route length, that
+#: justifies an exact trial.
 MIN_ESTIMATED_GAIN_FRACTION = 0.004
+
+#: Maximum re-layouts one default route spends on sealed nozzle exits.
+MAX_EXIT_ROUNDS = 3
 
 
 @dataclass(frozen=True)
@@ -265,8 +270,82 @@ def _publish_candidate(fs: Flowsheet, candidate: Flowsheet) -> None:
     fs._route_stale = False
 
 
+def _exits_repaired(before: Quality, after: Quality) -> bool:
+    """Check that a re-layout removed hard conflicts and added none.
+
+    Parameters
+    ----------
+    before, after : Quality
+        Measurements of the current and re-laid completed drawing.
+
+    Returns
+    -------
+    bool
+        Whether author intent and pins are preserved, no hard count rises,
+        and fewer hard conflicts remain.
+    """
+    return (
+        before.author_intent == after.author_intent
+        and before.frame_transform == after.frame_transform
+        and before.pin_geometry == after.pin_geometry
+        and before.manual_endpoint_geometry == after.manual_endpoint_geometry
+        and all(new <= old for old, new in zip(before.hard, after.hard))
+        and len(after.hard_conflicts) < len(before.hard_conflicts)
+    )
+
+
+def refine_exits(fs: Flowsheet) -> bool:
+    """Undo the row alignment that seals a connected nozzle exit.
+
+    Each round re-lays a detached copy with the owner and blocker of every
+    ``blocked-exit`` conflict kept on their row axis. Pinned units are
+    unaffected. Equipment-first layouts are left unchanged.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Completed default drawing to repair without changing its model.
+
+    Returns
+    -------
+    bool
+        Whether a re-laid drawing with fewer hard conflicts was published.
+    """
+    from pandid.layout import default_layout_engine
+
+    if fs._coarse_layout_candidate:
+        return False
+    best = measure_final(fs)
+    winner: Flowsheet | None = None
+    held: set[int] = set()
+    for _ in range(MAX_EXIT_ROUNDS):
+        blocked = {
+            index
+            for conflict in best.hard_conflicts
+            if conflict.kind == "blocked-exit"
+            for index in conflict.units
+        } - held
+        if not blocked:
+            break
+        held |= blocked
+        trial = copy.deepcopy(fs)
+        default_layout_engine.layout(trial, unaligned=frozenset(held))
+        trial._layout_stale = False
+        trial._route_stale = True
+        settle(trial)
+        after = measure_final(trial)
+        if not _exits_repaired(best, after):
+            break
+        best, winner = after, trial
+    if winner is None:
+        return False
+    _publish_candidate(fs, winner)
+    fs._search_seed_frames = None
+    return True
+
+
 def refine_default(fs: Flowsheet, *, max_trials: int = 1) -> bool:
-    """Publish the first qualifying local proposal within a fixed budget.
+    """Repair sealed exits, then publish the first qualifying local proposal.
 
     Parameters
     ----------
@@ -278,13 +357,14 @@ def refine_default(fs: Flowsheet, *, max_trials: int = 1) -> bool:
     Returns
     -------
     bool
-        Whether an accepted proposal changed the drawing.
+        Whether a repair or an accepted proposal changed the drawing.
     """
     from pandid.layout.candidates import generate
     from pandid.routing.metrics import path_length
 
     if max_trials <= 0:
         return False
+    repaired = refine_exits(fs)
     total_length = sum(
         path_length(stream.route.waypoints) for stream in fs.streams if stream.route is not None
     )
@@ -304,7 +384,7 @@ def refine_default(fs: Flowsheet, *, max_trials: int = 1) -> bool:
             )
             _publish_candidate(fs, candidate)
             return True
-    return False
+    return repaired
 
 
 def refine_rows(fs: Flowsheet) -> bool:

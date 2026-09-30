@@ -1,4 +1,4 @@
-"""Integration checks for publishing a qualified completed drawing."""
+"""Check that default routing publishes only qualified completed drawings."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from pandid import Flowsheet
+from _layout_cases import build as build_biodiesel
+from pandid import Flowsheet, GravitySeparator, Product, Reactor
 from pandid.layout.candidates import generate
 from pandid.layout.quality import admissible, measure_final
 from pandid.layout.trials import _evaluate_candidate
@@ -21,7 +22,7 @@ from scripts.layout_compare import _fingerprint
     "stem", ["10_ethanol_pfd", "16_demineralised_water", "17_stirred_reactor_train"]
 )
 def test_default_route_preserves_the_qualified_settled_drawing(stem: str) -> None:
-    """The final search preserves the accepted trial and model identities.
+    """Preserve the accepted trial and model identities through the final search.
 
     Parameters
     ----------
@@ -54,7 +55,7 @@ def test_default_route_preserves_the_qualified_settled_drawing(stem: str) -> Non
 
 @pytest.mark.parametrize("stem", ["04_control_loop", "08_from_data", "16_demineralised_water"])
 def test_refinement_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
-    """Rebuilds make the same choice without using prior derived geometry.
+    """Repeat the same choice from author intent and from a fresh build.
 
     Parameters
     ----------
@@ -138,7 +139,7 @@ def test_row_trial_does_not_replace_a_better_final_search(
 
 @pytest.mark.parametrize("stem", ["04_control_loop", "10_ethanol_pfd"])
 def test_route_report_uses_the_published_graph(stem: str) -> None:
-    """Trial searches do not change the final route-quality report.
+    """Report route quality from the published graph, not from trials.
 
     Parameters
     ----------
@@ -163,7 +164,7 @@ def test_route_report_uses_the_published_graph(stem: str) -> None:
 def test_route_report_ignores_an_unpublished_trial_warning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Speculative warnings do not count as missing final routes.
+    """Ignore a warning raised only by an unpublished trial.
 
     Parameters
     ----------
@@ -199,7 +200,7 @@ def test_route_report_ignores_an_unpublished_trial_warning(
 
 
 def test_route_report_accepts_manual_intermediate_waypoints() -> None:
-    """A one-point manual ``via`` is a valid routed stream.
+    """Count a manual route with one waypoint as drawn.
 
     Returns
     -------
@@ -209,3 +210,103 @@ def test_route_report_accepts_manual_intermediate_waypoints() -> None:
     fs, _ = layout_quality.build("11_ethanol_pid", False)
     report = route_quality.measure_sheet(fs, "11_ethanol_pid")
     assert report.undrawn == []
+
+
+def _sealed_by_alignment(pinned: bool = False) -> tuple[Flowsheet, dict[str, object]]:
+    """Build a sheet whose row alignment seals a separator's south exit.
+
+    Aligning S-2's feed with R-1's outlet lifts S-2 to 9 px below S-1, inside
+    the stub of S-1's connected underflow.
+
+    Parameters
+    ----------
+    pinned : bool, optional
+        Pin every unit at the sealed pixel positions instead of grid ranks.
+
+    Returns
+    -------
+    tuple[Flowsheet, dict[str, object]]
+        The sheet, with its units and the underflow stream by name.
+    """
+    fs = Flowsheet("Sealed exit")
+    reactor = fs.add(Reactor("R-1"))
+    upper = fs.add(GravitySeparator("S-1"))
+    lower = fs.add(GravitySeparator("S-2"))
+    drain = fs.add(Product("Drain"))
+    if pinned:
+        reactor.pin(x=50, y=50)
+        upper.pin(x=232, y=56)
+        lower.pin(x=232, y=185)
+        drain.pin(x=432, y=91)
+    else:
+        reactor.pin(col=0, row=0)
+        upper.pin(col=1, row=0)
+        lower.pin(col=1, row=1)
+        drain.pin(col=2, row=0)
+    fs.connect(reactor.outlet, lower.feed)
+    underflow = fs.connect(upper.underflow, drain.inlet)
+    return fs, {"upper": upper, "lower": lower, "underflow": underflow}
+
+
+def test_default_route_clears_an_exit_sealed_by_row_alignment() -> None:
+    """Undo the alignment that puts a unit inside a connected nozzle stub.
+
+    Returns
+    -------
+    None
+        The underflow is routed clear, grid ranks hold, and a second route
+        and a fresh build draw the same sheet.
+    """
+    fs, parts = _sealed_by_alignment()
+    fs.layout()
+    fs.route(DefaultRouter())
+    assert parts["underflow"].route.used_fallback
+
+    fs.layout()
+    fs.route()
+    upper, lower = parts["upper"].frame, parts["lower"].frame
+    assert not parts["underflow"].route.used_fallback
+    assert not measure_final(fs).hard_conflicts
+    assert lower.y - upper.y_max >= 25
+    assert (upper.row, lower.row) == (0, 1)
+
+    fingerprint = _fingerprint(fs)
+    fs.route()
+    assert _fingerprint(fs) == fingerprint
+    fresh, _ = _sealed_by_alignment()
+    fresh.route()
+    assert _fingerprint(fresh) == fingerprint
+
+
+def test_exit_repair_leaves_pinned_units_in_place() -> None:
+    """Keep pinned units where the author put them when an exit is sealed.
+
+    Returns
+    -------
+    None
+        Both separators stay on their pins and the blocked route is reported.
+    """
+    fs, parts = _sealed_by_alignment(pinned=True)
+    fs.route()
+
+    upper, lower = parts["upper"].frame, parts["lower"].frame
+    assert (upper.x, upper.y, lower.x, lower.y) == (232, 56, 232, 185)
+    assert parts["underflow"].route.used_fallback
+    assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
+
+
+def test_default_route_clears_the_unpinned_biodiesel_sheet() -> None:
+    """Route the unpinned biodiesel sheet without a line through equipment.
+
+    Returns
+    -------
+    None
+        No stream uses the fallback and no hard conflict remains.
+    """
+    fs, _ = build_biodiesel(pinned=False)
+    fs.route()
+
+    quality = measure_final(fs)
+    assert not any(stream.route.used_fallback for stream in fs.streams)
+    assert not quality.hard_conflicts and not any(quality.hard)
+    assert not any(issue.code == "route-crosses-unit" for issue in fs.validate())
