@@ -252,6 +252,119 @@ def test_recovered_escape_preserves_selected_and_authored_faces(
     assert drum.frame.port_faces == before
 
 
+# --- Reactor side outlets and blocked faces ----------------------------------
+
+
+def _reactor_discharging_to(x, y, *, blocker=None, **sheet):
+    """Build a pinned reactor whose outlet feeds one product flag.
+
+    Parameters
+    ----------
+    x, y : float
+        Pinned position of the flag's nozzle.
+    blocker : tuple[float, float] or None, optional
+        Pinned corner of a 40 px vessel placed beside the reactor.
+    **sheet
+        Extra ``Flowsheet`` keywords.
+
+    Returns
+    -------
+    tuple[Flowsheet, Reactor]
+        The sheet and the reactor pinned at (300, 200).
+    """
+    fs = Flowsheet("reactor", **sheet)
+    reactor = fs.add(units.Reactor("R-1")).pin(x=300, y=200)
+    flag = fs.add(units.Product("P")).pin(x=x, y=y)
+    if blocker is not None:
+        fs.add(units.Vessel("V-1", width=40, height=40, label_pos="center")).pin(
+            x=blocker[0], y=blocker[1]
+        )
+    fs.connect(reactor.outlet, flag.inlet)
+    return fs, reactor
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "face"),
+    [(600, 150, "E"), (60, 150, "W"), (331, 500, "S"), (600, 450, "S")],
+)
+def test_a_reactor_outlet_takes_a_side_only_when_it_saves_a_bend(x, y, face):
+    """Select a side outlet only when it needs no more bends than the floor.
+
+    Parameters
+    ----------
+    x, y : float
+        Pinned position of the product flag's nozzle.
+    face : str
+        Expected drawn face of the reactor outlet.
+
+    Returns
+    -------
+    None
+        A peer level with or above the shell takes a side; one below keeps
+        the floor outlet.
+    """
+    fs, reactor = _reactor_discharging_to(x, y)
+    fs.layout()
+    assert port_anchor(reactor, reactor.frame, "outlet")[2] == face
+
+
+def test_a_reactor_outlet_stays_on_the_floor_without_automatic_faces():
+    """Keep the floor outlet when ``auto_faces`` is disabled.
+
+    Returns
+    -------
+    None
+        The outlet stays south although a side would save a bend.
+    """
+    fs, reactor = _reactor_discharging_to(600, 150, auto_faces=False)
+    fs.layout()
+    assert port_anchor(reactor, reactor.frame, "outlet")[2] == "S"
+    assert reactor.frame.port_faces == {}
+
+
+def test_an_explicit_reactor_outlet_face_beats_the_engine():
+    """Keep a reactor outlet face the author chose with ``nozzle()``.
+
+    Returns
+    -------
+    None
+        The authored floor outlet is drawn and no automatic choice is stored.
+    """
+    fs, reactor = _reactor_discharging_to(600, 150)
+    reactor.nozzle("outlet", "S")
+    fs.layout()
+    assert port_anchor(reactor, reactor.frame, "outlet")[2] == "S"
+    assert reactor.frame.port_faces == {}
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "blocker", "faces"),
+    [(600, 150, (370, 294), {"S"}), (331, 500, (311, 340), {"E", "W"})],
+)
+def test_a_face_whose_stub_crosses_a_unit_is_skipped(x, y, blocker, faces):
+    """Skip a face whose outward stub crosses another unit.
+
+    Parameters
+    ----------
+    x, y : float
+        Pinned position of the product flag's nozzle.
+    blocker : tuple[float, float]
+        Pinned corner of the vessel inside the preferred face's stub.
+    faces : set[str]
+        Clear faces the selection may take.
+
+    Returns
+    -------
+    None
+        A clear face is drawn and the route crosses no unit.
+    """
+    fs, reactor = _reactor_discharging_to(x, y, blocker=blocker)
+    fs.layout()
+    assert port_anchor(reactor, reactor.frame, "outlet")[2] in faces
+    fs.route()
+    assert not any(issue.code == "route-crosses-unit" for issue in fs.validate())
+
+
 # --- A choice is derived geometry, not author intent -------------------------
 
 

@@ -394,9 +394,13 @@ KIND_MAP = {
     # stream out through the shell. So it sits at (62, 10), on the straight east
     # wall just under the tangent line at y 7.5, which is where the off-gas
     # leaves a vessel whose head is occupied.
+    #
+    # The outlet also has east and west placements at y 165, on the straight
+    # wall (y 15..185) below the duty and the feed family.
     ("reactor", "default"): ("vessels", "Pressurized Vessel",
                              {"feed": ("SERIES", "W", 100.0, 28.0, 0.32),
-                              "outlet": ("S", 50.0), "duty": ("E", 100.0),
+                              "outlet": [("S", 50.0), ("E", 165.0), ("W", 165.0)],
+                              "duty": ("E", 100.0),
                               "vent": ("AT", 100.0, 20.0)}),
     # The drawing ``default`` used to be, kept under a name that says what it is
     # rather than deleted: a box with a stirrer perched on top of it is still
@@ -1340,10 +1344,13 @@ KIND_MAP = {
     ("thickener", "default"): ("vessels", "Settling Tank",
                                {"feed": ("W", 8.0), "overflow": ("E", 8.0),
                                 "underflow": ("S", 50.0)}),
-    # Reactor / separator styles. The straight wall spans y 7.69..87.69.
+    # Reactor / separator styles. The straight wall spans y 7.69..87.69. The
+    # outlet also has east and west placements at y 77.7, below the duty and
+    # the feed family.
     ("reactor", "plain"):     ("vessels", "Reactor",
                                {"feed": ("SERIES", "W", 30, 14, 0.4),
-                                "outlet": ("S", 20), "duty": ("E", 47),
+                                "outlet": [("S", 20), ("E", 77.7), ("W", 77.7)],
+                                "duty": ("E", 47),
                                 "vent": ("AT", 30.0, 7.69)}),
     # Horizontal vessel: reflux drum, accumulator, knock-out pot. A lying
     # cylinder with dished ends: the shape a vertical vessel does NOT become
@@ -1806,11 +1813,24 @@ STENCIL_PATCHES = {
 
 
 def patch_shape(stencil, name, el):
-    """Apply :data:`STENCIL_PATCHES` to one parsed <shape>, if it has one.
+    """Apply the :data:`STENCIL_PATCHES` entry for one parsed shape.
 
-    The fragment is appended to the shape's <foreground>, so it paints over
-    what the stencil already drew, exactly as a stencil author would have
-    written it in the first place.
+    The fragment is appended to the shape's ``<foreground>``, so it paints
+    over what the stencil drew.
+
+    Parameters
+    ----------
+    stencil : str
+        Stencil file stem.
+    name : str
+        Shape name within the stencil.
+    el : xml.etree.ElementTree.Element
+        Parsed ``<shape>`` element.
+
+    Returns
+    -------
+    xml.etree.ElementTree.Element
+        The same element, patched in place when an entry exists.
     """
     entry = STENCIL_PATCHES.get((stencil, name))
     if entry is None:
@@ -2347,44 +2367,53 @@ SCALE = {"valve": 0.25, "fitting": 0.25,
 
 
 def scale_for(kind, variant):
-    """The (sx, sy) a symbol's artwork is drawn at, from :data:`SCALE`.
+    """Return the scale a symbol's artwork is drawn at.
 
-    A (kind, variant) entry beats the kind's own, so one variant can be resized
-    without dragging its siblings with it.
+    A ``(kind, variant)`` entry in :data:`SCALE` takes precedence over the
+    entry for the kind.
+
+    Parameters
+    ----------
+    kind : str
+        Unit kind.
+    variant : str
+        Symbol variant.
+
+    Returns
+    -------
+    tuple[float, float]
+        Horizontal and vertical scale factors.
     """
     s = SCALE.get((kind, variant), SCALE.get(kind, 1.0))
     return (float(s), float(s)) if isinstance(s, (int, float)) else (float(s[0]), float(s[1]))
 
 
 def drawio_shape_key(namespace, shape_name):
-    """The key draw.io's own stencil registry files one shape under.
+    """Return the key draw.io's stencil registry gives a shape.
 
-    mxGraph builds it out of the two names the stencil file already carries:
-    ``mxStencilRegistry.parseStencilSet`` takes the package off the root
-    element, the shape's own name off the ``<shape>``, replaces the spaces in
-    the shape's name with underscores and lowercases the pair. So
-    ``mxGraph.pid.valves`` and ``Gate Valve`` make
-    ``mxgraph.pid.valves.gate_valve``, which is what a ``shape=`` in a draw.io
-    style has to say to reach the very drawing this generator converted.
+    draw.io joins the stencil package and the shape name, replaces spaces
+    with underscores, and lowercases the result. It draws a plain rectangle
+    for an unknown key, so the key is derived by the same rule. draw.io
+    splits the key on dots to find the stencil file, so a dot in the shape
+    name is rejected.
 
-    Reproducing the rule is the whole point: a guessed key is not merely wrong,
-    it fails *quietly*. draw.io answers an unresolvable ``shape=`` with its
-    default rectangle, so the file still opens, the equipment is still all
-    there, and every symbol on the sheet has become a box. Deriving the key from
-    the same two strings the artwork was converted from is what makes the export
-    wrong loudly or not at all.
+    Parameters
+    ----------
+    namespace : str
+        Package declared by the stencil file, for example
+        ``mxGraph.pid.valves``.
+    shape_name : str
+        Shape name as written in the stencil.
 
-    Only spaces become underscores; the punctuation upstream puts in a shape
-    name survives ("Tank (Dished Roof)", "Y-Type Strainer", "Rotary Drum Drier,
-    Tumbling Drier"), and it has to, since draw.io does an exact dictionary
-    lookup on the key it built by the same rule. A **dot** is the one character
-    that cannot survive, and is refused rather than passed through: draw.io
-    finds the *file* to load by splitting the key on dots and treating all but
-    the last part as a path (``mxStencilRegistry.getBasenameForStencil``), so a
-    dot inside the shape's own name moves that boundary and sends draw.io
-    looking for a stencil file that was never there. No shape in the vendored
-    set has one today; this is here so that the day one arrives the generator
-    stops instead of emitting a reference nothing can resolve.
+    Returns
+    -------
+    str
+        Registry key, for example ``mxgraph.pid.valves.gate_valve``.
+
+    Raises
+    ------
+    SystemExit
+        If the shape name contains a dot.
     """
     if "." in shape_name:
         raise SystemExit(
@@ -2397,25 +2426,47 @@ def drawio_shape_key(namespace, shape_name):
 
 
 def is_series(spec):
-    """True for a port spec declaring a *family* rather than one nozzle."""
+    """Return whether a port spec declares a nozzle family.
+
+    Parameters
+    ----------
+    spec : object
+        Port specification from :data:`KIND_MAP`.
+
+    Returns
+    -------
+    bool
+        Whether the spec is a ``("SERIES", ...)`` tuple.
+    """
     return isinstance(spec, tuple) and spec[0] == "SERIES"
 
 
 def resolve_port(spec, constraints, w, h):
-    """Resolve a port spec to (x, y) in the shape's own units.
+    """Resolve a single-nozzle port spec to a point in the shape's units.
 
-    ``"W"``            - a named draw.io <constraint> anchor (compass point).
-    ``("E", 10.0)``    - a point on a bounding-box edge, at the given offset.
-    ``("AT", x, y)``   - an absolute point, for nozzles that sit inboard of the
-                         bounding box (e.g. a dome crown, or a shell wall drawn
-                         inside the box because brackets widen the extent).
+    A spec is a named draw.io constraint such as ``"W"``, an edge offset
+    such as ``("E", 10.0)``, or an absolute point such as ``("AT", x, y)``
+    for a nozzle inboard of the bounding box. A ``("SERIES", ...)`` spec is
+    handled by :func:`drawing`, not here.
 
-    A fourth form, ``("SERIES", edge, along, pitch, extent)``, is not a nozzle at
-    all: it hands the port to a :class:`~pandid.render.symbols.PortSeries`, which
-    places as many as the unit turns out to have, ``pitch`` apart and centred on
-    ``along``. A sixth element names the alignment
-    (:data:`~pandid.render.symbols.FROM_START`) for a body with no room to
-    straddle its own nozzle. See :func:`is_series`.
+    Parameters
+    ----------
+    spec : str or tuple
+        Port specification.
+    constraints : dict[str, tuple[float, float]]
+        Named anchors read from the stencil.
+    w, h : float
+        Shape width and height.
+
+    Returns
+    -------
+    tuple[float, float]
+        Port coordinates.
+
+    Raises
+    ------
+    SystemExit
+        If a named constraint is missing from the stencil.
     """
     if isinstance(spec, str):
         if spec not in constraints:
@@ -2430,13 +2481,35 @@ def resolve_port(spec, constraints, w, h):
 
 
 def drawing(el, kind, variant, port_map, sx, sy):
-    """One shape converted, its ports resolved, both at the family's scale.
+    """Convert one shape and resolve its ports at the family's scale.
 
-    Returns ``(inner, w, h, ports, menu, series, aspect)``: the artwork, and
-    everything a :class:`~pandid.render.symbols.Symbol` is built from except its
-    id. Split out so the two states of a device (see :data:`CLOSED_SHAPES`) go
-    through exactly the same arithmetic, which is what lets :func:`render` insist
-    afterwards that the pair differs in ink and in nothing else.
+    A port spec given as a list declares alternate faces after its home
+    placement.
+
+    Parameters
+    ----------
+    el : xml.etree.ElementTree.Element
+        Parsed ``<shape>`` element.
+    kind : str
+        Unit kind.
+    variant : str
+        Symbol variant.
+    port_map : dict[str, object]
+        Port specifications keyed by port name.
+    sx, sy : float
+        Horizontal and vertical scale factors.
+
+    Returns
+    -------
+    tuple
+        ``(inner, w, h, ports, menu, series, aspect)``: the SVG artwork, its
+        size, single-nozzle points, face menus, nozzle families, and the
+        stencil's aspect setting.
+
+    Raises
+    ------
+    SystemExit
+        If an alternate face is not an edge or point spec.
     """
     # Emit a heavier stroke on scaled symbols so it renders at 2px after the
     # scale transform (2px matches streams + hand-drawn symbols exactly).
@@ -2508,13 +2581,20 @@ def drawing(el, kind, variant, port_map, sx, sy):
 
 
 def render() -> str:
-    """The whole generated module, as a string, writing nothing.
+    """Return the text of the generated module without writing it.
 
-    Separate from :func:`main` so a test can regenerate the library in memory and
-    compare it against the committed ``_vendored_symbols.py``. That file is
-    regenerated wholesale, so a hand edit to it is lost the next time anyone runs
-    the generator and the drawing silently reverts; nothing but that comparison
-    notices, since a stale generated file still imports and still draws.
+    A test compares this text with the committed ``_vendored_symbols.py``.
+
+    Returns
+    -------
+    str
+        Python source with LF line endings.
+
+    Raises
+    ------
+    SystemExit
+        If a table names a shape or symbol the generator does not draw, or
+        the two states of a device differ in more than their artwork.
     """
     # Index every shape once, correcting the ones STENCIL_PATCHES names, and
     # note the package each file declares, which is what its shapes are filed
@@ -2708,6 +2788,7 @@ def render() -> str:
 
 
 def main():
+    """Write the generated module and print a summary."""
     OUT.write_text(render(), encoding="utf-8")
     print(f"wrote {OUT} ({len(KIND_MAP)} symbols, "
           f"{len(CLOSED_SHAPES)} of them in two positions)")
