@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate SVG and PNG gallery assets from the example flowsheets.
+"""Generate SVG and PNG gallery assets from example flowsheets.
 
-Run ``python scripts/gallery.py`` after an intentional example or rendering
-change, then review the generated assets before committing them.
+Run ``python scripts/gallery.py`` after an example or renderer change, then
+review the generated assets. A version-only package update needs no redraw.
 """
 
 import argparse

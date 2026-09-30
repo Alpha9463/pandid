@@ -9,7 +9,7 @@ These five fixtures provide exact-output coverage for distinct drawing modes:
 - `18_fixed_bed_recycle`: automatic recycle layout with line numbers.
 
 `tests/test_golden.py` compares each current render to its fixture. The gallery
-tests separately compare all 21 current example renders to `docs/gallery/`.
+documents runnable examples and is regenerated after output changes.
 
 SVGs are normalized with `tests/_svg_compare.py` before comparison. The
 normalizer sorts `<defs>` and removes renderer provenance so hash-seed and
@@ -17,8 +17,8 @@ version metadata do not change a fixture.
 
 ## Regenerating
 
-After an intentional rendering change, regenerate gallery assets and the five
-goldens, then inspect both diffs:
+After an example or rendering change, regenerate affected gallery assets and
+the five goldens, then inspect both diffs:
 
 ```bash
 python scripts/gallery.py
