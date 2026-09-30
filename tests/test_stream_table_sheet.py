@@ -1,13 +1,4 @@
-"""The stream table drawn as a sheet of its own (#481).
-
-``show_stream_table="sheet"`` renders a full drawing whose body is the
-stream table: a zone border, a title strip with a drawing number of its
-own, and the table wrapped into stacked blocks when the streams do not
-fit across the page. What is checked here is the drawing -- which blocks
-carry which streams, that each is headed, and that everything lands
-inside the frame -- rather than the strings the renderer happens to
-emit.
-"""
+"""Check stream-table sheets, their exports, and failed-render rollback."""
 
 import importlib.util
 import inspect
@@ -31,12 +22,19 @@ _HAS_PDF_EXTRA = all(
 
 
 def _sheet(streams: int = 21, rows: int = 4) -> Flowsheet:
-    """A flowsheet with *streams* tabulated runs, each carrying *rows*
-    properties, drawn as a feed into a product apiece.
+    """Create a flowsheet with tabulated feed-to-product streams.
 
-    Straight lines and no equipment: this file is about the table sheet,
-    which draws no diagram at all, so what the diagram would have looked
-    like is nobody's business here.
+    Parameters
+    ----------
+    streams : int, default=21
+        Number of connected feed and product pairs.
+    rows : int, default=4
+        Number of properties assigned to each stream.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet with a title block, table section, and populated streams.
     """
     fs = Flowsheet("Aromatics Recovery A100")
     fs.title_block = TitleBlock(
@@ -62,12 +60,34 @@ def _sheet(streams: int = 21, rows: int = 4) -> Flowsheet:
 
 
 def _blocks(svg: str) -> list[str]:
-    """Each stream-table block of a rendered sheet, as its own markup."""
+    """Extract stream-table block markup from an SVG export.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    list[str]
+        Markup for each stream-table block in document order.
+    """
     return re.findall(r'<g id="stream_table_\d+">.*?</g>', svg, re.S)
 
 
 def _cells(block: str) -> list[tuple[float, float, float, float]]:
-    """Every ruled cell of a block, as ``(x, y, w, h)``."""
+    """Extract ruled table-cell bounds from a table block.
+
+    Parameters
+    ----------
+    block : str
+        SVG markup for one stream-table block.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Cell ``(x, y, width, height)`` bounds.
+    """
     return [
         (float(m[0]), float(m[1]), float(m[2]), float(m[3]))
         for m in re.findall(
@@ -77,17 +97,33 @@ def _cells(block: str) -> list[tuple[float, float, float, float]]:
 
 
 def _texts(block: str) -> list[str]:
+    """Extract text values from a stream-table block.
+
+    Parameters
+    ----------
+    block : str
+        SVG markup for one stream-table block.
+
+    Returns
+    -------
+    list[str]
+        Text values in document order.
+    """
     return re.findall(r"<text[^>]*>([^<]*)</text>", block)
 
 
 def _lettering(block: str) -> list[tuple[float, str, float, bool, str]]:
-    """Every cell of a block paired with the string drawn in it:
-    ``(cell width, text, type size, bold, anchor)``.
+    """Extract table-cell text and its rendered style.
 
-    Read back off the markup rather than off the layout, and parsed rather
-    than pattern-matched, so that what is measured is what a reader's viewer
-    is handed -- entities and all. ``draw_stream_table`` emits a rect and then
-    its text, so the pairing is the document order.
+    Parameters
+    ----------
+    block : str
+        SVG markup for one stream-table block.
+
+    Returns
+    -------
+    list[tuple[float, str, float, bool, str]]
+        Cell width, text, font size, bold flag, and text anchor for each cell.
     """
     root = ET.fromstring(block)
     out: list[tuple[float, str, float, bool, str]] = []
@@ -110,9 +146,18 @@ def _lettering(block: str) -> list[tuple[float, str, float, bool, str]]:
 
 
 def _zone_letters(svg: str) -> list[str]:
-    """The row letters ruled in the border band, which is the one thing on a
-    table sheet lettered at the zone size. Every row is lettered twice, on the
-    left band and the right, so every second one is the row list."""
+    """Extract row-zone letters from a table-sheet border.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    list[str]
+        Zone letters in top-to-bottom order.
+    """
     return re.findall(r'<text[^>]*font-size="9.0"[^>]*>([A-Z])</text>', svg)[::2]
 
 
@@ -120,11 +165,12 @@ def _zone_letters(svg: str) -> list[str]:
 
 
 def test_the_table_sheet_carries_a_border_a_title_block_and_a_drawing_number():
+    """Verify that a table sheet includes a border, title block, and drawing number."""
     svg = _sheet().to_svg(show_stream_table="sheet", page_size="A3")
-    # The zone border: the frame, and the letters ruled in the band.
+    # Zone-border frame and letters.
     assert 'stroke-width="2"' in svg
     assert _zone_letters(svg)[:3] == ["A", "B", "C"]
-    # The strip, saying which drawing this is and which sheet of it.
+    # Title-strip fields.
     assert "Aromatics Recovery A100" in svg  # the diagram's own title, kept
     assert "Stream Table" in svg  # what this sheet is
     assert "PFD-1001-ST" in svg  # a number of its own, derived
@@ -132,7 +178,7 @@ def test_the_table_sheet_carries_a_border_a_title_block_and_a_drawing_number():
 
 
 def test_no_diagram_is_drawn_on_it():
-    """The point of the sheet: the flowsheet's equipment is *not* on it."""
+    """Verify that no diagram is drawn on it."""
     svg = _sheet(streams=3).to_svg(show_stream_table="sheet", page_size="A3")
     assert 'id="drawing"' not in svg and "<defs>" not in svg
     for tag in ("F0", "P0", "F1", "P1"):
@@ -140,8 +186,7 @@ def test_no_diagram_is_drawn_on_it():
 
 
 def test_the_diagram_sheet_is_untouched_by_the_option():
-    """``True`` still means the table under the drawing, and the sheet that
-    comes out of it is the sheet that always did."""
+    """Verify that the diagram sheet is untouched by the option."""
     fs = _sheet(streams=3)
     docked = fs.to_svg(show_stream_table=True, page_size="A3", border="zone")
     assert ">F0</text>" in docked  # the diagram is drawn
@@ -149,8 +194,7 @@ def test_the_diagram_sheet_is_untouched_by_the_option():
 
 
 def test_a_table_sheet_rules_the_zone_border_without_being_asked():
-    """It is a formal drawing rather than a table on paper. Stated
-    ``border`` still decides."""
+    """Verify that a table sheet rules the zone border without being asked."""
     fs = _sheet(streams=3)
     assert _zone_letters(fs.to_svg(show_stream_table="sheet", page_size="A3"))
     plain = fs.to_svg(show_stream_table="sheet", page_size="A3", border="none")
@@ -159,8 +203,7 @@ def test_a_table_sheet_rules_the_zone_border_without_being_asked():
 
 
 def test_the_document_is_named_for_the_sheet_it_is():
-    """Two sheets of one drawing set are two documents. Left at the drawing's
-    title alone, the table sheet answered to the diagram's accessible name."""
+    """Verify table-sheet document naming."""
     fs = _sheet(streams=3)
     assert "<title>Aromatics Recovery A100</title>" in fs.to_svg(page_size="A3")
     assert "<title>Aromatics Recovery A100 - Stream Table</title>" in fs.to_svg(
@@ -172,6 +215,7 @@ def test_the_document_is_named_for_the_sheet_it_is():
 
 
 def test_the_drawing_number_is_derived_and_can_be_stated():
+    """Verify that the drawing number is derived and can be stated."""
     fs = _sheet(streams=3)
     assert "PFD-1001-ST" in fs.to_svg(show_stream_table="sheet", page_size="A3")
     fs.stream_table.sheet_drawing_number = "PFD-1003"
@@ -180,6 +224,7 @@ def test_the_drawing_number_is_derived_and_can_be_stated():
 
 
 def test_what_the_sheet_is_called_can_be_stated():
+    """Verify that what the sheet is called can be stated."""
     fs = _sheet(streams=3)
     fs.stream_table.sheet_subtitle = "Stream Summary"
     svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
@@ -187,8 +232,7 @@ def test_what_the_sheet_is_called_can_be_stated():
 
 
 def test_the_rest_of_the_title_block_is_the_diagram_s():
-    """Same issue, same office, same day: only the two cells that say which
-    drawing this is are re-written."""
+    """Verify that a table sheet preserves the diagram title-block fields."""
     fs = _sheet(streams=3)
     fs.title_block = TitleBlock(
         title="Aromatics Recovery A100",
@@ -205,6 +249,7 @@ def test_the_rest_of_the_title_block_is_the_diagram_s():
 
 
 def test_a_flowsheet_with_no_title_block_still_gets_a_sheet_that_can_be_filed():
+    """Verify that a flowsheet with no title block still gets a sheet that can be filed."""
     fs = _sheet(streams=3)
     fs.title_block = None
     svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
@@ -213,20 +258,11 @@ def test_a_flowsheet_with_no_title_block_still_gets_a_sheet_that_can_be_filed():
 
 
 def test_a_table_sheet_states_no_scale():
-    """A table is not drawn to scale, so the box is ruled and left empty --
-    unlike a fitted diagram, which reports the ratio it was placed at.
-
-    The box itself stays: #370 settled that the bottom band rules four cells at
-    fixed shares whether or not there is a scale to write in one, because a
-    band that hands its room back changes what `drawing_number` is budgeted
-    from one call to the next. A table sheet is filed by a number of its own
-    and needs that budget as much as the diagram does.
-    """
+    """Verify that a table sheet states no scale."""
     fs = _sheet(streams=3)
     svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert ">SCALE</text>" in svg  # the box is ruled...
-    # ...and nothing is written in it: the caption is followed by the rule
-    # closing the cell, not by a value.
+    # The SCALE cell has no value.
     after = svg.split(">SCALE</text>", 1)[1].lstrip()
     assert after.startswith("<line"), after[:120]
 
@@ -235,11 +271,11 @@ def test_a_table_sheet_states_no_scale():
 
 
 def test_more_streams_than_fit_wrap_into_stacked_blocks():
+    """Verify that more streams than fit wrap into stacked blocks."""
     svg = _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
     blocks = _blocks(svg)
     assert len(blocks) > 1, "21 streams do not fit across an A4 sheet"
-    # Stacked, not laid side by side: every block starts at the same x and
-    # each begins below the one before it.
+    # Blocks share an x origin and stack vertically.
     tops = []
     for block in blocks:
         cells = _cells(block)
@@ -249,18 +285,19 @@ def test_more_streams_than_fit_wrap_into_stacked_blocks():
 
 
 def test_every_block_repeats_the_heading_row():
+    """Verify that every block repeats the heading row."""
     svg = _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
     blocks = _blocks(svg)
     assert len(blocks) > 1
     for i, block in enumerate(blocks):
         texts = _texts(block)
         assert texts[0] == "Stream Number", f"block {i} is not headed"
-        # And the section heading, which heads a group of rows in each block
-        # for the same reason.
+        # Each block retains the section heading.
         assert "Mass Fraction" in texts, f"block {i} lost its section heading"
 
 
 def test_every_stream_appears_once_and_in_order():
+    """Verify that every stream appears once and in order."""
     fs = _sheet(streams=21)
     names = [run[0].name for run in fs._named_runs().values()]
     svg = fs.to_svg(show_stream_table="sheet", page_size="A4")
@@ -271,18 +308,28 @@ def test_every_stream_appears_once_and_in_order():
 
 
 def test_how_many_streams_a_block_holds_comes_from_the_page():
-    """Not from a constant: the same table wraps into more blocks on smaller
-    paper and into one on paper wide enough for it."""
+    """Verify that page size determines stream-table block capacity."""
 
     def blocks(page: str) -> int:
+        """Count stream-table blocks on a page size.
+
+        Parameters
+        ----------
+        page : str
+            Requested paper size.
+
+        Returns
+        -------
+        int
+            Number of rendered stream-table blocks.
+        """
         return len(_blocks(_sheet(streams=21).to_svg(show_stream_table="sheet", page_size=page)))
 
     assert blocks("A4") > blocks("A3") >= blocks("A2") == 1
 
 
 def test_the_blocks_are_evened_out_rather_than_filled_and_left_a_stub():
-    """Twenty-one streams that fit twelve across come out eleven and ten. A
-    block of nine beside a block of twelve reads as an afterthought."""
+    """Verify that the blocks are evened out rather than filled and left a stub."""
     table = F.stream_table_sheet(_sheet(streams=21), 900.0)
     assert table is not None
     counts = [len(block.rows[0]) - 1 for block in table.blocks]
@@ -290,8 +337,7 @@ def test_the_blocks_are_evened_out_rather_than_filled_and_left_a_stub():
 
 
 def test_one_ruling_answers_for_every_block():
-    """A stream table is read down for one stream and across for one property.
-    Blocks ruled to different widths would not line up under one another."""
+    """Verify that one ruling answers for every block."""
     table = F.stream_table_sheet(_sheet(streams=21), 900.0)
     assert table is not None
     for block in table.blocks:
@@ -303,9 +349,7 @@ def test_one_ruling_answers_for_every_block():
 
 
 def test_a_block_is_not_shrunk_to_fit_when_it_can_wrap_instead():
-    """The docked table trades type size for width above eighteen columns,
-    because it has one row of columns and no other way to make room. A table
-    sheet makes room by wrapping, so it stays at the reading size."""
+    """Verify that a block is not shrunk to fit when it can wrap instead."""
     fs = _sheet(streams=21)
     docked = F.stream_table_layout(fs)
     wrapped = F.stream_table_sheet(fs, 900.0)
@@ -315,9 +359,7 @@ def test_a_block_is_not_shrunk_to_fit_when_it_can_wrap_instead():
 
 
 def test_a_stated_font_size_still_rules_the_table_sheet():
-    """The author overruling the reading size, which is how a table too deep
-    for its page is brought back onto it: smaller type buys columns per block,
-    and columns per block cost blocks."""
+    """Verify that a stated font size still rules the table sheet."""
     fs = _sheet(streams=21)
     ruled = F.stream_table_sheet(fs, 500.0)
     fs.stream_table.font_size = 7.0
@@ -329,8 +371,7 @@ def test_a_stated_font_size_still_rules_the_table_sheet():
 
 
 def test_a_sheet_with_no_page_takes_the_table_in_one_block():
-    """There is no width to wrap against, so the frame grows to the table --
-    which is what a sheet sized to its contents does everywhere else."""
+    """Verify that a sheet with no page takes the table in one block."""
     svg = _sheet(streams=21).to_svg(show_stream_table="sheet")
     assert len(_blocks(svg)) == 1
 
@@ -339,6 +380,18 @@ def test_a_sheet_with_no_page_takes_the_table_in_one_block():
 
 
 def _viewbox(svg: str) -> tuple[float, float, float, float]:
+    """Extract the SVG view box.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG document.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        View-box ``(x, y, width, height)`` values.
+    """
     m = re.search(r'viewBox="([-\d. ]+)"', svg)
     assert m
     x, y, w, h = (float(v) for v in m.group(1).split())
@@ -348,6 +401,15 @@ def _viewbox(svg: str) -> tuple[float, float, float, float]:
 @pytest.mark.parametrize("page", ["A4", "A3", "A2", "A1", None])
 @pytest.mark.parametrize("streams", [1, 8, 21])
 def test_every_cell_is_drawn_inside_the_sheet(page, streams):
+    """Verify that every cell is drawn inside the sheet.
+
+    Parameters
+    ----------
+    page : str | None
+        Requested paper size.
+    streams : int
+        Number of tabulated streams.
+    """
     fs = _sheet(streams=streams)
     svg = fs.to_svg(show_stream_table="sheet", page_size=page)
     vx, vy, vw, vh = _viewbox(svg)
@@ -358,6 +420,7 @@ def test_every_cell_is_drawn_inside_the_sheet(page, streams):
 
 
 def test_the_table_does_not_run_into_the_title_strip():
+    """Verify that the table does not run into the title strip."""
     fs = _sheet(streams=21, rows=4)
     plan = table_sheet_plan(fs, _page("A4"))
     strip_top = plan.strip[1]
@@ -365,13 +428,14 @@ def test_the_table_does_not_run_into_the_title_strip():
 
 
 def test_the_stack_is_centred_across_the_page_and_flush_with_its_top():
+    """Verify that the stack is centred across the page and flush with its top."""
     plan = table_sheet_plan(_sheet(streams=21), _page("A3"))
     page = _page("A3")
     assert page is not None
     left_gap = plan.left
     right_gap = page.width - (plan.left + plan.table.w)
     assert abs(left_gap - right_gap) < 1.0
-    # Blocks are flush left with one another, whatever their own widths.
+    # Blocks share the same left edge.
     lefts = [x for _i, _b, x, _y in plan.table.at(plan.left, plan.top)]
     assert len(set(lefts)) == 1
 
@@ -380,20 +444,18 @@ def test_the_stack_is_centred_across_the_page_and_flush_with_its_top():
 
 
 def test_a_page_too_small_for_the_table_says_which_furniture_will_not_fit():
-    """Wrapping answers width. Depth is what a page can still run out of, and
-    the error names the piece rather than saying the furniture does not fit."""
+    """Verify that an undersized page identifies the stream table."""
     fs = _sheet(streams=6)
     for run in fs._named_runs().values():
         run[0].properties = {f"Component {n}": f"{n / 100:.2f}" for n in range(40)}
     with pytest.raises(ValueError, match="stream table"):
         fs.to_svg(show_stream_table="sheet", page_size="A4")
-    # The same table on the next size up comes out, so what was reported was
-    # the page rather than the table.
+    # A larger page renders the same table.
     assert _blocks(fs.to_svg(show_stream_table="sheet", page_size="A2"))
 
 
 def test_a_flowsheet_with_nothing_to_tabulate_is_refused():
-    """The file asked for is a sheet whose whole body is the table."""
+    """Verify that a flowsheet with nothing to tabulate is refused."""
     fs = Flowsheet("bare")
     pump = fs.add(U.Pump("P-101")).pin(x=100, y=100)
     tank = fs.add(U.Tank("T-101")).pin(x=300, y=100)
@@ -403,10 +465,7 @@ def test_a_flowsheet_with_nothing_to_tabulate_is_refused():
 
 
 def test_a_spelling_neither_backend_knows_is_refused():
-    """Read as truthy, ``show_stream_table="own sheet"`` drew the whole table
-    onto the diagram. The annotation refuses it at the desk -- which is what
-    the cast here is stepping around -- and the renderer refuses it at run
-    time, for the author who typed it into a config file instead."""
+    """Verify that a spelling neither backend knows is refused."""
     fs = _sheet(streams=3)
     for value in ("own sheet", "Sheet", "table"):
         with pytest.raises(ValueError, match="show_stream_table"):
@@ -414,6 +473,7 @@ def test_a_spelling_neither_backend_knows_is_refused():
 
 
 def test_the_coordinate_overlay_is_refused_rather_than_drawn_over_nothing():
+    """Verify that the coordinate overlay is refused rather than drawn over nothing."""
     fs = _sheet(streams=3)
     with pytest.raises(ValueError, match="debug"):
         fs.to_svg(show_stream_table="sheet", page_size="A3", debug=True)
@@ -423,22 +483,24 @@ def test_the_coordinate_overlay_is_refused_rather_than_drawn_over_nothing():
 
 
 def test_the_drawio_export_draws_the_same_sheet():
+    """Verify that Draw.io exports the table-sheet structure."""
     fs = _sheet(streams=21)
     xml = fs.to_drawio(show_stream_table="sheet", page_size="A4")
     root = ET.fromstring(xml)
     cells = list(root.iter("mxCell"))
     tables = [c for c in cells if "shape=table;" in (c.get("style") or "")]
-    # One editable table per block, plus the strip's revision grid.
+    # One table per block and one revision grid.
     blocks = len(_blocks(fs.to_svg(show_stream_table="sheet", page_size="A4")))
     assert len(tables) == blocks + 1
     text = "".join(c.get("value") or "" for c in cells)
     assert text.count("Stream Number") == blocks
     assert "PFD-1001-ST" in text
-    # And no diagram: the equipment is not exported either.
+    # Equipment is absent from the table-sheet export.
     assert "F0" not in text and "P0" not in text
 
 
 def test_the_drawio_export_opens_on_the_same_paper():
+    """Verify that Draw.io uses the requested table-sheet page size."""
     fs = _sheet(streams=21)
     model = ET.fromstring(fs.to_drawio(show_stream_table="sheet", page_size="A4")).find(
         "diagram/mxGraphModel"
@@ -450,6 +512,13 @@ def test_the_drawio_export_opens_on_the_same_paper():
 
 
 def test_render_writes_the_table_sheet_to_whatever_the_extension_asks_for(tmp_path):
+    """Verify that render writes the requested table-sheet format.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary output directory supplied by pytest.
+    """
     fs = _sheet(streams=21)
     out = tmp_path / "stream_table.svg"
     fs.render(out, show_stream_table="sheet", page_size="A4")
@@ -464,19 +533,47 @@ def test_render_writes_the_table_sheet_to_whatever_the_extension_asks_for(tmp_pa
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 @pytest.mark.parametrize("ext", [".pdf", ".png"])
 def test_the_raster_paths_produce_the_table_sheet_too(tmp_path, ext):
+    """Verify that raster exports include the table sheet.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary output directory supplied by pytest.
+    ext : str
+        Raster output extension.
+    """
     out = tmp_path / f"stream_table{ext}"
     _sheet(streams=21).render(out, show_stream_table="sheet", page_size="A4")
     assert out.stat().st_size > 1000
 
 
 def test_the_option_reaches_the_drafting_call(monkeypatch):
-    """``show()`` is ``render()`` without the path, and a table sheet is a
-    sheet an author previews like any other."""
+    """Verify that table-sheet options reach the drafting call.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Patching helper supplied by pytest.
+    """
     from pandid.render import preview as P
 
     seen: dict = {}
 
     def fake(svg: str, *, title: str = "") -> str:
+        """Capture preview SVG without opening a window.
+
+        Parameters
+        ----------
+        svg : str
+            SVG document submitted to the preview backend.
+        title : str, default=""
+            Preview window title.
+
+        Returns
+        -------
+        str
+            Placeholder preview-window handle.
+        """
         seen["svg"] = svg
         return "window"
 
@@ -490,9 +587,7 @@ def test_the_option_reaches_the_drafting_call(monkeypatch):
 
 
 def test_a_table_sheet_numbered_as_its_diagram_is_refused():
-    """The suffix guarantees two numbers only while nobody overrules it. Stated
-    outright, the collision the derivation exists to prevent is typed in by
-    hand, and there is no reading of it that produces a filable set."""
+    """Verify that a table sheet cannot reuse its diagram drawing number."""
     fs = _sheet(streams=3)
     fs.stream_table.sheet_drawing_number = "PFD-1001"
     with pytest.raises(ValueError, match="the diagram's own drawing number"):
@@ -501,8 +596,13 @@ def test_a_table_sheet_numbered_as_its_diagram_is_refused():
 
 @pytest.mark.parametrize("stated", ["pfd-1001", "  PFD-1001 "])
 def test_one_number_said_a_different_way_is_still_the_same_number(stated):
-    """A drawing register does not file 'PFD-301' and 'pfd-301 ' as two
-    drawings, and neither does the person looking for one."""
+    """Verify that canonical drawing numbers are treated as equal.
+
+    Parameters
+    ----------
+    stated : str
+        Alternative drawing-number spelling.
+    """
     fs = _sheet(streams=3)
     fs.stream_table.sheet_drawing_number = stated
     with pytest.raises(ValueError, match="the diagram's own drawing number"):
@@ -510,19 +610,30 @@ def test_one_number_said_a_different_way_is_still_the_same_number(stated):
 
 
 def test_a_number_of_its_own_is_accepted():
+    """Verify that a number of its own is accepted."""
     fs = _sheet(streams=3)
     fs.stream_table.sheet_drawing_number = "PFD-1003"
     assert "PFD-1003" in fs.to_svg(show_stream_table="sheet", page_size="A3")
 
 
-def _unnumbered(fs) -> list:
+def _unnumbered(fs: Flowsheet) -> list:
+    """Find missing-number warnings on a table sheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Rendered flowsheet to inspect.
+
+    Returns
+    -------
+    list
+        Warnings with the ``table-sheet-unnumbered`` code.
+    """
     return [w for w in fs.warnings if w.code == "table-sheet-unnumbered"]
 
 
 def test_a_table_sheet_with_no_number_to_derive_says_so():
-    """Drawn, not refused: a flowsheet is not obliged to carry a title block
-    anywhere else in this library. But an unnumbered sheet is the sheet's own
-    identity missing, so it is a finding rather than a silence."""
+    """Verify that a table sheet with no number to derive says so."""
     fs = _sheet(streams=3)
     fs.title_block = None
     svg = fs.to_svg(show_stream_table="sheet", page_size="A3")
@@ -534,8 +645,7 @@ def test_a_table_sheet_with_no_number_to_derive_says_so():
 
 
 def test_a_title_block_carrying_no_number_says_so_too():
-    """The finding is about the number, not about the block: a title block with
-    every other cell filled in still leaves the sheet unfiled."""
+    """Verify that a title block carrying no number says so too."""
     fs = _sheet(streams=3)
     fs.title_block = TitleBlock(title="Aromatics Recovery A100", company="Pandid")
     fs.to_svg(show_stream_table="sheet", page_size="A3")
@@ -543,20 +653,19 @@ def test_a_title_block_carrying_no_number_says_so_too():
 
 
 def test_numbering_it_either_way_silences_the_finding():
+    """Verify that either valid numbering source clears the warning."""
     fs = _sheet(streams=3)
     fs.title_block = None
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert _unnumbered(fs)
-    # The same render again, with the table sheet numbered on its own: the
-    # stale finding goes with it rather than accumulating.
+    # A valid number removes the previous warning.
     fs.stream_table.sheet_drawing_number = "PFD-1003"
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert not _unnumbered(fs)
 
 
 def test_the_diagram_sheet_is_never_unnumbered_by_this():
-    """The finding belongs to the table sheet. A diagram with no title block is
-    a drawing this library has always been happy to make."""
+    """Verify that the diagram sheet is never unnumbered by this."""
     fs = _sheet(streams=3)
     fs.title_block = None
     fs.to_svg(page_size="A3", border="zone")
@@ -564,6 +673,7 @@ def test_the_diagram_sheet_is_never_unnumbered_by_this():
 
 
 def test_the_drawio_export_reports_it_in_the_same_words():
+    """Verify that Draw.io reports missing numbering consistently."""
     fs = _sheet(streams=3)
     fs.title_block = None
     fs.to_drawio(show_stream_table="sheet", page_size="A3")
@@ -579,7 +689,18 @@ def test_the_drawio_export_reports_it_in_the_same_words():
 
 
 def _unresolved(fs) -> bool:
-    """Nothing has been laid out or routed on this flowsheet."""
+    """Report whether a flowsheet has unresolved geometry.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to inspect.
+
+    Returns
+    -------
+    bool
+        Whether any unit frame or stream route is absent.
+    """
     return all(u.frame is None for u in fs.units) and all(s.route is None for s in fs.streams)
 
 
@@ -597,10 +718,13 @@ def _unresolved(fs) -> bool:
     ],
 )
 def test_a_render_that_cannot_happen_has_not_happened_halfway(kwargs):
-    """Laying a sheet out and routing it writes a Frame onto every unit and a
-    Route onto every stream. A render that raises after that has changed the
-    flowsheet on its way to failing, and the geometry the author's *next*
-    render reuses was resolved for the call that did not produce a file."""
+    """Verify that a rejected render does not derive partial geometry.
+
+    Parameters
+    ----------
+    kwargs : dict[str, object]
+        Rejected rendering options.
+    """
     fs = _sheet(streams=3)
     assert _unresolved(fs), "the fixture must not lay itself out"
     with pytest.raises(ValueError):
@@ -609,8 +733,7 @@ def test_a_render_that_cannot_happen_has_not_happened_halfway(kwargs):
 
 
 def test_the_table_sheet_s_own_refusals_come_before_the_geometry():
-    """Nothing to tabulate, and a page too small for the table: both are facts
-    about the model and the paper, so neither needs a sheet laid out to find."""
+    """Verify that table-sheet validation runs before geometry creation."""
     bare = Flowsheet("bare")
     pump = bare.add(U.Pump("P-101")).pin(x=100, y=100)
     tank = bare.add(U.Tank("T-101")).pin(x=300, y=100)
@@ -628,6 +751,7 @@ def test_the_table_sheet_s_own_refusals_come_before_the_geometry():
 
 
 def test_a_duplicate_number_is_refused_before_the_geometry():
+    """Verify that a duplicate number is refused before the geometry."""
     fs = _sheet(streams=3)
     fs.stream_table.sheet_drawing_number = "PFD-1001"
     with pytest.raises(ValueError, match="drawing number"):
@@ -647,11 +771,17 @@ def test_a_duplicate_number_is_refused_before_the_geometry():
 )
 @pytest.mark.parametrize("table", [False, True, "sheet"])
 def test_an_unknown_sheet_option_is_refused_whatever_the_sheet_holds(kwargs, match, table):
-    """The hole this closes: ``jump_direction`` is read where the hops are
-    *drawn*, as ``== "vertical"``, so a misspelling matched neither branch and
-    the sheet came out with no hops and no complaint. A table sheet draws no
-    process line at all, which made it the sheet where every such option was
-    swallowed."""
+    """Verify that unknown table-sheet options are always rejected.
+
+    Parameters
+    ----------
+    kwargs : dict[str, object]
+        Unknown table-sheet option.
+    match : str
+        Expected validation-error text.
+    table : bool
+        Whether the fixture contains a stream table.
+    """
     fs = _sheet(streams=3)
     for render in (fs.to_svg, fs.to_drawio):
         with pytest.raises(ValueError, match=match):
@@ -659,9 +789,7 @@ def test_an_unknown_sheet_option_is_refused_whatever_the_sheet_holds(kwargs, mat
 
 
 def test_a_valid_option_this_sheet_cannot_show_is_still_accepted():
-    """The distinction being drawn: ``connections`` on a sheet with no joints to
-    mark is a well-formed request this drawing has no answer to, and a PFD has
-    always accepted it and marked nothing."""
+    """Verify that valid inapplicable options remain accepted."""
     fs = _sheet(streams=3)
     assert fs.to_svg(show_stream_table="sheet", page_size="A3", connections="flanged")
     assert fs.to_svg(show_stream_table="sheet", page_size="A3", jump_direction="horizontal")
@@ -671,11 +799,7 @@ def test_a_valid_option_this_sheet_cannot_show_is_still_accepted():
 
 
 def test_the_ruling_does_not_depend_on_whether_a_page_was_named():
-    """A sheet grown to its contents does not wrap -- there is no width to wrap
-    against -- but it is lettered and ruled as the paged sheet is. Sized off the
-    column count instead, the same twenty-one streams came out at 9.05 unpaged
-    and 10.5 on A2: two drawings of one table, differing for a reason nothing on
-    either sheet shows."""
+    """Verify that the ruling does not depend on whether a page was named."""
     fs = _sheet(streams=21)
     unpaged = F.stream_table_sheet(fs, None)
     paged = F.stream_table_sheet(fs, 4000.0)
@@ -687,8 +811,7 @@ def test_the_ruling_does_not_depend_on_whether_a_page_was_named():
 
 
 def test_the_unpaged_sheet_is_the_paged_one_with_the_cutting_left_out():
-    """Down to the drawn cells: one block of the wrapped sheet is ruled exactly
-    as the unpaged sheet's single block is."""
+    """Verify that an unpaged sheet omits only the page cutting."""
     fs = _sheet(streams=21)
     unpaged = F.stream_table_sheet(fs, None)
     wrapped = F.stream_table_sheet(fs, 900.0)
@@ -696,7 +819,7 @@ def test_the_unpaged_sheet_is_the_paged_one_with_the_cutting_left_out():
     assert len(wrapped.blocks) > 1
     assert wrapped.blocks[0].size == unpaged.blocks[0].size
     assert wrapped.blocks[0].row_h == unpaged.blocks[0].row_h
-    # Same label column and same stream column, cut into fewer of them.
+    # Paged and unpaged sheets use the same column widths.
     assert wrapped.blocks[0].rows[0][0].w == unpaged.blocks[0].rows[0][0].w
     assert wrapped.blocks[0].rows[0][1].w == unpaged.blocks[0].rows[0][1].w
 
@@ -705,11 +828,7 @@ def test_the_unpaged_sheet_is_the_paged_one_with_the_cutting_left_out():
 
 
 def test_a_backend_refuses_the_keywords_it_does_not_take():
-    """`**opts` is on both renderers because `Renderer` is a protocol a future
-    backend has to answer. What it must not mean is accepted and dropped: the
-    draw.io exporter took `debug=True` and returned a document with no overlay
-    in it and no complaint, because a .drawio file has no overlay to draw and
-    nothing said so."""
+    """Verify that a backend refuses the keywords it does not take."""
     fs = _sheet(streams=3)
     fs.route()
     for renderer in (SvgRenderer(), DrawioRenderer()):
@@ -718,7 +837,7 @@ def test_a_backend_refuses_the_keywords_it_does_not_take():
 
 
 def test_the_drawio_backend_refuses_the_overlay_when_called_directly():
-    """The defect this closes, in the words the reviewer found it in."""
+    """Verify that the drawio backend refuses the overlay when called directly."""
     fs = _sheet(streams=3)
     fs.route()
     with pytest.raises(ValueError, match="debug"):
@@ -726,9 +845,7 @@ def test_the_drawio_backend_refuses_the_overlay_when_called_directly():
 
 
 def test_every_keyword_the_entry_points_pass_is_one_its_backend_names():
-    """The guard that keeps the door shut. Refusing unknown keywords only helps
-    while the entry points send nothing unknown, so the two lists are held
-    against each other here rather than discovered by a raise in the field."""
+    """Verify that entry-point keywords match backend parameters."""
     for entry, backend in (
         (Flowsheet.to_svg, SvgRenderer.render),
         (Flowsheet.to_drawio, DrawioRenderer.render),
@@ -742,9 +859,13 @@ def test_every_keyword_the_entry_points_pass_is_one_its_backend_names():
 
 
 def test_an_unsupported_extension_is_refused_before_the_geometry(tmp_path):
-    """Same poisoning as an unknown page size, through another door: the check
-    sat after `to_svg()`, so a misspelled suffix raised having installed a
-    Frame on every unit and a Route on every stream."""
+    """Verify that an unsupported extension is refused before the geometry.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary output directory supplied by pytest.
+    """
     fs = _sheet(streams=3)
     assert _unresolved(fs)
     with pytest.raises(ValueError, match="Unsupported output format"):
@@ -753,7 +874,13 @@ def test_an_unsupported_extension_is_refused_before_the_geometry(tmp_path):
 
 
 def test_the_supported_extensions_still_write(tmp_path):
-    """The guard against fixing the leak by narrowing the door."""
+    """Verify that the supported extensions still write.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary output directory supplied by pytest.
+    """
     fs = _sheet(streams=3)
     for name in ("sheet.svg", "sheet", "sheet.drawio"):
         out = tmp_path / name
@@ -765,16 +892,25 @@ def test_the_supported_extensions_still_write(tmp_path):
 
 
 def _with_an_unused_section(streams: int = 3) -> Flowsheet:
-    """A sheet whose `stream_table_sections` names a property no stream sets,
-    which is a warning the *measurement* raises rather than the drawing."""
+    """Create a flowsheet that reports an unused table section.
+
+    Parameters
+    ----------
+    streams : int, default=3
+        Number of tabulated streams.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet configured to emit one stream-table warning.
+    """
     fs = _sheet(streams=streams)
     fs.stream_table_sections = [("Nothing Sets This", "Mass Fraction")]
     return fs
 
 
 def test_a_refused_render_adds_no_finding_of_its_own():
-    """Prevalidation measures the table, and measuring reports. A finding left
-    behind by a render that then raised is a finding about a sheet nobody has."""
+    """Verify that a refused render adds no finding of its own."""
     fs = _with_an_unused_section()
     fs.stream_table.sheet_drawing_number = "PFD-1001"  # refused: the diagram's
     with pytest.raises(ValueError, match="drawing number"):
@@ -783,10 +919,7 @@ def test_a_refused_render_adds_no_finding_of_its_own():
 
 
 def test_a_refused_render_erases_no_finding_from_the_last_one():
-    """The worse half: `warnings` was emptied before the arguments were
-    checked, so a typo'd page size deleted the findings of the render that
-    succeeded. An author reads a real warning, renders again with a typo, and
-    the warning they were reading is gone."""
+    """Verify that a refused render erases no finding from the last one."""
     fs = _with_an_unused_section()
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     kept = [w.code for w in fs.warnings]
@@ -797,9 +930,7 @@ def test_a_refused_render_erases_no_finding_from_the_last_one():
 
 
 def test_a_successful_render_still_replaces_the_last_one_s_findings():
-    """The guard against fixing that by never clearing: `warnings` describes
-    the render in hand, so a finding that has been fixed must stop being
-    reported."""
+    """Verify that a successful render still replaces the last one's findings."""
     fs = _with_an_unused_section()
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert any(w.code == "stream-table-section-unused" for w in fs.warnings)
@@ -825,10 +956,15 @@ def test_a_successful_render_still_replaces_the_last_one_s_findings():
     ],
 )
 def test_which_numbers_count_as_the_diagram_s_own(stated, collides):
-    """`casefold` strips the outer space and the letter case, and folds the
-    compatibility forms with them -- more than "case", and kept, because two
-    numbers a reader cannot tell apart are one number. What is *not* folded is
-    anything that changes what a reader sees."""
+    """Verify drawing-number collisions after canonicalisation.
+
+    Parameters
+    ----------
+    stated : str
+        Candidate table-sheet drawing number.
+    collides : bool
+        Whether the candidate conflicts after canonicalisation.
+    """
     fs = _sheet(streams=3)
     fs.stream_table.sheet_drawing_number = stated
     if collides:
@@ -839,8 +975,7 @@ def test_which_numbers_count_as_the_diagram_s_own(stated, collides):
 
 
 def test_a_ligature_is_the_same_number_as_the_letters_it_stands_for():
-    """The one case where the folding reaches past case, stated so the
-    behaviour is a decision rather than a side effect."""
+    """Verify that a ligature is the same number as the letters it stands for."""
     fs = _sheet(streams=3)
     fs.title_block = TitleBlock(title="Ligatures", drawing_number="PFD-FFI")
     fs.stream_table.sheet_drawing_number = "PFD-ﬃ"
@@ -849,6 +984,26 @@ def test_a_ligature_is_the_same_number_as_the_letters_it_stands_for():
 
 
 # --- a valid option this sheet cannot show changes nothing about it ----------
+
+
+@pytest.fixture(scope="module")
+def table_sheet_noop_baselines() -> dict[str, str]:
+    """Render plain table-sheet baselines for both backends.
+
+    Returns
+    -------
+    dict[str, str]
+        SVG and Draw.io output keyed by ``Flowsheet`` export method.
+
+    Notes
+    -----
+    Each output uses a separate flowsheet because rendering writes derived state.
+    """
+    options = {"show_stream_table": "sheet", "page_size": "A4", "diagram": "p&id"}
+    return {
+        "to_svg": _sheet(streams=21).to_svg(**options),
+        "to_drawio": _sheet(streams=21).to_drawio(**options),
+    }
 
 
 @pytest.mark.parametrize(
@@ -860,16 +1015,20 @@ def test_a_ligature_is_the_same_number_as_the_letters_it_stands_for():
         {"jump_direction": "horizontal"},
     ],
 )
-def test_an_option_a_table_sheet_cannot_show_leaves_the_drawing_identical(kwargs):
-    """The distinction this PR draws, tested rather than asserted: an *invalid*
-    option is refused, and a *valid* one that this sheet has nothing to apply
-    to is accepted and changes not one byte. `connections` marks joints on
-    process lines and `jump_direction` hops one line over another; a table
-    sheet draws neither, so both must come out where they went in."""
+def test_an_option_a_table_sheet_cannot_show_leaves_the_drawing_identical(
+    kwargs: dict[str, str], table_sheet_noop_baselines: dict[str, str]
+) -> None:
+    """Verify that table-sheet no-op options preserve both backend exports.
+
+    Parameters
+    ----------
+    kwargs : dict[str, str]
+        Valid option with no table-sheet effect.
+    table_sheet_noop_baselines : dict[str, str]
+        Shared SVG and Draw.io baseline output.
+    """
     for render in ("to_svg", "to_drawio"):
-        plain = getattr(_sheet(streams=21), render)(
-            show_stream_table="sheet", page_size="A4", diagram="p&id"
-        )
+        plain = table_sheet_noop_baselines[render]
         stated = getattr(_sheet(streams=21), render)(
             show_stream_table="sheet", page_size="A4", diagram="p&id", **cast(Any, kwargs)
         )
@@ -877,13 +1036,16 @@ def test_an_option_a_table_sheet_cannot_show_leaves_the_drawing_identical(kwargs
 
 
 def test_the_same_option_does_change_a_diagram_that_can_show_it():
-    """The other half, so the test above cannot pass by the option being
-    ignored everywhere: on a P&ID with a nozzle to mark, `connections` draws.
-
-    A pump rather than this file's feed-to-product fixture, because a boundary
-    flag is not a joint and there is nothing to flange between two of them."""
+    """Verify that the same option changes a normal diagram export."""
 
     def build() -> Flowsheet:
+        """Create a diagram that can show flanged connections.
+
+        Returns
+        -------
+        Flowsheet
+            Pinned feed, pump, and product diagram.
+        """
         fs = Flowsheet("joints")
         feed = fs.add(U.Feed("F")).pin(x=100, y=100)
         pump = fs.add(U.Pump("P-101")).pin(x=280, y=100)
@@ -899,27 +1061,27 @@ def test_the_same_option_does_change_a_diagram_that_can_show_it():
 
 # --- a refused render changes nothing at all ---------------------------------
 #
-# The guard above this one used to be `_unresolved()`, which looked at frames
-# and routes. It passed while a refused render was renumbering every stream,
-# because numbering is not a frame and nobody had thought of it. What follows
-# compares the *whole* flowsheet instead, so the next thing nobody thinks of is
-# caught by the test rather than by a reviewer.
+# Failed renders restore all mutable flowsheet state.
 
 
 def _state(fs) -> bytes:
-    """The whole flowsheet, deeply, as bytes that can be compared.
+    """Capture mutable flowsheet state for rollback comparisons.
 
-    `pickle` rather than a field-by-field walk for the same reason the restore
-    it checks is wholesale: a comparison that names what to look at is a
-    comparison that goes stale.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to snapshot.
+
+    Returns
+    -------
+    tuple[object, ...]
+        Immutable representation of render-derived state.
     """
     return pickle.dumps(fs)
 
 
 def test_the_state_check_can_see_a_change_the_old_one_could_not():
-    """The guard's own guard. A test that compares nothing passes everything,
-    so this asserts that the comparison notices the very mutation that slipped
-    past the frames-and-routes check -- stream numbering."""
+    """Verify that the state check can see a change the old one could not."""
     fs = _sheet(streams=3)
     before = _state(fs)
     fs.stream_number_start = 90
@@ -943,9 +1105,15 @@ def test_the_state_check_can_see_a_change_the_old_one_could_not():
 )
 @pytest.mark.parametrize("numbering", [False, True])
 def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
-    """`numbering=True` is the reviewer's reproduction: a renumbering pending
-    because the author moved the start, which the refused render used to carry
-    out on its way to raising."""
+    """Verify that a refused render leaves the whole flowsheet alone.
+
+    Parameters
+    ----------
+    kwargs : dict[str, object]
+        Rejected rendering options.
+    numbering : int
+        Requested stream-number starting value.
+    """
     fs = _sheet(streams=3)
     if numbering:
         fs.stream_number_start = 90
@@ -964,6 +1132,13 @@ def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
     ],
 )
 def test_a_refused_drawio_export_leaves_the_whole_flowsheet_alone(kwargs):
+    """Verify that a refused drawio export leaves the whole flowsheet alone.
+
+    Parameters
+    ----------
+    kwargs : dict[str, object]
+        Rejected Draw.io export options.
+    """
     bare = Flowsheet("bare")
     pump = bare.add(U.Pump("P-101")).pin(x=100, y=100)
     tank = bare.add(U.Tank("T-101")).pin(x=300, y=100)
@@ -975,9 +1150,7 @@ def test_a_refused_drawio_export_leaves_the_whole_flowsheet_alone(kwargs):
 
 
 def test_a_refused_render_leaves_the_flowsheet_alone_after_a_successful_one():
-    """The harder case: a sheet that has already been drawn holds cached
-    geometry and a list of findings, and a refused render must not disturb
-    either of them."""
+    """Verify that a refused render leaves the flowsheet alone after a successful one."""
     fs = _sheet(streams=3)
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     before = _state(fs)
@@ -987,6 +1160,13 @@ def test_a_refused_render_leaves_the_flowsheet_alone_after_a_successful_one():
 
 
 def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
+    """Verify that an unsupported extension leaves the whole flowsheet alone.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary output directory supplied by pytest.
+    """
     fs = _sheet(streams=3)
     before = _state(fs)
     with pytest.raises(ValueError, match="Unsupported output format"):
@@ -995,8 +1175,7 @@ def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
 
 
 def test_a_model_error_leaves_the_whole_flowsheet_alone():
-    """Validation is a later refusal than the argument check, and the same rule
-    reaches it: a sheet the validator rejects is a sheet nobody has."""
+    """Verify that a model error leaves the whole flowsheet alone."""
     fs = _sheet(streams=3)
     fs.units[0].pin(x=float("nan"), y=10.0)
     before = _state(fs)
@@ -1009,9 +1188,7 @@ def test_a_model_error_leaves_the_whole_flowsheet_alone():
 
 
 def test_a_model_error_erases_no_finding_from_the_last_render():
-    """The refusal path one later than the one fixed before: `warnings` was
-    emptied ahead of the model check, so a pin set to NaN deleted the findings
-    of the render that succeeded."""
+    """Verify that a model error erases no finding from the last render."""
     fs = _with_an_unused_section()
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     kept = [w.code for w in fs.warnings]
@@ -1031,8 +1208,13 @@ def test_a_model_error_erases_no_finding_from_the_last_render():
     ],
 )
 def test_a_refused_render_keeps_the_very_list_object_fs_warnings_had(kwargs):
-    """Contents *and* identity. Replaced with an equal list, anything holding a
-    reference to the old one silently stops seeing what the flowsheet sees."""
+    """Verify that a rejected render preserves warning-list identity.
+
+    Parameters
+    ----------
+    kwargs : dict[str, object]
+        Rejected rendering options.
+    """
     fs = _with_an_unused_section()
     fs.stream_table.sheet_drawing_number = "PFD-1001"  # refused: the diagram's
     fs.stream_table_sections = []
@@ -1044,23 +1226,9 @@ def test_a_refused_render_keeps_the_very_list_object_fs_warnings_had(kwargs):
 
 
 def test_a_table_sheet_reports_a_cell_that_cannot_hold_its_value():
-    """The table sheet's title strip reports through the same reporter the
-    diagram's does, and has to take the same arguments.
-
-    #370 widened `Reporter` to carry the two widths a finding quotes -- how
-    much room the cell has and how much the value wanted. This sheet builds its
-    own reporter, and a reporter still built to the old three-argument shape
-    does not fail a check or draw a wrong sheet: it raises `TypeError` out of
-    the middle of a render, the first time a value on a table sheet is too long
-    for its cell. Nothing else on this sheet exercises it, because every other
-    fixture here states values that fit.
-    """
+    """Verify that a table sheet reports a cell that cannot hold its value."""
     fs = _sheet(streams=3)
-    # The subtitle is the cell that says *which sheet this is*, and it is the
-    # table sheet's own -- the one value here no caller can pre-check for it,
-    # so it is clipped by `draw_title_strip` and reaches that reporter and no
-    # other. `drawing_number` would not do: the plan checks that one itself and
-    # the finding arrives through `plan.findings`, never touching this closure.
+    # The long table-sheet subtitle is truncated by the title strip.
     fs.stream_table.sheet_subtitle = (
         "Stream Table for the Aromatics Recovery Unit A100, Sheet 1 of 1"
     )
@@ -1069,32 +1237,30 @@ def test_a_table_sheet_reports_a_cell_that_cannot_hold_its_value():
     cut = [w for w in fs.warnings if w.code == "text-truncated"]
     assert cut, "a value the strip had to abbreviate must not be silent"
     assert any("subtitle" in w.message for w in cut)
-    # ...and the finding carries the two widths, which is what the wider
-    # reporter exists to pass through.
     assert any("units its cell has" in w.message for w in cut)
 
 
 # --- a partition that fits is found ------------------------------------------
 
 
-#: The room an A4 sheet leaves the table: the page less the two margins, the
-#: two zone bands and the clearance the dock keeps. Stated here because three
-#: tests below reason about what fits in it.
+#: Width available to the table on an A4 sheet.
 A4_ROOM = 1122.5196850393702 - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER
 
 
 def _long_section(streams: int = 21, width: int = 101) -> Flowsheet:
-    """A table whose section heading is wider than any *block* of it fits, so
-    the label column is widened after the columns have been shared out -- but
-    not wider than the page, so a partition that fits exists.
+    """Create a flowsheet with a long stream-table section heading.
 
-    ``width`` is a count of capital W, the widest glyph Helvetica cuts (0,944
-    em against the 0,278 of an ``i``): a heading of them is the case a ruler
-    charging every character one average rate is furthest wrong about. At 101
-    the heading is ruled 1015.1 wide, which leaves this fitting A4 three blocks
-    of seven and nothing fewer -- see
-    ``test_the_widest_partition_that_fits_is_the_one_chosen`` for the
-    arithmetic.
+    Parameters
+    ----------
+    streams : int, default=21
+        Number of tabulated streams.
+    width : int, default=101
+        Number of wide glyphs in the section heading.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet that requires partitioning to fit an A4 table sheet.
     """
     fs = _sheet(streams=streams, rows=1)
     fs.stream_table_sections = [("Temperature (C)", "W" * width)]
@@ -1102,17 +1268,25 @@ def _long_section(streams: int = 21, width: int = 101) -> Flowsheet:
 
 
 def _ruled_width(m, chunks: list) -> float:
-    """What *chunks* would really be ruled to, together: the shared label
-    column once the narrowest block has to carry the section heading, plus the
-    stream columns of the widest."""
+    """Calculate the table width required by a partition.
+
+    Parameters
+    ----------
+    m : object
+        Stream-table measurement object.
+    chunks : list
+        Stream-column partitions.
+
+    Returns
+    -------
+    float
+        Width required by the shared label and stream columns.
+    """
     return F._section_span(m, min(len(c) for c in chunks)) + m.name_w * max(len(c) for c in chunks)
 
 
 def test_a_table_that_fits_in_more_blocks_is_drawn_rather_than_refused():
-    """The defect: capacity was worked out *before* the section heading widened
-    the shared label column, and never revisited. Twenty-one streams were cut
-    11/10 from a capacity of eleven, ruled wider than the A4 they were cut for,
-    and the page was called too small -- while 7/7/7 fits it."""
+    """Verify that a wider partition permits a table-sheet render."""
     svg = _long_section().to_svg(show_stream_table="sheet", page_size="A4")
     blocks = _blocks(svg)
     assert len(blocks) == 3
@@ -1120,8 +1294,7 @@ def test_a_table_that_fits_in_more_blocks_is_drawn_rather_than_refused():
 
 
 def test_the_partition_that_fits_really_fits():
-    """Not merely more blocks: every cell of the drawing lands inside the
-    sheet, which is what "it fits" has to mean."""
+    """Verify that the partition that fits really fits."""
     fs = _long_section()
     svg = fs.to_svg(show_stream_table="sheet", page_size="A4")
     vx, vy, vw, vh = _viewbox(svg)
@@ -1133,17 +1306,7 @@ def test_the_partition_that_fits_really_fits():
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_no_lettering_on_the_table_sheet_runs_outside_its_own_rule():
-    """The cells fitting the sheet is not the same claim as the *ink* fitting
-    the cells, and the second is the one that failed. A section heading of
-    capitals was measured at a flat 0,62 em a character where Helvetica Bold
-    sets a ``W`` at 0,944, so the cell was ruled a third short of the string it
-    had been ruled to hold and the heading drew through and past it -- on a
-    sheet every rectangle of which was inside the frame.
-
-    So this measures the drawing with the ruler that will *draw* it:
-    ReportLab, the face svglib resolves pandid's ``sans-serif`` onto. Measuring
-    it with pandid's own arithmetic is what agreed with the defect.
-    """
+    """Verify that no lettering on the table sheet runs outside its own rule."""
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
     svg = _long_section().to_svg(show_stream_table="sheet", page_size="A4")
@@ -1154,31 +1317,19 @@ def test_no_lettering_on_the_table_sheet_runs_outside_its_own_rule():
             room = width - (2 * F._STREAM_PAD if anchor == "start" else 0.0)
             assert drawn <= room, f"{body!r} draws {drawn:.1f} in {room:.1f} of cell"
             checked.append(body)
-    # ...and the string that used to run out of its cell was one of them, in
-    # every block, rather than a sheet of short values passing on their own.
+    # The long section heading appears in every block.
     assert checked.count("W" * 101) == 3
     assert len(checked) > 40
 
 
 def test_the_widest_partition_that_fits_is_the_one_chosen():
-    """Fewest blocks, because fewer blocks are wider blocks and a shorter
-    sheet. Three is the fewest that fits here, so two must not be offered and
-    four must not be chosen over three.
-
-    The arithmetic, since it is worth being able to read: the heading is ruled
-    1015.1 and a stream column 52.0, and where the heading is what widens the
-    label column a block comes to the heading's own width plus one column for
-    every column the biggest block has over the smallest. So 7/7/7 is ruled at
-    the heading exactly, and 11/10 at the heading plus a column, which is more
-    than the 1022.5 an A4 leaves.
-    """
+    """Verify that the widest partition that fits is the one chosen."""
     fs = _long_section()
     table = F.stream_table_sheet(fs, A4_ROOM)
     assert table is not None
     assert len(table.blocks) == 3
     assert table.w <= A4_ROOM
-    # ...and every count below it genuinely does not fit, so three is the
-    # floor rather than a coincidence.
+    # Fewer blocks do not fit within the A4 width.
     m = F._measure(fs, own_sheet=True)
     assert m is not None
     assert _ruled_width(m, F._blocks_of(21, 2)) > A4_ROOM
@@ -1186,9 +1337,7 @@ def test_the_widest_partition_that_fits_is_the_one_chosen():
 
 
 def test_a_table_no_partition_can_fit_is_still_refused():
-    """The guard against fixing the refusal by never refusing: a section
-    heading wider than the page is a page too small however the columns are
-    cut, and the sheet says so rather than drawing off the paper."""
+    """Verify that an over-wide table has no valid partition."""
     with pytest.raises(ValueError, match="stream table"):
         _long_section(width=400).to_svg(show_stream_table="sheet", page_size="A4")
 
@@ -1198,15 +1347,12 @@ def test_a_table_no_partition_can_fit_is_still_refused():
 
 @pytest.mark.parametrize("n", range(1, 26))
 def test_blocks_are_shared_out_within_one_column_at_every_count(n):
-    """``_blocks_of``'s whole contract, held at every count rather than at the
-    one count that divides evenly.
+    """Verify that blocks are shared out within one column at every count.
 
-    It promised blocks a column apart at worst and did not deliver: filling
-    ``ceil(n / count)`` into each block and leaving the last with the remainder
-    gives ten over four as 3/3/3/1, three apart, and ten over six as *five*
-    blocks -- a count the caller asked about and never got an answer for. The
-    only case the old test exercised was 21 over 3, which is the one shape the
-    bug cannot appear in.
+    Parameters
+    ----------
+    n : int
+        Number of stream columns.
     """
     for count in range(1, n + 1):
         blocks = F._blocks_of(n, count)
@@ -1214,27 +1360,18 @@ def test_blocks_are_shared_out_within_one_column_at_every_count(n):
         assert len(blocks) == count, sizes
         assert max(sizes) - min(sizes) <= 1, sizes
         assert sum(sizes) == n
-        # the columns themselves, in sheet order, each in exactly one block
+        # Every column occurs once in sheet order.
         assert [i for b in blocks for i in b] == list(range(n))
 
 
 def test_the_instance_the_review_named():
-    """Kept by name, so the case that was reported is the case that is run."""
+    """Verify the named uneven-partition examples."""
     assert [len(b) for b in F._blocks_of(10, 4)] == [3, 3, 2, 2]
     assert [len(b) for b in F._blocks_of(10, 6)] == [2, 2, 2, 2, 1, 1]
 
 
 def test_a_stub_block_no_longer_widens_the_label_column_into_a_refusal():
-    """Why the malformed shape was not a tidiness complaint.
-
-    The label column is widened against the *narrowest* block, so that one
-    ruling answers for all of them -- which means a one-column stub widens it
-    by everything the columns it should have had would have covered. 3/3/3/1 is
-    measured two stream columns wider than the 3/3/2/2 holding the same ten
-    streams, so a page that fits four blocks was told it did not, and the
-    search went on and returned five: a taller sheet of narrower blocks, for a
-    partition that was never measured.
-    """
+    """Verify that a stub block no longer widens the label column into a refusal."""
     fs = _sheet(streams=10, rows=1)
     fs.stream_table_sections = [("Temperature (C)", "Trace Components and Contaminants (mg/kg)")]
     m = F._measure(fs, own_sheet=True)
@@ -1243,21 +1380,15 @@ def test_a_stub_block_no_longer_widens_the_label_column_into_a_refusal():
     balanced = F._blocks_of(10, 4)
     assert [len(b) for b in balanced] == [3, 3, 2, 2]
     stub = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
-    # Both blocks are three columns at their widest, so the whole difference
-    # is what the narrowest block does not cover: a stub of one leaves the
-    # shared label column a stream column wider than a block of two does.
+    # A one-column stub widens the shared label column.
     assert _ruled_width(m, stub) == pytest.approx(_ruled_width(m, balanced) + m.name_w)
 
-    # A page with exactly the room the balanced four need: the stub does not
-    # fit it, nor does any count below four, so four is what a search that
-    # measures the right shape returns.
+    # Four balanced blocks are the smallest partition that fits.
     room = _ruled_width(m, balanced)
     assert _ruled_width(m, stub) > room
     assert _ruled_width(m, F._blocks_of(10, 3)) > room
     assert [len(b) for b in F._partition(m, 10, room)] == [3, 3, 2, 2]
-    # ...and five, which the stub's measurement drove it to, was never needed:
-    # it fits, so a search handed the stub's width went straight past four to
-    # it and drew a taller sheet of narrower blocks for no reason on the page.
+    # Five blocks fit but are not required.
     assert _ruled_width(m, F._blocks_of(10, 5)) < room
 
 
@@ -1265,21 +1396,28 @@ def test_a_stub_block_no_longer_widens_the_label_column_into_a_refusal():
 
 
 def _division_count(m, n: int, room: float) -> int:
-    """The count the arithmetic this search replaced worked out: how many
-    columns fit beside the label column, and how many blocks that takes."""
+    """Calculate the legacy stream-table partition count.
+
+    Parameters
+    ----------
+    m : object
+        Stream-table measurement object.
+    n : int
+        Number of stream columns.
+    room : float
+        Available table width.
+
+    Returns
+    -------
+    int
+        Number of blocks chosen by the division-based calculation.
+    """
     per = max(1, int((room - m.label_w) // m.name_w))
     return (n + per - 1) // per
 
 
 def test_the_search_never_chooses_more_blocks_than_the_division_it_replaced():
-    """The claim that survives, and the only one made.
-
-    It holds by construction rather than by sweep: the loop asks every count
-    from one upwards and stops at the first that fits, so where the division's
-    own partition fitted, the loop reached that count and returned there at the
-    latest. The sweep is here to catch the day the loop stops asking every
-    count.
-    """
+    """Verify that partition search uses no more blocks than division."""
     for rows in (1, 4):
         for n in (5, 7, 10, 13, 21):
             fs = _sheet(streams=n, rows=rows)
@@ -1294,29 +1432,11 @@ def test_the_search_never_chooses_more_blocks_than_the_division_it_replaced():
 
 
 def test_the_search_is_not_the_division_and_is_not_claimed_to_be():
-    """The claim that does *not* survive, kept as a case that kills it.
-
-    An earlier round of this branch said the search was arithmetically
-    identical to the division wherever no section heading widened anything, so
-    that no sheet which fitted before could move. It is not identical, and the
-    reason is that the two ask different questions. The division works out a
-    *capacity* -- ``(room - label_w) // name_w``, how many columns the page has
-    room for -- in floating point, where a room that is exactly a label column
-    plus five stream columns does not come back to five stream columns when the
-    label column is taken off it again. It reads four, and wraps a table into
-    two blocks that fits in one. The search asks whether the partition it would
-    actually rule fits, gets the same width it would draw, and does not wrap it.
-
-    So this is a correction rather than a compatibility break, and it is stated
-    as one. The surviving claim is the test above: never *more* blocks than the
-    division chose.
-    """
+    """Verify that partition search does not reproduce floating-point division."""
     fs = _sheet(streams=5, rows=1)
     fs.stream_table_sections = []
     for stream in fs.streams:
-        # The value :func:`stream_table_layout` names as the reason a stream
-        # table has no room to abbreviate in. It rules a column 96.887 wide,
-        # which is what makes the room below inexact.
+        # This value yields the floating-point boundary case.
         stream.properties = {"Total Flow (kg/h)": "0.0441 kg/kg total"}
     m = F._measure(fs, own_sheet=True)
     assert m is not None
@@ -1330,28 +1450,40 @@ def test_the_search_is_not_the_division_and_is_not_claimed_to_be():
 
 # --- ...and the same guarantee through the write itself ----------------------
 #
-# The rollback above lives inside `to_svg()`/`to_drawio()`, and both of those
-# hand back a *string*. `render()` converts that string and writes it out
-# afterwards, with both guards already let go, so the one failure the invariant
-# is named for -- a render that produced no file -- was the one it did not
-# cover: an OSError on the final write left the sheet numbered, laid out,
-# routed and rewarned for a file nobody has. Every assertion below fails
-# against a `render()` that does not carry the guard itself.
+# Render-write failures also restore flowsheet state.
 
 
 def _full_disk(*_args: object, **_kwargs: object) -> bytes:
-    """The motivating failure. A disk with no room on it, or a directory that
-    cannot be written to, is an ordinary way for a render to end."""
+    """Raise the output failure used by render rollback tests.
+
+    Parameters
+    ----------
+    *_args : object
+        Ignored positional arguments from the patched writer.
+    **_kwargs : object
+        Ignored keyword arguments from the patched writer.
+
+    Raises
+    ------
+    OSError
+        Always raised with a disk-full error.
+    """
     raise OSError(28, "No space left on device")
 
 
 def _without_geometry(fs) -> tuple[set[str], set[str]]:
-    """Which units carry no `Frame` and which streams no `Route`.
+    """Capture units and streams without derived geometry.
 
-    The set rather than `_unresolved`'s yes-or-no, because the sheet below has
-    been drawn once already: what must not change is *which* parts of it the
-    next render has yet to build, and a render that built them all would pass a
-    check that only asked whether anything was unbuilt."""
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to inspect.
+
+    Returns
+    -------
+    tuple[set[str], set[str]]
+        Names of units without frames and streams without routes.
+    """
     return (
         {u.name for u in fs.units if u.frame is None},
         {s.name for s in fs.streams if s.route is None},
@@ -1359,10 +1491,13 @@ def _without_geometry(fs) -> tuple[set[str], set[str]]:
 
 
 def _damageable() -> Flowsheet:
-    """A sheet carrying every kind of state a failed render could damage:
-    the findings of a render that succeeded, the geometry it cached, a unit
-    and a stream added since and so still unbuilt, and a renumbering pending
-    because the author moved the start."""
+    """Create a flowsheet with rendered and unresolved state.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet used to verify that failed rendering rolls state back.
+    """
     fs = _with_an_unused_section()
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert [w.code for w in fs.warnings] == ["stream-table-section-unused"]
@@ -1374,10 +1509,13 @@ def _damageable() -> Flowsheet:
 
 
 def test_the_write_failure_checks_can_see_the_mutation_they_forbid(tmp_path):
-    """The guard's own guard, in this file's established shape: a comparison
-    that notices nothing passes everything. Every assertion the test below
-    makes is made backwards here, against a render that does land, so each one
-    is known to have teeth rather than to be true of any flowsheet at all."""
+    """Verify that rollback assertions detect a successful render mutation.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary output directory supplied by pytest.
+    """
     fs = _damageable()
     state, held, finding = _state(fs), fs.warnings, fs.warnings[0]
     unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]
@@ -1407,8 +1545,19 @@ _NEEDS_PDF = pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not
 def test_a_render_that_cannot_be_written_leaves_the_whole_flowsheet_alone(
     tmp_path, monkeypatch, ext, injection
 ):
-    """Every final step of `render()`, one at a time: the two `write_text`
-    calls, the raster conversion, and the `write_bytes` that follows it."""
+    """Verify that write failures restore the complete flowsheet state.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary output directory supplied by pytest.
+    monkeypatch : pytest.MonkeyPatch
+        Patching helper supplied by pytest.
+    ext : str
+        Requested output extension.
+    injection : str
+        Render operation forced to fail.
+    """
     fs = _damageable()
     state, held, finding = _state(fs), fs.warnings, fs.warnings[0]
     unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]
