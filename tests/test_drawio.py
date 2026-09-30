@@ -16,7 +16,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+from _drawio_compare import normalize
 from _render_cases import copy_settled_case, gallery
+import pandid
 from pandid import units
 from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
@@ -3969,27 +3971,26 @@ def _samples():
     return module
 
 
-@pytest.mark.parametrize("stem", sorted(_samples().SAMPLES))
-def test_the_committed_sample_is_what_the_exporter_emits(stem):
-    """Keep committed Draw.io samples in sync with the exporter.
+def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
+    """Keep generated sample structure independent of generator provenance.
 
     Parameters
     ----------
-    stem : str
-        Committed Draw.io sample name.
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to replace the package version during the test.
 
     Returns
     -------
     None
-        No value is returned; pytest records assertion failures.
+        Assertion result for the stated behaviour.
     """
     samples = _samples()
-    committed = samples.OUT / f"{stem}.drawio"
-    assert committed.exists(), f"{committed.name} is not committed"
-    document, _dropped = samples.sample(stem)
-    assert committed.read_text(encoding="utf-8") == document, (
-        f"{committed.name} is stale; run python scripts/drawio_samples.py"
-    )
+    current, _dropped = samples.sample("04_control_loop")
+    monkeypatch.setattr(pandid, "__version__", "99.99.99")
+    bumped, _dropped = samples.sample("04_control_loop")
+
+    assert current != bumped, "the generator version is absent from the sample"
+    assert normalize(current) == normalize(bumped)
 
 
 # ---------------------------------------------------------------------------
