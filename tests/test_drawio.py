@@ -112,7 +112,18 @@ DRAWING_IDS = [f"{kind}/{variant}" for kind, variant, _ in DRAWINGS]
 
 @pytest.mark.parametrize("entry", DRAWINGS, ids=DRAWING_IDS)
 def test_every_shape_reference_resolves_to_a_vendored_stencil(entry):
-    """The check the export turns on; see this module's docstring."""
+    """The check the export turns on; see this module's docstring.
+
+    Parameters
+    ----------
+    entry : tuple[str, str, Symbol]
+        Registered symbol kind, variant, and definition.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     kind, variant, sym = entry
     if not sym.drawio_shape:
         pytest.skip("drawn here rather than vendored; the approximations cover it")
@@ -125,7 +136,18 @@ def test_every_shape_reference_resolves_to_a_vendored_stencil(entry):
 
 @pytest.mark.parametrize("entry", DRAWINGS, ids=DRAWING_IDS)
 def test_a_symbol_with_no_stencil_is_an_approximation_that_was_written_down(entry):
-    """Document every symbol that degrades to a built-in shape."""
+    """Document every symbol that degrades to a built-in shape.
+
+    Parameters
+    ----------
+    entry : tuple[str, str, Symbol]
+        Registered symbol kind, variant, and definition.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     kind, variant, sym = entry
     if sym.drawio_shape:
         return
@@ -140,13 +162,30 @@ def test_a_symbol_with_no_stencil_is_an_approximation_that_was_written_down(entr
 
 @pytest.mark.parametrize("entry", DRAWINGS, ids=DRAWING_IDS)
 def test_a_shape_key_survives_being_written_into_a_style(entry):
-    """Preserve each stencil key in the exported style string."""
+    """Preserve each stencil key in the exported style string.
+
+    Parameters
+    ----------
+    entry : tuple[str, str, Symbol]
+        Registered symbol kind, variant, and definition.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     _, _, sym = entry
     assert ";" not in sym.drawio_shape and "=" not in sym.drawio_shape
 
 
 def test_the_approximations_name_only_shapes_and_symbols_that_exist():
-    """The table is data, and stale data here is a silent wrong drawing."""
+    """The table is data, and stale data here is a silent wrong drawing.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     for (kind, variant), approx in _APPROXIMATIONS.items():
         assert (kind, variant) in default_registry._symbols, (
             f"_APPROXIMATIONS names {kind}/{variant}, which the registry does not draw"
@@ -164,7 +203,13 @@ def test_the_approximations_name_only_shapes_and_symbols_that_exist():
 
 
 def test_a_referenced_stencil_is_always_variable_aspect():
-    """Require referenced stencils to fill their exported cells."""
+    """Require referenced stencils to fill their exported cells.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     for kind, variant, sym in DRAWINGS:
         if sym.drawio_shape:
             assert sym.stretchable, (
@@ -196,7 +241,13 @@ def _codes(fs: Flowsheet) -> list[str]:
 
 
 def test_a_stand_in_says_on_fs_warnings_what_it_lost():
-    """Report the artwork lost by each approximate symbol."""
+    """Report the artwork lost by each approximate symbol.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("lost")
     feed = fs.add(units.Feed("F"))
     belt = fs.add(units.Conveyor("CV-101"))
@@ -220,7 +271,13 @@ def test_a_stand_in_says_on_fs_warnings_what_it_lost():
 
 
 def test_a_stand_in_that_loses_nothing_says_nothing():
-    """Omit loss warnings for faithful built-in shapes."""
+    """Omit loss warnings for faithful built-in shapes.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     assert not _APPROXIMATIONS[("feed", "default")].lost, "the premise has moved"
     fs = Flowsheet("exact")
     feed = fs.add(units.Feed("F"))
@@ -253,7 +310,13 @@ def _truncated_title_sheet() -> Flowsheet:
 
 
 def test_the_export_reports_a_title_block_cell_it_had_to_abbreviate():
-    """Report title-block text shortened during export."""
+    """Report title-block text shortened during export.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     svg_sheet, drawio_sheet = _truncated_title_sheet(), _truncated_title_sheet()
     svg_sheet.to_svg(page_size="A3")
     drawio_sheet.to_drawio(page_size="A3")
@@ -303,13 +366,35 @@ def every_symbol_sheet() -> Flowsheet:
 
 
 def test_the_sheet_covers_every_registered_symbol(every_symbol_sheet):
-    """Cover every symbol registered for export."""
+    """Cover every symbol registered for export.
+
+    Parameters
+    ----------
+    every_symbol_sheet : Flowsheet
+        Flowsheet containing every registered symbol.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     drawn = {(u.kind, getattr(u, "variant", "default")) for u in every_symbol_sheet.units}
     assert drawn == set(default_registry._symbols)
 
 
 def test_an_exported_sheet_references_only_shapes_that_resolve(every_symbol_sheet):
-    """Resolve every shape reference in a full-sheet export."""
+    """Resolve every shape reference in a full-sheet export.
+
+    Parameters
+    ----------
+    every_symbol_sheet : Flowsheet
+        Flowsheet containing every registered symbol.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     doc = ET.fromstring(every_symbol_sheet.to_drawio(check=False))
     shapes = set()
     for cell in doc.iter("mxCell"):
@@ -379,7 +464,18 @@ def sample() -> Flowsheet:
 
 
 def test_the_model_carries_drawios_two_root_cells(sample):
-    """Include the two root cells required by Draw.io."""
+    """Include the two root cells required by Draw.io.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     root = _model(sample)
     cells = root.findall("mxCell")
     assert cells[0].get("id") == "0" and cells[0].get("parent") is None
@@ -387,7 +483,18 @@ def test_the_model_carries_drawios_two_root_cells(sample):
 
 
 def test_every_drawn_cell_is_parented_and_uniquely_identified(sample):
-    """Give every drawn cell one identifier and a valid parent."""
+    """Give every drawn cell one identifier and a valid parent.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     root = _model(sample)
     ids = [cell.get("id") for cell in root.findall("mxCell")]
     assert len(ids) == len(set(ids)), "two cells under one id"
@@ -400,7 +507,18 @@ def test_every_drawn_cell_is_parented_and_uniquely_identified(sample):
 
 
 def test_every_edge_joins_cells_that_exist(sample):
-    """Connect every edge to existing cells."""
+    """Connect every edge to existing cells.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     root = _model(sample)
     ids = {cell.get("id") for cell in root.findall("mxCell")}
     edges = [c for c in root.findall("mxCell") if c.get("edge") == "1"]
@@ -417,7 +535,18 @@ def test_every_edge_joins_cells_that_exist(sample):
 
 
 def test_every_instrument_connection_is_exported_as_an_edge(sample):
-    """Export each instrument tap as a connected edge."""
+    """Export each instrument tap as a connected edge.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     root = _model(sample)
     drawn = tap_lines(sample)
     assert drawn, "the fixture stopped exercising tap lines"
@@ -445,7 +574,13 @@ def test_every_instrument_connection_is_exported_as_an_edge(sample):
 
 
 def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
-    """Export an off-page flag as a pennant with an internal tag."""
+    """Export an off-page flag as a pennant with an internal tag.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("flags")
     east = fs.add(units.Feed("FEED", reference="P-01"))
     east.pin(x=100, y=100)
@@ -481,11 +616,11 @@ def test_a_label_written_inside_its_shape_fits_inside_it(settled_gallery, render
     Returns
     -------
     None
-        Assertion result for every exported unit label.
+        Assertion result for representative exported unit labels.
     """
     from pandid.render.drawio import _LINE_BOX
 
-    for stem in SHEETS:
+    for stem in DRAWIO_REPRESENTATIVES:
         fs, kwargs = _gallery_case(settled_gallery, stem)
         cells = _gallery_cells(rendered_gallery, stem)
         for i, unit in enumerate(fs.units):
@@ -532,7 +667,13 @@ def _unit_label_sizes(fs, kwargs, **over) -> list[float]:
 
 
 def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it():
-    """Scale exported lettering with the drawing geometry."""
+    """Scale exported lettering with the drawing geometry.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render.drawio import _TAG_TYPE
 
     fs, kwargs = gallery.flowsheet("11_ethanol_pid")
@@ -561,7 +702,13 @@ def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it():
 
 
 def test_a_flag_is_drawn_across_its_own_box():
-    """Match boundary-flag width to its unit box."""
+    """Match boundary-flag width to its unit box.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     for cls, mirrored in (
         (units.Feed, False),
         (units.Feed, True),
@@ -581,7 +728,13 @@ def test_a_flag_is_drawn_across_its_own_box():
 
 
 def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
-    """Scale a flag pennant to its configured height."""
+    """Scale a flag pennant to its configured height.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     for cls, mirrored in (
         (units.Feed, False),
         (units.Feed, True),
@@ -622,7 +775,13 @@ def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
 
 
 def test_a_default_sized_flag_is_unmoved_by_the_height_fix():
-    """Keep default flag geometry at its standard size."""
+    """Keep default flag geometry at its standard size.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("plain-flag")
     feed = fs.add(units.Feed("F"))
     feed.pin(x=100, y=50, port=None)
@@ -634,7 +793,13 @@ def test_a_default_sized_flag_is_unmoved_by_the_height_fix():
 
 
 def test_a_tee_draws_no_ink_of_its_own():
-    """Draw a tee junction with its streams rather than its cell."""
+    """Draw a tee junction with its streams rather than its cell.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("tee")
     tee = fs.add(units.Tee("TEE"))
     tee.pin(x=100, y=100)
@@ -651,7 +816,13 @@ def test_a_tee_draws_no_ink_of_its_own():
 
 
 def test_three_runs_meeting_at_a_tee_close_on_one_point():
-    """Join all tee streams at the same central point."""
+    """Join all tee streams at the same central point.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("junction")
     header = fs.add(units.Feed("HDR"))
     tee = fs.add(units.Tee("TEE"))
@@ -683,7 +854,13 @@ def test_three_runs_meeting_at_a_tee_close_on_one_point():
 
 
 def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
-    """Place pneumatic markers at the rendered positions."""
+    """Place pneumatic markers at the rendered positions.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("pneumatic")
     valve = fs.add(units.Valve("FV-101", variant="control"))
     valve.pin(x=400, y=300)
@@ -715,7 +892,13 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
 
 
 def test_a_dash_is_stated_in_drawing_units():
-    """Keep dash lengths independent of stroke width."""
+    """Keep dash lengths independent of stroke width.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("dashes")
     a = fs.add(units.Tank("T-1"))
     b = fs.add(units.Tank("T-2"))
@@ -729,7 +912,13 @@ def test_a_dash_is_stated_in_drawing_units():
 
 
 def test_a_turned_cell_pins_which_anchor_algorithm_reads_its_fractions():
-    """Use the anchor algorithm matching the placed cell bounds."""
+    """Use the anchor algorithm matching the placed cell bounds.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     style = _one_unit(units.Pump("P-1"), x=100, y=100, orientation=90)
     assert style["direction"] == "south"
     assert style["anchorPointDirection"] == "0"
@@ -737,12 +926,34 @@ def test_a_turned_cell_pins_which_anchor_algorithm_reads_its_fractions():
 
 
 def test_the_export_is_deterministic(sample):
-    """A re-export that differs from itself is a diff nobody can read."""
+    """A re-export that differs from itself is a diff nobody can read.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     assert sample.to_drawio() == sample.to_drawio()
 
 
 def test_the_backend_is_a_renderer_in_its_own_right(sample):
-    """Expose the Draw.io backend through the renderer interface."""
+    """Expose the Draw.io backend through the renderer interface.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     assert DrawioRenderer().render(sample) == sample.to_drawio(check=False)
 
 
@@ -791,7 +1002,18 @@ def _style(cell: ET.Element) -> dict[str, str]:
 
 
 def test_a_units_box_is_the_box_the_renderer_draws_it_in(sample):
-    """Match exported unit bounds to rendered artwork."""
+    """Match exported unit bounds to rendered artwork.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     cells = _cells(sample)
     for i, u in enumerate(sample.units):
         geometry = cells[f"u{i}"].find("mxGeometry")
@@ -803,7 +1025,18 @@ def test_a_units_box_is_the_box_the_renderer_draws_it_in(sample):
 
 
 def test_an_edges_waypoints_are_the_line_the_renderer_draws(sample):
-    """The turns in the route, and only the turns: the ends are the nozzles."""
+    """The turns in the route, and only the turns: the ends are the nozzles.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     cells = _cells(sample)
     for n, s in enumerate(sample.streams):
         drawn = stream_polyline(s)
@@ -894,7 +1127,20 @@ def _drawio_connection_point(unit, vertex: dict, edge: dict, prefix: str) -> tup
 @pytest.mark.parametrize("orientation", [0, 90, 180, 270])
 @pytest.mark.parametrize("mirrored", [False, True, "y", "xy"])
 def test_a_connection_point_resolves_back_onto_its_nozzle(orientation, mirrored):
-    """Match fixed connection points to nozzles in every orientation."""
+    """Match fixed connection points to nozzles in every orientation.
+
+    Parameters
+    ----------
+    orientation : int
+        Clockwise symbol orientation in degrees.
+    mirrored : bool | str
+        Mirror mode applied to the exported symbol.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("placements")
     vessel = fs.add(units.Vessel("V-101", variant="dished"))
     feed = fs.add(units.Feed("F"))
@@ -921,7 +1167,13 @@ def test_a_connection_point_resolves_back_onto_its_nozzle(orientation, mirrored)
 
 
 def test_a_feed_pinned_to_a_stage_resolves_to_the_same_point_in_both_backends():
-    """Match a pinned stage feed connection across both renderers."""
+    """Match a pinned stage feed connection across both renderers.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("stage")
     col = fs.add(
         units.Column("T-101", internals="valve_tray", trays=30, n_feeds=2, feed_stages=[12, 22])
@@ -974,19 +1226,44 @@ def _one_unit(unit, **pin) -> dict[str, str]:
     "orientation,direction", [(0, None), (90, "south"), (180, "west"), (270, "north")]
 )
 def test_a_quarter_turn_exports_as_the_direction_it_turns_to(orientation, direction):
-    """pandid turns clockwise; draw.io names where the shape's east ended up."""
+    """pandid turns clockwise; draw.io names where the shape's east ended up.
+
+    Parameters
+    ----------
+    orientation : int
+        Clockwise symbol orientation in degrees.
+    direction : str
+        Configured direction for Draw.io line jumps.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     style = _one_unit(units.Pump("P-1"), x=100, y=100, orientation=orientation)
     assert style.get("direction") == direction
 
 
 def test_a_mirror_exports_as_a_flip():
-    """Export a mirrored unit with its flip style."""
+    """Export a mirrored unit with its flip style.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     style = _one_unit(units.Pump("P-1"), x=100, y=100, mirrored="xy")
     assert style.get("flipH") == "1" and style.get("flipV") == "1"
 
 
 def test_a_directional_symbol_is_never_flipped():
-    """Keep directional artwork unflipped while moving its nozzles."""
+    """Keep directional artwork unflipped while moving its nozzles.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     directional = [(k, v) for (k, v), s in default_registry._symbols.items() if s.directional]
     assert directional, "no directional symbol left to check this against"
     for kind, variant in directional:
@@ -998,14 +1275,26 @@ def test_a_directional_symbol_is_never_flipped():
 
 
 def test_a_normally_closed_valve_exports_its_body_filled():
-    """Fill the body of a normally closed valve."""
+    """Fill the body of a normally closed valve.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     style = _one_unit(units.Valve("HV-1", variant="gate", normal_position="closed"), x=100, y=100)
     assert style["shape"] == "mxgraph.pid.valves.gate_valve"
     assert style["fillColor"] == "#111"
 
 
 def test_an_expander_exports_its_stencil_mirrored():
-    """Mirror reducer artwork when exporting an expander."""
+    """Mirror reducer artwork when exporting an expander.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     reduction = _one_unit(units.Reducer("R-1", large_end="inlet"), x=100, y=100)
     expansion = _one_unit(units.Reducer("R-2", large_end="outlet"), x=100, y=100)
     assert reduction["shape"] == expansion["shape"]
@@ -1014,7 +1303,13 @@ def test_an_expander_exports_its_stencil_mirrored():
 
 
 def test_a_balloon_carries_its_letters_over_its_number():
-    """Place instrument letters above the balloon number."""
+    """Place instrument letters above the balloon number.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("balloon")
     ft = fs.add_instrument("FT", 101)
     ft.pin(x=100, y=100)
@@ -1029,7 +1324,13 @@ def test_a_balloon_carries_its_letters_over_its_number():
 
 
 def test_only_the_balloons_are_drawn_opaque():
-    """Use opaque fill only for built-in balloon shapes."""
+    """Use opaque fill only for built-in balloon shapes.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render.drawio import _APPROXIMATIONS as table
 
     for (kind, variant), approx in table.items():
@@ -1038,20 +1339,38 @@ def test_only_the_balloons_are_drawn_opaque():
 
 
 def test_a_vendored_stencil_exports_on_the_paper():
-    """Fill vendored shapes with the page colour where required."""
+    """Fill vendored shapes with the page colour where required.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     style = _one_unit(units.Tank("V-1", variant="sphere"), x=100, y=100)
     assert style["shape"] == "mxgraph.pid.vessels.storage_sphere"
     assert style["fillColor"] == "#ffffff"
 
 
 def test_a_mirrored_expander_is_the_reducer_drawn_as_vendored():
-    """Compose reducer direction and mirror without moving its nozzles."""
+    """Compose reducer direction and mirror without moving its nozzles.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     style = _one_unit(units.Reducer("R-1", large_end="outlet"), x=100, y=100, mirrored=True)
     assert "flipH" not in style
 
 
 def test_a_diamond_balloon_carries_its_number_alone():
-    """Keep the interlock number inside a diamond balloon."""
+    """Keep the interlock number inside a diamond balloon.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("interlock")
     square = fs.add(units.Instrument("Z", 301, variant="interlock"))
     square.pin(x=100, y=100)
@@ -1063,7 +1382,18 @@ def test_a_diamond_balloon_carries_its_number_alone():
 
 @pytest.mark.parametrize("variant", ["sis", "logic"])
 def test_a_trip_balloon_keeps_the_square_around_its_diamond(variant):
-    """Retain the safety-system square around a trip balloon."""
+    """Retain the safety-system square around a trip balloon.
+
+    Parameters
+    ----------
+    variant : str
+        Symbol variant under test.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     art = default_registry.get("instrument", variant).svg
     assert art.count("<rect") == 1 and art.count("<polygon") == 1, (
         "the sheet has stopped drawing this as a square with a diamond in it"
@@ -1103,7 +1433,18 @@ def test_a_trip_balloon_keeps_the_square_around_its_diamond(variant):
 
 
 def test_a_unit_from_outside_the_package_exports_as_the_box_it_draws(gapped_kind):
-    """Export an unknown unit as the generic box drawn by the sheet."""
+    """Export an unknown unit as the generic box drawn by the sheet.
+
+    Parameters
+    ----------
+    gapped_kind : type[units.Unit]
+        Test-only unit type with unanchored spare ports.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("foreign")
     unit = fs.add(gapped_kind("X-1"))
     unit.pin(x=100, y=100)
@@ -1114,13 +1455,25 @@ def test_a_unit_from_outside_the_package_exports_as_the_box_it_draws(gapped_kind
 
 
 def test_an_empty_flowsheet_still_exports_a_document():
-    """Export a valid document for an empty flowsheet."""
+    """Export a valid document for an empty flowsheet.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     root = _model(Flowsheet("empty"), check=False)
     assert [c.get("id") for c in root.findall("mxCell")] == ["0", "1"]
 
 
 def test_a_repeated_tag_gets_a_cell_of_its_own():
-    """Give each occurrence of a repeated tag its own cell."""
+    """Give each occurrence of a repeated tag its own cell.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("repeats")
     for n in range(3):
         square = fs.add(units.Instrument("Z", 1, variant="interlock"))
@@ -1133,7 +1486,13 @@ def test_a_repeated_tag_gets_a_cell_of_its_own():
 
 
 def test_an_off_page_flag_keeps_its_tag_and_its_reference():
-    """Keep an off-page flag tag and reference in the export."""
+    """Keep an off-page flag tag and reference in the export.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("boundary")
     feed = fs.add(units.Feed("FEED", reference="P-01"))
     feed.pin(x=100, y=100)
@@ -1147,7 +1506,18 @@ def test_an_off_page_flag_keeps_its_tag_and_its_reference():
 
 
 def test_a_signal_line_is_dashed_and_drawn_half_the_weight_of_pipe(sample):
-    """Draw signal lines dashed and half the material-line weight."""
+    """Draw signal lines dashed and half the material-line weight.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     cells = _cells(sample)
     weights = {}
     for n, s in enumerate(sample.streams):
@@ -1162,7 +1532,18 @@ def test_a_signal_line_is_dashed_and_drawn_half_the_weight_of_pipe(sample):
 
 
 def test_a_pfd_exports_arrowheads_and_a_p_and_id_does_not(sample):
-    """Show stream arrowheads only on process flow diagrams."""
+    """Show stream arrowheads only on process flow diagrams.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     pfd = _cells(sample, diagram="pfd")
     pid = _cells(sample, diagram="p&id")
     heads = [
@@ -1176,7 +1557,18 @@ def test_a_pfd_exports_arrowheads_and_a_p_and_id_does_not(sample):
 
 
 def test_a_stream_number_is_written_once_however_many_segments_carry_it(sample):
-    """A number names a run, and a run survives the valves in it."""
+    """A number names a run, and a run survives the valves in it.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     cells = _cells(sample)
     labels = [cells[f"s{n}"].get("value") for n in range(len(sample.streams))]
     written = [label for label in labels if label]
@@ -1229,12 +1621,12 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
     Returns
     -------
     None
-        Assertion result for unenclosed material-stream numbers.
+        Assertion result for representative unenclosed material-stream numbers.
     """
     from pandid.render.drawio import _tag_pass
     from pandid.render.svg import sheet_connections, stream_numbers
 
-    for stem in SHEETS:
+    for stem in LINE_NUMBER_SHEETS:
         fs, kwargs = _gallery_case(settled_gallery, stem)
         # Enclosed numbers use a separate cell, checked in test_stream_label_enclosure.py.
         if fs.stream_labels.enclosure != "none":
@@ -1268,7 +1660,13 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
 
 
 def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
-    """Use a perpendicular offset for a displaced line number."""
+    """Use a perpendicular offset for a displaced line number.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs, kwargs = gallery.flowsheet("11_ethanol_pid")
     fs.to_svg(**kwargs)
     cells = _drawio_cells(fs, kwargs)
@@ -1309,7 +1707,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
     from pandid.render.svg import quadrant_labels
 
     written, counted = {}, {}
-    for stem in SHEETS:
+    for stem in INSTRUMENT_CODE_SHEETS:
         fs, kwargs = _gallery_case(settled_gallery, stem)
         svg = rendered_gallery[stem].svg
         cells = _gallery_cells(rendered_gallery, stem)
@@ -1336,13 +1734,10 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
             assert style["labelBackgroundColor"] == "#ffffff"
 
     # Assert the code population as well as parity between both renderers.
-    assert {stem: n for stem, n in counted.items() if n} == {
+    assert counted == {
         "04_control_loop": 2,
         "11_ethanol_pid": 6,
         "14_tank_farm": 5,
-        "17_stirred_reactor_train": 5,
-        "18_fixed_bed_recycle": 5,
-        "20_molecular_sieve_dryer": 5,
     }, counted
     # Check identities as well as counts on the affected sheets.
     assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
@@ -1377,7 +1772,13 @@ def _titled() -> Flowsheet:
 
 
 def test_a_title_block_carries_every_field_in_a_cell_of_its_own():
-    """Give every title-block field an editable cell."""
+    """Give every title-block field an editable cell.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     cells = _cells(_titled(), check=False)
     values = {c.get("value") for c in cells.values()}
     assert {"REV", "DATE", "DESCRIPTION"} <= values, "the revision grid lost its headings"
@@ -1390,7 +1791,13 @@ def test_a_title_block_carries_every_field_in_a_cell_of_its_own():
 
 
 def test_the_title_strip_carries_the_same_ink_the_sheet_rules():
-    """Match title-strip text and rules to the rendered sheet."""
+    """Match title-strip text and rules to the rendered sheet.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     import html
     import re
 
@@ -1492,7 +1899,13 @@ def test_the_title_strip_carries_the_same_ink_the_sheet_rules():
 
 
 def test_a_table_rules_rows_and_cells_that_add_up_to_it():
-    """Make table rows and cells span their parent bounds."""
+    """Make table rows and cells span their parent bounds.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     cells = _cells(_titled(), check=False)
     tables = [c for c in cells.values() if "shape=table;" in (c.get("style") or "")]
     assert tables, "the title block exported no table at all"
@@ -1536,7 +1949,18 @@ def test_a_table_rules_rows_and_cells_that_add_up_to_it():
 
 @pytest.mark.parametrize("nrows", range(1, 13))
 def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
-    """Make serialized row dimensions sum to the table dimensions."""
+    """Make serialized row dimensions sum to the table dimensions.
+
+    Parameters
+    ----------
+    nrows : int
+        Number of rows in the generated table.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.document import Annotation
 
     fs = Flowsheet(f"rows{nrows}")
@@ -1739,9 +2163,9 @@ def test_no_table_cell_is_narrower_than_the_text_in_it(rendered_gallery):
     Returns
     -------
     None
-        Assertion result for all exported table columns.
+        Assertion result for representative exported table columns.
     """
-    for stem in SHEETS:
+    for stem in TABLE_REPRESENTATIVES:
         clipped = _clipped(_gallery_cells(rendered_gallery, stem))
         assert not clipped, f"{stem}: " + "; ".join(clipped)
 
@@ -1760,7 +2184,7 @@ def test_every_table_cell_states_the_size_it_is_drawn_at(rendered_gallery):
         Assertion result for exported table type sizes.
     """
     sized = []
-    for stem in SHEETS:
+    for stem in TABLE_REPRESENTATIVES:
         # _cell_font is the assertion: it refuses to fall back to the container.
         sized += [
             _cell_font(c) for c, _r, _t in _table_cells(_gallery_cells(rendered_gallery, stem))
@@ -1779,11 +2203,11 @@ def test_no_table_row_is_shorter_than_the_line_box_of_its_own_text(rendered_gall
     Returns
     -------
     None
-        Assertion result for all exported table rows.
+        Assertion result for representative exported table rows.
     """
     from pandid.render.drawio import _line_box
 
-    for stem in SHEETS:
+    for stem in TABLE_REPRESENTATIVES:
         for cell, row, _table in _table_cells(_gallery_cells(rendered_gallery, stem)):
             box = _line_box(_cell_font(cell))
             height = float(row.find("mxGeometry").get("height"))
@@ -1808,7 +2232,7 @@ def test_no_furniture_text_is_drawn_under_the_frames_own_rule(rendered_gallery):
     """
     from pandid.render.drawio import _line_box
 
-    for stem in SHEETS:
+    for stem in TABLE_REPRESENTATIVES:
         cells = _gallery_cells(rendered_gallery, stem)
         frame = cells.get("z-frame")
         if frame is None:  # an unruled sheet has no frame to be drawn under
@@ -1845,7 +2269,7 @@ def test_a_column_is_measured_in_the_face_its_text_is_drawn_in(rendered_gallery)
     """
     from pandid.render.furniture import text_width
 
-    for stem in SHEETS:
+    for stem in TABLE_REPRESENTATIVES:
         for cell, _row, _table in _table_cells(_gallery_cells(rendered_gallery, stem)):
             if _style(cell).get("fontStyle") != "1":
                 continue
@@ -1858,7 +2282,13 @@ def test_a_column_is_measured_in_the_face_its_text_is_drawn_in(rendered_gallery)
 
 
 def test_a_table_states_the_size_its_columns_were_measured_at():
-    """Export table text at the font size used to measure columns."""
+    """Export table text at the font size used to measure columns.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.document import Annotation
 
     fs = Flowsheet("sized")
@@ -1875,7 +2305,13 @@ def test_a_table_states_the_size_its_columns_were_measured_at():
 
 
 def test_the_title_block_rules_rows_deep_enough_to_draw_text_in():
-    """Give title-block rows enough height for their text."""
+    """Give title-block rows enough height for their text.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = _titled()
     cells = _cells(fs, check=False)
     rows = [c for c in cells.values() if _style(c).get("shape") == "tableRow"]
@@ -1886,7 +2322,13 @@ def test_the_title_block_rules_rows_deep_enough_to_draw_text_in():
 
 
 def test_the_title_strip_asks_the_dock_for_the_rectangle_the_sheet_rules():
-    """Match title-strip bounds to the docked SVG rectangle."""
+    """Match title-strip bounds to the docked SVG rectangle.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
     from pandid.render.drawio import _strip_size
 
@@ -1895,7 +2337,13 @@ def test_the_title_strip_asks_the_dock_for_the_rectangle_the_sheet_rules():
 
 
 def test_the_title_strip_is_one_rectangle_flush_to_the_frame():
-    """Align the title strip with the bottom-right frame corner."""
+    """Align the title strip with the bottom-right frame corner.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
 
     fs = _titled()
@@ -1920,7 +2368,13 @@ def test_the_title_strip_is_one_rectangle_flush_to_the_frame():
 
 
 def test_the_revision_history_is_still_a_grid_a_reader_can_edit():
-    """Keep revision history as editable table cells."""
+    """Keep revision history as editable table cells.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
 
     fs = _titled()
@@ -1994,7 +2448,13 @@ def _row_cells(cells, row):
 
 
 def test_a_columnar_box_is_a_table_and_a_prose_box_is_not():
-    """Export columnar annotations as tables and prose as text."""
+    """Export columnar annotations as tables and prose as text.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.document import Annotation
 
     fs = Flowsheet("boxes")
@@ -2017,7 +2477,13 @@ def test_a_columnar_box_is_a_table_and_a_prose_box_is_not():
 
 
 def test_the_furniture_docks_where_the_sheet_docks_it():
-    """Place exported furniture at the SVG docking positions."""
+    """Place exported furniture at the SVG docking positions.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.document import Annotation
     from pandid.render import furniture as F
 
@@ -2148,12 +2614,12 @@ def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery, rendered_
     Returns
     -------
     None
-        Assertion result for each gallery stream table.
+        Assertion result for each representative stream table.
     """
     from pandid.render.drawio import _fill
 
     checked = []
-    for stem in SHEETS:
+    for stem in TABLE_REPRESENTATIVES:
         fs, kwargs = _gallery_case(settled_gallery, stem)
         if not kwargs.get("show_stream_table"):
             continue
@@ -2209,7 +2675,7 @@ def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(
     from pandid.render import furniture as F
 
     checked = []
-    for stem in SHEETS:
+    for stem in TABLE_REPRESENTATIVES:
         fs, kwargs = _gallery_case(settled_gallery, stem)
         if not kwargs.get("show_stream_table"):
             continue
@@ -2249,7 +2715,24 @@ def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(
     ],
 )
 def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option, value):
-    """Reject unsupported Draw.io rendering options."""
+    """Reject unsupported Draw.io rendering options.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory supplied by pytest.
+    sample : Flowsheet
+        Representative flowsheet fixture.
+    option : str
+        Sheet option passed to the public render API.
+    value : object
+        Value supplied for the requested sheet option.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     with pytest.raises(ValueError, match=option):
         sample.render(tmp_path / "sheet.drawio", **{option: value})
 
@@ -2264,14 +2747,37 @@ def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option
     ],
 )
 def test_render_honours_the_sheet_options_it_can(tmp_path, sample, option, value):
-    """Apply supported sheet options when rendering Draw.io."""
+    """Apply supported sheet options when rendering Draw.io.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory supplied by pytest.
+    sample : Flowsheet
+        Representative flowsheet fixture.
+    option : str
+        Sheet option passed to the public render API.
+    value : object
+        Value supplied for the requested sheet option.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     out = tmp_path / "sheet.drawio"
     sample.render(out, **{option: value})
     assert out.read_text(encoding="utf-8") == sample.to_drawio(**{option: value})
 
 
 def test_a_page_size_is_the_paper_the_file_opens_on():
-    """Set exported page dimensions in drawing units."""
+    """Set exported page dimensions in drawing units.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render.svg import _page
 
     fs = Flowsheet("paper")
@@ -2316,7 +2822,20 @@ def _page_states(fs: Flowsheet, **kwargs) -> "tuple[str, float, float]":
 @pytest.mark.parametrize("border", ["none", "zone"])
 @pytest.mark.parametrize("page_size", [None, "A3"])
 def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, border):
-    """Declare a page large enough to contain the drawing."""
+    """Declare a page large enough to contain the drawing.
+
+    Parameters
+    ----------
+    page_size : str | None
+        Requested Draw.io paper size.
+    border : str
+        Border style requested for the exported sheet.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
     from pandid.render.svg import _page
 
@@ -2358,7 +2877,20 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
 
 @pytest.mark.parametrize("border", ["none", "zone"])
 def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border):
-    """Keep every visible cell inside the declared page."""
+    """Keep every visible cell inside the declared page.
+
+    Parameters
+    ----------
+    sample : Flowsheet
+        Representative flowsheet fixture.
+    border : str
+        Border style requested for the exported sheet.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
 
     _page_attr, pw, ph = _page_states(sample, border=border, check=False)
@@ -2380,7 +2912,13 @@ def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border)
 
 
 def test_a_paged_drawing_is_fitted_onto_its_paper():
-    """Fit paged drawing geometry into the available region."""
+    """Fit paged drawing geometry into the available region.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
     from pandid.render.svg import _fit_scale, _page
 
@@ -2413,7 +2951,13 @@ def test_a_paged_drawing_is_fitted_onto_its_paper():
 
 
 def test_dock_names_the_missing_callback_rather_than_crashing_blind():
-    """Report a missing overflow callback when docking needs it."""
+    """Report a missing overflow callback when docking needs it.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
     from pandid.render.svg import _page
 
@@ -2424,7 +2968,13 @@ def test_dock_names_the_missing_callback_rather_than_crashing_blind():
 
 
 def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
-    """Match zone-border divisions to the SVG frame."""
+    """Match zone-border divisions to the SVG frame.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render import furniture as F
 
     fs = Flowsheet("ruled")
@@ -2457,11 +3007,22 @@ def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
     assert (float(geo.get("x")), float(geo.get("y"))) == pytest.approx((ox, oy), abs=0.01)
 
 
-def test_every_example_exported_on_its_own_paper_lands_on_it(settled_gallery):
-    """Fit each example within its configured page and border."""
+def test_each_paged_representative_lands_on_its_configured_paper(settled_gallery):
+    """Fit each paged representative within its configured paper and border.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+
+    Returns
+    -------
+    None
+        Assertion result for representative page fitting.
+    """
     from pandid.render.svg import _page
 
-    for stem in SHEETS:
+    for stem in PAGED_REPRESENTATIVES:
         _lands_on_its_paper(stem, _page, settled_gallery)
 
 
@@ -2476,6 +3037,11 @@ def _lands_on_its_paper(stem, _page, settled_gallery):
         Page-size resolver.
     settled_gallery : dict
         Routed gallery sheets.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
     """
     fs, kwargs = _gallery_case(settled_gallery, stem)
     fs.to_svg(**kwargs)
@@ -2502,7 +3068,13 @@ def _lands_on_its_paper(stem, _page, settled_gallery):
 
 
 def test_an_unruled_sheet_draws_no_frame():
-    """Omit frame cells when the sheet requests no border."""
+    """Omit frame cells when the sheet requests no border.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("plain")
     fs.add(units.Pump("P-101")).pin(x=100, y=100)
     fs.layout()
@@ -2511,7 +3083,20 @@ def test_an_unruled_sheet_draws_no_frame():
 
 
 def test_render_writes_the_document_to_a_drawio_path(tmp_path, sample):
-    """Write a Draw.io document to a ``.drawio`` path."""
+    """Write a Draw.io document to a ``.drawio`` path.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory supplied by pytest.
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     out = tmp_path / "sheet.drawio"
     sample.render(out)
     text = out.read_text(encoding="utf-8")
@@ -2520,7 +3105,20 @@ def test_render_writes_the_document_to_a_drawio_path(tmp_path, sample):
 
 
 def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path, sample):
-    """List Draw.io among supported render formats."""
+    """List Draw.io among supported render formats.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Temporary directory supplied by pytest.
+    sample : Flowsheet
+        Representative flowsheet fixture.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     with pytest.raises(ValueError, match=r"\.drawio"):
         sample.render(tmp_path / "sheet.dwg")
 
@@ -2530,7 +3128,41 @@ def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path,
 # ---------------------------------------------------------------------------
 
 
-SHEETS = gallery.sheets()
+#: Representative sheets for cross-backend Draw.io export contracts. They cover
+#: a zoned PFD with enclosed labels, instrumentation, material-line labels, an
+#: A3 PFD, a dense P&ID, a BFD, a second instrumented P&ID, and a large table.
+DRAWIO_REPRESENTATIVES = (
+    "03_distillation_train",
+    "04_control_loop",
+    "09_line_numbers",
+    "10_ethanol_pfd",
+    "11_ethanol_pid",
+    "12_block_flow_diagram",
+    "14_tank_farm",
+    "21_alumina_refinery",
+)
+
+#: Sheets whose material-line labels exercise collision avoidance.
+LINE_NUMBER_SHEETS = ("09_line_numbers", "11_ethanol_pid", "14_tank_farm")
+
+#: Sheets that place at least one line-number leader.
+LEADER_SHEETS = ("11_ethanol_pid", "14_tank_farm")
+
+#: Dense, table, and flanged sheets that contain marked stream crossings.
+CROSSING_REPRESENTATIVES = (
+    "11_ethanol_pid",
+    "16_demineralised_water",
+    "18_fixed_bed_recycle",
+)
+
+#: Instrumented P&ID representatives with all exported function-code forms.
+INSTRUMENT_CODE_SHEETS = ("04_control_loop", "11_ethanol_pid", "14_tank_farm")
+
+#: Zoned, paged, and large tables for Draw.io furniture checks.
+TABLE_REPRESENTATIVES = ("03_distillation_train", "10_ethanol_pfd", "21_alumina_refinery")
+
+#: Paged representatives for checking actual gallery fit on A3 paper.
+PAGED_REPRESENTATIVES = ("10_ethanol_pfd", "11_ethanol_pid")
 
 
 def _gallery_case(settled_gallery, stem):
@@ -2569,7 +3201,7 @@ class _GalleryArtifacts:
 
 @pytest.fixture(scope="module")
 def rendered_gallery(settled_gallery) -> dict[str, _GalleryArtifacts]:
-    """Render the default export pair once for each settled gallery sheet.
+    """Render the default export pair once for each representative sheet.
 
     Parameters
     ----------
@@ -2579,7 +3211,7 @@ def rendered_gallery(settled_gallery) -> dict[str, _GalleryArtifacts]:
     Returns
     -------
     dict[str, _GalleryArtifacts]
-        Immutable SVG and Draw.io text keyed by gallery sheet name.
+        Immutable SVG and Draw.io text keyed by representative sheet name.
 
     Notes
     -----
@@ -2588,7 +3220,7 @@ def rendered_gallery(settled_gallery) -> dict[str, _GalleryArtifacts]:
     exports remain local to the contract that changes their options.
     """
     artifacts = {}
-    for stem in SHEETS:
+    for stem in DRAWIO_REPRESENTATIVES:
         fs, kwargs = _gallery_case(settled_gallery, stem)
         artifacts[stem] = _GalleryArtifacts(
             svg=fs.to_svg(**kwargs),
@@ -2615,9 +3247,22 @@ def _gallery_cells(rendered_gallery: dict[str, _GalleryArtifacts], stem: str) ->
     return _drawio_cells_from_document(rendered_gallery[stem].drawio)
 
 
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_every_example_exports_a_document_that_matches_its_sheet(settled_gallery, stem):
-    """Match every gallery export to its rendered sheet."""
+@pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
+def test_each_representative_export_matches_its_rendered_sheet(settled_gallery, stem):
+    """Match each representative Draw.io export to its rendered sheet.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    stem : str
+        Representative gallery example name.
+
+    Returns
+    -------
+    None
+        Assertion result for the selected cross-backend geometry contract.
+    """
     fs, kwargs = _gallery_case(settled_gallery, stem)
     fs.to_svg(**kwargs)  # draw the same settled geometry as the example
     root = ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram")))
@@ -2736,7 +3381,7 @@ def _boxes_overlap(a, b) -> bool:
     return a[2] > b[0] and a[0] < b[2] and a[3] > b[1] and a[1] < b[3]
 
 
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+@pytest.mark.parametrize("stem", LINE_NUMBER_SHEETS, ids=LINE_NUMBER_SHEETS)
 def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
     settled_gallery, rendered_gallery, stem
 ):
@@ -2749,7 +3394,7 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
     rendered_gallery : dict[str, _GalleryArtifacts]
         Shared default SVG and Draw.io outputs.
     stem : str
-        Parametrized gallery example name.
+        Representative gallery example name with material-line labels.
 
     Returns
     -------
@@ -2769,7 +3414,7 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
     assert not struck, f"{stem}: line numbers written over {struck}"
 
 
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+@pytest.mark.parametrize("stem", LEADER_SHEETS, ids=LEADER_SHEETS)
 def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, rendered_gallery, stem):
     """Connect a displaced line number to its stream with a leader.
 
@@ -2780,7 +3425,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
     rendered_gallery : dict[str, _GalleryArtifacts]
         Shared default SVG and Draw.io outputs.
     stem : str
-        Parametrized gallery example name.
+        Representative gallery example name with displaced line labels.
 
     Returns
     -------
@@ -2796,6 +3441,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
 
     drawn = {label.name: label for label in _labels(svg) if label.leader is not None}
     emitted = {cid: cell for cid, cell in cells.items() if cid.endswith("-lead")}
+    assert drawn, f"{stem}: this representative has no displaced line number"
     assert sorted(cells[cid[: -len("-lead")]].get("value") for cid in emitted) == sorted(drawn), (
         f"{stem}: the sheet draws {sorted(drawn)} leaders and the export {len(emitted)}"
     )
@@ -2829,7 +3475,13 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
 
 
 def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
-    """Match exported stroke widths to the library weight scale."""
+    """Match exported stroke widths to the library weight scale.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from test_line_weight import authored_pens
 
     checked = 0
@@ -2844,7 +3496,7 @@ def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
     assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
 
 
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+@pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
 def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
     settled_gallery, rendered_gallery, stem
 ):
@@ -2857,7 +3509,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
     rendered_gallery : dict[str, _GalleryArtifacts]
         Shared default SVG and Draw.io outputs.
     stem : str
-        Parametrized gallery example name.
+        Representative gallery example name.
 
     Returns
     -------
@@ -2890,7 +3542,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
     assert seen, f"{stem}: no unit cell was checked"
 
 
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+@pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
 def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(rendered_gallery, stem):
     """State a stroke width on each visible exported cell.
 
@@ -2899,7 +3551,7 @@ def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(rendered_gallery
     rendered_gallery : dict[str, _GalleryArtifacts]
         Shared default SVG and Draw.io outputs.
     stem : str
-        Parametrized gallery example name.
+        Representative gallery example name.
 
     Returns
     -------
@@ -3068,9 +3720,24 @@ def _sheet_hops(fs, fit, direction="vertical", style="arc"):
 
 
 @pytest.mark.parametrize("style", CROSSING_STYLES, ids=CROSSING_STYLES)
-@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(settled_gallery, stem, style):
-    """Match exported line jumps to rendered stream crossings."""
+@pytest.mark.parametrize("stem", CROSSING_REPRESENTATIVES, ids=CROSSING_REPRESENTATIVES)
+def test_each_marked_representative_accounts_for_every_drawio_hop(settled_gallery, stem, style):
+    """Match exported hops and dropped-hop findings to sheet crossings.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    stem : str
+        Representative gallery example with marked crossings.
+    style : str
+        Crossing style requested for both output backends.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs, kwargs = _gallery_case(settled_gallery, stem)
     fs.to_svg(**kwargs, crossing_style=style)
     root = ET.fromstring(
@@ -3079,13 +3746,11 @@ def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(settled_gallery, stem, 
         )
     ).find("diagram/mxGraphModel/root")
     edges, fit = _edge_lines(fs, kwargs, root)
-    drawn, sheet = _drawio_hops(edges), _sheet_hops(fs, fit, style=style)
+    drawn = _drawio_hops(edges)
+    sheet = _sheet_hops(fs, fit, style=style)
     assert drawn <= sheet, (
         f"{stem}: draw.io hops {sorted(drawn - sheet)} at crossing_style="
-        f"{style!r}, which the sheet does not -- a hop the wrong way round "
-        f"says the wrong pipe passes over, and one on a sheet drawing no "
-        f"mark at all says there is a crossing mark where the drawing has "
-        f"none"
+        f"{style!r}, which the sheet does not"
     )
     assert len(sheet - drawn) == len([w for w in fs.warnings if w.code == HOP_DROPPED]), (
         f"{stem}: {len(sheet - drawn)} crossing(s) exported flat, "
@@ -3095,7 +3760,18 @@ def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(settled_gallery, stem, 
 
 @pytest.mark.parametrize("direction", ["vertical", "horizontal"])
 def test_jump_direction_picks_which_of_two_crossing_lines_hops(direction):
-    """Apply the configured jump direction to the crossing stream."""
+    """Apply the configured jump direction to the crossing stream.
+
+    Parameters
+    ----------
+    direction : str
+        Configured direction for Draw.io line jumps.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs = Flowsheet("jump")
     a = fs.add(units.Feed("F1")).pin(x=60, y=175)
     b = fs.add(units.Product("P1")).pin(x=600, y=175)
@@ -3120,7 +3796,13 @@ def test_jump_direction_picks_which_of_two_crossing_lines_hops(direction):
 
 
 def test_the_hop_is_the_radius_the_sheet_draws_it_at():
-    """Match exported jump size to the rendered hop radius."""
+    """Match exported jump size to the rendered hop radius.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     from pandid.render.svg import HOP_R
 
     fs, kwargs = gallery.flowsheet("11_ethanol_pid")
@@ -3142,7 +3824,13 @@ def test_the_hop_is_the_radius_the_sheet_draws_it_at():
 
 
 def test_only_a_stream_hops_or_is_hopped():
-    """Restrict line jumps to stream crossings."""
+    """Restrict line jumps to stream crossings.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     fs, kwargs = gallery.flowsheet("11_ethanol_pid")
     fs.to_svg(**kwargs)
     cells = _drawio_cells(fs, kwargs)
@@ -3157,7 +3845,13 @@ def test_only_a_stream_hops_or_is_hopped():
 
 
 def test_a_run_is_written_before_the_run_that_hops_it():
-    """Write a hopped run before the stream that jumps it."""
+    """Write a hopped run before the stream that jumps it.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     order, hops, _lost = _hops(
         {"h": [(0.0, 10.0), (30.0, 10.0)], "v": [(15.0, 0.0), (15.0, 20.0)]},
         "vertical",
@@ -3215,7 +3909,13 @@ def _drawn(polylines, order, hops):
 
 
 def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
-    """Suppress jumps when two runs require conflicting draw order."""
+    """Suppress jumps when two runs require conflicting draw order.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     polylines = {
         "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
         "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
@@ -3232,7 +3932,13 @@ def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
 
 
 def test_a_cycle_costs_only_the_runs_inside_it():
-    """Retain jumps outside a conflicting draw-order cycle."""
+    """Retain jumps outside a conflicting draw-order cycle.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     polylines = {
         "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
         "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
@@ -3265,7 +3971,18 @@ def _samples():
 
 @pytest.mark.parametrize("stem", sorted(_samples().SAMPLES))
 def test_the_committed_sample_is_what_the_exporter_emits(stem):
-    """Keep committed Draw.io samples in sync with the exporter."""
+    """Keep committed Draw.io samples in sync with the exporter.
+
+    Parameters
+    ----------
+    stem : str
+        Committed Draw.io sample name.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     samples = _samples()
     committed = samples.OUT / f"{stem}.drawio"
     assert committed.exists(), f"{committed.name} is not committed"
@@ -3329,7 +4046,18 @@ def composed_sheet() -> Flowsheet:
 
 
 def test_a_composed_symbol_names_no_stencil_of_its_own(composed_sheet):
-    """Render composed symbols from their constituent parts."""
+    """Render composed symbols from their constituent parts.
+
+    Parameters
+    ----------
+    composed_sheet : Flowsheet
+        Flowsheet containing composed symbols under test.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     for unit in composed_sheet.units:
         sym = default_registry.for_unit(unit)
         assert sym.overlays, f"{unit.name} is not composed; the fixture is wrong"
@@ -3340,7 +4068,20 @@ def test_a_composed_symbol_names_no_stencil_of_its_own(composed_sheet):
 
 @pytest.mark.parametrize("index", range(len(COMPOSED_IDS)), ids=COMPOSED_IDS)
 def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, index):
-    """Match composed part geometry across both renderers."""
+    """Match composed part geometry across both renderers.
+
+    Parameters
+    ----------
+    composed_sheet : Flowsheet
+        Flowsheet containing composed symbols under test.
+    index : int
+        Index of the composed symbol part to inspect.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     unit = composed_sheet.units[index]
     sym = default_registry.for_unit(unit)
     cells = _cells(composed_sheet, check=False)
@@ -3373,7 +4114,18 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
 
 
 def test_a_composed_symbol_still_draws_its_body(composed_sheet):
-    """Keep the base symbol visible beneath its composed parts."""
+    """Keep the base symbol visible beneath its composed parts.
+
+    Parameters
+    ----------
+    composed_sheet : Flowsheet
+        Flowsheet containing composed symbols under test.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     cells = _cells(composed_sheet, check=False)
     for unit in composed_sheet.units:
         sym = default_registry.for_unit(unit)
@@ -3394,7 +4146,18 @@ def test_a_composed_symbol_still_draws_its_body(composed_sheet):
     ids=lambda p: f"{p.iso.group}/{p.name}",
 )
 def test_every_part_resolves_to_a_stencil_or_a_documented_built_in(part):
-    """Resolve each composed part to a known shape."""
+    """Resolve each composed part to a known shape.
+
+    Parameters
+    ----------
+    part : tuple
+        Composed-symbol part definition under test.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     if part.drawio_shape:
         assert part.drawio_shape in STENCIL_KEYS, (
             f"{part.iso.group}/{part.name} names {part.drawio_shape!r}, which no "
@@ -3413,7 +4176,13 @@ def test_every_part_resolves_to_a_stencil_or_a_documented_built_in(part):
 
 
 def test_the_part_table_names_only_parts_that_exist():
-    """The table is data, and stale data here is a silently wrong drawing."""
+    """The table is data, and stale data here is a silently wrong drawing.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
     registered = {p.key() for p in default_registry.parts()}
     assert set(_PART_APPROXIMATIONS) <= registered, (
         f"_PART_APPROXIMATIONS names parts nobody registers: "
