@@ -36,6 +36,8 @@ uv.lock
 .agents/
 .superpowers/
 skills-lock.json
+.vscode/
+.coverage
 
 # local render artifacts
 renders/
