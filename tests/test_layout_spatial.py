@@ -66,6 +66,7 @@ def test_row_index_reads_x_moved_after_it_was_built():
     other = _unit("N", (500, 0, 60, 40))
     index = _RowIndex([mover, other])
     assert not _overlaps_x(mover, 100, index.near(mover))
+    assert other._slot is not None
     other._slot.x = 100 + 60 + STACK_CLEAR - 1
     assert _overlaps_x(mover, 100, index.near(mover))
 
@@ -98,7 +99,7 @@ def test_stacked_layout_matches_the_unindexed_layout(monkeypatch):
     """Check that indexing changes no frame on a sheet that uses the check."""
     indexed = _stacked(30)
     indexed.layout()
-    monkeypatch.setattr(coordinates._RowIndex, "near", lambda self, u: self._units)
+    monkeypatch.setattr(coordinates._RowIndex, "near", lambda self, _unit: self._units)
     scanned = _stacked(30)
     scanned.layout()
     assert [u.frame for u in indexed.units] == [u.frame for u in scanned.units]
