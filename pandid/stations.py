@@ -1,37 +1,19 @@
-"""Valve stations: the assembly a control valve is installed in.
+"""Define control valve stations: the assembly a control valve sits in.
 
-A control valve is never a valve on its own. It sits in a standard
-arrangement that every P&ID in the industry draws the same way, and the
-**CHEE4001/7103 P&ID guidelines** (p.4, corroborated by the *EXAMPLE of
-a control valve system* figure on p.5) set it out: two isolation valves
-and two drain valves about the control valve, and a bypass pipe outside
-the isolations carrying a throttling valve. They add that a control
-valve is usually a size below the run it stands in, so that it throttles
-well across its range, and that a pair of reducers is therefore the
-norm.
-
-The prose is ambiguous about how the two pairs are counted -- two each
-side, or two in all; the figure is not. Read off the drawing, along the
-run:
+A standard station, following the CHEE4001/7103 P&ID guidelines (pp. 4-5),
+runs along the line as::
 
     bypass takeoff, isolation valve, drain tee, reduction,
     control valve, expansion, drain tee, isolation valve,
     bypass rejoin
 
-with the bypass carried below on one throttling valve, tapped
-**outside** both isolation valves. That is two isolation valves, two
-drains, one bypass valve and a size change at each end: eight devices
-and four tees, wired by twelve streams, for one control valve. Spelling
-it out is how mistakes get in: a station is easy to draw with no
-isolation valves at all, and nothing about the drawing says so.
+with a bypass leg carrying one throttling valve, tapped outside both
+isolation valves. That is eight devices and four tees joined by twelve
+streams. :meth:`~pandid.flowsheet.Flowsheet.add_valve_station` builds it.
 
-So the assembly is declared once, here, and
-:meth:`~pandid.flowsheet.Flowsheet.add_valve_station` builds it.
-
-**A station is not a unit.** It has no symbol, ports, or equipment-list
-entry. Its members are ordinary units and streams. Unpinned stations
-also retain assembly membership for layout and spec round-trips.
-:class:`ValveStation` gives the author access to every member::
+A station is not a unit: it has no symbol, ports or equipment-list entry.
+Its members are ordinary units and streams, reached through
+:class:`ValveStation`::
 
     station = fs.add_valve_station("CV-303", x=670, y=440,
                                    mirrored=True)
@@ -39,25 +21,12 @@ also retain assembly membership for layout and spec round-trips.
                kind="pneumatic")
     station.bypass.pin(x=station.reduction.pin_.x)
 
-Pinned stations round-trip through their member pins. Unpinned stations
-also write their assembly record so their relative geometry survives.
+Pinned stations round-trip through their members' pins; unpinned stations
+also save their assembly record so their relative geometry survives.
 
-Tags
-----
-
-The guidelines are explicit that this part is local practice: which
-symbols a sheet shows its equipment, valves, instruments and control
-loops with usually follows the design office drawing it. And the issued
-sheet in ``professional_examples/P&ID_301.pdf`` tags **none** of a
-station's hand valves or reducers, writing only the control valve's own
-tag. So the derivation is a scheme with a common
-default, exactly as
-:data:`~pandid.flowsheet.DEFAULT_LINE_NUMBERING_SCHEME` is: set it once
-on the :class:`~pandid.flowsheet.Flowsheet` for a site, or per station.
-:data:`DEFAULT_VALVE_STATION_TAG_SCHEME` spells ``CV-303`` out as
-``HV-303A`` through ``HV-303E`` and ``RD-303A``/``RD-303B``, which is
-the convention most sheets use and the one the reference sheet's own
-control valve numbering fits.
+Member tags follow a scheme set on the flowsheet or per station.
+:data:`DEFAULT_VALVE_STATION_TAG_SCHEME` tags the members of ``CV-303`` as
+``HV-303A`` to ``HV-303E`` and ``RD-303A``/``RD-303B``.
 """
 
 from __future__ import annotations
@@ -70,18 +39,13 @@ if TYPE_CHECKING:
     from pandid.streams import Stream
     from pandid.units import Reducer, Tee, Unit, Valve
 
-#: How a station's members are tagged from the control valve's.
-#: ``letters`` and ``suffix`` come from the member's role (the table
-#: below), ``number`` from the control valve's tag, and ``control`` is
-#: that whole tag. A site spelling them ``HV303A`` sets
-#: ``"{letters}{number}{suffix}"``; anything a format string cannot say
-#: is a callable taking ``(role, control_tag)``.
+#: Default member tag scheme. ``letters`` and ``suffix`` come from the
+#: member's role (:data:`TAG_PARTS`), ``number`` from the control valve's
+#: tag, and ``control`` is the whole control tag. A callable taking
+#: ``(role, control_tag)`` may be used instead of a format string.
 DEFAULT_VALVE_STATION_TAG_SCHEME = "{letters}-{number}{suffix}"
 
-#: The functional letters and the suffix each role takes under a scheme.
-#: The order is the one a valve list reads in (both isolations, then the
-#: bypass, then both drains) rather than the order the devices sit in
-#: along the run.
+#: Functional letters and suffix per member role, in valve-list order.
 TAG_PARTS: dict[str, tuple[str, str]] = {
     "upstream_isolation": ("HV", "A"),
     "downstream_isolation": ("HV", "B"),
@@ -92,10 +56,9 @@ TAG_PARTS: dict[str, tuple[str, str]] = {
     "expansion": ("RD", "B"),
 }
 
-#: What each role is called in a member's description, after the
-#: station's own ``description`` word: ``description="Reflux"`` gives
-#: ``"Reflux Isolation Valve"``. A tee takes none, being bulk pipe with
-#: nothing written against it.
+#: Words appended to the station's ``description`` for each member, so
+#: ``description="Reflux"`` gives ``"Reflux Isolation Valve"``. Tees take
+#: none.
 ROLE_WORDS: dict[str, str] = {
     "upstream_isolation": "Isolation Valve",
     "downstream_isolation": "Isolation Valve",
@@ -106,67 +69,65 @@ ROLE_WORDS: dict[str, str] = {
     "expansion": "Outlet Expander",
 }
 
-#: The members a bypass valve may be stood over, plus ``None`` for the
-#: middle of its own leg. See
-#: :meth:`~pandid.flowsheet.Flowsheet.add_valve_station`.
+#: Members a bypass valve may be centred over. ``None`` centres it on its
+#: own leg; see :meth:`~pandid.flowsheet.Flowsheet.add_valve_station`.
 BYPASS_ANCHORS = ("upstream_isolation", "reduction", "control", "expansion",
                   "downstream_isolation")
 
-#: Edge of one device to the edge of the next, along the run. The router
-#: needs about 25 units to leave a nozzle before it may turn, so a
-#: facing pair closer than that sends the run doubling back on itself.
+#: Gap between adjacent devices along the run. It exceeds the router's
+#: 25-unit nozzle stand-off, so a run cannot double back between them.
 DEFAULT_GAP = 30.0
 
-#: How far the bypass leg stands off the run, and how far a drain leg
-#: drops below it. Both measured from the run's centreline.
+#: Offsets of the bypass leg above the run and of a drain leg below it,
+#: from the run's centreline.
 DEFAULT_BYPASS_RISE = 45.0
 DEFAULT_DRAIN_DROP = 36.0
 
 
 @dataclass(frozen=True)
 class ValveStation:
-    """The members of one control valve station, by the part each plays.
+    """The members of one control valve station, by role.
 
-    Built by :meth:`~pandid.flowsheet.Flowsheet.add_valve_station`,
-    never directly. Every field is an ordinary
-    :class:`~pandid.units.Unit` already on the flowsheet and already
-    connected to its neighbours, so anything that can be done to a unit
-    can be done to one of these. A member the station was told to leave
-    out is ``None``.
+    Built by :meth:`~pandid.flowsheet.Flowsheet.add_valve_station`. Every
+    member is an ordinary connected unit on the flowsheet; an omitted
+    member is ``None``. The handle is frozen so roles cannot be rebound.
 
-    The handle itself is frozen: which valve is the bypass is a fact
-    about the assembly, and rebinding it here would rename a part
-    without moving anything on the sheet.
+    Attributes
+    ----------
+    control : Valve
+        The control valve; a controller output connects to its
+        ``actuator``.
+    upstream_isolation, downstream_isolation : Valve or None
+        Isolation valves either side of the control valve.
+    reduction, expansion : Reducer or None
+        Size change into and out of the control valve.
+    bypass : Valve or None
+        Normally closed throttling valve on the bypass leg.
+    upstream_drain, downstream_drain : Valve or None
+        Drain valves.
+    tees : tuple[Tee, ...]
+        Junctions in run order: bypass takeoff, drain tees, bypass rejoin.
+    members : tuple[Unit, ...]
+        Every member in run order, tees included.
+    inlet, outlet : Port
+        Where the run enters and leaves the station.
     """
 
-    #: The control valve the station exists for. Its ``actuator`` is
-    #: where a controller's output lands.
     control: "Valve"
     upstream_isolation: "Valve | None"
     downstream_isolation: "Valve | None"
-    #: The size change into the control valve, and the one back out of
-    #: it.
     reduction: "Reducer | None"
     expansion: "Reducer | None"
-    #: The throttling valve on the bypass leg, normally closed.
     bypass: "Valve | None"
     upstream_drain: "Valve | None"
     downstream_drain: "Valve | None"
-    #: The junctions, in run order: bypass takeoff, drain tees, bypass
-    #: rejoin. They carry no tag and reach no equipment list; see
-    #: :class:`~pandid.units.Tee`.
     tees: tuple["Tee", ...]
-    #: Every member in the order the run passes through it, tees
-    #: included. What to iterate to re-pin or re-describe a whole
-    #: station.
     members: tuple["Unit", ...]
-    #: Where the run enters and leaves the station. Connect to these
-    #: exactly as to any other port: the station is a length of line,
-    #: and the piping either side of it is the author's.
     inlet: "Port"
     outlet: "Port"
 
     def __repr__(self) -> str:
+        """Return a short representation naming the control valve."""
         return f"ValveStation({self.control.name!r}, members={len(self.members)})"
 
 
@@ -202,11 +163,29 @@ class StationAssembly:
 
 def member_tag(scheme: "str | Callable[[str, str], str]", role: str,
                control_tag: str, number: str) -> str:
-    """The tag one member takes under ``scheme``.
+    """Return a member's tag under a tag scheme.
 
-    A callable is handed the role and the control valve's whole tag and
-    is trusted with the answer. A format string is filled from
-    :data:`TAG_PARTS`.
+    Parameters
+    ----------
+    scheme : str or Callable[[str, str], str]
+        Format string filled from :data:`TAG_PARTS`, or a callable taking
+        ``(role, control_tag)``.
+    role : str
+        Member role, a key of :data:`TAG_PARTS`.
+    control_tag : str
+        Control valve's tag.
+    number : str
+        Number taken from the control tag (:func:`station_number`).
+
+    Returns
+    -------
+    str
+        Member tag.
+
+    Raises
+    ------
+    ValueError
+        If the format string names an unknown field.
     """
     if callable(scheme):
         return scheme(role, control_tag)
@@ -223,13 +202,23 @@ def member_tag(scheme: "str | Callable[[str, str], str]", role: str,
 
 
 def member_mirror(mirrored: bool, branch_north: bool) -> bool | str:
-    """The flip one member takes, from the station and its branch.
+    """Return the flip a station member takes.
 
-    A station piped east to west is the same run drawn the other way
-    round, so every member gains a left-right flip and takes flow on its
-    east face. The two bypass tees carry a top-bottom flip on top of
-    that, because a :class:`~pandid.units.Tee` branches south as drawn
-    and the bypass leg is over the run, not under it.
+    A station piped east to west flips every member left to right. Bypass
+    tees also flip top to bottom, because a :class:`~pandid.units.Tee`
+    branches south as drawn and the bypass leg runs above the line.
+
+    Parameters
+    ----------
+    mirrored : bool
+        Whether the station is piped east to west.
+    branch_north : bool
+        Whether the member is a bypass tee.
+
+    Returns
+    -------
+    bool or str
+        Mirror setting for :meth:`pandid.units.Unit.pin`.
     """
     if mirrored:
         return "xy" if branch_north else "x"
@@ -237,12 +226,18 @@ def member_mirror(mirrored: bool, branch_north: bool) -> bool | str:
 
 
 def station_number(control_tag: str) -> str:
-    """The number a station's members take, off the control valve.
+    """Return the number a station's members take from the control tag.
 
-    ``"CV-303"`` gives ``"303"``. A tag the split cannot find a number
-    in answers with the whole tag, so the scheme still produces
-    something unique rather than colliding every member on an empty
-    string.
+    Parameters
+    ----------
+    control_tag : str
+        Control valve's tag, such as ``"CV-303"``.
+
+    Returns
+    -------
+    str
+        Its number (``"303"``), or the whole tag when it has no number, so
+        member tags stay unique.
     """
     from pandid.units import split_tag
 

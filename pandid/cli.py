@@ -1,28 +1,22 @@
-"""The ``pandid`` command line.
+"""Provide the ``pandid`` command line.
 
-:mod:`pandid.spec` already reads an entire flowsheet from a YAML or JSON
-file, so the only thing left between an equipment list and a drawing is
-a Python prompt. This module removes it. It is a shell over the public
-API and knows nothing about drawing: it reads the spec, calls the
-methods a script would call, and turns whatever the engine raises into
-one line on stderr and an exit code a shell can gate on.
+A thin shell over the public API: it reads a spec with :mod:`pandid.spec`,
+calls the same methods a script would, and reports any failure as one
+line on stderr with an exit code::
 
     pandid draw plant.yaml -o plant.pdf --page-size A3 --border zone
     pandid validate plant.yaml
     pandid symbols --kind valve
 
-The exit codes are the interface a script sees, so they distinguish the
-three things that can go wrong rather than all reporting 1:
-
 ===== ============================================================
-``0`` the command did what it was asked
-``1`` the flowsheet was rejected: the spec could not be read, or
+``0`` success
+``1`` the flowsheet was rejected: the spec could not be read,
       validation found errors, or the engine refused the request
-      (an unknown page size, a page too small for its furniture)
+      (such as an unknown page size)
 ``2`` the command line was wrong: an unknown flag, a missing
-      argument, an option value this module checks itself
-``3`` an optional extra is not installed (PyYAML to read a YAML
-      spec, the ``pdf`` extra to write a PDF or a PNG)
+      argument, or an option value checked here
+``3`` an optional extra is missing (PyYAML for a YAML spec, the
+      ``pdf`` extra for PDF or PNG output)
 ===== ============================================================
 """
 
@@ -47,7 +41,15 @@ EXIT_MISSING_DEPENDENCY = 3
 
 
 class _Failure(Exception):
-    """Something wrong, and the code to report it under."""
+    """A user-facing failure and the exit code to report it under.
+
+    Parameters
+    ----------
+    message : str
+        One-line explanation.
+    code : int, default=EXIT_FAILED
+        Exit code.
+    """
 
     def __init__(self, message: str, code: int = EXIT_FAILED) -> None:
         super().__init__(message)
@@ -55,30 +57,88 @@ class _Failure(Exception):
 
 
 def _note(message: str) -> None:
-    """Write to stderr, behind whatever is queued on stdout.
+    """Write a line to stderr after flushing stdout.
 
-    The two streams are buffered differently once either is a pipe, so
-    without the flush a note lands above the line it is about.
+    Flushing keeps the note after the output it refers to when either
+    stream is a pipe.
+
+    Parameters
+    ----------
+    message : str
+        Line to write.
     """
     sys.stdout.flush()
     print(message, file=sys.stderr)
 
 
 def _fail(message: str, code: int) -> int:
+    """Report an error on stderr and return its exit code.
+
+    Parameters
+    ----------
+    message : str
+        Error text.
+    code : int
+        Exit code.
+
+    Returns
+    -------
+    int
+        ``code``.
+    """
     _note(f"error: {message}")
     return code
 
 
 def _plural(count: int, noun: str) -> str:
+    """Return a count with its noun, pluralised with ``s`` when not 1.
+
+    Parameters
+    ----------
+    count : int
+        Number of items.
+    noun : str
+        Singular noun.
+
+    Returns
+    -------
+    str
+        Such as ``"1 unit"`` or ``"3 units"``.
+    """
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
 def _fold(name: str) -> str:
-    """``HeatExchanger``, ``heat_exchanger``, ``hex``: one way."""
+    """Fold a kind or class name for comparison.
+
+    Parameters
+    ----------
+    name : str
+        Name such as ``HeatExchanger`` or ``heat_exchanger``.
+
+    Returns
+    -------
+    str
+        Lower case without underscores or hyphens.
+    """
     return name.lower().replace("_", "").replace("-", "")
 
 
 def _suggest(value: str, candidates: Sequence[str]) -> str:
+    """Return a "did you mean" hint for a misspelt name.
+
+    Parameters
+    ----------
+    value : str
+        Name the user typed.
+    candidates : Sequence[str]
+        Valid names.
+
+    Returns
+    -------
+    str
+        `` (did you mean 'X'?)``, or an empty string when nothing is close.
+    """
     close = difflib.get_close_matches(_fold(value), [_fold(c) for c in candidates], n=1, cutoff=0.6)
     if not close:
         return ""
@@ -92,23 +152,36 @@ def _suggest(value: str, candidates: Sequence[str]) -> str:
 
 
 def _load(path: Path) -> Flowsheet:
-    """Read a spec file, choosing the reader from its extension."""
+    """Read a spec file, choosing the reader from its extension.
+
+    Parameters
+    ----------
+    path : Path
+        ``.yaml``, ``.yml`` or ``.json`` file.
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet built from the spec.
+
+    Raises
+    ------
+    _Failure
+        If the extension is not supported.
+    OSError
+        If the file cannot be opened.
+    ImportError
+        If PyYAML is needed and not installed.
+    SpecError
+        If the spec is invalid.
+    """
     suffix = path.suffix.lower()
     if suffix not in (".yaml", ".yml", ".json"):
         named = repr(suffix) if suffix else "a file with no extension"
         raise _Failure(
             f"{path}: cannot read a spec from {named}; write it as .yaml, .yml or .json")
-    # Open the file *before* the extension picks a reader.
-    # ``spec.from_yaml`` imports PyYAML before it opens anything, so on a
-    # machine without the optional extra a path that is simply not there
-    # was reported as a dependency problem and exited 3 -- the code this
-    # module's docstring reserves for an extra that is not installed --
-    # while the same missing path spelled .json exited 1. The file is the
-    # earlier question and is asked first; the extra is only a problem
-    # once there is something to read with it.
-    #
-    # Nothing on the dev box or in CI sees this, because both have
-    # PyYAML: ``tests/test_cli`` blocks the import to reach it.
+    # Open the file first, so a missing file reports exit 1 rather than a
+    # missing PyYAML (exit 3).
     with path.open("rb"):
         pass
     if suffix == ".json":
@@ -117,6 +190,18 @@ def _load(path: Path) -> Flowsheet:
 
 
 def _draw(args: argparse.Namespace) -> int:
+    """Render a spec and report any warnings.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed ``draw`` arguments.
+
+    Returns
+    -------
+    int
+        :data:`EXIT_OK`; failures raise.
+    """
     fs = _load(args.spec)
     out = args.output if args.output is not None else args.spec.with_suffix(".svg")
     fs.render(
@@ -136,10 +221,7 @@ def _draw(args: argparse.Namespace) -> int:
         f"{_plural(len(fs.streams), 'stream')})"
     )
     if fs.warnings:
-        # The drawing is made either way; say where to read what was
-        # flagged -- and name the drawing that was made, since one
-        # finding depends on it and a bare `pandid validate` would answer
-        # about a PFD.
+        # Point to the validate command for the same diagram type.
         sheet = f" --diagram '{args.diagram}'" if args.diagram != "pfd" else ""
         _note(f"{_plural(len(fs.warnings), 'warning')}; "
               f"see: pandid validate{sheet} {args.spec}")
@@ -147,10 +229,21 @@ def _draw(args: argparse.Namespace) -> int:
 
 
 def _validate(args: argparse.Namespace) -> int:
+    """Lay out and route a spec, then print its validation findings.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed ``validate`` arguments.
+
+    Returns
+    -------
+    int
+        :data:`EXIT_FAILED` if any finding is an error, else
+        :data:`EXIT_OK`.
+    """
     fs = _load(args.spec)
-    # Lay the sheet out first: the geometric checks have nothing to
-    # measure until every unit has a frame, so validating a freshly read
-    # spec without this reports only what the reader itself caught.
+    # Route first so the geometric checks have frames to measure.
     fs.route()
     issues = fs.validate(diagram=args.diagram)
     for issue in issues:
@@ -169,21 +262,17 @@ def _validate(args: argparse.Namespace) -> int:
 
 
 def _catalogue() -> list[tuple[str, str, list[str]]]:
-    """Every symbol as ``(class name, kind, variants)``, per kind.
+    """List the drawable kinds and their variants.
 
-    The kinds come from the unit classes rather than from the registry,
-    so what is listed is what a flowsheet can actually put on a sheet: a
-    ``kind`` a spec is free to name, with the variants the renderer has
-    artwork for.
+    Kinds come from the unit classes, so only kinds a spec can name are
+    listed. One row per kind: classes that share a kind (``Absorber`` and
+    ``Stripper`` are ``"column"``) appear only under the class
+    ``spec._ALIASES`` resolves the kind to.
 
-    One row per ``kind``, not one row per class that carries it. Every
-    ``units`` class used to have a kind of its own, but ``Absorber`` and
-    ``Stripper`` do not: both are ``"column"``, the same as ``Column``,
-    because neither draws anything the registry does not already draw
-    under it. Filtered through ``spec._ALIASES``, the table that already
-    says which class a bare ``kind: column`` resolves to, so a class
-    whose ports are a reduced subset of its kind's does not print the
-    kind's whole variant list a second time under its own name.
+    Returns
+    -------
+    list[tuple[str, str, list[str]]]
+        ``(class name, kind, variants)``, sorted by class name.
     """
     from pandid.render.symbols import default_registry
 
@@ -199,7 +288,24 @@ def _catalogue() -> list[tuple[str, str, list[str]]]:
 
 
 def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
-    """``label``, then its items, wrapped under a hanging indent."""
+    """Format a label and its items, wrapped under a hanging indent.
+
+    Parameters
+    ----------
+    label : str
+        Row label.
+    items : Sequence[str]
+        Items to list.
+    pad : int
+        Indent for the items.
+    width : int
+        Line width.
+
+    Returns
+    -------
+    list[str]
+        Output lines.
+    """
     lines = [label.ljust(pad)]
     for item in items:
         if len(lines[-1]) > pad and len(lines[-1]) + len(item) > width:
@@ -209,6 +315,23 @@ def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
 
 
 def _symbols(args: argparse.Namespace) -> int:
+    """Print the symbol catalogue, optionally for one kind.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed ``symbols`` arguments.
+
+    Returns
+    -------
+    int
+        :data:`EXIT_OK`.
+
+    Raises
+    ------
+    _Failure
+        If ``--kind`` names no kind (exit 2).
+    """
     catalogue = _catalogue()
     rows = catalogue
     if args.kind is not None:
@@ -222,10 +345,7 @@ def _symbols(args: argparse.Namespace) -> int:
                 EXIT_USAGE,
             )
 
-    # A class name is what a spec writes; the kind is what the symbol is
-    # filed under and what the engine names in its own messages. They
-    # read the same for all but a couple, so the second is shown only
-    # where it differs.
+    # Show the kind beside the class name only where the two differ.
     labels = [name if _fold(name) == kind else f"{name} ({kind})" for name, kind, _ in rows]
     pad = max(len(label) for label in labels) + 2
     width = max(shutil.get_terminal_size(fallback=(100, 24)).columns - 1, pad + 24)
@@ -247,29 +367,31 @@ def _symbols(args: argparse.Namespace) -> int:
 
 
 def _diagram_option(command: argparse.ArgumentParser, help: str) -> None:
-    """``--diagram``, on both commands that answer about a sheet.
+    """Add the shared ``--diagram`` option to a command.
 
-    ``draw`` makes the drawing and ``validate`` reports on it, so the two
-    have to be told the same thing about which drawing it is. A P&ID
-    draws its process lines without arrowheads, and ``nozzles-crowded``
-    is a finding about the paper left between two arrowheads: on a sheet
-    that draws none there are none to be crowded, so a ``validate`` that
-    could not be told judged every spec as a PFD and reported a defect in
-    ink the drawing does not contain.
+    ``draw`` and ``validate`` must agree on the diagram type: a P&ID draws
+    no arrowheads, so ``nozzles-crowded`` does not apply, and a block flow
+    diagram needs no stream table.
 
-    ``bfd`` is the third, and the same argument the other way round: a
-    block flow diagram heads its lines and answers ISO 10628-1 4.2, so
-    ``stream-table-missing`` -- which is made under 4.3.2 d) -- is not a
-    finding about one. A spec drawn from blocks had no way to say so and
-    was judged as a PFD.
-
-    Declared once so the spelling and the default cannot drift apart.
+    Parameters
+    ----------
+    command : argparse.ArgumentParser
+        Subcommand parser.
+    help : str
+        Help text for this command.
     """
     command.add_argument("--diagram", choices=("pfd", "p&id", "bfd"), default="pfd",
                          help=help)
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for every subcommand.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Parser whose subcommands set ``run`` to their handler.
+    """
     parser = argparse.ArgumentParser(
         prog="pandid",
         description="Draw a P&ID or process flow diagram from a flowsheet spec file.",
@@ -307,11 +429,8 @@ def _build_parser() -> argparse.ArgumentParser:
              "'flanged-at-nozzles' marks the nozzles only. A P&ID only "
              "(default: none)",
     )
-    # ``nargs="?"`` for the reason ``--debug`` has it: the option grew a
-    # value and the flag spelling still has to mean what it always
-    # meant. ``--stream-table`` alone draws the table under the drawing;
-    # ``--stream-table sheet`` writes the table's own sheet to OUT
-    # instead, so a set with both is two runs with two outputs.
+    # ``--stream-table`` alone draws the table under the drawing;
+    # ``--stream-table sheet`` writes the table as its own sheet instead.
     draw.add_argument(
         "--stream-table", nargs="?", const=True, default=False,
         choices=(TABLE_SHEET,), metavar=TABLE_SHEET,
@@ -323,22 +442,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="which of two crossing lines carries the crossing mark "
              "(default: vertical)",
     )
-    # ``choices`` from the renderer's own tuple rather than a copy: the
-    # shell and the API refuse the same words, and a fourth style added
-    # to one is offered by the other without an edit here.
+    # Use the renderer's own choices and default, so the CLI and API agree.
     draw.add_argument(
         "--crossing-style", choices=CROSSING_STYLES, default=CROSSING_STYLE_DEFAULT,
         help="what that mark is: 'arc' bridges the crossed line, 'gap' "
              "interrupts the marking one (ISO 10628-1 5.3.4) at the cost of "
              "eating the run either side of it, 'plain' draws both lines "
-             "straight through (ISO 15519-1 12.5) (default: arc)",
+             "straight through (ISO 15519-1 12.5) (default: %(default)s)",
     )
-    # Every other render option is reachable from here, and a debugging
-    # view is if anything more use from a shell than from a script: it
-    # is the thing you switch on for one render, look at, and switch off
-    # again. ``nargs="?"`` gives that the shortest spelling there is --
-    # ``--debug`` alone for the default grid, ``--debug 100`` to change
-    # it -- and the two land on the same bool-or-number the API takes.
+    # ``--debug`` alone uses the default grid; ``--debug 100`` sets it.
     draw.add_argument(
         "--debug", nargs="?", type=float, const=True, default=None, metavar="SPACING",
         help="draw the coordinate overlay under the diagram: the grid, every pin() anchor "
@@ -372,8 +484,18 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line and return the exit code.
 
-    Every failure a user can provoke is reported as one line on stderr.
-    A traceback out of here is a bug in the engine, not a bad spec.
+    Every failure a user can cause is reported as one line on stderr; a
+    traceback indicates a bug.
+
+    Parameters
+    ----------
+    argv : Sequence[str] or None, optional
+        Arguments, or ``None`` for ``sys.argv[1:]``.
+
+    Returns
+    -------
+    int
+        Exit code from the table in the module docstring.
     """
     parser = _build_parser()
     try:
@@ -386,18 +508,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except _Failure as e:
         return _fail(str(e), e.code)
     except ImportError as e:
-        # PyYAML and the pdf extra are the two optional installs, and
-        # both of these messages already name the package to install and
-        # the extra.
+        # A missing optional extra; the message names what to install.
         return _fail(str(e), EXIT_MISSING_DEPENDENCY)
     except ValueError as e:
-        # SpecError is a ValueError, and so is every refusal from the
-        # engine. Those messages are written to be read by whoever wrote
-        # the file, so they are printed as they are rather than wrapped
-        # in anything.
+        # SpecError and engine refusals; their messages are user-facing.
         return _fail(str(e), EXIT_FAILED)
     except OSError as e:
-        # A file that is not there, or not readable, or a directory that
-        # is not.
+        # A missing or unreadable file or directory.
         detail = f"{e.filename}: {e.strerror}" if e.filename and e.strerror else str(e)
         return _fail(detail, EXIT_FAILED)

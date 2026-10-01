@@ -1,73 +1,39 @@
-"""pandid: a Python engine for chemical-engineering Process Flow Diagrams.
+"""pandid: draw process flow diagrams and P&IDs from a Python flowsheet.
 
-Public API (topology layer)::
+Public API::
 
     from pandid import Flowsheet, Component, Separator, Cyclone
 
-:mod:`pandid.units` is the ``kind`` + ``variant`` model a sheet is drawn from;
-:mod:`pandid.devices` is one class per device the registry draws. They are one
-hierarchy and not two -- a :class:`~pandid.devices.Cyclone` *is* a
-:class:`~pandid.units.Separator` -- so every public name in both is re-exported
-here and a sheet needs one spelling for the pair: ``pandid.Separator`` and
-``pandid.units.Separator`` are the same class, as are ``pandid.Cyclone`` and
-``pandid.devices.Cyclone``.
+:mod:`pandid.units` holds the base unit classes, drawn by ``kind`` and
+``variant``; :mod:`pandid.devices` holds one class per registered drawing.
+They form one hierarchy (a :class:`~pandid.devices.Cyclone` is a
+:class:`~pandid.units.Separator`), and every public name in both is
+re-exported here, so ``pandid.Separator`` is ``pandid.units.Separator``.
+Both modules also stay importable for qualified use and for
+``units.Kind(variant=...)``.
 
-Both namespaces stay importable (``from pandid import units, devices``) for
-anyone who would rather qualify, and for the ``units.Kind(variant=...)`` escape
-hatch that reaches the drawings no class of their own is named for.
-
-The handles the topology hands back -- a :class:`~pandid.streams.Stream` from
-``connect()``, a :class:`~pandid.loops.Loop` from ``add_loop()`` -- are also
-available at the package root for imports and type annotations.
+The handles the API returns, such as :class:`~pandid.streams.Stream` from
+``connect()`` and :class:`~pandid.loops.Loop` from ``add_loop()``, are also
+exported for imports and type annotations.
 """
 
-# The one place the version is written: hatchling reads this literal at build
-# time (`[tool.hatch.version]`), so the distribution metadata cannot disagree
-# with what `import pandid` reports, and a source checkout reports the same string
-# without the package having to be installed.
+# The only place the version is written; hatchling reads it at build time.
 __version__ = "0.1.5"
 
 from pandid.components import Component
 from pandid.flowsheet import Flowsheet
 from pandid import units
 from pandid import devices
-# The unit and device classes are names a user types, so they are on the package
-# the way Flowsheet is. Both stars, because one hierarchy is spelled one way:
-# ``units.Separator`` beside a bare ``Cyclone`` was two spellings for a base
-# class and its own subclass, a distinction the import line made and the type
-# system does not.
-#
-# The star is what keeps that free of a list this file maintains, and neither
-# ``__all__`` it takes is one kept by hand alone: ``devices.__all__`` is written
-# by scripts/gen_devices.py, and ``units.__all__`` is written beside the classes
-# and held to *every* public Unit subclass in that module by
-# tests/test_units_api.py. So a class added to either lands here with no second
-# list to keep in step, which a literal of thirty unit names and forty-two
-# device names would not be.
-#
-# Nothing collides. ``units.__all__`` and ``devices.__all__`` are disjoint -- a
-# device class is named for the equipment and its base for the kind -- and
-# neither holds ``Flowsheet``, ``Component``, ``SpecError``, ``units`` or
-# ``devices``. Both facts are asserted rather than assumed, since a star import
-# that shadowed one of these would do it silently.
+# Re-export both class modules. Their ``__all__`` lists are generated or tested
+# (scripts/gen_devices.py, tests/test_units_api.py), disjoint from each other,
+# and free of the names imported here, so no list is kept in this file.
 from pandid.units import *  # noqa: F403
 from pandid.devices import *  # noqa: F403
 from pandid.spec import SpecError
 
-# The objects the topology hands back, and the two furniture pairs a sheet is
-# titled and annotated with. Every one of them is named in docs/api.md as the
-# type of something the reader is holding -- ``connect() -> Stream``,
-# ``validate() -> list[Issue]``, ``fs.loops: list[Loop]``, ``stream.route:
-# Route | None`` -- and until #441 none of them could be spelled without
-# reaching into a submodule the reference never mentioned. A reader who
-# followed the documentation exactly got an ImportError, which for a package
-# that ships ``py.typed`` and asks to be annotated against is the documentation
-# describing an API that is not there.
-#
-# A list and not a star, because these modules are not the units/devices pair:
-# each holds internals beside the one or two classes the reference names, and a
-# star would export the module's whole namespace on every future addition.
-# tests/test_units_api.py checks these root bindings.
+# Handles the API returns and the title-block and annotation classes, all named
+# in docs/api.md. Listed explicitly so these modules' internals stay private;
+# tests/test_units_api.py checks the bindings.
 from pandid.ports import Port
 from pandid.streams import Stream
 from pandid.geometry import Pin, Frame, Route
@@ -76,15 +42,8 @@ from pandid.stations import ValveStation
 from pandid.validate import Issue
 from pandid.document import TitleBlock, Revision, Annotation, TableBox
 
-# ``Unit`` comes with them, deliberately. It is the base a custom unit
-# subclasses -- docs/api.md, "Custom equipment" -- so it is a name a user types
-# even though it is not one they instantiate, which is the footing ``SpecError``
-# has been on here since 0.1.0. Holding it back would also cost the rule this
-# file follows its statement: "every public name in units and devices" is a rule
-# a reader can check against the modules, while "every public name except the
-# one you subclass" is a list wearing a rule's clothes.
+# ``Unit`` is exported through units.__all__ because custom units subclass it.
 __all__ = ["Flowsheet", "Component", "units", "devices", "SpecError", "__version__",
-           # The documented handles, in the order a sheet meets them.
            "Port", "Stream", "Pin", "Frame", "Route",
            "Loop", "ControlLoop", "ValveStation", "Issue",
            "TitleBlock", "Revision", "Annotation", "TableBox",
