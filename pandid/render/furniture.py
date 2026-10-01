@@ -1,21 +1,14 @@
-"""Sheet furniture: the engineering title strip, generic titled boxes,
-generic tables, the stream property table, and the zone-ruled drawing
-border.
+"""Draw sheet furniture: title strip, titled boxes, tables, stream table, border.
 
-Every routine here is a pure function returning a list of SVG-fragment
-strings (or a ``(width, height)`` measurement). The renderer in
-:mod:`pandid.render.svg` measures each piece, places it at a sheet
-corner, unions the result to size the canvas, then draws it; none of the
-geometry logic lives in the giant render method.
+Each routine is a pure function returning SVG fragment strings or a
+``(width, height)`` measurement. :mod:`pandid.render.svg` measures each
+piece, places it, sizes the canvas and draws it.
 
-:func:`dock` is the placement itself, and it is *not* SVG: it takes
-measured boxes and answers the rectangle the sheet gives each one. It
-lives here rather than inside the renderer because two backends now ask
-the question. See its docstring.
+:func:`dock` does the placement and is not SVG: it maps measured boxes to
+sheet rectangles, and both the SVG and draw.io backends use it.
 
 Coordinates are absolute SVG user units. Boxes are drawn from a top-left
-origin; the title strip is drawn from a bottom-right corner (its natural
-anchor).
+origin; the title strip from its bottom-right corner.
 """
 
 from __future__ import annotations
@@ -31,26 +24,12 @@ from pandid.render.escape import escaped
 
 FONT = "sans-serif"
 
-# The advance widths ``FONT`` is really set in, in thousandths of the
-# type size, for the two bands the face encodes: ASCII 32..126 and
-# Latin-1 160..255.
-#
-# **Not a model of the lettering -- the lettering's own numbers.** Which
-# face ``sans-serif`` resolves to is not open here: this package's own
-# ``.pdf``/``.png`` path goes through svglib, which registers the
-# generic family onto ReportLab's ``Helvetica`` and ``Helvetica-Bold``
-# (``svglib.fonts.register_default_fonts``), and
-# :mod:`pandid.render.export` already writes that down and draws its
-# baselines from it (``_FACES``, ``_HELVETICA_EM``). A viewer resolves
-# the same family to Arial or Liberation Sans, both cut to Helvetica's
-# advance widths on purpose. (DejaVu Sans is the common resolution that
-# is not; it is wider, so a sheet ruled against these numbers has room
-# to spare in it, which is the direction to be wrong in.)
-#
-# So the numbers below are the Adobe Core-14 AFM advances, and
-# ``tests/test_text_width.py`` checks them character by character
-# against ReportLab itself wherever the ``pdf`` extra is installed --
-# the table is data, and data that nothing checks is data that drifts.
+# Advance widths of FONT in thousandths of the type size, for ASCII
+# 32..126 and Latin-1 160..255. These are the Adobe Core-14 Helvetica AFM
+# advances: svglib maps ``sans-serif`` to Helvetica for PDF and PNG
+# (:mod:`pandid.render.export`), and Arial and Liberation Sans share
+# Helvetica's advances. DejaVu Sans is wider, which errs towards spare room.
+# ``tests/test_text_width.py`` checks them against ReportLab.
 _ADVANCE = (
     (  # Helvetica, 32..126
         278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278,
@@ -88,84 +67,41 @@ _ADVANCE_BOLD = (
     ),
 )
 
-# What a *narrow* codepoint the table does not carry is charged, in the
-# same thousandths: Greek, Cyrillic, and everything else Unicode calls
-# Ambiguous or Neutral outside Latin-1, none of which Helvetica encodes
-# and none of which this renderer can therefore have a real advance for.
-# These two are the flat rates every character was charged before the
-# table existed -- a little over the face's own ASCII mean (527 and 551)
-# and so wrong in the direction that leaves paper spare. Kept at their
-# old values on purpose: a codepoint that had no metric before still has
-# none, and nothing about it should move because Latin text stopped
-# guessing. A wide codepoint is charged a full em and a combining mark
-# nothing; see :func:`script_counts`.
+# Flat advance, in thousandths, for a narrow codepoint outside the table
+# (Greek, Cyrillic and other non-Latin-1 text), slightly above Helvetica's
+# ASCII mean so it errs towards spare room. Wide codepoints are charged a
+# full em and combining marks nothing (:func:`script_counts`).
 _ADV = 560
 _ADV_BOLD = 620
 
-# How a cell says it could not hold what it was given: the field it
-# draws, the text it was asked for, the text it actually drew (the same
-# string when nothing was trimmed), the room the cell has and the width
-# the text needed, the last two in drawing units. An ellipsis tells
-# whoever reads the sheet that a value was abbreviated and tells the
-# program that supplied it nothing at all, and that program is the one
-# that can shorten the field or ask for a bigger sheet. Every
-# fixed-width cell here measures first and reports through one of these.
-#
-# The two widths are carried because a finding without them is not
-# actionable: "the title was truncated" leaves an author guessing how
-# much has to come out, and "needs 194 of the 187 units its cell has"
-# says it. ``route-detour`` states its two lengths and their ratio for
-# the same reason.
-#
-# **The field is the one the author edits, not the cell that drew it**,
-# and where the two differ it is spelled ``source -> cell``. Half the
-# strip's cells draw a value some *other* field supplied: a blank
-# ``title`` draws the flowsheet's name, a blank ``scale`` draws the
-# ratio the sheet was fitted at, a blank ``date`` draws today's, the REV
-# cell draws the newest revision's ``rev``, and the newest revision's
-# blank signatory cells draw the block's ``drawn_by``/``checked_by``/
-# ``approved_by``. Naming the cell in those cases sends the author to a
-# field they never set -- the mistake ``of_sheets`` reported as ``sheet``
-# was, one function away.
+#: Callback a fixed-width cell reports an overflow through:
+#: ``(field, text, drawn, room, need)``, giving the field, the requested
+#: text, the text drawn (the same if untrimmed), and the cell's room and
+#: the text's width in drawing units. ``field`` is the field the author
+#: edits, written ``source -> cell`` where another field supplied the value
+#: (a blank ``title`` draws the flowsheet name, a blank ``date`` today's).
 Reporter = Callable[[str, str, str, float, float], None]
 
 
 def script_counts(s: str) -> "tuple[int, int, int]":
-    """How many of *s*'s codepoints draw narrow, draw a full em wide, or
-    draw nothing of their own -- the classification the renderer's
-    per-character width rules measure a string by, so a CJK tag and a
-    combining mark are never charged the Latin rate the rest of the
-    sheet's lettering is charged at.
+    """Return how many codepoints of ``s`` are narrow, wide or zero-width.
 
-    :func:`text_width` no longer needs the narrow count: Latin-1 has a
-    real advance per character now, and this answers only for what the
-    face does not encode. The equipment-tag halo
-    (:func:`pandid.render.svg._unit_label_box`) and a labelled block's
-    own box (:func:`pandid.render.symbols.label_span`) still measure
-    through here, at per-character rates of their own.
+    Wide and fullwidth codepoints (``unicodedata.east_asian_width`` W or F)
+    draw about a full em. Ambiguous ones are counted narrow, the UAX #11
+    default without context. Combining marks (categories Mn and Me) advance
+    nothing. Used by the tag halo
+    (:func:`pandid.render.svg._unit_label_box`) and block labels
+    (:func:`pandid.render.symbols.label_span`).
 
-    :func:`unicodedata.east_asian_width` sorts a codepoint into five
-    classes. *W*ide and *F*ullwidth -- CJK ideographs, fullwidth forms --
-    draw close to a full em, same as the font's own point size. *H*alfwidth
-    and *Na*rrow -- Latin letters, digits, halfwidth kana -- draw at the
-    per-character rate its caller was tuned to (see :func:`text_width`
-    and ``_ADV``). *A*mbiguous -- Greek, Cyrillic, most
-    symbols, a character that is narrow set among Latin and wide set
-    among CJK -- has no surrounding text here to decide it by, so it
-    takes the standard's own default for that case (UAX #11, East Asian
-    Width, section "Recommendations"): "In the absence of context,
-    Ambiguous characters should be treated as Narrow." This renderer
-    never knows whether a string sits in a CJK line or a Latin one, so
-    the no-context default is the only defensible reading, and it is
-    also the one that leaves every shipped, Latin-tagged sheet exactly
-    where it was.
+    Parameters
+    ----------
+    s : str
+        Text.
 
-    A combining mark -- general category ``Mn`` (nonspacing) or ``Me``
-    (enclosing) -- draws on top of the glyph before it rather than
-    beside it, so it advances nothing of its own. Charged a full
-    narrow glyph, it is the same bug this function exists to fix, just
-    pointed at an accent instead of an ideograph: a string reading
-    shorter than what it measures.
+    Returns
+    -------
+    tuple[int, int, int]
+        ``(narrow, wide, zero)`` counts.
     """
     narrow = wide = zero = 0
     for ch in s:
@@ -179,38 +115,28 @@ def script_counts(s: str) -> "tuple[int, int, int]":
 
 
 def text_width(s, size: float, bold: bool = False) -> float:
-    """Drawn width of *s* set at *size*, without padding.
+    """Return the drawn width of ``s`` at ``size``, without padding.
 
-    **Glyph by glyph, off the face's own advance widths**
-    (:data:`_ADVANCE`), because a per-character average is not a ruler.
-    It was one: every character was charged the same 0,56 em (0,62
-    bold), which is near enough the mean of Helvetica's ASCII to look
-    calibrated and is wrong by a third on either side of it for real
-    drawing text. ``STREAM NUMBER`` came out 17 per cent narrow,
-    ``PROCESS FLOW DIAGRAM`` 14, ``Pump`` 14, ``iiii`` 150 per cent
-    wide; a section heading of capitals ran through and out of the rules
-    of the cell that had been ruled to hold it. The error was known and
-    absorbed rather than fixed -- ``_CELL_PAD`` in
-    :mod:`pandid.render.drawio` is fat by exactly the eleven per cent
-    that mean under-charges ``HPSSH`` by, and says so.
+    Measured glyph by glyph from the face's advances (:data:`_ADVANCE`),
+    because the result decides whether a table sheet fits its page
+    (:func:`_partition`). Outside the table, a narrow codepoint is charged
+    the flat rate, a wide one a full em and a combining mark nothing. The
+    sum is in integer thousandths, scaled once, so it does not depend on
+    character order.
 
-    It matters more than a fat pad because a width here is not only how
-    big a box is drawn. A stream table's own sheet asks *does this fit
-    the page* and refuses the render when it does not
-    (:func:`_partition`), so an average that reads a third under is a
-    page called big enough for a drawing that runs off it, and a page
-    called too small for one that would have fitted. A box can be
-    generous. A fit cannot be approximate.
+    Parameters
+    ----------
+    s : object
+        Text; converted with ``str``.
+    size : float
+        Font size in drawing units.
+    bold : bool, default=False
+        Use the bold advances.
 
-    Outside the two bands the table carries, the old flat rate still
-    answers, a wide (CJK/fullwidth) codepoint is charged a full em, and
-    a combining mark nothing at all; see :func:`script_counts` and
-    ``_ADV``.
-
-    Summed in thousandths and scaled once at the end rather than
-    multiplied per character, for the reason :func:`_total` adds by
-    hand: the sum is exact in integers, so the answer depends on the
-    string and the size and not on the order the characters came in.
+    Returns
+    -------
+    float
+        Width in drawing units.
     """
     s = str(s)
     table = _ADVANCE_BOLD if bold else _ADVANCE
@@ -232,23 +158,22 @@ def text_width(s, size: float, bold: bool = False) -> float:
 
 
 def _total(values) -> float:
-    """The sum of *values*, added left to right by hand rather than
-    through the builtin ``sum()``.
+    """Return the sum of ``values``, added left to right.
 
-    A box measured this way (its total width or height) is later
-    subtracted from a frame edge to place the box, and each of its own
-    pieces -- a column centred at half its width, an entry stacked at
-    half a run's height -- is positioned by walking the same values
-    forward with plain ``+=``. ``sum()``'s float algorithm changed in
-    CPython 3.12 (Neumaier-compensated, gh-100425): more accurate, and
-    a different last bit from a plain running total on the same
-    values. The measurement and the walk have to agree on that bit or
-    a centring formatted to one decimal place lands on a rounding tie
-    that falls one way on 3.11 and the other on 3.12+ -- the same
-    values, drawn 0,1 unit apart depending only on which Python drew
-    them. Adding by hand, the one way every version of Python always
-    has, is what keeps a box's measured extent and its own drawing
-    from ever disagreeing about it.
+    Avoids ``sum()``, whose compensated algorithm (CPython 3.12+) can
+    differ in the last bit from the running ``+=`` used to position each
+    piece, which would make one-decimal centring differ between Python
+    versions.
+
+    Parameters
+    ----------
+    values : iterable of float
+        Values to add.
+
+    Returns
+    -------
+    float
+        Running total.
     """
     total = 0.0
     for v in values:
@@ -258,61 +183,39 @@ def _total(values) -> float:
 
 def clip(s, room: float, size: float, bold: bool = False, *,
          field: str = "", report: "Reporter | None" = None) -> str:
-    """Trim a value to the room its cell has, and report what was cut.
+    """Trim a value to its cell's room with an ellipsis, and report the cut.
 
-    A title-block cell is ruled and the strip is fixed geometry, so a
-    value longer than its cell would run across the rule and into the
-    value beside it and no amount of growing can help. A draftsman
-    abbreviates.
+    Title-block cells are fixed, so an overlong value is abbreviated. The
+    longest prefix whose text plus ellipsis :func:`text_width` says fits is
+    kept, measured whole so no float rounding drops a character that fits.
 
-    **Where to cut is measured, and measured the way the width is.**
+    Parameters
+    ----------
+    s : object
+        Value; converted with ``str``.
+    room : float
+        Cell width.
+    size : float
+        Font size.
+    bold : bool, default=False
+        Measure in bold.
+    field : str, default=""
+        Field name for the report.
+    report : Reporter, optional
+        Receives a finding when the value is trimmed.
 
-    Two bugs met here, one from each side, and they have one answer. The
-    cut used to be ``int(room / (size * adv)) - 1`` characters -- how
-    many would fit if every character were the average one -- which is a
-    count and not a width, so it cut a line of capitals too late and a
-    line of narrow letters far too early, and left the ellipsis it then
-    appended unpaid for. And because the *decision* to cut was
-    :func:`text_width`'s while the cut itself counted at the Latin rate,
-    the two disagreed by the ratio between those rates: a fullwidth
-    title kept 28 characters measuring 290 units for a 187-unit cell and
-    was drawn straight through the sheet count beside it, on every page
-    size.
-
-    There is no closed form left to invert -- a character's advance is
-    its own now (:data:`_ADVANCE`) rather than one rate for the whole
-    alphabet -- so the string is grown a character at a time against
-    :func:`text_width` itself, with the ellipsis charged for first. Both
-    ends are the same function rather than two readings of one rate, and
-    the prefix this keeps is a prefix ``text_width`` agrees fits.
-
-    The earlier objection to walking -- that summing per-character
-    widths lands a rounding away from the same characters measured
-    whole, which is :func:`_total`'s complaint pointed at another pair
-    of numbers -- does not arise, because nothing is summed in floats.
-    ``text_width`` adds integer thousandths and scales once at the end,
-    so a prefix and the whole string are added the same way and cannot
-    disagree in the last bit.
-
-    Short strings, and only the ones that did not fit in the first
-    place.
+    Returns
+    -------
+    str
+        The value, or a trimmed prefix ending in an ellipsis.
     """
     s = str(s)
     need = text_width(s, size, bold)
     if need <= room:
         return s
     ellipsis = "…"
-    # Each candidate is measured **with its ellipsis on**, against the
-    # room itself. Not `room - text_width(ellipsis)`: that subtraction
-    # is the one float operation in the walk, and it rounds -- an `i`
-    # at 8.0 in 40 units of room comes to exactly 40 with the ellipsis,
-    # and `40.0 - 4.48` is 35.519999999999996, so the character that
-    # fits exactly was thrown away. Measuring the whole candidate is one
-    # call to `text_width`, which sums integer thousandths and scales
-    # once, so nothing rounds anywhere and the cut is the longest that
-    # fits. It also leaves `room` untouched for the finding to quote
-    # back: an author told their cell has 180 units when it is ruled 187
-    # has been told the wrong number about their own sheet.
+    # Measure each candidate with its ellipsis against the room itself,
+    # rather than subtracting the ellipsis width, which rounds.
     kept = 0
     while (kept < len(s)
            and text_width(s[:kept + 1] + ellipsis, size, bold) <= room):
@@ -325,13 +228,30 @@ def clip(s, room: float, size: float, bold: bool = False, *,
 
 def check_fit(s, room: float, size: float, bold: bool = False, *,
               field: str = "", report: "Reporter | None" = None) -> str:
-    """Measure a value that is drawn whole whatever it measures, and
-    report an overrun.
+    """Return a value unchanged, reporting it if it overruns its cell.
 
-    Some cells have nothing worth trimming. Half a sheet count reads as
-    a different sheet count, and a company name broken mid-word reads as
-    a different company, so those are drawn in full and the overrun is
-    reported instead of hidden.
+    For values that must not be trimmed, such as a sheet count or a company
+    name.
+
+    Parameters
+    ----------
+    s : object
+        Value; converted with ``str``.
+    room : float
+        Cell width.
+    size : float
+        Font size.
+    bold : bool, default=False
+        Measure in bold.
+    field : str, default=""
+        Field name for the report.
+    report : Reporter, optional
+        Receives a finding when the value overruns.
+
+    Returns
+    -------
+    str
+        The value as a string.
     """
     s = str(s)
     need = text_width(s, size, bold)
@@ -341,26 +261,27 @@ def check_fit(s, room: float, size: float, bold: bool = False, *,
 
 
 def report_once(report: "Reporter") -> "Reporter":
-    """*report*, with each distinct finding passed on only once.
+    """Wrap a reporter so each distinct finding is passed on once.
 
-    One strip can put one value in more than one place. The company cell
-    stacks its name over several lines, so a name repeating a word too
-    wide to break -- a group of companies, a joint venture -- reported
-    that word once per line, and the author read two findings about one
-    thing they can do once.
+    A repeated value, such as a word repeated across wrapped company-name
+    lines, would otherwise report once per line. The key is the whole
+    finding, so different fields stay separate.
 
-    Wrapped around the whole layout rather than at each of the three
-    places findings are collected (the two backends and
-    :func:`title_strip_fit`), because three de-duplications are three
-    chances to disagree about what counts as the same finding. The key
-    is the whole tuple, so two revisions that abbreviate the same
-    initials are still two findings: their fields differ, and they are
-    two rows the author edits separately.
+    Parameters
+    ----------
+    report : Reporter
+        Reporter to wrap.
+
+    Returns
+    -------
+    Reporter
+        De-duplicating reporter.
     """
     seen: set[tuple[str, str, str, float, float]] = set()
 
     def once(field: str, text: str, drawn: str,
              room: float, need: float) -> None:
+        """Pass on a finding not seen before."""
         key = (field, text, drawn, room, need)
         if key not in seen:
             seen.add(key)
@@ -371,25 +292,30 @@ def report_once(report: "Reporter") -> "Reporter":
 
 def fit_size(s, room: float, size: float, floor: float,
              bold: bool = False) -> float:
-    """The largest type size at or under *size* that draws *s* inside
-    *room*, and never under *floor*.
+    """Return the largest size, at most ``size`` and at least ``floor``, that fits.
 
-    The third answer to a value too long for its cell, and the only one
-    that keeps all of it and stays inside the rule. Lettering a long
-    value smaller is what a draughtsman does to a value that is *read*
-    -- the drawing title, set in display type well above everything else
-    on the strip. It is not what they do to a drawing number or a date,
-    which are matched character by character against another document
-    and are set at the strip's own reading size already, with nothing to
-    give back. So this is offered rather than applied: the caller says
-    which cell has size to spare and what its floor is, and the cells
-    that have none never ask.
+    For display text such as the drawing title; values matched against other
+    documents (drawing number, date) are trimmed or reported instead.
+    :func:`text_width` is linear in size, so the result is
+    ``size * room / need`` rounded down to the tenth :func:`_text` writes.
 
-    :func:`text_width` is linear in the size, so the size that exactly
-    fills the cell is ``size * room / need``. That is rounded *down* to
-    the tenth :func:`_text` writes into the file, so the size measured
-    here is the size the consumer sets and the fit is not a rounding
-    away from a clipped glyph.
+    Parameters
+    ----------
+    s : object
+        Text.
+    room : float
+        Cell width.
+    size : float
+        Preferred font size.
+    floor : float
+        Smallest allowed size.
+    bold : bool, default=False
+        Measure in bold.
+
+    Returns
+    -------
+    float
+        Font size.
     """
     need = text_width(s, size, bold)
     if need <= room or need <= 0 or room <= 0:
@@ -398,6 +324,30 @@ def fit_size(s, room: float, size: float, floor: float,
 
 
 def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=None):
+    """Return an SVG ``<text>`` element with escaped content.
+
+    Parameters
+    ----------
+    x, y : float
+        Anchor point.
+    s : str
+        Text.
+    size : float
+        Font size.
+    anchor : str, default="start"
+        ``text-anchor``.
+    bold : bool, default=False
+        Set bold.
+    fill : str, default="black"
+        Text colour.
+    baseline : str, optional
+        ``dominant-baseline``.
+
+    Returns
+    -------
+    str
+        SVG element.
+    """
     wt = ' font-weight="bold"' if bold else ""
     bl = f' dominant-baseline="{baseline}"' if baseline else ""
     return (f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{size:.1f}"'
@@ -408,37 +358,36 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=N
 # Generic titled box (Annotation): title bar over rows
 # ----------------------------------------------------------------
 
-#: The weight a titled box's own rectangle is ruled at, and the rule
-#: under its title. Named because :mod:`pandid.render.drawio` writes the
-#: box out as a draw.io table and has to state the weight on the
-#: container: draw.io draws a table's border and internal rules from the
-#: container's own style.
+# Rule weights of a titled box and the line under its title; drawio states
+# them on the exported table container.
 _BOX_RULE = 1.5
 _BOX_UNDERLINE = 1.0
-#: The weight a :class:`~pandid.document.TableBox` rules every one of
-#: its cells at -- lighter than the box above, because a table really is
-#: ruled across and down and a grid at 1,5 would compete with the
-#: drawing beside it.
+# Cell rule weight of a TableBox, lighter so the grid does not compete with
+# the drawing.
 _CELL_RULE = 0.75
 
-#: The three weights the **sheet's own border** is ruled at: the outer sheet
-#: rectangle, the drawing frame inside it, and the ticks that divide the band
-#: between the two into zones.
-#:
-#: Sheet furniture, and so *not* on :class:`~pandid.render.weights.LineWeight`:
-#: ISO 10628-1 5.3.1 rules the flow diagram, and a border and its zone grid are
-#: the drawing sheet rather than anything drawn on it. Named here all the same,
-#: because both backends rule them and each used to write its own literal --
-#: this module for the sheet and ``pandid.render.drawio`` for the export -- so
-#: the border was three numbers stated twice with nothing holding the pairs
-#: together.
+#: Rule weights of the sheet border: the sheet edge, the drawing frame and
+#: the zone ticks. Not on :class:`~pandid.render.weights.LineWeight`, since
+#: ISO 10628-1 5.3.1 governs the diagram, not the sheet. Shared by both
+#: backends.
 SHEET_RULE = 1.0
 FRAME_RULE = 2.0
 ZONE_TICK = 0.75
 
 
 def _ann_layout(ann):
-    """Compute the column widths and row metrics for an Annotation."""
+    """Return an Annotation's font size, row height, title height and column widths.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Box to measure.
+
+    Returns
+    -------
+    tuple[float, float, float, list[float]]
+        ``(size, row_h, title_h, col_w)``.
+    """
     size = ann.font_size
     row_h = size + 7
     title_h = size + 12 if ann.title else 0
@@ -454,6 +403,18 @@ def _ann_layout(ann):
 
 
 def measure_annotation(ann) -> tuple[float, float]:
+    """Return an Annotation's drawn size.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Box to measure.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(width, height)``; ``ann.width`` wins where set.
+    """
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = 9.0, 12.0
     body_w = _total(col_w) + gap * (len(col_w) - 1)
@@ -464,13 +425,27 @@ def measure_annotation(ann) -> tuple[float, float]:
 
 
 def _overflowing_text(ann, size: float, body_w: float) -> str:
-    """The one string a too-narrow box is best described by: its title
-    where that is what overruns, otherwise the row that does.
+    """Return the string to report for a box too narrow for its content.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Box.
+    size : float
+        Body font size.
+    body_w : float
+        Width the rows need.
+
+    Returns
+    -------
+    str
+        The title if it overruns, otherwise the widest row.
     """
     if text_width(ann.title, size + 1, bold=True) > body_w:
         return ann.title
 
     def flat(r):
+        """Return a row as one string."""
         return "   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
     return max((flat(r) for r in ann.rows), key=lambda s: text_width(s, size),
                default=ann.title)
@@ -478,13 +453,25 @@ def _overflowing_text(ann, size: float, body_w: float) -> str:
 
 def draw_annotation(ann, x: float, y: float, *,
                     report: "Reporter | None" = None) -> list[str]:
-    """Draw an Annotation with its top-left corner at (x, y).
+    """Return an Annotation drawn with its top-left corner at ``(x, y)``.
 
-    A box left to size itself is sized from its own rows, so it always
-    fits. One given an explicit ``width`` is a fixed cell like any
-    other: the rows are still drawn at the column stops their content
-    asks for, so a width smaller than that content runs the text out
-    through the side of the box.
+    A self-sized box always fits. With an explicit ``width``, rows keep
+    their measured column stops, so a too-small width overruns the box
+    and is reported.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Box to draw.
+    x, y : float
+        Top-left corner.
+    report : Reporter, optional
+        Receives a finding when an explicit width is too small.
+
+    Returns
+    -------
+    list[str]
+        SVG elements.
     """
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = 9.0, 12.0
@@ -494,9 +481,7 @@ def draw_annotation(ann, x: float, y: float, *,
         inner = max(body_w, text_width(ann.title, size + 1, bold=True))
         if ann.width < inner + 2 * pad:
             over = _overflowing_text(ann, size, body_w)
-            # The box's own ``width`` is the room and the width it would
-            # have measured to is the need, so the two numbers in the
-            # finding are the two numbers the author edits between.
+            # Report the stated width against the measured one.
             report(f"annotation {ann.title!r} (width={ann.width:g})", over, over,
                    ann.width, inner + 2 * pad)
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
@@ -525,6 +510,18 @@ def draw_annotation(ann, x: float, y: float, *,
 # ----------------------------------------------------------------
 
 def _table_layout(tb):
+    """Return a TableBox's font size, column count, column widths and row height.
+
+    Parameters
+    ----------
+    tb : TableBox
+        Table to measure.
+
+    Returns
+    -------
+    tuple[float, int, list[float], float]
+        ``(size, ncol, col_w, row_h)``.
+    """
     size = tb.font_size
     ncol = max(len(tb.headers), max((len(r) for r in tb.rows), default=0))
     col_w = [0.0] * ncol
@@ -537,6 +534,18 @@ def _table_layout(tb):
 
 
 def measure_table(tb) -> tuple[float, float]:
+    """Return a TableBox's drawn size.
+
+    Parameters
+    ----------
+    tb : TableBox
+        Table to measure.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(width, height)``.
+    """
     size, ncol, col_w, row_h = _table_layout(tb)
     title_h = size + 10 if tb.title else 0
     nrows = len(tb.rows) + (1 if tb.headers else 0)
@@ -544,6 +553,20 @@ def measure_table(tb) -> tuple[float, float]:
 
 
 def draw_table(tb, x: float, y: float) -> list[str]:
+    """Return a TableBox drawn with its top-left corner at ``(x, y)``.
+
+    Parameters
+    ----------
+    tb : TableBox
+        Table to draw.
+    x, y : float
+        Top-left corner.
+
+    Returns
+    -------
+    list[str]
+        SVG elements.
+    """
     size, ncol, col_w, row_h = _table_layout(tb)
     title_h = size + 10 if tb.title else 0
     w = _total(col_w)
@@ -555,6 +578,7 @@ def draw_table(tb, x: float, y: float) -> list[str]:
     top = y + title_h
 
     def _row(ry, cells, *, header):
+        """Append one ruled row at ``ry``."""
         cx = x
         for ci in range(ncol):
             val = cells[ci] if ci < len(cells) else ""
@@ -588,63 +612,57 @@ def draw_table(tb, x: float, y: float) -> list[str]:
 # property, section headings where the flowsheet asks for them)
 # ----------------------------------------------------------------
 #
-# Split the way the title strip is split: a layout function
-# (:func:`stream_table_layout`) that answers where every cell goes and
-# what is in it, and a stroker (:func:`draw_stream_table`) that turns
-# that into SVG. The sheet strokes the layout;
-# :mod:`pandid.render.drawio` builds table cells from the same one.
-# Neither backend measures a column.
+# stream_table_layout gives each cell's position and text; draw_stream_table
+# strokes it, and pandid.render.drawio builds table cells from the same
+# layout.
 
-#: Clearance a stream-table column is ruled with over the widest thing
-#: in it. Applied once per column, to whichever of the heading and the
-#: values is wider.
+# Clearance added to the widest heading or value in a stream-table column.
 _STREAM_GUTTER = 14.0
 
-#: Gutter between a cell's rule and text set against its left edge. The
-#: draw.io exporter states this too -- less what a draw.io cell insets
-#: on its own account -- so a row label starts the same distance in
-#: whichever backend drew it.
+# Gutter before left-aligned text; drawio applies it less its own inset.
 _STREAM_PAD = 5.0
 
-#: What the table fills its four kinds of cell with. The heading row is
-#: the grey the sheet fills every heading row with; a section heading is
-#: a shade lighter, being a heading *inside* the table rather than over
-#: it; a row label is lighter still, since it is read as a label rather
-#: than as a heading; a value is the paper.
+# Fills for the heading row, section headings, row labels and values,
+# lightening from heading to value.
 _STREAM_HEAD_FILL = "#eee"
 _STREAM_SECTION_FILL = "#f4f4f4"
 _STREAM_KEY_FILL = "#f9f9f9"
 _STREAM_VALUE_FILL = "white"
 
-#: The type size a table of up to 18 columns is set at, and the size the
-#: row depth below and both column-width floors
-#: (:class:`~pandid.document.StreamTableOptions`) were chosen against. An
-#: author who states a size states it as a multiple of this one, which is
-#: what makes the three follow it; see :func:`stream_table_layout`.
+# Type size for up to 18 columns; the row depth and column-width floors
+# (:class:`~pandid.document.StreamTableOptions`) scale with a stated size
+# relative to this one.
 _BASE_SIZE = 10.5
 
-#: Depth of every row at :data:`_BASE_SIZE`.
+# Row depth at _BASE_SIZE.
 _ROW_H = 20.0
 
 
 def _width_floor(stated: float | str, name: str, ruled: float) -> float:
-    """Narrowest one of the table's two kinds of column is ruled, in
-    drawing units, from what the sheet asked for.
+    """Return a column-width floor in drawing units.
 
-    The floors used to be constants here, 122.0 and 52.0 at
-    :data:`_BASE_SIZE`. They are
-    :class:`~pandid.document.StreamTableOptions` fields now and those
-    two numbers are their defaults, which is where a default has to live
-    once a value can be stated: a floor that scaled with ``font_size``
-    only while it held its own default would be a field an author cannot
-    reason about.
+    A number is scaled by ``ruled``, like :data:`_ROW_H`; ``"auto"`` means
+    no floor, since columns are measured from their content anyway.
 
-    So a number is scaled by ``ruled`` for the reason :data:`_ROW_H` is,
-    stated or not. ``"auto"`` is no floor at all, which is a floor of
-    zero: every column is measured from its contents anyway (see
-    :func:`stream_table_layout`) and a floor only ever holds one *up*,
-    so dropping it needs no second path through the measuring and cannot
-    rule a column narrower than what goes in it.
+    Parameters
+    ----------
+    stated : float or str
+        Floor from :class:`~pandid.document.StreamTableOptions`, or
+        ``"auto"``.
+    name : str
+        Option name, for error messages.
+    ruled : float
+        Scale relative to :data:`_BASE_SIZE`.
+
+    Returns
+    -------
+    float
+        Floor width.
+
+    Raises
+    ------
+    ValueError
+        If ``stated`` is not a number or ``"auto"``, or is negative.
     """
     if stated == "auto":
         return 0.0
@@ -663,33 +681,42 @@ def _width_floor(stated: float | str, name: str, ruled: float) -> float:
 
 
 def _options(fs):
-    """This sheet's :class:`~pandid.document.StreamTableOptions`.
+    """Return the sheet's :class:`~pandid.document.StreamTableOptions`.
 
-    Through ``getattr``, as :attr:`stream_table_sections` is read: every
-    :class:`~pandid.flowsheet.Flowsheet` has one, and this module is
-    handed whatever the renderer was handed.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet; defaults apply when it has no options.
+
+    Returns
+    -------
+    StreamTableOptions
+        Options.
     """
     from pandid.document import StreamTableOptions
     options = getattr(fs, "stream_table", None)
     return StreamTableOptions() if options is None else options
 
 
-#: A :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections` key that
-#: matched no property row. Unlike ``label_pos`` or ``col_align``, this
-#: cannot be checked when the author sets it -- the streams it is
-#: checked against may not exist yet -- so it is a render-time warning
-#: rather than a constructor-time raise.
+# Warning code for a stream_table_sections key that matched no property.
+# Checked at render time, since the streams may not exist when it is set.
 _UNUSED_SECTION_CODE = "stream-table-section-unused"
 
 
 def _report_unused_sections(fs, sec_before: dict[str, str], seen: set) -> None:
-    """Warn on ``fs.warnings`` for a section keyed to a property no
-    stream in the table sets, so it silently never heads anything.
+    """Replace warnings for sections whose property no stream sets.
 
-    Filtered and replaced rather than appended to, exactly as
-    :data:`~pandid.render.svg._FIT_CODES` is: a section named on an
-    earlier render that a later one has fixed must stop being warned
-    about.
+    Earlier warnings of this code are dropped, so a fixed section stops
+    warning.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose warnings are updated.
+    sec_before : dict[str, str]
+        Property key to section label.
+    seen : set
+        Property keys some stream sets.
     """
     from pandid.validate import Issue
 
@@ -705,12 +732,19 @@ def _report_unused_sections(fs, sec_before: dict[str, str], seen: set) -> None:
 class StreamCell(NamedTuple):
     """One ruled cell of the stream table.
 
-    ``w`` is the cell's own width rather than its column's: a section
-    heading spans the whole table and is **one** cell, which is what the
-    sheet strokes and what a merged cell is in a draw.io table.
-    ``anchor`` is the SVG ``text-anchor``, and the table sets a cell one
-    of two ways -- ``start`` for a label, ``middle`` for a value -- so
-    those are the two it takes.
+    Attributes
+    ----------
+    text : str
+        Cell text.
+    w : float
+        Cell width; a section heading is one cell spanning the table.
+    fill : str
+        Fill colour.
+    bold : bool
+        Set bold.
+    anchor : str
+        SVG ``text-anchor``: ``"start"`` for labels, ``"middle"`` for
+        values.
     """
     text: str
     w: float
@@ -720,17 +754,18 @@ class StreamCell(NamedTuple):
 
 
 class StreamTable(NamedTuple):
-    """The stream property table, as geometry rather than as ink.
+    """Stream property table geometry, shared by both backends.
 
-    ``rows`` is the table row by row, top to bottom, each row its cells
-    left to right -- which is both the order the sheet strokes them in
-    and the structure a draw.io table is built from (a container of rows
-    of cells).
-
-    ``w``/``h`` is what the table measures, which is what :func:`dock`
-    is given to place it by; ``row_h`` is the depth of every row and
-    ``size`` the type it is all set in. A row is uniform depth here,
-    unlike a revision grid: every row holds one line of text.
+    Attributes
+    ----------
+    rows : list[list[StreamCell]]
+        Rows top to bottom, cells left to right.
+    size : float
+        Font size.
+    row_h : float
+        Depth of every row.
+    w, h : float
+        Table size, as passed to :func:`dock`.
     """
     rows: list
     size: float
@@ -740,38 +775,47 @@ class StreamTable(NamedTuple):
 
 
 def _stream_cell_text(values, key) -> str:
-    """What one column's cell draws for one property row.
+    """Return a column's text for one property row, ``"-"`` if missing.
 
-    The single place the placeholder for a missing value is decided, so
-    the column that is *measured* is the column that is drawn.
+    Parameters
+    ----------
+    values : dict
+        The column's property values.
+    key : str
+        Property.
+
+    Returns
+    -------
+    str
+        Cell text.
     """
     val = values.get(key, "-")
     return "-" if val in (None, "") else str(val)
 
 
 def _run_values(run) -> dict:
-    """One column's values, gathered over the whole run.
+    """Return one column's property values, gathered over the whole run.
 
-    A run drawn through inline devices is several streams sharing one
-    name and one column, and each of them can carry properties. Read in
-    segment order, the first statement of a key winning, with any
-    segment the author marked :attr:`~pandid.streams.Stream.tabulate`
-    read before the rest.
+    A run drawn through inline devices is several streams in one column.
+    Segments are read in drawing order, the first value of a key winning,
+    except that a segment marked :attr:`~pandid.streams.Stream.tabulate`
+    is read first; segments may legitimately differ, such as pressure
+    either side of a control valve.
 
-    **Over the run**, because everything else about the column already
-    is: whether it exists at all (:func:`_table_runs`) and which rows it
-    fills (:func:`stream_table_layout`) are both asked of every segment,
-    and only the values used to come off the first one. A property
-    written on the far end of a line therefore kept the column, added
-    its row and then drew a dash in it.
+    Parameters
+    ----------
+    run : list[Stream]
+        Segments of one named run.
 
-    **Marked**, because segments can disagree and no rule can settle it.
-    A control valve is there to drop the pressure, so ``S6`` at 11.6
-    barg above one and 3.4 barg below it is the author describing the
-    line correctly; one column cannot show both, and which point it
-    reports is a decision about the drawing rather than about the data.
-    Unmarked, the run reads in the order it is drawn, which is what it
-    always did.
+    Returns
+    -------
+    dict
+        Property key to value.
+
+    Raises
+    ------
+    ValueError
+        If more than one segment is marked ``tabulate``.
     """
     marked = [s for s in run if s.tabulate]
     if len(marked) > 1:
@@ -792,75 +836,76 @@ def _run_values(run) -> dict:
 
 
 def _table_runs(fs) -> list:
-    """The runs that get a column, each as its segments, in sheet order.
+    """Return the runs that get a column, in sheet order.
 
-    One column per name -- a run drawn in two segments is one stream --
-    and never a signal, which is not a stream of anything and has no
-    properties to tabulate. What remains is the question this answers:
-    **a column has to have something in it.**
+    One column per name, never for signals. A run with no property is
+    dropped (ISO 10628-1:2014 4.3.3 a) makes internal flows optional),
+    unless it crosses the sheet edge
+    (:attr:`pandid.streams.Stream.at_boundary`): 4.3.2 d) requires every
+    ingoing and outgoing material, so its empty column shows the omission.
+    A property present but blank keeps a column. Both tests cover the whole
+    run.
 
-    A stream that states no property at all is dropped. An empty column
-    is a heading over a rule of dashes, and there is no clause behind
-    it: ISO 10628-1:2014 4.3.3 a) puts the flows *between the process
-    steps* among the things a PFD may carry rather than must.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
 
-    Unless it crosses the sheet edge. 4.3.2 d) makes the name of each
-    ingoing and outgoing material, with its flow rate or quantity,
-    something the diagram **shall** contain, so a feed or a product with
-    nothing on it keeps its column -- dropping it would hide exactly
-    what the standard asks the sheet to report, and hide it precisely
-    because it is missing. The empty column is the sheet saying so, and
-    :func:`pandid.validate.model_issues` says it in words as well.
-    :attr:`pandid.streams.Stream.at_boundary` is where that line is
-    drawn.
-
-    A property *present and blank* is not nothing: ``{"H2S": ""}`` is
-    the author saying this stream has none to report, and it keeps the
-    column. Only an absent key is silence. The two draw the same dash
-    (:func:`_stream_cell_text`) and are distinct in the model, which is
-    what makes a blank the way to keep a column the drop rule would
-    otherwise take.
-
-    Both questions are asked of the **whole run** rather than of the
-    segment the column is headed from, so nothing is dropped for being
-    written down at the far end of a line: a run out to a product flag
-    reaches it on its last segment, and a run's properties are written
-    wherever the author wrote them.
+    Returns
+    -------
+    list[list[Stream]]
+        Each run's segments.
     """
     return [run for run in fs._named_runs().values()
             if any(s.properties for s in run) or any(s.at_boundary for s in run)]
 
 
 def _table_streams(fs) -> list:
-    """The stream each column is headed from, in sheet order.
+    """Return the stream each column is headed from, in sheet order.
 
-    The first segment of each run in :func:`_table_runs`. What the
-    heading is made of belongs to the run rather than to any one segment
-    -- the number is the same on all of them, and the line-number
-    components are written where the run starts -- so the head is fixed
-    and never moves with a ``tabulate`` mark. The column's *values* are
-    a separate question and are gathered over the whole run; see
-    :func:`_run_values`.
+    The first segment of each run in :func:`_table_runs`; the values are
+    gathered over the run (:func:`_run_values`).
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    list[Stream]
+        Heading streams.
     """
     return [run[0] for run in _table_runs(fs)]
 
 
 class _Measured(NamedTuple):
-    """What the stream table measures to, before it is a grid of cells.
+    """Stream table measurements shared by the docked and sheet layouts.
 
-    The split exists because the table is now laid out two ways from one
-    measurement: whole, docked at the foot of a diagram
-    (:func:`stream_table_layout`), and cut into blocks on a sheet of its
-    own (:func:`stream_table_sheet`). Every number here is settled over
-    the *whole* table -- one type size, one row depth, one width for
-    every stream column -- so a table read across two blocks is read
-    across one ruling.
+    Settled over the whole table, so blocks of a table sheet share one
+    ruling.
 
-    ``span`` is what a section heading needs, which is a constraint on
-    the total width rather than on any column, so it is carried
-    unresolved: how much of it the label column has to take up depends
-    on how many stream columns stand beside it, and that is the one
-    thing the two layouts disagree about. See :func:`_section_span`.
+    Attributes
+    ----------
+    streams : list[Stream]
+        Heading stream per column.
+    cells : list[dict]
+        Values per column.
+    disp : list[tuple[str, str]]
+        Rows as ``("section", label)`` or ``("prop", key)``.
+    heading : str
+        Text of the top-left heading cell.
+    size : float
+        Font size.
+    row_h : float
+        Row depth.
+    label_w : float
+        Label column width before section headings.
+    name_w : float
+        Width of every stream column.
+    span : float
+        Total width a section heading needs; resolved per layout by
+        :func:`_section_span`.
     """
     streams: list
     cells: list
@@ -874,24 +919,48 @@ class _Measured(NamedTuple):
 
 
 def _section_span(m: "_Measured", columns: int) -> float:
-    """The label column's width once a section heading has to fit over
-    *columns* stream columns beside it.
+    """Return the label column width needed to fit section headings.
 
-    A section header spans the whole table, so it is the total width it
-    constrains rather than any one column; the row label column is the
-    only one free to take up the slack.
+    Section headings span the table, so the label column takes up any
+    shortfall.
+
+    Parameters
+    ----------
+    m : _Measured
+        Measurements.
+    columns : int
+        Stream columns beside the label column.
+
+    Returns
+    -------
+    float
+        Label column width.
     """
     return max(m.label_w, m.span - m.name_w * columns)
 
 
 def _stream_rows(m: "_Measured", streams: list, cells: list,
                  label_w: float) -> list[list[StreamCell]]:
-    """The table's cells, row by row, for the *streams* given.
+    """Return the table's cells row by row for the given columns.
 
-    The whole table passes all of them and a block of a table sheet
-    passes its own slice, which is what makes each block carry the
-    heading row again: the row is built here, from whatever columns this
-    block has, rather than being copied off a table that was built once.
+    A table sheet block passes its own slice, so each block gets its own
+    heading row.
+
+    Parameters
+    ----------
+    m : _Measured
+        Measurements.
+    streams : list[Stream]
+        Heading streams for these columns.
+    cells : list[dict]
+        Values for these columns.
+    label_w : float
+        Label column width.
+
+    Returns
+    -------
+    list[list[StreamCell]]
+        Rows.
     """
     rows: list[list[StreamCell]] = [
         [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
@@ -912,8 +981,24 @@ def _stream_rows(m: "_Measured", streams: list, cells: list,
 
 def _stream_table(m: "_Measured", streams: list, cells: list,
                   label_w: float) -> StreamTable:
-    """One ruled table over the columns given: the whole thing, or one
-    block of a table sheet."""
+    """Return a table over the given columns: whole, or one sheet block.
+
+    Parameters
+    ----------
+    m : _Measured
+        Measurements.
+    streams : list[Stream]
+        Heading streams.
+    cells : list[dict]
+        Values.
+    label_w : float
+        Label column width.
+
+    Returns
+    -------
+    StreamTable
+        Table geometry.
+    """
     rows = _stream_rows(m, streams, cells, label_w)
     return StreamTable(rows, m.size, m.row_h,
                        label_w + m.name_w * len(streams),
@@ -921,19 +1006,26 @@ def _stream_table(m: "_Measured", streams: list, cells: list,
 
 
 def stream_table_layout(fs) -> "StreamTable | None":
-    """Where every cell of the stream table goes and what is in it, or
-    ``None`` for a flowsheet with nothing to tabulate.
+    """Return the stream table docked on a diagram, as one block.
 
-    The table is measured from its own contents and placed at whatever
-    it comes to -- the sheet is grown around it, or a page too small for
-    it is refused -- so unlike a title-block cell there is no fixed room
-    here to abbreviate into. A stream table that cannot show ``0.0441
-    kg/kg total`` is not a stream table.
+    Measured from its contents, never abbreviated; the sheet grows to fit
+    or a too-small page is refused. :func:`stream_table_sheet` lays the same
+    table out on a sheet of its own.
 
-    This is the table drawn **on** a diagram, in one block, however wide
-    that comes to. :func:`stream_table_sheet` is the same table given a
-    sheet of its own, where the page it has to fit is known and the
-    columns are cut into blocks against it.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    StreamTable or None
+        Table geometry, or ``None`` with nothing to tabulate.
+
+    Raises
+    ------
+    ValueError
+        If the stream-table options are invalid.
     """
     m = _measure(fs)
     if m is None:
@@ -943,18 +1035,28 @@ def stream_table_layout(fs) -> "StreamTable | None":
 
 
 def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
-    """Measure the table, or ``None`` for a flowsheet with nothing to
-    tabulate.
+    """Return the table's measurements, or ``None`` with nothing to tabulate.
 
-    Nothing to tabulate is answered twice, and the second is the one
-    that matters: no stream gets a column (:func:`_table_streams`), or
-    no stream states a property, which leaves the columns that did get
-    one with no row to fill. Both are a grid of headings over nothing,
-    and a heading is not a stream table either.
+    Nothing to tabulate means no run gets a column, or no run states a
+    property.
 
-    ``own_sheet`` says the table is the body of a sheet of its own
-    rather than a block docked at the foot of a diagram, which changes
-    one thing and only one: the type size nobody stated. See below.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    own_sheet : bool, default=False
+        The table is a sheet of its own, which changes only the default
+        type size.
+
+    Returns
+    -------
+    _Measured or None
+        Measurements.
+
+    Raises
+    ------
+    ValueError
+        If the stream-table options are invalid.
     """
     runs = _table_runs(fs)
     if not runs:
@@ -962,10 +1064,7 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
     streams = [run[0] for run in runs]  # what each column is headed from
     cells = [_run_values(run) for run in runs]  # and what goes down it
 
-    # property rows in first-seen order (dict preserves insertion order),
-    # over every segment of a run for the reason its column was kept
-    # over every segment: the row belongs to the sheet, and a run that
-    # names a property anywhere has named it.
+    # Property rows in first-seen order over every segment of every run.
     order, seen = [], set()
     for run in runs:
         for s in run:
@@ -990,50 +1089,19 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
             f"how many columns it has"
         )
     if asked is None and own_sheet:
-        # A table on its own sheet has nothing to shrink *for*. The rule
-        # below trades type size for width because a table drawn beside
-        # a diagram has one row of columns and no way to make more room;
-        # a table sheet makes room by wrapping, so shrinking as well
-        # would letter a twenty-column sheet at 8 units to fit a page it
-        # already fits. The author's own `font_size` still rules, and is
-        # how a table too *deep* for its page is brought back onto it.
-        #
-        # **Whether or not a page was named**, which is why this reads
-        # `own_sheet` and not "did it wrap". A sheet grown to its
-        # contents does not wrap -- there is no width to wrap against --
-        # but sizing it off the column count instead would letter the
-        # same twenty-one streams at 9.05 unpaged and 10.5 on A2: two
-        # different drawings of one table, differing for a reason
-        # nothing on either sheet shows. One rule for the sheet, and the
-        # page decides how it is cut up rather than how it is lettered.
+        # A table sheet wraps columns rather than shrinking type, paged or
+        # not, so one table is lettered the same on any sheet.
         size, row_h, ruled = _BASE_SIZE, _ROW_H, 1.0
     elif asked is None:
-        # As it always was: 10.5 while the columns fit, then shrunk so
-        # that a long value still sits inside a column already at its
-        # minimum width. That last clause is why the minimums do not
-        # shrink with it -- shrinking them would rule a 55-column table
-        # too narrow to track a row across, which is the failure they
-        # were put there to prevent.
+        # 10.5 up to 18 columns, then smaller. The column floors do not
+        # shrink, so a wide table stays readable across.
         size = _BASE_SIZE if n <= 18 else max(8.0, 190.0 / n)
         row_h = _ROW_H if n <= 18 else max(15.0, size + 5)
         ruled = 1.0
     else:
-        # A size the author stated is the author overruling that
-        # judgement, for a sheet that has to fit a given page. So it
-        # rules the table and not only its lettering: the row height and
-        # both minimum widths are taken as multiples of _BASE_SIZE and
-        # follow it down. Setting only the glyphs would leave the table
-        # its whole footprint and the feature would do nothing at all
-        # for the sheet that needed it -- every column of a table of
-        # short names and short values is at its floor.
-        #
-        # Everything else already followed: each column is measured from
-        # `text_width(..., size)` and only *held up* by a floor.
-        # _STREAM_GUTTER and _STREAM_PAD do not scale and are not meant
-        # to. They are the clearance between a rule and a glyph, which
-        # is about the eye and the printer rather than about the type,
-        # and the draw.io exporter states the pad as a cell inset of its
-        # own.
+        # A stated size scales the row height and column floors too, so the
+        # table's footprint shrinks with it. The gutter and pad do not
+        # scale: they are clearances, not type.
         size = asked
         ruled = size / _BASE_SIZE
         row_h = _ROW_H * ruled
@@ -1042,41 +1110,26 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
         if k in sec_before:
             disp.append(("section", sec_before[k]))
         disp.append(("data", k))
-    # The corner cell has to be true of every column under it, so the
-    # table only calls itself a line-number table when every line drawn
-    # in it is identified that way.
+    # "Line Number" only when every column has a line number.
     heading = ("Line Number" if all(s.has_line_number for s in streams)
                else "Stream Number")
 
-    # Every column is sized to what goes in it, and held up to a floor
-    # the sheet may lower or drop (`fs.stream_table.label_width` /
-    # `.column_width`). The floor's default keeps a table of
-    # two-character names and three-figure values from being ruled too
-    # narrow to read across; dropping it is the author saying this table
-    # is not that one.
+    # Size columns to their content, held up to a floor the sheet may lower
+    # or drop (label_width, column_width).
     labels = [heading] + [key for kind, key in disp if kind == "data"]
     label_w = max(_width_floor(options.label_width, "label_width", ruled),
                   max(text_width(t, size, bold=True)
                       for t in labels) + _STREAM_GUTTER)
     values = [_stream_cell_text(c, key) for kind, key in disp if kind == "data"
               for c in cells]
-    # One width for every stream column, measured over every heading and
-    # every value in the table. That is not a shortcut and it does not
-    # relax when the floor is dropped: a stream table is read down for
-    # one stream and across for one property, so columns that did not
-    # line up would be a worse drawing than wide ones. It also settles
-    # the only way a column could be ruled narrower than its own
-    # heading -- the headings are in the same measurement as the values.
+    # One width for every stream column, over all headings and values, so
+    # columns line up when read across.
     name_w = max(_width_floor(options.column_width, "column_width", ruled),
                  max((text_width(s.name, size, bold=True) for s in streams),
                      default=0.0) + _STREAM_GUTTER,
                  max((text_width(v, size) for v in values), default=0.0)
                  + _STREAM_GUTTER)
-    # What a section header needs, left unresolved: it spans the whole
-    # table, so it is the total width it constrains rather than any one
-    # column, and how much of that the label column has to take up
-    # depends on how many stream columns stand beside it. See
-    # :func:`_section_span`.
+    # Width a section heading needs; resolved per layout by _section_span.
     sections = [label for kind, label in disp if kind == "section"]
     span = max((text_width(t, size, bold=True) for t in sections),
                default=0.0) + _STREAM_GUTTER
@@ -1084,23 +1137,26 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
                      label_w, name_w, span)
 
 
-#: How many rows deep the white space between two blocks of a table
-#: sheet is. One row rather than a fixed number of units, so the gap
-#: follows the type: a table sized down to fit its page does not keep a
-#: gap ruled for lettering half again as big.
+# Gap between table-sheet blocks, in rows, so it follows the type size.
 _BLOCK_ROWS = 1.0
 
 
 class TableSheet(NamedTuple):
-    """The stream table as the body of a sheet of its own: the same
-    table, cut into blocks stacked one above the other.
+    """Stream table on a sheet of its own, cut into stacked blocks.
 
-    ``w`` is the widest block and ``h`` the whole stack, gaps included,
-    which is what the sheet is sized against. The blocks are drawn
-    flush left with one another rather than each centred on its own
-    width: a reader tracks a property row from one block to the next
-    down the left-hand column, and a ragged left edge is what stops
-    them. See :meth:`at`.
+    Blocks are flush left, so property rows can be followed down the
+    label column (:meth:`at`).
+
+    Attributes
+    ----------
+    blocks : list[StreamTable]
+        Blocks, top to bottom.
+    gap : float
+        Space between blocks.
+    w : float
+        Widest block.
+    h : float
+        Whole stack, gaps included.
     """
     blocks: list
     gap: float
@@ -1108,9 +1164,20 @@ class TableSheet(NamedTuple):
     h: float
 
     def at(self, left: float, top: float):
-        """Each block with the corner it is drawn from, given the corner
-        the stack is drawn from. Both backends place blocks through
-        this, so neither owns the stacking."""
+        """Yield each block with the corner it is drawn from.
+
+        Both backends place blocks through this.
+
+        Parameters
+        ----------
+        left, top : float
+            Corner of the stack.
+
+        Yields
+        ------
+        tuple[int, StreamTable, float, float]
+            ``(index, block, x, y)``.
+        """
         y = top
         for i, block in enumerate(self.blocks):
             yield i, block, left, y
@@ -1118,26 +1185,23 @@ class TableSheet(NamedTuple):
 
 
 def _blocks_of(n: int, count: int) -> list:
-    """*n* columns shared out over *count* blocks, as evenly as they go:
-    ``n // count`` each, and the ``n % count`` left over handed one
-    apiece to the blocks at the front.
+    """Return ``n`` column indices shared evenly over ``count`` blocks.
 
-    The blocks come out one column apart at worst -- twenty-one over
-    three is 7/7/7, over two is 11/10, ten over four is 3/3/2/2 --
-    because two blocks of nearly a page each read as one table where a
-    full block beside a stub reads as an afterthought.
+    Each block gets ``n // count``, with the remainder one apiece to the
+    first blocks, so blocks differ by at most one column (ten over four is
+    3/3/2/2). :func:`_partition` measures these exact shapes.
 
-    It used to promise that and not do it. Filling ``ceil(n / count)``
-    columns into each block and letting the last take the remainder
-    gives ten over four as **3/3/3/1**, three columns apart, and ten
-    over six as five blocks rather than six -- a count the caller asked
-    about and never got an answer for. Both mattered, because
-    :func:`_partition` chooses by *measuring* what this returns: the
-    stub in 3/3/3/1 is the narrowest block, the shared label column is
-    widened against the narrowest block to carry a section heading
-    (:func:`_section_span`), and so a partition that fits was measured
-    as one that does not and rejected. The malformed shape was not a
-    tidiness complaint; it was the search's own input, wrong.
+    Parameters
+    ----------
+    n : int
+        Number of columns.
+    count : int
+        Number of blocks; capped at ``n``.
+
+    Returns
+    -------
+    list[list[int]]
+        Column indices per block.
     """
     count = min(count, n)  # an empty block is not a block
     per, extra = divmod(n, count)
@@ -1150,48 +1214,27 @@ def _blocks_of(n: int, count: int) -> list:
 
 
 def _partition(m: "_Measured", n: int, room: "float | None") -> list:
-    """How the stream columns are cut into blocks for a page *room* units
-    wide, or one block for a sheet with no page to fit.
+    """Return the fewest blocks whose ruled width fits ``room``.
 
-    **Measured on the width the blocks are actually ruled at**, which is
-    the whole of this function's reason for being separate. A block is
-    as wide as its stream columns *plus the label column*, and the label
-    column is widened to carry a section heading across the narrowest
-    block (:func:`_section_span`) -- so the width cannot be known until
-    the partition is chosen, and a capacity worked out before the
-    widening is a capacity the finished table can exceed.
+    The width depends on the partition, because the label column widens to
+    carry a section heading over the narrowest block
+    (:func:`_section_span`), so each block count is measured as drawn
+    rather than computed from a capacity. If no count fits, one column per
+    block is returned and the sheet reports the page as too small.
 
-    That is not hypothetical: twenty-one streams under a long section
-    heading were cut 11/10 from a capacity of eleven, then ruled wider
-    than the A4 they were cut for, and the page was reported too small
-    for a table that fits it three blocks of seven. The sheet was
-    refused for not fitting when a partition that fits existed, which is
-    the feature failing at its job rather than a bookkeeping slip.
+    Parameters
+    ----------
+    m : _Measured
+        Measurements.
+    n : int
+        Number of stream columns.
+    room : float or None
+        Page width for the table, or ``None`` for one block.
 
-    So the count is searched rather than divided out: the **fewest**
-    blocks whose ruled width fits, fewest because fewer blocks are wider
-    blocks and a shorter sheet, and every count is asked with the width
-    it would really be drawn at.
-
-    What the search promises against the division it replaced is one
-    thing and not two. It **never returns more blocks**: if the
-    division's own count fitted, the loop reaches that count and returns
-    there at the latest, so the answer is that count or fewer. It does
-    *not* promise the same count. The division works out a capacity by
-    ``(room - label_w) // name_w``, and floor division on floats is not
-    the floor of the quotient -- where the room is an exact multiple of
-    a column the subtraction can round below it, and a page that holds
-    seven columns is read as holding six and the table is wrapped that
-    did not need wrapping. An earlier draft of this function claimed the
-    two were arithmetically identical wherever no section heading
-    widened anything; a sweep of the no-heading cases found the claim
-    false, in the direction of the search being right and the division
-    wrong. It is a correction, and it is stated as one.
-
-    A table that fits at no count at all falls back to one column per
-    block, the narrowest a table can be ruled: it is then a page too
-    small however it is cut, which the sheet reports in those words
-    rather than this function guessing at.
+    Returns
+    -------
+    list[list[int]]
+        Column indices per block.
     """
     if room is None:
         return [list(range(n))]
@@ -1205,43 +1248,38 @@ def _partition(m: "_Measured", n: int, room: "float | None") -> list:
 
 
 def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
-    """The stream table laid out for a sheet of its own, wrapped into as
-    many blocks as *room* units of page width takes.
+    """Return the stream table laid out as a sheet of its own.
 
-    ``room`` is the width the sheet has for the table, or ``None`` for a
-    sheet with no fixed page, which has no width to wrap against and
-    takes the table in one block. **The count comes from the page and
-    never from a constant**: how many streams fit across is a fact about
-    this table's columns on this paper, and a fixed "twelve per block"
-    would wrap a sheet that did not need it and overrun one that did.
+    The block count comes from the page width (:func:`_partition`), and
+    columns are shared evenly (:func:`_blocks_of`). Type size, row depth
+    and column widths are the same with or without a page
+    (:func:`_measure`). Every block repeats the heading row and shares one
+    ruling.
 
-    The *ruling* does not depend on the page in the same way. Type size,
-    row depth and column widths are the sheet's own whether or not one
-    was named (:func:`_measure`), so an unpaged table sheet is the paged
-    one with the cutting left out.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    room : float or None
+        Page width for the table, or ``None`` for one block.
 
-    The columns are then shared out **evenly** rather than filled to the
-    brim and left with a remainder: twenty-one streams that fit twelve
-    across come out as eleven and ten, not twelve and nine, because two
-    blocks of nearly a page each read as one table and a stub of three
-    columns reads as an afterthought.
+    Returns
+    -------
+    TableSheet or None
+        Stacked blocks, or ``None`` with nothing to tabulate.
 
-    Every block carries the heading row again (:func:`_stream_rows`),
-    and every block is ruled to one measurement -- one type size, one
-    row depth, one stream-column width, one label column -- so the
-    second block is read exactly as the first.
-
-    Returns ``None`` for a flowsheet with nothing to tabulate, the same
-    answer :func:`stream_table_layout` gives and for the same reasons.
+    Raises
+    ------
+    ValueError
+        If the stream-table options are invalid.
     """
     m = _measure(fs, own_sheet=True)
     if m is None:
         return None
     n = len(m.streams)
     chunks = _partition(m, n, room)
-    # The label column is widened for a section heading against the
-    # *smallest* block, so the heading fits in every block and one
-    # ruling still answers for all of them.
+    # Widen the label column against the smallest block so one ruling
+    # fits every block.
     label_w = _section_span(m, min(len(c) for c in chunks))
     blocks = [_stream_table(m, [m.streams[i] for i in c],
                             [m.cells[i] for i in c], label_w)
@@ -1252,16 +1290,21 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
 
 
 def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
-    """The corner the block stack is drawn from, given the region a
-    fixed page left for it (``None`` for a sheet grown to its contents,
-    which starts the stack at the origin the frame was grown around).
+    """Return the corner the block stack is drawn from.
 
-    Centred across the page and hard against the top of it. Centred
-    because a table is the whole body of this sheet and a body hugging
-    one margin reads as a drawing that lost its left half; at the top
-    because a table is read from its first row down, and floating the
-    stack in the middle of the page puts a gap between the frame and
-    the heading that a reader takes for a missing block.
+    Centred across the page and against its top.
+
+    Parameters
+    ----------
+    table : TableSheet
+        Stacked blocks.
+    free : tuple[float, float, float, float] or None
+        Region a fixed page leaves, or ``None`` for a grown sheet.
+
+    Returns
+    -------
+    tuple[float, float]
+        Top-left of the stack; the origin for a grown sheet.
     """
     if free is None:
         return (0.0, 0.0)
@@ -1271,18 +1314,23 @@ def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
 
 def draw_stream_table(table: StreamTable, left: float, top: float, *,
                       group: str = "stream_table") -> list[str]:
-    """Draw the table with its top-left corner at (``left``, ``top``).
+    """Return the stream table drawn with its top-left at ``(left, top)``.
 
-    The geometry is :func:`stream_table_layout`'s; this strokes it,
-    exactly as :func:`draw_title_strip` strokes
-    :func:`title_strip_layout`. Every cell is ruled on all four sides --
-    a stream table really is a grid, read across for one property and
-    down for one stream -- at the weight a grid beside a drawing is
-    ruled at rather than the weight a box around one is.
+    Every cell is ruled on all four sides at :data:`_CELL_RULE`.
 
-    ``group`` names the group the cells go in. A sheet carrying blocks
-    of one table has to number them: two elements under one id is not a
-    document, and the id is how a reader of the file finds the table.
+    Parameters
+    ----------
+    table : StreamTable
+        Layout from :func:`stream_table_layout`.
+    left, top : float
+        Top-left corner.
+    group : str, default="stream_table"
+        Group id; table-sheet blocks need distinct ids.
+
+    Returns
+    -------
+    list[str]
+        SVG elements.
     """
     out = [f'<g id="{group}">']
     y = top
@@ -1310,58 +1358,43 @@ def draw_stream_table(table: StreamTable, left: float, top: float, *,
 # title, status, drawing number / scale / date / rev)
 # ----------------------------------------------------------------
 
-#: The weight the strip's own rectangle is ruled at. It is the frame's
-#: weight too, and it docks flush to the frame, so the two rules are
-#: coincident and the corner of the sheet reads as one heavy line rather
-#: than two.
+# Strip rectangle weight, equal to the frame's, so the flush-docked rules
+# coincide.
 _STRIP_RULE = 2.0
-#: The hairline the strip rules a revision column and a bottom-band cell
-#: with: light enough that the grid does not compete with the drawing
-#: above it.
+# Hairline for revision columns and bottom-band cells.
 _STRIP_HAIRLINE = 0.5
 
 _REV_W = 300.0
 _COMPANY_W = 100.0
 _INFO_W = 252.0
 _REV_ROW = 14.0
-# (heading, width, the Revision field the column draws). The widths sum
-# to _REV_W. DATE is 50 because a full ISO 8601 date at 7.5 with a
-# gutter either side comes to that, and at 42 it ran over its own rule.
+# (heading, width, Revision field). Widths sum to _REV_W; DATE fits a full
+# ISO 8601 date at 7.5 with gutters.
 _REV_COLS = (("REV", 22, "rev"), ("DATE", 50, "date"),
              ("DESCRIPTION", 132, "description"), ("BY", 32, "by"),
              ("CHK'D", 32, "checked"), ("APP'D", 32, "approved"))
 # Gutter between a revision cell's rule and its text, left and right.
 _REV_PAD = 3.0
-#: Which block-level field fills a revision column the newest row leaves
-#: blank. Those three columns are the only place on the sheet the strip
-#: letters a signatory, so a block-level name is drawn there or nowhere;
-#: :func:`pandid.validate.model_issues` reads this table to say which of
-#: the three the sheet is dropping and why.
+# Block-level field that fills each signatory column the newest revision
+# leaves blank; pandid.validate reads it to report undrawn signatories.
 _BACKFILL = {"by": "drawn_by", "checked": "checked_by",
              "approved": "approved_by"}
 # The title / status / drawing-number bands, which every sheet carries.
 _BODY_H = 80.0
-# The sheet count is drawn top-right of the title band, on the same line
-# as the title. A fixed slot keeps the title's own budget constant: how
-# much of a drawing's title survives must not depend on how many sheets
-# the set happens to have. Sized for "SHEET 1 of 12" at 7.5; a longer
-# count is drawn whole and reported, since half a sheet count reads as a
-# different sheet.
+# Fixed slot for the sheet count at the top right of the title band, so
+# the title's room does not depend on the count. Sized for "SHEET 1 of 12"
+# at 7.5; a longer count is drawn whole and reported.
 _SHEET_W = 55.0
 _TITLE_W = _INFO_W - 10 - _SHEET_W
-# One client or project line above them. Neither is an ISO 7200 field:
-# its mandatory "legal owner" is the issuing organisation, which is the
-# company cell. An issued sheet names both anyway, so the pair heads the
-# information block; a block that names neither is ruled no row for
-# them.
+# Client and project rows above the bands, ruled only when set. Neither is
+# an ISO 7200 field; its legal owner is the company cell.
 _HDR_ROW = 13.0
 _HDR_VALUE_X = 40.0
-# How the information block's depth is shared between the title band,
-# the status band and the drawing-number band that carries the rest.
+# Shares of the information block's depth for the title and status
+# bands; the drawing-number band takes the rest.
 _TITLE_BAND, _STATUS_BAND = 0.40, 0.28
 
-# The type the strip is lettered in, band by band. Named because a
-# second backend letters the same bands.
+# Type sizes per band, shared with draw.io.
 _REV_TYPE = 7.5        # a revision cell, and the sheet count in the title band
 _CAPTION = 6.5         # the small grey label sitting over a field's value
 _COMPANY_TYPE = 8.0
@@ -1370,95 +1403,58 @@ _TITLE_TYPE = 12.5
 _SUBTITLE_TYPE = 10.5
 _VALUE_TYPE = 11.0     # a status, a drawing number, a scale, a date, a rev
 
-#: The ink a caption is set in, which is what holds it back from the
-#: value under it: a caption names the field and the value is the
-#: drawing's own information, so the two are not read at the same
-#: weight.
+#: Caption ink, lighter than the value it labels.
 CAPTION_INK = "#666"
 
 
-#: Baseline-to-baseline spacing of the company cell's wrapped lines.
+# Line spacing of the company cell's wrapped lines.
 _COMPANY_LEAD = 12.0
 
 
 def _field(obj, name: str) -> str:
-    """A title-block field as the strip reads it: what the author
-    stated, stripped, and blank only where they stated nothing.
+    """Return a title-block field as the author stated it, stripped.
 
-    A field of nothing but spaces is *truthy*, so it defeated every
-    fallback the block has. ``tb.title or name`` drew three spaces
-    instead of the flowsheet's name; ``tb.status or "\u2014"`` and the
-    drawing number's dash likewise; a whitespace ``client`` or
-    ``project`` ruled an empty row and made the whole strip taller; a
-    whitespace ``scale`` turned the four-cell bottom band on with
-    nothing to put in it; and a whitespace ``company`` was accepted,
-    wrapped to no lines and drawn nowhere. Six of the block's fields
-    answered differently from the blank they mean, and none of them said
-    so -- the same class of silent wrong answer as the rest of this
-    strip, arrived at through truthiness rather than through width.
+    Whitespace counts as blank, so fallbacks such as the flowsheet name
+    still apply. Only ``None`` is unset, so ``sheet=0`` draws ``0``; the
+    text conversion is :func:`pandid.document._drawn_text`, shared with
+    the spec reader. Read here rather than normalised on the dataclass,
+    because fields are edited after construction. :func:`_stated` adds
+    the field's default.
 
-    Read *here* and not normalised on the dataclass because a block is
-    edited after it is built -- ``fs.title_block.title = ...`` is the
-    documented way to shorten a field and re-render -- and a
-    ``__post_init__`` sees only what it was constructed with. Reading
-    through one function also keeps :func:`measure_title_strip` and
-    :func:`title_strip_layout` from disagreeing about whether a row
-    exists, which is what would make the strip's own height wrong.
+    Parameters
+    ----------
+    obj : TitleBlock or Revision
+        Object to read.
+    name : str
+        Field name.
 
-    This answers *what the author stated*, which is what decides which
-    field a finding names and whether a signatory is the block's to
-    backfill. What a cell **draws** is :func:`_stated`, one layer up:
-    the same read, with the block's own default behind it.
-
-    **Unset, not falsey.** The question this asks is whether the author
-    put anything in the field, and truthiness only answers that for
-    strings. Every field here is annotated ``str`` and nothing enforces
-    it, so ``TitleBlock(sheet=1, of_sheets=3)`` is a perfectly ordinary
-    thing to type and has always worked -- ``str(1)`` is ``"1"``. But
-    ``sheet=0`` is falsey, so a truthy read discarded it as blank, and
-    then :func:`_stated` filled the cell with the field's default: an
-    author who stated sheet **0** was issued sheet **1**. That is this
-    module's own subject committed by the code meant to fix it -- a
-    stated value silently changed to a different stated value, which is
-    worse than the blank it was guarding, because blank at least meant
-    *unset*.
-
-    So the test is ``is None`` and everything else is drawn as written.
-    Refusing a non-string at the door was the other defensible answer
-    and is not the one taken: it would break ``sheet=1``, which reads
-    naturally, works today, and has nothing to do with the defect.
-
-    Which of the two doors that is settled is why the reading itself is
-    :func:`pandid.document._drawn_text` and not four words here. The
-    spec reader has to arrive at the same text for the same value or
-    ``from_dict(fs.to_dict())`` draws a different sheet from the one it
-    was handed, and for a while it did not arrive at any text at all --
-    it refused the ``0`` (#506). Strip is this end's alone: a cell
-    letters nothing for a run of spaces, but a *file* keeps what its
-    author typed.
-
-    :func:`pandid.document._clean` strips a location reference's parts
-    for the reason this strips a drawing field: whitespace at the ends
-    of either has nothing it could draw.
+    Returns
+    -------
+    str
+        Stripped text, empty when unset.
     """
     return _drawn_text(getattr(obj, name, None)).strip()
 
 
-#: :func:`_class_defaults` per class, since the answer is a property of
-#: the class and the question is asked once per cell per render.
+# Cache for _class_defaults.
 _DEFAULTS: "dict[type, dict[str, str]]" = {}
 
 
 def _class_defaults(cls: "type[Any]") -> "dict[str, str]":
-    """Every plain-string default the dataclass *cls* states, by field
-    name. A field built by a factory (``revisions``) has no such default
-    and is not listed, which is how the block's one list field leaves
-    itself out without being named here.
+    """Return a dataclass's plain-string field defaults, cached per class.
 
-    A class that is not a dataclass at all states nothing, for
-    :func:`_field`'s reason: the strip reads whatever it is handed and
-    draws a blank where there is nothing to draw, rather than raising
-    over the shape of the object.
+    Factory fields such as ``revisions`` are omitted; a non-dataclass has
+    none.
+
+    Parameters
+    ----------
+    cls : type
+        Class to read.
+
+    Returns
+    -------
+    dict[str, str]
+        Field name to default.
     """
     known = _DEFAULTS.get(cls)
     if known is None:
@@ -1470,49 +1466,42 @@ def _class_defaults(cls: "type[Any]") -> "dict[str, str]":
 
 
 def _stated(obj, name: str) -> str:
-    """The value a strip cell **draws** for a field: what the author
-    wrote (:func:`_field`), and where that is blank, the default the
-    field's own dataclass states for it.
+    """Return the value a strip cell draws: the stated field, else its default.
 
-    Every field of :class:`~pandid.document.TitleBlock` defaults to the
-    empty string bar two. ``sheet`` and ``of_sheets`` default to
-    ``"1"``, because a drawing with no set behind it is sheet 1 of 1 and
-    the block says so in its own signature. Left blank they drew
-    ``SHEET  of 1`` -- and a count with half of it missing is what the
-    slot's own note calls *a different sheet*. Nothing reported it
-    either: the string as a whole is well inside its 55 units, so no
-    cell was over its room and there was nothing for :func:`check_fit`
-    to say. Accepted, drawn meaningless, and issued.
+    Defaults come from the dataclass, so a blank ``sheet`` or ``of_sheets``
+    draws ``1`` as an unset one does, rather than ``SHEET  of 1``.
 
-    The fallback is **read off the dataclass** rather than written here
-    so that the two cannot say different things. An author reads ``sheet:
-    str = "1"`` on the block; that is what an unset field draws, and it
-    is now what a blank one draws too. It also settles the next field
-    somebody gives a default to on the day it is added rather than the
-    day a cell is noticed drawing half of it.
+    Parameters
+    ----------
+    obj : TitleBlock or Revision
+        Object to read.
+    name : str
+        Field name.
 
-    Read here and not in ``__post_init__`` for :func:`_field`'s reason:
-    ``fs.title_block.sheet = "  "`` after the block is built has to
-    answer the same way, and a dataclass hook sees only construction.
+    Returns
+    -------
+    str
+        Text to draw.
     """
     return _field(obj, name) or _class_defaults(type(obj)).get(name, "")
 
 
 def company_lines(company: str) -> list[str]:
-    """The company name broken into the lines its cell stacks.
+    """Return the company name wrapped into the lines its cell stacks.
 
-    The company cell is the one on the strip that *wraps*, because a
-    company name is several words and the cell is a hundred units wide.
-    It is also the one where breaking mid-word is not available: a
-    hyphen the author did not write invents a name, so a single word
-    wider than the cell is drawn whole and reported (:func:`check_fit`)
-    rather than split.
+    Breaks only between words; a word wider than the cell is kept whole
+    and reported by :func:`check_fit`. Shared with
+    :func:`pandid.validate.model_issues`, which checks the line count.
 
-    A function rather than four lines inside the layout because
-    :func:`pandid.validate.model_issues` has to count the lines to know
-    whether they still fit the strip's depth, and a second wrapper
-    written to answer that would be a second opinion about where the
-    breaks fall.
+    Parameters
+    ----------
+    company : str
+        Company name.
+
+    Returns
+    -------
+    list[str]
+        Lines.
     """
     line, lines = "", []
     for word in company.split():
@@ -1528,19 +1517,21 @@ def company_lines(company: str) -> list[str]:
 
 
 def company_overflow(tb) -> "tuple[int, float, float] | None":
-    """``(line count, room, need)`` when the company name wraps to more
-    lines than the strip is deep, or ``None``.
+    """Return how far the wrapped company name overruns the strip's depth.
 
-    The cell is centred on the strip's depth, so a name that wraps to
-    more lines than fit does not stop at the rule: it runs *out of the
-    strip*, over the drawing above and off the sheet below, and the
-    per-line width check above sees nothing wrong because every line is
-    within its width. It is the one way this block loses a value in a
-    direction the rest of the strip cannot.
+    The cell is centred on the strip, so too many lines run out of the
+    strip top and bottom, which no per-line width check sees. The room is
+    the strip's full depth (:func:`measure_title_strip`).
 
-    The depth is the strip's own, since the company cell is ruled the
-    full height of it (:func:`measure_title_strip`), so a block with a
-    revision history or a client line has more room than a bare one.
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    tuple[int, float, float] or None
+        ``(line count, room, need)``, or ``None`` if it fits.
     """
     lines = company_lines(_stated(tb, "company"))
     _, room = measure_title_strip(tb)
@@ -1549,26 +1540,24 @@ def company_overflow(tb) -> "tuple[int, float, float] | None":
 
 
 def undrawn_signatories(tb) -> "list[tuple[str, str, str]]":
-    """``(field, value, displaced_by)`` for every block-level signatory
-    the strip does not letter anywhere.
+    """Return the block-level signatories the strip does not draw.
 
-    ``drawn_by``/``checked_by``/``approved_by`` fill the BY / CHK'D /
-    APP'D cells of the *newest* revision row (:data:`_BACKFILL`), which
-    is the only place on the sheet those three columns exist. So a
-    block-level name is drawn in that row or it is drawn nowhere, and it
-    goes undrawn two ways: there is no revision at all, and
-    ``displaced_by`` is empty; or the newest revision states a signatory
-    of its own, which is the more specific claim and keeps the cell.
-    A row stating the *same* name displaces nothing -- the value is on
-    the sheet, and which field put it there is nobody's problem.
+    ``drawn_by``, ``checked_by`` and ``approved_by`` fill the newest
+    revision row's BY, CHK'D and APP'D cells (:data:`_BACKFILL`). They go
+    undrawn when there is no revision, or when the newest revision names a
+    different signatory. Kept here so :func:`title_strip_layout` and
+    :mod:`pandid.validate` read the fields the same way.
 
-    Here rather than in :mod:`pandid.validate` because it is the same
-    question :func:`title_strip_layout` answers when it fills the row,
-    asked of the same fields through the same :func:`_field`. Derived a
-    second time in the validator, the two disagreed the moment one of
-    them learned that a whitespace ``by`` is not a value: the strip
-    backfilled the row and the validator reported an override that had
-    not happened.
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        ``(field, value, displaced_by)``; ``displaced_by`` is empty when
+        there is no revision row.
     """
     out: list[tuple[str, str, str]] = []
     newest = tb.revisions[-1] if tb.revisions else None
@@ -1587,33 +1576,62 @@ def undrawn_signatories(tb) -> "list[tuple[str, str, str]]":
 
 
 def _header_lines(tb) -> list[tuple[str, str]]:
+    """Return the client and project rows that are set.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        ``(label, value)`` pairs.
+    """
     return [(label, value) for label, value
             in (("CLIENT", _stated(tb, "client")),
                 ("PROJECT", _stated(tb, "project"))) if value]
 
 
 def measure_title_strip(tb) -> tuple[float, float]:
+    """Return the title strip's size.
+
+    The depth is the larger of the revision grid and the information
+    bands, plus a row for each of client and project.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(width, height)``.
+    """
     n = len(tb.revisions)
     h = max((n + 1) * _REV_ROW, _BODY_H) + _HDR_ROW * len(_header_lines(tb))
     return _REV_W + _COMPANY_W + _INFO_W, h
 
 
 class RevGrid(NamedTuple):
-    """The revision history, as the grid it is rather than as ink.
+    """Revision history grid geometry, shared by both backends.
 
-    ``x``/``y``/``w``/``h`` is the whole left-hand column of the strip,
-    which is the rectangle the vertical rules run the full depth of;
-    ``cols`` is ``(heading, width)`` per column, ``row_h`` the depth of
-    a row, ``header_y`` the line the heading row is ruled off at, and
-    ``rows`` the revisions **oldest first** -- top to bottom on the
-    sheet, since the heading sits at the foot and the newest revision
-    immediately above it. Every value in ``rows`` and every heading has
-    already been clipped to its own column, so a second backend cannot
-    letter the grid at a size the widths were not measured at.
+    Values and headings are already clipped to their columns. The blank
+    space above the oldest revision is not a row.
 
-    The blank paper above the oldest revision is not a row and is not
-    listed: it is the room the next revision will be written in, and the
-    sheet rules nothing across it.
+    Attributes
+    ----------
+    x, y, w, h : float
+        The strip's left-hand column.
+    cols : tuple[tuple[str, float], ...]
+        ``(heading, width)`` per column.
+    row_h : float
+        Row depth.
+    header_y : float
+        Where the heading row at the foot is ruled off.
+    rows : list[list[str]]
+        Revisions oldest first, top to bottom.
     """
     x: float
     y: float
@@ -1626,20 +1644,21 @@ class RevGrid(NamedTuple):
 
 
 class Strip(NamedTuple):
-    """The title strip, as geometry rather than as ink.
+    """Title strip geometry, shared by both backends.
 
-    :func:`zone_layout`'s pattern one level up, so that the draw.io
-    backend rules the *same* strip rather than a second opinion about
-    one.
-
-    ``box`` is the strip rectangle ``(x, y, w, h)``, ruled at 2.
-    ``rules`` is the pair of full-depth column rules that divide it into
-    revision grid, company cell and information block. ``rev`` is the
-    grid. ``parts`` is everything else, **in drawing order**: ``("rule",
-    x1, y1, x2, y2, weight)`` and ``("text", x, baseline, string, size,
-    anchor, bold, fill)``, the text stated the way SVG states it -- at a
-    baseline, with a ``text-anchor``. One list, because two would have
-    to be re-interleaved to put the ink back where it was.
+    Attributes
+    ----------
+    box : tuple[float, float, float, float]
+        Strip rectangle ``(x, y, w, h)``, ruled at 2.
+    rules : list[tuple]
+        The two full-depth rules dividing revision grid, company cell and
+        information block.
+    rev : RevGrid
+        Revision grid.
+    parts : list[tuple]
+        Everything else in drawing order: ``("rule", x1, y1, x2, y2,
+        weight)`` and ``("text", x, baseline, string, size, anchor, bold,
+        fill)``, with text placed at an SVG baseline.
     """
     box: tuple
     rules: list
@@ -1650,42 +1669,40 @@ class Strip(NamedTuple):
 def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                        fit_scale: str = "", *,
                        report: "Reporter | None" = None) -> Strip:
-    """Where every part of the title strip goes, its bottom-right corner
-    at (``right``, ``bottom``).
+    """Return the title strip layout with its bottom-right at ``(right, bottom)``.
 
-    ``fit_scale`` is the ratio the renderer actually placed the drawing
-    at, which is what the scale cell reports for a sheet that does not
-    state a scale of its own.
+    The strip is fixed geometry (ISO 15519-1 5.2.2, ISO 5457 position,
+    ISO 7200 content), so an overlong value cannot get more room:
 
-    The strip is fixed geometry -- ISO 15519-1 §5.2.2 splits the title
-    block in two and fixes both halves, where it sits to ISO 5457 and
-    how big it is and what goes in it to ISO 7200 -- so a value too long
-    for its cell cannot be given more room. What each cell does about
-    that is a property of the field it draws, and there are three
-    answers:
+    * the drawing title is set smaller down to the subtitle size
+      (:func:`fit_size`), then abbreviated;
+    * the company name wraps between words, and it and the sheet count are
+      drawn whole and reported (:func:`check_fit`);
+    * everything else is abbreviated with an ellipsis (:func:`clip`).
 
-    * the drawing **title** is lettered smaller until it fits
-      (:func:`fit_size`), because it alone is set above the strip's
-      reading size and is read straight through;
-    * the **company** cell wraps between words, and the sheet count is
-      drawn whole, because half of either reads as a different company
-      or a different sheet (:func:`check_fit`);
-    * everything else is abbreviated to an ellipsis (:func:`clip`),
-      which is what a draughtsman does and what the cell beside it makes
-      necessary.
+    Measuring happens here, so both backends draw and report the same.
 
-    ``report`` is how each such cell says which field it could not hold,
-    what it was given, what it drew and the two widths; see
-    :data:`Reporter`. The measuring happens **here** and not in either
-    stroker, so the two backends abbreviate the same field to the same
-    string and report it in the same words.
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+    name : str
+        Title fallback, normally the flowsheet name.
+    date : str
+        Date fallback, normally today's date.
+    right, bottom : float
+        Bottom-right corner.
+    fit_scale : str, default=""
+        Scale the drawing was fitted at, for a block that states none.
+    report : Reporter, optional
+        Receives a finding per cell that cannot hold its value.
+
+    Returns
+    -------
+    Strip
+        Strip geometry.
     """
-    # *name* and *date* are what the two cells fall back to, not what
-    # they draw: the block's own values win, and the choice is made
-    # here because it has to be made *after* whitespace is read as the
-    # blank it means. A caller that chose first handed on a whitespace
-    # title with the flowsheet name it should have fallen back to
-    # already thrown away, and a whitespace date with today's.
+    # name and date are fallbacks, applied after whitespace reads as blank.
     name, date = str(name or "").strip(), str(date or "").strip()
     date = _stated(tb, "date") or date
     w, h = measure_title_strip(tb)
@@ -1698,11 +1715,10 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
     # --- Revision grid (left): heading at the foot, revisions above
     def rev_cells(cells, bold=False):
-        """One row of the grid, each cell clipped to its own column.
+        """Return one grid row, each cell clipped to its column.
 
-        *cells* is a ``(value, field)`` pair per column, the field
-        naming what the author would edit; an empty field is the
-        library's own lettering and is not reported on.
+        ``cells`` is a ``(value, field)`` pair per column; an empty field
+        is library lettering and is not reported.
         """
         return [clip(v, cw - 2 * _REV_PAD, _REV_TYPE, bold,
                      field=f, report=report if f else None)
@@ -1710,9 +1726,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
     header_y = bottom - _REV_ROW
     headings = rev_cells([(c[0], "") for c in _REV_COLS], bold=True)
-    # Clipped newest first, which is the order the strip used to draw
-    # them in and so the order a caller watching ``report`` already
-    # sees; stored oldest first, which is the order they are read in.
+    # Clip newest first, so findings come in that order; store oldest first.
     newest_first = []
     for idx, rv in enumerate(reversed(tb.revisions)):
         newest = idx == 0
@@ -1720,10 +1734,8 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         row = []
         for _heading, _cw, attr in _REV_COLS:
             cell, value = f"revisions[{i}].{attr}", _stated(rv, attr)
-            # The block-level drawn/checked/approved fields backfill the
-            # newest row's signatories when that revision leaves them
-            # blank -- so the value in the cell is sometimes the block's
-            # and the finding has to name whichever field supplied it.
+            # Backfill the newest row's blank signatories from the block,
+            # naming the block field in any finding.
             block = _BACKFILL.get(attr, "")
             if newest and not value and block and _field(tb, block):
                 row.append((_stated(tb, block), f"{block} -> {cell}"))
@@ -1742,9 +1754,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         lines = company_lines(_stated(tb, "company"))
         cy = y + h / 2 - (len(lines) - 1) * _COMPANY_LEAD / 2
         for ln in lines:
-            # A word too long for the cell has no break point the
-            # wrapper may use: hyphenating a company name invents one,
-            # so it is drawn whole and said out loud instead.
+            # A word wider than the cell is drawn whole and reported.
             parts.append(("text", rx + _COMPANY_W / 2, cy,
                           check_fit(ln, _COMPANY_W - 10, _COMPANY_TYPE, True,
                                     field="company", report=report),
@@ -1771,33 +1781,13 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         hy += _HDR_ROW
     for ly in ([top] if header else []) + [band2, band3]:
         parts.append(("rule", ix, ly, x + w, ly, 0.75))
-    # title + subtitle, with sheet count tucked top-right of the title
-    # band. Both halves through :func:`_stated`, which is what keeps the
-    # count whole: blank, each falls back to the ``"1"`` the block's own
-    # signature states, so the cell reads SHEET 1 of 1 rather than
-    # ``SHEET  of 1``. A half-count is the one thing this slot must not
-    # draw -- see :data:`_SHEET_W` -- and it is not a width finding,
-    # since the short string fits its room easily.
+    # Title, subtitle, and the sheet count at the top right of the title
+    # band. Blank sheet fields fall back to "1" (_stated), so the count is
+    # never half drawn.
     sheets = f"SHEET {_stated(tb, 'sheet')} of {_stated(tb, 'of_sheets')}"
-    # The drawing title is the one value on the strip lettered *above*
-    # the strip's reading size, so it is the one with size to give back
-    # before it has meaning to give up -- and it is read straight
-    # through, where a drawing number or a date is matched character by
-    # character against another document. A draughtsman letters a long
-    # title smaller; nobody abbreviates it. So it is set down to fit,
-    # and only abbreviated below the floor.
-    #
-    # The floor is the subtitle's size, because a title lettered under
-    # it would read as the subordinate line of the two and the band
-    # would say the wrong thing about the drawing. The baseline does not
-    # move with the size: a set of sheets is scanned down the same line,
-    # and it is the lettering that varies with the title's length, not
-    # where the title sits.
-    #
-    # A block that states no title of its own draws the flowsheet's
-    # name, so the finding names *that* -- an author told "title was
-    # truncated" about a field they never set goes looking in the wrong
-    # place. Same for the three cells below it; see :data:`Reporter`.
+    # The title is set smaller to fit, down to the subtitle size, then
+    # abbreviated; its baseline stays fixed across a set of sheets. A
+    # fallback title is reported as the flowsheet name (see Reporter).
     title = _stated(tb, "title") or name
     title_type = fit_size(title, _TITLE_W, _TITLE_TYPE, _SUBTITLE_TYPE, True)
     parts.append(("text", ix + 6, top + 15,
@@ -1811,10 +1801,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                       clip(_stated(tb, "subtitle"), _INFO_W - 12, _SUBTITLE_TYPE,
                            field="subtitle", report=report),
                       _SUBTITLE_TYPE, "start", False, "black"))
-    # One cell drawn from two fields, so the finding names both: which
-    # of the two is the long one is visible in the string it quotes, and
-    # a cell that named only ``sheet`` sent an author who had set
-    # ``of_sheets`` to look at the wrong field.
+    # One cell from two fields, so the finding names both.
     parts.append(("text", x + w - 5, top + 11,
                   check_fit(sheets, _SHEET_W, _REV_TYPE,
                             field="sheet/of_sheets", report=report),
@@ -1827,39 +1814,12 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                        _VALUE_TYPE, True,
                        field="status", report=report),
                   _VALUE_TYPE, "start", True, "black"))
-    # Bottom band: DRAWING No | SCALE | DATE | REV. Keeping the scale
-    # with the number and the revision index is common drafting practice
-    # rather than a standard: ISO 7200 §4 puts scale outside the title
-    # block, and ASME title-block content is Y14.100's concern, not
-    # Y14.1's.
-    #
-    # **Four cells, always, at fixed shares of the band.** A title block
-    # is a form: its boxes are ruled by the form and filled in by the
-    # drawing, and a real one carries a SCALE box whether or not there
-    # is a scale to write in it. This band used to rule three when there
-    # was none and hand the room back to the cells that identify the
-    # drawing, which sounds like a kindness and is the defect. The scale
-    # cell appears when the block states a scale *or* when a page size
-    # lets the renderer state the ratio it fitted the drawing at -- so
-    # ``drawing_number`` was budgeted 118 units under ``to_svg()`` and
-    # 88 under ``to_svg(page_size="A3")``. The same ``PFD-111111111``
-    # fits one call and is silently abbreviated by the other, and no
-    # check that had not been told the page size could say which.
-    #
-    # A fixed slot is what :data:`_SHEET_W` already does for the title,
-    # for the same reason and in nearly the same words: how much of a
-    # drawing number survives must not depend on how the sheet happened
-    # to be asked for. It is also what lets
-    # :func:`pandid.validate.model_issues` measure this band at all --
-    # every width here is a constant now, so the cell it measures is the
-    # cell the renderer draws.
-    #
-    # Three of the four draw a value the block did not state, and each
-    # names the field that did state it (see :data:`Reporter`).
-    # Through :func:`_stated` like every other read: left raw, a
-    # revision whose ``rev`` was whitespace put four invisible
-    # characters in a 22-unit cell and had them reported as a
-    # truncation.
+    # Bottom band: DRAWING No | SCALE | DATE | REV, four cells at fixed
+    # shares whether or not there is a scale, so each value's room is the
+    # same for every render and pandid.validate can measure it before
+    # rendering. Scale here is drafting practice, not a standard (ISO 7200
+    # 4 puts scale outside the title block). Fallback values name their
+    # source field (see Reporter).
     rev_id = _stated(tb.revisions[-1], "rev") if tb.revisions else "0"
     rev_field = (f"revisions[{len(tb.revisions) - 1}].rev -> rev"
                  if tb.revisions else "rev")
@@ -1881,10 +1841,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         bold = seg_label != "DATE"
         parts.append(("text", cxr + 5, band3 + 8, seg_label, _CAPTION,
                       "start", False, CAPTION_INK))
-        # Measured either way, drawn only when there is something to
-        # draw: the scale box is ruled on a sheet with no scale to state
-        # (see the note above) and an empty ``<text>`` under its caption
-        # would be an element in every such file saying nothing.
+        # Measure always; skip an empty <text> in an unused scale cell.
         drawn = clip(seg_val, seg_w - 8, _VALUE_TYPE, bold,
                      field=seg_field, report=report)
         if drawn:
@@ -1896,52 +1853,36 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
 def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
                     ) -> "list[tuple[str, str, str, float, float]]":
-    """Every cell of the strip that cannot hold what it was given, as
-    :data:`Reporter` tuples, without drawing anything.
+    """Return every strip cell that cannot hold its value, without drawing.
 
-    ``name`` and ``date`` are what the title and date cells fall back to
-    where the block states neither -- the flowsheet's name and today's
-    date -- and are passed *unchosen*, exactly as the two renderers pass
-    them, so that this and the sheet answer alike. Choosing first is
-    what made a whitespace title a truncation the render reported and
-    this did not.
+    Runs :func:`title_strip_layout` with a collecting reporter, so the
+    measurement is the renderers'. Every strip width is a constant, so
+    :func:`pandid.validate.model_issues` can report before any render.
+    ``name`` and ``date`` are passed unchosen, as the renderers pass them.
+    Without ``fit_scale`` only the scale cell's own value goes unmeasured;
+    the render reports that.
 
-    Whether a value fits is a fact about the *model*: every width the
-    strip rules is a constant in this module, so the answer does not
-    depend on the page size, on the drawing, or on anything layout or
-    routing settles. That is what lets
-    :func:`pandid.validate.model_issues` report an over-long title block
-    on a sheet that has never been rendered -- the point of the finding
-    being to reach the author *before* the sheet is issued, not to
-    describe one that already was.
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+    name : str
+        Title fallback.
+    date : str
+        Date fallback.
+    fit_scale : str, default=""
+        Fitted scale, if known.
 
-    It is the same measurement and not a second opinion about it: the
-    layout is run with a collecting reporter and its ink thrown away,
-    so a cell width can never be stated in two places and drift.
-
-    ``fit_scale`` is the ratio the renderer settled on, which the scale
-    cell reports for a block that states no scale of its own. A caller
-    with no render behind it cannot know it and passes none, and that
-    changes **nothing about any other cell**: the bottom band is ruled
-    at four fixed shares whether or not there is a scale to write in the
-    scale box, so the drawing number is budgeted the same 88 units under
-    every call. It did not use to be -- the band gave the scale cell's
-    room back to the three cells that identify the drawing, and
-    ``drawing_number`` was measured against 118 units here and cut at 88
-    by a render with a page size, which is exactly the silent
-    abbreviation this module exists to report. The remedy was to stop
-    the width moving, not to describe the two of them.
-
-    The scale cell is the one cell whose *own* value this cannot
-    measure, and it is the only one nobody typed: what goes in it is a
-    ratio the dock settles from the page and the drawing, so it is the
-    render's to report and the render does. Every value the **author**
-    wrote is measured here, against the width it will be drawn in.
+    Returns
+    -------
+    list[tuple[str, str, str, float, float]]
+        :data:`Reporter` arguments per finding.
     """
     found: list[tuple[str, str, str, float, float]] = []
 
     def collect(field: str, text: str, drawn: str,
                 room: float, need: float) -> None:
+        """Record a finding."""
         found.append((field, text, drawn, room, need))
 
     title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale, report=collect)
@@ -1949,7 +1890,18 @@ def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
 
 
 def _strip_part(part) -> str:
-    """One laid-out strip part, as SVG."""
+    """Return one laid-out strip part as SVG.
+
+    Parameters
+    ----------
+    part : tuple
+        A ``"rule"`` or ``"text"`` part from :class:`Strip`.
+
+    Returns
+    -------
+    str
+        SVG element.
+    """
     if part[0] == "rule":
         _, x1, y1, x2, y2, weight = part
         return (f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
@@ -1961,11 +1913,29 @@ def _strip_part(part) -> str:
 def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
                      fit_scale: str = "", *,
                      report: "Reporter | None" = None) -> list[str]:
-    """Draw the strip so its bottom-right corner sits at (right,
-    bottom).
+    """Return the title strip drawn with its bottom-right at ``(right, bottom)``.
 
-    The geometry is :func:`title_strip_layout`'s; this strokes it,
-    exactly as :func:`zone_frame` strokes :func:`zone_layout`.
+    Strokes :func:`title_strip_layout`.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+    name : str
+        Title fallback.
+    date : str
+        Date fallback.
+    right, bottom : float
+        Bottom-right corner.
+    fit_scale : str, default=""
+        Fitted scale for a block that states none.
+    report : Reporter, optional
+        Receives a finding per cell that cannot hold its value.
+
+    Returns
+    -------
+    list[str]
+        SVG elements.
     """
     strip = title_strip_layout(tb, name, date, right, bottom, fit_scale,
                                report=report)
@@ -1974,11 +1944,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
          f'fill="white" stroke="black" stroke-width="{_STRIP_RULE:g}"/>']
     L += [_strip_part(part) for part in strip.rules]
 
-    # The revision grid: the heading's own rule, then the column rules
-    # the full depth of the strip, then the cells. No rule *between*
-    # revisions -- the rows are told apart by their lettering, and
-    # ruling each one would put six more lines into the busiest corner
-    # of the sheet.
+    # Revision grid: the heading rule, full-depth column rules, then the
+    # cells. No rules between revisions.
     g = strip.rev
     L.append(_strip_part(("rule", g.x, g.header_y, g.x + g.w, g.header_y,
                           _BOX_UNDERLINE)))
@@ -1988,14 +1955,14 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
         L.append(_strip_part(("rule", cx, g.y, cx, g.y + g.h, _STRIP_HAIRLINE)))
 
     def rev_row(ry, vals, bold=False):
+        """Append one row of revision text at ``ry``."""
         cx = g.x
         for (_heading, cw), value in zip(g.cols, vals):
             L.append(_text(cx + _REV_PAD, ry + g.row_h - 4, value,
                            _REV_TYPE, bold=bold))
             cx += cw
     rev_row(g.header_y, [heading for heading, _cw in g.cols], bold=True)
-    # Newest revision nearest the heading (bottom); oldest climbs the
-    # stack.
+    # Newest revision just above the heading; older ones above it.
     for idx, values in enumerate(reversed(g.rows)):
         rev_row(g.header_y - (idx + 1) * g.row_h, values)
 
@@ -2006,57 +1973,56 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 # ----------------------------------------------------------------
 # Zone-ruled drawing border (A.. top→down, 1.. left→right)
 #
-# The direction is ISO 5457 §4.4's: letters run top down and numerals
-# left to right, so the grid's origin is the top-left corner. That is
-# the whole of the reference's meaning -- ISO 15519-1 Clause 9 composes
-# an address out of it (see :func:`pandid.document.location_reference`),
-# and an address space that runs the other way names the wrong corner of
-# the sheet.
-#
-# What is *not* ISO 5457 is the ruling. §4.4 fixes a 50 mm pitch and the
-# field counts of its Table 2, and §4.3/§4.5 add centring and trimming
-# marks. Neither is drawn here: the band is a constant in drawing units
-# and the field count is chosen to suit the sheet. ISO 15519-1 §5.1.2,
-# the clause that applies to a diagram, asks for the centring marks only
-# on a document prepared for microfilming.
+# Lettering follows ISO 5457 4.4: letters top down, numerals left to
+# right, so ISO 15519-1 Clause 9 addresses
+# (:func:`pandid.document.location_reference`) start at the top left. The
+# 50 mm pitch, ISO 5457 field counts and centring marks are not used: the
+# band is a constant and the field count suits the sheet; ISO 15519-1 5.1.2
+# asks for centring marks only for microfilming.
 # ----------------------------------------------------------------
 
-# Width of the lettered/numbered band between the drawing frame and the
-# sheet border. A fixed-size sheet insets its frame by this to rule to
-# the page edge.
+#: Width of the lettered band between drawing frame and sheet border.
 ZONE_BAND = 16.0
 
 
 def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
                ) -> tuple[float, float, float, float]:
-    """The sheet rectangle around a drawing frame, ruled or not.
+    """Return the sheet rectangle around a drawing frame.
 
-    An unruled sheet keeps the band as plain margin, so turning the
-    border on and off leaves every piece of furniture exactly where it
-    was.
+    An unruled sheet keeps the band as margin, so the border can be turned
+    on or off without moving furniture.
+
+    Parameters
+    ----------
+    ix, iy, iw, ih : float
+        Drawing frame.
+    band : float, default=ZONE_BAND
+        Band width.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Sheet rectangle ``(x, y, w, h)``.
     """
     return ix - band, iy - band, iw + 2 * band, ih + 2 * band
 
 
-#: The size the zone letters and numerals are lettered at, and the drop
-#: from the middle of the band to their baseline.
+#: Zone letter size, and the drop from the band's middle to the baseline.
 ZONE_TYPE, _ZONE_BASE = 9, 3
 
 
 class Zoned(NamedTuple):
-    """The zone-ruled border, as geometry rather than as ink.
+    """Zone-ruled border geometry, shared by both backends.
 
-    ``outer`` and ``inner`` are the sheet border and the drawing frame,
-    each ``(x, y, w, h)``. ``parts`` is everything ruled in the band
-    between them, in the order the sheet draws it: ``("rule", x1, y1,
-    x2, y2)`` for a tick, and ``("label", x, y, text)`` for a letter or
-    a numeral, stated at the point the glyph is *centred* on. The SVG
-    sets a label ``text-anchor="middle"`` and drops the baseline by
-    :data:`_ZONE_BASE`, which is that same point said the way SVG says
-    it.
-
-    One list rather than two, and in drawing order, since
-    :func:`zone_frame` strokes it straight through.
+    Attributes
+    ----------
+    outer : tuple[float, float, float, float]
+        Sheet border ``(x, y, w, h)``.
+    inner : tuple[float, float, float, float]
+        Drawing frame ``(x, y, w, h)``.
+    parts : list[tuple]
+        Band contents in drawing order: ``("rule", x1, y1, x2, y2)`` ticks
+        and ``("label", x, y, text)`` letters centred on ``(x, y)``.
     """
     outer: tuple[float, float, float, float]
     inner: tuple[float, float, float, float]
@@ -2065,18 +2031,22 @@ class Zoned(NamedTuple):
 
 def zone_layout(ix: float, iy: float, iw: float, ih: float,
                 band: float = ZONE_BAND) -> Zoned:
-    """Where every part of the zone-ruled border goes.
+    """Return the zone-ruled border layout.
 
-    The geometry of :func:`zone_frame`, with the drawing taken out of
-    it, so the draw.io exporter rules the same border rather than a
-    second opinion about one -- the same split :func:`dock` and
-    :func:`~pandid.render.svg.stream_polyline` are already on the far
-    side of.
+    Zones are about 165 units, with 4 to 12 columns and 3 to 8 rows,
+    rather than ISO 5457's 50 mm pitch.
 
-    The field counts are the sheet's own and are chosen from its size (a
-    zone about 165 units across, four to twelve columns and three to
-    eight rows). They are *not* ISO 5457's fixed 50 mm pitch; see the
-    note above :data:`ZONE_BAND`.
+    Parameters
+    ----------
+    ix, iy, iw, ih : float
+        Drawing frame.
+    band : float, default=ZONE_BAND
+        Band width.
+
+    Returns
+    -------
+    Zoned
+        Border geometry.
     """
     ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih, band)
     cols = max(4, min(12, round(iw / 165)))
@@ -2093,8 +2063,7 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
             parts.append(("rule", x0, iy + ih, x0, oy + oh))
         parts.append(("label", (x0 + x1) / 2, oy + band / 2, num))
         parts.append(("label", (x0 + x1) / 2, oy + oh - band / 2, num))
-    # rows: letters A.. top→down, on the left and right bands. y grows
-    # downwards here, so row 0 is the top band and takes the A.
+    # rows: letters A.. top→down, on the left and right bands (y down).
     for r in range(rows):
         y0 = iy + ih * r / rows
         y1 = iy + ih * (r + 1) / rows
@@ -2109,12 +2078,21 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
 
 def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
                ) -> tuple[list[str], tuple[float, float, float, float]]:
-    """Draw the drawing frame (inner rect) plus the sheet border (outer
-    rect) with zone letters/numbers ruled in the band between them.
+    """Return the drawing frame, sheet border and zone band, drawn.
 
-    (``ix``, ``iy``, ``iw``, ``ih``) is the inner drawing rectangle.
-    Returns the SVG fragments and the outer sheet rectangle (x, y, w,
-    h). The geometry is :func:`zone_layout`'s; this strokes it.
+    Strokes :func:`zone_layout`.
+
+    Parameters
+    ----------
+    ix, iy, iw, ih : float
+        Drawing frame.
+    band : float, default=ZONE_BAND
+        Band width.
+
+    Returns
+    -------
+    tuple[list[str], tuple[float, float, float, float]]
+        SVG elements and the sheet rectangle ``(x, y, w, h)``.
     """
     z = zone_layout(ix, iy, iw, ih, band)
     ox, oy, ow, oh = z.outer
@@ -2138,21 +2116,25 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
 # The sheet dock: which rectangle each piece of furniture is given
 # ----------------------------------------------------------------
 
-# Clearance between the drawing and the frame it is framed by; between
-# two boxes stacked in one corner; and between a left-hand and a
-# right-hand stack sharing a band. The last is what stops a wide
-# equipment list and a wide legend being ruled as though they could be
-# laid end to end.
+#: Clearances: drawing to frame, between boxes stacked in one corner, and
+#: between left and right stacks sharing a band.
 INNER, GAP, SEP = 26.0, 14.0, 18.0
 
-#: Margin outside the sheet border. A fixed page insets its frame by
-#: this plus the zone band, so the border rules to the paper edge
-#: whether or not the zones are lettered.
+#: Margin outside the sheet border; a fixed page insets its frame by this
+#: plus the zone band.
 OUTER_MARGIN = 8.0
 
 
 class Docked(NamedTuple):
-    """One piece of furniture and the rectangle the sheet gives it."""
+    """One piece of furniture and the rectangle the sheet gives it.
+
+    Attributes
+    ----------
+    obj : object
+        The furniture, or a sentinel.
+    x, y, w, h : float
+        Placed rectangle.
+    """
     obj: object
     x: float
     y: float
@@ -2161,43 +2143,40 @@ class Docked(NamedTuple):
 
 
 def dock(items, inner, *, sheet=None, too_small=None):
-    """Where each piece of sheet furniture lands, and the frame it lands
-    on.
+    """Return where each piece of furniture is placed and the frame.
 
-    **This is the placement, and nothing here draws.** Both backends
-    have the same boxes to place, so both ask this rather than deriving
-    it twice.
+    Draws nothing; both backends use it. Boxes are grouped into edge bands
+    by ``align`` and placed flush to that frame edge, inset by their
+    ``margin``; a box with ``position`` is placed by hand. Without a sheet
+    the frame grows from the drawing to hold the bands; with one, the frame
+    is the page inset by the border and the drawing fits what is left.
 
-    Nothing about the arithmetic is SVG's. A box is measured from its
-    own text (:func:`measure_annotation`, :func:`measure_table`, and
-    :func:`measure_title_strip`, all of which are already pure), grouped
-    into an edge *band* by its ``align``, and placed flush against the
-    frame edge that band names. The frame either grows out of the
-    drawing far enough to hold the bands, or -- given a *sheet* -- is
-    the fixed page inset by the border, with the drawing fitted into
-    whatever the bands leave.
+    Parameters
+    ----------
+    items : iterable of tuple
+        ``(obj, align, w, h)``. ``margin`` and ``position`` are read from
+        ``obj`` where present, so sentinels (title strip, stream table) are
+        allowed.
+    inner : tuple[float, float, float, float]
+        Drawing bounds ``(x0, y0, x1, y1)``.
+    sheet : _Sheet, optional
+        Fixed page; ``None`` grows the frame to the drawing.
+    too_small : callable, optional
+        Called with ``(need_w, need_h, culprit)`` when a fixed page cannot
+        hold its furniture; returns the exception to raise. Required only
+        if that can happen.
 
-    ``items`` are ``(obj, align, w, h)``. ``obj`` is opaque: its
-    ``margin`` and ``position`` are read off it where it has them, so a
-    caller may pass a sentinel for a piece of furniture that is not one
-    of the caller's objects (the title strip, the stream table) and have
-    the band maths size the frame around it too. ``inner`` is the
-    drawing's own bounding box ``(x0, y0, x1, y1)``.
+    Returns
+    -------
+    tuple
+        ``(placed, frame, free)``: :class:`Docked` rectangles in drawing
+        order, the frame ``(x, y, w, h)``, and the region left for the
+        drawing on a fixed page, or ``None``.
 
-    ``sheet`` is a fixed page, or None to grow the frame to the drawing.
-    ``too_small`` is called with ``(need_w, need_h, culprit)`` when a
-    fixed page cannot hold its own furniture and must return the
-    exception to raise; the caller supplies it because naming
-    ``culprit`` in words is the caller's vocabulary, not this module's.
-    It is only reached from inside that same overflow, so a caller
-    whose page cannot overflow -- an empty ``items``, say -- may still
-    leave it ``None``.
-
-    Returns ``(placed, frame, free)``: the list of :class:`Docked`
-    rectangles in the order the sheet draws them, the frame rectangle
-    ``(x, y, w, h)``, and the region a fixed page leaves for the drawing
-    (None when the frame was grown to the drawing, which needs no
-    fitting).
+    Raises
+    ------
+    TypeError
+        If a fixed page overflows and ``too_small`` is missing.
     """
     from pandid.document import _ALIGN
 
@@ -2212,16 +2191,15 @@ def dock(items, inner, *, sheet=None, too_small=None):
             cols[align].append((obj, w, h))
 
     def stack_h(entries):
+        """Return a stack's height, with gaps."""
         return _total(h for _, _, h in entries) + GAP * max(0, len(entries) - 1)
 
     def stack_w(entries):
+        """Return a stack's width."""
         return max((w for _, w, _ in entries), default=0.0)
 
     def biggest(dim: int):
-        """The largest piece of furniture along ``dim`` (1 = width, 2 =
-        height), for an error that has to say which piece will not fit
-        rather than that something will not.
-        """
+        """Return the largest piece along ``dim`` (1 width, 2 height), to name it."""
         entries = [it for col in cols.values() for it in col]
         return max(entries, key=lambda it: it[dim])[0] if entries else None
 
@@ -2233,6 +2211,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
     left_w, right_w = stack_w(cols["left"]), stack_w(cols["right"])
 
     def row_w(lk, ck, rk):
+        """Return the width a band row needs."""
         lw, cw, rw = stack_w(cols[lk]), stack_w(cols[ck]), stack_w(cols[rk])
         side = (lw + SEP + rw) if (lw and rw) else max(lw, rw)
         return max(side, cw)
@@ -2242,21 +2221,14 @@ def dock(items, inner, *, sheet=None, too_small=None):
 
     # frame rectangle --------------------------------------------
     if sheet is not None:
-        # A named page fixes the frame: the sheet inset by the zone band
-        # and the margin outside it, so the border rules to the sheet
-        # edges and the zone count does not drift with the drawing.
+        # A named page fixes the frame: the sheet inset by band and margin.
         edge = OUTER_MARGIN + ZONE_BAND
         need_w = max(band_w, left_w + right_w + 2 * INNER)
         need_h = max(top_h + bottom_h + 2 * INNER,
                      stack_h(cols["left"]), stack_h(cols["right"]))
         too_wide = need_w >= sheet.width - 2 * edge
         if too_wide or need_h >= sheet.height - 2 * edge:
-            # Only a fixed page can overflow, so this is the one place
-            # a missing `too_small` would otherwise surface as a bare
-            # "NoneType is not callable" -- naming the real invariant
-            # here instead means whoever forgot it reads why, and only
-            # a caller that actually overflows its page has to supply
-            # it at all.
+            # Name the missing callback rather than fail on calling None.
             if too_small is None:
                 raise TypeError("dock() needs a too_small callback when sheet is given")
             raise too_small(need_w + 2 * edge, need_h + 2 * edge,
@@ -2278,9 +2250,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
             iyb += extra / 2
     iw, ih = ixr - ix, iyb - iy
 
-    # The bands are measured, so the region left for the drawing is
-    # settled and so is the ratio it will be placed at. A frame grown to
-    # the drawing has no fixed page and so nothing to fit into.
+    # Region left for the drawing on a fixed page.
     free = None if sheet is None else (
         ix + left_w + INNER, iy + top_h + INNER,
         iw - left_w - right_w - 2 * INNER, ih - top_h - bottom_h - 2 * INNER)
@@ -2289,6 +2259,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
     placed: list[Docked] = []
 
     def x_for(mode, w, m):
+        """Return a box's x for left, right or centred placement."""
         if mode == "l":
             return ix + m
         if mode == "r":
@@ -2296,6 +2267,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
         return ix + (iw - w) / 2  # centred on the frame
 
     def put_top(entries, mode):     # flush to the top edge, grow downward
+        """Place a stack against the top edge."""
         y = iy
         for obj, w, h in entries:
             m = getattr(obj, "margin", 0.0)
@@ -2303,6 +2275,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
             y += m + h + GAP
 
     def put_bottom(entries, mode):  # flush to the bottom edge, grow upward
+        """Place a stack against the bottom edge."""
         y = iyb
         for obj, w, h in reversed(entries):
             m = getattr(obj, "margin", 0.0)
@@ -2311,6 +2284,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
             y = top - GAP
 
     def put_side(entries, mode):    # flush to a side edge, vertically centred
+        """Place a stack against a side edge, centred vertically."""
         y = (iy + iyb) / 2 - stack_h(entries) / 2
         for obj, w, h in entries:
             m = getattr(obj, "margin", 0.0)
