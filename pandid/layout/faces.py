@@ -86,7 +86,7 @@ def select_faces(
             continue
         # ``eligible_faces`` excludes pinned and author-chosen nozzles: a pin
         # fixes the box from the nozzle position, so a later choice would move
-        # the nozzle off its pin (#294).
+        # the nozzle off its pin.
         live = [name for name, port in unit.ports.items() if port.stream is not None]
         menus = {name: menu for name in live
                  if (menu := eligible_faces(fs, unit, name))}

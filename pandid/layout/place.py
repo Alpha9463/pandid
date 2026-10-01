@@ -1,35 +1,19 @@
-"""Stage 1: where every process unit sits on the grid.
+"""Assign grid columns and rows to process units from their placement claims.
 
-Two runs of :func:`pandid.layout.solver.relax`, one per axis, over the
-claims :mod:`pandid.layout.claims` reads off the equipment. Each run
-answers with a *fractional* position -- the compromise between every
-claim touching that unit -- and this module turns the two into a whole
-column and a whole row.
+:func:`assign_positions` fits each axis separately with
+:func:`pandid.layout.solver.relax`, which gives every unit a fractional
+position: the weighted least-squares compromise of the claims touching it.
+The passes that follow turn that into whole columns and rows:
 
-Preference, then legality
--------------------------
-The fit states where each unit would rather be, and it is free to say
-"between": a pair of claims of ``+1`` and ``-1`` average to ``0``, which
-as a preference is "the same row would suit both of you" and as a
-drawing is one box on top of another. So the fit supplies preference and
-:func:`_separate` supplies legality, in that order and never the other
-way about. Separation walks each column top to bottom in the order the
-fit asked for and hands out distinct rows, so the arrangement the claims
-argued their way to survives being made legal.
+1. :func:`_spread` gives each pair a stated column step apart its own
+   columns, in the order the fit chose.
+2. :func:`_separate` gives units sharing a column distinct rows, as close
+   to their fitted rows as stiffness allows.
+3. :func:`_unlace` reorders rows within each column to reduce crossings.
+   The fit has no crossing term, so units it left unordered are ordered
+   here. It only permutes rows a column already holds.
 
-Then crossing reduction, and it is **not** what the fit computes
-------------------------------------------------------------------
-The fit puts every unit at the weighted average of every claim touching
-it, which looks like what a barycentre sweep converges to and is a
-different quantity: least squares minimises *displacement*, and a
-crossing is nowhere in that objective. Where two units in one column
-have no claim about each other -- which on a sheet of valve stations is
-most pairs -- the fit puts them in whichever order the arithmetic came
-out, and swapping them costs it nothing and the drawing plenty. Deleting
-the sweep on the grounds that the fit subsumed it cost the corpus 93
-crossings; :func:`_unlace` puts it back, after the solve and as a
-permutation within each column, so that the two passes answer the two
-different questions rather than one pretending to answer both.
+Pinned columns and rows are kept exactly.
 """
 
 from __future__ import annotations
@@ -76,10 +60,7 @@ def assign_positions(fs: "Flowsheet", *, units: list["Unit"] | None = None,
 
     pulls = {step: [(at[c.author], at[c.subject], c.confidence, float(getattr(c, step)))
                     for c in claims] for step in ("eastward", "southward")}
-    # One graph, two axes: the components are the same set either way,
-    # since a claim that weighs nothing on one axis weighs nothing on
-    # both. Found once, so the column run and the row run cannot come to
-    # different conclusions about what is joined to what.
+    # Both axes share one claim graph, so find its components once.
     groups = solver.components(len(units), pulls["eastward"])
 
     eastward = _fit(units, at, pulls["eastward"], groups, "col")
@@ -98,11 +79,26 @@ def assign_positions(fs: "Flowsheet", *, units: list["Unit"] | None = None,
 
 def _fit(units: list["Unit"], at: dict["Unit", int], pulls: list[solver.Pull],
          groups: list[list[int]], axis: str) -> list[float]:
-    """One axis, fitted: the pins held fast and everything else settled.
+    """Fit one axis with pinned positions held fixed.
 
-    ``axis`` names the ``_Slot`` field the author's pin arrives in, and
-    is the only thing that differs between the column run and the row
-    run beyond the pulls themselves.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placement nodes.
+    at : dict[Unit, int]
+        Index of each unit in ``units``.
+    pulls : list[Pull]
+        Claims on this axis as solver pulls.
+    groups : list[list[int]]
+        Connected components of the claim graph.
+    axis : str
+        ``_Slot`` field holding the pin on this axis, ``"col"`` or ``"row"``.
+
+    Returns
+    -------
+    list[float]
+        Fitted position of each unit. An unpinned component is anchored at
+        zero through :func:`_anchor`.
     """
     fixed = {at[u]: float(pin) for u in units
              if (pin := getattr(slot(u), axis)) is not None}
@@ -114,25 +110,29 @@ def _fit(units: list["Unit"], at: dict["Unit", int], pulls: list[solver.Pull],
 
 def _band(units: list["Unit"], at: dict["Unit", int], groups: list[list[int]],
           southward: list[float]) -> list[float]:
-    """Give each piece of a sheet in several pieces a band of its own.
+    """Stack disconnected components in separate row bands.
 
-    Every component with nothing pinned in it is anchored at zero, so
-    two trains that share no run are fitted on top of each other -- and
-    then the row separation, which works a column at a time, pushes them
-    apart in the columns they both use and leaves them alone in the
-    columns only one of them reaches. A three-block chain beside an
-    unrelated pair came out with a *kink* in it: the two blocks sharing
-    a column with the pair were lifted a row and the third, alone in its
-    column, was not.
+    Every unpinned component is anchored at row zero, so without this
+    unrelated trains would overlap and row separation would push them
+    apart only in the columns they share. Components are stacked in
+    flowsheet order, each below the last. A component holding a pinned row
+    stays where the fit put it, and later components stack below it.
 
-    So the pieces are stacked here instead, in the order the flowsheet
-    states them, each below the last. What the separation is then left
-    with is the collisions inside one train, which is what it is for.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placement nodes.
+    at : dict[Unit, int]
+        Index of each unit in ``units``.
+    groups : list[list[int]]
+        Connected components, in flowsheet order.
+    southward : list[float]
+        Fitted rows.
 
-    A component holding a pin is left exactly where the fit put it: the
-    author has said which band it goes in. It still claims the paper it
-    covers, so that a free component after it is stacked clear rather
-    than into it.
+    Returns
+    -------
+    list[float]
+        Fitted rows with each free component shifted into its own band.
     """
     if len(groups) < 2:
         return southward
@@ -151,19 +151,22 @@ def _band(units: list["Unit"], at: dict["Unit", int], groups: list[list[int]],
 
 
 def _anchor(units: list["Unit"], group: list[int]) -> int:
-    """Which unit of an unpinned component is nailed to the origin.
+    """Choose the unit that fixes an unpinned component at the origin.
 
-    Claims are all relative, so a component nothing is pinned in is
-    determined only up to a shared translation and something has to be
-    chosen. The first :class:`~pandid.units.Feed` in it, because a
-    drawing is read from where the material comes in and that is the
-    box a reader's eye starts at; failing that the component's lowest
-    member in the order the flowsheet holds its units, which is stated
-    by the author and the same on every run.
+    Claims are relative, so an unpinned component needs one fixed member.
 
-    A sheet in several pieces gets one anchor per piece, so a component
-    joined to nothing still lands on the grid instead of taking the
-    matrix apart.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placement nodes.
+    group : list[int]
+        Indices of one component, in flowsheet order.
+
+    Returns
+    -------
+    int
+        Index of the component's first :class:`~pandid.units.Feed`, or of
+        its first member when it has none.
     """
     from pandid.units import Feed
 
@@ -175,15 +178,25 @@ def _anchor(units: list["Unit"], group: list[int]) -> int:
 
 def _stiffness(units: list["Unit"], at: dict["Unit", int],
                claims: list[claims_mod.Claim]) -> list[float]:
-    """How hard each unit is to move: every weight touching it, summed.
+    """Return how strongly each unit resists moving.
 
-    This is the diagonal of the fit's own matrix, and it is what
-    :func:`_separate` spends when it has to move somebody. A unit
-    wired into half the sheet earns its stiffness by connection count
-    alone, which is emergent rather than declared.
+    Stiffness is the sum of the weights of every claim touching the unit,
+    the diagonal of the fit's normal matrix. :func:`_separate` uses it to
+    decide which unit gives way.
 
-    Floored at :data:`~pandid.layout.claims.LINE` so a unit nothing
-    claims anything about still has a weight to be weighed by.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placement nodes.
+    at : dict[Unit, int]
+        Index of each unit in ``units``.
+    claims : list[Claim]
+        Claims between the nodes.
+
+    Returns
+    -------
+    list[float]
+        Stiffness per unit, at least :data:`~pandid.layout.claims.LINE`.
     """
     out = [0.0] * len(units)
     for claim in claims:
@@ -196,46 +209,35 @@ def _stiffness(units: list["Unit"], at: dict["Unit", int],
 
 def _spread(units: list["Unit"], at: dict["Unit", int],
             claims: list[claims_mod.Claim], eastward: list[float]) -> dict["Unit", int]:
-    """A whole column each, for a run of units the fit squeezed into one.
+    """Push apart pairs the fit placed in one column despite a column step.
 
-    The fit is a compromise and a compromise can be *zero*: a valve
-    station between a column and its condenser is eight fittings whose
-    only claims are the pipe's own, weighed at
-    :data:`~pandid.layout.claims.LINE`, and the two ends of it are held
-    a single column apart by claims weighed at 8. Least squares crushes
-    the eight into that one column -- 11_ethanol_pid came out 25 rows
-    deep and folded to a quarter of full size -- and no weighting fixes
-    it, because two nodes held one column apart with a chain between
-    them is a statement the fit can only compromise on.
+    Least squares can collapse a chain into one column, for example the
+    devices of a valve station held one column apart by strong claims at
+    its ends. Each pair joined by a claim with a nonzero eastward step is
+    kept at least one column apart. The fit decides which unit is west;
+    the claim only says the two need a column between them. Units are
+    visited west to east in fitted order and each takes one column past
+    every settled unit it follows, so pushes cascade down a chain.
 
-    What is legal here is sharper than "no two boxes in one place". A
-    run that states a step **along** the sheet has to be given one: with
-    both ends in the same column the run leaves an east nozzle, turns,
-    and comes back west to reach a west nozzle beside it, which is the
-    disagreement between geometry and nozzle this whole engine exists to
-    end. So a pair the fit collapsed is pushed apart, in the order the
-    fit put them and by :func:`_pool_adjacent_violators`, exactly as a
-    column of boxes is.
+    A pair that also has a claim with no eastward step (such as a relief
+    valve stated directly over its vessel) is exempt from the push, as is
+    any unit with a pinned column.
 
-    Only where a claim asked for the step, and only where none asked for
-    none. A relief valve over the vessel it protects is in one column
-    because the vessel *said* so -- ``PLACES["relief"] == "N"``, a step
-    of zero along -- and nothing here moves it.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placement nodes.
+    at : dict[Unit, int]
+        Index of each unit in ``units``.
+    claims : list[Claim]
+        Claims between the nodes.
+    eastward : list[float]
+        Fitted columns.
 
-    Which **side** of the gap each end takes is the fit's answer and not
-    the claim's; see the comment on the loop. That is worth 14 crossings
-    on 20_molecular_sieve_dryer, where two identical adsorber beds are
-    read differently -- one of them has the torn edge of the
-    regeneration loop on it -- and the fit still has them side by side
-    while the claims, read for their direction, do not.
-
-    Each unit takes a column one past the furthest of the neighbours
-    already placed that stated it comes after them -- a longest path,
-    over the handful of units one column holds. Spacing them evenly
-    instead is what a valve station shows to be wrong: its bypass runs
-    *parallel* to the isolations it is tapped outside of, so it wants
-    the same columns they do and one row down, and spread evenly the
-    eleven of them walk eleven columns diagonally across the sheet.
+    Returns
+    -------
+    dict[Unit, int]
+        Whole column for each unit.
     """
     columns = {u: solver.discretise(eastward[at[u]]) for u in units}
     after: dict["Unit", list["Unit"]] = defaultdict(list)
@@ -246,17 +248,8 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
             level.add((at[claim.author], at[claim.subject]))
             level.add((at[claim.subject], at[claim.author]))
             continue
-        # Which way round is the *fit's* answer and never the claim's.
-        # The claim is read for one thing only -- that these two are a
-        # column apart -- because that is the part of it the fit cannot
-        # honour and this pass exists to restore. Read for its direction
-        # as well and a claim the fit weighed and turned down would be
-        # enforced here anyway, at full strength, by a pass that weighed
-        # nothing: a stripper's ``boilup_in: SE`` and the blower's own
-        # ``discharge: E`` would push each other apart a column at a
-        # time and end three columns from where either wanted. Taking
-        # the side from the fit and the gap from the claim leaves the
-        # arrangement the solve settled on and only stretches it.
+        # Take the side from the fit, not the claim: enforcing the
+        # claim's direction would override claims the fit outweighed.
         west, east = claim.author, claim.subject
         if fitted[west] > fitted[east]:
             west, east = east, west
@@ -264,28 +257,14 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
     if not after:
         return columns
 
-    # West to east in the order the *fit* put them, each unit taking a
-    # column past every neighbour already settled that it claims to come
-    # after. Two things fall out of walking that order and no other.
-    #
-    # It **cascades**: pushing the valve on a column's overhead off the
-    # column pushes the tee after it off the valve, and so on down the
-    # manifold. Measuring each unit against the fit's own answer for its
-    # neighbour instead stops at the first push, and left
-    # 05_reactor_recycle with its compressor and its reactor stacked in
-    # one column because the compressor had been moved into the
-    # reactor's.
-    #
-    # And the order is the same one the edges above were oriented by, so
-    # every push is forward and one walk settles the lot: this is a
-    # longest path over a graph that is acyclic by construction rather
-    # than one somebody had to break the cycles in.
+    # Walk west to east in fitted order. Edges point the same way, so the
+    # graph is acyclic and one pass computes the longest path.
     order = sorted(units, key=lambda v: fitted[v])
     settled: set["Unit"] = set()
     for u in order:
         settled.add(u)
         if slot(u).col is not None:
-            continue  # the author's answer, and not this pass's business
+            continue  # pinned column
         behind = [columns[v] for v in after[u]
                   if v in settled and v is not u and (at[u], at[v]) not in level]
         columns[u] = max([columns[u], *(c + 1 for c in behind)])
@@ -293,7 +272,20 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
 
 
 def _by_key(units: list["Unit"], key: dict["Unit", int]) -> dict[int, list["Unit"]]:
-    """The units grouped by ``key``, each group in flowsheet order."""
+    """Group units by a key, keeping flowsheet order within each group.
+
+    Parameters
+    ----------
+    units : list[Unit]
+        Units in flowsheet order.
+    key : dict[Unit, int]
+        Group key per unit.
+
+    Returns
+    -------
+    dict[int, list[Unit]]
+        Units per key.
+    """
     out: dict[int, list["Unit"]] = defaultdict(list)
     for u in units:
         out[key[u]].append(u)
@@ -302,46 +294,42 @@ def _by_key(units: list["Unit"], key: dict["Unit", int]) -> dict[int, list["Unit
 
 def _separate(units: list["Unit"], at: dict["Unit", int], columns: dict["Unit", int],
               southward: list[float], stiffness: list[float]) -> dict["Unit", int]:
-    """One row per unit, distinct within a column.
+    """Give units sharing a column distinct rows near their fitted rows.
 
-    Two units in one column may not be in one row, and the fit has no
-    way to know that: it is a statement about boxes having *size*, and
-    the claims are not about size. So this is the same objective solved
-    a second time with that one constraint added --
+    Within one column, taken in fitted order, this solves
 
     .. code-block:: text
 
         minimise sum of  stiffness * (row - fitted) ** 2
         subject to       row[i + 1] >= row[i] + 1
 
-    -- over the units of one column, taken in fitted order. Substituting
-    ``s[i] = row[i] - i`` turns the constraint into "``s`` does not
-    decrease", which is isotonic regression, and
-    :func:`_pool_adjacent_violators` is its standard linear-time
-    solution.
+    Substituting ``s[i] = row[i] - i`` makes it isotonic regression, solved
+    by :func:`_pool_adjacent_violators`. The less stiff unit gives way, so
+    two feeds fitted onto one block's roof move up rather than pushing the
+    block down.
 
-    Solving rather than pushing matters, and the case that shows it is
-    two feeds over one block's roof. Both fit to half a row above the
-    block, which is one row once separated, and pushing the loser *down*
-    puts it on the block and the block a row below its own train. The
-    fit says instead that the block is eight times the stiffer -- it has
-    eight claims on it and the feeds two each -- so what gives is the
-    feeds, which go to two rows and one row above the roof they land on.
-    That is the drawing, and nobody had to write a rule for it.
+    Pinned rows are reserved first and free units step down past them.
+    Columns are walked west to east; units the fit ties are ordered by the
+    average row of their already-placed neighbours, then by flowsheet
+    order (see :func:`_tied_first_nearest`).
 
-    A pinned row is exempt and exact. It is reserved before the walk and
-    a free unit steps over it, down, so the fitted order survives being
-    made legal.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placement nodes.
+    at : dict[Unit, int]
+        Index of each unit in ``units``.
+    columns : dict[Unit, int]
+        Whole column per unit.
+    southward : list[float]
+        Fitted rows.
+    stiffness : list[float]
+        Resistance to moving, per unit.
 
-    Where the fit **ties** it has nothing to say, and the columns are
-    walked west to east so that what has already been placed can say it
-    instead: a tied unit sorts by the average row of the neighbours to
-    its west, and only then by the order the flowsheet states. Three
-    parallel trains pinned into one column tie exactly, and settling
-    each column on the flowsheet's order alone lands the first train's
-    source opposite the last one's sink -- three runs crossing where the
-    fit had no preference at all. This is a **tie-break** and never
-    anything more: it cannot move a unit the fit placed.
+    Returns
+    -------
+    dict[Unit, int]
+        Whole row per unit, distinct within each column.
     """
     by_column = _by_key(units, columns)
     out: dict["Unit", int] = {}
@@ -372,21 +360,24 @@ def _separate(units: list["Unit"], at: dict["Unit", int], columns: dict["Unit", 
 
 
 def _tied_first_nearest(members: list["Unit"], key) -> list["Unit"]:
-    """Reverse each tied run but the last, so the first stated lands nearest.
+    """Reverse each tied run except the last, so the first stated is nearest.
 
-    Two feeds onto one roof fit to the same fraction of a row above the
-    block and the claims say nothing about which of them is higher. The
-    one stated **first** goes nearest the block, which is the answer the
-    corpus is drawn against and the reason its runs come down in one
-    turn: the near feed drops straight onto its own nozzle, and the far
-    one clears it because its nozzle is further along the roof. Stated
-    the other way round the near feed has to get past the far one's box
-    -- a detour east, down and back west, which is three turns to cross
-    ten pixels.
+    Units tied above an anchor are stacked upward, so reversing a tied run
+    puts the first stated unit nearest the anchor. Two feeds onto one roof
+    then reach their nozzles without crossing. The last run lies below the
+    anchor, where flowsheet order already puts the first stated nearest.
 
-    The last tied run in a column is the one *below* whatever anchors
-    it, and there the first stated is already the nearest, so it is left
-    alone.
+    Parameters
+    ----------
+    members : list[Unit]
+        One column's units sorted by fitted row.
+    key : Callable[[Unit], object]
+        Sort key that defines a tie.
+
+    Returns
+    -------
+    list[Unit]
+        Members in their adjusted order.
     """
     runs: list[list["Unit"]] = []
     for unit in members:
@@ -400,56 +391,43 @@ def _tied_first_nearest(members: list["Unit"], key) -> list["Unit"]:
     return out
 
 
-#: Barycentre passes over the settled grid, down the sheet and back.
-#:
-#: **Worth nothing on today's corpus, and that is worth writing down
-#: rather than leaving as a number nobody re-ran.** Setting this to 0,
-#: 1, 2 or 3 leaves the auto-placed corpus at 246 crossings and leaves
-#: every unit's ``(col, row)`` on all 21 sheets identical: the
-#: :func:`_untangle` loop below runs unconditionally afterwards and now
-#: recovers everything the sweeps used to buy. It was worth 34 when it
-#: was measured, against a smaller corpus and an engine since replaced.
-#: Kept at 2 because a pass that costs nothing and might catch an
-#: arrangement the untangler cannot is not worth removing on a corpus
-#: this size -- but nobody should tune it expecting movement.
+#: Barycentre passes over the settled grid, west to east and back. Varying
+#: it from 0 to 3 changed no drawing in the pins-stripped example corpus
+#: (measured September 2026), because :func:`_untangle` runs afterwards.
 SWEEPS = 2
 
 
 def _unlace(units: list["Unit"], claims: list[claims_mod.Claim],
             columns: dict["Unit", int],
             rows: dict["Unit", int]) -> dict["Unit", int]:
-    """One column's rows, dealt out again so that fewer runs cross.
+    """Reorder rows within each column so that fewer runs cross.
 
-    The fit answers *where*, and it has no term for a crossing: it
-    minimises how far each unit is from where its claims put it, and two
-    units in one column whose claims say nothing about each other land
-    in whichever order the arithmetic came out. Which of them is drawn
-    on top is then decided by nothing -- and on a sheet of valve
-    stations that is most of the sheet. So the order within a column is
-    settled here instead, by the pass that always settled it: a
-    barycentre, each unit to the average row of its neighbours, and then
-    a swap of any neighbouring pair that demonstrably unlaces.
+    Each column keeps the set of rows it was given and only permutes them
+    among its free members, so the fitted columns and the separation from
+    :func:`_separate` are preserved. :data:`SWEEPS` barycentre passes
+    (:func:`_sweep`) run first, then :func:`_untangle` swaps adjacent pairs
+    until no swap helps.
 
-    **A permutation and nothing but a permutation.** Each column keeps
-    exactly the rows it was given and hands them back out among its own
-    members, so the columns the fit chose, the rows the sheet is deep,
-    and every collision :func:`_separate` resolved all come through
-    untouched. Nothing here can move a unit off an arrangement the
-    claims argued for; it can only choose between arrangements they were
-    silent about. That is what makes it safe to run *after* the solve
-    rather than as a seed before it, which is where the engine this
-    replaces had to put it.
+    The barycentre is blended: a unit's own row is weighted by the sum of
+    the confidences of its claims with a north or south step, against its
+    neighbours at one each. A unit with a strong vertical claim (a
+    condenser over its column) stays; a unit with none follows its line.
 
-    Silence is not all or nothing, which is why the barycentre is
-    **blended** rather than run over a free list. Each unit's own row is
-    weighed in at ``upright`` -- every confidence that stated a step
-    across, summed -- against its neighbours at one apiece. A condenser
-    its column places north east carries 8 or more against two or three
-    neighbours and does not move; a block valve carries nothing and goes
-    wherever its line goes. Freezing the stated units outright instead,
-    which is this same rule with the blend rounded to 0 and 1, costs 26
-    crossings, 19 of them on 20_molecular_sieve_dryer: a unit that
-    states one thing weakly is not a unit with nothing left to say.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placement nodes.
+    claims : list[Claim]
+        Claims between the nodes.
+    columns : dict[Unit, int]
+        Whole column per unit.
+    rows : dict[Unit, int]
+        Separated row per unit.
+
+    Returns
+    -------
+    dict[Unit, int]
+        Reordered row per unit.
     """
     upright: dict["Unit", float] = defaultdict(float)
     for claim in claims:
@@ -476,19 +454,27 @@ def _unlace(units: list["Unit"], claims: list[claims_mod.Claim],
 def _sweep(members: list["Unit"], columns: dict["Unit", int], rows: dict["Unit", int],
            pinned: set["Unit"], order: dict["Unit", int],
            upright: dict["Unit", float]) -> None:
-    """This column's free members, re-dealt its own rows by barycentre.
+    """Reassign one column's free rows by blended barycentre.
 
-    Every run the unit is on counts, in either direction and returns
-    included. Reading only the runs *into* it on the way down and only
-    the runs *out* of it on the way back is the textbook sweep and is 30
-    crossings worse here: a P&ID is not layered, a header reaches ten
-    columns, and half of a unit's neighbourhood is a worse estimate of
-    where it belongs than all of it. Neighbours in this same column are
-    skipped, being what is under discussion.
+    Every run the unit is on counts, in both directions and returns
+    included, because a P&ID is not layered. Neighbours in the same column
+    are ignored. Pinned members keep their rows and are excluded from the
+    rows handed out.
 
-    A pinned row is not a row to deal: it is left out of both the
-    members being ranked and the rows being handed round, so the author
-    keeps it exactly and the rest sort themselves around it.
+    Parameters
+    ----------
+    members : list[Unit]
+        Units in the column.
+    columns : dict[Unit, int]
+        Whole column per unit.
+    rows : dict[Unit, int]
+        Current rows, updated in place.
+    pinned : set[Unit]
+        Units with a pinned row.
+    order : dict[Unit, int]
+        Flowsheet order, used to break ties.
+    upright : dict[Unit, float]
+        Weight of each unit's own row in the blend.
     """
     free = [u for u in members if u not in pinned]
     if not free:
@@ -507,26 +493,46 @@ def _sweep(members: list["Unit"], columns: dict["Unit", int], rows: dict["Unit",
 
 def _untangle(members: list["Unit"], columns: dict["Unit", int],
               rows: dict["Unit", int], pinned: set["Unit"]) -> bool:
-    """Swap neighbouring pairs in one column while that unlaces runs.
+    """Swap adjacent pairs in one column while a swap reduces crossings.
 
-    A barycentre answers "roughly where", and where two units' averages
-    tie it has nothing to say about which goes on top. This counts
-    instead: for a pair, how many of the upper one's runs leave it below
-    a run of the lower one's, which is how many times the two would
-    cross if their neighbours were the next column along. Swapped where
-    that count falls and left alone where it does not, so every swap is
-    demonstrated rather than guessed.
+    For a pair, the count of crossings is the number of neighbour rows of
+    the upper unit that lie below a neighbour row of the lower unit. A
+    pair is swapped only when swapping lowers that count. Pinned units are
+    not swapped.
 
-    Worth nothing while the stated units were frozen -- the barycentre
-    had already found every swap that was left to it -- and 20 crossings
-    once the blend let them move. The two are one mechanism and neither
-    is redundant.
+    Parameters
+    ----------
+    members : list[Unit]
+        Units in the column.
+    columns : dict[Unit, int]
+        Whole column per unit.
+    rows : dict[Unit, int]
+        Current rows, updated in place.
+    pinned : set[Unit]
+        Units with a pinned row.
+
+    Returns
+    -------
+    bool
+        Whether any pair was swapped.
     """
     here = columns[members[0]]
     reach = {u: [rows[p] for p in _peers(u) if p in columns and columns[p] != here]
              for u in members}
 
     def tangle(above: "Unit", below: "Unit") -> int:
+        """Count crossings between two units' runs to other columns.
+
+        Parameters
+        ----------
+        above, below : Unit
+            Upper and lower unit of the pair.
+
+        Returns
+        -------
+        int
+            Pairs of neighbour rows that cross.
+        """
         return sum(1 for a in reach[above] for b in reach[below] if a > b)
 
     ranked = sorted(members, key=lambda u: rows[u])
@@ -545,20 +551,38 @@ def _untangle(members: list["Unit"], columns: dict["Unit", int],
 
 
 def _westward(unit: "Unit", settled: dict["Unit", int]) -> float:
-    """The average row of this unit's already-placed neighbours.
+    """Return the average row of a unit's already-placed neighbours.
 
-    Only the runs this unit is on, and only the ends of them the walk
-    has already settled -- which, since the columns are walked west to
-    east, is everything to the west of it. A unit with none sorts last,
-    so a column of tied units puts the ones nothing to the west reaches
-    below the ones something does rather than interleaving them.
+    Parameters
+    ----------
+    unit : Unit
+        Unit to rank.
+    settled : dict[Unit, int]
+        Rows of units in columns already walked (those to the west).
+
+    Returns
+    -------
+    float
+        Average neighbour row, or infinity when none is placed, so such a
+        unit sorts last.
     """
     rows = [settled[peer] for peer in _peers(unit) if peer in settled]
     return sum(rows) / len(rows) if rows else float("inf")
 
 
 def _peers(unit: "Unit") -> list["Unit"]:
-    """Every unit a run joins this one to, in nozzle order."""
+    """Return every unit a stream joins to this one, in port order.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit whose neighbours are wanted.
+
+    Returns
+    -------
+    list[Unit]
+        Neighbouring units, repeated once per connecting stream.
+    """
     out: list["Unit"] = []
     for port in unit.ports.values():
         stream = port.stream
@@ -571,18 +595,24 @@ def _peers(unit: "Unit") -> list["Unit"]:
 
 
 def _pool_adjacent_violators(fitted: list[float], weights: list[float]) -> list[int]:
-    """Whole rows, one apart and in order, nearest the fitted positions.
+    """Return whole rows, one apart and in order, nearest the fitted rows.
 
-    Pool adjacent violators over ``fitted[i] - i``: each run that comes
-    out flat is a group of units the constraint has pressed together,
-    and its level is their weighted mean. ``O(n)`` -- every unit is
-    pushed once and popped at most once.
+    Pool adjacent violators over ``fitted[i] - i``; each pooled group sits
+    at its weighted mean. Rounding happens once per group, at its first
+    member, so a group stays contiguous (two units pooled at -0.5 become
+    rows -1 and 0, not -1 and +1). Runs in O(n).
 
-    The rounding is per *group*, not per unit, and that is load-bearing.
-    Two boxes pooled at a level of -0.5 sit at -0.5 and +0.5, which
-    rounded one at a time and half away from zero are -1 and +1 with an
-    empty row between them. Rounded once, at the group's first member,
-    they are -1 and 0 -- adjacent, which is what "one apart" meant.
+    Parameters
+    ----------
+    fitted : list[float]
+        Fitted rows in column order.
+    weights : list[float]
+        Positive stiffness per unit.
+
+    Returns
+    -------
+    list[int]
+        Strictly increasing rows, one per unit.
     """
     #: weight, weight * level, first index, how many
     groups: list[list[float]] = []
@@ -590,9 +620,7 @@ def _pool_adjacent_violators(fitted: list[float], weights: list[float]) -> list[
         groups.append([weight, weight * (value - index), float(index), 1.0])
         while len(groups) > 1:
             below, above = groups[-2], groups[-1]
-            # Cross-multiplied rather than divided: the weights are
-            # positive, so this is the same comparison without a
-            # division whose rounding would have to be reasoned about.
+            # Compare weighted means by cross-multiplying; weights are positive.
             if below[1] * above[0] < above[1] * below[0]:
                 break
             below[0] += above[0]
@@ -608,19 +636,17 @@ def _pool_adjacent_violators(fitted: list[float], weights: list[float]) -> list[
 
 
 def _rebase(units: list["Unit"], axis: str) -> None:
-    """Slide one axis back so the sheet starts at zero.
+    """Shift one axis so the smallest rank is zero.
 
-    Both directions. A satellite over a unit on the top row lands above
-    it, and a run of claims all saying *below* pushes the whole sheet
-    down; either way the drawing is the same one and only its numbering
-    moved. What a row or a column is counted from has to be the sheet,
-    so that a ``frame.row`` a caller reads back means the band it can
-    count to and ``pin(col=0)`` means the left edge.
+    Skipped when any unit has a pin on this axis, since a pin names a fixed
+    column or row.
 
-    A sheet carrying a pin on this axis is left where it is. A pin names
-    a band or a column, so renumbering under it would move a unit the
-    author placed -- and a negative row is a row the coordinate pass
-    builds a band for.
+    Parameters
+    ----------
+    units : list[Unit]
+        Placed units.
+    axis : str
+        ``"col"`` or ``"row"``.
     """
     if any(u.pin_ is not None and getattr(u.pin_, axis) is not None for u in units):
         return

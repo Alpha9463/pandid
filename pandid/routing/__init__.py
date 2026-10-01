@@ -163,7 +163,7 @@ def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, 
     """Record one committed route in the crossing index.
 
     A manual route is recorded one orthogonal run at a time. Its diagonal
-    legs are left out, so later searches do not price crossing them (#510).
+    legs are left out, so later searches do not price crossing them.
 
     Parameters
     ----------

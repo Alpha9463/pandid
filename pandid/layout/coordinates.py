@@ -26,8 +26,7 @@ if TYPE_CHECKING:
     from pandid.units import Unit
 
 #: Clear width between adjacent columns. It holds the connecting run and its
-#: line number (ISO 15519-1 §7.2.5); the longest corpus number needs just
-#: under 100 px.
+#: line number (ISO 15519-1 §7.2.5); a long line number needs about 100 px.
 COL_GAP = 120.0
 #: Clear height between adjacent rows, measured from the taller row.
 ROW_GAP = 70
@@ -41,7 +40,7 @@ BAND_GAP = 160.0
 
 #: Maximum band width before the ribbon folds: about the width of an A1
 #: sheet at 96 dpi. It is a width and not an aspect ratio, so a long, small
-#: sheet is not folded (#429).
+#: sheet is not folded.
 BAND_WIDTH = 3200.0
 
 

@@ -1,23 +1,13 @@
-"""The space a process unit has to leave for the balloons hung on it.
+"""Reserve room around process units for the balloons attached to them.
 
-Stage 1 places the equipment and stage 2 places the instrumentation
-against it. If stage 1 packs the boxes as though the sheet were empty,
-stage 2 packs into space that is already gone -- which is a bubble drawn
-over the vessel it reads (#428), and it gets worse exactly as a sheet
-gets more instrumented.
+Stage 1 places equipment before stage 2 places instruments, so each
+unit's footprint is widened by the balloon chains that hang on it: the
+balloon, the transmitter beside it, the controller beside that. A chain's
+reach is known before drawing because it depends only on its host, face
+or fraction, offsets and angle.
 
-So a unit's *effective* footprint is its own box plus whatever hangs off
-it: the balloon on its crown, the transmitter beside that, the
-controller beside that again. The demand is computable before anything
-is drawn, because a balloon's position is its host, a face or a
-fraction, an offset and an angle, and only the first of those is
-unknown at this point.
-
-A balloon on a **stream** is charged to both of the units that stream
-joins. Where the tap lands along the run is not known yet, so the run
-is treated as though the balloon could be anywhere on it; over-reserving
-the two ends is the safe direction, and the alternative -- reserving
-nothing and finding out afterwards -- is the defect this exists to stop.
+A balloon on a stream is charged to both units the stream joins, because
+where it lands along the run is not known yet.
 """
 
 from __future__ import annotations
@@ -30,25 +20,22 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
 
-#: How much clear paper a balloon wants around it. Not a hairline: what
-#: has to fit in the gap between a bubble and whatever the grid packs
-#: against it is **two lines of lettering and a pipe** -- the bubble's
-#: own tag, the neighbour's (a control valve writes its fail position
-#: under its body, outside the box the grid laid out for it, and the
-#: layout has no way to ask where), and whatever run the router then
-#: threads between the two.
-#:
-#: Reserved at 20, ``18_fixed_bed_recycle``'s flow controller came to
-#: rest four units under ``XV-307``'s "FC"; at 50 the same lettering
-#: landed on the loop-gas line running under it. Both were reported --
-#: by ``tests/test_halo_invariants.py`` and ``tests/test_render.py`` --
-#: rather than found by looking, which is what says this is a *width*
-#: and not a taste.
+#: Clear space added around a balloon chain, in drawing units. It must
+#: hold two lines of lettering and a run between them: the balloon's tag
+#: and a neighbour's, such as a control valve's fail position. Smaller
+#: values put lettering on neighbouring tags or lines in
+#: ``tests/test_halo_invariants.py`` and ``tests/test_render.py``.
 CLEARANCE = 80.0
 
 
 class Pad(NamedTuple):
-    """Clear space one unit needs on each side of its own box."""
+    """Clear space a unit needs on each side of its box.
+
+    Attributes
+    ----------
+    north, south, east, west : float
+        Clearance beyond the box on each side, in drawing units.
+    """
 
     north: float = 0.0
     south: float = 0.0
@@ -56,13 +43,24 @@ class Pad(NamedTuple):
     west: float = 0.0
 
     def widened(self, face: str, reach: float, girth: float = 0.0) -> "Pad":
-        """Room for something ``reach`` out on ``face``, ``girth`` across.
+        """Return a pad widened for something on one face.
 
-        The girth goes on the other two faces. A balloon standing north
-        of an orifice plate is forty units wide and the plate is twelve,
-        so reserving only the run up to it reserves a corridor the
-        balloon does not fit down -- and what it overlaps is whatever
-        the next column put beside it.
+        The reach extends the named face; the girth extends the two faces
+        beside it, so a balloon wider than its host fits beside it.
+
+        Parameters
+        ----------
+        face : str
+            ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+        reach : float
+            Distance out from the face.
+        girth : float, default=0.0
+            Half-width across the face.
+
+        Returns
+        -------
+        Pad
+            Pad no smaller than this one on any side.
         """
         n, s, e, w = self
         if face in ("N", "S"):
@@ -77,12 +75,20 @@ class Pad(NamedTuple):
 
 
 def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
-    """What each process unit must leave clear, by side.
+    """Return the clearance each process unit must leave for its balloons.
 
-    Read after the ranks are settled and before pixels are handed out,
-    which is the one point at which a stream's direction is known (from
-    the columns and rows its ends landed in) and nothing has yet been
-    placed against it.
+    Called after grid ranks are settled and before pixel coordinates,
+    because a stream's direction is read from its ends' ranks.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with settled grid ranks.
+
+    Returns
+    -------
+    dict[Unit, Pad]
+        Pad for each unit that hosts at least one balloon chain.
     """
     from pandid.layout.stages import is_control
 
@@ -100,24 +106,29 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
 
 
 def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
-    """How far this balloon reaches, how wide it is, and who pays."""
+    """Measure one attached balloon chain and the units that host it.
+
+    Parameters
+    ----------
+    inst : Unit
+        Attached instrument at the outer end of a chain.
+
+    Returns
+    -------
+    tuple[float, float, str, list[Unit]] or None
+        Reach, girth and face of the chain, and the units that reserve the
+        room; ``None`` for a chain that closes on itself or hangs on a
+        stream with an unowned end.
+    """
     from pandid.layout.attach import _rotate_ccw
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size
     from pandid.streams import Stream
 
     reach, girth, node, root = 0.0, 0.0, inst, inst
-    # Balloons chain -- an interlock under a controller beside a
-    # transmitter -- and each link stands its own offset further out, so
-    # what the sheet has to reserve is the whole chain and not the last
-    # link of it. Which way the chain leaves is the *root* link's
-    # question: it is the only one measured against the host that pays.
-    #
-    # ``seen`` is what stops a chain that closes on itself: two balloons
-    # hung on each other is a model nothing can place (see
-    # :func:`~pandid.layout.attach.place_attached`, which reports them
-    # unplaced), and reserving paper for it must not be the thing that
-    # hangs the run.
+    # Sum the whole chain's reach. Its direction is the root link's, the
+    # only one measured from the host. ``seen`` stops a chain that closes
+    # on itself; place_attached reports such balloons unplaced.
     seen: set[int] = set()
     while is_control(node) and getattr(node, "host", None) is not None:
         if id(node) in seen:
@@ -126,9 +137,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
         w, h = resolve_size(node)
         reach += float(getattr(node, "offset", 0.0)) + max(w, h) / 2.0
         girth = max(girth, max(w, h) / 2.0)
-        # ``host`` lives on Instrument rather than on Unit, and what the
-        # walk holds is whatever the last host was -- a balloon, a unit
-        # or a stream -- so it is read off the object and not the class.
+        # The host may be a balloon, a unit or a stream, so read it with getattr.
         root, node = node, getattr(node, "host")
     reach += CLEARANCE
     girth += CLEARANCE
@@ -152,17 +161,37 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
 
 
 def _face_normal(face: str) -> tuple[float, float]:
+    """Return the outward unit normal of a face.
+
+    Parameters
+    ----------
+    face : str
+        Compass face; anything else is treated as ``"E"``.
+
+    Returns
+    -------
+    tuple[float, float]
+        Normal on the y-down canvas.
+    """
     return {"N": (0.0, -1.0), "S": (0.0, 1.0),
             "W": (-1.0, 0.0), "E": (1.0, 0.0)}.get(face.upper(), (1.0, 0.0))
 
 
 def _run_direction(src: "Unit", dst: "Unit") -> tuple[float, float]:
-    """Which way a run travels, read off the ranks its ends landed in.
+    """Return the direction a stream runs, from its ends' grid ranks.
 
-    The columns and rows are settled by the time this is asked, and the
-    pixels are not, so this is the only description of the run that
-    exists yet. A run that changes column is drawn along the sheet
-    whatever else it does; one that does not is drawn down it.
+    A stream that changes column runs along the sheet; one that does not
+    runs down or up it.
+
+    Parameters
+    ----------
+    src, dst : Unit
+        Source and destination units with settled ranks.
+
+    Returns
+    -------
+    tuple[float, float]
+        Unit direction on the y-down canvas.
     """
     across = (slot(dst).col or 0) - (slot(src).col or 0)
     if across:

@@ -1,4 +1,9 @@
-"""Post-processing pass to separate overlapping parallel segments."""
+"""Separate routed streams that share a track.
+
+Runs of different streams that lie on nearly the same track and overlap
+along their length are moved onto distinct tracks at least ``spacing``
+apart. Runs that end at a nozzle keep their tracks.
+"""
 
 from typing import Any, Sequence, TYPE_CHECKING
 
@@ -9,33 +14,29 @@ if TYPE_CHECKING:
 def _compute_offsets(
     streams: "Sequence[Stream]", spacing: float
 ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
-    """The h/v offsets ``separate_streams`` applies, without applying them.
+    """Compute the offsets :func:`separate_streams` would apply.
 
-    Split out so a caller can ask "where would this settle" without
-    committing to it -- ``DefaultRouter.route()`` wants a preview of the
-    streams routed so far, mid-loop, to price crossings against something
-    closer to the drawn sheet than raw pre-separation geometry, but must
-    not let that preview *become* the drawn sheet: this pass resolves every
-    stream against every other one currently in the picture, so running it
-    for real after each new stream would keep re-settling every earlier
-    one's track against a shifting set of neighbours, and the final render
-    would depend on routing order. One real, non-previewing call, against
-    the complete final set, stays the only thing that writes waypoints.
+    :func:`preview_separated_waypoints` uses this without writing
+    waypoints. Writing after every stream would re-settle earlier tracks
+    and make the drawing depend on routing order, so only the final
+    :func:`separate_streams` call writes.
+
+    Parameters
+    ----------
+    streams : Sequence[Stream]
+        Routed streams to separate.
+    spacing : float
+        Minimum distance between separated tracks.
+
+    Returns
+    -------
+    tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]
+        Vertical offsets for horizontal segments and horizontal offsets for
+        vertical segments, keyed by ``(id(stream), segment index)``.
     """
-    # 1. Collect all runs.
-    #
-    # The unit is a *run* -- a maximal chain of consecutive segments on one axis
-    # -- rather than a single segment. Consecutive segments on the same axis
-    # share a waypoint, so they are collinear: they are one drawn line, and
-    # offsetting them by different amounts would tear that line into a diagonal.
-    # Such chains are ordinary, not exotic: the simplifier leaves one behind
-    # every time it keeps a projection point that happened to be collinear.
-    #
-    # Tracks are the raw coordinate. Rounding the track and then applying
-    # ``target - track`` to the unrounded waypoint leaves the run at
-    # ``target + (raw - round(raw))``, up to half a pixel off the slot the
-    # resolver picked for it -- which is enough to land a pair closer together
-    # than the minimum spacing the resolver was enforcing.
+    # Collect runs: maximal chains of consecutive segments on one axis.
+    # Collinear segments are one drawn line and must move together. Tracks
+    # keep their raw coordinate so the offset lands exactly on its slot.
     h_runs: list[dict[str, Any]] = []
     v_runs: list[dict[str, Any]] = []
 
@@ -59,9 +60,7 @@ def _compute_offsets(
             flat_y = abs(p1[1] - p2[1]) < 0.1
 
             if flat_x and flat_y:
-                # A zero-length segment points nowhere, so it names no track of
-                # its own. Carry it along with the run it interrupts, whichever
-                # axis that is, so the run stays one line.
+                # A zero-length segment joins the run it interrupts.
                 if open_run is not None:
                     open_run["is_fixed"] = open_run["is_fixed"] or is_fixed
                     open_run["seg_idxs"].append(i)
@@ -100,6 +99,22 @@ def _compute_offsets(
             offsets[(id(s), i)] = 0.0
 
     def resolve_track(runs, offsets_dict):
+        """Assign target tracks to one cluster of nearby runs.
+
+        Runs that overlap along their length form a component. In a
+        component with more than one stream, runs that end at a nozzle keep
+        their track, a free run of a stream that already has a nozzle run
+        joins the nearer of that stream's tracks, and every other run takes
+        the nearest free slot on a ``spacing`` grid around the component's
+        mean track.
+
+        Parameters
+        ----------
+        runs : list[dict]
+            Runs on one axis with nearby tracks.
+        offsets_dict : dict[tuple[int, int], float]
+            Segment offsets, updated in place.
+        """
         runs.sort(key=lambda r: r["min_val"])
 
         components = []
@@ -128,18 +143,9 @@ def _compute_offsets(
             if len({run["stream"] for run in comp}) <= 1:
                 continue  # one stream's own runs, nothing to separate
 
-            # Resolve to absolute *target tracks*, not per-run deltas: the runs
-            # in a component start on slightly different tracks, so nudging each
-            # by its own delta can land two of them closer together than they
-            # began. A run attached to a port ("fixed") must stay put -- it
-            # holds the line on its nozzle -- so it claims its own track and
-            # everyone else takes the nearest free slot on a spacing grid.
-            #
-            # Every fixed run claims its own track, one claim per *run* and not
-            # one per stream: a stream that jogs between two nozzles contributes
-            # two fixed runs at different heights, and giving the whole stream a
-            # single track drags the second nozzle's run off it and flattens the
-            # jog into a zero-length segment.
+            # Assign absolute target tracks rather than per-run deltas, so
+            # runs cannot end closer than they began. Each nozzle run keeps
+            # its own track, so a stream's jog between two nozzles survives.
             fixed = [run for run in comp if run["is_fixed"]]
             pool = fixed or comp
             base = sum(run["track"] for run in pool) / len(pool)
@@ -155,19 +161,15 @@ def _compute_offsets(
                     continue
                 own = nozzles.get(run["stream"])
                 if own:
-                    # A free run of a stream already pinned in this component
-                    # joins the nearer of its own nozzle tracks instead of taking
-                    # a slot of its own. It is the same line: straightening it
-                    # onto the track it is already heading for is what un-doubles
-                    # it, and a slot of its own would only add two bends.
+                    # Join this stream's nearer nozzle track rather than
+                    # taking a slot, which would add two bends.
                     track = run["track"]
                     run["target"] = min(own, key=lambda t: (abs(t - track), t))
                     continue
                 k = 0
                 while "target" not in run:
                     for cand in ((base,) if k == 0 else (base + k * spacing, base - k * spacing)):
-                        # Slots are compared at the spacing exactly; the epsilon
-                        # only absorbs the float error in ``base + k * spacing``.
+                        # The epsilon absorbs float error in ``base + k * spacing``.
                         if all(abs(cand - o) >= spacing - 1e-9 for o in occupied):
                             run["target"] = cand
                             occupied.append(cand)
@@ -179,16 +181,24 @@ def _compute_offsets(
                 for seg_idx in run["seg_idxs"]:
                     offsets_dict[(run["stream"], seg_idx)] = offset
 
-    # 2. Group by track and resolve.
-    #
-    # Tracks are clustered by proximity, not exact equality: two parallel runs a
-    # couple of pixels apart are visually one doubled line (2px strokes), but an
-    # exact-match bucket would file them separately and never separate them.
-    # Single-linkage on the sorted tracks (compare against the previous run, not
-    # the cluster's first member) keeps a run of near-coincident tracks in one
-    # cluster; ``resolve_track`` then only separates those that also overlap
-    # along their length, so genuinely distinct runs are left alone.
+    # Cluster tracks by single linkage within ``spacing``: runs a few pixels
+    # apart read as one doubled line. resolve_track then separates only runs
+    # that also overlap along their length.
     def group_by_track(runs, tolerance):
+        """Cluster runs whose tracks chain within a tolerance.
+
+        Parameters
+        ----------
+        runs : list[dict]
+            Runs on one axis.
+        tolerance : float
+            Largest gap between consecutive tracks in one cluster.
+
+        Returns
+        -------
+        list[list[dict]]
+            Clusters in track order.
+        """
         groups: list[list] = []
         current: list = []
         prev_track = None
@@ -204,14 +214,7 @@ def _compute_offsets(
             groups.append(current)
         return groups
 
-    # The window is exactly ``spacing``. A neighbour closer than that is one the
-    # resolver could nudge a run into, so it still has to be in the same cluster
-    # and resolved in the same pass; a run further away than that is already
-    # legible and has nothing to gain. Chaining at twice the spacing would sweep
-    # up runs a comfortable 10–12px apart and then pack them onto the grid at the
-    # 6px minimum (closer together than they started) and, where one stream
-    # contributed two tracks to the cluster, would flatten that stream's own jog
-    # onto a neighbour's track.
+    # A wider window would pull legible runs together onto the spacing grid.
     window = spacing
     for group in group_by_track(h_runs, window):
         resolve_track(group, h_offsets)
@@ -227,9 +230,20 @@ def _apply_offsets(
     h_offsets: dict[tuple[int, int], float],
     v_offsets: dict[tuple[int, int], float],
 ) -> dict[int, list[tuple[float, float]]]:
-    """Every stream's waypoints with ``h_offsets``/``v_offsets`` applied,
-    keyed by ``id(stream)`` -- the shared arithmetic ``separate_streams``
-    writes back and ``preview_separated_waypoints`` only hands to a caller.
+    """Return every stream's waypoints with the offsets applied.
+
+    Parameters
+    ----------
+    streams : Sequence[Stream]
+        Routed streams.
+    h_offsets, v_offsets : dict[tuple[int, int], float]
+        Offsets from :func:`_compute_offsets`.
+
+    Returns
+    -------
+    dict[int, list[tuple[float, float]]]
+        New waypoints keyed by ``id(stream)``. A waypoint takes its own
+        segment's offset in preference to the previous segment's.
     """
     result: dict[int, list[tuple[float, float]]] = {}
     for s in streams:
@@ -266,12 +280,16 @@ def _apply_offsets(
 
 
 def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
-    """Detect overlapping parallel segments and offset them.
+    """Separate overlapping parallel runs and write the new waypoints.
 
-    This operates on the route waypoints in-place. The only caller that may
-    do so -- see ``preview_separated_waypoints`` for the non-mutating form
-    ``DefaultRouter.route()`` uses mid-loop, and ``_compute_offsets`` for why
-    a second real (mutating) call per stream is not an option.
+    Called once per routing pass, on the complete set of streams.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet; route waypoints are updated in place.
+    spacing : float, default=6.0
+        Minimum distance between separated tracks.
     """
     h_offsets, v_offsets = _compute_offsets(fs.streams, spacing)
     new_waypoints = _apply_offsets(fs.streams, h_offsets, v_offsets)
@@ -283,44 +301,24 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
 def preview_separated_waypoints(
     streams: "Sequence[Stream]", spacing: float = 6.0
 ) -> dict[int, list[tuple[float, float]]]:
-    """Where ``separate_streams`` would put every already-routed stream's
-    waypoints, without writing any of them back.
+    """Return where :func:`separate_streams` would put each stream's waypoints.
 
-    ``DefaultRouter.route()`` rebuilds its crossing index from this after
-    each stream, over the streams routed so far, so a later stream's search
-    prices crossings against something much closer to the sheet that will
-    actually get drawn than raw, pre-separation geometry -- without making
-    the drawn sheet itself depend on routing order, which running the real,
-    writing pass more than once would (see ``_compute_offsets``).
+    ``DefaultRouter.route()`` prices crossings against this preview of the
+    streams routed so far, without writing waypoints. A later stream can
+    still move an earlier stream's track, so a search can underprice a
+    crossing in the finished drawing (#509).
 
-    Not a perfect match for the final drawing even so: a stream not yet
-    routed can still pull an *already*-recorded track when it is added, the
-    same way any later stream in this preview's own set can -- ``_compute
-    _offsets`` resolves every run against every other one *currently*
-    passed to it, from each one's own raw, undisplaced track, so a track
-    two streams settled between themselves is not fixed once a third
-    arrives to share it. Concretely: two unfixed runs sharing a track
-    resolve to +0px/+6px; add a *third*, port-fixed run onto the +6px one
-    -- unremarkable on its own, a fixed run always keeps its own track --
-    and the recompute that follows moves *both* of the first two again,
-    to +12px/+0px, not just makes room for the newcomer.
+    Parameters
+    ----------
+    streams : Sequence[Stream]
+        Streams routed so far.
+    spacing : float, default=6.0
+        Minimum distance between separated tracks.
 
-    #483's own corpus does exercise this, measured correctly the second
-    time: capturing each stream's preview *at its own* ``settle()`` call
-    (not the last preview it happens to appear in, which is a different
-    question and trivially matches the final pass by construction) and
-    comparing against its final, post-``separate_streams`` waypoints finds
-    14 divergences out of 1032 already-routed streams checked, across both
-    the pinned and auto-placed forms of all 21 shipped examples -- max
-    shift 19.37px, all five on auto-placed sheets. The consequence is real:
-    a later search can be undercharged for a crossing the finished drawing
-    actually has, because the earlier stream's track moves again after
-    that search already ran. Tracked as #509, with a reproduced case
-    (``06_column_reflux+auto``, streams ``S7``/``S5``) rather than fixed
-    here -- closing it needs either a second, full-set-aware separation
-    pass before the crossing-sensitive decisions, or re-checking every
-    stream against the real geometry after ``separate_streams``'s one true
-    pass, both a larger change than this preview mechanism itself.
+    Returns
+    -------
+    dict[int, list[tuple[float, float]]]
+        Separated waypoints keyed by ``id(stream)``.
     """
     h_offsets, v_offsets = _compute_offsets(streams, spacing)
     return _apply_offsets(streams, h_offsets, v_offsets)

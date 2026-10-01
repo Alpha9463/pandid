@@ -1,4 +1,10 @@
-"""Fit relative pixel positions to exact per-axis placement pins."""
+"""Fit free pixel coordinates around units pinned in pixels.
+
+When a sheet mixes pixel pins with free units, :func:`refine` solves each
+pixel axis by least squares with the pinned coordinates fixed, keeping the
+grid's spacing between connected units. :func:`clear_pins` then moves
+free units off any box they overlap, respecting pinned grid order.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +23,12 @@ if TYPE_CHECKING:
 def refine(fs: Flowsheet, units: list[Unit],
            reference: dict[Unit, tuple[float, float]],
            links: list[tuple[Unit, Unit, float]] | None = None) -> dict[str, list[Unit]]:
-    """Resolve free coordinates against pins and nominal graph spacing.
+    """Resolve free coordinates against pixel pins and nominal grid spacing.
+
+    Each process stream pulls its ends toward their spacing on the nominal
+    grid, weighted by the stream's claims. Facing north/south or east/west
+    nozzles in one grid column or row are pulled into line instead. A
+    component with no pin on an axis keeps its grid coordinates there.
 
     Parameters
     ----------
@@ -89,7 +100,20 @@ Box = tuple[float, float, float, float]
 
 
 def occupied_box(unit: Unit, pads: dict[Unit, Pad]) -> Box:
-    """Return the drawn body and its instrumentation reservation."""
+    """Return a unit's drawn box widened by its balloon reservation.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit with a resolved slot.
+    pads : dict[Unit, Pad]
+        Balloon reservations from :func:`pandid.layout.halo.balloon_pads`.
+
+    Returns
+    -------
+    Box
+        ``(left, top, right, bottom)``.
+    """
     left, top, right, bottom = unit_box(unit, slot(unit))
     pad = pads.get(unit, Pad())
     return left - pad.west, top - pad.north, right + pad.east, bottom + pad.south
@@ -98,7 +122,32 @@ def occupied_box(unit: Unit, pads: dict[Unit, Pad]) -> Box:
 def grid_limits(unit: Unit, axis: str, boxes: dict[Unit, Box], gap: float = 0.0,
                 moving: set[Unit] | None = None,
                 origin: float | None = None) -> tuple[float, float]:
-    """Bound a free coordinate by other explicit grid ranks on that axis."""
+    """Return the range a coordinate may take without breaking pinned grid order.
+
+    Applies only to a unit pinned by grid rank on this axis and not by
+    pixel: it must stay after every unit with a lower pinned rank and
+    before every unit with a higher one.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to bound.
+    axis : str
+        ``"x"`` or ``"y"``.
+    boxes : dict[Unit, Box]
+        Occupied boxes.
+    gap : float, default=0.0
+        Required clearance.
+    moving : set[Unit] or None, optional
+        Units being moved together, ignored as bounds.
+    origin : float or None, optional
+        Coordinate ``boxes[unit]`` was measured at, if not the slot's.
+
+    Returns
+    -------
+    tuple[float, float]
+        Lower and upper bound, infinite where unconstrained.
+    """
     lower, upper = float("-inf"), float("inf")
     rank = "col" if axis == "x" else "row"
     grid = getattr(unit.pin_, rank, None)
@@ -122,7 +171,29 @@ def grid_limits(unit: Unit, axis: str, boxes: dict[Unit, Box], gap: float = 0.0,
 def _target(unit: Unit, axis: str, boxes: dict[Unit, Box], gap: float,
             limits: tuple[float, float] | None = None,
             preferred: float | None = None) -> float | None:
-    """Find the nearest clear coordinate consistent with explicit grid order."""
+    """Return the nearest clear coordinate within pinned grid order.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to move along ``axis``.
+    axis : str
+        ``"x"`` or ``"y"``.
+    boxes : dict[Unit, Box]
+        Occupied boxes.
+    gap : float
+        Required clearance.
+    limits : tuple[float, float] or None, optional
+        Bounds to use instead of :func:`grid_limits`.
+    preferred : float or None, optional
+        Coordinate to aim for instead of the current one.
+
+    Returns
+    -------
+    float or None
+        Clear coordinate nearest the aim, or ``None`` when the bounds leave
+        no room.
+    """
     index = 0 if axis == "x" else 1
     cross = 1 - index
     value = getattr(slot(unit), axis)
@@ -154,6 +225,22 @@ def _target(unit: Unit, axis: str, boxes: dict[Unit, Box], gap: float,
 
 
 def _shifted(box: Box, axis: str, delta: float) -> Box:
+    """Return a box moved along one axis.
+
+    Parameters
+    ----------
+    box : Box
+        Box to move.
+    axis : str
+        ``"x"`` or ``"y"``.
+    delta : float
+        Distance to move.
+
+    Returns
+    -------
+    Box
+        Moved box.
+    """
     left, top, right, bottom = box
     return ((left + delta, top, right + delta, bottom) if axis == "x"
             else (left, top + delta, right, bottom + delta))
@@ -161,6 +248,24 @@ def _shifted(box: Box, axis: str, delta: float) -> Box:
 
 def _ordered(positions: dict[Unit, float], axis: str, boxes: dict[Unit, Box],
              gap: float) -> bool:
+    """Return whether proposed coordinates keep pinned grid order.
+
+    Parameters
+    ----------
+    positions : dict[Unit, float]
+        Proposed coordinate per unit.
+    axis : str
+        ``"x"`` or ``"y"``.
+    boxes : dict[Unit, Box]
+        Occupied boxes at the proposed coordinates.
+    gap : float
+        Required clearance.
+
+    Returns
+    -------
+    bool
+        Whether every proposed coordinate is within its grid limits.
+    """
     for unit, value in positions.items():
         lower, upper = grid_limits(unit, axis, boxes, gap, origin=value)
         if not lower <= value <= upper:
@@ -170,7 +275,28 @@ def _ordered(positions: dict[Unit, float], axis: str, boxes: dict[Unit, Box],
 
 def _separate_pair(a: Unit, b: Unit, axis: str, boxes: dict[Unit, Box],
                    gap: float) -> dict[Unit, float]:
-    """Try joint separation at the available interval boundaries."""
+    """Try moving two overlapping units together to clear each other.
+
+    Each unit in turn is tried at the boundaries of the free intervals on
+    the axis, and the other is then moved to its nearest clear coordinate.
+
+    Parameters
+    ----------
+    a, b : Unit
+        Overlapping units.
+    axis : str
+        ``"x"`` or ``"y"``.
+    boxes : dict[Unit, Box]
+        Occupied boxes.
+    gap : float
+        Required clearance.
+
+    Returns
+    -------
+    dict[Unit, float]
+        Cheapest valid coordinates for both units, or an empty dict when
+        none keeps grid order or either unit is pinned on ``axis``.
+    """
     if any(u.pin_ is not None and getattr(u.pin_, axis) is not None for u in (a, b)):
         return {}
     index = 0 if axis == "x" else 1
@@ -206,7 +332,27 @@ def _separate_pair(a: Unit, b: Unit, axis: str, boxes: dict[Unit, Box],
 
 def _cascade(unit: Unit, axis: str, boxes: dict[Unit, Box], gap: float,
              direction: int) -> dict[Unit, float]:
-    """Make room by moving successive free grid ranks in one direction."""
+    """Make room by moving a unit and its later grid ranks in one direction.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit pinned by grid rank on this axis.
+    axis : str
+        ``"x"`` or ``"y"``.
+    boxes : dict[Unit, Box]
+        Occupied boxes.
+    gap : float
+        Required clearance.
+    direction : int
+        ``1`` to push toward higher ranks, ``-1`` toward lower.
+
+    Returns
+    -------
+    dict[Unit, float]
+        New coordinates for the units that moved, or an empty dict when no
+        valid cascade exists.
+    """
     rank = "col" if axis == "x" else "row"
     grid = getattr(unit.pin_, rank, None)
     if grid is None:
@@ -235,7 +381,25 @@ def _cascade(unit: Unit, axis: str, boxes: dict[Unit, Box], gap: float,
 
 def clear_pins(units: list[Unit], moved: dict[str, list[Unit]], gap: float,
                pads: dict[Unit, Pad]) -> None:
-    """Clear mixed-pin collisions on free axes without introducing new overlaps."""
+    """Move free units off overlaps without creating new ones.
+
+    First, units :func:`refine` moved are taken off pixel-pinned boxes.
+    Then any remaining overlapping pair is cleared by the smallest move on
+    a free axis, a joint move (:func:`_separate_pair`) or a cascade along
+    pinned grid ranks (:func:`_cascade`). Each accepted move leaves the
+    moved unit clear of every box, so the loop ends.
+
+    Parameters
+    ----------
+    units : list[Unit]
+        Units in the pixel solve.
+    moved : dict[str, list[Unit]]
+        Units :func:`refine` moved on each axis.
+    gap : float
+        Required clearance.
+    pads : dict[Unit, Pad]
+        Balloon reservations.
+    """
     boxes = {u: occupied_box(u, pads) for u in units}
     for axis, index in (("x", 0), ("y", 1)):
         fixed = [u for u in units

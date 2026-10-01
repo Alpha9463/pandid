@@ -6,7 +6,8 @@
 - cycle breaking, which identifies return lines;
 - placement (:mod:`pandid.layout.place`): one weighted least-squares fit per
   axis over the neighbour positions each unit claims
-  (:mod:`pandid.layout.claims`), solved by :mod:`pandid.layout.solver`;
+  (:mod:`pandid.layout.claims`), solved by :mod:`pandid.layout.solver`, then
+  whole grid columns and rows with crossing-reduction sweeps;
 - coordinates (:mod:`pandid.layout.coordinates`): grid to pixels, folded
   into bands, with instrumentation space reserved
   (:mod:`pandid.layout.halo`).

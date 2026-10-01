@@ -1,146 +1,34 @@
-"""What each unit says about where its neighbours are drawn.
+"""Read the placement claims that process streams make about their two ends.
 
-Vertical position on a P&ID is **not** elevation. A condenser is drawn
-top right of its column because that reads clearly and keeps the runs
-from crossing, not because it stands on a structure above it. It is a
-drafting convention, and the only thing that knows it is the equipment:
-a column knows its overhead goes up and to the right and its reboiler
-down and to the right, and no amount of looking at the pipe will tell
-you that.
+A claim says that one unit (the author) expects another (the subject) a
+number of grid steps away. The placement solve
+(:mod:`pandid.layout.solver`) fits every claim by weighted least squares,
+so two ends of one stream may disagree; the solve weighs them rather than
+dropping either.
 
-So the equipment says it, in two class attributes
-(:attr:`~pandid.units.Unit.PLACES` and
-:attr:`~pandid.units.Unit.LAYOUT_CONFIDENCE`), and this module reads
-them off the sheet as :class:`Claim` s.
+Each end of a stream speaks for itself. Its direction comes from, in
+order:
 
-One shape for everything
-------------------------
-``Claim(author, subject, eastward, southward, confidence)``. The
-``author`` asserts; the ``subject`` is asserted upon. ``eastward`` and
-``southward`` are relative **steps**, not coordinates, and are named for
-their sign: ``+1 southward`` is a row further down a y-down canvas,
-which ``dy`` invites a reader to get backwards.
+1. the class's :attr:`~pandid.units.Unit.PLACES` entry for the port, or
+   for the port's numbered family (``feed`` covers ``feed_1``);
+2. the face the symbol fixes the nozzle to (:func:`fixed_face`).
 
-**A stream states one claim for each end that has something to say.**
-Where both do they are independent and may flatly disagree -- a column's
-``overhead -> NE`` and its condenser's own reading of its inlet face are
-two different statements about the same pair -- and the solve
-(:mod:`pandid.layout.solver`) arbitrates by weight rather than by
-dropping one of them. That is what lets every block have a say, and it
-is why nothing here has to decide which end is right.
+Both are read as drawn, so a turned or mirrored unit states turned
+directions. Either claim weighs the class's
+:attr:`~pandid.units.Unit.LAYOUT_CONFIDENCE` unless the ``PLACES`` entry
+gives its own weight.
 
-Where **neither** end has anything to say the pipe states one claim on
-its own account, and a return line is always that case (see below). The
-approved design in #447 said *two* claims per stream, unconditionally.
-That is amended here, deliberately: a valve has no opinion about where
-its line goes, and a claim written on its behalf is not its opinion but
-an invention -- and an invented claim is still a weight in the fit.
-Emitting one anyway -- a confidence-0 end stating what the *pipe*
-states, at :data:`LINE`, which is exactly what makes it two claims per
-stream unconditionally -- costs the corpus 38 crossings, 246 to 284,
-and buys a symmetry that is in the code rather than in the equipment.
+An end whose port has a face menu, or whose ``PLACES`` entry is ``None``
+(a service connection such as a heater's steam), states only flow order:
+the destination lies one column east, at weight :data:`LINE`. A unit with
+confidence 0 (a valve, fitting or reducer) states nothing. If neither end
+speaks, the stream states flow order once at :data:`LINE`, so inline
+devices never leave the sheet disconnected. A return line states only
+that its source lies east of its destination, at :data:`RETURN`.
 
-What the two-claim contract was there to prevent still holds, and it is
-the half that matters: **no end is ever dropped because the other end
-spoke.** A stream with one stated end and one silent end states the one,
-never "whichever of the two is better".
-
-Where a direction comes from
-----------------------------
-Three levels, best first, all at the author's own confidence:
-
-1. **:attr:`~pandid.units.Unit.PLACES`**, the drafting convention this
-   kind of equipment draws to. Looked up by port name, then by the
-   family name a numbered family shares, so ``feed`` covers ``feed_1``
-   through ``feed_8``.
-2. **The face the nozzle is fixed to**, where the symbol leaves it no
-   choice (:func:`fixed_face`). A west nozzle says its peer is west.
-   Note what this is *not*: it is the author's own guess about its own
-   nozzle, worth exactly the author's confidence, and no longer the
-   binary fact the engine before this one tried to build an order out
-   of. A column overhead and a condenser inlet both facing north used to
-   cancel to nothing and let the barycentre draw the tower upside down
-   (#446); here they are two weak opinions that a strong ``PLACES``
-   overrules.
-
-   A class **stops the ladder here** by mapping a nozzle to ``None``:
-   that nozzle's face is artwork and nothing else, and the class has no
-   view on where its peer is drawn. What that is for is the **service**
-   connection -- a heater's steam supply, a filter's regenerant, a
-   furnace's fuel gas. Steam enters a heater from below because that is
-   where the symbol draws the nozzle, and where the steam *header*
-   belongs on the sheet is not the heater's business. Read as a claim it
-   was five heaters at confidence 2 each asserting their supply lay
-   south of them, against a header with no opinion of its own, and the
-   header sank below every consumer it fed -- 24 crossings on a sheet
-   two pins draw cleanly (#459).
-3. **Flow order**: the destination is one step east of the source. A
-   recycle is the same statement backwards, since a return line is drawn
-   right to left and its two ends are already ordered by the forward run
-   it returns along.
-
-   This one is **not** at the author's confidence. It is what the *pipe*
-   says, not what the unit says: a unit whose nozzle has a menu nobody
-   has picked from, or whose class declared the nozzle empty, has stated
-   nothing at all, and weighing that silence as heavily as a stated
-   convention makes silence argue. Concretely, a feed over a block's
-   roof: the block states north, the feed's silence is read as "east of
-   me", the two weigh the same, and the fit splits the difference and
-   draws the feed diagonally off the corner. So flow order weighs
-   :data:`LINE`, wherever it comes from.
-
-Confidence 0, and why the line still speaks
--------------------------------------------
-A valve, a fitting or a reducer sets
-:attr:`~pandid.units.Unit.LAYOUT_CONFIDENCE` to 0: it sits *in* the line
-and has no opinion about where the line goes. Its claims are dropped,
-which is not the same as weighing them 1 -- a train with a dozen block
-valves on it would otherwise stiffen the vessel at the end of it by 12
-and drown out the column arguing with it.
-
-Dropped claims cannot be allowed to disconnect the sheet, though: a run
-of valves between two valves would leave a component with nothing
-joining it to anything, and a component the solve anchors on its own is
-a component drawn on top of the sheet. So a stream **both** of whose
-ends declined to speak contributes one claim of its own at
-:data:`LINE`, the weakest weight there is, saying only what a pipe says:
-that the thing it leaves comes before the thing it reaches.
-
-What a fitting is *not* given is a claim toward the middle of its two
-neighbours. That is the obvious reading of "a valve sits on the line
-rather than at a place on the grid", and this grid cannot draw it: the
-midpoint of two boxes one column apart is half a column, which
-discretises onto one of them, and
-:func:`~pandid.layout.place._separate` then hands the valve a **row** of
-its own -- lifting it off the very line it was supposed to be sitting
-on.
-
-Measured, because "cannot draw it" is worth a number, and stated
-exactly enough to run again. In :func:`read`, where a confidence-0
-end is dropped, emit ``Claim(author, subject, 0, 0, LINE)`` instead
-and count that end as having spoken. Once per **end**, not once per
-run, and the two are not the same rule: of the corpus's 422
-non-recycle process runs 174 have one confidence-0 end and 146 have
-two, so per-end emits 466 of these claims where per-run would emit
-320. Per-end is also what puts the fitting in the middle -- each of
-its own two runs pulls it onto the neighbour at the far end, and
-least squares splits them. That takes the corpus from **246
-crossings to 475**. Blunting it does not rescue it either: keep those
-claims out of :func:`~pandid.layout.place._spread`'s list and nowhere
-else, so the fit reads the midpoint while the fitting still takes a
-column of its own, and it is **516**.
-
-Every corpus-wide crossing figure in this module -- 246, 284, 309,
-475, 516 -- is one measurement, and it is worth saying which:
-``scripts/layout_quality.py``'s **auto-placed** corpus, which is the
-21 shipped examples with every ``pin()`` placement stripped, its
-per-sheet crossings summed. Those same 21 sheets pinned as their
-authors wrote them draw 32 between them, so a crossing count quoted
-without saying which corpus it counted is out by most of itself.
-
-Drawing a fitting *between* two columns rather than in one is a
-question for :mod:`pandid.layout.coordinates`, which owns where a
-column's paper begins and ends, and not for the claims.
+Vertical position is a drafting convention, not elevation: a condenser is
+drawn above and to the right of its column because the column's
+``PLACES`` says so.
 """
 
 from __future__ import annotations
@@ -155,50 +43,36 @@ if TYPE_CHECKING:
     from pandid.streams import Stream
     from pandid.units import Unit
 
-#: What the run itself states, where a unit has said nothing. Below
-#: every confidence a unit class declares, because it is not a unit's
-#: opinion at all -- it is the pipe, and the pipe only knows which end
-#: it left.
+#: Weight of a claim the stream makes without a stated direction. It is
+#: below every unit confidence, so flow order never outweighs a unit.
 LINE = 0.25
 
-#: What a return line is worth. It states one thing -- that the end it
-#: leaves is further along the sheet than the end it reaches -- and it
-#: is the *pipe* that states it, not either unit, because a return's
-#: nozzles are read for nothing (see :func:`read`).
-#:
-#: Twice :data:`LINE`, and stated once rather than once per end. Written
-#: the other way -- which is what this was, both ends emitting the
-#: identical pull at ``LINE`` -- it is the same arithmetic with the
-#: doubling hidden inside a loop, so a return held a loop together twice
-#: as stiffly as a silent forward run held its own two ends and nothing
-#: said so. Undoing the doubling instead takes the corpus from 246
-#: crossings to 309, on the auto-placed corpus the module docstring
-#: defines: a return is often the *only* run joining a loop's
-#: two halves, where a silent forward run nearly always has a stated
-#: claim somewhere beside it, and halved it lets the loop come apart. So
-#: the doubling stays, and is written down.
+#: Weight of a return line's single claim. Twice :data:`LINE`, because a
+#: return is often the only run holding a loop's two halves together.
 RETURN = 0.5
 
-#: Compass point -> ``(eastward, southward)``, in grid steps. South is
-#: positive: the canvas is y-down and the table is written the way the
-#: drawing reads, not the way the maths would prefer.
-#:
-#: :data:`pandid.portgeom.COMPASS` itself rather than a copy of it: the
-#: same table says which way a claim steps and which way
-#: :func:`~pandid.portgeom.drawn_direction` turns a direction through a
-#: placement, and a step that disagreed with the transform beside it is
-#: the defect that made the transform necessary.
+#: Compass point to ``(eastward, southward)`` grid steps, with south
+#: positive on the y-down canvas. Shared with
+#: :func:`~pandid.portgeom.drawn_direction` so a claim and its transform
+#: use one table.
 STEPS = COMPASS
 
 
 class Claim(NamedTuple):
-    """``author`` says ``subject`` is drawn this many steps away.
+    """State that ``subject`` is drawn a number of grid steps from ``author``.
 
-    ``confidence`` is stiffness, not authority: it is how hard the pair
-    resists being pulled out of this arrangement, and it resists at
-    **both** ends. A column insisting its condenser is north east of it
-    is equally a column that will move north west to satisfy a condenser
-    someone pinned.
+    Attributes
+    ----------
+    author : Unit
+        Unit making the claim.
+    subject : Unit
+        Unit the claim places.
+    eastward, southward : int
+        Grid steps from ``author`` to ``subject``; positive is east and
+        south.
+    confidence : float
+        Weight in the least-squares fit. It resists movement at both ends,
+        so a pinned subject moves an unpinned author.
     """
 
     author: "Unit"
@@ -209,12 +83,20 @@ class Claim(NamedTuple):
 
 
 def read(streams: list["Stream"]) -> list[Claim]:
-    """Every claim the process runs on this sheet make, in sheet order.
+    """Read every claim the given streams make, in stream order.
 
-    Order is part of the answer. The solve sums weights in the order it
-    is handed them, and float addition is not associative, so a claim
-    list assembled from a set or a dict of units would draw a sheet that
-    depended on where its names happened to hash to.
+    The order is deterministic because the solve sums weights in the
+    order given, and floating-point addition is not associative.
+
+    Parameters
+    ----------
+    streams : list[Stream]
+        Process streams whose ends both have an owner.
+
+    Returns
+    -------
+    list[Claim]
+        Zero to two claims per stream, in stream order.
     """
     out: list[Claim] = []
     for stream in streams:
@@ -224,17 +106,9 @@ def read(streams: list["Stream"]) -> list[Claim]:
             continue  # a run from a unit back to itself places nothing
         ends = ((src, stream.source.name, dst, 1), (dst, stream.dest.name, src, -1))
         if stream.is_recycle:
-            # A return line's nozzles are read for nothing. The run
-            # leaves an east face and goes back **west**, so reading that
-            # face forwards states the loop the wrong way round -- and
-            # weakly stating something wrong is still wrong: the two
-            # claims a splitter and a mixer make about each other pull
-            # the whole train between them together, and every step
-            # along it comes out short of a column
-            # (``05_reactor_recycle``, one straight row of equipment
-            # that folded into three). What is left is the only thing a
-            # return says: the end it leaves is further along than the
-            # end it reaches.
+            # A return leaves an east face and runs back west, so its
+            # nozzle faces would state the loop backwards. Read only that
+            # its source lies further along than its destination.
             step = _flow_step(1, True)
             out.append(Claim(src, dst, step[0], step[1], RETURN))
             continue
@@ -242,16 +116,10 @@ def read(streams: list["Stream"]) -> list[Claim]:
         for author, port_name, subject, forward in ends:
             direction, confidence = _placed(author, port_name)
             if confidence <= 0.0:
-                continue  # an in-line fitting has nothing to say; see above
+                continue  # an inline device states nothing
             if direction is None:
-                # The unit has said nothing about this nozzle -- its
-                # face is a menu no one has picked from, or its class
-                # mapped the nozzle to ``None`` -- so what is left is
-                # the pipe, at the pipe's weight. Weighing an invented
-                # opinion at the unit's own is what puts a feed over a
-                # block's roof *diagonally* -- the block states north,
-                # the feed's silence is read as "east of me", the two
-                # weigh the same and the fit splits the difference.
+                # No stated direction: only flow order, at the pipe's
+                # weight, so it cannot pull a stated claim off its line.
                 step, weight = _flow_step(forward, False), LINE
             else:
                 step, weight = STEPS[direction], confidence
@@ -264,53 +132,45 @@ def read(streams: list["Stream"]) -> list[Claim]:
 
 
 def _flow_step(forward: int, is_recycle: bool) -> tuple[int, int]:
-    """Which way the pipe alone says the peer lies.
+    """Return the step flow order alone gives from an author to its peer.
 
-    ``forward`` is +1 when the author is the run's source. A recycle is
-    read backwards: it is drawn right to left, so its source is the unit
-    further along the sheet, and reading it forwards would ask the
-    solver to close the loop it is drawn around.
+    Parameters
+    ----------
+    forward : int
+        ``1`` when the author is the stream's source, ``-1`` when it is the
+        destination.
+    is_recycle : bool
+        Whether the stream is a return line, which is drawn right to left.
+
+    Returns
+    -------
+    tuple[int, int]
+        ``(eastward, southward)`` grid step.
     """
     return (-forward if is_recycle else forward, 0)
 
 
 def _placed(unit: "Unit", port_name: str) -> tuple[str | None, float]:
-    """Where *unit* says its peer on *port_name* is drawn, and what that is worth.
+    """Return the direction a unit states for a port's peer, and its weight.
 
-    The ladder in the module docstring, in order: the class's
-    :attr:`~pandid.units.Unit.PLACES` entry, then the face the symbol
-    fixed the nozzle to, then ``None`` -- which is this unit saying
-    nothing, and leaves the caller to read the pipe instead.
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    port_name : str
+        Port connected to the peer.
 
-    The confidence is the class's own unless the entry overrides it,
-    which is how a column can insist on its overhead and merely prefer
-    its side draws. The caller drops anything at 0; what is returned
-    with it does not matter, and the check is here only so a class that
-    states nothing does not pay for a face nobody will read.
-
-    ``PLACES`` is looked up by the port's own name first and then by the
-    family name, so ``{"feed": "W"}`` covers a tower with eight of them
-    without listing eight keys.
-
-    Both rungs answer **as drawn**. A ``PLACES`` entry is authored in
-    the symbol's own frame -- it is written beside the artwork, against
-    the nozzle it names -- so it is turned and mirrored onto the sheet
-    by :func:`~pandid.portgeom.drawn_direction` exactly as
-    :func:`fixed_face` is by :func:`~pandid.portgeom.port_faces`. Read
-    untransformed, the two rungs disagreed the moment a unit was
-    mirrored: the artwork put the nozzle east and the class went on
-    asserting its peer lay west, so a stated ``mirrored=True`` was
-    honoured in the ink and discarded in the fit (#471). It also made a
-    redundant entry -- one that merely restates the face the symbol
-    already fixes -- a hazard rather than a no-op, which is what #471
-    measured; with the transform they are once again the same statement.
+    Returns
+    -------
+    tuple[str | None, float]
+        Compass direction as drawn, or ``None`` when the unit states no
+        direction, and the claim weight. A weight of 0 means the unit
+        states nothing at all.
     """
     confidence = float(type(unit).LAYOUT_CONFIDENCE)
     places = type(unit).PLACES
-    # Asked with ``in`` rather than ``get``, because an entry **of**
-    # ``None`` and no entry at all are different answers and ``get``
-    # returns ``None`` to both: no entry reads the face next, an empty
-    # entry is the class saying that face is artwork and stopping here.
+    # Test membership: an entry of ``None`` (face is artwork only) differs
+    # from no entry (read the fixed face next).
     key = port_name if port_name in places else family(port_name)
     if key in places:
         entry = places[key]
@@ -324,30 +184,45 @@ def _placed(unit: "Unit", port_name: str) -> tuple[str | None, float]:
 
 
 def family(port_name: str) -> str:
-    """The name a numbered family of nozzles shares: ``feed_3`` -> ``feed``.
+    """Return the family name of a numbered port.
 
-    A trailing ``_<n>`` and nothing else, because that is the only
-    generated suffix in the library (:func:`pandid.units._feed_names`
-    and its peers), and a looser rule would fold ``shell_in`` onto
-    ``shell``.
+    Only a trailing ``_<digits>`` is removed, so ``feed_3`` becomes
+    ``feed`` and ``shell_in`` is unchanged.
+
+    Parameters
+    ----------
+    port_name : str
+        Port name.
+
+    Returns
+    -------
+    str
+        Name without its numeric suffix.
     """
     head, _, tail = port_name.rpartition("_")
     return head if head and tail.isdigit() else port_name
 
 
 def fixed_face(unit: "Unit", port_name: str, placed: object) -> str | None:
-    """The face this port is drawn on, when it has no choice.
+    """Return the face a port is drawn on when it has only one.
 
-    ``None`` where the port has a menu and no one has picked from it:
-    :mod:`pandid.layout.faces` will choose once the boxes are settled,
-    and a placement pass that guessed the answer now would be placing
-    the boxes to suit a face it had itself invented.
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    port_name : str
+        Port to resolve.
+    placed : object
+        Placement to answer for, normally the solver's ``_Slot`` seeded from
+        the author's pin. The previous frame is not used, so laying out
+        twice gives the same answer.
 
-    ``placed`` is the placement to answer for and is the solver's
-    ``_Slot``, seeded from the author's :class:`~pandid.geometry.Pin`.
-    Reading the unit's ``frame`` instead would read back the placement
-    the *previous* run emitted, and laying a sheet out twice would not
-    draw it twice the same.
+    Returns
+    -------
+    str or None
+        Face stated with ``nozzle()``, the symbol's only face, or ``None``
+        when the port has a menu that :mod:`pandid.layout.faces` chooses
+        from later.
     """
     from pandid.portgeom import port_faces
 
@@ -359,23 +234,41 @@ def fixed_face(unit: "Unit", port_name: str, placed: object) -> str | None:
 
 
 def stacks(fs: "Flowsheet", units: list["Unit"]) -> dict["Unit", "Unit"]:
-    """Map each unit to the first unit of the stack it belongs to.
+    """Map each unit to the representative of its stack.
 
-    A stack is a run of connected units the solve put in **one column**,
-    and it is read off the settled grid rather than off the claims: what
-    matters to the caller is which boxes are drawn one above another,
-    and that is a fact about the answer and not about the argument that
-    produced it. :func:`~pandid.layout.coordinates._straighten` is the
-    caller, and it moves a stack as one thing -- shifting the vessel
-    onto its own spine and leaving the relief valve above it on the row
-    axis would say the arrangement in the row numbers and deny it in the
-    ink.
+    A stack is a set of units joined by process streams and placed in one
+    grid column. :func:`~pandid.layout.coordinates._straighten` moves a
+    stack as one group.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose process streams join the units.
+    units : list[Unit]
+        Units with settled grid columns.
+
+    Returns
+    -------
+    dict[Unit, Unit]
+        Representative unit for each unit; units in one stack share it.
     """
     from pandid.layout.stages import process_streams
 
     lead = {u: u for u in units}
 
     def find(u: "Unit") -> "Unit":
+        """Return the representative of a unit's stack.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to look up.
+
+        Returns
+        -------
+        Unit
+            Stack representative, with the path compressed.
+        """
         while lead[u] is not u:
             lead[u] = lead[lead[u]]
             u = lead[u]
