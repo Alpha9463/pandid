@@ -1,47 +1,26 @@
-"""PDF and PNG export.
+"""Export the rendered SVG to PDF and PNG.
 
-``.svg`` is the native output and needs nothing. ``.pdf`` and ``.png``
-go through svglib (SVG -> ReportLab drawing) and ReportLab (drawing ->
-PDF), with pypdfium2 rasterising that PDF for ``.png``. All three are
-pure Python or ship ``py3-none-<platform>`` wheels. cairosvg does not:
-it reaches libcairo through cairocffi, which ``dlopen``s the shared
-library at import time, so ``pip install 'pandid[pdf]'`` succeeds and
-then
+``.pdf`` goes through svglib (SVG to ReportLab drawing) and ReportLab;
+``.png`` rasterises that PDF with pypdfium2. All ship pure-Python or
+platform wheels. cairosvg is avoided because it loads libcairo at import
+time and fails with ``OSError: no library called "cairo-2"`` where GTK is
+absent.
 
-    OSError: no library called "cairo-2" was found
+svglib silently skips parts of SVG, four of which change a pandid drawing:
 
-comes out of the *import* on a machine that has GTK nowhere.
+- ``<use>`` of a ``<symbol>`` ignores the reference's size and the
+  viewBox, so equipment draws at its intrinsic size;
+- ``marker-end`` is ignored, so PFD arrowheads disappear;
+- ``dominant-baseline`` is ignored, so centred text sits about a quarter
+  of its size high, off its halo;
+- ``font-size`` is converted px to pt twice, so lettering is three
+  quarters size while geometry is right.
 
-svglib does not implement all of SVG, and what it does not implement it
-*skips silently*. Measured against a cairosvg reference over the gallery
-sheets, four gaps change the meaning of the drawing:
-
-- ``<use>`` of a ``<symbol>`` ignores the width/height on the reference
-  and the viewBox on the definition, so equipment is drawn at its
-  intrinsic size instead of the size the layout gave it.
-- ``marker-end`` is ignored outright, so on a PFD every flow arrow
-  disappears.
-- ``dominant-baseline`` is ignored, so a string centred on a point is
-  drawn with its *baseline* there and rides about a quarter of its type
-  size high. The opaque halo is struck round the same point and does not
-  move, so the two come apart: 2.7 px of a 13 px halo.
-- ``font-size`` is converted px to pt *and* the drawing the string sits
-  in is scaled px to pt, so lettering comes out at three quarters of the
-  size the file asked for while geometry beside it comes out right.
-
-:func:`flatten` resolves the first three into plain geometry and plain
-coordinates before svglib sees any of it, and
-:func:`_reject_unsupported` then refuses to export at all if the
-renderer has grown some *other* construct this file does not know about,
-so the next gap is a loud failure rather than a quietly wrong drawing.
-
-The fourth is applied twice rather than skipped, so no rewriting of the
-SVG can state it away. :func:`_type_scale` measures the ratio and
-:func:`to_pdf` corrects it on the drawing, after svglib has built it and
-before ReportLab draws it.
-
-The ``.svg`` output itself is untouched: both happen on the way to the
-PDF and nowhere else.
+:func:`flatten` rewrites the first three into plain geometry, and
+:func:`_reject_unsupported` refuses any other construct svglib is known to
+drop, so a new gap fails loudly. :func:`to_pdf` corrects the fourth on the
+built drawing, using the ratio :func:`_type_scale` measures. The ``.svg``
+output is unaffected.
 """
 
 from __future__ import annotations
@@ -61,13 +40,9 @@ _XLINK_NS = "http://www.w3.org/1999/xlink"
 # pixel count at exactly this scale.
 _PX_PER_PT = 96 / 72
 
-# Constructs that reach the page in a browser and do not reach it in
-# svglib. Some are what flatten() removes and must therefore be gone by
-# the time the check runs; the rest are ones pandid does not emit today,
-# listed so that the day it starts emitting one the export stops instead
-# of dropping it. Only things svglib is *known* to ignore belong here: a
-# false alarm would refuse a drawing that would have exported perfectly
-# well.
+# Constructs svglib is known to drop. flatten() removes some; the rest
+# pandid does not emit yet, and are listed so export fails rather than
+# silently dropping them.
 _UNSUPPORTED_TAGS = {
     "use": "a <use> reference",
     "symbol": "a <symbol> definition",
@@ -87,34 +62,29 @@ _UNSUPPORTED_ATTRS = {
     "clip-path": "a clip-path reference",
     "mask": "a mask reference",
     "filter": "a filter reference",
-    # _resolve_baselines() takes this off every <text> it can place, so
-    # what is left is one on an ancestor, inherited by whatever text is
-    # below it: a shift this file has not applied and svglib will not
-    # either.
+    # Left only on an ancestor after _resolve_baselines(), so unapplied.
     "dominant-baseline": "a dominant-baseline away from the <text> it sets",
     "alignment-baseline": "an alignment-baseline",
 }
 
-# Absolute path commands and how many numbers each takes. pandid emits
-# only these: a route is moves and lines, with an elliptical arc where
-# one line hops over another. A relative or curve command would mean the
-# renderer changed.
+# Absolute path commands pandid emits, with their argument counts: moves,
+# lines and crossing arcs.
 _PATH_ARITY = {"M": 2, "L": 2, "A": 7}
 _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 
 def _tag(name: str) -> str:
+    """Return an SVG-namespaced element tag."""
     return f"{{{_SVG_NS}}}{name}"
 
 
 def _local(tag: object) -> str:
-    """The element name without its namespace."""
+    """Return the element name without its namespace."""
     return str(tag).rsplit("}", 1)[-1]
 
 
 def _num(value: float) -> str:
-    # Six decimals is below what a rasteriser can resolve at any plate
-    # size, and keeps the intermediate SVG legible by hand.
+    """Return a number with at most six decimals, trailing zeros removed."""
     return f"{value:.6f}".rstrip("0").rstrip(".") or "0"
 
 
@@ -122,6 +92,13 @@ def _num(value: float) -> str:
 
 
 def _viewbox(el: ET.Element) -> tuple[float, float, float, float]:
+    """Return an element's viewBox.
+
+    Raises
+    ------
+    RuntimeError
+        If it has no four-number viewBox.
+    """
     parts = [float(v) for v in (el.get("viewBox") or "").replace(",", " ").split()]
     if len(parts) != 4:
         raise RuntimeError(f"{_local(el.tag)} {el.get('id')!r} has no usable viewBox")
@@ -129,13 +106,24 @@ def _viewbox(el: ET.Element) -> tuple[float, float, float, float]:
 
 
 def _placement(use: ET.Element, symbol: ET.Element) -> str:
-    """The transform that puts *symbol* into the box *use* asks for.
+    """Return the transform placing ``symbol`` in the box ``use`` asks for.
 
-    The ``<symbol>`` viewport rule written out: scale the viewBox to the
-    reference's width and height, and, unless the definition gave up its
-    aspect ratio, keep the scale uniform and centre what is left over.
-    ``pandid.portgeom.ink_box`` resolves ports against that same centred
-    rectangle, so the two agree by construction.
+    Applies the ``<symbol>`` viewport rule: scale the viewBox to the
+    reference's size, uniformly and centred unless
+    ``preserveAspectRatio="none"``. ``pandid.portgeom.ink_box`` uses the
+    same rectangle for ports.
+
+    Parameters
+    ----------
+    use : Element
+        ``<use>`` element.
+    symbol : Element
+        ``<symbol>`` it references.
+
+    Returns
+    -------
+    str
+        SVG transform.
     """
     vx, vy, vw, vh = _viewbox(symbol)
     x, y = float(use.get("x", 0)), float(use.get("y", 0))
@@ -153,14 +141,18 @@ def _placement(use: ET.Element, symbol: ET.Element) -> str:
 
 
 def _expand_use(use: ET.Element, symbols: dict[str, ET.Element]) -> ET.Element:
-    """One ``<use>`` as a ``<g>`` holding a copy of what it named."""
+    """Return a ``<use>`` as a ``<g>`` holding a copy of its symbol.
+
+    Raises
+    ------
+    RuntimeError
+        If the reference names no ``<symbol>``.
+    """
     href = use.get("href") or use.get(f"{{{_XLINK_NS}}}href") or ""
     symbol = symbols.get(href.lstrip("#"))
     if symbol is None:
         raise RuntimeError(f"<use> references {href!r}, which is not a <symbol> in <defs>")
-    # Composed right to left, so the reference's own transform applies
-    # to the placed box rather than inside it -- which is what the
-    # renderer meant by putting rotate() and the mirror on the <use>.
+    # The use's own rotate/mirror applies to the placed box.
     own = use.get("transform")
     transform = f"{own} {_placement(use, symbol)}" if own else _placement(use, symbol)
     group = ET.Element(_tag("g"), {"transform": transform})
@@ -169,7 +161,13 @@ def _expand_use(use: ET.Element, symbols: dict[str, ET.Element]) -> ET.Element:
 
 
 def _path_tail(d: str) -> tuple[tuple[float, float], tuple[float, float]]:
-    """The last point on a path and the one before, for its angle."""
+    """Return a path's last two points, for its end angle.
+
+    Raises
+    ------
+    RuntimeError
+        If the path uses another command or has fewer than two points.
+    """
     tokens = _PATH_TOKEN.findall(d)
     points: list[tuple[float, float]] = []
     i = 0
@@ -187,12 +185,24 @@ def _path_tail(d: str) -> tuple[tuple[float, float], tuple[float, float]]:
 
 
 def _arrowhead(el: ET.Element, markers: dict[str, ET.Element]) -> ET.Element | None:
-    """The ``marker-end`` of *el* drawn where the marker would have
-    gone.
+    """Return ``el``'s end marker drawn as geometry, removing the attribute.
 
-    Returns ``None`` if *el* wears no end marker. The attribute is
-    removed either way, since it has been honoured here and nothing
-    downstream reads it.
+    Parameters
+    ----------
+    el : Element
+        Element that may carry ``marker-end``.
+    markers : dict[str, Element]
+        Markers by id.
+
+    Returns
+    -------
+    Element or None
+        Group drawing the head, or ``None`` without a marker.
+
+    Raises
+    ------
+    RuntimeError
+        If the marker is missing or not in ``userSpaceOnUse`` units.
     """
     ref = el.attrib.pop("marker-end", None)
     if not ref:
@@ -201,8 +211,7 @@ def _arrowhead(el: ET.Element, markers: dict[str, ET.Element]) -> ET.Element | N
     if marker is None:
         raise RuntimeError(f"marker-end={ref!r} names no <marker> in <defs>")
     if marker.get("markerUnits", "strokeWidth") != "userSpaceOnUse":
-        # strokeWidth units scale the head by the line it ends, which is
-        # a second rule to reproduce and one pandid has never asked for.
+        # pandid never uses strokeWidth-scaled markers.
         raise RuntimeError("only markerUnits='userSpaceOnUse' can be flattened")
 
     _, _, vw, vh = _viewbox(marker)
@@ -227,7 +236,7 @@ def _arrowhead(el: ET.Element, markers: dict[str, ET.Element]) -> ET.Element | N
 
 
 def _rewrite(parent: ET.Element, symbols: dict, markers: dict) -> None:
-    """Replace every ``<use>`` below *parent*; draw every end marker."""
+    """Expand every ``<use>`` and draw every end marker below ``parent``."""
     rewritten: list[ET.Element] = []
     for child in list(parent):
         if _local(child.tag) == "use":
@@ -235,10 +244,7 @@ def _rewrite(parent: ET.Element, symbols: dict, markers: dict) -> None:
         else:
             _rewrite(child, symbols, markers)
         rewritten.append(child)
-        # A marker paints after the element wearing it and before the
-        # next sibling, so the head goes here and not at the end of the
-        # parent: the halo that knocks a line out from under a label is
-        # painted by z-order too.
+        # Insert the head right after its element, keeping paint order.
         head = _arrowhead(child, markers)
         if head is not None:
             rewritten.append(head)
@@ -247,53 +253,42 @@ def _rewrite(parent: ET.Element, symbols: dict, markers: dict) -> None:
 
 # ------------------------------------------------------ baselines
 #
-# svglib maps ``text-anchor`` and nothing else about how a string sets:
-# search it for ``dominant-baseline`` and there is no match, so every
-# ``<text>`` is drawn with its alphabetic baseline on the ``y`` it was
-# given. The geometry the attribute stands for is a fixed fraction of
-# the font size, so honouring it here is arithmetic on ``y``. Written in
-# the same user units the font size is in, that shift rides through
-# whatever transform is above it, as it does in a browser.
+# svglib ignores dominant-baseline and sets text on its alphabetic baseline.
+# The shift is a fixed fraction of font size, applied to ``y``.
 
-# Where each value puts the alphabetic baseline relative to the anchored
-# point, in ascent and descent: ``shift = wa * ascent + wd * descent``,
-# descent being negative. Anything not here is refused rather than
-# guessed at: ``hanging`` is a baseline a browser reads out of the font
-# and ReportLab's base-14 metrics do not carry.
+# Baseline shift as ``wa * ascent + wd * descent`` (descent negative).
+# Unknown values such as "hanging" are refused.
 _BASELINES = {
-    # The value names the baseline svglib already draws on, so there is
-    # nothing to do but take the attribute off. "baseline" is not an SVG
-    # 1.1 keyword and a browser falls back to "auto" for it, which is
-    # this; pandid emits it above a unit, where the y it computed is a
-    # baseline.
+    # Already the alphabetic baseline; "baseline" falls back to "auto".
     "auto": (0.0, 0.0),
     "alphabetic": (0.0, 0.0),
     "baseline": (0.0, 0.0),
-    # ``middle`` is half the *x-height* above the alphabetic baseline
-    # and ``central`` the middle of the ascent/descent box, and only the
-    # second can be answered from what ReportLab holds for a base-14
-    # face: there is no x-height in it. For Helvetica the substitution
-    # is 0.2555 em against a true 0.2615 em, which is 0.07 px on a
-    # sheet's 12 px lettering.
+    # "middle" uses "central": base-14 metrics have no x-height, and for
+    # Helvetica the error is 0.006 em.
     "middle": (0.5, 0.5),
     "central": (0.5, 0.5),
 }
 
-# The face the backend will draw with. pandid writes
-# font-family="sans-serif" on every string, and svglib resolves that
-# generic family onto ReportLab's base 14 -- the ``/BaseFont
-# /Helvetica`` an exported PDF carries.
+# svglib maps pandid's sans-serif to ReportLab's base-14 Helvetica.
 _FACES = {False: "Helvetica", True: "Helvetica-Bold"}
-# ...and that face's ascent and descent in ems, for a machine without
-# the optional extra: flatten() is checked against every golden sheet
-# whether or not the backend is installed to draw one, and must not
-# answer differently for its absence. A test holds these to what
-# pdfmetrics says where both are present.
+# Helvetica ascent and descent in ems, used when ReportLab is absent so
+# flatten() gives the same result; a test checks them against pdfmetrics.
 _HELVETICA_EM = (0.718, -0.207)
 
 
 def _ascent_descent(bold: bool) -> tuple[float, float]:
-    """The drawing face's ascent and descent, as fractions of its em."""
+    """Return the drawing face's ascent and descent, in ems.
+
+    Parameters
+    ----------
+    bold : bool
+        Whether the face is bold.
+
+    Returns
+    -------
+    tuple[float, float]
+        Ascent and (negative) descent.
+    """
     try:
         from reportlab.pdfbase import pdfmetrics
     except ImportError:
@@ -303,7 +298,13 @@ def _ascent_descent(bold: bool) -> tuple[float, float]:
 
 
 def _font_size(el: ET.Element, inherited: float | None) -> float | None:
-    """The size *el* is set in, in user units, or the one inherited."""
+    """Return the font size ``el`` sets, or the inherited one.
+
+    Raises
+    ------
+    RuntimeError
+        If the size is not a user-unit length.
+    """
     raw = (el.get("font-size") or "").strip().removesuffix("px")
     if not raw:
         return inherited
@@ -314,7 +315,13 @@ def _font_size(el: ET.Element, inherited: float | None) -> float | None:
 
 
 def _set_baseline(text: ET.Element, size: float | None) -> None:
-    """One ``<text>``'s ``dominant-baseline`` folded into its ``y``."""
+    """Fold one ``<text>``'s ``dominant-baseline`` into its ``y``.
+
+    Raises
+    ------
+    RuntimeError
+        If the value is unsupported or no font size applies.
+    """
     value = (text.attrib.pop("dominant-baseline", None) or "").strip()
     if not value:
         return
@@ -336,13 +343,10 @@ def _set_baseline(text: ET.Element, size: float | None) -> None:
 
 
 def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
-    """Fold every ``dominant-baseline`` below *el* into its ``y``."""
+    """Fold every ``dominant-baseline`` below ``el`` into its ``y``."""
     size = _font_size(el, size)
     if _local(el.tag) == "text":
-        # And no further down: pandid writes no ``<tspan>``, and one
-        # wearing a baseline of its own would need a ``y`` of its own to
-        # move. Left for _reject_unsupported, which refuses the
-        # attribute wherever it is still set by the time it looks.
+        # pandid writes no <tspan>; any baseline left is refused later.
         _set_baseline(el, size)
         return
     for child in el:
@@ -350,6 +354,13 @@ def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
 
 
 def _reject_unsupported(root: ET.Element) -> None:
+    """Raise if ``root`` still uses a construct svglib would drop.
+
+    Raises
+    ------
+    RuntimeError
+        Naming the first unsupported element or attribute.
+    """
     for el in root.iter():
         name = _local(el.tag)
         if name in _UNSUPPORTED_TAGS:
@@ -367,12 +378,25 @@ def _reject_unsupported(root: ET.Element) -> None:
 
 
 def flatten(svg: str) -> str:
-    """*svg* with ``<use>``, ``marker-end`` and ``dominant-baseline``
-    resolved.
+    """Return ``svg`` rewritten without ``<use>``, markers or baselines.
 
-    The drawing is unchanged; only the way it is written down is.
-    Anything the PDF backend would have dropped without saying so raises
-    instead.
+    The drawing is unchanged. ``<defs>`` is removed once its contents have
+    been copied into place.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG.
+
+    Returns
+    -------
+    str
+        Equivalent SVG svglib can draw.
+
+    Raises
+    ------
+    RuntimeError
+        If anything svglib would drop remains.
     """
     ET.register_namespace("", _SVG_NS)
     ET.register_namespace("xlink", _XLINK_NS)
@@ -380,13 +404,9 @@ def flatten(svg: str) -> str:
     symbols = {el.get("id", ""): el for el in root.iter(_tag("symbol"))}
     markers = {el.get("id", ""): el for el in root.iter(_tag("marker"))}
     _rewrite(root, symbols, markers)
-    # After the expansion, so a symbol's own lettering -- the "M" on a
-    # motor operator -- is placed in the units the symbol is drawn in
-    # and then scaled by whatever placed it, rather than in the sheet's.
+    # After expansion, so symbol lettering shifts in the symbol's units.
     _resolve_baselines(root)
-    # <defs> now holds only definitions that have been copied to where
-    # they were used. Dropping it is what makes the check below mean
-    # something.
+    # Drop the now-copied definitions so the check sees only drawn content.
     for defs in root.findall(_tag("defs")):
         root.remove(defs)
     _reject_unsupported(root)
@@ -397,6 +417,13 @@ def flatten(svg: str) -> str:
 
 
 def _require(module: str, package: str, ext: str):
+    """Import an optional backend module.
+
+    Raises
+    ------
+    ImportError
+        Naming the ``pandid[pdf]`` extra to install.
+    """
     try:
         return __import__(module, fromlist=["_"])
     except ImportError as e:
@@ -408,25 +435,11 @@ def _require(module: str, package: str, ext: str):
 
 # ------------------------------------------------------ type size
 #
-# svglib turns a length into points twice on the way to a glyph and once
-# on the way to a line. ``convertLengthToPt`` multiplies ``font-size``
-# by its px-to-pt 0.75 to set the ReportLab ``String``'s ``fontSize``,
-# and the group holding the whole drawing is then scaled by that same
-# 0.75 to take user units to points -- so every string is drawn inside a
-# transform that has already made the conversion its own size carries.
-# Geometry takes the factor once and lands right; lettering lands at
-# three quarters. Measured against a rule of the same declared length in
-# the same document, a 100-unit capital drew a cap height 0.752 of the
-# 0.718 em Helvetica declares while the rule drew 1.000 of its length.
-#
-# One multiplier on every ``String`` puts it back, and it is measured
-# rather than written down. _TYPE_PROBE declares a square and a capital
-# at one size, so whatever svg2rlg makes of it states what a glyph is
-# drawn at against what a line of the same length is, and the ratio
-# between them is the whole correction. On an svglib that has stopped
-# converting twice it reads 1.0 and nothing is applied, which is the
-# difference between this ageing into a no-op and it ageing into
-# lettering four thirds too big with nothing to say so.
+# svglib converts font-size px to pt and then scales the whole drawing px
+# to pt again, so text draws at 0.75 size while geometry is right.
+# _TYPE_PROBE draws a 100-unit square and a 100-unit capital; the ratio of
+# their drawn sizes is the correction, and it becomes 1.0 if svglib is
+# fixed.
 _TYPE_PROBE = (
     '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" '
     'viewBox="0 0 100 100">'
@@ -437,12 +450,21 @@ _TYPE_PROBE = (
 
 
 def _leaves(node, scale: float = 1.0):
-    """Every drawn shape below *node*, with the scale it will be drawn
-    at.
+    """Yield every drawn shape below ``node`` with its vertical scale.
 
-    A group's transform applies to its children rather than to itself,
-    and both of the things weighed against each other here are heights,
-    so the y term of that transform is all either needs from it.
+    Only heights are compared, so only the transforms' y scale is used.
+
+    Parameters
+    ----------
+    node : reportlab Group or shape
+        Drawing node.
+    scale : float, default=1.0
+        Scale inherited from ancestors.
+
+    Yields
+    ------
+    tuple
+        ``(shape, scale)``.
     """
     contents = getattr(node, "contents", None)
     if contents is None:
@@ -454,15 +476,23 @@ def _leaves(node, scale: float = 1.0):
 
 @functools.cache
 def _type_scale() -> float:
-    """What svglib's idea of a string's size is out by, as a factor.
+    """Return the factor svglib's text size is off by.
 
-    One on a backend that sizes type the way it sizes everything else,
-    and four thirds on one that has taken the px-to-pt conversion twice.
+    1.0 if svglib sizes text like geometry; 4/3 if it converts twice.
+
+    Returns
+    -------
+    float
+        Correction factor.
+
+    Raises
+    ------
+    RuntimeError
+        If the probe does not produce one rule and one string.
     """
     svglib = _require("svglib.svglib", "svglib", ".pdf")
     drawing = svglib.svg2rlg(io.BytesIO(_TYPE_PROBE.encode("utf-8")))
-    # svg2rlg returns None rather than raising on a parse it cannot make
-    # sense of, which the count below reports as the nothing it is.
+    # svg2rlg returns None on a failed parse; the count check reports it.
     leaves = list(_leaves(drawing)) if drawing is not None else []
     rule = [scale * shape.height for shape, scale in leaves if hasattr(shape, "height")]
     letter = [scale * shape.fontSize for shape, scale in leaves if hasattr(shape, "fontSize")]
@@ -477,14 +507,17 @@ def _type_scale() -> float:
 
 
 def _rescale_type(drawing, factor: float) -> None:
-    """Draw every string in *drawing* at *factor* times the size svglib
-    set it.
+    """Scale every string's ``fontSize`` in ``drawing`` by ``factor``.
 
-    Nothing but ``fontSize`` moves, so no geometry can follow it. What a
-    ``text-anchor`` of ``middle`` or ``end`` shifts a string by is
-    worked out from that same ``fontSize`` when ReportLab draws it, so a
-    centred label is re-centred on the new size rather than left on the
-    old one.
+    Only font sizes change; ReportLab recomputes anchored text positions
+    from them.
+
+    Parameters
+    ----------
+    drawing : reportlab Drawing
+        Drawing from svglib.
+    factor : float
+        Correction factor.
     """
     for shape, _ in _leaves(drawing):
         if hasattr(shape, "fontSize"):
@@ -492,7 +525,25 @@ def _rescale_type(drawing, factor: float) -> None:
 
 
 def to_pdf(svg: str) -> bytes:
-    """*svg* as a one-page PDF, drawn as vectors at its own size."""
+    """Return ``svg`` as a one-page vector PDF at its own size.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG.
+
+    Returns
+    -------
+    bytes
+        PDF document.
+
+    Raises
+    ------
+    ImportError
+        If svglib or ReportLab is not installed.
+    RuntimeError
+        If the SVG cannot be drawn faithfully.
+    """
     svglib = _require("svglib.svglib", "svglib", ".pdf")
     renderPDF = _require("reportlab.graphics.renderPDF", "reportlab", ".pdf")
     drawing = svglib.svg2rlg(io.BytesIO(flatten(svg).encode("utf-8")))
@@ -503,7 +554,27 @@ def to_pdf(svg: str) -> bytes:
 
 
 def to_png(svg: str, scale: float = _PX_PER_PT) -> bytes:
-    """*svg* rasterised by way of that PDF, so the two agree."""
+    """Return ``svg`` rasterised from its PDF, so PNG and PDF agree.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG.
+    scale : float, default=_PX_PER_PT
+        Pixels per PDF point; the default gives the SVG's own pixel size.
+
+    Returns
+    -------
+    bytes
+        PNG image.
+
+    Raises
+    ------
+    ImportError
+        If an optional backend is not installed.
+    RuntimeError
+        If the SVG cannot be drawn faithfully.
+    """
     pdfium = _require("pypdfium2", "pypdfium2", ".png")
     _require("PIL.Image", "pillow", ".png")
     page = pdfium.PdfDocument(to_pdf(svg))[0]

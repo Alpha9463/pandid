@@ -1,29 +1,16 @@
-"""Instrument attachment: balloons anchored to a line or to equipment.
+"""Place attached instrument balloons from their hosts.
 
-A P&ID bubble is not a node in the process flow; it is furniture hung
-off a tap point. So an attached instrument takes no part in stage 1 (it
-has no column and no row) and its frame comes from its host instead: a
-point on the host stream's routed path, or the midpoint of a face of the
-host unit's drawn box, pushed out along a branch direction measured from
-the flow. The space it will need is reserved before stage 1 places
-anything -- see :mod:`pandid.layout.halo` -- so what it lands in is
-paper nothing else was allowed to take.
+An attached balloon is not a process node: it has no grid rank, and its
+frame comes from its host. The tap point is a point on the host stream's
+drawn path, or the midpoint of a face of the host unit, resolved through
+:mod:`pandid.portgeom`. The balloon hangs from the tap at a standoff
+distance and branch angle; :func:`_clear_standoff` may change the
+standoff to avoid other boxes, but never the tap. Room is reserved before
+stage 1 by :mod:`pandid.layout.halo`.
 
-The tap point is resolved through :mod:`pandid.portgeom`, so a balloon
-can never disagree with the nozzle geometry the router and renderer see.
-
-The tap is the anchor and never moves; the *standoff* -- how far out and
-in which direction -- is the only thing this module may choose, and it
-chooses it against everything already on the sheet. See
-:func:`_clear_standoff`.
-
-**Unless the author placed it.** A balloon carries a
-:class:`~pandid.geometry.Pin` like any other unit, and an absolute
-``x``/``y`` on one is honoured here, per axis, in place of the standoff
-this module would have chosen (#467). It is not a rank -- there is no
-grid for a bubble to stand in -- and ``col``/``row`` on one is still
-nothing this sweep can read, which
-:func:`pandid.validate.geometry_issues` reports as ``pin-not-honored``.
+An absolute ``x`` or ``y`` pin on a balloon replaces the standoff on that
+axis. A ``col`` or ``row`` pin has no meaning here and is reported as
+``pin-not-honored`` by :func:`pandid.validate.geometry_issues`.
 """
 
 from __future__ import annotations
@@ -38,103 +25,99 @@ if TYPE_CHECKING:
 
 Point = tuple[float, float]
 
-#: How many times :func:`place_attached` may move a balloon before
-#: :meth:`pandid.flowsheet.Flowsheet.route` gives up and warns.
-#:
-#: Placing and routing chase each other: a balloon is placed on its
-#: host's routed path, and the box it lands in is an obstacle the router
-#: then avoids, which can bend that very path. Every sheet shipped here
-#: settles in one or two passes and the worst converging sheet found by
-#: search took four, but there is no quantity the recursion descends,
-#: and sheets do exist that cycle between two or three arrangements
-#: forever. The cap is what stops such a drawing from hanging, and the
-#: warning it raises is what stops it from being silently whichever
-#: arrangement the last pass happened to leave. Every pass ends on a
-#: *route*, so running out of them still leaves each line drawn to the
-#: balloon it belongs to.
+#: Maximum placement and routing passes in
+#: :meth:`pandid.flowsheet.Flowsheet.route`. A balloon is placed on its
+#: host's routed path and then becomes an obstacle that can bend that path,
+#: so some sheets cycle; the cap ends the loop with a warning. Every pass
+#: ends on a route, so every line still reaches its balloon.
 MAX_PLACEMENT_PASSES = 6
 
-#: How far out :func:`_clear_standoff` walks a balloon that collides,
-#: per step, and how many steps it may take.
-#:
-#: A step is the balloon's own radius. Shorter, and a box only just
-#: clear of one obstacle needs several steps to clear the next; longer,
-#: and the first free ring is further out than the drawing needed.
-#: Eight of them is enough to walk a bubble clear of the tallest vessel
-#: in the corpus, and a search that runs out returns the least-bad
-#: standoff rather than growing without bound.
+#: Distance step, about one balloon radius, and number of steps
+#: :func:`_clear_standoff` may move a colliding balloon outward.
 STANDOFF_STEP = 22.0
 STANDOFF_STEPS = 8
 
-#: How far either side of the branch angle asked for the search may
-#: swing the balloon, and in what increments. The sweep runs at a fixed
-#: distance from the tap, so it is a rotation about the anchor and not a
-#: move of it.
+#: Largest swing either side of the requested branch angle, and its
+#: increment, in degrees. The swing rotates the balloon about its tap.
 SWEEP_LIMIT = 60.0
 SWEEP_STEP = 15.0
 
-#: How near the host's own reference direction a swept angle may come.
-#: That reference is the flow at a stream tap and the face tangent on a
-#: unit host, so a branch along it lays the balloon *on* the line it
-#: reads or flat against the face it is mounted on. Both are clear of
-#: every box on the sheet and neither can be read, which is exactly the
-#: kind of answer a box-overlap search would otherwise be delighted with.
+#: Smallest angle, in degrees, between a swept branch and the host's
+#: reference direction (the flow at a stream tap, the face tangent on a
+#: unit). A smaller angle lays the balloon along the line or the face.
 MIN_BRANCH = 20.0
 
-#: What a balloon the search *had* to move clears its neighbours by.
-#:
-#: Nothing is ever moved in order to reach it: the standoff the author
-#: asked for is kept whenever it merely does not overlap, which is what
-#: leaves a bubble deliberately set a pixel off a primary element (11's
-#: FT-303 on FE-303) exactly where it was put. The clearance applies
-#: only once a collision has already forced a different standoff, and
-#: then it is the difference between a balloon that reads as separate
-#: and one that is separate by a hair.
+#: Clearance a balloon keeps once a collision has forced a new standoff.
+#: The requested standoff is kept whenever it merely does not overlap.
 RESOLVED_CLEARANCE = 6.0
 
-#: How much room in front of a nozzle a *moved* balloon leaves the
-#: router. ``VisibilityGraph`` stands every run off its nozzle before it
-#: may turn, by this much or more -- more where a label has to be
-#: cleared, but the label pass has not run the first time a balloon is
-#: placed, so the bare stand-off is the one figure true at every call.
-#: Under-stating it leaves a nozzle the router can still escape from;
-#: over-stating it would walk bubbles out past corridors nothing needs.
+#: Length of the strip in front of a connected nozzle that a moved balloon
+#: keeps clear, matching the router's minimum stand-off.
 ESCAPE_ROOM = 25.0
 
-#: The overlap :func:`pandid.validate.validate` tolerates before it
-#: calls two boxes collided -- its ``_TOL``, restated rather than
-#: imported so that a layout phase does not reach into the checker's
-#: privates. ``tests/test_instruments.py`` pins the two together, because
-#: a search that resolved to a tighter rule than the check would report
-#: overlaps it had just declared itself finished with.
+#: Overlap :func:`pandid.validate.validate` tolerates before it reports a
+#: collision. Restated here; ``tests/test_instruments.py`` keeps the two
+#: equal.
 TOUCHING = 1.0
 
 Box = tuple[float, float, float, float]
 
 
 def is_attached(unit: "Unit | None") -> bool:
-    """True when a host positions this unit, not the coordinate pass.
+    """Return whether a unit is positioned by a host.
 
-    Which balloons stage 2 resolves *from something else* rather than
-    from their wiring; :func:`pandid.layout.stages.is_control` is the
-    question of which units stage 2 places at all, and is the one the
-    process/control boundary is drawn on.
+    :func:`pandid.layout.stages.is_control` decides which units stage 2
+    places; this decides which of those resolve from a host.
+
+    Parameters
+    ----------
+    unit : Unit or None
+        Unit to test.
+
+    Returns
+    -------
+    bool
+        Whether the unit has a host.
     """
     return unit is not None and getattr(unit, "host", None) is not None
 
 
 def _rotate_ccw(vx: float, vy: float, degrees: float) -> Point:
-    """Rotate a direction anticlockwise as drawn, on a y-down canvas."""
+    """Rotate a direction anticlockwise as drawn on the y-down canvas.
+
+    Parameters
+    ----------
+    vx, vy : float
+        Direction to rotate.
+    degrees : float
+        Anticlockwise angle.
+
+    Returns
+    -------
+    Point
+        Rotated direction.
+    """
     rad = math.radians(degrees)
     c, s = math.cos(rad), math.sin(rad)
     return (vx * c + vy * s, -vx * s + vy * c)
 
 
 def stream_path(stream: "Stream") -> list[Point]:
-    """The stream's drawn polyline.
+    """Return the polyline a stream is drawn along.
 
-    Exactly what :meth:`SvgRenderer._draw_streams` puts on the sheet, so
-    ``at=`` measures along the line the reader sees.
+    It matches the renderer's line, so ``at=`` measures along what the
+    reader sees.
+
+    Parameters
+    ----------
+    stream : Stream
+        Stream to trace.
+
+    Returns
+    -------
+    list[Point]
+        Port points and route waypoints, or an empty list before either end
+        has a frame.
     """
     from pandid.portgeom import port_point
 
@@ -190,7 +173,20 @@ def logical_stream_path(stream: "Stream") -> list[Point]:
 
 
 def _along(points: list[Point], fraction: float) -> tuple[Point, Point]:
-    """Point at ``fraction`` along a polyline, and the direction."""
+    """Return the point a fraction along a polyline, and its direction.
+
+    Parameters
+    ----------
+    points : list[Point]
+        Polyline with at least one point.
+    fraction : float
+        Fraction of the total length, clamped to ``[0, 1]``.
+
+    Returns
+    -------
+    tuple[Point, Point]
+        Point and unit direction of the segment it lies on.
+    """
     lengths = [math.dist(points[i], points[i + 1]) for i in range(len(points) - 1)]
     total = sum(lengths)
     if total <= 0.0:
@@ -226,10 +222,7 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     from pandid.streams import Stream
 
     host = inst.host
-    # Not one of the guard clauses below: those answer "not placeable
-    # yet", and a balloon with no host at all is one place_attached
-    # never offers, since it only sweeps what is_attached() has already
-    # said yes to.
+    # place_attached only offers attached balloons.
     assert host is not None
     if isinstance(host, Stream):
         points = logical_stream_path(host)
@@ -243,13 +236,23 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
 
 
 def _intrusion(a: Box, b: Box, gap: float) -> float:
-    """How much of *a* lies within *gap* of *b*, as an area.
+    """Return the area of overlap between two boxes grown by a gap.
 
-    ``gap = -TOUCHING`` is exactly the overlap
-    :func:`pandid.validate.validate` reports, so "the search found a free
-    standoff" and "the checker finds no overlap" are the same statement
-    rather than two rules that have to be kept in step. A positive
-    *gap* asks for daylight as well.
+    With ``gap = -TOUCHING`` this is the overlap
+    :func:`pandid.validate.validate` reports; a positive gap also demands
+    clearance.
+
+    Parameters
+    ----------
+    a, b : Box
+        Boxes as ``(left, top, right, bottom)``.
+    gap : float
+        Clearance added to the overlap test.
+
+    Returns
+    -------
+    float
+        Overlap area, zero when clear.
     """
     wide = min(a[2], b[2]) - max(a[0], b[0]) + gap
     tall = min(a[3], b[3]) - max(a[1], b[1]) + gap
@@ -289,14 +292,21 @@ def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
 
 
 def _branch_angles(requested: float) -> list[float]:
-    """Branch angles to try, the one asked for first.
+    """Return the branch angles to try, nearest the request first.
 
-    Ordered by how far each is from the request, so the search gives up
-    as little of the author's intent as the sheet allows. The near-axial
-    ones are dropped (see :data:`MIN_BRANCH`) *except* for the request
-    itself, which is honoured however it is spelled: an author who puts
-    a bubble along the line has said something, and this is not the
-    place to overrule it.
+    Angles within :data:`MIN_BRANCH` of the reference direction are left
+    out, except the requested angle itself.
+
+    Parameters
+    ----------
+    requested : float
+        Branch angle the author asked for.
+
+    Returns
+    -------
+    list[float]
+        Requested angle, then swings of :data:`SWEEP_STEP` up to
+        :data:`SWEEP_LIMIT` either side.
     """
     floor = math.sin(math.radians(MIN_BRANCH))
     angles = [requested]
@@ -310,8 +320,26 @@ def _branch_angles(requested: float) -> list[float]:
 
 def _standoff_box(tap: Point, ref: Point, distance: float, angle: float,
                   w: float, h: float) -> Box:
-    """The drawn box of a balloon hung *distance* out from *tap* at
-    *angle* off the host's reference direction."""
+    """Return the box of a balloon hung from a tap.
+
+    Parameters
+    ----------
+    tap : Point
+        Tap point.
+    ref : Point
+        Host's reference direction.
+    distance : float
+        Standoff from the tap to the balloon centre.
+    angle : float
+        Branch angle from ``ref``, anticlockwise.
+    w, h : float
+        Balloon size.
+
+    Returns
+    -------
+    Box
+        ``(left, top, right, bottom)``.
+    """
     ux, uy = _rotate_ccw(ref[0], ref[1], angle)
     cx, cy = tap[0] + ux * distance, tap[1] + uy * distance
     return (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
@@ -321,34 +349,40 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                     w: float, h: float,
                     obstacles: list[Box],
                     keepouts: list[Box]) -> tuple[float, float]:
-    """``(distance, angle)`` to hang *inst* at: what it asked for, or the
-    nearest standoff out from it that nothing else is standing in.
+    """Return the standoff to hang a balloon at.
 
-    The anchor does not move. Only the standoff does, and only outward:
-    the balloon is swung about the tap at one distance, and *then* the
-    distance grows -- never the reverse. That is what makes a pass
-    monotone, which is what makes the placement/routing fixed point in
-    :meth:`pandid.flowsheet.Flowsheet.route` terminate rather than
-    trading two arrangements back and forth until
-    :data:`MAX_PLACEMENT_PASSES` trips.
+    The requested standoff is used if it overlaps nothing. Otherwise the
+    branch angle is swung about the tap at that distance, then the
+    distance grows by :data:`STANDOFF_STEP`. Standoffs only move outward,
+    which lets the placement and routing loop in
+    :meth:`pandid.flowsheet.Flowsheet.route` settle. A replacement standoff
+    must also clear the nozzle keepouts by :data:`RESOLVED_CLEARANCE`.
 
-    *obstacles* is every drawn box already on the sheet -- the ranked
-    units, and the balloons this sweep has placed before this one. Not
-    the routed paths: a standoff chosen against a line the router has
-    yet to redraw is a standoff that moves every time the line does, and
-    that loop has no bottom. *keepouts* holds the nozzle stand-offs of
-    :func:`_nozzle_keepouts`, which only a *replacement* standoff has to
-    respect.
+    A balloon on a stream whose requested box straddles its tap is an
+    inline primary element (``offset=0``) and is kept where requested, as
+    the router also routes through it.
 
-    Deliberately no search at all for a balloon that straddles its own
-    tap **on a stream**: that is an in-line primary element (``offset=0``
-    is how an orifice plate is drawn), and it is the same test
-    :class:`pandid.routing.visibility.VisibilityGraph` uses to leave one
-    out of its obstacles -- so a symbol the router draws *through* is one
-    this refuses to push aside. A balloon straddling a *unit* face is not
-    that: there is no line for it to be in, and what it is actually doing
-    is standing half inside the wall it is mounted on, which is the
-    collision rather than the exception to it.
+    Parameters
+    ----------
+    inst : Instrument
+        Balloon to place.
+    tap : Point
+        Its tap point.
+    ref : Point
+        Host's reference direction.
+    w, h : float
+        Balloon size.
+    obstacles : list[Box]
+        Placed process boxes and balloons placed earlier in this pass.
+        Routes are excluded, because they are redrawn after placement.
+    keepouts : list[Box]
+        Nozzle exit strips that a replacement standoff must clear.
+
+    Returns
+    -------
+    tuple[float, float]
+        Distance and angle. When nothing is clear, the candidate with the
+        least overlap with ``obstacles``.
     """
     from pandid.streams import Stream
 
@@ -369,11 +403,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                 gap, against = RESOLVED_CLEARANCE, obstacles + keepouts
             if not any(_intrusion(box, o, gap) > 0.0 for o in against):
                 return distance, angle
-            # Ranked on one rule for every candidate, and the checker's
-            # rather than the search's: where the sheet has no free
-            # standoff at all, the balloon should land on the one that
-            # overlaps least of what a reader would be shown, not on the
-            # one that came closest to a clearance nothing could meet.
+            # Rank fallbacks by the overlap validation reports.
             crowding = sum(_intrusion(box, o, -TOUCHING) for o in obstacles)
             if least is None or crowding < least:
                 fallback, least = (distance, angle), crowding
@@ -400,17 +430,13 @@ def place_attached(fs: "Flowsheet") -> bool:
     from pandid.portgeom import resolve_size, unit_box
 
     moved = False
-    # What a balloon has to keep out of. The ranked units are all of it
-    # to begin with -- an attached one carries a frame from the last
-    # sweep, and reading that back is what would make this pass depend
-    # on the one before it -- and each balloon joins as it is placed.
+    # Start from process boxes only; an attached balloon's old frame would
+    # make this pass depend on the last. Each balloon joins once placed.
     obstacles = [unit_box(u, u.frame) for u in fs.units
                  if u.frame is not None and not is_attached(u)]
     coarse = fs._coarse_layout_candidate
     keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if coarse else 0.0)
-    # Balloons chain (an interlock hung under a controller hung off a
-    # transmitter), so resolve a host before whatever hangs on it,
-    # sweeping until nothing new can be placed.
+    # Balloons chain, so place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     while pending:
         progressed = False
@@ -428,23 +454,9 @@ def place_attached(fs: "Flowsheet") -> bool:
                 [] if coarse else keepouts)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
-            # An absolute pin supersedes the standoff on the axis it
-            # names, exactly as it supersedes a grid rank on every other
-            # unit -- and per axis for the same reason, so
-            # ``pin(x=...)`` fixes the column the bubble stands in and
-            # leaves the search to find it clear air down the page.
-            #
-            # Read off ``pin_`` rather than off the raw coordinates, so
-            # ``pin(port="signal", y=...)`` puts the *nozzle* on that
-            # elevation: the property derives the corner from the
-            # nozzle relation the author stated (#294), and a balloon's
-            # signal terminal is the point on it worth lining up.
-            #
-            # Not swept, not cleared, not walked out of a collision: the
-            # author said where. What the search may still choose is the
-            # standoff on the axes they left alone, and the tap is the
-            # host's either way, so the leader line still lands on the
-            # line or the face the balloon reads.
+            # An absolute pin replaces the standoff on its axis. ``pin_``
+            # gives the corner implied by a pinned nozzle, so
+            # ``pin(port="signal", y=...)`` aligns the signal terminal.
             pin = inst.pin_
             if pin is not None:
                 cx = cx if pin.x is None else float(pin.x)
@@ -453,36 +465,24 @@ def place_attached(fs: "Flowsheet") -> bool:
             old = inst.frame
             if old is None or abs(old.x - cx) > 0.01 or abs(old.y - cy) > 0.01:
                 moved = True
-            # Carry the placement transform across: an attached balloon
-            # is positioned by its host rather than by the coordinate
-            # pass, so without this a pin(mirrored=...) on one is
-            # silently dropped, and mirroring is how a balloon puts its
-            # signal port on the side the run actually comes from.
+            # Carry the pinned transform, so mirroring can put the signal
+            # port on the side its run comes from.
             inst.frame = Frame(
                 x=cx, y=cy, w=w, h=h, label_pos="center",
                 orientation=pin.orientation if pin else 0.0,
                 mirrored=pin.mirrored if pin else False,
                 mirror_y=pin.mirror_y if pin else False,
-                # Faces chosen in layout ride across the re-place.
-                # Re-deciding here would move a nozzle the router has
-                # already drawn to, and would make the answer depend on
-                # the routed path, which is itself downstream of the
-                # face.
+                # Keep chosen faces; changing them would move a nozzle
+                # the router has already reached.
                 port_faces=dict(old.port_faces) if old is not None else {},
             )
             inst.tap = (tx, ty)
             pending.remove(inst)
             progressed = True
         if not progressed:
-            # A sweep that placed nothing will place nothing next time
-            # either: what is left hangs off a host that is itself
-            # waiting, so the chain closes on itself. Stopping is right;
-            # stopping *quietly* was the defect. Each survivor keeps
-            # ``frame = None``, which no later phase fills in and the
-            # renderer refuses outright, so the sheet has an instrument
-            # on it that cannot be drawn.
+            # The rest hang on each other in a closed chain. They keep
+            # ``frame = None`` and are reported as unplaced.
             break
-    # Set on every call, placed or not, so this is the last sweep's
-    # answer rather than an accumulation across the route() fixed point.
+    # Replace, not accumulate, across the route() passes.
     fs.unplaced_instruments = list(pending)
     return moved

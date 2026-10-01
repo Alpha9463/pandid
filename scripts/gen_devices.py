@@ -1,67 +1,35 @@
 #!/usr/bin/env python3
 """Generate pandid/devices.py: one class per piece of equipment the registry draws.
 
-The library models equipment as a ``kind`` and a ``variant``, which is what the
-symbol registry is keyed by and what a sheet is drawn from. That is the right
-model for *drawing* and the wrong one for *finding*: an engineer looking for a
-cyclone searches for ``Cyclone``, not for ``Separator(variant="cyclone")``, and
-a type checker asked about ``sep.underflow`` on the second form can only shrug,
-because the nozzle depends on a string. This file is the mapping from the one to
-the other, and ``pandid/devices.py`` is what it emits.
+:mod:`pandid.units` models equipment as a ``kind`` and a ``variant``, which is
+how the symbol registry is keyed. ``pandid/devices.py`` adds named classes, so
+an engineer finds ``Cyclone`` rather than ``Separator(variant="cyclone")`` and
+a type checker sees ``cyclone.underflow``.
 
-The rule, in one line: **a class is what the equipment is; ``variant=`` is how it
-is drawn.** Precisely -- a variant becomes a class when it names a distinct
-*scheduled item*, something with a row of its own on an equipment list. It stays
-a variant when it names a support, a roof, a cladding, an attitude, a drawn
-internal, a certification rating or a body style within one bought item. Outside
-``pandid.document._MAJOR_EQUIPMENT``, which is already this library's own
-definition of "bought as an item", a variant becomes a class only where the
-**ports** or a **declarable property** differ. That line is what keeps this at
-seventy-odd classes instead of one apiece for every registered variant.
+The rule: **a class is what the equipment is; ``variant=`` is how it is
+drawn.** A variant becomes a class when it names a distinct scheduled item (a
+row of its own on an equipment list). It stays a variant when it names a
+support, roof, cladding, attitude, drawn internal, certification rating or body
+style. Outside ``pandid.document._MAJOR_EQUIPMENT``, a variant becomes a class
+only where the ports or a declarable property differ.
 
-**A narrower or wider port set earns a class with no drawing behind it at
-all.** Every class this file generates is named for a *drawing*: a
-registered ``(kind, variant)`` this module claims and hands a ``PORTS``
-list read off the registry. ``pandid.units.DistillationColumn``,
-``pandid.units.Absorber`` and ``pandid.units.Stripper`` are not that. All
-three draw exactly what ``Column`` already draws -- ISO gives none of
-them a symbol, so there is no new stencil, no new registry key, and
-nothing for :func:`claims` to see -- and what tells them apart is only
-which of the general tower's return nozzles each one has: a distillation
-column has all four (a reboiler, a condenser and the reflux that closes
-the loop between them), a stripper a reboiler and no condenser, an
-absorber neither. So none is in ``DEVICES``, ``OWNS`` or
-``STAYS_ON_BASE``, and this script does not generate any of them; they are
-written by hand in ``pandid/units.py`` next to ``Column`` itself, the one
-other class in this codebase whose ports this file does not own. A future
-class earns the same treatment on the same test: no drawing of its own,
-and a port set narrower or wider than its base's that stating the base's
-own set on it would be false.
+A different port set with no drawing of its own also earns a class, but not
+here: ``pandid.units.DistillationColumn``, ``Absorber`` and ``Stripper`` draw
+the ``Column`` symbol and differ only in their return ports, so they are
+written by hand in ``pandid/units.py``.
 
-Three tables say the rest of it, and :func:`claims` holds them to the registry:
+Three tables hold the mapping:
 
-``DEVICES``       the (kind, variant) a class is *named for*, its class name and
-                  its docstring. One entry per class.
-``OWNS``          the other drawings a class also answers for, as
-                  ``{class-local variant: registry variant}``. A class not named
-                  here owns its ``DEVICES`` drawing and nothing else.
-``STAYS_ON_BASE`` every drawing that gets no class, each with the word from the
-                  rule that says why.
+``DEVICES``       the (kind, variant) each class is named for, its class name
+                  and its docstring. One entry per class.
+``OWNS``          other drawings a class also answers for, as
+                  ``{class-local variant: registry variant}``.
+``STAYS_ON_BASE`` every drawing that gets no class, with the reason.
 
-**The anti-drift check is the point.** :func:`claims` imports the live registry
-and refuses to generate unless every registered ``(kind, variant)`` is claimed
-exactly once, by one of those three. Vendor a new stencil and this script stops
-until someone has said what the equipment *is*, which is the one question a
-symbol table cannot answer for itself. It mirrors the ``SystemExit`` orphan
-checks in ``scripts/vendor_symbols.py``, in the same voice and for the same
-reason.
-
-It claims every registry **key**, not every distinct drawing. ``valve/default``
-and ``valve/gate`` are one shape under two keys, as are ``hex/default`` and
-``hex/shell_tube``, ``fitting/default`` and ``fitting/flange``, and
-``reducer/default`` and ``reducer/concentric``; ``instrument/sis`` and
-``instrument/logic`` are the *same Symbol object* registered twice. Each key is
-claimed on its own, because each is a name a caller may write.
+:func:`claims` refuses to generate unless every registered ``(kind, variant)``
+key is claimed exactly once, so a newly vendored stencil must be classified
+first. Keys are claimed individually even where two share one drawing (such as
+``valve/default`` and ``valve/gate``), since each is a name a caller may write.
 
 Run:  python scripts/gen_devices.py
 """
@@ -80,38 +48,27 @@ from pandid.render.symbols import default_registry  # noqa: E402
 
 OUT = HERE.parent / "pandid" / "devices.py"
 
-# Kinds that must never get a class, and why. Refused by name rather than left
-# out, so adding one is a deliberate act with the reason to read first.
-#
-# All three would be *silently* wrong rather than merely unhelpful, which is
-# what puts them here and not in STAYS_ON_BASE:
+# Kinds that must never get a class, with the reason. A subclass of any of
+# these would be silently wrong.
 REFUSED_KINDS = {
-    # An Instrument's variants name a FUNCTION, not a device: "sis", "logic" and
-    # "interlock" are the logic square a trip is drawn with, one thing acting in
-    # several places, and Instrument.repeats() is what lets the sheet draw it in
-    # each of them. Its __init__ signature is different too (type/number, not
-    # name), and pandid.spec._resolve_kind already refuses it in `units:`
-    # because its tag and its attachment live in the `instruments:` section.
+    # Instrument variants name functions (a logic square may repeat; see
+    # Instrument.repeats), its constructor takes type/number, and pandid.spec
+    # keeps instruments in their own section.
     "instrument": "its variants are functions, not devices; see Instrument.repeats",
-    # _Boundary.repeats tests `type(other) is type(self)`, so a subclass of Feed
-    # or Product would quietly stop matching the flags it is meant to repeat
-    # with, and a utility header tapped twice would be reported as two services
-    # the reader cannot tell apart. A flag is where the sheet ends, and a sheet
-    # ends one way.
+    # _Boundary.repeats tests the exact type, so a subclassed flag would stop
+    # matching the flags it repeats with.
     "feed": "_Boundary.repeats tests the exact type; a subclass defeats it silently",
     "product": "_Boundary.repeats tests the exact type; a subclass defeats it silently",
 }
 
 
-# (kind, variant) -> (class name, docstring). The drawing each class is *named
-# for*: its own, and the one ``Cyclone("S-1")`` with no variant= asks for.
+# (kind, variant) -> (class name, docstring): the drawing each class is named
+# for, and the one it draws with no variant= argument.
 DEVICES = {
     # --- Pumps -------------------------------------------------------------
     #
-    # Every pump variant is a distinct scheduled item: a gear pump and a
-    # centrifugal are different machines with different curves, bought
-    # separately and listed separately, even though the flowsheet sees the same
-    # suction and discharge on all six.
+    # Each pump type is a separate machine and equipment-list row, though all
+    # have suction and discharge.
     ("pump", "default"): ("CentrifugalPump", """Centrifugal pump: the volute-and-impeller workhorse.
 
     What ``Pump`` draws when it is asked for by name, under the name a
@@ -181,10 +138,8 @@ DEVICES = {
 
     # --- Heat exchangers ---------------------------------------------------
     #
-    # ``hex`` is in _MAJOR_EQUIPMENT, so the test is "distinct scheduled item"
-    # rather than "different ports" -- but five of these differ in ports as
-    # well, because their two sides are not a shell and tubes and they refuse to
-    # borrow the vocabulary. See HeatExchanger._VARIANT_PORTS.
+    # hex is major equipment, so each scheduled item is a class. Five also
+    # differ in ports (HeatExchanger._VARIANT_PORTS).
     ("hex", "default"): ("ShellAndTubeExchanger", """Shell-and-tube exchanger: a tube bundle inside a shell.
 
     The default exchanger and the one most of the family's drawings are
@@ -258,11 +213,8 @@ DEVICES = {
 
     # --- Evaporators -------------------------------------------------------
     #
-    # Named for the heating element, because that is what a process design
-    # picks and what a vendor quotes. ``ThinFilmEvaporator`` above is the
-    # exception that proves it: it is a ``hex`` and not an ``evaporator``
-    # because its own artwork is a jacketed wiped-film column with no vapour
-    # nozzle of its own, and it kept the kind it was vendored under.
+    # Named for the heating element, which is what a design picks.
+    # ThinFilmEvaporator above stays a hex: its artwork has no vapour port.
     ("evaporator", "calandria"): ("CalandriaEvaporator", """Calandria (short-tube) evaporator: a short bundle with a central downcomer.
 
     The sugar and salt workhorse, and the body most people picture when
@@ -318,10 +270,8 @@ DEVICES = {
 
     # --- Separators --------------------------------------------------------
     #
-    # Four of these are the mechanical separators, which sort by size, inertia
-    # or magnetism rather than into phases, and three more collect *dust*. See
-    # the module docstring of pandid/devices.py for the port vocabulary that
-    # follows from that, and for what it costs.
+    # Mechanical separators and dust collectors draw ``overflow`` and
+    # ``underflow``; see the generated module docstring.
     ("separator", "cyclone"): ("Cyclone", """Cyclone separator: a vortex throws the heavy phase down.
 
     The gas-solid workhorse -- off a spray dryer, a fluidised bed, a
@@ -331,10 +281,8 @@ DEVICES = {
     says nothing true turned.
 
     The draws are ``overflow`` and ``underflow``, not ``vapor`` and
-    ``liquid``: what leaves the apex is a catch, and calling a hopper
-    full of dust a liquid is the bend this class exists to stop.
-    ``Separator(variant="cyclone")`` draws the same pair as of 0.1.2;
-    see the module docstring.
+    ``liquid``, because the apex discharges a solid catch.
+    ``Separator(variant="cyclone")`` draws the same pair.
 """),
     ("separator", "gravity"): ("GravitySeparator", """Gravity separator: velocity drops and the heavy phase falls.
 
@@ -351,13 +299,8 @@ DEVICES = {
     ("separator", "sifter"): ("Screen", """Screen: a deck sorting by size, oversize over and fines through.
 
     Named ``Screen`` rather than ``Sifter`` because that is the word a
-    specification uses and the word an engineer searches for, and
-    because the one drawing stands for both duties a screen is bought
-    for: **scalping**, taking a little oversize off a lot of product,
-    and **sizing**, cutting a feed into fractions. Which of the two
-    draws is the product is a fact about the service and not about the
-    machine, which is why the nozzles name the two positions and not the
-    contents.
+    specification uses. One drawing covers scalping and sizing; the ports
+    name positions because either draw may be the product.
 """),
     ("separator", "impact"): ("ImpactSeparator", """Impact separator: a baffle to throw the stream at.
 
@@ -366,100 +309,62 @@ DEVICES = {
 """),
     ("separator", "permanent_magnet"): ("MagneticSeparator", """Magnetic separator: tramp metal pulled out of a solids stream.
 
-    One class over both drawings, because the choice between a
-    **permanent** magnet (``default``) and an **electromagnet**
-    (``electromagnetic``) is a matter of how the field is made, not of
-    what the machine does or of how it is piped: same body, same hopper,
-    same two draws.
+    One class over both drawings: a **permanent** magnet (``default``)
+    and an **electromagnet** (``electromagnetic``) differ only in how the
+    field is made, with the same body and draws.
 """),
     ("separator", "scrubber"): ("Scrubber", """Wet scrubber: a wash liquid takes the contaminant out of a gas.
 
-    Cleaned gas off the side, dirty scrubbing liquid out of the hopper,
-    which really is a vapour and a liquid -- so unlike the collectors
-    above this one keeps ``vapor`` and ``liquid``. A scrubber cleans a
-    gas rather than classifying a solid.
+    Cleaned gas leaves the side and dirty liquid the hopper, a true
+    vapour and liquid, so unlike the dust collectors it keeps ``vapor``
+    and ``liquid``.
 """),
     ("separator", "venturi_scrubber"): ("VenturiScrubber", """Venturi scrubber: the wash is injected into an accelerating throat.
 
-    Its own class rather than a body style of :class:`Scrubber`, because
-    the separating families in this table each get one per **mechanism**
-    and this is a different mechanism: a spray tower washes a gas at the
-    velocity it arrives at, and a venturi accelerates it through a throat
-    first, which is what buys the collection efficiency and what costs
-    the pressure drop. Two different machines with two different fans in
-    front of them.
-
-    So the feed is on the **top**: the throat runs downward, and the
-    stencil draws it that way.
+    A different mechanism from :class:`Scrubber`, so its own class: the
+    gas is accelerated through a throat, which buys collection
+    efficiency at the cost of pressure drop. The throat runs downward, so
+    the feed is on the top.
 """),
     ("separator", "knockout"): ("KnockoutDrum", """Knock-out drum: an upright drum with a demister pad.
 
-    A mesh pad and a level gauge are both *drawn internals*, which the
-    rule calls a variant -- and this is one of the two places the rule
-    is deliberately overruled, because "knock-out drum" is the term a
-    P&ID, a datasheet and a search box all use, and a class nobody can
-    find is worth nothing. It is therefore near enough a duplicate of
-    ``Separator``, and that is accepted.
+    A class despite the rule (drawn internals are variants) because
+    "knock-out drum" is the term P&IDs, datasheets and searches use.
 
-    The gauge is *drawn*, not declared, so a level instrument added with
-    :meth:`~pandid.flowsheet.Flowsheet.add_instrument` puts its own
-    ISA-5.1 balloon beside it and the sheet says the level is measured
-    twice.
+    The level gauge is drawn, not declared, so a level instrument added
+    with :meth:`~pandid.flowsheet.Flowsheet.add_instrument` draws its own
+    balloon beside it.
 """),
 
     # --- Filters -----------------------------------------------------------
     ("filter", "gas"): ("DustCollector", """Dust collector: a gas filter with a hopper under the medium.
 
-    One class over the three gas casings the stencil set draws -- bag,
-    candle or cartridge elements (``default``), a granular bed
-    (``fixed_bed``) and a cloth on rollers (``belt``) -- because
-    choosing between them is a statement about the **medium**, which is
-    what a variant is for, and all three are piped alike.
-
-    Not called ``Baghouse``. That is the commonest member and the word
-    most often reached for, but the same stencil stands for candle and
-    cartridge filters, and a class named for one of the three would be
-    wrong about the other two. The term is here in the docstring so a
-    search finds it.
+    One class over the three gas casings, since the choice is the
+    medium and all are piped alike: bag, candle or cartridge elements
+    (``default``), a granular bed (``fixed_bed``) and a cloth on rollers
+    (``belt``). Also known as a baghouse.
 """),
     ("filter", "rotary"): ("RotaryDrumFilter", """Rotary drum filter: a drum turns through slurry under vacuum.
 
     Cake builds on the submerged face and is lifted off at the top. The
-    ``scraper`` variant is the same drum with the knife that lifts the
-    cake drawn on it, which is the whole of the difference between the
-    two shapes.
+    ``scraper`` variant draws the knife that lifts it.
 
-    Four connections, because the machine makes **two products**:
     ``inlet`` is the slurry, ``outlet`` the filtrate, ``cake`` what is
-    lifted off the drum, and ``wash_in`` the sprays over the top of it
-    that displace mother liquor before the knife reaches. Both drawings
-    take them at the same points, so swapping one for the other moves no
-    run.
+    lifted off, and ``wash_in`` the sprays that displace mother liquor
+    first. Both variants have the same ports in the same places.
 """),
     ("filter", "press"): ("FilterPress", """Filter press: plates squeezed together, slurry in, two products out.
 
-    A batch machine on a continuous sheet, which is exactly why it is
-    worth its own row on an equipment list.
-
-    ``outlet`` is the filtrate and ``cake`` is what the plates hold,
-    discharged downward when they part -- and it is usually the product
-    the press was bought for, so it is a line of its own rather than
-    something the filtrate has to stand in for. ``wash_in`` is the
-    displacement wash that pushes mother liquor out of the cake before
-    the press is opened.
+    A batch machine on a continuous sheet. ``outlet`` is the filtrate and
+    ``cake`` what the plates hold, often the product. ``wash_in`` is the
+    displacement wash applied before the press opens.
 """),
     ("filter", "ion_exchange"): ("IonExchanger", """Ion exchanger: a resin bed between two retention screens.
 
-    The vessel every demineraliser or softener train is drawn with. A
-    filter by drawing and by piping; what it removes is dissolved rather
-    than suspended.
-
-    That is also why its extra pair is not the cake filters' one. A
-    resin is restored by running acid, caustic or brine through it, so
-    the connections are ``regenerant_in``, above the bed, and
-    ``spent_regenerant``, out of the underdrain: the reagent loaded with
-    what it has stripped. Calling either a wash would put the wrong
-    fluid on the line list.
+    The vessel of a demineraliser or softener train; it removes
+    dissolved rather than suspended matter. ``regenerant_in`` (acid,
+    caustic or brine, above the bed) and ``spent_regenerant`` (out of the
+    underdrain) replace the cake filters' wash and cake.
 """),
 
     # --- Dryers ------------------------------------------------------------
@@ -505,15 +410,8 @@ DEVICES = {
 
     # --- Crushers and mills -------------------------------------------------
     #
-    # Nine classes over nine drawings, and every one of the nine is a body
-    # carrying one ISO group-29 characteristic -- the same shape of row the
-    # three composed separators are, and classed for the same reason. A jaw
-    # crusher and a cone crusher are not one machine with two internals fitted:
-    # they are two purchases, two datasheets and two rows on an equipment list,
-    # and the mark inside the outline is what says which was bought.
-    #
-    # ``crusher/default`` and ``mill/default`` stay on their base classes, which
-    # is where a machine whose type is not being stated belongs.
+    # Each is a body carrying one ISO group-29 characteristic, and each is a
+    # separate purchase. crusher/default and mill/default stay on their bases.
     ("crusher", "jaw"): ("JawCrusher", """Jaw crusher: a swing jaw worked by an eccentric.
 
     The primary crusher of a hard-rock circuit -- run-of-mine ore in at
@@ -572,10 +470,8 @@ DEVICES = {
 
     # --- Solids conveying ---------------------------------------------------
     #
-    # A screw conveyor is a different purchase from a belt -- different
-    # supplier, different datasheet, different failure modes -- so it is a
-    # class. The two bucket elevators are one purchase in two arrangements,
-    # which is a body style, so both stay on ``Elevator``.
+    # A screw conveyor is a different purchase from a belt. The two bucket
+    # elevator arrangements are one purchase and stay on Elevator.
     ("conveyor", "screw"): ("ScrewConveyor", """Screw conveyor: a flighted shaft turning in a closed trough.
 
     Short runs of dusty, hot or hazardous solids, where the enclosure
@@ -589,14 +485,8 @@ DEVICES = {
 
     # --- Feeders -------------------------------------------------------------
     #
-    # ISO 10628-2 group 19, three classes over three drawings, on the same
-    # reasoning as the crushers above: a rotary valve feeder, a rotary table
-    # feeder and a weigh (metering) feeder are three purchases and three rows
-    # on an equipment list, not one machine shown three ways.
-    #
-    # ``feeder/general`` stays on the base class, which is where a feeder
-    # whose mechanism is not being stated belongs -- the same reasoning
-    # ``crushing_machine/default`` gives item 11.1.
+    # ISO 10628-2 group 19: three purchases, three classes. feeder/general
+    # stays on the base.
     ("feeder", "rotary_valve"): ("RotaryValveFeeder", """Rotary valve feeder: a close-fitting rotor metering solids through a housing.
 
     The standard way solids enter a pressurised system, one pocket of
@@ -618,13 +508,8 @@ DEVICES = {
 
     # --- Screens -------------------------------------------------------------
     #
-    # ISO 10628-2 group 7, six classes over six drawings, one outline apiece --
-    # the same shape of family the crushers above are, and for the same
-    # reason: a vibrating screen, a trommel and a rake screen are different
-    # purchases even where their nozzles agree.
-    #
-    # ``screen/general`` stays on the base class, ISO item 7.1's plain
-    # outline with no mechanism marked.
+    # ISO 10628-2 group 7: six purchases, six classes. screen/general (item
+    # 7.1) stays on the base.
     ("screening_device", "coarse_rake"): ("CoarseRakeScreen", """Rake screen, coarse type: a mesh cleared by a coarse-toothed rake.
 
     ISO 10628-2 item 7.2 X8026.
@@ -657,17 +542,9 @@ DEVICES = {
 
     # --- Valves ------------------------------------------------------------
     #
-    # Seven classes over twenty-three drawings, split on BEHAVIOUR rather than
-    # on body. A gate, a ball and a globe valve are three ways of building the
-    # same thing (a hand-operated block valve in a line) and the flowsheet
-    # cannot tell them apart; a control valve, a relief valve and a check valve
-    # are three different jobs, and the difference shows in what the unit may
-    # be declared to do. Body style stays a variant, which is what
-    # ``Valve(variant="ball")`` has always been.
-    #
-    # ``three_way`` earns its own class on the rule's explicit tie-breaker
-    # (the centrifuge entry above): a third connection is a different port
-    # set, not a body style, whichever words the drawing is described in.
+    # Split on behaviour, not body. Gate, ball and globe are body styles of one
+    # block valve and stay variants; control, relief and check valves do
+    # different jobs. three_way has a third port, so it is a class.
     ("valve", "three_way"): ("ThreeWayValve", """Three-way valve: a third leg the run is switched between.
 
     The ISO three-port mark, with the third connection anchored as
@@ -676,27 +553,17 @@ DEVICES = {
     """),
     ("valve", "control"): ("ControlValve", """Control valve: the final element a loop's output lands on.
 
-    The valve a controller modulates. **ISO 15519-2 Table A.3** builds
-    one on two axes: A.3.20 is the general control valve, drawn with a
-    general actuator standing on it, and §7.4.4.3 asks that an actuator
-    be drawn without saying what type it is unless the type matters.
-    What is drawn here is that general body with A.3.41's diaphragm on
-    it, which Table 5 makes the P&ID's answer -- a P&ID's basic
-    information runs to the **specific** symbols for valves and their
-    actuators -- and which is a deviation on a PFD, where Table 4 asks
-    for the general one. It is deliberate: the stencil set fuses body
-    and operator into a single shape, so no general actuator exists to
-    draw.
-    ``default`` is the general body every sheet's CVs are drawn on;
-    ``butterfly_pneumatic`` is the same actuator on a butterfly disc,
-    and is reached as
-    ``ControlValve(variant="butterfly", actuator="diaphragm")`` too.
+    The valve a controller modulates. ISO 15519-2 Table A.3.20 is the
+    general control valve with a general actuator; this draws the general
+    body with A.3.41's diaphragm, the specific symbol Table 5 asks for on a
+    P&ID (a PFD, per Table 4, would use the general one). The stencil set
+    has no separate general actuator. ``butterfly_pneumatic`` is the same
+    actuator on a butterfly disc, also reached as
+    ``ControlValve(variant="butterfly", actuator="diaphragm")``.
 
-    It is the one valve family that regularly declares ``fail=``, where
-    it goes when its air is lost, and it may **not** be shown normally
-    closed -- PIP PIC001 clause 4.2.2.10, because a darkened control
-    valve on an issued sheet reads as a block valve someone has closed.
-    Say ``fail="closed"`` instead.
+    It usually declares ``fail=``. It may not be shown normally closed
+    (PIP PIC001 4.2.2.10), since a darkened control valve reads as a closed
+    block valve; use ``fail="closed"``.
 """),
     ("valve", "solenoid"): ("SolenoidValve", """Solenoid valve: an electrically operated on/off valve.
 
@@ -729,36 +596,27 @@ DEVICES = {
 """),
     ("valve", "check"): ("CheckValve", """Check valve: it passes flow one way and shuts against the other.
 
-    Worked by the flow itself. **It has no actuator**, so this class
-    does not declare one: a check valve is not something a controller
-    output can land on, and a signal line drawn to one is a mistake
-    worth refusing rather than drawing. That missing nozzle is the whole
-    reason this is a class and not a body style.
+    Worked by the flow itself, so it has no ``actuator`` port and a
+    signal line cannot be connected to it; that missing port is why it is
+    a class.
 
-    Its arrow lives inside the outline and would be swallowed by a
-    darkened body, so a normally closed one draws the letters ``NC``
-    beside it instead (PIP PIC001 clause 4.2.2.8).
+    The arrow inside the outline would be hidden by a darkened body, so a
+    normally closed one is marked ``NC`` beside it (PIP PIC001 4.2.2.8).
 """),
 
     # --- In-line fittings --------------------------------------------------
     #
-    # ``fitting`` is outside _MAJOR_EQUIPMENT, so the bar is "ports or a
-    # declarable property differ". Exactly two clear it, and the other
-    # twenty-five stay what they have always been: styles of a pair of faces on
-    # a line.
+    # Fittings are not major equipment, so a class needs different ports or a
+    # declarable property. The other fitting variants stay styles.
     ("fitting", "blind"): ("SpectacleBlind", """Spectacle blind: two discs on a tie, one bored and one solid.
 
-    The one fitting with a **declarable property**, which is what makes
-    it a class. Which disc is in the line is the whole of what the
-    symbol says, and the stencil set draws both states:
+    The fitting with a declarable property, which makes it a class. The
+    stencil set draws both states:
 
     - ``normal_position="open"`` (the default) puts the **ring** in the
       line, with the solid disc parked above it: the line is through.
     - ``normal_position="closed"`` puts the **solid** disc in the line:
       blanked.
-
-    A change of shape, not a mark added to one, so a blind is never
-    shown in a position by inference.
 """),
     ("fitting", "steam_trap"): ("SteamTrap", """Steam trap: drains condensate from a steam line and holds the steam.
 
@@ -766,16 +624,10 @@ DEVICES = {
     draws it: a body with a diameter across it at 45 degrees and the
     discharge half below that filled.
 
-    A class rather than a style of :class:`~pandid.units.Fitting`, for
-    the reason :class:`FlowElement` is one: a trap is what an equipment
-    or a valve schedule lists, sized and typed and bought as its own
-    item, while a strainer body and a flanged joint are the same shape
-    of thing to the drawing. Every steam main has one at each low point
-    and each drip leg, and until now this library had no way to draw one
-    at all.
-
-    Two faces on a line, like any fitting: the trap takes the condensate
-    in and passes it to the return header or to drain.
+    A class rather than a :class:`~pandid.units.Fitting` style because a
+    trap is scheduled and bought as its own item. Fitted at each low point
+    and drip leg of a steam main; condensate passes to the return header or
+    drain.
 """),
     ("fitting", "venturi"): ("FlowElement", """Primary flow element: the device in the run an FE balloon reads.
 
@@ -787,68 +639,42 @@ DEVICES = {
     ``averaging_pitot``) or a meter body (``coriolis``, ``vortex``,
     ``ultrasonic``, ``turbine_meter``, ``positive_displacement``).
 
-    It is a class rather than a style of ``Fitting`` because it is what
-    an equipment or instrument schedule lists, which is the whole
-    argument for the layer: a strainer and a venturi are the same shape
-    of thing to the drawing and different rows on the list.
-
-    Hang the balloon on one with
+    A class rather than a ``Fitting`` style because it is listed on the
+    instrument schedule. Attach the balloon with
     :meth:`~pandid.flowsheet.Flowsheet.add_instrument`. The restriction
-    orifice and the rotameter are **not** here: the first restricts
-    rather than measures, and the second carries its own indication, so
-    both stay ``Fitting`` variants where the class docstring already
-    lists them.
+    orifice (which restricts rather than measures) and the rotameter
+    (which indicates itself) stay ``Fitting`` variants.
 """),
 
     # --- Reactors ----------------------------------------------------------
     ("reactor", "default"): ("StirredTankReactor", """Stirred-tank reactor: a charge vessel with a top agitator.
 
-    An agitator is a *drawn internal*, which the rule calls a variant --
-    and this is the second of the two places the rule is deliberately
-    overruled, for :class:`KnockoutDrum`'s reason: "stirred tank
-    reactor" and "CSTR" are what a process engineer searches for, and it
-    is what ``Reactor`` already draws when it is asked for by name. A
-    near-duplicate of its base, accepted.
+    A class despite the rule (an agitator is a drawn internal) because
+    "stirred tank reactor" and "CSTR" are the terms engineers search for.
 
-    ``n_feeds`` gives the vessel more than one charge nozzle, exactly as
-    it does on :class:`pandid.units.Reactor`.
+    ``n_feeds`` adds feed ports as on :class:`pandid.units.Reactor`.
 """),
 
     # --- Storage -----------------------------------------------------------
     ("tank", "gas_holder"): ("GasHolder", """Gas holder: a bell floating in a water seal.
 
-    The only tank drawing that gets a class, and the reason is the rule
-    rather than an exception to it. Every other one is a **roof**, a
-    **floor** or a **shell style** on a container that holds a liquid at
-    atmospheric pressure -- a conical roof, a floating roof, a discharge
-    cone, a pressure sphere -- so all of them are one purchase drawn
-    several ways. A gas holder is not that container. It holds a *gas*,
-    it has a moving part, and its volume is what varies while its
-    pressure does not; the water in it is a seal and not the inventory.
-    Different machine, different row, different supplier.
+    The only tank drawing with a class: other tank variants are roofs,
+    floors or shells of one atmospheric liquid tank, while a gas holder
+    stores gas at constant pressure and variable volume, with a moving
+    bell and a water seal.
 
-    ``inlet`` and ``outlet`` are the gas main, on the seal tank rather
-    than on the bell: the bell travels the height of the holder every
-    time it fills, so nothing is piped to it. ``vent`` and ``relief``
-    *are* on the bell, because a holder's crown valves discharge to
-    atmosphere and are piped nowhere. ``drain`` is the seal water.
+    ``inlet`` and ``outlet`` are the gas main, on the seal tank, since the
+    bell moves. ``vent`` and ``relief`` are the crown valves on the bell,
+    discharging to atmosphere. ``drain`` is the seal water.
 """),
 }
 
 
-# class -> {class-local variant: registry variant}, for the classes that answer
-# for more than one drawing. A class absent here owns its DEVICES drawing alone.
-#
-# The left-hand names are what a caller may write, the right-hand ones what the
-# registry (and so ``unit.variant``, and so a written spec) spells them. Both
-# spellings are listed in the generated ``VARIANTS``, class-local first, so a
-# sheet written out and read back still constructs: ``to_dict`` writes the
-# registry name, and a class that would not accept its own output does not round
-# trip.
+# class -> {class-local variant: registry variant}, for classes that answer for
+# more than one drawing. Generated VARIANTS lists both spellings, class-local
+# first, because to_dict writes the registry name and it must read back.
 OWNS = {
-    # Every shell-and-tube style, including the two bundles that turn round
-    # inside the shell. One class because they are one piece of equipment drawn
-    # five ways, and they share a nozzle set to the letter.
+    # Shell-and-tube styles: one item with one port set.
     "ShellAndTubeExchanger": {
         "default": "default", "shell_tube": "shell_tube", "u_tube": "u_tube",
         "straight_tubes": "straight_tubes", "finned": "finned", "hairpin": "hairpin",
@@ -857,25 +683,19 @@ OWNS = {
     "MagneticSeparator": {
         "default": "permanent_magnet", "electromagnetic": "electromagnetic",
     },
-    # The three gas casings. The registry prefixes them ``gas_`` to tell them
-    # from the liquid filters beside them; on a class that is only ever a gas
-    # filter the prefix says nothing, so the class-local names drop it.
+    # The three gas casings, without the registry's gas_ prefix.
     "DustCollector": {
         "default": "gas", "fixed_bed": "gas_fixed_bed", "belt": "gas_belt",
     },
     "RotaryDrumFilter": {"default": "rotary", "scraper": "rotary_scraper"},
-    # The diaphragm-actuated bodies. ``butterfly_pneumatic`` is a body style
-    # under a pneumatic actuator, which is a control valve however the disc is
-    # shaped -- and it is already one of the variants FAIL_ACTUATED lets declare
-    # a fail position.
+    # Diaphragm-actuated bodies; butterfly_pneumatic may declare fail= too.
     "ControlValve": {
         "default": "control", "butterfly_pneumatic": "butterfly_pneumatic",
     },
-    # Two bodies of one device: the bonnet-on-a-stem PRV and the spring-loaded
-    # angle PSV. Body style, which the rule leaves a variant.
+    # Two body styles: the bonnet-on-a-stem PRV and the angle PSV.
     "ReliefValve": {"default": "relief", "psv": "psv"},
-    # The twelve primary elements, all from flow_sensors.xml. The metering
-    # principle is the variant; being a flow element is the class.
+    # The twelve primary elements from flow_sensors.xml; the metering
+    # principle is the variant.
     "FlowElement": {
         "default": "venturi", "venturi": "venturi", "flow_nozzle": "flow_nozzle",
         "coriolis": "coriolis", "vortex": "vortex", "ultrasonic": "ultrasonic",
@@ -887,60 +707,38 @@ OWNS = {
 }
 
 
-# class -> the complete nozzle list, where it is not what the base lays down.
-#
-# Everything else is *computed* from the live base class, which is the point:
-# a nozzle added to Pump.PORTS or to HeatExchanger._VARIANT_PORTS reaches the
-# generated classes without anyone editing a table here, and the committed file
-# then disagrees with the generator until it is regenerated. Only a deliberate
-# departure is written down.
+# class -> complete port list, where it differs from the base's. Other port
+# lists are computed from the live base class, so the committed file must be
+# regenerated when a base's ports change.
 PORT_OVERRIDES = {
     # A check valve has no actuator; see the class docstring.
     "CheckValve": [("inlet", "inlet", "process"), ("outlet", "outlet", "process")],
 }
 
 
-# class -> {nozzle: the name the symbol anchors it under}.
-#
-# Empty, and correctly so as of 0.1.2. Its three entries were the dust
-# collectors, whose classes renamed the draws their drawings anchor ``vapor``
-# and ``liquid`` -- and ``Separator`` itself now makes the same rename for the
-# same three drawings, in :attr:`pandid.units.Separator._VARIANT_ANCHORS`, so
-# these classes inherit it. A class that owns one drawing has that drawing's
-# rename, and stating it twice was two places for one fact.
-#
-# The plumbing stays for the next class whose artwork ships a nozzle under
-# another name. See :attr:`pandid.units.Unit.PORT_ANCHORS` for why such a rename
-# cannot instead be a second pair of names on the symbol.
+# class -> {port: artwork anchor name}, for a class whose artwork names a port
+# differently. Empty: the dust collectors inherit
+# pandid.units.Separator._VARIANT_ANCHORS.
 PORT_ANCHORS: dict[str, dict[str, str]] = {}
 
 
-# (kind, variant) -> the word from the rule that says why this drawing gets no
-# class of its own. Every registered key not claimed by a class is here, and
-# :func:`claims` refuses to generate if one is missing: a new stencil has to be
-# classified before it can be drawn from this layer.
+# (kind, variant) -> why this drawing gets no class. :func:`claims` refuses to
+# generate while any registered key is unclaimed.
 STAYS_ON_BASE = {
-    # The base classes' own drawings. A class already exists; naming it twice
-    # would be the layer's first duplicate.
+    # The base classes' own drawings.
     ("block", "default"): "Block's own drawing",
     ("blower", "default"): "Blower's own drawing",
     ("boiler", "default"): "Boiler's own drawing",
     ("conveyor", "default"): "Conveyor's own drawing",
     ("cooler", "default"): "Cooler's own drawing",
     ("cooling_tower", "default"): "CoolingTower's own drawing (the fan on the stack)",
-    # One machine drawn twice. Where the fan sits changes the casing and
-    # nothing else: same water side, same air side, same basin, same six
-    # nozzles in the same roles, and one row on an equipment list either way.
+    # Fan position changes only the casing; the ports and the item are the same.
     ("cooling_tower", "induced_draft"):
         "fan arrangement, and the same drawing as the default",
     ("cooling_tower", "forced_draft"):
         "fan arrangement: the fan in a housing at the foot of each side",
-    # Centrifuge's eight ISO 10628-2 group-9 rows. None differs from the
-    # others in its ports -- all eight anchor the same feed/overflow/
-    # underflow -- so none clears the bar a crusher's or a filter's press
-    # clears; each is "a drawn internal" the rule's own phrase already
-    # covers, the way Column's eight tray types are. Only where the mark
-    # sits on the shell changes between them.
+    # Centrifuge's eight ISO group-9 rows share one port set; the mechanism
+    # is a drawn internal.
     ("centrifuge", "default"): (
         "Centrifuge's own drawing (ISO item 9.6 X8082, the decanter) -- "
         "same drawing as decanter, below"
@@ -957,10 +755,8 @@ STAYS_ON_BASE = {
     ("centrifuge", "skimmer"): "mechanism: item 9.8 X8039, the skimmer tube",
     ("crushing_machine", "default"):
         "CrushingMachine's own drawing (ISO item 11.1, no characteristic)",
-    # The eight ISO 10628-2 group-5 drawings (symbols._register_cooling_towers):
-    # one outline, a draught arrangement and a fill characteristic, on the same
-    # reasoning as the three vendored bodies just above -- same basin, same six
-    # nozzles, one row on an equipment list whichever fan or fill is drawn.
+    # ISO group 5 (symbols._register_cooling_towers): fill and draught marks on
+    # one outline with one port set.
     ("cooling_tower", "general"): "ISO item 5.1: the bare outline, no fill or draught mark",
     ("cooling_tower", "dry_natural"): "fill + draught: dry fill, no fan (natural draught)",
     ("cooling_tower", "dry_forced"): "fill + draught: dry fill, fan low in the tower",
@@ -972,29 +768,18 @@ STAYS_ON_BASE = {
         "fill + draught: both fill marks, no fan (natural draught)",
     ("crusher", "default"): "Crusher's own drawing (ISO item 11.2, no characteristic)",
     ("mill", "default"): "Mill's own drawing (ISO item 11.8, no characteristic)",
-    # ISO item 10.1 C0046, "Drier (general)": the group's own bare casing,
-    # with none of the six marks that make a drawing one particular
-    # machine. Not a scheduled item of its own -- an equipment list does
-    # not row "a drier, unspecified" -- but a real drawing for the stage
-    # before process design has picked shelf over turbo over belt, on
-    # the same reasoning ("crushing_machine", "default") above gives
-    # X8084 for a crusher-or-mill not yet chosen.
+    # ISO item 10.1 C0046: a dryer whose type is not yet chosen.
     ("dryer", "general"): "ISO item 10.1: the bare casing, no characteristic drawn",
     ("feeder", "general"): "ISO item 19.1: the bare circle, no mechanism drawn",
     ("screening_device", "general"): "ISO item 7.1: the bare outline, no mechanism drawn",
     ("kneader", "default"): "Kneader's own drawing (ISO item 12.4 X8134)",
     ("evaporator", "default"):
         "the general row: two tubesheets around a boxed element, no element chosen",
-    # A thickener and a clarifier are one machine at two duties, so they are
-    # one drawing and one class: the word on the schedule changes with what
-    # the buyer is after -- the underflow or the overflow -- and nothing in
-    # the drawing does. What varies IS composed: Thickener(rake=) names the
-    # ISO group-28 stirrer on the shaft, and rake=None is the plain settling
-    # tank the vendored stencil is of.
+    # Thickener and clarifier are one machine at two duties; the rake is
+    # composed with Thickener(rake=).
     ("thickener", "default"): "Thickener's own drawing (draw.io's settling tank)",
     ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
-    # Group 12's other two in-line mixers, beside ``fitting/static_mixer``
-    # just above: mixing elements in the run, the same body style.
+    # ISO group 12 in-line mixers, like fitting/static_mixer.
     ("fitting", "rotary_mixer"): "body style: a rotating mixing element in the run",
     ("fitting", "mixing_path"): "body style: three mixing elements in series in the run",
     ("elevator", "default"): "Elevator's own drawing (ISO item 18.7, the straight lift)",
@@ -1016,12 +801,8 @@ STAYS_ON_BASE = {
     ("vessel", "default"): "Vessel's own drawing",
     ("column", "default"): "Column's own drawing",
     ("reactor", "plain"): "body style: the same charge vessel without the agitator",
-    # The other three reactor bodies. What makes a reactor a CSTR rather than a
-    # PBR is the ISO group-27/28 part inside it, which ``Reactor`` states with
-    # ``agitator=`` and ``internals=``, so none of these three is a functional
-    # type of its own: a jacket is cladding exactly as it is on a vessel;
-    # ``mixing`` is the rectangle-with-a-V-bottom ``default`` used to draw, kept
-    # under a name that says so; and a tubular shell is a shell.
+    # Reactor type comes from agitator= and internals=, so these bodies are
+    # styles.
     ("reactor", "jacketed"): "cladding: a heating/cooling jacket",
     ("reactor", "mixing"): "body style: a conical-bottomed mixing vessel",
     ("reactor", "tubular"): "body style: a horizontal shell with a tube pass",
@@ -1036,10 +817,7 @@ STAYS_ON_BASE = {
     ("instrument", "sis"): "a function, not a device",
     ("instrument", "logic"): "a function, not a device",
     ("instrument", "interlock"): "a function, not a device",
-    # Vessels: every one of these is a support, a head style, a cladding or an
-    # attitude. A vessel on legs and a vessel on a skirt are one vessel, bought
-    # once, with one row on the equipment list and one civil drawing between
-    # them; the sheet shows which, and that is all a variant is for.
+    # Vessels: supports, head styles, cladding and attitude.
     ("vessel", "dished"): "head style, plus the brackets it stands on",
     ("vessel", "dome"): "head style: a raised manway dome",
     ("vessel", "skirted"): "support: a skirt",
@@ -1049,16 +827,14 @@ STAYS_ON_BASE = {
     ("vessel", "jacketed"): "cladding: a heating/cooling jacket",
     ("vessel", "insulated"): "cladding: thermal insulation",
     ("vessel", "electrical_heating"): "a heating element hung on the shell wall",
-    # Tanks: roofs and floors. A floating-roof tank is a tank; the roof is what
-    # the sheet is saying, and the schedule already has one row.
+    # Tanks: roofs, floors and shell styles.
     ("tank", "conical"): "roof: conical",
     ("tank", "floating_roof"): "roof: floating",
     ("tank", "sphere"): "shell style: a pressure sphere on legs",
     ("tank", "conical_bottom"): "floor: a discharge cone",
     ("tank", "conical_ends"): "roof and floor: a cone at each end",
     ("tank", "dished_roof_conical_bottom"): "roof and floor",
-    # Columns: the packing is a drawn internal, and a packed tower and a trayed
-    # one are one line on an equipment list with the internals on the datasheet.
+    # Columns: packing is a drawn internal.
     ("column", "packed"): "drawn internal: beds of packing on their support grids",
     # Reducers: body style, and the fitting is bulk piping bought by the line.
     ("reducer", "default"): "Reducer's own drawing (the concentric body)",
@@ -1067,17 +843,13 @@ STAYS_ON_BASE = {
     # Vents: what is on top of the stack.
     ("vent", "exhaust_head"): "body style: a silencing hood",
     ("vent", "breather"): "body style: a conservation vent",
-    # The two liquid filters whose gas counterparts DustCollector claims. The
-    # medium is the variant on both sides of that pair, and neither liquid
-    # casing is a scheduled item the base class does not already name.
+    # Liquid filters whose gas counterparts DustCollector claims: the medium
+    # is the variant.
     ("filter", "belt"): "medium: a cloth on rollers, in a liquid casing",
     ("filter", "fixed_bed"): "medium: a granular bed, in a liquid casing",
     # The horizontal flash drum: attitude, exactly as vessel/horizontal is.
     ("separator", "horizontal"): "attitude: the same separator lying down",
-    # Valves: body style, every one. A gate, a ball, a globe and a needle valve
-    # are four ways of building a hand-operated block valve, and to the
-    # flowsheet they are one device with one pair of faces. The behaviour split
-    # is above; this is what is left, and what ``Valve(variant=...)`` is for.
+    # Valves: body and operator styles of one block valve.
     ("valve", "default"): "Valve's own drawing (the gate body)",
     ("valve", "gate"): "body style, and the same drawing as the default",
     ("valve", "globe"): "body style",
@@ -1092,10 +864,7 @@ STAYS_ON_BASE = {
     ("valve", "bleed"): "body style: the small drain valve tapped off a header",
     ("valve", "manual"): "operator style: a handwheel drawn on the body",
     ("valve", "hydraulic"): "operator style: a hydraulic cylinder drawn on the body",
-    # Fittings: in-line devices, all with one pair of faces and none with a
-    # property to declare. The four arrestor bodies are certification ratings,
-    # which the rule names outright; the strainers and the sight glasses are
-    # body styles; the couplings, the spool and the joints are bulk piping.
+    # Fittings: body styles, certification ratings and bulk piping.
     ("fitting", "default"): "Fitting's own drawing (a flanged joint)",
     ("fitting", "flange"): "body style, and the same drawing as the default",
     ("fitting", "strainer"): "body style",
@@ -1130,12 +899,22 @@ STAYS_ON_BASE = {
 
 
 def variant_map(class_name: str, home: str) -> dict[str, str]:
-    """``{class-local variant: registry variant}`` for one class.
+    """Return ``{class-local variant: registry variant}`` for one class.
 
-    A class named in :data:`OWNS` says its own; every other class owns the one
-    drawing it is named for, under that name and under ``"default"`` -- because
-    ``variant`` defaults to ``"default"`` and a class whose own drawing is what
-    naming it should ask for has to accept it.
+    A class in :data:`OWNS` states its own mapping; any other owns its named
+    drawing, also under ``"default"`` since that is the default argument.
+
+    Parameters
+    ----------
+    class_name : str
+        Generated class name.
+    home : str
+        Registry variant the class is named for.
+
+    Returns
+    -------
+    dict[str, str]
+        Class-local variant to registry variant.
     """
     if class_name in OWNS:
         return dict(OWNS[class_name])
@@ -1143,23 +922,44 @@ def variant_map(class_name: str, home: str) -> dict[str, str]:
 
 
 def declared_variants(mapping: dict[str, str]) -> tuple[str, ...]:
-    """The tuple a generated ``VARIANTS`` carries: class-local names, then the
-    registry spellings of any that were renamed.
+    """Return a generated class's ``VARIANTS``.
 
-    Both, because :attr:`~pandid.units.Unit.VARIANT_ALIASES` stores the
-    *registry's* spelling on the unit, so that is what ``to_dict`` writes; a
-    class that accepted only its own name would refuse to read back the spec it
-    just wrote.
+    Class-local names come first, then the registry spellings of renamed
+    ones: :attr:`~pandid.units.Unit.VARIANT_ALIASES` stores the registry
+    spelling, which ``to_dict`` writes and must read back.
+
+    Parameters
+    ----------
+    mapping : dict[str, str]
+        Output of :func:`variant_map`.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Accepted variant names.
     """
     return tuple(dict.fromkeys([*mapping, *mapping.values()]))
 
 
 def base_of(kind: str) -> type:
-    """The class that owns ``kind``: the one a generated class subclasses.
+    """Return the :mod:`pandid.units` class that owns ``kind``.
 
-    Read off ``units.__all__`` rather than written down, so a base class renamed
-    or a kind moved between them cannot leave this file quietly pointing at the
-    old one.
+    Read from ``units.__all__`` so a renamed base cannot go stale here.
+
+    Parameters
+    ----------
+    kind : str
+        Unit kind.
+
+    Returns
+    -------
+    type
+        Base class for generated subclasses.
+
+    Raises
+    ------
+    SystemExit
+        If no exported class owns ``kind``.
     """
     for name in units.__all__:
         cls = getattr(units, name)
@@ -1169,27 +969,32 @@ def base_of(kind: str) -> type:
 
 
 def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
-    """The nozzles a generated class declares, taken from the live base class.
+    """Return the ports a generated class declares, from the live base class.
 
-    ``_declared_ports()`` is the class-level list and ``_variant_ports()`` the
-    per-variant one that :class:`~pandid.units.HeatExchanger`,
-    :class:`~pandid.units.Separator`, :class:`~pandid.units.Reactor` and
-    :class:`~pandid.units.Filter` lay down after it. Neither includes a
-    nozzle the base's ``__init__`` adds by hand -- a Reactor's ``feed`` -- which
-    is exactly right: a subclass restating one would hand ``_add_port`` a name
-    it already has and be refused at construction.
+    ``_declared_ports()`` plus ``_variant_ports(variant)``. Ports a base's
+    ``__init__`` adds itself (a Reactor's feeds) are excluded, since a
+    subclass restating them would add them twice.
+
+    Parameters
+    ----------
+    base : type
+        Base unit class.
+    variant : str
+        Registry variant.
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        ``(name, direction, role)`` port specs.
     """
     declared = base._declared_ports()
     variant_ports = base._variant_ports(variant) if hasattr(base, "_variant_ports") else []
     return [*declared, *variant_ports]
 
 
-# (keyword, member, default, max_n) for one variable-port family base --
-# ``Mixer``, ``Splitter``, ``Column`` and ``Reactor`` today. ``keyword`` is
-# the constructor argument a literal count is passed under (``n_feeds``),
-# ``member`` the numbered nozzles' common prefix (``feed``), ``default`` the
-# count an author gets by leaving the argument out, and ``max_n`` the
-# highest arity the base hands back an exact class for.
+# (keyword, member, default, max_n) for a variable-port family base: the count
+# argument (n_feeds), the numbered port prefix (feed), the count's default, and
+# the highest arity with a typed class.
 _Family = tuple[str, str, int, int]
 
 _ARITY_CLASS_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
@@ -1197,13 +1002,16 @@ _ARITY_CLASS_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
 
 @functools.lru_cache(maxsize=None)
 def _arity_families() -> dict[str, dict[int, list[str]]]:
-    """Every base's per-arity ``TYPE_CHECKING`` subclasses, read off units.py.
+    """Return each base's per-arity type-checking classes, read from units.py.
 
-    ``{"Reactor": {1: [], 2: ["feed_1", "feed_2"], ...}, ...}``. Read off the
-    *source* rather than the objects, and it has to be: a family's ``BaseN``
-    classes are declared only under ``if TYPE_CHECKING:`` and so do not exist
-    at import time -- ``tests/test_port_annotations.py`` reads them the same
-    way, for the same reason.
+    Read from the source because the ``BaseN`` classes exist only under
+    ``TYPE_CHECKING``.
+
+    Returns
+    -------
+    dict[str, dict[int, list[str]]]
+        Base name to ``{arity: annotated port names}``, such as
+        ``{"Reactor": {2: ["feed_1", "feed_2"], ...}}``.
     """
     tree = ast.parse((HERE.parent / "pandid" / "units.py").read_text(encoding="utf-8"))
     families: dict[str, dict[int, list[str]]] = {}
@@ -1224,25 +1032,30 @@ def _arity_families() -> dict[str, dict[int, list[str]]]:
 
 
 def arity_family(base: type) -> "_Family | None":
-    """What *base* would hand a generated subclass's ``__new__`` overloads,
-    if it is a variable-port family base -- ``None`` if it is not one.
+    """Return the arity family a generated subclass needs overloads for.
 
-    Derived from the base rather than a hard-coded list of names, so a
-    future family base earns this for its device subclasses without this
-    file being told about it by name: whether ``base`` is one at all comes
-    from :func:`_arity_families`, the member prefix from the nozzles its own
-    arity-2 class declares, and the keyword and its default off the base's
-    live ``__init__`` signature -- the argument right after ``name``, which
-    is what every family base takes it as (``Mixer(name, n_inlets=2, ...)``,
-    ``Reactor(name, n_feeds=1, ...)``).
+    Derived from the base: its per-arity classes (:func:`_arity_families`),
+    their shared port prefix, and the count argument after ``name`` in its
+    signature. A subclass needs its own overloads so that, for example,
+    ``StirredTankReactor`` with a literal count returns
+    ``StirredTankReactor2`` rather than ``Reactor2``, keeping it assignable
+    to its own type.
 
-    Why a subclass needs its own rather than inheriting the base's: a
-    literal count on ``StirredTankReactor`` has to resolve to
-    ``StirredTankReactor2``, not ``Reactor2`` -- the base's own overloads
-    would hand back a type pyright no longer considers a
-    ``StirredTankReactor`` at all (``t: StirredTankReactor =
-    StirredTankReactor("R")`` would then be an error), whether or not the
-    subclass's ports happen to match the base's.
+    Parameters
+    ----------
+    base : type
+        Base unit class.
+
+    Returns
+    -------
+    tuple[str, str, int, int] or None
+        ``(keyword, member, default, max_n)``, or ``None`` if ``base`` has
+        no family.
+
+    Raises
+    ------
+    SystemExit
+        If the family cannot be derived from the base.
     """
     arities = _arity_families().get(base.__name__)
     if not arities:
@@ -1262,11 +1075,7 @@ def arity_family(base: type) -> "_Family | None":
             f"share one prefix; cannot derive the member name"
         )
     member = next(iter(prefixes))
-    # ``inspect.signature(base)``, not ``base.__init__``: a class's own
-    # signature already leaves ``self`` off, and asking it of the class
-    # rather than the bound method is also what keeps this sound under
-    # mypy, which otherwise cannot rule out a subclass overriding
-    # ``__init__`` with an incompatible one.
+    # Ask the class, not __init__: it omits self and type-checks soundly.
     params = list(inspect.signature(base).parameters.values())
     if not params or params[0].name != "name":
         raise SystemExit(f"{base.__name__}.__init__ does not take name first")
@@ -1283,24 +1092,29 @@ def arity_family(base: type) -> "_Family | None":
 
 
 def claims() -> dict[tuple[str, str], str]:
-    """Every registered ``(kind, variant)``, mapped to what claims it.
+    """Return every registered ``(kind, variant)`` mapped to what claims it.
 
-    The anti-drift check, and the reason this file exists rather than a
-    declaration beside each unit class: nothing would tie *that* to the
-    registry, and drift between the symbol table and the class layer is the
-    failure this design is built to make impossible. Vendor a stencil and this
-    refuses to run until someone has said what the equipment is.
+    The drift check between the class tables and the symbol registry: a
+    registered drawing nobody claims, a claim on an unregistered drawing,
+    or a double claim all stop generation.
 
-    Refuses in both directions -- a registered drawing nobody claims, and a
-    claim on a drawing nothing registers -- because either one means the two
-    files have parted company, and the second is how a table keeps a line for a
-    symbol that was removed.
+    Returns
+    -------
+    dict[tuple[str, str], str]
+        Registry key to claiming class or reason.
+
+    Raises
+    ------
+    SystemExit
+        If the tables and the registry disagree, or a refused kind is
+        claimed.
     """
     registered = set(default_registry._symbols)
     claimed: dict[tuple[str, str], str] = {}
     twice: list[str] = []
 
     def claim(key: tuple[str, str], by: str) -> None:
+        """Record a claim, noting a second claim on one key."""
         if key in claimed:
             twice.append(f"{key[0]}/{key[1]} (by {claimed[key]} and by {by})")
         claimed[key] = by
@@ -1341,15 +1155,35 @@ def claims() -> dict[tuple[str, str], str]:
 
 
 def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
-    """Everything one generated class needs, resolved against the live library."""
+    """Return everything one generated class needs, from the live library.
+
+    Parameters
+    ----------
+    class_name : str
+        Generated class name.
+    kind : str
+        Unit kind.
+    home : str
+        Registry variant the class is named for.
+    doc : str
+        Class docstring.
+
+    Returns
+    -------
+    dict
+        Name, base, kind, doc, variants, aliases, anchors, ports and family.
+
+    Raises
+    ------
+    SystemExit
+        If two owned drawings have different ports.
+    """
     base = base_of(kind)
     mapping = variant_map(class_name, home)
     variants = declared_variants(mapping)
     aliases = {local: registry for local, registry in mapping.items() if local != registry}
     ports = PORT_OVERRIDES.get(class_name) or ports_for(base, home)
-    # Every drawing a class answers for has to have the same nozzles, or the
-    # class would be two devices sharing a name: PORTS is read once, at
-    # construction, and there is no second list for the second variant.
+    # Every owned drawing must share one port list, since PORTS is per class.
     for registry_variant in set(mapping.values()):
         also = PORT_OVERRIDES.get(class_name) or ports_for(base, registry_variant)
         if also != ports:
@@ -1367,53 +1201,39 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     }
 
 
-HEADER = '''"""Equipment classes: what a piece of plant *is*, over its drawing.
+HEADER = '''"""Equipment classes: named classes for what a piece of plant is.
 
 GENERATED by scripts/gen_devices.py. Do not edit by hand.
 
-:mod:`pandid.units` models equipment as a ``kind`` and a ``variant``,
-which is what the symbol registry is keyed by and what a sheet is drawn
-from. This module is the other half: one class per device the registry
-draws, so that
+:mod:`pandid.units` models equipment as a ``kind`` and a ``variant``, as
+the symbol registry is keyed. This module adds one class per device, so
 
     * an engineer looking for a cyclone finds :class:`Cyclone` rather
-      than having to know it is ``Separator(variant="cyclone")``;
-    * a type checker can answer ``cyclone.underflow``, because the
-      nozzles are declared on the class and not held in a string;
+      than ``Separator(variant="cyclone")``;
+    * a type checker sees ``cyclone.underflow``, because the ports are
+      declared on the class;
     * an equipment list reads as equipment.
 
-The split follows **a class is what the equipment is and ``variant=``
-is how it is drawn**: a variant becomes a class when it names a distinct
-scheduled item, and stays a variant when it names a support, a roof, a
-cladding, an attitude, a drawn internal, a certification rating or a
-body style. So a gate valve and a ball valve are one class and two
-variants, while a check valve is a class of its own -- it has no
-actuator, and that is a fact about the device rather than its picture.
+A class is what the equipment is and ``variant=`` is how it is drawn:
+a variant becomes a class when it names a distinct scheduled item, and
+stays a variant for a support, roof, cladding, attitude, drawn internal,
+certification rating or body style. A gate valve and a ball valve are
+one class; a check valve, which has no actuator, is its own.
 
-The low-level form is not going anywhere.
-``Separator(variant="cyclone")`` stays supported indefinitely, and it is
-the only way to reach the 130-odd drawings that never get a class of
-their own; ``pandid.render.symbols.default_registry`` is still the whole
-catalogue.
+The base-class form, such as ``Separator(variant="cyclone")``, stays
+supported and is the only way to reach drawings without a class;
+``pandid.render.symbols.default_registry`` is the whole catalogue.
 
-**One drawing, one nozzle vocabulary.** :class:`Cyclone`,
-:class:`GravitySeparator` and :class:`ElectrostaticPrecipitator` collect
-*dust*, and their drawings have anchored the catch ``liquid`` since
-0.1.0. All three classes call it ``underflow`` and the gas draw
-``overflow``, which is what classification and solid-liquid separation
-call them.
-
-``Separator(variant="cyclone")`` draws the same pair. The ``vapor``/
-``liquid`` spelling it carried up to 0.1.1 still resolves, with a
-:class:`DeprecationWarning` and a ``deprecated`` finding on
-``fs.validate()``, and is gone in 0.1.3. The artwork is untouched: the
-anchors it shipped with are mapped in
+:class:`Cyclone`, :class:`GravitySeparator` and
+:class:`ElectrostaticPrecipitator` collect dust, so their draws are
+``overflow`` (gas) and ``underflow`` (catch), as in classification and
+solid-liquid separation. ``Separator`` draws the same pair for those
+variants; the artwork's ``vapor``/``liquid`` anchors are mapped in
 :attr:`pandid.units.Separator._VARIANT_ANCHORS`.
 
-Not star-imported into :mod:`pandid.units`: this module imports its
-bases from there, so that would be a genuine cycle. Use ``from pandid
-import devices``, or take the names off the package, which re-exports
-them all.
+This module imports its bases from :mod:`pandid.units`, so it is not
+star-imported there. Use ``from pandid import devices`` or the package,
+which re-exports every class.
 """
 {typing_import}
 from pandid.ports import Port
@@ -1424,22 +1244,27 @@ __all__ = [
 {exports}]
 '''
 
-#: Prepended to :data:`HEADER` only where a spec needs it: a generated class
-#: with a family base's own overloads and per-arity classes to write (see
-#: :func:`arity_family`). Every other release of this file has none, and
-#: importing ``TYPE_CHECKING``, ``Any``, ``Literal`` and ``overload`` for
-#: nothing would be an unused-import lint finding on every one of them.
+#: Typing import added to :data:`HEADER` only when a class needs arity
+#: overloads, so the module has no unused imports otherwise.
 _TYPING_IMPORT = "\nfrom typing import TYPE_CHECKING, Any, Literal, overload\n"
 
 
 def render() -> str:
-    """The whole generated module, as a string, writing nothing.
+    """Return the generated module source without writing it.
 
-    Separate from :func:`main` so a test can regenerate the module in memory and
-    compare it against the committed ``pandid/devices.py``. That file is
-    regenerated wholesale, so a hand edit to it is lost the next time anyone runs
-    the generator; nothing but that comparison notices, since a stale generated
-    module still imports and still draws.
+    A test compares this with the committed ``pandid/devices.py``, which
+    catches hand edits and stale output.
+
+    Returns
+    -------
+    str
+        Module source with LF line endings.
+
+    Raises
+    ------
+    SystemExit
+        If the tables are inconsistent or a class name clashes with
+        ``units.__all__``.
     """
     claims()
     specs = [spec_of(class_name, kind, variant, doc)
@@ -1460,26 +1285,32 @@ def render() -> str:
     )]
     for spec in specs:
         lines.append(emit(spec))
-    # "\n" and not os.linesep, for the reason vendor_symbols.render() gives: the
-    # test compares this string against the committed file read back in text
-    # mode, so both ends speak LF whatever the checkout does on the way to disk.
+    # Use LF, not os.linesep: the test reads the committed file in text mode.
     return "\n".join(lines)
 
 
 def emit(spec: dict) -> str:
-    """One class, as source.
+    """Return one generated class as source.
 
-    The nozzle names are written twice on purpose, once as the ``PORTS`` tuples
-    that build them and once as bare annotations. An annotation with no
-    assignment binds nothing -- it lands in ``__annotations__`` and nowhere else
-    -- so ``_add_port``'s ``setattr`` still does the work and nothing about
-    construction changes; what it buys is a checker and an editor that can see
-    ``cyclone.underflow``, which is the whole point of the layer.
+    Ports appear twice: as ``PORTS`` tuples that create them, and as bare
+    annotations so type checkers and editors see them. An annotation binds
+    nothing, so construction is unchanged.
+
+    Parameters
+    ----------
+    spec : dict
+        Output of :func:`spec_of`.
+
+    Returns
+    -------
+    str
+        Class source, plus its arity classes when it has a family.
     """
     body = [
         "",
         f"class {spec['name']}({spec['base']}):",
-        f'    """{spec["doc"].rstrip()}\n    """',
+        f'    """{spec["doc"].rstrip()}\n\n'
+        f'    Parameters are those of :class:`~pandid.units.{spec["base"]}`.\n    """',
         "",
         f'    kind = "{spec["kind"]}"',
         f"    VARIANTS = {_variants_source(spec['variants'])}",
@@ -1496,20 +1327,28 @@ def emit(spec: dict) -> str:
         body += _family_overload_lines(spec["name"], spec["family"])
     out = "\n".join(body)
     if spec["family"]:
-        # Two blank lines, matching the gap PEP 8 -- and every class above --
-        # already keeps before a top-level statement: ``out`` ends on a real
-        # line (the arity overloads' own last line, not a blank one).
+        # Two blank lines before the top-level block, as PEP 8 asks.
         out += "\n\n\n" + _family_class_block(spec["name"], spec["family"])
     return out
 
 
 def _family_overload_lines(name: str, family: "_Family") -> list[str]:
-    """The ``if TYPE_CHECKING: ... def __new__`` lines a family subclass needs.
+    """Return the ``__new__`` overload lines for a family subclass.
 
-    The same shape :class:`~pandid.units.Column` writes by hand: a literal
-    count has to pick an overload naming *this* class's own arity, or the
-    whole reason a device subclass needs one (see :func:`arity_family`) is
-    undone.
+    A literal count returns this class's own arity class, as in
+    :class:`~pandid.units.Column`.
+
+    Parameters
+    ----------
+    name : str
+        Generated class name.
+    family : tuple[str, str, int, int]
+        Output of :func:`arity_family`.
+
+    Returns
+    -------
+    list[str]
+        Source lines, indented for the class body.
     """
     keyword, _member, default, max_n = family
     lines = ["    if TYPE_CHECKING:", ""]
@@ -1530,35 +1369,54 @@ def _family_overload_lines(name: str, family: "_Family") -> list[str]:
 
 
 def _family_class_block(name: str, family: "_Family") -> str:
-    """``ClassName1`` ... ``ClassName{max_n}``, the module-level block the
-    overloads above hand back.
+    """Return the module-level arity classes the overloads refer to.
 
-    Mirrors ``pandid.units``'s own per-arity classes: nothing but the
-    numbered nozzles at every arity, arity 1 included -- ``feed_1`` is a
-    real nozzle there too, the way ``in_1`` always has been on ``Mixer1``,
-    with the base class's bare alias (``Reactor.feed``, say) answering for
-    the singular spelling on top of it. See :func:`_feed_names` in
-    ``units.py``.
+    Like :mod:`pandid.units`, each declares only its numbered ports, arity 1
+    included; the base's alias (``Reactor.feed``) covers the singular name.
+
+    Parameters
+    ----------
+    name : str
+        Generated class name.
+    family : tuple[str, str, int, int]
+        Output of :func:`arity_family`.
+
+    Returns
+    -------
+    str
+        ``if TYPE_CHECKING:`` block declaring ``Name1`` to ``Name{max_n}``.
     """
     _keyword, member, _default, max_n = family
     lines = ["if TYPE_CHECKING:", ""]
     for n in range(1, max_n + 1):
         lines.append(f"    class {name}{n}({name}):")
+        ports = f"``{member}_1``" if n == 1 else f"``{member}_1`` to ``{member}_{n}``"
+        lines.append(f'        """{name} declaring {ports} for type checkers."""')
+        lines.append("")
         lines += [f"        {member}_{i}: Port" for i in range(1, n + 1)]
         lines.append("")
     return "\n".join(lines)
 
 
 def _q(text: str) -> str:
-    """One string, double-quoted, because that is how this package writes them."""
+    """Return ``text`` double-quoted, as the package writes strings."""
     return f'"{text}"'
 
 
 def _variants_source(variants: tuple[str, ...]) -> str:
-    """``VARIANTS`` as source: one line, or wrapped in the same brackets.
+    """Return ``VARIANTS`` as source, wrapped if longer than one line.
 
-    A one-member tuple keeps its trailing comma because it is what makes it a
-    tuple; a longer one does not, because the rest of the tree does not.
+    A one-member tuple keeps its trailing comma; longer ones do not.
+
+    Parameters
+    ----------
+    variants : tuple[str, ...]
+        Variant names.
+
+    Returns
+    -------
+    str
+        Tuple literal.
     """
     if len(variants) == 1:
         return f"({_q(variants[0])},)"
@@ -1569,21 +1427,29 @@ def _variants_source(variants: tuple[str, ...]) -> str:
 
 
 def _wrap(open_bracket: str, entries: list[str], close_bracket: str) -> str:
-    """A literal too long for one line, one entry per line, closed at indent 4."""
+    """Return a literal with one entry per line, closed at indent 4."""
     return (open_bracket + "\n"
             + "".join(f"        {entry},\n" for entry in entries)
             + "    " + close_bracket)
 
 
 def _dict(mapping: dict[str, str]) -> str:
+    """Return a string mapping as a one-line dict literal."""
     return "{" + ", ".join(f"{_q(k)}: {_q(v)}" for k, v in mapping.items()) + "}"
 
 
 def _ports_source(ports: list[tuple[str, str, str]]) -> str:
-    """``PORTS`` as source, wrapped the way units.py writes its own.
+    """Return ``PORTS`` as source: one line if it fits in 100 columns.
 
-    One line while it fits inside the hundred columns the rest of the tree keeps
-    to, and one tuple per line after that.
+    Parameters
+    ----------
+    ports : list[tuple[str, str, str]]
+        Port specs.
+
+    Returns
+    -------
+    str
+        List literal.
     """
     tuples = ["(" + ", ".join(_q(field) for field in port) + ")" for port in ports]
     flat = "[" + ", ".join(tuples) + "]"
@@ -1591,6 +1457,7 @@ def _ports_source(ports: list[tuple[str, str, str]]) -> str:
 
 
 def main() -> None:
+    """Write ``pandid/devices.py`` and report the class count."""
     OUT.write_text(render(), encoding="utf-8")
     print(f"wrote {OUT} ({len(DEVICES)} classes over "
           f"{len(default_registry._symbols) - len(STAYS_ON_BASE)} of the "

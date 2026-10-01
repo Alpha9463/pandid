@@ -1,27 +1,37 @@
-"""Geometry primitives for PFD elements.
+"""Define placement intent, resolved geometry and routes.
 
-The model keeps two distinct things apart:
-
-- :class:`Pin` is the user's *intent*: "put this unit at column 2" or
-  "pin it to exactly (x, y)". Set only through
-  :meth:`pandid.units.Unit.pin`. Never written by the engine.
-- :class:`Frame` is the *result*: the resolved pixel box (and grid rank)
-  the layout engine computes. Written only by the layout engine, read by
-  the router and renderer. Recomputed from the :class:`Pin` on every
-  layout run, so layout is idempotent.
-
-:class:`Route` is the resolved orthogonal path of a stream.
+- :class:`Pin` is the author's placement intent, set only through
+  :meth:`pandid.units.Unit.pin` and never written by the engine.
+- :class:`Frame` is the resolved box the layout engine writes and the
+  router and renderer read. It is recomputed from the pin on every
+  layout, so layout is idempotent.
+- :class:`Route` is a stream's resolved path.
 """
 
 from dataclasses import dataclass, field
 
-# Quarter turns are the only rotations a P&ID sheet uses: anything else
-# would tilt the text and break the orthogonal routing grid.
+# Other angles would tilt text and break orthogonal routing.
 _QUARTER_TURNS = (0, 90, 180, 270)
 
 
 def normalize_orientation(value) -> int:
-    """Snap an orientation to a quarter turn, clockwise, in degrees."""
+    """Validate an orientation as a clockwise quarter turn.
+
+    Parameters
+    ----------
+    value : object
+        Angle in degrees.
+
+    Returns
+    -------
+    int
+        ``0``, ``90``, ``180`` or ``270``.
+
+    Raises
+    ------
+    ValueError
+        If the value is not a number or not a multiple of 90 degrees.
+    """
     try:
         deg = int(round(float(value))) % 360
     except (TypeError, ValueError):
@@ -34,13 +44,27 @@ def normalize_orientation(value) -> int:
 
 
 def normalize_mirror(value) -> tuple[bool, bool]:
-    """Resolve a mirror spec to ``(mirror_x, mirror_y)``.
+    """Resolve a mirror setting to ``(mirror_x, mirror_y)``.
 
-    ``mirror_x`` flips left↔right (swapping the E and W faces),
-    ``mirror_y`` flips top↔bottom (swapping N and S). Accepts ``True``
-    (shorthand for the left↔right flip), or one of
-    ``"x"``/``"horizontal"``, ``"y"``/``"vertical"``,
-    ``"xy"``/``"both"``.
+    ``mirror_x`` flips left to right (swapping the E and W faces);
+    ``mirror_y`` flips top to bottom (swapping N and S).
+
+    Parameters
+    ----------
+    value : bool, str or None
+        ``True`` for a left-right flip, or ``"x"``/``"h"``/``"horizontal"``,
+        ``"y"``/``"v"``/``"vertical"``, ``"xy"``/``"both"``; ``None``,
+        ``False``, ``""`` and ``"none"`` mean no flip.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        Left-right and top-bottom flips.
+
+    Raises
+    ------
+    ValueError
+        If the string is not recognised.
     """
     if value is None or value is False:
         return (False, False)
@@ -62,24 +86,25 @@ def normalize_mirror(value) -> tuple[bool, bool]:
 
 @dataclass(frozen=True)
 class Pin:
-    """User-specified placement *intent* for a Unit.
+    """Placement intent for a unit.
 
-    Any subset of fields may be given. Grid intent (``col``/``row``) and
-    absolute intent (``x``/``y``) may be mixed; absolute wins for
-    whichever axis it sets.
+    Any subset of fields may be set. Grid and pixel intent may be mixed; a
+    pixel coordinate wins on its axis. The object is frozen because
+    :attr:`pandid.units.Unit.pin_` returns a derived value; change a
+    placement with :meth:`pandid.units.Unit.pin`.
 
-    ``orientation`` is a clockwise quarter turn in degrees; ``mirrored``
-    / ``mirror_y`` flip the symbol left↔right and top↔bottom
-    respectively.
-
-    **Frozen**, because :attr:`pandid.units.Unit.pin_` is a *read*: a
-    port-pinned axis is stored as the nozzle it was measured to and the
-    corner is derived on the way out, so the object handed back is a
-    value rather than the record. Assigning to a field of it changed the
-    placement for a corner-pinned unit and was silently dropped for a
-    port-pinned one -- the same input honoured or discarded depending on
-    how the unit happened to be pinned. Refusing both says which way it
-    is. :meth:`~pandid.units.Unit.pin` is how a placement changes.
+    Attributes
+    ----------
+    col, row : int or None
+        Grid column and row.
+    x, y : float or None
+        Top-left corner in pixels.
+    orientation : float
+        Clockwise quarter turn in degrees.
+    mirrored : bool
+        Left-right flip.
+    mirror_y : bool
+        Top-bottom flip.
     """
     col: int | None = None
     row: int | None = None
@@ -92,12 +117,28 @@ class Pin:
 
 @dataclass
 class Frame:
-    """Resolved geometry of a Unit, produced by the layout engine.
+    """Resolved geometry of a unit, written by the layout engine.
 
-    Read-only by convention: callers (router, renderer) consume it but
-    never mutate it. ``x``/``y`` are the top-left pixel corner;
-    ``w``/``h`` the resolved size; ``col``/``row`` the grid rank the
-    solver assigned.
+    Callers read it and do not mutate it.
+
+    Attributes
+    ----------
+    x, y : float
+        Top-left corner in pixels.
+    w, h : float
+        Resolved size.
+    col, row : int or None
+        Grid rank the solver assigned, if any.
+    orientation : float
+        Clockwise quarter turn in degrees.
+    mirrored, mirror_y : bool
+        Left-right and top-bottom flips.
+    label_pos : str or None
+        Tag position: ``"top"``, ``"bottom"``, ``"left"``, ``"right"`` or
+        ``"center"``.
+    port_faces : dict[str, str]
+        Faces automatic selection chose for movable ports. Kept on the
+        frame, not the unit, so each layout starts from author intent.
     """
     x: float
     y: float
@@ -108,38 +149,49 @@ class Frame:
     orientation: float = 0.0
     mirrored: bool = False
     mirror_y: bool = False
-    label_pos: str | None = None  # top/bottom/left/right
-    # Faces the engine picked for movable ports (see
-    # pandid.layout.faces), keyed by port name. A *result*, so it
-    # belongs here and not on the unit: the unit carries only what the
-    # author asked for, and a layout run that started from a previous
-    # run's pick would not be idempotent.
+    label_pos: str | None = None
     port_faces: dict[str, str] = field(default_factory=dict)
 
     @property
     def x_max(self) -> float:
+        """Return the right edge in pixels."""
         return self.x + self.w
 
     @property
     def y_max(self) -> float:
+        """Return the bottom edge in pixels."""
         return self.y + self.h
 
     @property
     def cx(self) -> float:
+        """Return the horizontal centre in pixels."""
         return self.x + self.w / 2
 
     @property
     def cy(self) -> float:
+        """Return the vertical centre in pixels."""
         return self.y + self.h / 2
 
 
 @dataclass
 class _Slot:
-    """Internal, mutable solver scratch state for one unit.
+    """Mutable solver state for one unit during layout.
 
-    The layout engine seeds this from the unit's :class:`Pin` and fills
-    in the missing ``col``/``row``/``x``/``y`` across its phases, then
-    emits a concrete :class:`Frame`. Not part of the public API.
+    Seeded from the unit's :class:`Pin`; layout passes fill in the missing
+    fields, then write a :class:`Frame`. Not public API.
+
+    Attributes
+    ----------
+    w, h : float
+        Resolved size.
+    col, row : int or None
+        Grid rank.
+    x, y : float or None
+        Top-left corner in pixels.
+    orientation : float
+        Clockwise quarter turn in degrees.
+    mirrored, mirror_y : bool
+        Left-right and top-bottom flips.
     """
     w: float
     h: float

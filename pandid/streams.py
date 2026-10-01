@@ -1,18 +1,15 @@
-"""Stream: a connection from one outlet Port to one inlet Port.
+"""Define a stream: a connection from one port to another.
 
-`name` is the stream number. On an auto-named stream the flowsheet owns
-it and keeps it equal to what gets drawn; a name passed to `connect()`
-is never touched. Setting any of `size`, `schedule`, `service`, `spec`
-or `insulation` turns that number into a full line number
-(`6"-P-1001-A1A`), assembled by the flowsheet's `line_numbering_scheme`.
-`kind` is one of `STREAM_KINDS`: a process kind ("material"/"energy") on
-a pipe, a signal kind on an instrument line. `is_recycle` is COMPUTED
-later by the layout engine's cycle-detection phase and must never be set
-by API callers. `draw_as_recycle` lets a caller nudge which stream is
-chosen as a tear/back-edge in ambiguous cycles; it is advisory only.
-`color` and `dasharray` are checked as they are set -- see
-`check_color` -- because they are instructions to the renderer rather
-than lettering, and an instruction it cannot read is dropped silently.
+A stream's ``name`` is its stream number; the flowsheet keeps an
+automatically named stream's number current and never changes a name
+given to ``connect()``. Setting any of ``size``, ``schedule``,
+``service``, ``spec`` or ``insulation`` turns the number into a line
+number built by the flowsheet's ``line_numbering_scheme``.
+
+``kind`` is one of :data:`STREAM_KINDS`. ``is_recycle`` is computed by
+layout and read-only; ``draw_as_recycle`` only advises which stream of a
+cycle to treat as the return. ``color`` and ``dasharray`` are validated
+when set, because the renderer silently ignores a value it cannot read.
 """
 
 from __future__ import annotations
@@ -27,47 +24,26 @@ if TYPE_CHECKING:
     from pandid.ports import Port
     from pandid.state import State
 
-#: The parts of a line number, in the order a conventional scheme spells
-#: them. ``schedule`` sits next to ``size`` because it qualifies it: the
-#: two together are the bore and the wall, and the issued reference
-#: sheet writes them side by side (``FB-301-200-160-SS`` is service,
-#: sequence, DN 200, schedule 160, 316L).
-#:
-#: The list is fixed rather than open: a component nothing else on the
-#: sheet can spell is one the drawing cannot be checked against. An
-#: author who wants a fact of their own writes a callable
-#: ``line_numbering_scheme``. See issue #118 before adding a seventh.
+#: Line-number components, in conventional order. ``schedule`` follows
+#: ``size`` because together they give the bore and the wall. The set is
+#: fixed; a different format needs a callable ``line_numbering_scheme``.
 LINE_NUMBER_FIELDS = ("size", "schedule", "service", "sequence", "spec", "insulation")
 
-#: Kinds that carry process fluid or duty: what a pipe on the sheet
-#: holds.
+#: Kinds that carry process fluid or duty.
 PROCESS_KINDS = frozenset({"material", "energy"})
 
-#: Kinds that carry a measurement or a command instead of a fluid.
-#: ISA-5.1 gives each its own line style, and `Flowsheet.connect()`
-#: pairs them with the signal-role ports that are the only things they
-#: may run between.
+#: Kinds that carry a measurement or command, each with its own ISA-5.1
+#: line style. They may only join signal-role ports.
 SIGNAL_KINDS = frozenset({"electric", "pneumatic", "data", "capillary", "software"})
 
-#: Every kind `connect()` accepts.
+#: Every kind ``connect()`` accepts.
 STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS
 
-#: A colour, in the three shapes SVG writes one: a keyword (a named
-#: colour, or ``none``/``currentColor``/``transparent``/``inherit``), a
-#: hex triple in any of its four lengths, or a colour function over
-#: numbers. Deliberately a *shape* check and not a list of the 148 CSS
-#: names -- ``rebeccapurple`` is a colour and so is whatever CSS names
-#: next, and a library that ships the list has to keep shipping it.
-#:
-#: What the shape rules out is the point: no quote, angle bracket or
-#: ampersand can appear in a value that matches, so nothing that gets
-#: past here can close an SVG attribute; and no ``;`` or ``=`` can,
-#: which is what keeps it from opening a second key in the ``style=``
-#: string the draw.io export writes it into.
-#:
-#: ``url(#...)`` is not admitted although SVG accepts it as a paint: the
-#: library defines no gradient or pattern for one to name, so it could
-#: only ever dangle.
+#: Accepted colour shapes: a keyword, a hex colour of 3, 4, 6 or 8 digits,
+#: or an ``rgb``/``rgba``/``hsl``/``hsla`` function over numbers. The shape
+#: excludes quotes, angle brackets, ampersands, ``;`` and ``=``, so a value
+#: cannot break out of an SVG attribute or a draw.io style string.
+#: ``url(#...)`` is excluded because no gradient or pattern is defined.
 _COLOR = re.compile(
     r"""\A(?:
         [A-Za-z][A-Za-z0-9-]*                        # a keyword
@@ -77,47 +53,49 @@ _COLOR = re.compile(
     re.VERBOSE,
 )
 
-#: One number in a dash pattern. Unitless: everything in this library is
-#: in drawing units, and the draw.io export translates the pattern into
-#: draw.io's own unitless list (see ``pandid.render.drawio._dash``), so a
-#: length carrying ``px`` or ``%`` would come out right on one backend
-#: and wrong on the other.
+#: One unitless number in a dash pattern, in drawing units, which the
+#: draw.io export can translate.
 _DASH_NUMBER = r"(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)"
 
-#: A dash pattern, as SVG spells one: ``none``, or lengths separated by
-#: commas and/or spaces.
+#: A dash pattern: ``none``, or lengths separated by commas or spaces.
 _DASHARRAY = re.compile(rf"\A(?:none|{_DASH_NUMBER}(?:[, ]+{_DASH_NUMBER})*)\Z")
 
 
 def _names(stream: "Stream | None") -> str:
-    """``"S-1: "`` for a stream that carries a number, else nothing.
+    """Return a message prefix naming a stream, if it has a name yet.
 
-    A stream is checked as it is built, before auto-numbering has given
-    it one, so the line cannot always be named -- but the field always
-    can, and that is what a message has to carry.
+    Parameters
+    ----------
+    stream : Stream or None
+        Stream being checked; it may not be numbered yet.
+
+    Returns
+    -------
+    str
+        ``"<name>: "``, or an empty string.
     """
     name = getattr(stream, "name", "") if stream is not None else ""
     return f"{name}: " if name else ""
 
 
 def check_color(value: str, stream: "Stream | None" = None) -> None:
-    """Refuse a ``color`` that is not a colour.
+    """Reject a ``color`` value that is not a colour.
 
-    Refused rather than escaped, which is the choice the rest of this
-    library makes about a value that is wrong rather than merely
-    awkward. Escaping ``black" onload="alert(1)`` yields a well-formed
-    document whose ``stroke`` is a string no renderer recognises, and an
-    unrecognised paint is *ignored*: the line is drawn with no stroke
-    and vanishes off the sheet, silently, on a drawing whose whole job
-    is to say what is connected to what. A refusal names the field and
-    the line; a missing pipe names nothing.
+    An unreadable paint is ignored by renderers, so the line would vanish.
+    Only the shape is checked; a misspelled keyword such as ``"blck"``
+    passes.
 
-    What is checked is the *shape*, which is the part that decides
-    whether the value is safe to write. A misspelled keyword --
-    ``"blck"`` -- still gets through and still draws nothing: catching
-    that means shipping and maintaining the 148 CSS colour names, and it
-    is a typo rather than an injection. It belongs with the rest of the
-    sheet's spelling checks in :mod:`pandid.validate`, not here.
+    Parameters
+    ----------
+    value : str
+        Proposed colour.
+    stream : Stream or None, optional
+        Stream named in the error message.
+
+    Raises
+    ------
+    ValueError
+        If the value is not a keyword, hex colour or colour function.
     """
     if _COLOR.match(value):
         return
@@ -131,12 +109,22 @@ def check_color(value: str, stream: "Stream | None" = None) -> None:
 
 
 def check_dasharray(value: str, stream: "Stream | None" = None) -> None:
-    """Refuse a ``dasharray`` that is not a dash pattern.
+    """Reject a ``dasharray`` value that is not a dash pattern.
 
-    For the reason :func:`check_color` refuses a colour, and with a
-    sharper edge: an unrecognised ``stroke-dasharray`` is ignored too,
-    and the line is then drawn **solid**. A signal line that comes out
-    solid does not go missing, it reads as a pipe.
+    An unreadable pattern is ignored and the line is drawn solid, so a
+    signal line would read as a pipe.
+
+    Parameters
+    ----------
+    value : str
+        Proposed dash pattern.
+    stream : Stream or None, optional
+        Stream named in the error message.
+
+    Raises
+    ------
+    ValueError
+        If the value is not ``none`` or a list of numbers.
     """
     if _DASHARRAY.match(value):
         return
@@ -155,29 +143,34 @@ class Stream:
     Parameters
     ----------
     name : str
-        Stream label.
+        Stream number or line number.
     source, dest : Port
         Connected source and destination ports.
     kind : str, default="material"
-        Connection type.
+        Connection type, one of :data:`STREAM_KINDS`.
     draw_as_recycle : bool, default=False
-        Prefer this segment as a recycle cut.
+        Prefer this stream as the return line of a cycle.
     route : Route or None, default=None
         Resolved or manually supplied route.
     color, dasharray : str or None, default=None
-        Optional line appearance.
+        Line colour and dash pattern, validated when set.
     ends : str, tuple[str, str], or None, default=None
-        Joint styles at the two ends.
+        Joint style at both ends, or at ``(source, dest)``, overriding the
+        sheet's ``connections``. ``None`` inherits. Resolved by
+        :func:`pandid.render.svg.resolve_connections`.
     auto_named : bool, default=True
-        Whether the flowsheet assigns the label.
+        Whether the flowsheet assigns the name.
     size, schedule, service, sequence, spec, insulation : str, float, or None, default=None
-        Components of the line number.
+        Line-number components. ``sequence`` is filled by automatic
+        numbering unless set; ``schedule`` is a schedule number or
+        ``STD``/``XS``/``XXS``.
     properties : dict[str, str | float], optional
-        Values displayed in the stream table.
+        Values shown in the stream table.
     tabulate : bool, default=False
-        Prefer this segment's values in a shared line column.
+        Report this segment's values in the stream-table column of a run
+        drawn through inline devices. It does not add the run to the table.
     state : State or None, default=None
-        Material state held by this segment.
+        Stream conditions for a future balance engine.
     """
 
     name: str
@@ -188,65 +181,45 @@ class Stream:
     route: Route | None = None
     color: str | None = None
     dasharray: str | None = None
-    # How this line's two joints are made up, overriding the sheet's
-    # `connections` for this run alone. One name for both ends, or a
-    # (source, dest) pair in connection order. None inherits, which lets
-    # one flanged line sit on an unmarked sheet. Resolved by
-    # pandid.render.svg.resolve_connections(), which also holds the
-    # P&ID-only rule that outranks all of this.
     ends: "str | tuple[str, str] | None" = None
-    auto_named: bool = True  # False if the caller named it
-    # Line-number components. The author supplies all but `sequence`,
-    # which auto-numbering fills; see Flowsheet.renumber_streams().
+    auto_named: bool = True
     size: str | float | None = None
-    # The wall the line is bought to, at the size above. A schedule
-    # number (40, 80, 160) or one of the older STD/XS/XXS names, so it
-    # is not numeric and takes the same union as the components either
-    # side of it.
     schedule: str | float | None = None
     service: str | float | None = None
     sequence: str | float | None = None
     spec: str | float | None = None
     insulation: str | float | None = None
     properties: dict[str, str | float] = field(default_factory=dict)
-    # Read this segment first when the run's stream-table column is
-    # filled in. A run drawn through a valve is several streams sharing
-    # one name and one column, and its conditions can genuinely differ
-    # along it -- a control valve is there to drop the pressure -- so
-    # only the author can say which point the column reports. Set it on
-    # that segment. Nothing else changes: the column is still headed
-    # from the run's first segment, since the number and the line-number
-    # components are the run's rather than any one segment's.
-    #
-    # Not "put this line in the table"; that is decided by whether the
-    # run states anything and by whether it crosses the sheet edge (see
-    # `pandid.render.furniture._table_runs`). This picks between
-    # segments of a run that is in the table already.
     tabulate: bool = False
-    state: State | None = None  # <- balance engine writes here later
+    state: State | None = None
     _is_recycle: bool = field(default=False, init=False, repr=False)
-    # The sequence auto-numbering last wrote, so a value the author put
-    # there instead is recognised and left alone however often numbering
-    # re-runs.
+    # Sequence last written by automatic numbering, so an author's value is
+    # recognised and kept.
     _auto_sequence: str | None = field(default=None, init=False, repr=False)
     _inline_at: float | None = field(default=None, init=False, repr=False, compare=False)
     _logical_to: Port | None = field(default=None, init=False, repr=False, compare=False)
     _logical_segments: list[Stream] = field(default_factory=list, init=False, repr=False, compare=False)
     _logical_root: Stream | None = field(default=None, init=False, repr=False, compare=False)
 
-    #: The two fields that are checked as they are written, and why they
-    #: are the only two. Everything else on a stream is *lettering* --
-    #: it reaches the sheet as words, and words are escaped on the way
-    #: out (see :mod:`pandid.render.escape`), so a strange one draws
-    #: strangely and no more. These two are *instructions to the
-    #: renderer*, and an instruction the renderer cannot read is not
-    #: drawn strangely, it is dropped: a bad colour takes the line with
-    #: it, a bad dash makes a signal read as a pipe. Neither failure
-    #: reaches the author, which is what makes checking here worth the
-    #: refusal.
+    #: Fields validated on assignment: renderer instructions that are
+    #: silently dropped when unreadable. Other text is escaped on output.
     _CHECKED = {"color": check_color, "dasharray": check_dasharray}
 
     def __setattr__(self, name: str, value) -> None:
+        """Set an attribute, validating ``color`` and ``dasharray``.
+
+        Parameters
+        ----------
+        name : str
+            Attribute name.
+        value : object
+            New value.
+
+        Raises
+        ------
+        ValueError
+            If a checked field receives an invalid value.
+        """
         check = self._CHECKED.get(name)
         if check is not None and value is not None:
             check(str(value), self)
@@ -254,57 +227,50 @@ class Stream:
 
     @property
     def is_recycle(self) -> bool:
-        """True when layout() marked this stream a recycle back-edge.
+        """Return whether layout marked this stream as a return line.
 
-        Read-only: computed by the engine, never set by API callers.
+        Returns
+        -------
+        bool
+            Read-only result of cycle breaking.
         """
         return self._is_recycle
 
     @property
     def has_line_number(self) -> bool:
-        """True when a line number rather than a stream number names it.
+        """Return whether a line number, not a stream number, names the stream.
 
-        Read-only. ``sequence`` alone does not count: auto-numbering
-        fills it on every stream, and on its own it only renumbers,
-        which ``stream_naming_scheme`` already does.
+        ``sequence`` alone does not count, because automatic numbering fills
+        it on every stream.
+
+        Returns
+        -------
+        bool
+            Whether ``size``, ``schedule``, ``service``, ``spec`` or
+            ``insulation`` is set.
         """
         return any((self.size, self.schedule, self.service, self.spec, self.insulation))
 
     @property
     def at_boundary(self) -> bool:
-        """True when this line is an ingoing or outgoing material.
+        """Return whether this segment crosses the sheet boundary.
 
-        One of its ends is a :class:`~pandid.units.Feed` or a
-        :class:`~pandid.units.Product`: the off-page flag pandid draws
-        where a line crosses the edge of the sheet, and the only thing
-        in the model that says *the process ends here*.
+        A segment is a boundary segment when one end is a
+        :class:`~pandid.units.Feed` or :class:`~pandid.units.Product` flag.
+        ISO 10628-1:2014 4.3.2 d) requires a PFD to name every ingoing and
+        outgoing material with its flow, so the stream table keeps such
+        columns and :mod:`pandid.validate` reports empty ones. A
+        :class:`~pandid.units.Vent` or :class:`~pandid.units.Funnel` is
+        drawn as piping, not as a reference to another drawing, and is not
+        a boundary here.
 
-        Read-only, and the place the question is answered, because ISO
-        10628-1:2014 draws its own line there and two callers have to
-        find it in the same place. 4.3.2 d) makes the name of every
-        **ingoing and outgoing** material, with its flow rate or
-        quantity, something a PFD **shall** carry, where the flows
-        *between* the process steps are optional (4.3.3 a)). So the
-        stream table drops an internal column with nothing in it and
-        keeps a boundary one
-        (:func:`pandid.render.furniture._table_streams`), and
-        :mod:`pandid.validate` reports the boundary column that is
-        empty.
+        The answer is per segment: on a run drawn through inline devices,
+        only the segment at the flag returns ``True``.
 
-        A :class:`~pandid.units.Vent` and a :class:`~pandid.units.Funnel`
-        are boundaries of the plant too and are deliberately not
-        boundaries here: both are drawn as real piping -- a stack with a
-        weather cap, a cone open to the room -- rather than as a
-        reference to a line that continues on another drawing, and it is
-        the reference that says the material is accounted for somewhere
-        else. An author who wants a vent tabulated says so the way any
-        other stream is kept, by giving it a property; a blank one is
-        enough.
-
-        Per *segment*, not per run: a line drawn through a valve is
-        several streams sharing one name and only the segment on the
-        flag answers True. Callers that mean the run ask it of every
-        segment.
+        Returns
+        -------
+        bool
+            Whether either end is a boundary flag.
         """
         from pandid.units import _Boundary
 
@@ -312,9 +278,12 @@ class Stream:
                 or isinstance(self.dest.owner, _Boundary))
 
     def line_components(self) -> dict[str, str]:
-        """The line-number components as text, empty where unset.
+        """Return the line-number components as text.
 
-        Unset components drop out of the formatted line number.
+        Returns
+        -------
+        dict[str, str]
+            Value per field in :data:`LINE_NUMBER_FIELDS`, empty where unset.
         """
         return {f: "" if getattr(self, f) is None else str(getattr(self, f))
                 for f in LINE_NUMBER_FIELDS}

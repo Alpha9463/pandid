@@ -1,4 +1,10 @@
-"""SVG rendering backend."""
+"""Render a flowsheet as SVG.
+
+:class:`SvgRenderer` draws the sheet. The module-level functions compute
+what both backends share (label placement, crossing marks, flags, line
+weights, sheet sizing and render-argument checks), so the draw.io export
+in :mod:`pandid.render.drawio` draws the same sheet.
+"""
 
 from typing import NamedTuple, TYPE_CHECKING
 import math
@@ -24,344 +30,236 @@ if TYPE_CHECKING:
 # or flipped.
 _SYMBOL_TEXT = re.compile(
     r'<text\b[^>]*?\bx="(-?[\d.]+)"[^>]*?\by="(-?[\d.]+)"[^>]*?>.*?</text>', re.S)
-# Balloon variants whose symbol draws a location bar across the middle
-# (see the instrument symbols in pandid.render.symbols): their tag text
-# has to clear it.
-#
-# ``shared`` carries a bar *and* a square, which is not a contradiction
-# and so not a membership to tidy away (#181): ISO 15519-2 Table 1 (p.
-# 7) makes the bar an "additional graphic" answering where the
-# information lives, while the square answers what the function is. All
-# forty balloons on ``professional_examples/P&ID_301.pdf`` carry a bar,
-# twelve of them squared.
+# Balloon variants drawn with a location bar across the middle, which
+# their tag text must clear. ``shared`` has a bar and a square: the bar
+# says where the information is (ISO 15519-2 Table 1) and the square what
+# the function is.
 _BARRED_BALLOONS = {"panel", "aux", "shared"}
 # Variants drawn as a diamond (ISA-5.1-2009 Table 5.1.1 column B and
-# Table 5.1.2 items 3-5): they carry the interlock number alone, and it
-# has to sit where the sloping sides leave room for it rather than in
-# the middle of the box.
+# Table 5.1.2 items 3-5): the interlock number sits where the sloping
+# sides leave room for it.
 _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
-# Variants that stand for a device out on the plant. Every ISA-5.1
-# balloon but the bare circle is a *location or function* symbol saying
-# the function is somewhere else: a bar puts it in a panel (Table 5.1.1
-# rows 2-5), a square in the shared display (column B), a hexagon in a
-# computer (column C), a diamond in a logic solver (column D and Table
-# 5.1.2). Only a thing in the field can have process fluid piped to it,
-# which is what decides whether the line reaching it is impulse tubing;
-# see :func:`impulse_tap`.
-#
-# Named positively, so a location symbol added later is out rather than
-# in: a dashed line claims the less of the two.
+# Variants that stand for a device in the field. Every other ISA-5.1
+# balloon places the function in a panel, shared display, computer or
+# logic solver (Table 5.1.1, Table 5.1.2), which has no process fluid
+# piped to it; see :func:`impulse_tap`. Listed positively so a new
+# location symbol defaults to a dashed (signal) line.
 _FIELD_BALLOONS = {"default"}
 
-#: Every side a unit's tag may be asked for, spelled the way
-#: ``label_pos`` is written.
+#: Values ``label_pos`` accepts: the four faces, in the order layout tries
+#: them (:data:`pandid.layout.coordinates.LABEL_SIDES`), and ``"center"``,
+#: which layout never picks but a balloon or an author may ask for.
 #:
-#: Four faces and the middle of the box. The faces are
-#: :data:`pandid.layout.coordinates.LABEL_SIDES` in the order layout
-#: tries them; ``"center"`` is not a face and is not one layout ever
-#: picks -- a symbol asks for it (an instrument balloon letters its tag
-#: inside itself) or an author does, for a body wide enough to write
-#: across.
-#:
-#: Public because it is the vocabulary and not the implementation, and
-#: three things have to agree on it: :meth:`SvgRenderer._label_place`
-#: places these five, ``pandid.render.drawio._LABEL_SIDE`` keys on the
-#: same five, and :func:`pandid.validate.model_issues` refuses a sixth.
-#: ``tests/test_render_api`` holds the two backends against this tuple so
-#: none of the three can drift.
-#:
-#: ``"top_right"`` is deliberately not here. It is where §11.4.5 puts the
-#: ``NC`` marking (:meth:`SvgRenderer._nc_label_item`) rather than
-#: somewhere a tag may be asked for, and the draw.io backend has no key
-#: for it.
+#: :meth:`SvgRenderer._label_place`, ``pandid.render.drawio._LABEL_SIDE``
+#: and :func:`pandid.validate.model_issues` all use this tuple, and
+#: ``tests/test_render_api`` keeps them in step. ``"top_right"`` is only
+#: for the ``NC`` marking (ISO 15519-1 11.4.5;
+#: :meth:`SvgRenderer._nc_label_item`).
 LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
 
 # --- line weights -----------------------------------------------------
-# Every width this file draws in comes off :class:`~.weights.LineWeight`
-# and there is no local constant to add a fourth to. Which rung each
-# element is on is stated at the point it is drawn; the ladder itself,
-# and why it is three rungs at 4:2:1 rather than the two this file used
-# to hold, is in :mod:`pandid.render.weights`.
-#
-# What #490 moved is one assignment: a material run is ISO 10628-1
-# §5.3.1 a) and not b). It had been drawn at the same 2 units as the
-# vessel it enters -- a coherent reading of ISO 15519-2 Annex A.1, which
-# spends two widths across pipeline (A.1.01) and instrument and signal
-# line (A.1.02, A.1.03), but not the reading 10628-1 §5.3.1 states for
-# the documents this library draws.
+# Every width comes from :class:`~.weights.LineWeight`, the 4:2:1 ladder
+# in :mod:`pandid.render.weights`. Each element states its rung where it
+# is drawn. Material runs are main flow lines (ISO 10628-1 5.3.1 a)).
 
-#: The dash a signal line is drawn with, per kind. A pneumatic line is
-#: absent because it is drawn *solid* and cross-hatched instead. Held at
-#: module scope because the draw.io export writes the same line, and two
-#: tables of dashes would be two answers to what an electric signal
-#: looks like.
+# Dash pattern per signal kind; pneumatic lines are solid and hatched
+# instead. Shared with the draw.io export.
 _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
                 "capillary": "3,3"}
 
-#: The dash a tap line is drawn with where it carries a measurement or a
-#: command rather than process fluid; an impulse line is solid. See
-#: :meth:`SvgRenderer._draw_taps` and :func:`impulse_tap`. Here beside
-#: the signal dashes and for the same reason: the export writes it too.
+# Dash for a tap line carrying a measurement or command rather than
+# process fluid (an impulse line is solid); see :func:`impulse_tap`.
+# Shared with the draw.io export.
 _TAP_DASH = "5,4"
 
 
-#: The radius of the semicircle a crossing line hops with, which is half
-#: the length of run the hop takes out and how far it stands off it.
-#: :meth:`SvgRenderer._draw_streams` builds the arc from this alone.
+#: Radius of a crossing mark: half the run an arc or gap takes out, and
+#: how far an arc stands off the run. draw.io sizes its hop differently;
+#: :func:`pandid.render.drawio._jump_size` converts.
 #:
-#: Named for the same reason :data:`_TAP_DASH` is, and with arithmetic
-#: in the way: draw.io sizes its own hop from a ``jumpSize``, where
-#: ``mxConnector.paintLine`` makes the half-extent ``(jumpSize - 2) / 2
-#: + strokeWidth``. That is a different number, and
-#: :func:`pandid.render.drawio._jump_size` solves it for this radius.
-#:
-#: **Derived from the pen since #490, because it has to be.** The paper
-#: the arc leaves against the run it bridges is the radius less a
-#: half-pen of each::
+#: Derived from the pen so the paper an arc leaves stays constant::
 #:
 #:     clearance = HOP_R - w_hop / 2 - w_crossed / 2
 #:
-#: Left at the flat 5 it was, a run widening from 2 units to
-#: :attr:`~.weights.LineWeight.MAIN_FLOW`'s 4 took that from 3 units to
-#: **1, 0,25 mm** -- measured on the raster, not only computed -- and at
-#: that width the crescent closes: the arc, the run it crosses and the
-#: corner beside it merge into one shape, and the mark states a junction
-#: where there is none. A tight crossing is a defect; one that reads as
-#: a tee is a false statement, so the radius follows the rung.
-#:
-#: :data:`_HOP_CLEARANCE` is the paper the sheet has always left there,
-#: and the term added to it is a half-pen of each of two main flow runs
-#: -- the widest pair that can meet -- so the clearance is a floor for
-#: every crossing and exact for that one.
-#:
-#: **No clause sizes this**, and none is cited as if it did. §5.3.2's
-#: floor is between *parallel* lines and does not reach a crossing, and
-#: nothing in §5.3.4, ISO 15519-1 §12.5 or ISO 15519-2 Table A.1 gives
-#: the gap a dimension. The number below restores what the drawing had
-#: and claims nothing further.
-#:
-#: **Nor is the arc itself specified anywhere.** §5.3.4 draws an
-#: interruption, 15519-1 §12.5 draws a plain crossing, and none of the
-#: three reference sheets in ``professional_examples/`` marks a crossing
-#: at all -- 393 of 393 interior crossings are plain. An arc is a
-#: drafting convention this library brought with it, and which of the
-#: three a sheet should draw is #499, with the prototype and the
-#: measurements on it.
-#:
-#: The radius cannot simply be raised to whatever would be comfortable.
-#: ``_draw_streams`` only marks a segment longer than twice it, so a
-#: larger radius *drops* crossings -- 2 of the corpus's 53 at 7 and 5 at
-#: 12 -- and an interruption wide enough to clear the run eats the run
-#: it is cut into instead, leaving 0,25 mm stubs of pipe beside a corner
-#: on this same corpus. Both conventions meet the same wall: the router
-#: puts crossings within a few units of a corner
-#: (``pandid.routing.separation``, whose spacing is 6 units and is
-#: derived from nothing), and at 0,4 M no crossing mark of any shape
-#: fits in what it leaves. That is #498.
-#:
-#: The two crossings that go unmarked here are drawn plain, which is
-#: ambiguous where the merged arc was wrong -- the same trade
-#: :data:`~pandid.render.drawio.HOP_DROPPED` already makes, and the way
-#: every crossing on all three reference sheets is drawn.
+#: :data:`_HOP_CLEARANCE` is that paper for two main flow runs, the widest
+#: pair, so it is a floor for every crossing. No standard dimensions a
+#: crossing mark. A larger radius is not free: ``_draw_streams`` marks
+#: only segments longer than ``2 * HOP_R``, so more crossings would go
+#: unmarked (drawn plain, as
+#: :data:`~pandid.render.drawio.HOP_DROPPED` also does).
 _HOP_CLEARANCE = 3.0
 HOP_R = _HOP_CLEARANCE + LineWeight.MAIN_FLOW.width
 
-#: How a crossing of two unconnected runs is marked. **The author's
-#: choice**, because the documents on disk do not agree on one --
-#: :data:`HOP_R`'s note above sets out the reading, and #499 settled it
-#: as a choice rather than a fix.
+#: How a crossing of two unconnected runs may be marked, chosen per sheet
+#: (see :func:`check_crossing_style`):
 #:
-#: * ``"arc"`` -- the semicircular bridge, and the default, so that no
-#:   drawing already issued changes. It is in no standard this project
-#:   holds and on none of the reference sheets; it is a drafting
-#:   convention this library brought with it.
-#: * ``"gap"`` -- the interruption ISO 10628-1 5.3.4 prescribes. Drawn
-#:   over the same ``2 * HOP_R`` of run the arc spans, because no clause
-#:   dimensions it and matching the arc's footprint is the one choice
-#:   that invents no number and moves nothing else on the sheet. **It
-#:   costs run**: the break comes out of the line rather than being laid
-#:   over it, so a crossing near a corner leaves a short leg. Measured
-#:   on this corpus at this radius: of the 84 resulting pieces of run,
-#:   3 keep a straight leg under 1 mm -- 0,15 mm at the worst, on
-#:   ``11_ethanol_pid`` -- and the shortest whole piece is 1,5 mm. The
-#:   arc meets the same wall from the other side (it drops 1 of 50
-#:   crossings), and both are the router putting crossings within a few
-#:   units of a corner, which is #498.
+#: * ``"gap"`` -- the default: the interruption ISO 10628-1 5.3.4
+#:   prescribes, cut over the same ``2 * HOP_R`` of run an arc spans. The
+#:   break comes out of the run, so a crossing near a corner leaves a
+#:   short leg.
+#: * ``"arc"`` -- a semicircular bridge, a drafting convention this
+#:   library offers for house styles; no standard specifies it.
 #: * ``"plain"`` -- both lines continuous, as ISO 15519-1 12.5 Figure 31
-#:   draws a crossing and as all 393 interior crossings on the reference
-#:   sheets are drawn. A junction is then told from a crossing by the
-#:   *junction* carrying a mark, which is the other way round from the
-#:   two above.
+#:   draws a crossing; junctions then carry the mark instead.
 #:
-#: The choice is the **sheet's** and not the line's: a drawing that
-#: marked some crossings one way and some another would teach its reader
-#: a convention and then break it, which is worse than either. See
-#: :func:`check_crossing_style`.
+#: Mixing styles on one sheet would break the convention a reader learns,
+#: so the style applies to the whole sheet.
 CROSSING_STYLES = ("arc", "gap", "plain")
 
-#: What a crossing is drawn as when the author says nothing.
-#:
-#: ISO 10628-1 5.3.4 asks for an interruption and describes no other mark,
-#: and 4.1 puts every diagram this package draws -- block, PFD and P&ID
-#: alike -- under Clause 5, so the rule does not vary by diagram type.
-#: The arc is a drafting convention this library brought with it and no
-#: document here specifies; it stays available because a house style may
-#: want it, but it is no longer what a sheet gets by default.
-#:
-#: Every signature that takes ``crossing_style`` defaults to this value,
-#: and ``test_every_crossing_style_default_is_the_package_default``
-#: fails if one of them drifts.
+#: Crossing style used when none is given: ``"gap"``, since ISO 10628-1
+#: 5.3.4 asks for an interruption and 4.1 applies Clause 5 to every
+#: diagram this package draws. Public entry points default to it;
+#: ``test_every_crossing_style_default_is_the_package_default`` checks
+#: every module-level function taking ``crossing_style``.
 CROSSING_STYLE_DEFAULT = "gap"
 
 # --- stream-label placement -------------------------------------------
-# A stream label is written on an opaque halo, so it can only sit *on*
-# the pipe where the run leaves pipe showing at each end: the ARROWHEAD
-# a PFD draws, plus enough line either side that the run still reads as
-# one line rather than two stubs. Anything shorter goes beside the pipe.
+# A label on its opaque halo may sit on the pipe only where the run
+# leaves this much pipe showing at each end (room for an ARROWHEAD and a
+# visible line); otherwise it goes beside the pipe.
 _LABEL_CLEAR = 20.0
 # Gap from the pipe to the near edge of a label written beside it.
 _LABEL_GAP = 4.0
-# Search step along the run. Fine, because a label only has to clear
-# whatever it landed on rather than jump a whole label width.
+# Search step along the run.
 _LABEL_STEP = 6.0
-# How many bands of sideways stand-off the search may walk through. A
-# bound on the search rather than a judgement about what reads: the
-# bands are walked inward-out and a clear band wins outright, so the
-# number only matters to a label whose nearer bands are all spoken for.
-#
-# Seven because six left one label on the shipped corpus with nowhere to
-# go -- AE-304 on ``11_ethanol_pid``, whose 276 candidate spots all
-# covered something once a halo stopped being allowed to break a symbol
-# (:func:`_covering`) -- and its first clear band is the seventh. The
-# answer settles there rather than merely first appearing there: at 8,
-# 10 and 12 bands that label lands in the same place.
+# Number of sideways stand-off bands the search tries, nearest first. A
+# bound on the search; seven is the fewest that places every label on the
+# example sheets, and more bands do not move them.
 _LABEL_BANDS = 7
 
 def _class_weight(sym) -> LineWeight:
-    """The rung *sym*'s outline is drawn on.
+    """Return the line weight a symbol's outline is drawn at.
 
-    :attr:`~.symbols.Symbol.trim` is the flag that says which, and it
-    says it for exactly ISO 10628-1 §5.3.1 c)'s class -- valves,
-    fittings, piping accessories and PCE symbols -- against §5.3.1 b)'s
-    equipment and machinery for everything else.
+    Symbols marked :attr:`~.symbols.Symbol.trim` (valves, fittings,
+    piping accessories, PCE; ISO 10628-1 5.3.1 c)) use the detail rung;
+    equipment and machinery (5.3.1 b)) use the equipment rung. Artwork is
+    drawn at one nominal weight (:func:`_nominal`) and scaled to the rung
+    at render time (see :meth:`SvgRenderer._defs`).
 
-    ISO 15519-1 §11.1.3 applies to both rungs alike. :func:`_nominal`
-    holds every artwork in the registry to one nominal weight whichever
-    rung it is placed on, so a class is one number for the whole class
-    rather than a property of any one drawing, and the division to the
-    finer rung happens once at render time (see :meth:`SvgRenderer._defs`).
+    Parameters
+    ----------
+    sym : Symbol
+        Registered symbol.
+
+    Returns
+    -------
+    LineWeight
+        Outline rung.
     """
     return LineWeight.DETAIL if sym.trim else LineWeight.EQUIPMENT
 
 
 def _stream_rung(signal: bool) -> LineWeight:
-    """The rung a run is drawn on.
+    """Return the line weight of a stream, for both backends.
 
-    ISO 10628-1 §5.3.1 a) for a material run and c) for a control or
-    data line -- the *whole* of what either backend has to decide about
-    a stream's width, in one place, because both of them ask here.
+    Material runs are main flow lines (ISO 10628-1 5.3.1 a)); there is
+    no way yet to mark one subsidiary. Signal lines use the detail rung
+    (5.3.1 c)).
 
-    A material run is drawn on a) rather than b) and the clause offers
-    no third answer for it: b)'s flow-line class is the *subsidiary*
-    one, and this library has no way for an author to call a run
-    subsidiary (see #497). Every material run is therefore a main flow
-    line, which is what #490 changed -- they had all been drawn on b),
-    at the weight of the equipment they run into.
+    Parameters
+    ----------
+    signal : bool
+        Whether the stream is a signal line.
 
-    This is also the seam #489 attaches at: an energy carrier is
-    §5.3.1 b), so it is one branch here and :attr:`~.weights
-    .LineWeight.EQUIPMENT`, with no new rung and nothing else to move.
+    Returns
+    -------
+    LineWeight
+        Line rung.
     """
     return LineWeight.DETAIL if signal else LineWeight.MAIN_FLOW
 
 
 def _ink_pad(rung: LineWeight) -> float:
-    """How far off a line drawn on *rung* an opaque plate has to stop.
+    """Return how far an opaque plate must stop from a line on a rung.
 
-    Half a pen of ink and one unit of paper beyond it; see the call in
-    :func:`_ink`, which is where the two halves are argued.
+    Half the pen plus one unit of paper; see :func:`_ink`.
+
+    Parameters
+    ----------
+    rung : LineWeight
+        Line weight.
+
+    Returns
+    -------
+    float
+        Padding in drawing units.
     """
     return rung.width / 2 + LineWeight.DETAIL.width
 
 
-#: The paper a label's opaque plate leaves outside a symbol's ink.
-#:
-#: **A symbol's box is not its ink**, which is the whole of issue #243.
-#: :func:`~pandid.portgeom.unit_box` reports the *geometry*, and an
-#: outline is stroked centred on it, so half the pen falls outside the
-#: box and a plate laid flush against the box covers exactly that half.
-#: Measured on the shipped ``examples/14``: V-604's left shell wall
-#: integrated 1.141 of ink for the forty pixels ``VAP-611-150-40-CS``'s
-#: plate ran beside it against 2.345 the row after it ended -- 48,7 % of
-#: its weight gone, with nothing in the drawing to say why.
-#:
-#: A clearance rather than a bare half-pen, since half the pen is where
-#: the plate stops *erasing* and this is where it stops *crowding*: the
-#: same division :func:`_ink` already makes for a pipe.
+# Paper a label plate leaves outside a symbol's ink. A unit box is the
+# geometry and the outline is stroked centred on it, so half the pen lies
+# outside the box; a plate flush with the box would erase it.
 _PLATE_CLEARANCE = 2.0
 
 
 def _obstacle(box) -> "tuple[float, float, float, float]":
-    """A symbol's drawn box, grown to what a label has to keep off.
+    """Return a symbol box grown to the area a label must keep off.
 
-    Every place that treats a unit as something a label may not land on
-    goes through here, so the two label passes -- the equipment tags in
-    :meth:`SvgRenderer._tag_item`, the line numbers and their leaders in
-    :func:`stream_numbers` -- cannot disagree about where a symbol ends.
-    The growth is applied where the boxes are *used* rather than where
-    they are built, because the draw.io exporter builds a list of its
-    own and hands it to ``_tag_item``.
+    Both label passes (:meth:`SvgRenderer._tag_item` and
+    :func:`stream_numbers`) use this, so they agree on where a symbol
+    ends; the draw.io export passes its own boxes through it too. The pad
+    assumes the heavier equipment rung for every symbol, which keeps labels
+    at least as far from real ink as needed.
 
-    Held to :attr:`~.weights.LineWeight.EQUIPMENT`, the heavier of the
-    two symbol rungs, whatever *box* was actually drawn at. This is a clearance
-    around a box that already grew to the ink (see :data:`_PLATE_CLEARANCE`),
-    not the ink's own measurement, so an obstacle for a valve or a
-    balloon a half-pen too generous never puts a label nearer real ink
-    than it draws -- only ever ekes it a little further off a trimmed
-    symbol than :attr:`~.weights.LineWeight.DETAIL` strictly requires. Threading which
-    class each box was drawn in through every caller here, several of
-    which build their list from mixed geometry (a flange mark has no
-    :class:`~.symbols.Symbol` at all), would buy nothing a reader could
-    see.
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Drawn box ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Grown box.
     """
     pad = LineWeight.EQUIPMENT.width / 2 + _PLATE_CLEARANCE
     return (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
 
 
 def _along(box, vertical: bool, lo: float, hi: float) -> bool:
-    """Is a label at *box* written **along** the run ``lo``..``hi``?
+    """Return whether a label lies along the run from ``lo`` to ``hi``.
 
-    ISO 15519-1 §7.2.5, on the reference designation of a connection,
-    orients it along or beside the connecting line it belongs to, and
-    where there is no room beside that line it goes elsewhere in the
-    content area with a leader drawn back to it.
+    ISO 15519-1 7.2.5 writes a connection's designation along or beside
+    its line, or elsewhere with a leader. More than half the label must
+    lie alongside the run; below that :func:`_leader` takes over. On the
+    example sheets the labels fall clearly either side of 50%, which
+    ``tests/test_label_invariants.py`` checks.
 
-    Two *shall*s, the second naming the only escape from the first, so
-    this is where *along* stops and :func:`_leader` takes over. It asks
-    the one question the clause turns on -- is the line *there*, beside
-    the words? -- and not how wide the paper between them is.
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Label box.
+    vertical : bool
+        Whether the run is vertical.
+    lo, hi : float
+        Run extent along its axis.
 
-    More than half, measured over all 286 line numbers on the 21
-    shipped sheets: 25 overrun their run at all, and they fall in two
-    groups with a clear band of nothing between, 21 from 60 % of the
-    string alongside its own line up to 98 %, and four -- the ones
-    below this function's own 50 % line, which is what actually earns
-    a leader -- at 18 %, 29 %, 34 % and 36 %. The band has narrowed as
-    the corpus grew: 40 % to 61 % over fourteen sheets, measured at
-    ``87935d6``, and 32 % to 74 % over twelve, at ``07cb3b3``. Those
-    two are cited and not re-derivable -- the corpora they were taken
-    over are gone -- but they are what says the band is narrowing, and
-    a sheet that lands a number *in* today's band is the signal this
-    threshold has stopped sorting them. The two checks in
-    ``tests/test_label_invariants.py`` that read the corpus are what
-    would say so.
+    Returns
+    -------
+    bool
+        Whether over half the label is alongside the run.
     """
     a, b = (box[1], box[3]) if vertical else (box[0], box[2])
     return min(b, hi) - max(a, lo) > (b - a) / 2
 
 
 def _slide(x: float, y: float, room: float, vertical: bool):
-    """Anchors along a run: centred first, then out either way."""
+    """Yield label anchors along a run, centred first, then alternately out.
+
+    Parameters
+    ----------
+    x, y : float
+        Centre anchor.
+    room : float
+        Distance available either way.
+    vertical : bool
+        Whether the run is vertical.
+
+    Yields
+    ------
+    tuple[float, float]
+        Anchor points.
+    """
     yield x, y
     for k in range(1, int(room // _LABEL_STEP) + 1):
         d = k * _LABEL_STEP
@@ -370,30 +268,30 @@ def _slide(x: float, y: float, room: float, vertical: bool):
 
 
 # --- the ink a halo would delete --------------------------------------
-# Every label is written on an opaque rect, so wherever one lands it
-# erases what was drawn under it -- and the ink is not just the symbols,
-# it is every routed segment and every impulse line. A halo that deletes
-# a length of somebody else's pipe says two things that are not true,
-# that the line stops there and that the gap is where a reader may
-# write, and neither is visible to the validator, whose topology is
-# untouched. So the lines are seeded as occupied alongside the boxes.
+# Labels sit on opaque halos, so routed segments and impulse lines count
+# as occupied alongside symbol boxes: a halo over another line would make
+# it look broken.
 
 
 class _Ink(NamedTuple):
     """A drawn line, as the rectangle its stroke covers.
 
-    ``axis``/``at`` name the infinite line it lies on (``"h"`` at a
-    ``y``, ``"v"`` at an ``x``), which is how a label tells its own run
-    from a line that merely crosses it: breaking the run you are
-    labelling is the convention, and breaking the one beside it is a lie
-    about that line.
+    A label may break its own run but no other line, so each piece
+    records the infinite line it lies on and which run it belongs to;
+    collinear segments of two runs are still two runs.
 
-    ``line`` is whose it is, and it is the rest of that answer. Two
-    different runs at one height are collinear and are still two runs,
-    so a number gathering "its own" length by ``axis``/``at`` alone
-    gathers the neighbour's as well -- and reads as written along a line
-    it has nothing to do with. Empty for an impulse line, which is
-    nobody's run.
+    Attributes
+    ----------
+    x0, y0, x1, y1 : float
+        Covered rectangle.
+    axis : str
+        ``"h"`` or ``"v"``.
+    at : float
+        The ``y`` of a horizontal line or ``x`` of a vertical one.
+    kind : str
+        ``"pipe"`` or ``"tap"``.
+    line : str
+        Stream number of the run, or ``""`` for an impulse line.
     """
     x0: float
     y0: float
@@ -406,27 +304,28 @@ class _Ink(NamedTuple):
 
     @property
     def box(self) -> "tuple[float, float, float, float]":
-        """The covered rectangle, as every collision test takes it."""
+        """Return the covered rectangle ``(x0, y0, x1, y1)``."""
         return (self.x0, self.y0, self.x1, self.y1)
 
 
 def tap_lines(fs):
-    """Every impulse line, as ``(instrument, tap, balloon centre)``.
+    """Return every impulse line as ``(instrument, tap, balloon centre)``.
 
-    The line from a tap to the balloon reading it, and the rule for when
-    there is one at all: nothing is drawn where the balloon is merely
-    *placed* against its host (``near=``, issue #137; see
-    :data:`~pandid.units.RELATIONS`), where a stream already joins the
-    two, or where the element sits directly on the line (``offset=0``).
+    No line is drawn where the balloon is only placed near its host
+    (``relation="near"``; see :data:`~pandid.units.RELATIONS`), where a
+    stream already joins the two, or where the element sits on the line
+    (``offset=0``). The drawing pass, label placement and the draw.io
+    export all use this, so labels avoid exactly the lines drawn.
 
-    One derivation, shared by the drawing pass, by label placement and
-    by the draw.io exporter. A label cannot then be placed against an
-    impulse line the renderer declines to draw, or over one it does; and
-    these are the only lines on a P&ID that are not streams, so an
-    exporter walking ``fs.streams`` alone left 13 of
-    ``11_ethanol_pid``'s 29 balloons floating unconnected -- the rest
-    already touch a stream of their own (a signal wire to another
-    instrument) and were never at risk.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[Instrument, tuple[float, float], tuple[float, float]]]
+        Instrument, tap point and balloon centre for each line.
     """
     from pandid.layout.attach import is_attached
 
@@ -449,30 +348,23 @@ def tap_lines(fs):
 
 
 def impulse_tap(inst) -> bool:
-    """Is the line from *inst* to its host impulse tubing?
+    """Return whether the line from a balloon to its host is impulse tubing.
 
-    The question is about the **edge**, not about the class of either
-    thing on the end of it. An impulse line is a piece of pipe: it
-    exists only where there is process fluid at one end and something
-    out in the plant to pipe it to at the other. So both ends are asked,
-    and each answers out of a fact the model already states.
+    Impulse tubing carries process fluid, so all three must hold: the host
+    holds fluid (not a balloon or signal line), the relation is
+    ``"sensing"`` (fluid comes to the instrument), and the balloon is a
+    field device (:data:`_FIELD_BALLOONS`). Otherwise the line is a dashed
+    signal.
 
-    *The host end* carries fluid unless it carries a measurement
-    instead: a balloon holds nothing at all, and a signal line holds a
-    command. Everything else a balloon may hang on -- a process line, a
-    vessel, an exchanger, an in-line element -- is full of the fluid the
-    reading is taken from.
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
 
-    *The balloon end* can receive it only where the balloon is a device
-    in the field. Every other ISA-5.1 balloon is a symbol for a function
-    in a panel, in the shared display, in a computer or in a logic
-    solver, and no tubing runs from a drum to any of those; see
-    :data:`_FIELD_BALLOONS`.
-
-    *The line itself* has to be carrying the reading. Tubing brings the
-    fluid **to** the instrument, so only a ``sensing`` relation can be
-    one; a trip square hung on the valve it strokes is ``acting_on``,
-    and what runs down to the actuator is a command.
+    Returns
+    -------
+    bool
+        Whether the tap line is drawn solid as impulse tubing.
     """
     host = getattr(inst, "host", None)
     host_kind = getattr(host, "kind", "")
@@ -484,64 +376,53 @@ def impulse_tap(inst) -> bool:
 
 
 # --- letter codes written outside the symbol --------------------------
-# ISO 15519-2 §5.1.3, p. 19, puts anything written outside a PCI symbol
-# in the four quadrants around it, drawn at Figure 8, and gives the
-# reason: doing so leaves the symbol free to be connected horizontally
-# and vertically.
-#
-# The quadrants are the *corners*, and that reason is why: N, S, E and W
-# stay clear for the four connections a balloon takes, so annotating one
-# spends no face (#253).
-#
-# §5.2.5 fixes the *vertical* half -- the value a code stands for rises
-# with its distance from the centre line, so a high function is above it
-# and a low one below -- and does not fix which side of the symbol the
-# pair goes on.
-# ``professional_examples/P&ID_301.pdf`` bears that out: all three of
-# its annotated controllers put their alarms on whichever side has room.
-# So a pair keeps its half of the symbol and takes whichever side reads.
-# The four are (a) references and safety identifiers with (b) the
-# measured-variable type for letter code U, and (c) high functions with
-# (d) low.
+# ISO 15519-2 5.1.3 (Figure 8) writes codes outside a PCI symbol in the
+# four corner quadrants, leaving the faces free for connections. 5.2.5
+# puts high functions above the centre line and low below, but not which
+# side, so each pair keeps its half and takes the side with room.
+# Quadrants: (a) references and safety identifiers, (b) the variable for
+# letter code U, (c) high functions, (d) low functions.
 
-#: Each quadrant as ``(side, away)``: which way from the symbol it sits,
-#: and which way a second code in it stacks. Both are +1 right/down.
+# Quadrant -> (side, away): which side of the symbol and which way a
+# second code stacks; +1 is right or down.
 _QUADRANTS = {"a": (-1, -1), "b": (-1, 1), "c": (1, -1), "d": (1, 1)}
 
-#: The two pairs, in the order they are placed, and the side each
-#: prefers. Placed as pairs because they are read as one: a high code
-#: over a low one is a column.
+# The two quadrant pairs, placed in order, with each pair's preferred
+# side. A pair is read as one column.
 _QUADRANT_PAIRS = ((("a", "b"), -1), (("c", "d"), 1))
 
-#: Paper left clear on the symbol's centre line, each side. A connection
-#: arrives there -- on ``professional_examples/P&ID_301.pdf`` the signal
-#: line into every annotated controller runs between the two alarm codes
-#: -- so the band keeps the pair straddling the line, not sitting on it.
+# Paper kept clear either side of the centre line, where a connection
+# arrives between the two codes.
 _QUADRANT_BAND = 3.0
-#: From the symbol's drawn edge to the near edge of the code. 0,12
-#: balloon diameters, which is what PIC-301 and LIC-304 are drawn at
-#: (0,142 and 0,085); TIC-302's 0,384 is the outlier and the three
-#: together are hand-placed.
+# Gap from the symbol's edge to the code, about 0.12 balloon diameters as
+# on the reference P&ID.
 _QUADRANT_GAP = 5.0
-#: Between two codes stacked in one quadrant: one line of type, so the
-#: halos touch and the pair reads as a block.
+# Pitch of two codes in one quadrant: one line of type.
 _QUADRANT_PITCH = 15.0
-#: How far outward the search may push a quadrant to find clear paper.
-#: The quadrant itself is what the code *means*, so the only freedom is
-#: the stand-off; past this the placement is one to make by hand.
+# Furthest a quadrant may move outward to find clear paper; the quadrant
+# itself is fixed by meaning.
 _QUADRANT_REACH = 60.0
 
 
 def quadrant_labels(fs, direction: str) -> list:
-    """Every letter code written outside a symbol, placed.
+    """Return every letter code written outside a symbol, placed.
 
-    Items in :meth:`SvgRenderer._draw_unit_labels`' own form, so the
-    codes are haloed and drawn over the lines exactly as a tag is.
+    Items use :meth:`SvgRenderer._draw_unit_labels`' form, so codes are
+    haloed like tags. Derived from the flowsheet alone, as
+    :func:`stream_numbers` is, so the tag and line-number passes avoid the
+    same positions.
 
-    Derived from the flowsheet alone, for the reason
-    :func:`stream_numbers` is: the tag pass and the line-number pass
-    both have to dodge these, and a second derivation would put them
-    somewhere else for one of the two.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+    direction : str
+        ``jump_direction``, which decides which run draws a crossing arc.
+
+    Returns
+    -------
+    list
+        Label items ``(x, y, anchor, baseline, lpos, text)``.
     """
     from pandid.portgeom import unit_box
 
@@ -560,9 +441,7 @@ def quadrant_labels(fs, direction: str) -> list:
             codes = {name: u.quadrants.get(name) or () for name in names}
             if not any(codes.values()):
                 continue
-            # The preferred side first, so a tie keeps it; the other
-            # only wins by being cleaner, which is the draughtsman's own
-            # reason to swap.
+            # Try the preferred side first; the other wins only if cleaner.
             best = None
             for side in (prefers, -prefers):
                 block = _quadrant_block(box, codes, side)
@@ -574,20 +453,28 @@ def quadrant_labels(fs, direction: str) -> list:
                     break
             assert best is not None
             out.extend(best[1])
-            # Each code is paper for the next pair, and for the next
-            # balloon's: two controllers a balloon apart annotate into
-            # the same gap, and the second has to see where the first
-            # landed.
+            # Placed codes become obstacles for later pairs and balloons.
             symbols += [b for b in map(_unit_label_box, best[1]) if b is not None]
     return out
 
 
 def _quadrant_block(box, codes, side: int) -> list:
-    """One side's codes, laid out from the symbol's box outward.
+    """Return one side's codes laid out from the symbol's box outward.
 
-    ``codes`` is the pair keyed by quadrant letter; which of the two is
-    above the centre line and which below is :data:`_QUADRANTS`', and
-    does not change with the side.
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Symbol box.
+    codes : dict[str, tuple[str, ...]]
+        Codes keyed by quadrant letter; :data:`_QUADRANTS` sets which is
+        above the centre line.
+    side : int
+        ``1`` for right, ``-1`` for left.
+
+    Returns
+    -------
+    list
+        Label items.
     """
     cy = (box[1] + box[3]) / 2
     lx = (box[2] if side > 0 else box[0]) + side * _QUADRANT_GAP
@@ -603,21 +490,34 @@ def _quadrant_block(box, codes, side: int) -> list:
 
 
 def _quadrant_stand_off(block, side: int, ink, symbols):
-    """How far out of the symbol a pair's codes stand, and what is left.
+    """Return how far outward to move a pair of codes, and what remains hit.
 
-    Returns ``(shift, damage)``. Outward only, and the whole pair moves
-    together: the codes are a block whose order is the standard's, and
-    outward is the only direction that leaves each in its own quadrant.
+    The pair moves together and only outward, so each code stays in its
+    quadrant. Positions are scored with :func:`_erases`; the smallest step
+    that clears wins.
 
-    Scored with :func:`_erases`, so a code gives things up in the order
-    every other label does, and the smallest clearing step wins, which
-    keeps a code hard against its own symbol where the paper is clear.
+    Parameters
+    ----------
+    block : list
+        Label items from :func:`_quadrant_block`.
+    side : int
+        ``1`` for right, ``-1`` for left.
+    ink : list[_Ink]
+        Drawn lines.
+    symbols : list[tuple[float, float, float, float]]
+        Obstacle boxes.
+
+    Returns
+    -------
+    tuple[float, tuple[int, int, int]]
+        Shift and the remaining :func:`_erases` score.
     """
     boxes = [b for b in map(_unit_label_box, block) if b is not None]
     if not boxes:
         return 0.0, (0, 0, 0)
 
     def damage(m: float) -> tuple[int, int, int]:
+        """Return the :func:`_erases` total with the block shifted by ``m``."""
         hits = taps = pipes = 0
         for b in boxes:
             moved = (b[0] + side * m, b[1], b[2] + side * m, b[3])
@@ -642,37 +542,33 @@ def _quadrant_stand_off(block, side: int, ink, symbols):
 
 
 def _ink(fs, direction: str) -> "list[_Ink]":
-    """Every line the sheet draws, as the rectangle its stroke covers.
+    """Return every drawn line as the rectangle its stroke covers.
 
-    Padded by a whole stroke width: half is the ink itself, drawn
-    centred on the path, and half the margin that stops a halo shaving
-    the edge of a line it only just reaches, since a run clipped to nine
-    tenths of its weight reads as a fault rather than as a line.
+    Each line is padded by half its pen plus a unit of paper, so a halo
+    neither erases nor crowds it. Paths come from
+    :func:`~pandid.layout.attach.stream_path`, as drawn. Crossing arcs
+    (:func:`stream_hops`) are included, since a halo cutting one would make
+    two crossing lines look joined.
 
-    The paths come from :func:`~pandid.layout.attach.stream_path`, which
-    is what :meth:`SvgRenderer._draw_streams` draws, so what is dodged
-    here is what lands on the sheet.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    direction : str
+        :meth:`SvgRenderer.render`'s ``jump_direction``, which decides which
+        run draws each arc. Required so the arcs match the drawing.
 
-    **And the hops, which are in no route at all.** Where one run
-    crosses another the sheet draws a semicircle standing off the line
-    (:func:`stream_hops`), and this function used to measure the
-    straight path underneath it and stop there. A plate half a unit
-    clear of the run was therefore free to take a bite out of the arc
-    over it, and did: ``S-934``'s number cut ``S-939``'s hop in two on
-    ``21_alumina_refinery``, on ``main`` and at every setting of
-    ``fs.stream_labels.enclosure``. That is the worst mark on the sheet
-    to break, since a hop exists only to say *these two lines cross and
-    are not joined* and half a hop says they are joined. ``direction``
-    is :meth:`SvgRenderer.render`'s ``jump_direction`` and is what
-    settles which of the two runs draws the arc; it is required rather
-    than defaulted, because a pass that guesses it dodges the arcs of a
-    drawing nobody asked for.
+    Returns
+    -------
+    list[_Ink]
+        Pipe, tap and hop rectangles.
     """
     from pandid.layout.attach import stream_path
 
     out: list[_Ink] = []
 
     def add(a, b, pad: float, kind: str, line: str = "") -> None:
+        """Append the padded rectangle of segment ``a``-``b``."""
         (ax, ay), (bx, by) = a, b
         if abs(ax - bx) < 0.5 and abs(ay - by) < 0.5:
             return  # a zero-length hop between coincident points draws nothing
@@ -681,37 +577,17 @@ def _ink(fs, direction: str) -> "list[_Ink]":
                         max(ax, bx) + pad, max(ay, by) + pad, axis, at, kind, line))
 
     for s in fs.streams:
-        # Half the pen is the ink itself; the unit beyond it is paper
-        # a halo may not crowd. Two quantities, and stated as two
-        # since #490: written as the whole pen they were one number,
-        # which read correctly only while every rung's clearance
-        # happened to equal its own half-pen. Widening the main flow
-        # rung would then have doubled a clearance nothing asked to
-        # move -- the same slip as :data:`_LEADER_HEAD`, a step
-        # further from the pen.
-        #
-        # One unit of paper because that is the finest rung on the
-        # ladder: the narrowest thing this sheet can draw, and so the
-        # narrowest gap that reads as a gap rather than as a join. It
-        # is what a main flow line already stood off at, and it is the
-        # same division :data:`_PLATE_CLEARANCE` makes around a symbol
-        # -- half a pen of ink, then a clearance with its own name.
+        # Half the pen of ink, then one unit (the finest rung) of paper.
         pad = _ink_pad(_stream_rung(s.kind in _SIGNAL_KINDS))
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe", s.name or "")
     for _u, tap, centre in tap_lines(fs):
-        # A tap is §5.3.1 c) too, and stands off by the same rule.
+        # A tap is ISO 10628-1 5.3.1 c) and stands off the same way.
         add(tap, centre, _ink_pad(LineWeight.DETAIL), "tap")
-    # A hop belongs to the run that draws it, and `line` says so: to
-    # every *other* label on the sheet it is somebody else's ink, which
-    # is the whole of the fix. `axis`/`at` name the run it stands on and
-    # not the offset arc, so a label reading its own run's length
-    # (`_along`) counts the hop as part of that run, which it is.
-    # `kind` is its own word so a reader can tell one from a straight
-    # length; `_erases` scores it with the pipes, which is where a
-    # broken one belongs. Padded off the hopping run's own rung, the
-    # same way its straight length is: the arc is drawn at that weight.
+    # A hop belongs to the run that draws it (``line``), so other labels
+    # treat it as foreign ink while ``_along`` counts it as part of its run.
+    # Scored with pipes and padded off the run's own rung.
     for hop in stream_hops(fs, direction):
         run = fs.streams[hop.stream]
         pad = _ink_pad(_stream_rung(run.kind in _SIGNAL_KINDS))
@@ -722,38 +598,43 @@ def _ink(fs, direction: str) -> "list[_Ink]":
 
 
 def _meets(box, region) -> bool:
-    """Do two rectangles share any area?
+    """Return whether two rectangles overlap; touching edges do not count.
 
-    Touching edge to edge does not count: the padding a line already
-    carries is what keeps a halo off it.
+    Parameters
+    ----------
+    box, region : tuple[float, float, float, float]
+        Rectangles ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    bool
+        Whether they share area.
     """
     return (box[2] > region[0] and box[0] < region[2]
             and box[3] > region[1] and box[1] < region[3])
 
 
 def _erases(box, ink, symbols=()) -> "tuple[int, int, int]":
-    """What a halo at *box* deletes: symbols, impulse lines, pipe.
+    """Return what a halo at ``box`` would erase: symbols, taps, pipes.
 
-    Ordered, because the three are not worth the same. A line broken by
-    a halo is still that line, and the reader reads across the gap --
-    which is why writing a number *in* a run is a convention at all. An
-    impulse line is the only mark saying *where* a transmitter measures
-    and is a couple of centimetres long, so a break takes more of it.
+    Ordered by cost, and compared as a tuple. A symbol is worst, since its
+    outline identifies it (a circle against a circle in a square). An
+    impulse line is short and shows where a measurement is taken. A pipe
+    reads across a gap, which is why labels may sit in a run.
 
-    A **graphical symbol** is worse than either, and is first for that
-    reason: its outline is what identifies it -- ANSI/ISA-5.1 draws an
-    instrument as a circle and a shared display as a circle in a square,
-    and the difference is the outline -- so a bite out of a balloon
-    replaces one symbol with a shape that is in neither standard. (The
-    square is ISA's: ISO 15519-2 §5.1.1 has a circle and an extended
-    circle and nothing else, and neither of its two encodes function.)
-    On
-    ``11_ethanol_pid`` D-301's tag ate the upper-left of LT-304's
-    balloon and HV-301C's the left edge of PIC-301's square, both
-    because nothing here had been told a symbol was there.
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Halo box.
+    ink : list[_Ink]
+        Drawn lines.
+    symbols : Sequence[tuple[float, float, float, float]], optional
+        Obstacle boxes.
 
-    Comparing these tuples is what does the stepping, so the order above
-    is the order a tag gives things up in.
+    Returns
+    -------
+    tuple[int, int, int]
+        Symbols, impulse lines and pipe pieces hit.
     """
     hits = sum(1 for b in symbols if _meets(box, b))
     taps = pipes = 0
@@ -767,19 +648,27 @@ def _erases(box, ink, symbols=()) -> "tuple[int, int, int]":
 
 
 def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
-    """What a halo at *box* covers: symbols, then everything else.
+    """Return what a halo at ``box`` covers: symbols, then everything else.
 
-    Two numbers and not one, for the reason :func:`_erases` orders its
-    three: covering a symbol is not a worse version of covering a line
-    but a different and heavier kind of damage. Counted together, a
-    label a band closer to its own run could buy that place with a
-    stripe out of a heat exchanger's tube bundle and win, because one
-    box is one box.
+    Kept as two counts, as in :func:`_erases`, so covering a symbol never
+    trades against covering lines. Counting stops once the score exceeds
+    ``limit``.
 
-    Counting of the second kind stops once the pair is already worse
-    than *limit*, the best score so far, since the search only needs to
-    know whether a spot is worse than the one it is holding. That is
-    what keeps scoring every anchor on a crowded sheet affordable.
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Halo box.
+    occupied : Iterable[tuple[float, float, float, float]]
+        Other occupied boxes.
+    symbols : Sequence[tuple[float, float, float, float]], optional
+        Obstacle boxes.
+    limit : tuple[int, int], optional
+        Best score so far.
+
+    Returns
+    -------
+    tuple[int, int]
+        Symbols covered and other boxes covered.
     """
     hits = sum(1 for b in symbols if _meets(box, b))
     n = 0
@@ -792,47 +681,36 @@ def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
 
 
 def _step_aside(item, room: float, ink=(), others=()):
-    """Slide a valve's position mark along its own face until it takes
-    nothing away, and return where it ended up.
+    """Slide a valve's position mark along its face until it erases nothing.
 
-    Issue #223: the mark had one thing it stepped past, the equipment
-    tag, and a face has three. ``examples/14``'s XV-601 hangs its trip
-    square below the valve and fails closed, so PIP PIC001 4.2.4.6(1)
-    puts ``FC`` directly below the body and the square's impulse line
-    leaves the same face for the same place -- and the letters' plate is
-    opaque and drawn last. ISO 15519-2 §5.1.1 makes that connection a
-    *shall*, and it is a couple of centimetres long, so a bite out of it
-    is the whole statement.
+    A mark such as ``FC`` below a valve (PIP PIC001 4.2.4.6(1)) can sit on
+    an impulse line leaving the same face, which ISO 15519-2 5.1.1 requires
+    to be drawn. Moving along the face clears such a line; moving outward
+    would follow it. Candidates are the distances that clear each obstacle
+    by :data:`_PLATE_CLEARANCE`; the nearest clear one wins, ties going
+    right and down.
 
-    **Along the face, and not out from it**, which is the one thing this
-    does that the tag step above it does not. Out is what clears a tag,
-    which is centred on the face and as wide as the symbol; it is no use
-    against an impulse line, which leaves that same face and runs the
-    way the mark would be going, so the letters follow it down however
-    far they are pushed.
+    Parameters
+    ----------
+    item : tuple
+        Label item ``(x, y, anchor, baseline, lpos, text)``.
+    room : float
+        Furthest the mark may move.
+    ink : list[_Ink], optional
+        Drawn lines.
+    others : Sequence[tuple[float, float, float, float]], optional
+        Other obstacle boxes.
 
-    The candidates are the exact distances that clear each obstacle by
-    :data:`_PLATE_CLEARANCE`, which is #243's answer to the same
-    question asked of a line number's plate. The nearest one
-    :func:`_erases` scores clear wins, so the mark moves as little as
-    the paper allows and the base position is kept where it is already
-    clear. A tie -- which a plate astride a line produces every time,
-    the two ways round being the same distance -- goes right and down,
-    the way the tag step goes.
-
-    *room* is how far the caller will let it go, and is not the tag's
-    bound of half a face (:meth:`SvgRenderer._tag_item`): two letters
-    against a 24-unit valve body are a plate 21 wide on a face 24 long,
-    and no position in that half-face band clears a line down the middle
-    of it.
+    Returns
+    -------
+    tuple
+        The moved item, or ``item`` if nothing is better.
     """
     box = _unit_label_box(item)
     if box is None or not (ink or others):
         return item
     lx, ly, anchor, baseline, lpos, text = item
-    # Which way the face runs, not which way the label was pushed out
-    # along it: a left or right face runs up and down, so it slides in
-    # y.
+    # A left or right face runs vertically, so slide in y.
     vertical = lpos in ("left", "right")
     lo, hi = (box[1], box[3]) if vertical else (box[0], box[2])
     a, b = (1, 3) if vertical else (0, 2)
@@ -857,52 +735,36 @@ def _step_aside(item, room: float, ink=(), others=()):
 
 def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float,
                    vertical: bool, on_run: bool, plate: float):
-    """Where an ``hw`` x ``hh`` label may go on a run, best first.
+    """Yield anchors for an ``hw`` by ``hh`` label on a run, best first.
 
-    Yields ``(x, y, off)``: the anchor, and the perpendicular stand-off
-    from the run that put it there, which is what the outermost band is
-    counted in. Whether the label needs a leader is :func:`_along`'s
-    separate question.
+    On the pipe first, while the run still shows clear line at each end
+    (a long line number takes less room on the pipe than beside it); then
+    beside it, above a horizontal run or left of a vertical one as ISO
+    15519-1 7.2.5 recommends, then the far side, then further out. Each
+    position slides along the run before the next band is tried. Whether
+    a leader is needed is :func:`_along`'s question.
 
-    On the pipe only while the run can still show clear line at each
-    end; then beside it (above a horizontal run, left of a vertical
-    one), then the far side, then further out. Each is slid along the
-    run in turn, so the label leaves the pipe before it leaves the
-    neighbourhood of its own line. Above and left is the side ISO
-    15519-1 §7.2.5 asks for, as a ``should``; on the pipe comes first
-    anyway, a dozen-character line number costing the sheet more room
-    beside the run than on it.
+    Parameters
+    ----------
+    cx, cy : float
+        Run midpoint.
+    span : float
+        Run length.
+    hw, hh : float
+        Label width and height.
+    vertical : bool
+        Whether the run is vertical.
+    on_run : bool
+        Keep the label on the run (an enclosure, whose meaning is that the
+        run passes through it); no side bands are offered.
+    plate : float
+        Opaque length of the label along the run, which bounds the slide;
+        an enclosure's outline is see-through, so only its words count.
 
-    On the pipe the label has to stay within the run, clearance and all.
-    Beside it, it erases nothing, so it may slide until its near edge
-    reaches the run's end -- far enough to get out from under a symbol
-    the run butts into, and no further.
-
-    ``on_run`` is the label that may not leave its line at all, which is
-    what an enclosure asks for (#480). Both of the rules above are then
-    suspended: the run's clear length no longer decides whether the
-    label may sit on it, and the bands beside it are never offered. A
-    diamond's whole grammar is *the run passes through me*, so one
-    written beside the line, or out on a leader, is a symbol a reader
-    cannot identify -- while one that will not fit is merely crowded,
-    and crowding is the author's to fix by spacing the sheet. The slide
-    that is left is what lets the search still dodge; where even that is
-    spent, :data:`_slide` yields the centre alone and the label stays
-    there.
-
-    ``plate`` is how much of the label *along the run* is opaque, where
-    that is less than the whole of it: the words inside an enclosure,
-    the enclosure itself being an outline the run is seen straight
-    through (:func:`_enclosure_svg`). The slide is bounded by it rather
-    than by ``hw``, and that is one rule and not two -- what has to keep
-    clear line at each end is the paper the label paints, because that
-    is the only part of it a reader could take for the end of the run.
-    Bounding the slide by the shape instead leaves every label whose
-    shape outruns its segment -- 70 of the 286 on the shipped corpus at
-    ``"diamond"`` -- with no slide at all, pinned to the middle of the
-    segment whatever happens to cross there, which is where four of the
-    corpus's thirteen covered plates this branch started with came
-    from.
+    Yields
+    ------
+    tuple[float, float, float]
+        Anchor ``x``, ``y`` and perpendicular stand-off from the run.
     """
     room = (span - plate) / 2 - _LABEL_CLEAR
     if on_run or span >= hw + 2 * _LABEL_CLEAR:
@@ -920,88 +782,47 @@ def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float,
 
 
 # --- the leader that stands in for adjacency --------------------------
-# ISO 15519-1 §6.4 gives a leader three terminators and picks between
-# them by where the leader lands: a dot inside an object, an arrowhead on
-# the outline of an object or on a connection, an oblique stroke across
-# several parallel connections. A line number's leader ends on a
-# connection, so it wears an arrowhead, and Figure 4 c) draws the leader
-# itself *oblique*, running down onto a plain horizontal connecting line
-# with the text at its upper end.
-#
-# The slope is load-bearing. §12.1 holds the connecting lines -- pipes,
-# mechanical links, conductors, functional connections and the rest --
-# to horizontal or vertical, and it is being oblique that keeps a leader
-# from being read as one of those, which is why
-# tests/test_route_invariants.py sweeps streams and impulse lines and
-# not this.
-#
-# The head is ambiguous against the sheet's own flow marker, and
-# knowingly so: both are a solid filled triangle, this one at 1,8 times
-# the size, with nothing else telling them apart. §6.4 offers no other
-# terminator, so what pays the ambiguity down is drawing fewer leaders
-# -- §7.2.5 wants the number along its line and treats the leader as
-# what to do when that is impossible. See :func:`_along`.
+# ISO 15519-1 6.4: a leader ending on a connection takes an arrowhead,
+# and Figure 4 c) draws it oblique onto the line with the text at its
+# upper end. The slope keeps it from reading as a connecting line, which
+# 12.1 holds to horizontal or vertical. The head resembles the flow
+# arrowhead, and 6.4 offers no other terminator, so leaders are a last
+# resort after writing the number along its line (7.2.5; :func:`_along`).
 
-# Half the sheet's flow arrowhead: §6.4 hands the leader to ISO 128-22,
-# where it is a narrow line, and a terminator heavier than the line it
-# ends would read as the weightier of the two. Same proportions as the
-# flow head, so the two are one drawing at two sizes.
-#
-# A *size*, and half outright. It was written as the ratio between two
-# line weights that happened to stand at 2:1, which made a glyph's size
-# a function of a width -- so #490's widening of the main flow rung
-# would have shrunk this head to a quarter of the flow head without
-# anything in the drawing asking it to. A width and a size are
-# different quantities and this is the one place they were tied.
+# Leader arrowhead size: half the flow arrowhead, same proportions, since
+# the leader is a narrow line (ISO 128-22).
 _LEADER_HEAD = ARROWHEAD / 2
 
 
-#: A crossing the sheet could not mark. See :func:`unmarked_crossings`.
+#: Issue code for a crossing the sheet could not mark; see
+#: :func:`unmarked_crossings`.
 CROSSING_UNMARKED = "crossing-unmarked"
 
 
 def unmarked_crossings(fs, jump_direction: str = "vertical",
                        crossing_style: str = "gap") -> list:
-    """Every crossing of two unconnected runs the sheet draws **bare**.
+    """Return every crossing the sheet draws without its mark.
 
-    A crossing is marked by breaking one of the two runs over the other
-    across :data:`HOP_R` either side of it
-    (:meth:`SvgRenderer._draw_streams`), and the run that carries the
-    mark needs that much of itself either side of the crossing for the
-    mark to sit on rather than overhang. Where it has less, no mark is
-    drawn and the two runs are laid down straight through each other.
+    An arc or gap needs :data:`HOP_R` of the marked run either side of the
+    crossing; with less, the runs are drawn straight through. Both styles
+    need the same room. On a sheet where other crossings carry a mark, a
+    bare one may read as a junction, so :meth:`SvgRenderer.render` reports
+    each as a :data:`CROSSING_UNMARKED` warning. ``tests/test_render.py``
+    checks this agrees with the marks ``_draw_streams`` draws.
 
-    **One answer for two of the three styles.** The arc and the
-    interruption occupy the same ``2 * HOP_R`` of run, so a crossing has
-    the room for one exactly when it has the room for the other, and
-    :data:`CROSSING_STYLES` changes only the noun in the sentence
-    :func:`_crossing_issues` writes. ``"plain"`` returns nothing: a
-    sheet that marks no crossing anywhere drew every one of them the way
-    it said it would, and a finding against each would be a finding
-    against the option rather than against the drawing.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    jump_direction : str, default="vertical"
+        Which run carries the mark.
+    crossing_style : str, default="gap"
+        ``"plain"`` returns nothing, since no crossing is marked.
 
-    **That is not a neutral fallback on this sheet.** A drawing on which
-    every other crossing carries an arc has taught its reader that a
-    crossing looks like an arc, so a bare one does not read as "no
-    information" -- it reads as the other thing, a junction. The
-    reference sheets get away with drawing every crossing bare because
-    they draw *all* of them bare and mark the junctions instead; a sheet
-    that does both cannot borrow that. So the sheet says so rather than
-    leaving the reader to find it: :meth:`SvgRenderer.render` turns each
-    of these into a :data:`CROSSING_UNMARKED` warning naming both runs
-    and the point.
-
-    Returns ``(marked, crossed, x, y)`` per crossing, where *marked* is
-    the run that would have carried the arc. The room test is the one
-    ``_draw_streams`` applies, and ``tests/test_render.py``'s
-    ``test_a_hop_has_room_for_its_own_arc`` holds the two to agreeing:
-    it counts the arcs actually drawn against the crossings that have
-    room, so a drift here shows up there.
-
-    Widening a run is what made this worth reporting -- at 0,4 M an arc
-    needs more room than it did (see :data:`HOP_R`) -- but the condition
-    is older than #490 and the count on the shipped corpus is 2 of 53.
-    Giving those two the room is the router's to do, and is #498.
+    Returns
+    -------
+    list[tuple[Stream, Stream, float, float]]
+        ``(marked, crossed, x, y)`` per crossing.
     """
     if crossing_style == "plain":
         return []
@@ -1031,12 +852,24 @@ def unmarked_crossings(fs, jump_direction: str = "vertical",
 
 def _crossing_issues(fs, jump_direction: str = "vertical",
                      crossing_style: str = "gap") -> list:
-    """:func:`unmarked_crossings`, worded for the reader of the sheet.
+    """Return :func:`unmarked_crossings` as warnings.
 
-    The mark is named as the sheet drew it, and the cure has gained a
-    second half since #499: where the router has left no room, drawing
-    every crossing plain is the honest answer, and it is the one that
-    keeps the sheet reading by a single convention throughout.
+    The message names the mark style and suggests moving the crossing with
+    ``via()`` or drawing every crossing ``"plain"``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    jump_direction : str, default="vertical"
+        Which run carries the mark.
+    crossing_style : str, default="gap"
+        Crossing mark style.
+
+    Returns
+    -------
+    list[Issue]
+        One :data:`CROSSING_UNMARKED` warning per bare crossing.
     """
     mark = "arc" if crossing_style == "arc" else "interruption"
     issues = []
@@ -1058,11 +891,21 @@ def _crossing_issues(fs, jump_direction: str = "vertical",
 
 
 def _crosses(start, end, region) -> bool:
-    """Does the segment *start* -> *end* pass through *region*?
+    """Return whether a segment passes through a rectangle's interior.
 
-    Liang-Barsky, and strict at the ends for the reason :func:`_meets`
-    is: a leader that grazes the edge of a box is not cutting through
-    it.
+    Liang-Barsky clipping; grazing an edge does not count.
+
+    Parameters
+    ----------
+    start, end : tuple[float, float]
+        Segment end points.
+    region : tuple[float, float, float, float]
+        Rectangle ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    bool
+        Whether the segment enters the interior.
     """
     (x0, y0), (x1, y1) = start, end
     dx, dy = x1 - x0, y1 - y0
@@ -1086,12 +929,21 @@ def _crosses(start, end, region) -> bool:
 
 
 def _cutting(leader, occupied, limit: int) -> int:
-    """How many of *occupied* a leader cuts, counted to *limit*.
+    """Return how many occupied boxes a leader cuts, counting up to a limit.
 
-    A leader is new ink on a sheet already too crowded to write the
-    number beside its line, so it is scored the way the label is: one
-    running through the vessel the label stepped around has moved the
-    problem rather than solved it.
+    Parameters
+    ----------
+    leader : tuple[tuple[float, float], tuple[float, float]]
+        Leader end points.
+    occupied : Iterable[tuple[float, float, float, float]]
+        Occupied boxes.
+    limit : int
+        Count at which to stop.
+
+    Returns
+    -------
+    int
+        Boxes cut, at most ``limit``.
     """
     n = 0
     for p in occupied:
@@ -1103,7 +955,20 @@ def _cutting(leader, occupied, limit: int) -> int:
 
 
 def _near_segment(p, a, b, tol: float = 0.5) -> bool:
-    """Does *p* sit on the segment ``a``-``b``, to within *tol*?"""
+    """Return whether ``p`` lies on segment ``a``-``b`` within ``tol``.
+
+    Parameters
+    ----------
+    p, a, b : tuple[float, float]
+        Point and segment end points.
+    tol : float, default=0.5
+        Distance tolerance.
+
+    Returns
+    -------
+    bool
+        Whether the point is on the segment.
+    """
     dx, dy = b[0] - a[0], b[1] - a[1]
     span = dx * dx + dy * dy
     if not span:
@@ -1113,59 +978,36 @@ def _near_segment(p, a, b, tol: float = 0.5) -> bool:
 
 
 def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
-    """How a label's halo at *box* is joined to the run *seg* names.
+    """Return the leader joining a label halo to its run, and what it cuts.
 
-    Returns ``((start, end), crossings)``: the leader, the end being the
-    point on the run the arrowhead lands on, and how many of *occupied*
-    it cuts through.
+    Each candidate leaves the halo's near face and lands about 45 degrees
+    along the run (ISO 15519-1 Figure 4), so the leader follows the label
+    as it slides. Starts are swept along the face, inset by about one
+    character from the corners, and ranked by: boxes cut, closeness to 45
+    degrees, then closeness to the middle of the face. The landing point
+    keeps :data:`_LABEL_CLEAR` (or a third of a short run) from the run's
+    ends, where a head would point at the equipment instead.
 
-    Every candidate leaves the halo's **near face** and lands 45 degrees
-    away along the run -- the slope Figure 4 draws. Leaving from the
-    label rather than aiming at a fixed point on the run is what makes a
-    leader *move* when the search slides the label along; pinned to the
-    run, every anchor in a band produced the same leader.
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Label halo.
+    seg : tuple[tuple[float, float], tuple[float, float]]
+        The run's segment.
+    occupied : Sequence[tuple[float, float, float, float]]
+        Occupied boxes.
+    keep_out : float, default=0.0
+        Extra clearance from the run's ends, for drawn flanges.
 
-    The tail is swept along that face and scored, in this order:
-
-    **What it cuts**, first, for the reason the halo dodges anything at
-    all. The strip of paper directly between a label and its run is
-    often the congestion that pushed the label out, so a leader dropping
-    out of the middle of the face is aimed straight into it and one
-    leaving from nearer an end takes it around.
-
-    **How near 45 degrees it lands**, second. It is the same slope on
-    every leader on the sheet, so a reader learns the mark once.
-
-    **How near the middle of the face it starts**, last. A halo is
-    measured at 6,2 per character plus padding, which over-measures a
-    string as hyphen-heavy as a line number by the better part of a
-    character at each end, so its corners are blank paper and a tail
-    landing there does not touch the words at all. The sweep is inset
-    from the corners by half the halo's thickness, about one character
-    at this size.
-
-    The landing point is kept off the ends of the run, since those are
-    where it meets the equipment it serves and a head there points at
-    the vessel as readily as at the pipe -- the very reading the clause
-    exists to prevent. The clearance is ``_LABEL_CLEAR``, or a third of
-    the run where the run is too short to give that much; where the
-    clamp bites the leader comes in shallower than 45 degrees, which is
-    still oblique, and the second key spends the sweep's freedom getting
-    back towards 45.
-
-    ``keep_out`` extends that clearance by whatever the run's ends are
-    *marked* with, and is the same clause rather than a new one: on a
-    flanged sheet the joint is drawn, so landing on it points at the
-    joint exactly as landing at the end points at the vessel. Measured
-    off the run's ends before the inset, which is what lets a short
-    spool with a flange pair at each end put the head in the clear
-    middle.
+    Returns
+    -------
+    tuple[tuple, int]
+        ``((start, end), crossings)``: the leader, ending on the run, and
+        how many occupied boxes it cuts.
     """
     (sx1, sy1), (sx2, sy2) = seg
     vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
-    # Everything below is in the run's own frame -- *u* along it, *v*
-    # across -- so one arithmetic serves a horizontal run and a
-    # vertical.
+    # Work in the run's frame: u along it, v across.
     lo, hi = ((min(sy1, sy2), max(sy1, sy2)) if vertical
               else (min(sx1, sx2), max(sx1, sx2)))
     at = (sx1 + sx2) / 2 if vertical else (sy1 + sy2) / 2
@@ -1173,35 +1015,31 @@ def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
     v0, v1 = (box[0], box[2]) if vertical else (box[1], box[3])
     v = v0 if abs(v0 - at) < abs(v1 - at) else v1
     gap = abs(v - at)
-    # Only where the run can spare it: a band inverted by its own
-    # clearance would put the head off the run altogether.
+    # Only where the run is long enough to keep a landing band.
     if keep_out and hi - lo > 3 * keep_out:
         lo, hi = lo + keep_out, hi - keep_out
     inset = min(_LABEL_CLEAR, (hi - lo) / 3)
     near, far = lo + inset, hi - inset
 
     def route(s: float):
-        """The leader leaving the near face at *s*, 45 degrees along.
+        """Return the leader from face position ``s``, landing 45 degrees along.
 
-        Both directions along the run are offered and the one landing
-        *furthest* from ``s`` wins, which is the same as the one nearest
-        45 degrees: an unclamped landing is exactly ``gap`` away, and
-        clamping to the run can only bring it closer in.
+        The direction landing furthest from ``s`` is nearest 45 degrees,
+        since clamping to the run can only shorten it.
         """
         u = max((min(max(s + d * gap, near), far) for d in (1.0, -1.0)),
                 key=lambda c: abs(c - s))
         return ((v, s), (at, u)) if vertical else ((s, v), (u, at))
 
-    # The face, inset at each end so the tail lands on the lettering
-    # rather than the halo's padding, never past a quarter of a short
-    # one.
+    # Inset the face so the tail starts at the lettering, at most a
+    # quarter of a short face.
     ends = min(abs(v1 - v0) / 2, (u1 - u0) / 4)
     first, last, mid = u0 + ends, u1 - ends, (u0 + u1) / 2
     starts = [first + k * _LABEL_STEP
               for k in range(int((last - first) // _LABEL_STEP) + 1)] + [last]
 
     def scored(s: float, limit: int):
-        """The leader from *s*, and the three keys it is chosen on."""
+        """Return the leader from ``s`` and its ranking key."""
         lead = route(s)
         u = lead[1][1] if vertical else lead[1][0]
         return lead, (_cutting(lead, occupied, limit), abs(abs(u - s) - gap),
@@ -1216,19 +1054,23 @@ def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
 
 
 class _Hop(NamedTuple):
-    """One line jump: the crossing it stands over, and who draws it.
+    """One crossing mark and the run that draws it.
 
-    ``x``/``y`` is the point on the **hopping** run the semicircle is
-    centred on, ``vertical`` says that run is the vertical one, and
-    ``side`` is which way the arc leaves it -- ``+1`` towards greater
-    x (or y), ``-1`` the other way. ``stream``/``seg`` index the run and
-    the segment of :func:`stream_polyline` carrying it, which is what
-    lets the renderer take one segment's hops in the order it draws
-    them.
-
-    ``line`` is the hopping run's number, and it is the field the
-    label search turns on: a hop is drawn as part of *that* run, so to
-    every other label on the sheet it is somebody else's ink.
+    Attributes
+    ----------
+    x, y : float
+        Centre of the mark on the marked run.
+    vertical : bool
+        Whether the marked run is vertical.
+    side : float
+        Which way an arc bulges: ``+1`` towards greater x (or y), ``-1``
+        the other way.
+    stream : int
+        Index of the marked run in ``fs.streams``.
+    seg : int
+        Index of its segment in :func:`stream_polyline`.
+    line : str
+        Marked run's number; other labels treat the mark as foreign ink.
     """
     x: float
     y: float
@@ -1240,57 +1082,37 @@ class _Hop(NamedTuple):
 
 
 def stream_hops(fs, direction: str) -> "list[_Hop]":
-    """Every line jump the sheet draws, in the order it draws them.
+    """Return every crossing mark the sheet draws, in drawing order.
 
-    Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
-    :func:`stream_polyline` was, and for a second reason that cost the
-    drawing a run: the hop is the one piece of a line whose geometry is
-    **not** in the route. :func:`_ink` measured the straight path and
-    nothing else, so a plate could sit clear of the run by half a
-    millimetre and still take a bite out of the arc standing over it --
-    which is what happened to ``S-939``'s hop under ``S-934``'s number
-    on ``21_alumina_refinery``, on ``main`` and at every setting of
-    ``fs.stream_labels.enclosure``. A hop is the worst thing on the
-    sheet to erase: it exists solely to say *these two lines cross and
-    are not joined*, and cut in half it says the opposite. So the
-    derivation is one function, and the pass that draws it and the pass
-    that dodges it read the same answer.
+    Shared by :meth:`SvgRenderer._draw_streams` and :func:`_ink`, so labels
+    avoid the marks, which are not part of any route.
 
-    **Which run hops** is ``direction``: a vertical segment crossing a
-    horizontal one hops it, or the other way round under
-    ``"horizontal"``. Strictly inside both, so a run that merely ends on
-    another is a junction and is not hopped, and strictly far enough
-    inside the hopping segment for the arc's two feet
-    (:data:`HOP_R`) to land on it.
+    With ``direction="vertical"`` a vertical segment carries the mark over
+    a horizontal one, and the reverse for ``"horizontal"``. A run that
+    ends on another is a junction, not a crossing, and the mark needs
+    :data:`HOP_R` of the marked segment either side. Any other value
+    raises, as :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` would,
+    for callers that bypass a flowsheet.
 
-    **Any other spelling is refused, and used not to be.** This read
-    ``direction`` the way the drawing pass used to read it, against the
-    two names it knows and no others, so ``jump_direction="vertcial"``
-    hopped nothing and drew every crossing flat -- a drawing that says
-    two lines meet where they cross, which is the same lie a severed hop
-    tells, told the other way round. There is no third value to mean
-    "no hops": :meth:`SvgRenderer.render` documents two, and a sheet
-    that wants none is a sheet with no crossings on it.
+    An arc bulges by SVG's clockwise sweep (y down): a run drawn downward
+    bulges right, upward left, rightward up, leftward down.
 
-    The refusal is :func:`check_jump_direction`'s sentence and not a
-    second one: #492 gave the parameter a closed set and a message, and
-    a value checked against two spellings of one set is how a set stops
-    being closed. What is here is the **second door**. #492 refuses at
-    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`, before the
-    sheet is touched, which is where an author's typo should be caught;
-    this catches the caller who reaches the geometry without going
-    through a flowsheet at all, which is the argument
-    :func:`enclosure_shape` makes for its own re-check. Neither replaces
-    the other, and the read site is the one that makes it impossible to
-    *use* the value without having checked it.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    direction : str
+        ``"vertical"`` or ``"horizontal"``.
 
-    **Which way it bulges** follows from the direction of travel and
-    SVG's sweep flag, which is always ``1``: on a screen whose y runs
-    down, that is clockwise, so a run drawn downwards bulges right and
-    one drawn upwards bulges left; a run drawn rightwards bulges up and
-    one drawn leftwards bulges down. The arc is a semicircle, so the
-    side is the whole of the difference between the paper it covers and
-    the paper beside it.
+    Returns
+    -------
+    list[_Hop]
+        Crossing marks.
+
+    Raises
+    ------
+    ValueError
+        If ``direction`` is not a known value.
     """
     check_jump_direction(direction)
     geoms = [(s, stream_polyline(s)) for s in fs.streams]
@@ -1325,15 +1147,23 @@ def stream_hops(fs, direction: str) -> "list[_Hop]":
 
 
 def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
-    """The paper a hop's arc covers, as a rectangle, padded like a line.
+    """Return the padded bounding box of a crossing arc.
 
-    The bounding box of the *semicircle* and not of the whole disc: the
-    arc leaves the run on one side only, and the other side is paper a
-    label may still use. Deliberately the box and not the half-disc,
-    which over-states two corners of about 10,7 square units between
-    them -- every other consumer of :class:`_Ink` compares rectangles,
-    and the way for this to err is towards reserving paper that is
-    clear rather than towards painting over paper that is not.
+    The box of the semicircle on its bulging side only; the other side of
+    the run stays free. A rectangle slightly over-reserves the corners,
+    which errs on the safe side.
+
+    Parameters
+    ----------
+    hop : _Hop
+        Crossing mark.
+    pad : float
+        Padding, as for a line.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Box ``(x0, y0, x1, y1)``.
     """
     if hop.vertical:
         lo, hi = sorted((hop.x, hop.x + hop.side * HOP_R))
@@ -1342,60 +1172,47 @@ def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
     return (hop.x - HOP_R - pad, lo - pad, hop.x + HOP_R + pad, hi + pad)
 
 
-#: The size a line number is lettered at, and the halo it is written on:
-#: the string's estimated width plus a gutter, by a fixed depth. Held at
-#: module scope because the exporter sizes the same label with them.
+#: Font size of a line number. The halo under it is the estimated string
+#: width plus a gutter, by a fixed depth; the export uses the same sizes.
 NUMBER_TYPE = 10
 _HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
 
-#: The paper a **box** enclosure leaves outside the halo it is ruled
-#: around, on each of the four sides. The other two shapes need none: a
-#: rule that slopes or curves away from the words is already clear of
-#: them everywhere except the two points it touches, and those two
-#: points are the halo's corners, which :data:`_HALO_CHAR` over-measures
-#: into blank paper anyway (see :func:`_leader`). A rule *parallel* to
-#: the words at the halo's own edge is the one case with nothing
-#: between, so the box buys the gutter the geometry gives the others.
+# Gap a box enclosure leaves outside the halo on each side. A diamond or
+# circle touches the halo only at its corners, which are blank paper; a
+# box's sides run parallel to the words and need the gap.
 _ENCLOSURE_PAD = 4.0
 
-#: The weight a stream label's enclosure is ruled at.
-#:
-#: :attr:`~.weights.LineWeight.DETAIL`, and the reason is not that the
-#: balloons happen to be drawn there. The diamond an interlock balloon
-#: draws is a graphical symbol, ISO 10628-1 §5.3.1 c), and answers to
-#: that clause; a shape around a stream number stands for nothing in the
-#: plant at all. It is part of the *annotation*, like the leader beside
-#: it, and ISO 15519-1 §6.4 hands a leader to ISO 128-22 where it is a
-#: narrow line -- which is the rung this file spells ``DETAIL``. The two
-#: arriving at one number is a coincidence, so the one carrying the
-#: reason is written here. A quarter of the weight of a main flow line
-#: either way, which is the part a reader sees: an enclosure heavier
-#: than the run it sits on would read as plant.
+# Enclosure stroke: the narrow annotation line a leader also uses (ISO
+# 15519-1 6.4, ISO 128-22), a quarter of a main flow line so it does not
+# read as plant.
 _ENCLOSURE_STROKE = LineWeight.DETAIL.width
 
-#: The enclosures a quarter turn leaves unchanged, and so the ones whose
-#: number is written horizontally on a vertical run rather than turned
-#: with the line. A square on its corner and a circle are both symmetric
-#: about their centre under 90 degrees; the box is not. The reasoning is
-#: at the ``turned`` line in :func:`stream_numbers`, which is where it is
-#: decided; :mod:`pandid.render.drawio` reads it to make the same call.
+#: Enclosures unchanged by a quarter turn, whose numbers stay upright on a
+#: vertical run (see ``turned`` in :func:`stream_numbers`).
+#: :mod:`pandid.render.drawio` reads it too.
 UPRIGHT_ENCLOSURES = ("diamond", "circle")
 
 
 def enclosure_shape(fs) -> str:
-    """The shape ruled around every stream label on *fs*.
+    """Return the enclosure shape for every stream label on a sheet.
 
-    Read off the flowsheet rather than passed down from the renderer, so
-    the two backends cannot be handed different answers.
+    Read from the flowsheet so both backends agree. Checked again here for
+    callers that bypass :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`.
 
-    Re-checked here, though
-    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` has already
-    refused a name outside the set before a thing was touched: this is
-    the guard for the caller who reaches a renderer without going
-    through a flowsheet at all, and it is deliberately not the first
-    line of defence. It used to be the only one, and a render that
-    raised from here had already numbered the streams, laid out the
-    sheet and routed it.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    str
+        ``"none"``, ``"diamond"``, ``"circle"`` or ``"box"``.
+
+    Raises
+    ------
+    ValueError
+        If the configured shape is unknown.
     """
     from pandid.document import _resolve_enclosure
 
@@ -1403,45 +1220,32 @@ def enclosure_shape(fs) -> str:
 
 
 def enclosure_box(shape: str, hw: float, hh: float) -> "tuple[float, float]":
-    """How big an enclosure has to be to hold an ``hw`` x ``hh`` halo.
+    """Return the size of an enclosure holding an ``hw`` by ``hh`` halo.
 
-    Returned as the enclosure's own bounding box, measured along the
-    words by across them; a label on a vertical run turns the pair over
-    with everything else about it.
+    Sizes are measured along the words, then across; a label on a vertical
+    run swaps them.
 
-    The diamond and the circle are the **smallest of their kind
-    containing the rectangle**, so neither is a size somebody had to
-    choose. The box is not, and cannot be: the smallest rectangle
-    containing a rectangle is that rectangle, and a rule drawn on the
-    plate's own edge is a rule through the words -- the plate is what
-    :data:`_HALO_CHAR` and :data:`_HALO_DEEP` measure the *glyphs*
-    into, with no paper left over on the long sides. So the box is the
-    one shape here carrying a chosen number, :data:`_ENCLOSURE_PAD`,
-    and that constant is where the choice is argued.
-
-    * ``diamond`` -- a **square turned through 45 degrees**: the
-      smallest one containing the halo, so its diagonal is the halo's
-      width plus its depth. Put a corner of the rectangle on the edge
-      and the containment condition is ``p/a + q/b <= 1``; a square has
-      ``a = b = d``, which gives ``d = (hw + hh) / 2`` and a box of
-      ``hw + hh`` each way.
-
-      Not the minimum-area rhombus, which is what this drew until the
-      shape was measured on a sheet. That one doubles each half-side
-      independently (``a = 2p``, ``b = 2q``), and on a two- or
-      three-character number the words are much wider than they are
-      deep, so it came out a long flat lozenge -- wider than the square
-      by half again, which is the direction that matters, because a
-      stream number sits *along* its run and it is the reach either side
-      that collides with the next fitting. It costs about 3% in area and
-      returns the shape a drawing office actually rules.
+    * ``diamond`` -- the smallest square turned 45 degrees containing the
+      halo. With a halo corner on the edge, ``p/a + q/b <= 1`` and
+      ``a = b = d`` give ``d = (hw + hh) / 2``, a box ``hw + hh`` each way.
+      This is shorter along the run than the minimum-area rhombus, which
+      matters because the reach along the run is what collides.
     * ``circle`` -- the circumscribed circle, diameter the halo's
-      diagonal. Much the tightest of the three on a long label, since it
-      pays for the corners once rather than twice. It is also what an
-      ISA balloon is drawn as, which is why it is not the default and
-      why :class:`~pandid.document.StreamLabelOptions` says so for a
-      sheet carrying instruments.
-    * ``box`` -- the halo plus :data:`_ENCLOSURE_PAD`.
+      diagonal; tightest for long labels, but it resembles an ISA balloon
+      (see :class:`~pandid.document.StreamLabelOptions`).
+    * ``box`` -- the halo plus :data:`_ENCLOSURE_PAD` each side.
+
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape; any other value returns the halo size.
+    hw, hh : float
+        Halo width and height.
+
+    Returns
+    -------
+    tuple[float, float]
+        Enclosure size along and across the words.
     """
     if shape == "diamond":
         side = hw + hh
@@ -1455,61 +1259,34 @@ def enclosure_box(shape: str, hw: float, hh: float) -> "tuple[float, float]":
 
 
 def _enclosure_svg(shape: str, box, words, color: str, fill: bool = False) -> list[str]:
-    """The plate a stream label is written on, and the shape ruled
-    around it: *words* is the plate and *box* the shape, and *words* is
-    ``None`` where the label lays down no plate at all.
+    """Return the SVG for a stream label's plate and enclosure outline.
 
-    **The shape fills nothing, and the plate inside it erases nothing
-    but the label's own run.** Those are the two halves of one rule, and
-    together they are what lets an enclosure cost the drawing no ink
-    that is not its own.
+    The outline is hollow unless :func:`fillable_enclosures` found it
+    touches only its own run, and the white plate under the words covers
+    only that run (:func:`stream_numbers`). Where no such place exists the
+    plate is omitted (``words`` is ``None``) and the crossing line is drawn
+    through the number, reported by :func:`label_findings`: a crowded
+    number is better than a line with a piece missing. A clipped fill
+    would need ``<clipPath>``, which :mod:`pandid.render.export` refuses.
 
-    A shape filled white is an opaque plate the size of a diamond, and a
-    diamond is large -- twice the words in each direction -- so over the
-    twenty-one shipped sheets, at the placement this file draws today,
-    one would erase **1154 square units of drawn ink in 26 places**.
-    Measured off the rendered document, by sampling each shape against
-    the stroke every other run actually lays down: an area taken off
-    :func:`_ink` instead is reservation area, the stroke padded by a
-    whole stroke width, and this file of all files may not offer one for
-    the other -- its own finding was that ``_ink`` is not the drawing.
-    **Clipping a unit and deleting a line are not the same damage.** A block crowded by a diamond is a crowded drawing, and
-    #480 decided the author spaces the sheet; a pipe with a bite out of
-    it is a *wrong* drawing, and it says two things that are not true --
-    that the line ends there, and that the gap is blank paper. An enclosed label may no longer step off what it
-    covers (:func:`_label_anchors`, ``on_run``), so the fill is what had
-    to give.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape; ``"none"`` returns the plate alone.
+    box : tuple[float, float, float, float]
+        Enclosure box.
+    words : tuple[float, float, float, float] or None
+        Plate under the words, or ``None`` for no plate.
+    color : str
+        Outline colour.
+    fill : bool, default=False
+        Fill the outline white.
 
-    Unfilling the shape is not the whole answer, and taking it for the
-    whole answer is the defect this docstring used to carry. The plate
-    under the words is opaque too, and pinning the label to its run laid
-    **thirteen** of the 286 plates across a crossing pipe -- thirteen
-    13-unit breaks in lines this drawing says are continuous -- where
-    the same corpus lettered bare breaks none at all. So the plate is
-    placed to cover nothing but the run it names
-    (:func:`stream_numbers`), and where the run offers no such place it
-    is **not drawn**: *words* arrives here ``None``, the number is
-    written straight onto the sheet, and the line crossing it is drawn
-    through it in full. Nine of the 286 land there on this corpus, and
-    :func:`label_findings` names each one. A number a passing run
-    has to be read across is harder to read; a run with a piece missing
-    is not there. Foreign ink erased, at each of the four settings:
-    **none** -- and measured off the rendered document rather than off
-    :func:`_ink`, which is the only measurement that can catch
-    :func:`_ink` being wrong, and did.
-
-    The fill is then the one thing a drawing office does that this does
-    not. A white-filled diamond hiding its own run is what they rule,
-    and it cannot be ruled here without deleting the neighbour's: the
-    fill would have to be clipped to the label's own ink, ``<clipPath>``
-    is the only exact way to say that in SVG, and
-    :mod:`pandid.render.export` refuses one outright rather than drop it
-    silently from the PDF and the PNG. What carries the convention
-    without it is that the run is seen to pass *through* the shape
-    rather than to stop inside it, which is the grammar the whole
-    decision rests on.
-
-    ``"none"`` is the plate alone, to the byte it always was.
+    Returns
+    -------
+    list[str]
+        SVG elements: plate, then outline. The words are written by the
+        caller, on top.
     """
     plate = []
     if words is not None:
@@ -1520,11 +1297,9 @@ def _enclosure_svg(shape: str, box, words, color: str, fill: bool = False) -> li
         return plate
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    # White where the shape was measured to reach nothing but its own run
-    # (:func:`fillable_enclosures`), and hollow where it reaches anything
-    # else. Painted before the plate and the words below, and the whole
-    # label pass runs after every run is drawn, so a filled shape hides
-    # the piece of its own line that used to be drawn across the outline.
+    # Fill white only where the shape reaches nothing but its own run. The
+    # label pass runs after every run is drawn, so the fill hides the run
+    # inside the outline.
     pen = (f'fill="{"white" if fill else "none"}" stroke="{color}" '
            f'stroke-width="{_ENCLOSURE_STROKE:g}"')
     if shape == "diamond":
@@ -1537,60 +1312,41 @@ def _enclosure_svg(shape: str, box, words, color: str, fill: bool = False) -> li
     else:
         outline = (f'    <rect x="{x0:.1f}" y="{y0:.1f}" '
                    f'width="{x1 - x0:.1f}" height="{y1 - y0:.1f}" {pen} />')
-    # The plate first and the **outline over it**, so the rule is a
-    # closed shape rather than one with white bitten out of its sides.
-    #
-    # This was the other way round, on the reasoning that a rule grazing
-    # the words should be buried by them. That reasoning had the geometry
-    # backwards for two of the three shapes: a diamond and a circle are
-    # the *smallest* of their kind containing the halo
-    # (:func:`enclosure_box`), so the halo's four corners lie exactly on
-    # the outline -- touching is the containment condition, not a near
-    # miss. Drawing the plate last therefore painted four white notches
-    # into every diamond, and the wider the number the more of the edge
-    # each notch took: a two-digit stream number showed it plainly. The
-    # box is the only shape with a gutter (:data:`_ENCLOSURE_PAD`) and is
-    # unaffected either way, so one order is right for all three.
-    #
-    # The words themselves are written after this list, at the call site,
-    # so they stay on top of the rule they are enclosed by.
+    # Draw the plate, then the outline over it: a diamond's or circle's
+    # outline touches the halo corners, which would otherwise notch it.
     return [*plate, outline]
 
 
 class StreamNumber(NamedTuple):
-    """One line number, and where the sheet decided to write it.
+    """One placed line number.
 
-    ``seg`` is the segment of the run the number names -- its longest,
-    the piece with the most line to attach a caption to. ``x``/``y`` is
-    the point the string is *centred* on, ``vertical`` says it is turned
-    a quarter to read bottom to top, ``box`` is the shape it is written
-    in -- the opaque halo where the sheet rules none -- and ``leader``
-    is the pair of points a leader runs between where the search found
-    no paper alongside the run (``None`` where it did).
+    Both backends read these fields rather than re-deriving them, so the
+    ``.drawio`` file matches the sheet.
 
-    ``vertical`` is a fact about **the words** and not about the run
-    under them. The two agree wherever the number is written bare or in
-    a box, and part company inside a diamond or a circle, where the
-    words stay upright however the line runs
-    (:data:`UPRIGHT_ENCLOSURES`). Both backends read this field rather
-    than re-deriving the direction from ``seg``, which is what keeps the
-    ``.drawio`` file turning exactly the numbers the sheet turns.
-
-    ``words`` is the opaque plate the string itself is written on, and
-    is the *only* white a label lays down: it equals ``box`` where
-    nothing is ruled, and is the smaller rectangle inside it where
-    something is. It is ``None`` where the label lays down no plate at
-    all -- the case where every place its run offered would have painted
-    out somebody else's line, and a crowded number was the cheaper of
-    the two. See :func:`_enclosure_svg`.
-
-    ``crossed`` names the runs the number is written across when that
-    happened, and is empty otherwise. It is settled here rather than
-    worked out again from the geometry, because here is the only place
-    that holds both the plate the label wanted and the ink that took it
-    away -- and because the rectangle it was measured against is not
-    ``box`` once a shape is ruled around it, so a later reader of
-    ``box`` alone would name lines the *number* never touched.
+    Attributes
+    ----------
+    name : str
+        Line number.
+    color : str
+        Text colour.
+    seg : tuple
+        The run's longest segment, which the number names.
+    x, y : float
+        Centre of the string.
+    vertical : bool
+        Whether the words are turned to read bottom to top. Words stay
+        upright in a diamond or circle on a vertical run
+        (:data:`UPRIGHT_ENCLOSURES`).
+    box : tuple
+        Enclosure shape's box, or the halo where none is drawn.
+    leader : tuple or None
+        Leader end points, or ``None`` when written along the run.
+    words : tuple or None
+        Opaque plate under the string; equals ``box`` with no enclosure,
+        and is ``None`` when any plate would erase another line.
+    crossed : tuple[str, ...]
+        Runs the number is written across, if any. Recorded here, where
+        the plate and the ink are both known.
     """
     name: str
     color: str
@@ -1608,6 +1364,13 @@ def stream_numbers(fs, placed: list, joints: "str | None",
                    direction: str) -> "list[StreamNumber]":
     """Choose one readable label position for each named material run.
 
+    The number goes on the run's longest segment. Candidates come from
+    :func:`_label_anchors` and are ranked by: other lines the plate would
+    erase, symbols and labels covered, then boxes a leader would cut. The
+    first spot with no damage wins. A plate is never laid over another
+    run: where no spot avoids one, the number is written without a plate
+    and the runs it crosses are recorded for :func:`label_findings`.
+
     Parameters
     ----------
     fs : Flowsheet
@@ -1617,7 +1380,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     joints : str or None
         Sheet-wide connection style.
     direction : str
-        Preferred direction for crossing jumps.
+        ``jump_direction``, which decides where crossing marks are drawn.
 
     Returns
     -------
@@ -1631,23 +1394,13 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         _obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None
     ]
 
-    # A flange mark is a symbol on a run, so it goes in with the
-    # symbols: the search dodges it as it dodges a valve body, and both
-    # the halo and the leader are scored against it. The mark is drawn
-    # hard against a nozzle and a leader wants the clear middle of a
-    # segment -- on the short spool between a condenser and the drum
-    # beneath it, "the clear middle" was the two units between the two
-    # flanges. See :func:`flange_boxes`.
+    # Flange marks and quadrant codes are obstacles like symbols.
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
-    # A letter code written outside a balloon is a mark on the sheet the
-    # same way: it is placed before either label pass runs (see
-    # :func:`quadrant_labels`), so both can be told where it went.
     symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
 
-    # A number names a *run*, and a run survives the valves and fittings
-    # in it: renumber_streams() gives every segment the same name and
-    # the sheet writes it once, on the longest piece.
+    # One number per run name, through inline valves and fittings, on the
+    # longest segment.
     label_items: list = []
     labeled_names: set = set()
     for s in fs.streams:
@@ -1668,10 +1421,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         if not longest_seg:
             continue
         labeled_names.add(s.name)
-        # How much of the segment its own flange marks take: the mark's
-        # standoff plus its half-width, where the near bar ends. Nought
-        # on a run whose longest piece is in the middle of it, the marks
-        # being at the nozzles and nowhere else.
+        # Length the segment's own flange marks take at its ends, if any.
         (mx1, my1), (mx2, my2) = longest_seg
         keep = FLANGE_STANDOFF + FLANGE_GAP / 2 if any(
             _near_segment((m.x, m.y), (mx1, my1), (mx2, my2))
@@ -1679,23 +1429,9 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         ) else 0.0
         label_items.append((longest_seg, s.name, s.color or "black", keep))
 
-    # An enclosure is ruled at **one size for the whole sheet**: measured
-    # over the longest label on it, and given to every label, so a sheet
-    # carrying 1 and 1002 draws one diamond seven times rather than two
-    # diamonds. Sizing each to its own text is the alternative and it
-    # comes out worse than it sounds -- on the mixed sheet #480 asked
-    # for, per-label rules 26 units of diamond around `1` and 61,6
-    # around `1002`, alternating down one process -- because a row of
-    # shapes that vary reads as a drawing where the shape *means*
-    # something. Same answer and the same argument as the stream table's
-    # columns (#477), and the same cost: every label is paid for at the
-    # width of the longest.
-    #
-    # The words' plate is the exception and stays per-label, because it
-    # is not a shape a reader compares -- it is paper, and invisible --
-    # and it is the only white a label lays down, so widening it to the
-    # longest name would rub out a run's worth of pipe on either side of
-    # every short one for nothing at all.
+    # Enclosures are one size per sheet, fitted to the longest label, so
+    # the shapes do not vary along a process. The plate under the words
+    # stays per label, since a wider plate would erase more pipe.
     shape = enclosure_shape(fs)
     widest = max((len(name) * _HALO_CHAR + _HALO_PAD
                   for _s, name, _c, _k in label_items), default=0.0)
@@ -1704,57 +1440,30 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     out: list[StreamNumber] = []
     for seg, name, color, keep in label_items:
         (sx1, sy1), (sx2, sy2) = seg
-        # What the words occupy, and what is reserved for them. One box
-        # with no enclosure; with one, the second contains the first.
+        # The words' size, and the reserved size (the enclosure, if any).
         tw, th = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
         hw, hh = (tw, th) if shape == "none" else uniform
         cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
         vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
         span = abs(sy2 - sy1) if vertical else abs(sx2 - sx1)
-        # Which way the *words* face, which stops being the same
-        # question as which way the run goes once a shape is ruled
-        # around them.
-        #
-        # A number written alongside a pipe is a designation and is
-        # oriented along its line -- ISO 15519-1 7.2.5, and Figure 40
-        # turns it to read bottom to top on a vertical connection. A
-        # number written *inside a shape* is not alongside anything: the
-        # shape is a balloon, and a balloon's contents read horizontally
-        # however the line under it runs. That is what a drawing office
-        # rules, and it is what ISA-5.1 draws for the instrument balloon
-        # this one sits beside on a P&ID. Turning them asked a reader to
-        # tilt their head for a symbol that had not tilted, since neither
-        # the diamond nor the circle changes under a quarter turn.
-        #
-        # Only those two suppress it. The box is not symmetric, and
-        # standing its words up without standing the box up would put
-        # them through the sides; it goes on following its line, which is
-        # right for what it is -- a ruled designation, not a balloon.
+        # A bare or boxed number follows its run (ISO 15519-1 7.2.5,
+        # Figure 40: bottom to top on a vertical line). Inside a diamond or
+        # circle it reads horizontally, like a balloon, since neither shape
+        # changes under a quarter turn.
         turned = vertical and shape not in UPRIGHT_ENCLOSURES
-        # Turned to follow the run, the halo measures hw along it, hh
-        # across. The *enclosure* follows the run either way; for the two
-        # shapes above that is a distinction without a difference, their
-        # box being square.
+        # The enclosure follows the run; upright shapes are square anyway.
         bw, bh = (hh, hw) if vertical else (hw, hh)
         lw, lh = (th, tw) if turned else (tw, th)
 
-        # Everything the anchors below can reach: along the run as far
-        # as _label_anchors will slide the label, and across it to the
-        # outermost band. Seeds outside it are dropped before the search
-        # rather than re-tested at every step of it.
+        # The area any anchor can reach; obstacles outside it are dropped.
         along = (span + hw) / 2 + max(bw, bh) / 2
         across = hh / 2 + _LABEL_GAP + _LABEL_BANDS * hh + max(bw, bh) / 2
         rx, ry = (across, along) if vertical else (along, across)
         window = (cx - rx, cy - ry, cx + rx, cy + ry)
 
         axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
-        # How far **the run** goes, which is not how far the labelled
-        # segment goes: an in-line valve splits a straight length of
-        # pipe into three drawn pieces and a reader sees one line.
-        # Everything collinear with the segment, which is what
-        # :func:`_along` measures against. Taken over all the ink and
-        # not only the ink inside the window, since a run that leaves
-        # the window is one the label cannot overrun on that side.
+        # Extent of the whole collinear run, through inline valves, which
+        # is what :func:`_along` measures against.
         run_lo = min(sy1, sy2) if vertical else min(sx1, sx2)
         run_hi = max(sy1, sy2) if vertical else max(sx1, sx2)
         for line in ink:
@@ -1767,33 +1476,17 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         occupied += [line.box for line in ink
                      if not (line.axis == axis and abs(line.at - at) < 0.5)
                      and _meets(line.box, window)]
-        # Somebody else's line, which is the ink the label's own plate
-        # may not be laid over at any price. By **name** and not by the
-        # axis test above it: that one asks whether a line is collinear
-        # with this segment, which is the question `_along` needs, and
-        # two runs at one height are collinear and are still two runs.
-        # A tap carries no name and so is foreign to every label, which
-        # is what it is -- the one mark saying where a transmitter
-        # measures.
+        # Other runs' ink, by name (collinear runs are still separate), and
+        # every tap. The plate must never cover these.
         foreign = [line for line in ink
                    if line.line != name and _meets(line.box, window)]
-        # A leader is ink like any other and dodges the same things the
-        # halo does, symbols included, so it is scored against the lot.
+        # A leader avoids the same things as the halo.
         everything = near_symbols + occupied
 
-        # Best first, and the first spot that covers nothing wins
-        # outright; where nothing is clear the least damaging wins and a
-        # tie keeps the earlier anchor. The anchors that sit *on* the
-        # pipe come first, which makes the label's own line the last
-        # resort -- breaking the run you are naming is a convention a
-        # reader knows, and breaking the one beside it is a lie about
-        # that line.
-        #
-        # An anchor the run does not run along carries a leader instead
-        # (ISO 15519-1 §7.2.5; :func:`_along` for where the line falls),
-        # and the leader's own crossings are the last part of the score.
-        # A clear spot alongside the run still wins outright, scoring
-        # all zeros with the anchors generated near-first.
+        # Anchors come best first; the first clear spot wins, otherwise the
+        # least damaging, ties keeping the earlier. On-pipe anchors come
+        # first, since breaking one's own run is a known convention. An
+        # anchor not along the run needs a leader, whose cuts score last.
         clear = (0, 0, 0, 0)
         spot: "tuple[float, float] | None" = None
         damage: "tuple[int, int, int, int] | None" = None
@@ -1803,12 +1496,8 @@ def stream_numbers(fs, placed: list, joints: "str | None",
             box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
             paper = (box if shape == "none" else
                      (ux - lw / 2, uy - lh / 2, ux + lw / 2, uy + lh / 2))
-            # **First, and ahead of everything else the search weighs.**
-            # The plate is the only white a label lays down, so this is
-            # the only term that can *delete* a line rather than crowd
-            # it, and a drawing that shows a connected pipe as broken is
-            # wrong where a crowded one is merely hard to read. Nothing
-            # further down this tuple may buy a spot that erases one.
+            # Erasing another line ranks above everything else: a pipe shown
+            # broken is wrong, while a crowded label is only hard to read.
             erased = sum(1 for line in foreign if _meets(paper, line.box))
             limit = None
             if damage is not None:
@@ -1818,10 +1507,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
             hits = _covering(box, occupied, near_symbols, limit)
             if limit is not None and hits > limit:
                 continue
-            # An enclosed label is on its run by construction, so it
-            # never carries a leader: a leader stands in for adjacency
-            # (:func:`_along`, ISO 15519-1 §7.2.5) and there is nothing
-            # to stand in for when the line goes through the shape.
+            # An enclosed label is on its run and never needs a leader.
             lead, cut = ((None, 0)
                          if shape != "none" or _along(box, vertical, run_lo, run_hi)
                          else _leader(box, seg, everything, keep))
@@ -1830,27 +1516,13 @@ def stream_numbers(fs, placed: list, joints: "str | None",
                 spot, damage, leader = (ux, uy), cost, lead
                 if cost == clear:
                     break
-        # `_label_anchors` always offers at least the innermost band
-        # either side of the run: the search chooses between anchors, it
-        # never fails to find one.
+        # _label_anchors always yields at least one anchor.
         assert spot is not None and damage is not None
         tx, ty = spot
         halo = (tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2)
-        # The one opaque plate the label lays down -- the reserved box
-        # itself where nothing is ruled, the words' own smaller
-        # rectangle inside the shape where something is (see
-        # :func:`_enclosure_svg` for why the shape adds no white) --
-        # **and nothing at all where every place the run offered would
-        # have painted out a line that is not this one's.** Erasing a
-        # neighbour's pipe is the one damage the search may not choose,
-        # so where it cannot be dodged it is not paid: the words go
-        # straight onto the sheet, the crossing line is drawn through
-        # them in full, and a reader sees a crowded label rather than a
-        # line that stops for no reason. `label_findings` names every
-        # one, at every setting, and this is where the names come from:
-        # worked out here where the candidate and the ink that beat it
-        # are both in hand, rather than re-derived later from a box
-        # whose size a shape has changed.
+        # The opaque plate: the halo with no enclosure, the words' box
+        # inside one, and none where every spot would erase another line.
+        # The runs crossed are recorded here, where both are known.
         paper = (halo if shape == "none" else
                  (tx - lw / 2, ty - lh / 2, tx + lw / 2, ty + lh / 2))
         words = None if damage[0] else paper
@@ -1859,11 +1531,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
              if _meets(paper, line.box)}))
         placed.append(halo)
         if leader is not None:
-            # Seeded as occupied so the next label's halo cannot delete
-            # it. The bounding box rather than the stroke, which is
-            # generous for a sloping line, but a leader is rare and the
-            # alternative is a halo on the one mark saying which line
-            # this number belongs to.
+            # Reserve the leader's bounding box so later halos avoid it.
             (ax0, ay0), (ax1, ay1) = leader
             placed.append((min(ax0, ax1), min(ay0, ay1),
                            max(ax0, ax1), max(ay0, ay1)))
@@ -1872,35 +1540,33 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     return out
 
 
-#: The codes the stream-label pass puts on ``fs.warnings``.
-#:
-#: ``label-over-line`` is the one that is **not** about an enclosure and
-#: fires whatever ``fs.stream_labels.enclosure`` says, the default
-#: included, because the rule it reports is unconditional: a label lays
-#: its opaque plate only where it covers nothing but its own run, and
-#: gives the plate up rather than paint out a neighbour's. That is a
-#: change to the drawing, so it is a change the author has to be told
-#: about on the sheet they did not opt into.
+# Issue codes from the stream-label pass. ``label-over-line`` applies at
+# every enclosure setting, the default included.
 _LABEL_CODES = ("label-over-line", "enclosure-over-unit",
                 "enclosure-over-line", "enclosure-over-label")
 
 
 def _shape_hits(shape: str, box, rect) -> bool:
-    """Does the enclosure *shape* filling *box* meet the rectangle *rect*?
+    """Return whether an enclosure shape filling ``box`` meets a rectangle.
 
-    The shape and not its bounding box, which is the difference between
-    a finding worth acting on and a list the author learns to ignore: a
-    diamond is half the area of the box it is measured in, and all four
-    of the halves it is missing are corners -- exactly where a
-    neighbouring line passes closest without touching.
+    Tests the shape, not its bounding box, since a diamond's missing
+    corners are where neighbouring lines pass. Both shapes are symmetric,
+    so the rectangle's nearest point is found per axis, and
+    ``|x|/a + |y|/b`` is separable, making the rhombus test exact.
 
-    Both shapes are symmetric about the enclosure's centre and the
-    rectangle's nearest point to that centre can be taken axis by axis,
-    so ``dx``/``dy`` below is the nearest point of *rect* in the
-    quadrant geometry, and each shape is then one inequality. For the
-    rhombus that is exact because ``|x|/a + |y|/b`` is separable and
-    increasing in each term, so minimising it over a rectangle
-    minimises each coordinate on its own.
+    Parameters
+    ----------
+    shape : str
+        ``"box"``, ``"circle"`` or ``"diamond"``.
+    box : tuple[float, float, float, float]
+        Enclosure box.
+    rect : tuple[float, float, float, float]
+        Rectangle to test.
+
+    Returns
+    -------
+    bool
+        Whether they share area.
     """
     if not _meets(box, rect):
         return False
@@ -1917,36 +1583,27 @@ def _shape_hits(shape: str, box, rect) -> bool:
 
 
 def _shapes_meet(shape: str, box, other) -> bool:
-    """Do the two enclosures of the same *shape* filling *box* and
-    *other* share any area?
+    """Return whether two enclosures of one shape overlap, exactly.
 
-    :func:`_shape_hits` answers a shape against a **rectangle**, which
-    is what a symbol and a length of pipe are, and it is exact for one.
-    A second enclosure is not a rectangle, and asking it twice -- each
-    shape against the other's bounding box, both ways round -- is not
-    the same question and gets the wrong answer: two rhombi can each
-    reach into the other's box while neither reaches the other. The
-    corpus draws that pair. Two diamonds 222,8 by 26, centres five units
-    apart across their runs and overlapping 2,81 along them, and over
-    the whole of that overlap the two rhombi between them reach 0,328 --
-    they cannot touch, and both directions of the box test call it a
-    collision. Over the twenty-one sheets at ``"diamond"`` that test
-    names seven crossing pairs where five touch, and bounding box
-    against bounding box names twelve. A list the author is asked to
-    work from earns nothing by being generous, so this settles it
-    exactly. ``tests/test_stream_label_enclosure.py`` keeps that pair of
-    rectangles as literals, and checks every pair on the corpus against
-    a clipped polygon area.
+    Testing each shape against the other's bounding box over-reports, since
+    two rhombi can each reach into the other's box without touching;
+    ``tests/test_stream_label_enclosure.py`` keeps such a pair. Boxes are
+    settled by :func:`_meets` and circles by centre distance. Rhombi use
+    the separating-axis theorem over both shapes' edge normals ``(b, a)``
+    and ``(b, -a)``; a rhombus's extent along ``u`` is
+    ``max(|a*ux|, |b*uy|)``.
 
-    Each shape is its own answer. Two boxes are two rectangles and
-    :func:`_meets` has already decided. Two circles meet when their
-    centres are closer than the two radii. Two rhombi are convex
-    polygons, so the separating-axis theorem is exact over the edge
-    normals of both: a rhombus of half-diagonals ``a`` by ``b`` has two
-    distinct edge normals, ``(b, a)`` and ``(b, -a)``, and its own
-    extent about its centre along any axis ``u`` is
-    ``max(|a*ux|, |b*uy|)`` -- the four vertices being the only
-    candidates and lying on the axes. Four axes settle any pair.
+    Parameters
+    ----------
+    shape : str
+        ``"box"``, ``"circle"`` or ``"diamond"``.
+    box, other : tuple[float, float, float, float]
+        The two enclosure boxes.
+
+    Returns
+    -------
+    bool
+        Whether the shapes share area.
     """
     if not _meets(box, other):
         return False
@@ -1968,34 +1625,30 @@ def _shapes_meet(shape: str, box, other) -> bool:
 
 def fillable_enclosures(fs, shape: str, numbers: "list[StreamNumber]",
                         direction: str) -> "list[bool]":
-    """Which of *numbers* may have their enclosure filled white, in order.
+    """Return which enclosures may be filled white, in order.
 
-    A filled shape is what a drawing office rules -- the number sits on
-    clean paper and its own run stops at the shape's edge instead of
-    being drawn across the outline and out the other side. What stopped
-    it being drawn here was that the fill is opaque over *everything*,
-    not only over the run it belongs to, and a diamond is large: filled
-    blindly on the corpus as it stood, one would have taken 1154 square
-    units of somebody else's ink out of 26 places. Deleting a neighbour's
-    line is a wrong drawing, and no amount of convention buys it.
+    A filled shape hides its own run inside the outline, as drawing
+    offices rule it, but is opaque over everything. So a shape is filled
+    only when it reaches no symbol, no other run's ink and no other
+    enclosure; otherwise it stays hollow and :func:`label_findings`
+    reports it. :func:`_ink` slightly over-reserves, so this refuses a few
+    safe fills and never allows an unsafe one.
 
-    So the fill is decided per label instead of once for the sheet, and
-    the question asked is exactly the one the three
-    ``enclosure-over-*`` findings ask: does this shape reach any ink
-    that is not its own? Where it reaches none, the fill is free and is
-    drawn; where it reaches any, the shape stays hollow and the run is
-    seen to pass through it, which is what the whole sheet used to do.
-    A label that keeps the hollow shape is also a label
-    :func:`label_findings` is reporting, so the author is told about the
-    one case the convention is not carried in.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    shape : str
+        Enclosure shape; ``"none"`` fills nothing.
+    numbers : list[StreamNumber]
+        Placed numbers.
+    direction : str
+        ``jump_direction``.
 
-    **Deliberately conservative.** ``_ink`` is reservation area -- each
-    stroke padded by a whole stroke width -- so it claims a little more
-    of the sheet than the drawing actually puts ink on. Reading the fill
-    off it therefore refuses a few fills that would have been safe, and
-    never allows one that is not. That is the direction to be wrong in:
-    a hollow diamond is the old drawing, and the old drawing was not
-    wrong, only less conventional.
+    Returns
+    -------
+    list[bool]
+        Whether each enclosure may be filled.
     """
     from pandid.portgeom import unit_box
 
@@ -2009,9 +1662,7 @@ def fillable_enclosures(fs, shape: str, numbers: "list[StreamNumber]",
             not any(box and _shape_hits(shape, number.box, box) for box in boxes)
             and not any(line.line != number.name
                         and _shape_hits(shape, number.box, line.box) for line in ink)
-            # Against *every* other label and not only the earlier ones:
-            # a finding is raised once for a pair, but both members of
-            # that pair have to keep their fill off it.
+            # Check every other label: both members of a pair stay hollow.
             and not any(other is not number
                         and _shapes_meet(shape, number.box, other.box)
                         for other in numbers)
@@ -2022,68 +1673,38 @@ def fillable_enclosures(fs, shape: str, numbers: "list[StreamNumber]",
 
 def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
                    direction: str) -> "list[Issue]":
-    """What the stream labels on this sheet have been drawn over.
+    """Return warnings for what stream labels are drawn over.
 
-    An enclosed label may not leave its run (#480), so where the shape
-    is bigger than the paper beside the line the sheet draws it there
-    anyway and something ends up underneath. **That is the decision, and
-    this is the list it owes the author**: spacing the plant is a
-    drafting choice and belongs to the drafter, but they cannot make it
-    from a sheet they have to scan diamond by diamond.
+    An enclosed label must stay on its run, so a shape larger than the
+    paper beside it is drawn over something; spacing the sheet is the
+    author's choice, and these findings say where. All are warnings because
+    nothing is erased: the shape is an outline and the plate covers only
+    its own run. If a fill or plate ever covered another run, this would
+    have to become an error.
 
-    Three codes, because the three are not the same news:
+    * ``label-over-line`` -- no plate could be laid without erasing another
+      run, so the number is written across it. Raised at every enclosure
+      setting.
+    * ``enclosure-over-unit`` -- the shape crosses a symbol's box.
+    * ``enclosure-over-line`` -- the shape crosses another run's ink.
+    * ``enclosure-over-label`` -- two enclosures overlap
+      (:func:`_shapes_meet`), reported once per pair from the later label.
 
-    * ``enclosure-over-unit`` -- the shape crosses a symbol's box. This
-      is the case the decision accepted outright, and the finding is a
-      cue and not a complaint: the drawing is crowded and complete.
-    * ``enclosure-over-line`` -- the shape crosses ink belonging to some
-      other run. Worse to read, because a shape whose grammar is *the
-      run passes through me* now has two runs through it.
-    * ``enclosure-over-label`` -- two enclosures cross each other,
-      which on the shipped corpus is five pairs out of 286 diamonds.
-      Reported once per pair, from the second of the two: the first was
-      seeded as occupied before the second was placed
-      (:func:`stream_numbers`), so the search preferred every clear
-      alternative it had and this is what was left. Settled by
-      :func:`_shapes_meet`, which is exact: this used to ask the
-      shape-against-rectangle test both ways round, which names seven
-      pairs here and is wrong about two of them.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    shape : str
+        Enclosure shape; ``"none"`` returns only ``label-over-line``.
+    numbers : list[StreamNumber]
+        Placed numbers.
+    direction : str
+        ``jump_direction``.
 
-    **All three are warnings, and that is a consequence of what the
-    drawing does rather than a judgement about crowding.** A sheet that
-    shows a connected pipe as broken is a wrong drawing, and a render
-    that emits one should refuse rather than warn about it. Nothing
-    here emits one: the shape is an outline, and the plate under the
-    number is laid only where it covers nothing but the run it names
-    (:func:`_enclosure_svg`). What is left over is a crowded drawing
-    the author can read, and crowding is what #480 handed to the
-    drafter. Give the shape a fill, or let the plate cover a foreign
-    run again, and this severity has to rise with it.
-
-    Where the plate had to be dropped -- nine labels of the 286 on the
-    corpus with a shape ruled, the runs too short to hold it clear
-    anywhere -- ``label-over-line`` says so, and says which runs the
-    number is written across. It is a separate code from
-    ``enclosure-over-line`` because it is a separate fact: one is a
-    shape with two runs through it, the other is a *number* with a run
-    through it, and a reader who has to space the sheet needs to know
-    which they have.
-
-    ``label-over-line`` is the fourth, and it is the one that has
-    nothing to do with enclosures: it fires **at every setting**, the
-    default included. A label gives its plate up rather than paint out a
-    run that is not its own, and that rule is not conditional on the
-    option -- so neither is the finding, or the sheet nobody opted into
-    would quietly drop a plate and say nothing. Bare labels reach it
-    only on a crowded sheet, since a bare label may still step off what
-    it would cover and on the shipped corpus always finds paper; the
-    twenty-seven-stream fixture in
-    ``tests/test_stream_label_enclosure.py`` is what a sheet with no
-    clear paper in any of the fourteen bands beside a run looks like.
-
-    The other three are silent at ``"none"`` for the reason they are
-    named after: there is no enclosure to have been drawn over
-    anything.
+    Returns
+    -------
+    list[Issue]
+        Warnings.
     """
     from pandid.portgeom import unit_box
 
@@ -2117,10 +1738,7 @@ def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
                 f"fs.stream_labels.enclosure = 'circle', which is the tightest "
                 f"of the three on a long label"))
         if lines:
-            # About the *shape* only. Whether the number inside it is
-            # crossed too is `label-over-line`'s to say, and saying it
-            # in both would be one fact wearing two codes -- which is
-            # how a list the author works from stops being read.
+            # The shape only; a crossed number is label-over-line's finding.
             out.append(Issue(
                 "warning", "enclosure-over-line",
                 f"{number.name}'s {shape} is drawn over {', '.join(lines)}, so "
@@ -2128,10 +1746,7 @@ def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
                 f"still drawn -- the shape is an outline and fills nothing -- "
                 f"but the reader has to tell them apart. Space the sheet, or "
                 f"route {number.name} clear with via()"))
-        # Against the labels already placed only, so a crossing pair is
-        # one finding rather than two saying the same thing twice.
-        # Shape against shape, exactly: see :func:`_shapes_meet` for
-        # what asking it as two box questions got wrong.
+        # Earlier labels only, so each pair is reported once.
         pairs = sorted({other.name for other in numbers[:i]
                         if _shapes_meet(shape, number.box, other.box)})
         if pairs:
@@ -2144,20 +1759,24 @@ def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
     return out
 
 
-#: How deep the point of an off-page flag is cut back from the end of
-#: its rectangle, and how far the pennant is inset inside the flag's
-#: box, top and bottom -- less where an off-page reference has to be
-#: written under the tag, since two lines need a taller flag than one.
+#: Depth of an off-page flag's point. The private insets are the pennant's
+#: top and bottom inset in the flag box, smaller when a reference is
+#: written under the tag.
 FLAG_POINT = 15
 _FLAG_INSET, _FLAG_INSET_REF = 15, 12
 
 
 class Pennant(NamedTuple):
-    """The off-page flag a Feed or a Product is drawn as.
+    """Off-page flag geometry for a Feed or Product.
 
-    ``box`` is the rectangle the pennant occupies, ``point`` how deep
-    its point is cut back from the end, and ``east`` which end that
-    point is on.
+    Attributes
+    ----------
+    box : tuple[float, float, float, float]
+        Rectangle the pennant occupies.
+    point : float
+        Depth the point is cut back from its end.
+    east : bool
+        Whether the point is on the east end.
     """
     box: tuple[float, float, float, float]
     point: float
@@ -2165,40 +1784,32 @@ class Pennant(NamedTuple):
 
 
 def boundary_flag(u, frame) -> Pennant:
-    """The pennant an off-page flag is drawn as.
+    """Return the pennant an off-page flag is drawn as.
 
-    A rectangle with one end drawn to a point at mid-height, pointing
-    the way the stream runs: east out of a Feed, east into a Product,
-    and west for either where the placement mirrors it. The point is
-    where the line meets the flag on a Feed and the blunt end is where
-    it meets a Product, which is why both point the same way.
+    A rectangle with one end pointed at mid-height, pointing east (west
+    when mirrored): the line meets a Feed at its point and a Product at
+    its blunt end. The rectangle spans the whole of
+    :func:`~pandid.portgeom.unit_box` horizontally (a Feed's box extends
+    left of its port) and is inset 12 or 15 units from the top and bottom
+    of the placed ``frame.h``, so a resized flag fills its box. ``header``
+    does not change the outline. Shared with the draw.io exporter.
 
-    Two things about the rectangle are worth writing down once rather
-    than measuring twice. It spans the *whole* of
-    :func:`~pandid.portgeom.unit_box` horizontally -- a Feed's box
-    extends left from its port, the one place in the library where that
-    is true -- and it is inset a fixed 12 or 15 units off ``frame.h``
-    top and bottom, so a flag at the default 50-unit height is 26 or 20
-    units deep. Reading the inset off the *placed* height rather than a
-    fixed 50 is what lets a caller who sizes a flag get a pennant that
-    fills it instead of one stuck 20 units deep near the top of a box
-    the drawing never reaches the bottom of. An exporter taking the box
-    for the drawing would rule a flag 1,9 to 2,5 times too tall,
-    depending on which inset it carries -- not simply twice, either way.
+    The horizontal extent is computed here rather than read from
+    ``unit_box`` so whole-number coordinates format as ``100``, not
+    ``100.0``; ``test_a_flag_is_drawn_across_its_own_box`` checks they
+    agree.
 
-    Nothing here reads ``header``: a utility header flag is the same
-    pennant as an off-page reference, and what tells the two apart on a
-    sheet is the label rather than the outline.
+    Parameters
+    ----------
+    u : Unit
+        Feed or Product.
+    frame : Frame
+        Its placed frame.
 
-    Shared with the draw.io exporter, as :func:`stream_polyline` is.
-
-    The horizontal extent is written out again rather than read from
-    ``unit_box`` for one reason: this arithmetic is what the polygon is
-    *formatted from*, and ``unit_box``'s ``50.0`` would write a
-    whole-number coordinate as ``100.0`` where the sheet has always
-    written ``100``. The two agree on the number, which
-    ``test_a_flag_is_drawn_across_its_own_box`` pins over every
-    placement.
+    Returns
+    -------
+    Pennant
+        Flag geometry.
     """
     inset = _FLAG_INSET_REF if (getattr(u, "reference", "") or "") else _FLAG_INSET
     if u.kind == "feed" and not frame.mirrored:
@@ -2209,10 +1820,9 @@ def boundary_flag(u, frame) -> Pennant:
                    FLAG_POINT, not frame.mirrored)
 
 
-#: Where the two strokes of a pneumatic double cross-hatch sit *along*
-#: the run, relative to the mark's own point, and how far each reaches
-#: across it. The stroke leans, 6 units along by 10 across, which makes
-#: it a slash rather than a tick.
+#: Positions of the two strokes of a pneumatic double cross-hatch along
+#: the run, relative to the mark, and how far each reaches across it.
+#: Each stroke leans 6 units along by 10 across, so it reads as a slash.
 HATCH_ALONG = (-2.5, 1.5)
 HATCH_ARM = (3.0, 5.0)
 
@@ -2220,13 +1830,16 @@ HATCH_ARM = (3.0, 5.0)
 class Hatch(NamedTuple):
     """One double cross-hatch on a pneumatic line.
 
-    ``along`` is how far down the line the mark sits, by the Euclidean
-    arc length ``mxGraphView.getPoint`` measures a relative child of an
-    edge by. Carried rather than recovered from ``(x, y)`` because a
-    point cannot always be found again: an orthogonal route that doubles
-    back passes through the same neighbourhood twice, and a mark on the
-    second pass matched against the first is hung on the wrong part of
-    the line.
+    Attributes
+    ----------
+    x, y : float
+        Mark position.
+    horizontal : bool
+        Whether the segment it sits on is horizontal.
+    along : float
+        Euclidean arc length from the source, as
+        ``mxGraphView.getPoint`` measures it. Stored because a route that
+        doubles back makes the position ambiguous.
     """
     x: float
     y: float
@@ -2235,28 +1848,30 @@ class Hatch(NamedTuple):
 
 
 def pneumatic_marks(points) -> "list[Hatch]":
-    """Every double cross-hatch a pneumatic line is marked with.
+    """Return the double cross-hatches marking a pneumatic line.
 
-    ISA-5.1 draws a pneumatic signal as a *solid* line marked with
-    double cross-hatches, so the hatch is the only thing telling it
-    apart from process piping. One mark per 45px alone leaves a short
-    run (a transducer to the actuator right beneath it) with none at
-    all, reading as plain pipe. Any segment with room gets at least one;
-    longer segments keep the 45px spacing.
+    ISA-5.1 draws a pneumatic signal as a solid line with double
+    cross-hatches, so the hatch is what distinguishes it from piping.
+    Marks are spaced every 45 px, and any segment of 16 px or more gets
+    at least one. Shared with the draw.io exporter so both mark the same
+    places.
 
-    Shared with the draw.io exporter, which has no way to stroke a mark
-    across a line and hangs one on the edge at these points instead. For
-    a mark that is the *whole* of what identifies the line, a second
-    rule for where they fall is worse than a different style.
+    Parameters
+    ----------
+    points : sequence of tuple[float, float]
+        Line polyline.
+
+    Returns
+    -------
+    list[Hatch]
+        Marks in drawing order.
     """
     out: list[Hatch] = []
     walked = 0.0
     for i in range(len(points) - 1):
         (px1, py1), (px2, py2) = points[i], points[i + 1]
-        # Manhattan for the spacing rule, which is what the sheet counts
-        # marks by; Euclidean for the distance, which is what mxGraph
-        # measures a mark's place on an edge in. The two agree on an
-        # orthogonal segment and differ only on a sloping leg.
+        # Manhattan length sets the spacing; Euclidean length is what
+        # mxGraph measures positions in. They differ only on a slope.
         seglen = abs(px2 - px1) + abs(py2 - py1)
         span = math.hypot(px2 - px1, py2 - py1)
         n = int(seglen // 45) or (1 if seglen >= 16 else 0)
@@ -2269,73 +1884,46 @@ def pneumatic_marks(points) -> "list[Hatch]":
     return out
 
 
-#: What a drawing may say about the joints where its lines meet what
-#: they serve. A tuple rather than a bool for the reason
-#: ``Valve.NORMAL_POSITIONS`` is one: the joint's make-up is an
-#: enumeration the plant has more entries in (threaded, socket-welded, a
-#: spec break), not a switch with two settings.
+#: Joint markings a drawing may state where lines meet what they serve.
 #:
-#: ``"none"`` is not ``"welded"``. It is the drawing declining to say,
-#: which is what an unmarked line has always meant: a library that
-#: marked every joint flanged would be claiming something about piping
-#: nobody gave it.
+#: * ``"none"`` -- no marks; the drawing does not say, which is not the
+#:   same as welded.
+#: * ``"flanged"`` -- every joint the sheet can mark, including both
+#:   sides of valves and in-line fittings.
+#: * ``"flanged-at-nozzles"`` -- only where a line meets an equipment
+#:   nozzle.
 #:
-#: The other two differ in one thing, and it is the thing the author is
-#: choosing between -- whether the **bodies standing in the run**, the
-#: valves and the in-line fittings, are bolted in or welded in.
-#:
-#: * ``"flanged"`` marks every joint the sheet can mark, valves
-#  included.
-#: * ``"flanged-at-nozzles"`` marks only where a line meets an equipment
-#:   nozzle, leaving the bodies in the run unmarked.
-#:
-#: See :func:`flanged_joint` for what each marks, and for why no
-#: standard settles it.
+#: See :func:`flanged_joint`.
 CONNECTIONS = ("none", "flanged", "flanged-at-nozzles")
 
-#: The in-line kinds that are *bodies bolted into* a run rather than
-#: pipe welded along it, and so the ones ``"flanged"`` marks. A strict
-#: subset of :data:`~pandid.flowsheet.INLINE_KINDS`, the wider set of
-#: things that interrupt a line without ending it; ``test_render_api``
-#: holds the subset relation so the two cannot drift together.
-#:
-#: A valve, a strainer, a sight glass or an orifice plate is a body you
-#: break the line to pull, bolted between a pair of faces *so that* you
-#: can. A concentric reducer and a tee are butt-welded fittings, as much
-#: "pipe" as the pipe either side. So the mark follows what has to come
-#: out.
+# In-line kinds bolted into a run (removable bodies), which "flanged"
+# marks; reducers and tees are welded fittings. A subset of
+# pandid.flowsheet.INLINE_KINDS, checked by test_render_api.
 _INLINE_BODIES = frozenset({"valve", "fitting"})
 
-#: The flanged-connection mark, in the proportions the vendored draw.io
-#: stencil draws it in: ``('fitting', 'flange')`` in
-#: :mod:`._vendored_symbols` is two bars 5.0 apart and 12.5 long, at the
-#: weight of the pipe. Held to those exact numbers so the sheet and an
-#: export that places the stencil are one mark rather than two drawings
-#: of one.
-#:
-#: Against P&ID_301 the proportions check out: its ticks are 8.5pt long,
-#: 2.13pt apart, at a ~0.85pt pen. The gap is 1.5 pen widths there and
-#: 1.5 here (5.0 apart less a 2.0 stroke), which is what makes the two
-#: bars read as one mark rather than two ticks near each other.
+#: Flanged-connection mark size: two bars 12.5 long and 5.0 apart, as the
+#: vendored ``('fitting', 'flange')`` stencil draws them, so the sheet and
+#: the draw.io export match. P&ID_301 has the same gap of 1.5 pen widths.
 FLANGE_TICK = 12.5
 FLANGE_GAP = 5.0
 
-#: How far the pair's *centre* stands off the nozzle, along the run.
-#: Enough that the near bar clears the outline it is drawn against: the
-#: mark says the joint is outside the equipment, and a bar overlapping
-#: the shell reads as part of the shell.
+#: Distance from the nozzle to the pair's centre along the run, so the
+#: near bar clears the equipment outline.
 FLANGE_STANDOFF = 5.0
 
 
 class Flange(NamedTuple):
     """One flanged-connection mark on a stream.
 
-    ``angle`` is the direction of the *run* at the mark in degrees, not
-    the direction the bars are stroked in; the bars are drawn across it.
-    Carried rather than recovered because the draw.io exporter cannot
-    re-derive it -- mxGraph has no auto-orientation for a shape on an
-    edge. ``along`` is arc length from the source end, for the reason it
-    is on :class:`Hatch`.
+    Attributes
+    ----------
+    x, y : float
+        Mark centre.
+    angle : float
+        Run direction at the mark, in degrees; the bars are drawn across
+        it. Stored because mxGraph cannot orient a shape on an edge.
+    along : float
+        Arc length from the source end, as on :class:`Hatch`.
     """
     x: float
     y: float
@@ -2344,14 +1932,20 @@ class Flange(NamedTuple):
 
 
 def _draws_its_own_flange(u) -> bool:
-    """Is this body's own symbol already the flanged connection?
+    """Return whether a unit's own symbol is the flanged connection.
 
-    ``Fitting``'s *default* variant is the flanged connection and
-    ``"flange"`` is the same artwork under its own name, so an author
-    who pins one has drawn the joint explicitly; marking it would put
-    three flange pairs where one was asked for. Asked of the registry
-    rather than matched against variant names, so re-pointing the
-    artwork cannot leave this checking for a symbol nothing draws.
+    Such a fitting already draws the joint, so it is not marked again.
+    Compared through the registry's artwork, not variant names.
+
+    Parameters
+    ----------
+    u : Unit
+        In-line unit.
+
+    Returns
+    -------
+    bool
+        True when its artwork is the flange stencil.
     """
     from pandid.render.symbols import default_registry
 
@@ -2361,57 +1955,34 @@ def _draws_its_own_flange(u) -> bool:
 
 
 def flanged_joint(port, want: str) -> bool:
-    """Does a ``want`` joint put a mark at this end of a stream?
+    """Return whether a joint setting marks this end of a stream.
 
-    ``want`` is one of :data:`CONNECTIONS`, already resolved against the
-    sheet by :func:`resolve_connections`, so all that is left is whether
-    this end is the kind of end that takes a mark.
+    No standard on hand settles where flanges are drawn: ISO 15519-1 and
+    15519-2 do not mention flanges, and 15519-1 12.4 concerns joins of
+    connecting lines (symbol 501, a dot, which may be omitted at a
+    T-joint, as this package does). So the setting is a drafting choice.
 
-    **No standard on disk settles this, and this docstring is not going
-    to pretend one does.** The word "flange" appears nowhere in either
-    part of the reference the rest of this module cites -- zero
-    occurrences in ISO 15519-1:2010 and zero in ISO 15519-2:2015.
-    ISO 15519-1 §12.4 is headed *Joints* and is not about pipe joints at
-    all: it governs the joining of *connecting lines* on the paper, and
-    marks a join with symbol 501, *Joint of connections*, a dot. Its last
-    sentence lets that dot be left off a T-joint, and that is the
-    permission this package takes. Nothing here draws a joining
-    dot: a tee is two straight strokes and no ``<circle>`` is emitted
-    anywhere (see the tee's own artwork in
-    :mod:`pandid.render.symbols`). That is conforming, but it is
-    conforming by the exemption rather than by the rule.
-    ISO 15519-2 §6.3.1 hands symbols to the ISO 14617 series, where the
-    flanged-connection symbol lives, but 14617 is a registry of symbols
-    rather than a rule about where to put them and is not in
-    ``professional_examples/``, so nothing is quoted from it.
-
-    So: **no clause requires a flange at a valve and no clause forbids
-    one.** What follows is a drafting choice, and is offered as a choice
-    for that reason rather than settled on the author's behalf.
-
-    Two kinds of end are not joints under either setting:
-
-    * a boundary flag, a ``Feed`` or ``Product`` being a reference to
-      another sheet, and a reference has no flange faces;
-    * an instrument, since what a balloon terminates is a tap or a
-      signal, and :func:`flange_marks` has dropped the signal lines.
-
-    Everything else turns on ``want``:
+    Boundary flags and instruments never take a mark. Otherwise:
 
     ``"flanged"``
-        Every equipment nozzle, **and both sides of every body standing
-        in the run** (:data:`_INLINE_BODIES`). A valve in flanged
-        service is flanged both sides, which is how it is got out of the
-        line. Reducers and tees stay unmarked, being welded fittings.
+        Every equipment nozzle and both sides of every body in the run
+        (:data:`_INLINE_BODIES`); reducers and tees stay unmarked.
 
     ``"flanged-at-nozzles"``
-        The nozzles only, which is what ``P&ID_301.pdf`` draws: every
-        piped branch off a shell carries the mark there and nothing else
-        on the sheet does, not the gate valves either side of CV-305,
-        not the drains, not the boundary flags. On that sheet the mark
-        means *this branch is bolted to the vessel* and says nothing
-        about the valve downstream. Evidence of what one drawing office
-        drew rather than of what a standard demands.
+        Equipment nozzles only, as ``P&ID_301.pdf`` draws them.
+
+    Parameters
+    ----------
+    port : Port
+        Stream end.
+    want : str
+        One of :data:`CONNECTIONS`, already resolved by
+        :func:`resolve_connections`.
+
+    Returns
+    -------
+    bool
+        Whether this end gets a flange mark.
     """
     from pandid.flowsheet import INLINE_KINDS
 
@@ -2425,20 +1996,24 @@ def flanged_joint(port, want: str) -> bool:
 
 
 def flange_marks(s, points, ends) -> "list[Flange]":
-    """Every flange mark one stream carries, in drawing order.
+    """Return the flange marks one stream carries, in drawing order.
 
-    ``ends`` is the resolved ``(source, dest)`` pair, each a member of
-    :data:`CONNECTIONS`; resolving it against the sheet is
-    :func:`resolve_connections`' job, so this asks only whether the
-    geometry and the flowsheet agree that a mark belongs.
+    Signal lines carry none. Shared with the draw.io exporter, since the
+    mark sits hard against an outline.
 
-    A signal line never carries one: a flange is a fact about pipe, and
-    there is no joint to describe.
+    Parameters
+    ----------
+    s : Stream
+        Stream.
+    points : sequence of tuple[float, float]
+        Its drawn polyline.
+    ends : tuple[str, str]
+        Resolved ``(source, dest)`` settings from :data:`CONNECTIONS`.
 
-    Shared with the draw.io exporter for the reason
-    :func:`pneumatic_marks` is, and more sharply -- this mark lands hard
-    against a vessel outline, where a few units either way is the
-    difference between a joint and a collision.
+    Returns
+    -------
+    list[Flange]
+        Marks, at most one per end.
     """
     if len(points) < 2 or s.kind in _SIGNAL_KINDS:
         return []
@@ -2455,18 +2030,12 @@ def flange_marks(s, points, ends) -> "list[Flange]":
         if not flanged_joint(port, want):
             continue
 
-        # The mark stands off the nozzle *along the line*, the same
-        # placement the arrowhead has and stated the same way: the run's
-        # direction at the end it terminates, from the last two points
-        # of the polyline the pipe is drawn through.
+        # Stand off the nozzle along the end segment, as the arrowhead does.
         tip = points[-1] if at_dest else points[0]
         neighbour = points[-2] if at_dest else points[1]
         span = spans[-1] if at_dest else spans[0]
 
-        # No room, no mark. The pair needs its standoff plus its own
-        # half-width of straight run to sit on, and a flange drawn
-        # across the corner beyond a short first segment is worse than
-        # none.
+        # Skip the mark when the end segment is too short to hold it.
         if span < FLANGE_STANDOFF + FLANGE_GAP / 2:
             continue
 
@@ -2478,32 +2047,25 @@ def flange_marks(s, points, ends) -> "list[Flange]":
 
 
 def flange_boxes(fs, joints) -> "list[tuple[float, float, float, float]]":
-    """Every flange mark on a sheet, as a box a label must keep off.
+    """Return every flange mark on a sheet as a box labels must avoid.
 
-    **A flange mark is a graphical symbol standing on a run**, so every
-    pass that places opaque lettering ranks it with the symbols and not
-    with the pipe. The distinction is :func:`_erases`': a halo over pipe
-    is a gap the reader reads across, and a halo over a flange face is
-    the sheet no longer saying the joint is bolted.
+    A flange mark is a symbol, so label placement treats it as one
+    (:func:`_erases`): a halo over it would hide the joint. Every label
+    pass, including the exporter's :func:`~pandid.render.drawio._tag_pass`,
+    uses this one list. Boxes are square on the longer mark dimension and
+    ungrown; callers apply :func:`_obstacle`.
 
-    ``joints`` is :func:`sheet_connections`' answer, and ``None`` -- a
-    drawing that marks no joints -- gives an empty list, so a caller
-    with nothing to dodge need not ask whether it has anything to dodge.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    joints : str or None
+        :func:`sheet_connections` result; ``None`` gives no boxes.
 
-    One function rather than a list built at each of the three passes,
-    which were not agreeing: ``RB-301``'s tag went out with two units of
-    a flange face on the reboiler's vapour riser cut out of it, because
-    :meth:`SvgRenderer._draw_units` had not grown the rule
-    :func:`stream_numbers` had. The exporter's
-    :func:`~pandid.render.drawio._tag_pass` runs the same search and has
-    to be handed the same ink.
-
-    Square, and sized on the longer of the pair's two dimensions: the
-    mark's angle follows the run, and a box tracking the angle would be
-    four numbers saying less than one. A little slack along the run, on
-    a mark 12,5 across.
-
-    Ungrown. The caller applies :func:`_obstacle`, for the reason there.
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        One box per mark.
     """
     half = max(FLANGE_TICK, FLANGE_GAP) / 2
     return [
@@ -2514,7 +2076,18 @@ def flange_boxes(fs, joints) -> "list[tuple[float, float, float, float]]":
 
 
 def _arrowhead(start, end) -> str:
-    """Path data for the filled head terminating a leader at *end*."""
+    """Return path data for the filled arrowhead ending a leader at ``end``.
+
+    Parameters
+    ----------
+    start, end : tuple[float, float]
+        Last leader segment.
+
+    Returns
+    -------
+    str
+        SVG path data.
+    """
     dx, dy = end[0] - start[0], end[1] - start[1]
     length = math.hypot(dx, dy) or 1.0
     ux, uy = dx / length, dy / length
@@ -2525,40 +2098,43 @@ def _arrowhead(start, end) -> str:
 
 
 def arrow_marker_id(color: str) -> str:
-    """The ``<marker>`` id the arrowhead in *colour* is defined under.
+    """Return the ``<marker>`` id for an arrowhead in a colour.
 
-    One function for the definition and for the ``url(#...)`` that
-    reaches it, so the two cannot drift, over
-    :func:`~pandid.render.escape.ident`, which is what makes the answer
-    a legal XML name whatever the colour is spelled like. A hex triple
-    loses its ``#`` first because ``#0a7`` and ``0a7`` are the same
-    colour to a reader and only one of them is a name -- and because
-    that is the id these sheets have always carried.
+    Used for both the definition and the ``url(#...)`` reference, and
+    built with :func:`~pandid.render.escape.ident` so any colour spelling,
+    such as ``rgb(0, 170, 119)``, gives a legal XML id. A leading ``#`` is
+    dropped.
 
-    ``rgb(0, 170, 119)`` is the case that used to break: pasted whole it
-    gives ``arrow_rgb(0,_170,_119)``, which a browser rejects as an id,
-    drops the definition for, and then draws the line without its head.
-    Nothing warns, and a PDF export -- which resolves the reference
-    itself rather than through the document -- still shows the head, so
-    the two outputs disagree about the drawing.
+    Parameters
+    ----------
+    color : str
+        Stroke colour.
+
+    Returns
+    -------
+    str
+        Marker id.
     """
     return ident("arrow", color.lstrip("#"))
 
 
 def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
-    """Halo rect of an equipment tag.
+    """Return the halo rectangle of an equipment tag.
 
-    ``None`` for a ``center`` tag, which sits inside its own symbol and
-    so is drawn without one.
+    Width is 6.6 px per narrow character (12 pt font) plus 8 px padding;
+    a wide (CJK or fullwidth) character counts a full 12 px em and a
+    combining mark nothing (:func:`~pandid.render.furniture.script_counts`).
 
-    ``6.6`` is this label font's per-character width (hand-tuned for
-    12pt) and ``8`` the padding either side; a Latin, digit or
-    punctuation tag still computes exactly that, unchanged. A wide
-    (CJK/fullwidth) character is charged a full em (12, this font's own
-    size) instead of that per-character rate, and a combining mark
-    nothing -- see :func:`~pandid.render.furniture.script_counts`. Left
-    uncounted, a wide character was the halo that stopped a third short
-    of its own ink and let the line behind the tag show through it.
+    Parameters
+    ----------
+    item : tuple
+        ``(x, y, anchor, baseline, label_pos, text)``.
+
+    Returns
+    -------
+    tuple[float, float, float, float] or None
+        Halo box, or ``None`` for a ``center`` tag, drawn without a halo
+        inside its symbol.
     """
     lx, ly, anchor, baseline, lpos, text = item
     if lpos == "center":
@@ -2573,24 +2149,32 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
 
 
 def _num(v: float) -> str:
-    """Format a coordinate without trailing zeros (100.0 -> '100')."""
+    """Return a coordinate without trailing zeros (``100.0`` gives ``'100'``)."""
     return f"{v:.2f}".rstrip("0").rstrip(".") or "0"
 
 
 def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
-    """Id suffix naming a placement transform ('' for the identity)."""
+    """Return the id suffix naming a placement transform (``''`` for identity)."""
     if not (rot or mirror_x or mirror_y):
         return ""
     return "_t" + (f"r{rot}" if rot else "") + ("x" if mirror_x else "") + ("y" if mirror_y else "")
 
 
 def _placed_box(u) -> "tuple[float, float] | None":
-    """The box a unit's artwork is drawn into, in its own attitude.
+    """Return the box a unit's artwork is drawn into, before rotation.
 
-    A quarter turn swaps the box the drawing is laid into and turns the
-    result back onto the frame, so the artwork never sees the swap.
-    Every question about how a placement scales a symbol is asked in
-    these terms.
+    A quarter turn swaps the frame's width and height, so the artwork
+    never sees the swap.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        ``(width, height)``, or ``None`` if unplaced.
     """
     f = getattr(u, "frame", None)
     if f is None:
@@ -2600,48 +2184,56 @@ def _placed_box(u) -> "tuple[float, float] | None":
 
 
 def _reshapes(sym, u) -> bool:
-    """True when a unit's box is a different shape from its symbol.
+    """Return whether a unit's box has a different aspect from its symbol.
 
-    Which is the whole of what a placement can ask of the artwork beyond
-    a plain resize: an explicit ``width``/``height`` is taken as the
-    final box, so a unit left to size itself lands on the symbol's
-    proportions exactly. A quarter turn swaps the box and swaps the
-    symbol with it, so it never reshapes anything by itself.
+    Only an explicit ``width`` or ``height`` can reshape; a quarter turn
+    swaps box and symbol together.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    bool
+        True when the aspects differ.
     """
     box = _placed_box(u)
     if box is None:
         return False
     bw, bh = box
-    # Cross-multiplied, so a zero dimension cannot divide. A box that
-    # matches is copied from the symbol's own size and matches to the
-    # bit; the tolerance is there only so arithmetic on a size the
-    # author computed cannot claim a reshaping that is not one.
+    # Cross-multiply to avoid dividing by zero; the tolerance absorbs
+    # rounding in author-computed sizes.
     return not math.isclose(sym.width * bh, sym.height * bw, rel_tol=1e-9)
 
 
 # --- the pen a placement draws with -----------------------------------
-# A symbol's line weights are compensated once, at generation time:
-# scripts/vendor_symbols.py bakes stroke_width = 2/sqrt(sx*sy) inside
-# the scale group it wraps the artwork in, so a valve drawn under
-# scale(0.25) carries an 8.0 and lands on the sheet's 2.0. That is right
-# for exactly one box, the symbol's own. A <use> resizes the <symbol>'s
-# viewport, and a viewport scales the ink as readily as the geometry, so
-# the same valve placed in a box twice its own draws at 4.0 with nothing
-# to scale it back. _pen_scale is the other half: divide the baked
-# weight back out by whatever the placement multiplied it by, which is
-# what makes a resized unit's <defs> entry per placed *size* rather than
-# per (kind, variant).
-#
-# Dividing works while the placement scales both axes alike, and only
-# then. A stroke is swept by a *circular* pen, and a viewport scaling
-# the axes differently sweeps an elliptical one: under
-# preserveAspectRatio="none" a vertical line comes out at sx and a
-# horizontal one at sy, and no single stroke-width undoes a difference
-# that depends on which way the element runs. _baked handles that case.
+# scripts/vendor_symbols.py bakes stroke_width = 2/sqrt(sx*sy) into each
+# symbol, which is right only at the symbol's own size. A <use> scales
+# ink with its viewport, so _pen_scale divides the placement's scale back
+# out, giving one <defs> entry per placed size. That works only for a
+# uniform scale; an uneven one turns the round pen elliptical, which no
+# single stroke-width undoes, and _baked handles it.
 
 
 def _placement_scale(sym, u) -> "tuple[float, float]":
-    """What a unit's ``<use>`` box scales its artwork by, per axis."""
+    """Return the per-axis scale a unit's ``<use>`` box applies to its artwork.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(sx, sy)``; ``(1, 1)`` if unplaced or the symbol has no size.
+    """
     box = _placed_box(u)
     if box is None or not (sym.width and sym.height):
         return (1.0, 1.0)
@@ -2649,50 +2241,71 @@ def _placement_scale(sym, u) -> "tuple[float, float]":
 
 
 def _stretch_scale(sym, u) -> "tuple[float, float]":
-    """What the ``<use>`` viewport would scale the artwork by, per axis.
+    """Return the uneven per-axis scale a placement would stretch artwork by.
 
-    ``(1, 1)`` unless the placement actually reshapes a symbol that may
-    be reshaped: everything else lands on a *uniform* scale -- the
-    symbol's own box, a plain resize, or the letterbox a non-stretchable
-    symbol is centred in -- which is the case the pen division below
-    answers exactly.
+    ``(1, 1)`` unless a stretchable symbol is reshaped; every other case
+    (own size, plain resize, or letterboxing a non-stretchable symbol) is
+    a uniform scale handled by :func:`_pen_scale`.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(sx, sy)``.
     """
     if sym.stretchable and _reshapes(sym, u):
         return _placement_scale(sym, u)
     return (1.0, 1.0)
 
 
-# Bounded rather than unbounded: the key is a whole artwork string and a
-# placed size, so a long-running process drawing many differently-sized
-# units would otherwise hold every one forever. Cached at all because
-# _fold, _pen_scale, _size_tag and _sym_id each ask it, several times
-# per unit.
+# Bounded: keys are whole artwork strings and sizes. Cached because
+# _fold, _pen_scale, _size_tag and _sym_id ask it repeatedly per unit.
 @lru_cache(maxsize=2048)
 def _uneven(svg: str, fx: float, fy: float) -> bool:
-    """Would an *uneven* scale stand between this ink and the page?
+    """Return whether any stroke in ``svg`` is drawn under an uneven scale.
 
-    Two things can put one there and they multiply. The placement is
-    one, and is what :func:`_stretch_scale` reports. The artwork's own
-    groups are the other, and are easy to miss:
-    ``scripts/vendor_symbols.py`` reproportions four stencil families to
-    the box the library wants them in -- a plain vessel is drawn under
-    ``scale(0.62, 0.5)`` -- so those four draw an elliptical pen *at
-    their own size*, with no placement involved. It is why a separator
-    on a sheet that resizes nothing still draws its shell walls at 2.23
-    against its heads' 1.80.
+    The placement scale multiplies the artwork's own group transforms:
+    ``scripts/vendor_symbols.py`` reproportions four stencil families
+    unevenly (a plain vessel uses ``scale(0.62, 0.5)``), so those draw an
+    elliptical pen even at their own size. Magnitudes are compared, so a
+    mirror is not uneven.
 
-    Magnitudes, so a mirror does not read as an unevenness: the derived
-    expansion fittings are their reducer under ``scale(-1, 1)``, which
-    turns the pen round without deforming it.
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    fx, fy : float
+        Placement scale.
+
+    Returns
+    -------
+    bool
+        True if some stroke's x and y scales differ.
     """
     return any(not math.isclose(ax, ay, rel_tol=1e-9)
                for ax, ay in _stroke_scales(svg, fx, fy))
 
 
 def _stroke_scales(svg: str, fx: float, fy: float) -> "list[tuple[float, float]]":
-    """The scale over every stroke in *svg*, at ``scale(fx, fy)``.
+    """Return the effective scale magnitudes over each stroke in ``svg``.
 
-    Magnitudes.
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    fx, fy : float
+        Outer scale.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        ``(|sx|, |sy|)`` per element carrying a ``stroke-width``.
     """
     out: list[tuple[float, float]] = []
     scales = [(fx, fy)]
@@ -2715,49 +2328,74 @@ def _stroke_scales(svg: str, fx: float, fy: float) -> "list[tuple[float, float]]
 
 
 def _fold(sym, u) -> "tuple[float, float]":
-    """The placement scale a definition takes into its own coordinates.
+    """Return the scale to bake into a definition's coordinates.
 
-    ``(1, 1)`` -- the artwork left in the symbol's own coordinates, the
-    viewport doing the scaling -- unless the viewport would scale the
-    two axes differently, in which case there is nothing for it but to
-    rewrite the drawing at the placed size. See :func:`_baked`.
+    ``(1, 1)``, leaving the viewport to scale, unless the scale would be
+    uneven, in which case the artwork is rewritten at the placed size
+    (:func:`_baked`).
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float]
+        Scale to bake in.
     """
     fx, fy = _stretch_scale(sym, u)
     return (fx, fy) if _uneven(sym.svg, fx, fy) else (1.0, 1.0)
 
 
 def _pen_scale(sym, u) -> float:
-    """The factor a placement multiplies a symbol's line weights by.
+    """Return the factor a placement multiplies a symbol's line weights by.
 
-    One factor and not two, because ``stroke-width`` is one number, so
-    this is only ever asked where the placement leaves a *uniform* scale
-    over the artwork. :func:`_fold` guarantees it: a placement that
-    would have left an uneven one has already been rewritten into the
-    coordinates, at which point the viewport scales by exactly 1.
+    Only asked where the remaining viewport scale is uniform, since
+    :func:`_fold` bakes uneven ones: no resize, a plain resize, or a
+    letterbox at the smaller of the two scales.
 
-    What is left is the three ways a placement can resize a symbol
-    evenly: not at all, a plain resize, and the letterbox a symbol that
-    may not be stretched is centred in, which keeps its aspect at the
-    smaller of the two scales.
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    float
+        Pen scale; 1 when the definition was baked.
     """
     if _fold(sym, u) != (1.0, 1.0):
         return 1.0
     kx, ky = _placement_scale(sym, u)
     if sym.stretchable and _reshapes(sym, u):
-        # An uneven box over an artwork whose own wrapper is uneven the
-        # other way: the two cancel and the pen comes out round after
-        # all. Rare, but it is the case _uneven() declines to rewrite.
+        # An uneven box that cancels the artwork's own uneven wrapper, so
+        # the pen is round and _uneven() did not rewrite it.
         return math.sqrt(kx * ky)
     return min(kx, ky)
 
 
 def _size_tag(sym, u) -> str:
-    """Id suffix naming the box a placement had its symbol drawn for.
+    """Return the id suffix naming the box a symbol was drawn for.
 
-    Empty for the great majority, which is the point: a unit left to
-    size itself lands on its symbol's own box at a scale of exactly 1
-    and goes on sharing one definition with every other unit of its
-    kind. Only a unit given a ``width``/``height`` costs a second entry.
+    Empty for a unit at its symbol's own size, so such units share one
+    definition; only a unit with an explicit size needs its own.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    str
+        ``""`` or ``"_s<w>x<h>"``.
     """
     if (math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9)
             and _fold(sym, u) == (1.0, 1.0)):
@@ -2767,22 +2405,28 @@ def _size_tag(sym, u) -> str:
     return f"_s{_num(box[0])}x{_num(box[1])}"
 
 
-# Written on the element in every symbol here, hand-drawn and vendored
-# alike; nothing reaches a stroke through CSS, which is what lets this
-# be a rewrite of the emitted string rather than a parse of it.
+# Every symbol writes stroke-width as an attribute, never through CSS, so
+# a string rewrite suffices.
 _STROKE_WIDTH = re.compile(r'stroke-width="([\d.]+)"')
 
 
 def _at_pen_scale(svg: str, scale: float) -> str:
-    """*svg* with every line weight in it divided by *scale*.
+    """Return ``svg`` with every line weight divided by ``scale``.
 
-    Every weight and not only the 2.0 outline: a symbol's own fine
-    detail -- a column's trays, an agitator, the location bar across a
-    panel balloon -- is drawn at a deliberate fraction of the sheet
-    weight, and the placement swells all of them alike, so dividing all
-    of them alike is what holds the ratio its author drew. Six
-    significant figures because the number is read back as a weight and
-    multiplied by the scale again on the way to the page.
+    All weights, including fine detail, so their ratios are kept. Six
+    significant figures, since the value is scaled again on the page.
+
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    scale : float
+        Pen scale from :func:`_pen_scale`.
+
+    Returns
+    -------
+    str
+        Rewritten artwork.
     """
     if scale == 1.0:
         return svg
@@ -2792,65 +2436,43 @@ def _at_pen_scale(svg: str, scale: float) -> str:
 
 # --- baking an uneven scale into the drawing --------------------------
 #
-# ISO 15519-1:2010 §11.1.3, *Line width in graphical symbols*, is a
-# *shall*: a symbol's line is normally 0,1 M after ISO 81714-1, and
-# resizing the symbol leaves that width alone.
+# ISO 15519-1:2010 11.1.3 requires a symbol's line width (normally 0,1 M,
+# after ISO 81714-1) to stay unchanged when the symbol is resized; 11.1.2
+# allows changing its proportions, and 6.2 requires line widths at least
+# 2:1 apart, so an elliptical pen is not a second weight.
 #
-# §11.1.2 permits the proportions themselves to be modified, so
-# stretching a stencil to fill the box a unit was given is allowed;
-# carrying the stroke along with it is not. §6.2 closes the other door by
-# holding any two line widths on a drawing at least 2:1 apart, so an
-# outline drawn 1,53 heavier one way than the other cannot be defended
-# as a deliberate second weight either.
-#
-# No ``stroke-width`` can put an uneven viewport back, the width the
-# reader measures depending on the direction the line runs in. Two
-# constructs can, and the first is not available here:
-#
-# - ``vector-effect="non-scaling-stroke"`` says it directly and browsers
-#   honour it. **svglib has no notion of the property** (grep it), so
-#   the PDF/PNG backend strokes the scaled geometry and drops the
-#   attribute without a word, and ``export._reject_unsupported`` does
-#   not catch it because an attribute it has never been taught is one it
-#   does not look for. Measured through ``export.to_png`` on a rule
-#   stretched 3:1, the raster is byte-identical with the attribute and
-#   without it. Emitting it would leave the .svg right and every
-#   exported sheet and every gallery PNG wrong, which is the worst of
-#   the three states because it looks fixed.
-#
-# - Rewriting the artwork's coordinates at the placed size, which is
-#   this. It costs a definition per placed size, which the sheet was
-#   already paying (see _size_tag), and the arithmetic is exact but for
-#   the last bits of a float.
-#
-# Baked and not merely straightened, because the same rewrite is what
-# rounds out the *four vendored families* whose own wrapper group is
-# uneven before any placement touches them (see _uneven). Those draw an
-# elliptical pen at their natural size, which no care at the <use> could
-# have fixed.
+# vector-effect="non-scaling-stroke" would fix the .svg but svglib ignores
+# it, leaving PDF and PNG exports wrong. Instead the artwork is rewritten
+# at the placed size, one definition per placed size (see _size_tag). The
+# same rewrite rounds the pen of the four vendored families whose own
+# wrapper is uneven (see _uneven).
 
 def _nominal(width: float, gx: float, gy: float) -> float:
-    """What *width* stands for on the sheet under ``scale(gx, gy)``.
+    """Return the sheet weight ``width`` represents under ``scale(gx, gy)``.
 
-    The generator divides by this same geometric mean when it bakes the
-    weight in (``scripts/vendor_symbols.py``), so the two are inverses
-    and a vendored outline reads back as exactly the 2.0 it was drawn to
-    be. The mean rather than either axis because it is the factor that
-    leaves the pen's *area* alone, and because for the 138 families
-    whose wrapper is uniform the choice does not arise: ``sqrt(k*k)`` is
-    ``k``.
+    Uses the geometric mean of the magnitudes, the inverse of what
+    ``scripts/vendor_symbols.py`` bakes in, so a vendored outline reads
+    back as 2.0. For a uniform scale this is just the scale.
 
-    Magnitudes, a mirror being a negative scale that turns no pen over.
+    Parameters
+    ----------
+    width : float
+        Stroke width in artwork units.
+    gx, gy : float
+        Enclosing scale.
+
+    Returns
+    -------
+    float
+        Nominal width on the sheet.
     """
     return width * math.sqrt(abs(gx * gy))
 
 
-# How each attribute answers to the map, by name. A *point* takes the
-# scale and the translation; a *length* takes the scale alone, and
-# unsigned, since a mirror turns the drawing over and no drawn width is
-# negative. ``rx``/``ry`` cover both the ellipse radii and a rect's
-# corner rounding, being the same lengths on the same axes; ``r`` is
-# handled apart, a circle scaled unevenly not being a circle.
+# How each attribute maps: a point takes scale and translation; a length
+# takes the unsigned scale only. rx/ry cover ellipse radii and rect corner
+# rounding; r is handled separately, since a circle scaled unevenly is not
+# a circle.
 _X_POINTS = {"x", "x1", "x2", "cx"}
 _Y_POINTS = {"y", "y1", "y2", "cy"}
 _X_LENGTHS = {"rx", "width"}
@@ -2858,61 +2480,62 @@ _Y_LENGTHS = {"ry", "height"}
 
 _TAG = re.compile(r'<(/?)([A-Za-z][\w.-]*)((?:\s+[\w:.-]+="[^"]*")*)\s*(/?)>')
 _ATTR = re.compile(r'([\w:.-]+)="([^"]*)"')
-# Absolute moves, lines, cubics and elliptical arcs, and how many
-# numbers each takes.
-#
-# Everything but the arc is a list of *points*, so an axis-aligned scale
-# is applied to each in turn and a cubic needs nothing the line does not
-# -- the image of a Bezier under an affine map is the Bezier through the
-# mapped control points, exactly. The arc is the one that has to be
-# recomputed rather than scaled, which is what :func:`_scaled_ellipse`
-# is for.
-#
-# A **relative** command is still refused, and deliberately: its numbers
-# are displacements, so the scale applies and the translation must not,
-# and quietly adding it to this table would apply both. Nothing in the
-# library emits one. ``H``/``V`` are refused for a related reason -- a
-# lone number that is an x on one and a y on the other does not fit the
-# alternating map below. Both are a few lines to support on the day a
-# drawing needs them, and an error until then, as
-# ``export._reject_unsupported`` does it.
+# Supported absolute path commands and their argument counts. Points map
+# directly (an affine image of a Bezier is the Bezier of the mapped
+# control points); arcs are recomputed by _scaled_ellipse. Relative
+# commands and H/V are refused, since nothing in the library emits them.
 _PATH_ARITY = {"M": 2, "L": 2, "C": 6, "A": 7, "Z": 0, "z": 0}
 _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 
 def _art(v: float) -> str:
-    """A number in a symbol's own coordinates.
+    """Return a number in a symbol's own coordinates.
 
-    Six decimals, four more than the sheet coordinates around it get
-    (:func:`_num`): these are products of numbers the artwork already
-    carried, and rounding them to the drawing's own precision would be a
-    *geometry* change made in the course of fixing a *weight*.
-    Fixed-point rather than significant figures so a small number never
-    comes out in exponent notation, which SVG accepts and no other
-    number in the file is written in.
+    Six decimals, more than sheet coordinates (:func:`_num`), so baking a
+    weight fix does not change geometry; fixed-point, so no exponent
+    notation appears.
+
+    Parameters
+    ----------
+    v : float
+        Value.
+
+    Returns
+    -------
+    str
+        Formatted number.
     """
     s = f"{v:.6f}".rstrip("0").rstrip(".")
     return "0" if s in ("", "-0", "0") else s
 
 
 def _affine(transform: str) -> "tuple[float, float, float, float]":
-    """A symbol's transform as the map ``(sx, sy, tx, ty)`` it is.
+    """Return a symbol transform as the diagonal map ``(sx, sy, tx, ty)``.
 
-    The library writes two things and only two: the ``scale()`` a
-    vendored stencil is reproportioned by, and the ``translate()
-    scale(-1, 1)`` that turns a reducer end for end into an expansion.
-    Both are diagonal, which is what lets the flattening below be
-    arithmetic on each number in turn rather than a matrix applied to a
-    point; a rotation or a skew is not, and is refused rather than
-    silently flattened as though it were.
+    The library writes only ``scale()`` and ``translate() scale(-1, 1)``,
+    both axis-aligned, so each number maps independently.
+
+    Parameters
+    ----------
+    transform : str
+        SVG ``transform`` attribute.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Scale and translation.
+
+    Raises
+    ------
+    RuntimeError
+        If the transform contains a rotation, skew or other operation.
     """
     sx = sy = 1.0
     tx = ty = 0.0
     for op, args in re.findall(r"([a-zA-Z]+)\(([^)]*)\)", transform):
         v = [float(t) for t in args.replace(",", " ").split()]
         if op == "translate":
-            # Composed on the right: each op is stated in the frame the
-            # ones before it have established.
+            # Compose on the right, in the frame earlier ops set up.
             tx += sx * v[0]
             ty += sy * (v[1] if len(v) > 1 else 0.0)
         elif op == "scale":
@@ -2927,19 +2550,27 @@ def _affine(transform: str) -> "tuple[float, float, float, float]":
 
 def _scaled_ellipse(rx: float, ry: float, rot: float,
                     ax: float, ay: float) -> "tuple[float, float, float]":
-    """The ellipse ``scale(ax, ay)`` makes of *rx*, *ry*, *rot*.
+    """Return the radii and tilt of a tilted ellipse after ``scale(ax, ay)``.
 
-    An axis-aligned scale of a *tilted* ellipse is still an ellipse, but
-    with different radii and a different tilt, so the arc's parameters
-    have to be recomputed rather than scaled. The ellipse is the image
-    of the unit circle under ``R(rot) diag(rx, ry)``; the scale composes
-    on the left, and the singular value decomposition of the product
-    hands back the new radii and tilt directly. The sweep flag is
-    untouched because both scales are positive, and the large-arc flag
-    because neither depends on the frame.
+    The ellipse is the image of the unit circle under
+    ``R(rot) diag(rx, ry)``; the singular value decomposition of
+    ``diag(ax, ay) R(rot) diag(rx, ry)`` gives the new radii and tilt. Only
+    the domed vessel's arcs (tilted 179,97 degrees) need this when
+    stretched.
 
-    One family needs this -- the domed vessel, whose arcs are vendored
-    at a tilt of 179,97 degrees -- and only when something stretches it.
+    Parameters
+    ----------
+    rx, ry : float
+        Radii.
+    rot : float
+        Tilt in degrees.
+    ax, ay : float
+        Scale.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        New ``(rx, ry, rot)``.
     """
     if ax == ay:
         return rx * ax, ry * ay, rot
@@ -2954,7 +2585,25 @@ def _scaled_ellipse(rx: float, ry: float, rot: float,
 
 
 def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
-    """One ``d`` attribute with the map *m* folded into its numbers."""
+    """Return a path ``d`` attribute with the map ``m`` applied.
+
+    Parameters
+    ----------
+    d : str
+        Path data using commands from ``_PATH_ARITY``.
+    m : tuple[float, float, float, float]
+        ``(sx, sy, tx, ty)``.
+
+    Returns
+    -------
+    str
+        Mapped path data.
+
+    Raises
+    ------
+    RuntimeError
+        If the path uses an unsupported command.
+    """
     ax, ay, ex, ey = m
     tokens = _PATH_TOKEN.findall(d)
     out: list[str] = []
@@ -2970,11 +2619,8 @@ def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
         out.append(cmd)
         if cmd == "A":
             rx, ry, rot = _scaled_ellipse(nums[0], nums[1], nums[2], ax, ay)
-            # The large-arc flag is a property of the arc; the sweep
-            # flag is a handedness, and a map that turns the plane over
-            # reverses it. The two are written back as the integers they
-            # are, since a round trip through float would print them
-            # "1.0" and the arc grammar takes a single digit.
+            # A mirror reverses the sweep flag. Write flags as integers,
+            # since the arc grammar takes single digits.
             sweep = int(nums[4]) if ax * ay > 0 else 1 - int(nums[4])
             out += [_art(rx), _art(ry), _art(rot), str(int(nums[3])), str(sweep),
                     _art(nums[5] * ax + ex), _art(nums[6] * ay + ey)]
@@ -2986,7 +2632,20 @@ def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
 
 
 def _scaled_points(points: str, m: "tuple[float, float, float, float]") -> str:
-    """One ``points`` attribute with *m* folded into its numbers."""
+    """Return a ``points`` attribute with the map ``m`` applied.
+
+    Parameters
+    ----------
+    points : str
+        Polyline or polygon points.
+    m : tuple[float, float, float, float]
+        ``(sx, sy, tx, ty)``.
+
+    Returns
+    -------
+    str
+        Mapped points.
+    """
     ax, ay, ex, ey = m
     v = [float(t) for t in points.replace(",", " ").split()]
     return " ".join(
@@ -2997,20 +2656,34 @@ def _scaled_points(points: str, m: "tuple[float, float, float, float]") -> str:
 def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
                     m: "tuple[float, float, float, float]",
                     gx: float, gy: float, self_closing: str) -> str:
-    """One drawn element, rewritten as it would look under the map *m*.
+    """Return one drawn element rewritten under the map ``m``.
 
-    *gx*, *gy* are the artwork's *own* share of that map's scale -- its
-    groups, without the placement -- and are what the weight is read
-    back through. The weight is therefore independent of the box: a
-    symbol drawn to a 2.0 outline comes out declaring 2.0 whatever size
-    it was placed at, which is ISO 15519-1 §11.1.3 in one line of code.
+    Stroke widths are read back through the artwork's own scale ``gx``,
+    ``gy`` (without the placement), so a 2.0 outline stays 2.0 at any
+    placed size, as ISO 15519-1 11.1.3 requires.
+
+    Parameters
+    ----------
+    name : str
+        Element name.
+    attrs : list[tuple[str, str]]
+        Attributes in source order.
+    m : tuple[float, float, float, float]
+        Accumulated ``(sx, sy, tx, ty)``.
+    gx, gy : float
+        Artwork's own share of the scale.
+    self_closing : str
+        Non-empty if the tag self-closes.
+
+    Returns
+    -------
+    str
+        Rewritten tag; a circle becomes an ellipse.
     """
     ax, ay, ex, ey = m
     src = dict(attrs)
-    # A rect is stated as one corner and two lengths, and a map that
-    # turns an axis over moves the corner it is stated from to the other
-    # end. Both ends are mapped and the near one taken, so the rectangle
-    # covers the same ground whichever way round the map is.
+    # A mirror moves a rect's stated corner to the other end, so map both
+    # ends and take the lower.
     corner = {}
     if name == "rect":
         for axis, span, s, e in (("x", "width", ax, ex), ("y", "height", ay, ey)):
@@ -3025,10 +2698,8 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
         elif key == "points":
             out.append((key, _scaled_points(value, m)))
         elif key == "font-size":
-            # A glyph has no direction to be measured along, so an
-            # uneven scale has no size to give it. The mean keeps the
-            # lettering a legal character height rather than a stretched
-            # one (ISO 15519-1 §11.4.1).
+            # Scale text by the geometric mean so it keeps a valid
+            # character height (ISO 15519-1 11.4.1).
             out.append((key, _art(math.sqrt(abs(ax * ay)) * float(value))))
         elif key == "r":
             out.append(("rx", _art(abs(float(value) * ax))))
@@ -3051,18 +2722,24 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
 
 
 def _baked(svg: str, fx: float, fy: float) -> str:
-    """*svg* redrawn at ``scale(fx, fy)``, scale groups flattened out.
+    """Return ``svg`` redrawn at ``scale(fx, fy)`` with scale groups flattened.
 
-    The drawing is unchanged -- every point lands where the scale would
-    have put it -- and what changes is that no scale is left above any
-    stroke, so each ``stroke-width`` is the width the reader measures,
-    in both directions, at the weight the symbol's author drew.
+    Geometry is unchanged, but no scale remains above any stroke, so each
+    ``stroke-width`` is the width drawn in both directions. Returns
+    ``svg`` unchanged when the scale is even, which keeps most ``<defs>``
+    identical to the vendored stencil.
 
-    A no-op wherever the scale over the ink is already even, which is
-    the great majority: a uniform wrapper is harmless, the ``<use>``
-    viewport divides back out exactly (:func:`_at_pen_scale`), and
-    leaving those alone keeps the ``<defs>`` recognisable as the
-    vendored stencil.
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    fx, fy : float
+        Placement scale.
+
+    Returns
+    -------
+    str
+        Flattened artwork.
     """
     if not _uneven(svg, fx, fy):
         return svg
@@ -3087,8 +2764,7 @@ def _baked(svg: str, fx: float, fy: float) -> str:
                 ax, ay, ex, ey = here
                 sx, sy, tx, ty = _affine(value)
                 here = (ax * sx, ay * sy, ax * tx + ex, ay * ty + ey)
-            # A group carrying nothing but the transform has nothing
-            # left to say once the transform is in the numbers.
+            # Drop a group that carried only the transform.
             if not self_closing:
                 maps.append(here)
                 elided.append(not kept)
@@ -3106,30 +2782,38 @@ def _baked(svg: str, fx: float, fy: float) -> str:
 
 
 def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
-    """Keep a symbol's lettering readable under a placement.
+    """Return ``svg`` with its text wrapped to stay upright under a placement.
 
-    Flipping a motor-operated valve to put its operator below the line
-    is a statement about the *equipment*, not about the letter stamped
-    on it: the box moves, the "M" inside it does not turn upside down.
-    The transform on the ``<use>`` reaches the glyphs as readily as the
-    strokes, so each text is wrapped in the inverse of that transform
-    about its own anchor. The anchor still lands where the flip puts it;
-    only the orientation is undone.
+    Flipping a unit moves its lettering but must not turn it over, so
+    each text element is wrapped in the inverse transform about its own
+    centre.
+
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    rot : int
+        Rotation in degrees.
+    mirror_x, mirror_y : bool
+        Mirrors applied by the placement.
+
+    Returns
+    -------
+    str
+        Artwork with each text element wrapped.
     """
     if not (rot or mirror_x or mirror_y):
         return svg
 
     def wrap(match: "re.Match[str]") -> str:
+        """Return one text element wrapped in the inverse transform."""
         tx, ty = float(match.group(1)), float(match.group(2))
-        # Pivot on the glyph's visual centre, not its anchor: `y` is a
-        # *baseline*, and reflecting one leaves the letter hanging off
-        # the top of the box it is stamped in, the glyph body sitting
-        # above the line rather than astride it. Cap height is ~0.7em,
-        # so the middle of a capital is ~0.35em above the baseline. `x`
-        # needs no such correction: these are all text-anchor="middle".
+        # Pivot on the glyph centre, about 0.35 em above the baseline
+        # (cap height is about 0.7 em). x is already centred
+        # (text-anchor="middle").
         size = re.search(r'font-size="(-?[\d.]+)"', match.group(0))
         cy = ty - 0.35 * float(size.group(1) if size else 12.0)
-        # Undone in the reverse of the order the <use> applies them.
+        # Undo in the reverse of the order the <use> applies them.
         ops = []
         if mirror_x:
             ops.append(f"translate({_num(2 * tx)}, 0) scale(-1, 1)")
@@ -3143,28 +2827,25 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
 
 
 def _reflections(rot: int, mirror_x: bool, mirror_y: bool) -> "tuple[bool, bool]":
-    """A placement's *reflection content*, as a pair of axis flips.
+    """Return a placement's reflection content as a pair of axis flips.
 
-    The eight placements a unit may take are the symmetries of a square,
-    and they split in two. Four leave the axes alone -- the identity,
-    the two mirrors, and the **half turn, which is exactly the two
-    mirrors composed** -- so each is some combination of ``scale(-1,
-    1)`` and ``scale(1, -1)`` about the box's centre, which is what this
-    returns. The other four swap the axes: the quarter turns, and each
-    with a mirror on top.
+    The identity, the two mirrors and the half turn (both mirrors
+    composed) leave the axes in place and can be undone inside a symbol
+    definition, since an axis flip commutes with per-axis scaling. Quarter
+    turns swap the axes and are not undone. So ``orientation=180``
+    reverses a directional mark as either mirror would.
 
-    That split is the one a directional mark cares about and the one the
-    arithmetic cares about, which is not a coincidence. An axis flip
-    commutes with the per-axis scaling that fits a symbol into its box,
-    so it can be cancelled exactly inside the definition; a quarter turn
-    does not, and on a box that is not square it cannot be. An axis flip
-    also lands a mark somewhere else on a drawing the reader still sees
-    the same way up -- which is how a cooler comes to be drawn as a
-    heater -- where a quarter turn turns the box with it.
+    Parameters
+    ----------
+    rot : int
+        Rotation in degrees.
+    mirror_x, mirror_y : bool
+        Mirrors applied.
 
-    So ``orientation=180`` is not a turn as far as the mark is
-    concerned: it is both mirrors at once, and reverses the arrow as
-    either would.
+    Returns
+    -------
+    tuple[bool, bool]
+        Net x and y flips.
     """
     half = rot == 180
     return (mirror_x != half, mirror_y != half)
@@ -3172,39 +2853,28 @@ def _reflections(rot: int, mirror_x: bool, mirror_y: bool) -> "tuple[bool, bool]
 
 def _upright_artwork(svg: str, w: float, h: float,
                      mirror_x: bool, mirror_y: bool) -> str:
-    """Keep a *directional* drawing saying the same thing under a flip.
+    """Return directional artwork with a placement flip undone inside it.
 
-    The lettering problem one level out. A cooler is the heater's circle
-    and zigzag with the arrowhead moved to the other end of the
-    diagonal, and nothing else tells the two apart, so a flipped cooler
-    is not a cooler drawn the other way round: it is the heater, drawn
-    where the author asked for a cooler. What the flip was asked for is
-    the *nozzles* on the other side -- ``examples/10_ethanol_pfd`` flips
-    one to put the condenser's shell inlet underneath, so the overhead
-    rises into it dead straight -- and the ports move under the
-    placement transform however this leaves the ink.
+    A cooler differs from a heater only by where its arrowhead sits, so a
+    flipped cooler would read as a heater. The flip is undone about the
+    symbol's centre lines and reapplied by the ``<use>``, so the artwork
+    stays as drawn while the ports move with the flip. ``mirror_x`` and
+    ``mirror_y`` are the net flips from :func:`_reflections`; quarter turns
+    are left alone. See :attr:`pandid.render.symbols.Symbol.directional`.
 
-    So the flip is undone inside the definition, about the symbol's own
-    centre lines, and the ``<use>`` reapplies it: the two cancel
-    exactly, an axis flip commuting with the per-axis scaling that fits
-    the artwork into its box, so the drawing lands where it was drawn
-    while the nozzles go where the flip puts them.
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork, wrapped in an outer ``<g>``.
+    w, h : float
+        Symbol size.
+    mirror_x, mirror_y : bool
+        Net flips.
 
-    *mirror_x* and *mirror_y* are the placement's whole reflection
-    content and not only what the caller spelled ``mirrored=``: a half
-    turn is both flips composed and reverses the mark as either one
-    does, so it arrives here as both. :func:`_reflections` works that
-    out, and is also where the quarter turn is left alone -- it takes
-    the mark onto ground no upright drawing of either symbol occupies,
-    and turns the box with it. See
-    :attr:`pandid.render.symbols.Symbol.directional`.
-
-    Only the whole drawing, never part of it: on the one family that
-    declares this the artwork *is* the statement, a circle with the
-    zigzag and the arrow both on its centre. Held still it stays exactly
-    as vendored, which is what the check in
-    ``tests/test_symbol_invariants`` measures the flipped nozzles
-    against.
+    Returns
+    -------
+    str
+        Artwork with an inner counter-flip group.
     """
     if not (mirror_x or mirror_y) or not svg.startswith("<g"):
         return svg
@@ -3217,10 +2887,8 @@ def _upright_artwork(svg: str, w: float, h: float,
     return f'{head}<g transform="{" ".join(ops)}">{inner}</g></g>'
 
 
-# Standard page sizes in millimetres, landscape, straight from ISO 216.
-# Held in millimetres because that is what the sizes are defined in:
-# deriving each from the last by doubling accumulates ISO's per-size
-# rounding, which is how A1 and A0 came out a millimetre short.
+# ISO 216 page sizes in millimetres, landscape. Listed, not derived by
+# doubling, because ISO rounds each size.
 _PAGE_SIZES = {
     "A4": (297.0, 210.0),
     "A3": (420.0, 297.0),
@@ -3236,10 +2904,12 @@ _PX_PER_MM = 96.0 / 25.4
 class _Sheet(NamedTuple):
     """A fixed sheet the drawing is placed on, rather than sized to.
 
-    ``width``/``height`` are the layout units the diagram is placed in;
-    ``width_mm``/``height_mm`` are the physical size the SVG declares,
-    so the sheet prints and converts to PDF at exactly its ISO size
-    rather than at whatever the consumer assumes a pixel is worth.
+    Attributes
+    ----------
+    name : str
+        Page size name, such as ``"A3"``.
+    width_mm, height_mm : float
+        Physical size the SVG declares, so it prints at its ISO size.
     """
     name: str
     width_mm: float
@@ -3247,15 +2917,34 @@ class _Sheet(NamedTuple):
 
     @property
     def width(self) -> float:
+        """Return the sheet width in layout units (CSS px)."""
         return self.width_mm * _PX_PER_MM
 
     @property
     def height(self) -> float:
+        """Return the sheet height in layout units (CSS px)."""
         return self.height_mm * _PX_PER_MM
 
 
 def _page(page_size: "str | None") -> "_Sheet | None":
-    """Resolve ``page_size``; ``None`` fits the sheet to the drawing."""
+    """Return the fixed sheet for a page size.
+
+    Parameters
+    ----------
+    page_size : str or None
+        ISO A-size name, case-insensitive; ``None`` fits the sheet to the
+        drawing.
+
+    Returns
+    -------
+    _Sheet or None
+        Sheet, or ``None`` to fit.
+
+    Raises
+    ------
+    ValueError
+        If the size is unknown.
+    """
     if page_size is None:
         return None
     dims = _PAGE_SIZES.get(page_size.upper())
@@ -3267,46 +2956,54 @@ def _page(page_size: "str | None") -> "_Sheet | None":
     return _Sheet(page_size.upper(), *dims)
 
 
-# The frame the sheet is ruled with: sheet furniture, a statement about
-# the paper rather than about the diagram drawn on it. A PFD carries a
-# zone frame as readily as a P&ID does.
+# Border frames; any diagram may carry the zone frame.
 _BORDERS = ("none", "zone")
-# Which drawing this is, a statement about the conventions it is read
-# by -- and about which clause of ISO 10628-1 governs what it has to
-# carry. Two questions read it: :func:`draws_arrowheads` and
-# :func:`tabulates_boundary_flows`.
-#
-# One value per clause of 10628-1 4: a block flow diagram answers 4.2, a
-# process flow diagram 4.3, a P&ID 4.4. Three kinds and not two, because
-# ``12_block_flow_diagram`` is a BFD drawn with ``Block`` and had no way
-# to say so, so it was checked against 4.3.2 -- a clause that does not
-# reach it -- and reported for a stream table its own clause never asked
-# for.
+# Diagram kinds, one per ISO 10628-1 clause 4 subclause: BFD 4.2, PFD 4.3,
+# P&ID 4.4. Read by draws_arrowheads and tabulates_boundary_flows.
 _DIAGRAMS = ("pfd", "p&id", "bfd")
-# One accepted spelling per value, plus whatever the caller can
-# reasonably be expected to type for it.
+# Accepted spellings of each diagram kind.
 _ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd", "bfd": "bfd"}
 
 
 def _canon(value: str) -> str:
-    """Fold a diagram name to the one spelling the table keys on.
+    """Return a diagram name in canonical spelling.
 
-    Case is folded and the ampersand-less ``"pid"`` is read as
-    ``"p&id"``. This package spells the name with the ampersand
-    everywhere else, down to the distribution, so an engineer typing
-    ``"P&ID"`` is typing the real name; ``"pid"`` is the spelling
-    already published and stays working. Nothing else is guessed at.
+    Case is folded and ``"pid"`` is read as ``"p&id"``; nothing else is
+    guessed.
+
+    Parameters
+    ----------
+    value : str
+        Diagram name.
+
+    Returns
+    -------
+    str
+        Canonical name, or ``value`` unchanged if unknown.
     """
     return _ALIASES.get(value.strip().lower(), value)
 
 
 def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, str]":
-    """The frame to rule and the drawing to rule it around.
+    """Return the validated border and diagram kind.
 
-    The two are independent: the frame is sheet furniture and a PFD
-    carries the zone-ruled one as readily as a P&ID does. A name neither
-    knows is a sheet the renderer cannot draw, so it raises rather than
-    quietly handing back a plain PFD.
+    Parameters
+    ----------
+    border : str or None
+        ``"none"`` or ``"zone"``; ``None`` means ``"none"``.
+    diagram : str or None
+        ``"pfd"``, ``"p&id"`` (or ``"pid"``) or ``"bfd"``; ``None`` means
+        ``"pfd"``.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(border, diagram)``.
+
+    Raises
+    ------
+    ValueError
+        If either name is unknown.
     """
     if border is None:
         border = "none"
@@ -3326,32 +3023,31 @@ def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, s
     return border, kind
 
 
-# What ``show_stream_table`` says when the table is to be a drawing in
-# its own right rather than a block docked at the foot of a diagram.
+#: ``show_stream_table`` value that draws the stream table as its own sheet.
 TABLE_SHEET = "sheet"
 
 
 def wants_table_sheet(show_stream_table) -> bool:
-    """Is this render being asked for the stream table's **own sheet**?
+    """Return whether a render asks for the stream table on its own sheet.
 
-    ``show_stream_table`` takes three answers: ``False``, no table;
-    ``True``, the table docked at the foot of the diagram; and
-    ``"sheet"``, the table as a full drawing of its own -- border, title
-    strip, drawing number -- with no diagram on it at all.
+    ``show_stream_table`` is ``False`` (no table), ``True`` (table docked
+    at the foot of the diagram) or ``"sheet"`` (the table alone as a full
+    drawing with border and title strip). One call still writes one file.
 
-    A third answer on the keyword that already asks for the table,
-    rather than a tenth keyword on the four calls that render. It is a
-    property of the *call* and not of the flowsheet -- which sheet this
-    file is, not how the table is drawn -- so it does not belong beside
-    :class:`~pandid.document.StreamTableOptions`; and one call still
-    writes one file, so it is not a flag that makes ``render()`` emit
-    two. ``debug`` grew from a flag into ``bool | float`` in these same
-    signatures for the same reason: the question had a third answer, not
-    a second question.
+    Parameters
+    ----------
+    show_stream_table : bool, str or None
+        Render argument.
 
-    A spelling neither backend knows is refused here rather than read as
-    truthy, which is what would have drawn the whole table onto the
-    diagram for ``show_stream_table="own sheet"``.
+    Returns
+    -------
+    bool
+        True for ``"sheet"``.
+
+    Raises
+    ------
+    ValueError
+        If the value is any other string or object.
     """
     if isinstance(show_stream_table, bool) or show_stream_table is None:
         return False
@@ -3365,63 +3061,70 @@ def wants_table_sheet(show_stream_table) -> bool:
 
 
 def draws_arrowheads(diagram: "str | None") -> bool:
-    """Does this kind of drawing head the end of a process line?
+    """Return whether a diagram kind draws arrowheads on process lines.
 
-    ANSI/ISA-5.1 draws process piping on a P&ID as plain line: flow
-    direction is read off the equipment and the line list, so an
-    arrowhead at the end of every run is a PFD convention.
+    ANSI/ISA-5.1 draws P&ID piping as plain lines. A BFD heads its lines,
+    since ISO 10628-1:2014 4.2.2 c) requires it to show flow direction.
+    Used by the renderer and by :func:`pandid.validate.validate`, which
+    skips arrowhead checks on a sheet without heads.
 
-    A block flow diagram heads its lines, which is why this is a
-    question about the P&ID alone and not about "is this a PFD". ISO
-    10628-1:2014 4.2.2 c) is the item that puts flow direction among a
-    block diagram's minimum content, and a rectangle with a name in it
-    carries the direction nowhere else.
-    :func:`tabulates_boundary_flows` is the other question this name
-    is read for, and the two answer differently on a BFD -- which is
-    the whole reason there are two of them.
+    Parameters
+    ----------
+    diagram : str or None
+        Diagram name as :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it.
 
-    Public, and asked rather than open-coded, because two callers need
-    the answer and only one is the renderer.
-    :func:`pandid.validate.validate` reports nozzles pitched inside the
-    heads they carry, and on a sheet that draws none there are no heads
-    to be inside of -- a finding about ink the drawing does not contain
-    is false however well the geometry is measured. Takes the argument
-    in the spelling :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it.
+    Returns
+    -------
+    bool
+        False only for a P&ID.
+
+    Raises
+    ------
+    ValueError
+        If the diagram name is unknown.
     """
     return _resolve_sheet(None, diagram)[1] != "p&id"
 
 
 def tabulates_boundary_flows(diagram: "str | None") -> bool:
-    """Must this kind of drawing state the *rate* of what crosses its edge?
+    """Return whether a diagram kind must state boundary flow rates.
 
-    True for a process flow diagram alone. ISO 10628-1:2014 4.3.2 d) is
-    where that sits in a PFD's minimum content; a P&ID answers 4.4.2
-    instead, and a block flow diagram answers 4.2, whose minimum content
-    is 4.2.2 -- the flow rates are listed a clause later, under 4.2.3,
-    which is the *additional* information a block diagram may also
-    carry.
+    True only for a PFD (ISO 10628-1:2014 4.3.2 d)). A P&ID answers 4.4.2,
+    and a BFD lists flow rates as optional (4.2.3), so
+    ``stream-table-missing`` is silent on both. Separate from
+    :func:`draws_arrowheads` because a BFD draws arrowheads but owes no
+    rates.
 
-    So the finding that reads this, ``stream-table-missing``, is silent
-    on both of the other two, and for two different reasons: it is not
-    the P&ID's clause, and on the BFD it is not a *shall*.
+    Parameters
+    ----------
+    diagram : str or None
+        Diagram name as :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it.
 
-    Public and asked rather than open-coded for the reason
-    :func:`draws_arrowheads` is, and separate from it because the two
-    part company exactly here: a BFD draws the arrowhead and owes no
-    flow rate. Read as one boolean, ``12_block_flow_diagram`` could only
-    be a sheet that tabulates or a sheet without arrows, and it is
-    neither. Takes the argument in the spelling
-    :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it.
+    Returns
+    -------
+    bool
+        True only for a PFD.
+
+    Raises
+    ------
+    ValueError
+        If the diagram name is unknown.
     """
     return _resolve_sheet(None, diagram)[1] == "pfd"
 
 
 def check_connections(value) -> None:
-    """Reject a joint with no mark, naming the ones there are.
+    """Check a ``connections`` value against :data:`CONNECTIONS`.
 
-    Takes the sheet's spelling or a stream's: a stream may state its two
-    ends separately, so a pair is as valid a value as a name and is
-    checked a name at a time.
+    Parameters
+    ----------
+    value : str or Sequence[str]
+        One name, or a stream's ``(source, dest)`` pair.
+
+    Raises
+    ------
+    ValueError
+        If any name is unknown.
     """
     for name in ((value,) if isinstance(value, str) else tuple(value)):
         if name not in CONNECTIONS:
@@ -3436,21 +3139,21 @@ JUMP_DIRECTIONS = ("vertical", "horizontal")
 
 
 def check_jump_direction(value) -> None:
-    """Reject a hop direction that is neither of the two, naming them.
+    """Check a ``jump_direction`` value against :data:`JUMP_DIRECTIONS`.
 
-    Every other sheet option this module takes is checked against its
-    own closed set; this one was not, and the reason it went unnoticed
-    is the reason it matters. ``jump_direction`` is read where the hops
-    are *drawn*, as ``== "vertical"`` and ``== "horizontal"``, so a
-    misspelling is not a value the renderer rejects -- it is a value
-    that matches neither branch, and the sheet quietly comes out with no
-    hops at all. A drawing where two crossing lines are drawn straight
-    through each other says the lines are joined, and nobody was told.
+    Checked up front because the drawing code tests for each value, so a
+    misspelling would silently draw no hops, and a sheet with no
+    crossings would never reveal it.
 
-    Checked whatever the sheet turns out to hold, and that is the point
-    of a separate function: a sheet with nothing crossing on it draws
-    the same picture for every spelling, so the one render that could
-    have caught the typo by its result is the render that cannot.
+    Parameters
+    ----------
+    value : str
+        ``"vertical"`` or ``"horizontal"``.
+
+    Raises
+    ------
+    ValueError
+        If the value is unknown.
     """
     if value not in JUMP_DIRECTIONS:
         raise ValueError(
@@ -3460,22 +3163,22 @@ def check_jump_direction(value) -> None:
 
 
 def check_crossing_style(value) -> None:
-    """Reject a crossing mark this library cannot draw, naming the ones
-    it can.
+    """Check a ``crossing_style`` value against :data:`CROSSING_STYLES`.
 
-    :func:`check_jump_direction` beside it, one question further on, and
-    for exactly the same reason: ``crossing_style`` is read where the
-    marks are *drawn*, so a misspelling would not be a value the
-    renderer rejects but one that matches no branch -- and the sheet
-    would come out drawn some other way with nobody told. An author who
-    typed ``"break"`` and got the arc has a drawing they did not ask for
-    and would find out from a reader.
+    Checked up front, as :func:`check_jump_direction` is, so a
+    misspelling raises even on a sheet with no crossings instead of
+    silently drawing another style. The default is
+    :data:`CROSSING_STYLE_DEFAULT` (``"gap"``).
 
-    Checked whatever the sheet turns out to hold, and that is why it
-    lives here rather than in ``_draw_streams``: a sheet with nothing
-    crossing on it draws the same picture for every spelling, so the one
-    render that could have caught the typo by its result is the render
-    that cannot.
+    Parameters
+    ----------
+    value : str
+        ``"arc"``, ``"gap"`` or ``"plain"``.
+
+    Raises
+    ------
+    ValueError
+        If the value is unknown.
     """
     if value not in CROSSING_STYLES:
         raise ValueError(
@@ -3486,24 +3189,31 @@ def check_crossing_style(value) -> None:
 
 def sheet_connections(diagram: "str | None",
                       connections: "str | None") -> "str | None":
-    """The joint a sheet marks by default, or ``None`` if it marks none.
+    """Return the joint marking a sheet uses by default.
 
-    The ``None`` is the load-bearing part and is not the same answer as
-    ``"none"``. ``"none"`` is a P&ID asked about its joints that has
-    declined to say, so one line on it may still say otherwise; ``None``
-    is a drawing on which the question does not arise, and nothing a
-    stream states can reopen it.
+    ``None`` means the sheet never marks joints and no stream can
+    override it; ``"none"`` is a P&ID that marks none by default but lets
+    a stream say otherwise. Only a P&ID marks joints: ISO 15519-2:2015
+    Table 5 gives it specific connection symbols, while Table 4 limits a
+    PFD to general ones, so ``connections="flanged"`` on a PFD draws
+    nothing. Shared with the draw.io exporter.
 
-    That distinction is ISO 15519-2:2015's. Table 5 (p. 19) counts, among
-    the *basic* information for a P&ID, the **specific** symbols for
-    process equipment, prime movers, valves, actuators and connections;
-    Table 4 (p. 17) allows the PFD only **general** symbols for its
-    connections. A flange face is as specific as a connection gets, so
-    ``connections="flanged"`` on a PFD draws nothing.
+    Parameters
+    ----------
+    diagram : str or None
+        Diagram name.
+    connections : str or None
+        Requested setting from :data:`CONNECTIONS`.
 
-    Public and asked rather than open-coded for the reason
-    :func:`draws_arrowheads` is: the draw.io exporter needs the same
-    answer and is not the renderer.
+    Returns
+    -------
+    str or None
+        Default setting, or ``None`` when the diagram is not a P&ID.
+
+    Raises
+    ------
+    ValueError
+        If ``connections`` or ``diagram`` is unknown.
     """
     if connections is not None:
         check_connections(connections)
@@ -3513,19 +3223,25 @@ def sheet_connections(diagram: "str | None",
 
 
 def resolve_connections(s, default: "str | None") -> "tuple[str, str]":
-    """What a stream says about its two joints, ``(source, dest)``.
+    """Return a stream's joint settings as ``(source, dest)``.
 
-    ``Stream.ends`` unset means "whatever the sheet said", the shape a
-    valve station's ``tag_scheme`` override takes and for the same
-    reason: an author has to be able to say the *opposite* of the sheet,
-    both ways round, or a mostly-welded sheet with three flanged joints
-    and a mostly-flanged sheet with three welded ones cannot both be
-    written. So an unset stream inherits and a set one wins, including
-    winning with ``"none"``.
+    An unset ``Stream.ends`` inherits the sheet default; a set one wins,
+    including ``"none"``, so a sheet can have exceptions either way. A pair
+    gives the two ends in connection order: ``connect(a, b)`` with
+    ``ends=("flanged", "none")`` flanges the joint at ``a`` only.
 
-    A pair states the two ends apart, in the order they were connected:
-    ``connect(a, b)`` then ``ends=("flanged", "none")`` is the joint at
-    *a* flanged and the joint at *b* not.
+    Parameters
+    ----------
+    s : Stream
+        Stream.
+    default : str or None
+        :func:`sheet_connections` result.
+
+    Returns
+    -------
+    tuple[str, str]
+        Settings for the source and destination ends; ``("none", "none")``
+        when the sheet marks no joints.
     """
     if default is None:
         return ("none", "none")
@@ -3534,60 +3250,72 @@ def resolve_connections(s, default: "str | None") -> "tuple[str, str]":
 
 
 def _fit_scale(dw: float, dh: float, free) -> float:
-    """The uniform scale putting a ``dw`` x ``dh`` drawing in *free*.
+    """Return the uniform scale that fits a drawing into a free area.
 
-    Never enlarges: sheet furniture is drawn at a fixed size, so blowing
-    a small drawing up to fill the page would swell its line weights and
-    lettering out of proportion to the border and title strip around it.
+    Never enlarges, since furniture is drawn at a fixed size and an
+    enlarged drawing would outweigh it.
+
+    Parameters
+    ----------
+    dw, dh : float
+        Drawing size.
+    free : tuple[float, float, float, float]
+        Free area ``(x, y, w, h)``.
+
+    Returns
+    -------
+    float
+        Scale, at most 1.
     """
     _, _, fw, fh = free
     return min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
 
 
 def _scale_text(s: float) -> str:
-    """A fit scale as a title-block ratio."""
+    """Return a fit scale as a title-block ratio, such as ``"1:2.5"``."""
     return "1:1" if s >= 1.0 else f"1:{1 / s:.3g}"
 
 
-# Findings a renderer raises about text that did not fit the cell drawn
-# for it, as against the validator's findings about the diagram.
+# Renderer findings about text that did not fit its cell.
 _FIT_CODES = ("text-truncated", "text-overruns-cell")
 
-#: The stream table's own sheet, carrying no drawing number. Two sheets
-#: of one set are told apart by their numbers, and this one has none to
-#: derive: see :func:`table_sheet_plan`.
+#: Finding code for a stream-table sheet with no drawing number to tell
+#: it from its diagram; see :func:`table_sheet_plan`.
 TABLE_SHEET_UNNUMBERED = "table-sheet-unnumbered"
 
-#: Every code the *renderer* puts on ``fs.warnings`` itself, as against
-#: the validator's findings about the model. Replaced rather than added
-#: to on each render, so a sheet redrawn after a fix stops reporting
-#: what the last one found -- as true of a table sheet that has since
-#: been given a number as of a crossing that has since been marked. The
-#: draw.io exporter extends this with what only an export can find
-#: (:data:`~pandid.render.drawio._EXPORT_CODES`).
+# Codes the renderer itself puts on fs.warnings. Each render replaces
+# them, so fixed problems stop being reported. The draw.io exporter adds
+# its own (pandid.render.drawio._EXPORT_CODES).
 _RENDER_CODES = _FIT_CODES + ("crossing-unmarked", TABLE_SHEET_UNNUMBERED)
 
 
 
 def fit_issue(field: str, text: str, drawn: str,
               room: float, need: float) -> Issue:
-    """One :data:`_FIT_CODES` finding, from what a cell was given and
-    what it drew.
+    """Return a text-fit finding for one title-strip or furniture cell.
 
-    The shape :data:`~pandid.render.furniture.Reporter` reports in, made
-    into an :class:`~pandid.validate.Issue` here rather than in each
-    backend: the draw.io exporter measures the same title strip with the
-    same functions, and :func:`pandid.validate.model_issues` measures it
-    with no file at all, so the sentence a reader gets must not depend
-    on which of the three asked.
+    Shared by both renderers and :func:`pandid.validate.model_issues`, so
+    the message does not depend on which one measured. It states the room,
+    the width needed and their ratio.
 
-    The two widths are the actionable half of the finding, stated the
-    way ``route-detour`` states its two lengths: how much room the cell
-    has, how much the value wanted, and the ratio between them, which is
-    what says whether a word has to come out or a whole phrase.
+    Parameters
+    ----------
+    field : str
+        Field name.
+    text : str
+        Value given.
+    drawn : str
+        Value drawn.
+    room, need : float
+        Cell width and text width, in drawing units.
+
+    Returns
+    -------
+    Issue
+        ``text-truncated`` if the value was shortened, else
+        ``text-overruns-cell``.
     """
-    # A box given ``width=0`` has no ratio to state, so the ratio is
-    # dropped rather than the finding.
+    # Omit the ratio when the cell has no width.
     span = (f"needs {need:.0f} of the {room:.0f} units its cell has"
             + (f" ({need / room:.1f}x)" if room > 0 else ""))
     if drawn != text:
@@ -3601,13 +3329,23 @@ def fit_issue(field: str, text: str, drawn: str,
 
 def _too_small(sheet: _Sheet, need_w: float, need_h: float,
                cause: str = "") -> ValueError:
-    """A sheet too small for its furniture.
+    """Return the error for a sheet too small for its furniture.
 
-    Furniture is drawn at a fixed size, so this is an error no scale of
-    the drawing can resolve. ``cause`` names the widest piece, which is
-    the one worth shortening: a stream table sized to its own contents
-    is usually what pushed a sheet over, and "the furniture does not
-    fit" does not say which furniture.
+    Furniture is drawn at a fixed size, so no drawing scale can fix it.
+
+    Parameters
+    ----------
+    sheet : _Sheet
+        Fixed sheet.
+    need_w, need_h : float
+        Space the furniture needs, in px.
+    cause : str, default=""
+        Name of the widest piece, often the stream table.
+
+    Returns
+    -------
+    ValueError
+        Error to raise.
     """
     blame = f" The widest piece is {cause}." if cause else ""
     return ValueError(
@@ -3618,16 +3356,25 @@ def _too_small(sheet: _Sheet, need_w: float, need_h: float,
     )
 
 
-# The title strip is placed by the same band arithmetic as the boxes the
-# caller docked, but it is not an object of the caller's -- a zone-ruled
-# sheet rules a strip whether or not a title block was filled in -- so
-# it stands in the columns as a sentinel. Naming it is what an error
-# that has to say *which* piece of furniture will not fit needs.
+# Sentinel for the title strip among docked furniture, so a fit error can
+# name it.
 TITLE = "\x00title"
 _FURNITURE_NAMES = {TITLE: "the title strip"}
 
 
 def _furniture_name(obj) -> str:
+    """Return a readable name for a piece of furniture in an error message.
+
+    Parameters
+    ----------
+    obj : object
+        Title sentinel, stream table or annotation box.
+
+    Returns
+    -------
+    str
+        Name such as ``"the stream table"``.
+    """
     if isinstance(obj, str):
         return _FURNITURE_NAMES.get(obj, obj)
     if isinstance(obj, F.StreamTable):
@@ -3636,17 +3383,9 @@ def _furniture_name(obj) -> str:
     return f"the {title!r} box" if title else "an untitled annotation box"
 
 
-# The two comments that fence the provenance block, for the reader who
-# has to *ignore* it: a version string in the body of an SVG would move
-# every golden fixture and every committed gallery sheet on each
-# release. ``tests/test_golden.py`` drops everything between these two
-# lines before comparing -- one slice, not a regex over the document --
-# and keeps the fences, so a golden still records that the block is
-# there and where in the file it sits.
-#
-# **Anything version-dependent must go inside the fence.** ``<title>``
-# stays outside on purpose: it carries the sheet's own name and no
-# version, so it is real content and belongs in the comparison.
+#: Comments fencing the provenance block. tests/test_golden.py drops the
+#: lines between them, so anything version-dependent must go inside.
+#: ``<title>`` stays outside because it is real content.
 PROVENANCE_OPEN = "  <!-- pandid:provenance -->"
 PROVENANCE_CLOSE = "  <!-- /pandid:provenance -->"
 
@@ -3655,25 +3394,22 @@ _DC_NS = "http://purl.org/dc/elements/1.1/"
 
 
 def _sheet_title(fs: "Flowsheet") -> str:
-    """What this drawing is called.
+    """Return the drawing's accessible title.
 
-    The title block's title when the sheet has been given one -- the
-    title the drawing is *issued* under, and what is lettered on it --
-    and the flowsheet's own name otherwise. Either can be empty, and an
-    empty accessible name is worse than none, so the caller drops
-    ``<title>`` rather than emitting a blank one -- and a title of
-    nothing but spaces is one of those, being *truthy* and announced by
-    a screen reader as silence. Both are stripped to the blank they
-    mean, so the fallback to the flowsheet's name happens for either.
+    The title block's title if stated, else the flowsheet name, both
+    stripped. Uses :func:`~pandid.render.furniture._field` so "stated"
+    means the same as on the title strip. An empty result means the caller
+    omits ``<title>``.
 
-    Read through the strip's own :func:`~pandid.render.furniture._field`
-    rather than restated here. Which of the two names the document is
-    *this* function's decision -- the accessible name is not title-strip
-    ink and does not follow the strip's fallbacks -- but what counts as
-    the author having stated a title is one question, and asked twice it
-    was answered twice: a copy of the read here kept the truthy test
-    after the strip stopped using it, so ``title=0`` would have been
-    lettered on the sheet and dropped from the document's name.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    str
+        Title, possibly empty.
     """
     tb = fs.title_block
     title = F._field(tb, "title") if tb is not None else ""
@@ -3681,37 +3417,46 @@ def _sheet_title(fs: "Flowsheet") -> str:
 
 
 def _table_sheet_title(fs: "Flowsheet", options) -> str:
-    """What the stream table's own sheet is called, as a document.
+    """Return the stream-table sheet's title: drawing title and subtitle.
 
-    The drawing's title and the sheet's, in the order the strip letters
-    them. Two sheets of one drawing set are two documents, and a reader
-    with both open has only this to tell them apart: left at the
-    drawing's title alone, the table sheet and the diagram it belongs to
-    would answer to the same accessible name.
+    Gives it an accessible name distinct from its diagram's.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    options : StreamTableOptions
+        Table options carrying ``sheet_subtitle``.
+
+    Returns
+    -------
+    str
+        Title parts joined with ``" - "``.
     """
     parts = [p for p in (_sheet_title(fs), options.sheet_subtitle) if p]
     return " - ".join(parts)
 
 
 def _provenance(fs: "Flowsheet", title: "str | None" = None) -> list[str]:
-    """The document's title and the block saying what drew it.
+    """Return the ``<title>`` and provenance lines of an SVG document.
 
-    Openly, in a comment and in a real ``<metadata>`` element, and never
-    as a white-on-white string in the drawing: an invisible run of text
-    inside a controlled engineering document comes out on
-    select-all-copy and in any text extractor, and ends up pasted into a
-    client deliverable nobody chose to put it in.
+    Provenance goes in a comment and a ``<metadata>`` block, never as
+    hidden text that would be copied out of the drawing. ``<title>`` is
+    the first child, for tooltips and screen readers; ``dc:title`` repeats
+    it and ``dc:creator`` names the generator.
 
-    ``<title>`` is the first child of ``<svg>`` because that is where a
-    browser looks for the tooltip and where a screen reader looks for
-    the document's accessible name; it holds the sheet's own title (see
-    :func:`_sheet_title`) and nothing else. ``dc:title`` repeats it
-    inside the metadata, where a cataloguing tool reads it, and
-    ``dc:creator`` names what drew the file.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    title : str, optional
+        Title to use instead of :func:`_sheet_title`, for the stream-table
+        sheet.
 
-    ``title`` states that name instead of reading it off the flowsheet,
-    for the one sheet that is not the diagram: the stream table's own
-    (:func:`_table_sheet_title`).
+    Returns
+    -------
+    list[str]
+        Indented SVG lines.
     """
     from pandid.render import HOMEPAGE, generator
     who = generator()
@@ -3721,14 +3466,11 @@ def _provenance(fs: "Flowsheet", title: "str | None" = None) -> list[str]:
     if title:
         lines.append(f"  <title>{escaped(title)}</title>")
     lines.append(PROVENANCE_OPEN)
-    # The colon is not a style choice: an XML comment may not contain
-    # "--" anywhere (XML 1.0 §2.5), so "pandid 0.1.2 -- https://..."
-    # would make every sheet malformed.
+    # Use a colon: an XML comment may not contain "--" (XML 1.0 2.5).
     lines.append(f"  <!-- Generated by {who}: {HOMEPAGE} -->")
     lines.append("  <metadata>")
     lines.append(f'    <rdf:RDF xmlns:rdf="{_RDF_NS}" xmlns:dc="{_DC_NS}">')
-    # ``rdf:about=""`` is the RDF spelling of "this document" -- the
-    # file, not the plant it draws.
+    # rdf:about="" means this document.
     lines.append('      <rdf:Description rdf:about="">')
     lines.append(f"        <dc:creator>{escaped(who)}</dc:creator>")
     if title:
@@ -3743,20 +3485,31 @@ def _provenance(fs: "Flowsheet", title: "str | None" = None) -> list[str]:
 def _document(fs: "Flowsheet", sheet: "_Sheet | None",
               viewbox: "tuple[float, float, float, float]",
               body: list[str], title: "str | None" = None) -> str:
-    """The SVG document around a sheet's ink: the declaration, the
-    element, the provenance block and the paper, then *body*.
+    """Return a complete SVG document around a sheet's ink.
 
-    Two sheets come out of this renderer -- the diagram and the stream
-    table's own sheet -- and both are the same document with different
-    ink in it. Written twice, they would be free to disagree about the
-    one thing every consumer of the file reads first: the physical size
-    it prints at.
+    Writes the XML declaration, the ``<svg>`` element, provenance, a white
+    background and then ``body``. Shared by the diagram and the
+    stream-table sheet so both declare their size the same way. A named
+    page declares its physical size in millimetres, so it prints at its ISO
+    size; a fitted sheet stays in user units.
 
-    ``viewbox`` is the canvas rectangle in drawing units. A named page
-    size additionally declares its *physical* size, so the sheet prints
-    and converts to PDF at exactly that ISO size instead of at whatever
-    the consumer takes a user unit to be worth; a sheet fitted to its
-    contents has none to declare and stays in user units.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    sheet : _Sheet or None
+        Fixed page, or ``None`` when fitted to the drawing.
+    viewbox : tuple[float, float, float, float]
+        Canvas rectangle in drawing units.
+    body : list[str]
+        Ink lines.
+    title : str, optional
+        Title passed to :func:`_provenance`.
+
+    Returns
+    -------
+    str
+        SVG source.
     """
     x, y, w, h = viewbox
     if sheet is not None:
@@ -3769,9 +3522,7 @@ def _document(fs: "Flowsheet", sheet: "_Sheet | None",
         f'width="{decl_w}" height="{decl_h}" '
         f'viewBox="{x:.1f} {y:.1f} {w:.1f} {h:.1f}">',
     ]
-    # What drew the file, and what it is called. First children of
-    # <svg>, before any ink: <title> is the document's accessible
-    # name and is only picked up there. See :func:`_provenance`.
+    # Title and provenance must be the first children of <svg>.
     lines.extend(_provenance(fs, title))
     lines.append('  <!-- Background -->')
     lines.append(f'  <rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="white" />')
@@ -3781,19 +3532,27 @@ def _document(fs: "Flowsheet", sheet: "_Sheet | None",
 
 
 class TableSheetPlan(NamedTuple):
-    """A stream-table sheet as geometry, before either backend draws it.
+    """Stream-table sheet geometry, shared by both backends.
 
-    ``table`` is the wrapped table and ``left``/``top`` the corner its
-    block stack is drawn from; ``block``/``name``/``date`` are what the
-    title strip says and ``strip`` the rectangle it says it in;
-    ``frame`` is the drawing frame the border is ruled on.
+    Findings are carried rather than emitted because the plan is computed
+    twice: once to refuse an impossible render, once to draw.
 
-    ``findings`` is what this sheet has to report about itself, for
-    whichever backend drew it to put on ``fs.warnings``. It is carried
-    here rather than raised because the plan is worked out twice -- once
-    before the model is laid out, to refuse a render that cannot happen,
-    and once to draw from -- and a warning emitted from the first of
-    those would be a warning about a file that was never written.
+    Attributes
+    ----------
+    table : TableSheet
+        Wrapped table.
+    block : TitleBlock
+        What the title strip says.
+    name, date : str
+        Strip name and date.
+    strip : tuple[float, float, float, float]
+        Strip rectangle.
+    frame : tuple[float, float, float, float]
+        Drawing frame the border is ruled on.
+    left, top : float
+        Corner the table blocks are drawn from.
+    findings : list[Issue]
+        Warnings for the backend to report.
     """
     table: "F.TableSheet"
     block: "TitleBlock"
@@ -3807,54 +3566,43 @@ class TableSheetPlan(NamedTuple):
 
 
 def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
-    """Lay out the stream table's own sheet: the table wrapped to the
-    page, the strip docked, and the frame around both.
+    """Lay out the stream table's own sheet.
 
-    **Both backends ask this**, exactly as both ask :func:`dock` where a
-    legend goes. Everything here is a statement about a sheet rather
-    than about a file format -- how many streams a block holds, what the
-    strip says, where the frame is ruled -- and a second opinion about
-    any of it would be a table sheet that exported differently from the
-    one that printed.
+    Wraps the table to the page, docks the title strip and frames both.
+    Both backends use it, as they use :func:`dock`, so the export and the
+    print agree. The table is the sheet's body rather than docked
+    furniture, so it gets the full width. The strip is always drawn, from
+    :func:`~pandid.document.table_sheet_block`, since a sheet in a set
+    needs a number. The flowsheet's annotation boxes belong to the
+    diagram and are not repeated.
 
-    The table is the sheet's **body** rather than a piece of docked
-    furniture, which is the one structural difference from
-    :meth:`SvgRenderer._place_furniture`. Docked, it would share the
-    bottom band with the strip and be ruled to what the strip left of
-    the page width -- some six hundred units of a table sheet's whole
-    reason for existing. So only the strip is docked, and the table
-    takes the region that leaves, exactly as a diagram does.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    sheet : _Sheet or None
+        Fixed page, or ``None`` to fit.
 
-    The strip is drawn whether or not the flowsheet carries a title
-    block: a sheet issued into a set without one cannot be filed, and
-    the acceptance for this drawing is that it carries a border, a title
-    block and a drawing number. What it says is
-    :func:`~pandid.document.table_sheet_block`'s.
+    Returns
+    -------
+    TableSheetPlan
+        Layout and findings.
 
-    The flowsheet's annotation boxes are **not** repeated here. An
-    equipment list schedules the plant the diagram draws and a legend
-    explains its symbols; neither is about this sheet, whose body is the
-    table and nothing else. ``fs.annotations`` is one list belonging to
-    one drawing, so there is nowhere yet to say *this box, on that
-    sheet* -- that is a sheet set's question, and #407's.
-
-    Raises :class:`ValueError` for a flowsheet with nothing to tabulate,
-    and the page's own "too small" for a table the paper cannot hold.
+    Raises
+    ------
+    ValueError
+        If nothing is tabulated, or the page is too small for the table or
+        strip.
     """
     from pandid.document import TABLE_SHEET_SUFFIX, table_sheet_block
 
-    # What the page leaves the table to wrap into: the frame, less the
-    # clearance the dock keeps between the frame and whatever it frames.
-    # A sheet with no page has no width to wrap against and takes the
-    # table in one block, however wide that comes to.
+    # Wrap to the frame width less the dock clearance; with no page the
+    # table is one block.
     room = None if sheet is None else (
         sheet.width - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER)
     table = F.stream_table_sheet(fs, room)
     if table is None:
-        # Refused rather than drawn empty: what was asked for is a sheet
-        # whose whole body is the table, and there is no table. See
-        # :func:`~pandid.render.furniture.stream_table_layout` for the
-        # two ways that happens.
+        # No table to draw; see furniture.stream_table_layout.
         raise ValueError(
             "show_stream_table='sheet' draws a sheet whose body is the stream "
             "table, and this flowsheet has nothing to tabulate: no stream "
@@ -3876,11 +3624,7 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
         assert free is not None  # a fixed page always leaves a region
         _fx, _fy, fw, fh = free
         if table.w > fw or table.h > fh:
-            # The table is measured from its contents and wrapped to the
-            # page, so what can be left over is depth -- more rows than
-            # the paper takes -- or a block one column wide that is
-            # still too wide, which is a section heading or a single
-            # value no page this size can hold.
+            # Too many rows, or one column still too wide, for this page.
             raise _too_small(page, page.width - fw + table.w,
                              page.height - fh + table.h, "the stream table")
     _obj, sx, sy, sw, sh = placed[0]
@@ -3888,22 +3632,8 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
     date = block.date or datetime.now().strftime("%Y-%m-%d")
     findings = []
     if not block.drawing_number:
-        # There is nothing to derive a number from, so the sheet is
-        # drawn unnumbered and says so. **Drawn, not refused**: a
-        # flowsheet is not obliged to carry a title block anywhere else
-        # in this library, and refusing here would make the simplest
-        # possible table sheet -- build a flowsheet, render its table --
-        # the one that raises. But an unnumbered sheet is a real defect
-        # rather than a style: it is the sheet's own identity missing,
-        # and the two documents this call is one of can then only be
-        # told apart by their titles.
-        #
-        # Soft rather than hard for the reason `boundary-flow-missing`
-        # is soft: the sheet draws, and what is absent is a number
-        # nobody but the author has. Nothing here can invent one -- a
-        # drawing number is a filing identity issued by the office that
-        # owns the set, and a number made up from the flowsheet's name
-        # would be worse than a blank, because it would look issued.
+        # Draw unnumbered and warn: a title block is optional elsewhere,
+        # and a drawing number must be issued, not invented.
         findings.append(Issue(
             "warning", TABLE_SHEET_UNNUMBERED,
             f"the stream table sheet for {fs.name!r} carries no drawing "
@@ -3918,27 +3648,24 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
 
 
 def reject_unknown_options(where: str, opts: dict) -> None:
-    """Refuse the keywords a backend does not know, naming them.
+    """Raise if a backend was given keywords it does not take.
 
-    Both renderers end their signature with ``**opts``, because
-    :class:`~pandid.render.Renderer` is a protocol every backend has to
-    answer and a future one will take arguments these two never heard
-    of. What that spelling must not mean is **accepted and dropped**: an
-    argument a backend swallows is a caller told something false about
-    the file they now hold, and it is silent in exactly the case that
-    matters -- ``DrawioRenderer().render(fs, debug=True)`` returned a
-    57-kilobyte document with no overlay in it and no complaint, because
-    a ``.drawio`` file has no overlay to draw and nothing said so.
+    Backends accept ``**opts`` to satisfy the
+    :class:`~pandid.render.Renderer` protocol, but silently dropping an
+    argument (such as ``debug=True`` on a draw.io render) would mislead
+    the caller. All unknown names are reported at once.
 
-    Raised for the whole set rather than the first one, for the reason
-    :meth:`~pandid.flowsheet.Flowsheet._raise_on_errors` names every
-    error it found: an author who misspelled two keywords should not
-    meet them one render at a time.
+    Parameters
+    ----------
+    where : str
+        Backend name, for the message.
+    opts : dict
+        Unrecognised keyword arguments.
 
-    A closed door rather than a longer list of arguments to remember to
-    forward. The defect this closes was one argument going unchecked;
-    the fix is that an *unknown* argument cannot go unchecked, so the
-    next keyword added to a render call cannot repeat it.
+    Raises
+    ------
+    ValueError
+        If ``opts`` is not empty.
     """
     if opts:
         raise ValueError(
@@ -3957,34 +3684,43 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
                            jump_direction: str = "vertical",
                            crossing_style: str = "gap",
                            debug: "bool | float" = False) -> None:
-    """Everything a render can refuse about the arguments it was given,
-    asked **before the sheet is laid out or routed**.
+    """Check render arguments before the sheet is laid out or routed.
 
-    Laying a sheet out and routing it writes a ``Frame`` onto every unit
-    and a ``Route`` onto every stream. A render that raises after that
-    has changed the flowsheet on its way to failing: the author fixes
-    the typo, renders again, and the second render reuses geometry the
-    first one resolved -- and if the argument that raised was one that
-    *decides* geometry, the sheet they finally get was laid out for the
-    call that failed. The rule this restores is
-    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`'s own, and the
-    reason ``pin-not-finite`` is checked before the router sees it: a
-    render that cannot happen must not have happened halfway.
+    Layout and routing write frames and routes onto the flowsheet, so a
+    render that failed afterwards would leave geometry for the failed
+    call (see :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`). These
+    checks need no geometry. ``jump_direction``, ``crossing_style`` and
+    ``connections`` are checked even when the sheet cannot show them, so
+    a typo is caught on any sheet. Renderers repeat the checks where they
+    use the values.
 
-    So every one of these is a question about the *arguments* and the
-    *model*, answerable with no geometry at all -- which page was named,
-    how it is spelled, whether the table has anything in it, whether it
-    fits the paper. The renderers ask the same questions again where
-    they use the answers; asking twice is cheap (this measures strings)
-    and is what lets a backend be called directly without losing a
-    check.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    show_stream_table : bool or str, default=False
+        ``True``, ``False`` or ``"sheet"``.
+    border : str, optional
+        ``"none"`` or ``"zone"``.
+    diagram : str, optional
+        ``"pfd"``, ``"p&id"`` or ``"bfd"``.
+    page_size : str, optional
+        ISO A-size.
+    connections : str, optional
+        One of :data:`CONNECTIONS`.
+    jump_direction : str, default="vertical"
+        One of :data:`JUMP_DIRECTIONS`.
+    crossing_style : str, default="gap"
+        One of :data:`CROSSING_STYLES`.
+    debug : bool or float, default=False
+        Debug overlay setting.
 
-    ``jump_direction``, ``crossing_style`` and ``connections`` are
-    checked here **whether or not this sheet can show them**. That is the whole of their fix: a
-    sheet with nothing crossing on it, or with no process line at all,
-    draws the same picture for every spelling, so leaving the check to
-    the drawing means the option is validated on the sheets that did not
-    need validating and swallowed on the ones that did.
+    Raises
+    ------
+    ValueError
+        If any argument is invalid, ``debug`` is set with
+        ``show_stream_table="sheet"``, or the table sheet cannot be laid
+        out.
     """
     from pandid.render import debug as _debug
 
@@ -3997,38 +3733,15 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
     if not wants_table_sheet(show_stream_table):
         return
     if grid is not None:
-        # Refused rather than ignored, as a .drawio render refuses it:
-        # the overlay draws the coordinates a ``pin()`` takes, and there
-        # is nothing pinned on this sheet for it to be about.
+        # The coordinate overlay needs a diagram; refuse rather than ignore.
         raise ValueError(
             "debug draws the coordinate overlay under a *diagram*, and "
             "show_stream_table='sheet' draws no diagram. Render the diagram "
             "to see the overlay, or drop debug=")
-    # The plan is the check: a flowsheet with nothing to tabulate, a
-    # page too small for the table, a table sheet numbered as the
-    # diagram it belongs to. Its answer is thrown away and worked out
-    # again to draw from, exactly as `title_strip_fit` runs the strip's
-    # own layout and discards the ink -- one measurement, so what is
-    # refused here is what would have been drawn there.
-    #
-    # Discarding the answer is not enough: measuring the table *reports*
-    # (:func:`~pandid.render.furniture._report_unused_sections` writes a
-    # `stream-table-section-unused` finding onto ``fs.warnings``), and a
-    # finding left behind by a render that then raised is a finding
-    # about a sheet nobody has. So the list is put back exactly as it
-    # was, in a ``finally`` because the interesting case is the one that
-    # raises. The render that follows measures again and reports then,
-    # which is when there is a drawing for the finding to be about.
-    #
-    # Restored wholesale rather than by undoing what this call is known
-    # to write: what a measurement reports is the measurement's
-    # business, and a guard that named today's findings would go stale
-    # the day another one is added.
-    # The *same list*, refilled -- not a new list with the same
-    # contents. A caller holding a reference to ``fs.warnings`` from
-    # before this call has to keep seeing what the flowsheet sees, and
-    # the writers below rebind the attribute rather than mutating it, so
-    # putting the original object back is what restores both.
+    # Lay the table sheet out to check it, then discard the result.
+    # Measuring may add findings to fs.warnings, which must not outlive a
+    # render that then raises, so restore the same list object (callers
+    # may hold a reference), even on error.
     was = fs.warnings
     contents = list(was)
     try:
@@ -4039,9 +3752,16 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
 
 
 class SvgRenderer:
-    """Renders a Flowsheet to an SVG file using manual geometry."""
+    """Render a laid-out Flowsheet to SVG.
+
+    Parameters
+    ----------
+    registry : SymbolRegistry, optional
+        Symbols to draw with; ``default_registry`` when omitted.
+    """
 
     def __init__(self, registry=None):
+        """Store the symbol registry."""
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
 
@@ -4054,74 +3774,69 @@ class SvgRenderer:
                **opts) -> str:
         """Render the flowsheet to SVG.
 
+        Render warnings (title-block fit, unmarked crossings, label
+        placement) replace those of any earlier render on ``fs.warnings``.
+
         Parameters
         ----------
         fs : Flowsheet
-            The flowsheet to render.
-        jump_direction : str
+            Laid-out and routed flowsheet.
+        jump_direction : str, default="vertical"
             Which of two crossing lines carries the crossing mark:
             ``"vertical"`` or ``"horizontal"``.
-        crossing_style : str
-            What that mark is: ``"arc"`` (the default), ``"gap"`` or
-            ``"plain"``. See :data:`CROSSING_STYLES`. Any other spelling
-            raises rather than being folded to the default.
-        show_stream_table : bool | str
-            ``True`` docks the stream property table at the foot of the
-            diagram; ``"sheet"`` draws the table as a sheet of its own
-            and no diagram at all. See :func:`wants_table_sheet`.
-        border : str | None
-            ``"none"`` for a plain sheet edge, ``"zone"`` for the
-            zone-ruled drawing frame, lettered A.. top down and numbered
-            1.. left to right. The flowsheet's title block and
-            annotation boxes are drawn whichever is chosen. A table
-            sheet rules the zone frame unless told otherwise: it is a
-            drawing in its own right rather than a table on paper.
-        diagram : str | None
-            Which drawing this is: ``"pfd"`` (the default), ``"p&id"``,
-            also spelled ``"pid"``, or ``"bfd"``. A P&ID draws its
-            process lines without arrowheads; the other two head
-            theirs.
-        page_size : str | None
-            Standard paper size (``"A4"`` through ``"A0"``), drawn at
-            exactly that size, with the furniture docked to the sheet
-            edges and the drawing fitted into what they leave. ``None``
-            (the default) sizes the sheet to the drawing instead.
-        connections : str | None
-            The joint a P&ID marks on a stream that does not say its own
-            (``"flanged"`` or ``"none"``), or ``None`` to mark nothing a
-            stream has not stated. Ignored outside a P&ID, since a PFD's
-            symbols are only ever general ones. See
-            :func:`sheet_connections`.
-        debug : bool | float
-            Draw the coordinate overlay under the diagram: a ruled grid
-            carrying its own coordinates, every unit's ``pin()`` anchor
-            and every port. ``True`` rules it at the default spacing and
-            a number sets that spacing. Off by default. See
-            :mod:`pandid.render.debug`.
+        crossing_style : str, default="gap"
+            The mark: ``"gap"``, ``"arc"`` or ``"plain"``; see
+            :data:`CROSSING_STYLES`.
+        show_stream_table : bool or str, default=False
+            ``True`` docks the stream table at the foot of the diagram;
+            ``"sheet"`` draws the table as its own sheet with no diagram
+            (:func:`wants_table_sheet`).
+        border : str, optional
+            ``"none"`` for a plain edge or ``"zone"`` for the zone-ruled
+            frame (rows lettered A.. top down, columns numbered 1.. left to
+            right). Defaults to ``"none"``, or ``"zone"`` for a table sheet.
+        diagram : str, optional
+            ``"pfd"`` (default), ``"p&id"`` (or ``"pid"``) or ``"bfd"``. A
+            P&ID draws process lines without arrowheads.
+        page_size : str, optional
+            ``"A4"`` to ``"A0"``: draw at that size with furniture docked to
+            the edges and the drawing fitted between. ``None`` sizes the
+            sheet to the drawing.
+        connections : str, optional
+            Joint marked on P&ID streams that state none: ``"flanged"`` or
+            ``"none"``. Ignored outside a P&ID (:func:`sheet_connections`).
+        debug : bool or float, default=False
+            Draw the coordinate overlay (:mod:`pandid.render.debug`):
+            ``True`` for the default grid spacing, or a spacing.
+        **opts
+            Refused; any unknown keyword raises.
+
+        Returns
+        -------
+        str
+            SVG document.
+
+        Raises
+        ------
+        ValueError
+            If an argument is invalid, the page is too small, or a unit has
+            no frame.
         """
         from pandid.portgeom import unit_box
         from pandid.render import debug as _debug
-        # Resolved first, so a spacing the overlay cannot draw is
-        # refused before a whole sheet has been built rather than after.
+        # Check options before building anything.
         reject_unknown_options("SvgRenderer.render()", opts)
         grid = _debug.resolve_spacing(debug)
         table_sheet = wants_table_sheet(show_stream_table)
-        # Asked again here, and asked of the arguments this backend was
-        # handed. `Flowsheet` asks before it lays the sheet out, which is
-        # what keeps a refused render from having moved anything; a
-        # caller holding a renderer directly has skipped that, and a
-        # check that only the entry point ran is a check the backend
-        # does not have. Both calls are the same function, so there is
-        # one rule and two places that insist on it.
+        # Flowsheet checks these before layout; check again for callers
+        # using the renderer directly.
         check_render_arguments(
             fs, show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, connections=connections,
             jump_direction=jump_direction, crossing_style=crossing_style,
             debug=debug)
-        # A table sheet is a formal drawing rather than a table on
-        # paper, so it rules the frame the reference sets do; the
-        # diagram's own default stays the plain edge. Stated `border`
-        # still decides either way.
+        # A table sheet is a formal drawing, so it gets the zone frame
+        # unless border is stated.
         if table_sheet and border is None:
             border = "zone"
         border, diagram = _resolve_sheet(border, diagram)
@@ -4161,26 +3876,18 @@ class SvgRenderer:
         furniture: list[str] = []
         free = None  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
-        # What the *drawing* found, as against what the furniture did.
-        # A separate list because it is filled much later -- the label
-        # passes run after the sheet has been sized -- and because only
-        # this one knows where a stream label ended up.
+        # Findings from the label passes, which run after sizing.
         self._findings: list[Issue] = []
 
         def report(field: str, text: str, drawn: str,
                    room: float, need: float) -> None:
+            """Record a title-block or annotation cell that overflowed."""
             fit_issues.append(fit_issue(field, text, drawn, room, need))
 
-        # Furniture belongs to the sheet, not to the border: a title
-        # block or a docked box is drawn because it was supplied. A zone
-        # border implies a formal sheet, which carries a title strip
-        # whether one was filled in or not. A stream table is furniture
-        # too, and the only kind :func:`~pandid.render.furniture.dock`
-        # can place without help from any of the other three -- routing
-        # it through the same call as they do is what keeps this
-        # in agreement with the draw.io exporter, which docks everything
-        # through that one function and knows no "plain sheet" case of
-        # its own to disagree from.
+        # Furniture comes from what was supplied: a title block,
+        # annotations or a stream table, plus a title strip on any zone
+        # border. Docking everything through furniture.dock keeps this in
+        # step with the draw.io exporter.
         furnished = (border == "zone" or fs.title_block is not None
                      or bool(getattr(fs, "annotations", None))
                      or st_layout is not None)
@@ -4192,23 +3899,14 @@ class SvgRenderer:
             frame_x, frame_y = 0.0, 0.0
             canvas_width, canvas_height = sheet.width, sheet.height
         else:
-            # Bare sheet: no border, no title block, no annotations and
-            # no stream table either, so nothing was ever placed and the
-            # frame is just the drawing's own bounds, margined.
+            # Bare sheet: the frame is the drawing's bounds plus margin.
             frame_x, frame_y = dx0 - margin, dy0 - margin
             canvas_width = (dx1 - dx0) + 2 * margin
             canvas_height = (dy1 - dy0) + 2 * margin
 
-        # A cell that could not hold its text is a finding about this
-        # render, so it joins the validator's on ``fs.warnings``.
-        # Findings from an earlier render are dropped rather than added
-        # to: a title shortened and re-rendered must stop warning about
-        # the old one.
-        #
-        # A crossing drawn bare is the same kind of finding and is
-        # replaced the same way: it depends on ``jump_direction``, which
-        # is this render's option and not a property of the model, so
-        # the validator cannot know it (:func:`unmarked_crossings`).
+        # Replace render findings from earlier renders. Unmarked crossings
+        # depend on jump_direction, a render option, so only the render can
+        # report them (:func:`unmarked_crossings`).
         render_issues = fit_issues + _crossing_issues(fs, jump_direction,
                                                       crossing_style)
         fs.warnings = [w for w in fs.warnings
@@ -4221,60 +3919,36 @@ class SvgRenderer:
         lines.extend(self._defs(fs, arrows))
         unit_labels: list = []
         balloons: list = []
-        # Where every line on the sheet runs. Both label passes below
-        # write on an opaque halo and so have to be told, and this is
-        # the first point where the answer exists: the routes are
-        # settled and the balloons have stopped moving, so the impulse
-        # lines are settled with them. See :func:`_ink`.
+        # Every drawn line, for the label passes, which write on opaque
+        # halos (:func:`_ink`).
         ink = _ink(fs, jump_direction)
-        # The letter codes written outside the balloons, placed before
-        # anything that has to dodge them; see :func:`quadrant_labels`.
-        # Drawn with the equipment tags at the end, on the same halo.
+        # Balloon quadrant codes, placed before anything that must dodge
+        # them and drawn with the tags (:func:`quadrant_labels`).
         quadrants = quadrant_labels(fs, jump_direction)
         drawing: list[str] = []
-        # Every opaque white plate the sheet lays down, collected only
-        # when the overlay is going to be drawn. The overlay is emitted
-        # *under* the drawing, so a plate is the one thing that can
-        # delete it outright and the only way to step clear is to be
-        # told where they landed. With ``debug`` off the list is
-        # ``None`` and not one of these boxes is computed.
+        # Opaque plates, collected only for the debug overlay, which is
+        # drawn underneath and must avoid them.
         plates: "list[tuple[float, float, float, float]] | None" = (
             [] if grid is not None else None)
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints,
                                         quadrants))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
                                           plates, joints, crossing_style))
-        # Instrumentation goes on over the lines: an impulse line runs
-        # from the tap to the balloon, and the balloon's opaque body
-        # then knocks out both it and any process line an in-line
-        # element straddles.
+        # Instruments go over the lines, so a balloon's opaque body masks
+        # its impulse line and any process line it straddles.
         drawing.extend(self._draw_taps(fs))
         if balloons:
             drawing.append('  <g id="instruments">')
             drawing.extend(balloons)
             drawing.append('  </g>')
-        # Equipment tags go on last, haloed, so no stream line strikes
-        # through them, and the quadrant codes with them: a code is
-        # lettering outside a symbol and wants the same halo.
+        # Tags and quadrant codes go last, on halos, over every line.
         drawing.extend(self._draw_unit_labels(unit_labels + quadrants))
-        # The label passes have run, so what a stream label's enclosure
-        # was drawn over is now known; the furniture's findings were
-        # already added above, and the stale ones of both kinds dropped
-        # with them.
+        # Add the label-pass findings now that they are known.
         fs.warnings = fs.warnings + self._findings
 
-        # Placed last and drawn first. The overlay must sit *under*
-        # every piece of the sheet's own ink -- it is scaffolding and
-        # must not come between the reader and the drawing -- but it can
-        # only choose paper the sheet has left clear once the sheet
-        # exists. Splicing the result onto the head is what satisfies
-        # both.
-        #
-        # It goes inside the fitted group for a separate reason: the
-        # numbers it writes have to be the ones ``pin()`` takes, and a
-        # fixed page scales that group, so the overlay is told the scale
-        # and holds its lettering to a constant size on paper while
-        # leaving its geometry in drawing units.
+        # The debug overlay is computed last but drawn first, under the
+        # sheet's ink, inside the fitted group so its numbers are pin()
+        # coordinates; its lettering is held to a constant paper size.
         if grid is not None:
             assert plates is not None
             drawing[:0] = _debug.overlay(
@@ -4292,7 +3966,20 @@ class SvgRenderer:
                          (frame_x, frame_y, canvas_width, canvas_height), lines)
 
     def _fit(self, dx0, dy0, dx1, dy1, free) -> str:
-        """Transform centring the drawing in *free*, scaled to fit."""
+        """Return the SVG transform that centres and scales the drawing in ``free``.
+
+        Parameters
+        ----------
+        dx0, dy0, dx1, dy1 : float
+            Drawing bounds.
+        free : tuple[float, float, float, float]
+            Region ``(x, y, w, h)`` left for the drawing.
+
+        Returns
+        -------
+        str
+            ``translate(...) scale(...)``.
+        """
         fx, fy, fw, fh = free
         dw, dh = dx1 - dx0, dy1 - dy0
         s = _fit_scale(dw, dh, free)
@@ -4303,42 +3990,53 @@ class SvgRenderer:
 
     def _place_furniture(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet,
                          border, report=None):
-        """Dock furniture flush to the sheet *frame*, not the drawing.
+        """Dock furniture to the sheet frame and draw it.
 
-        The frame is ruled into zones where the sheet asked for a
-        border.
+        Boxes are grouped into edge bands by ``align`` and placed flush to
+        the frame edge, inset by their ``margin``; a box with ``position``
+        is placed by hand. Without a fixed sheet the frame grows from the
+        drawing bounds to hold the bands; with one, the frame is the page
+        and the drawing fits the region left. The band arithmetic is
+        :func:`pandid.render.furniture.dock`, shared with draw.io.
 
-        Boxes are grouped into edge *bands* by ``align``; the frame
-        grows outward from the diagram bounds just enough to hold them,
-        and each box is placed flush against the frame edge its
-        ``align`` names (inset by its ``margin``). A box with an
-        explicit ``position`` is hand-placed instead. Given a *sheet*,
-        the frame is the fixed page inset by the border, and the drawing
-        is fitted into the region the bands leave.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose title block and annotations are drawn.
+        st_layout : StreamTable or None
+            Measured stream table.
+        dx0, dy0, dx1, dy1 : float
+            Drawing bounds.
+        furniture : list[str]
+            SVG lines, appended to in place.
+        sheet : _Sheet or None
+            Fixed page, or ``None``.
+        border : str
+            ``"none"`` or ``"zone"``.
+        report : callable, optional
+            Receives title and annotation fit findings.
 
-        The band arithmetic is :func:`pandid.render.furniture.dock`'s,
-        which is a statement about a *sheet* rather than about SVG and
-        is shared with the draw.io exporter for that reason. What is
-        left here is the drawing.
-
-        Returns the outer canvas rect ``(x, y, w, h)`` and that free
-        region, or ``None`` when the frame was grown to the drawing.
+        Returns
+        -------
+        tuple
+            Canvas ``(x, y, w, h)`` and the free region, or ``None`` when
+            the frame grew to the drawing.
         """
         from pandid.document import TitleBlock, TableBox
 
         OUT = F.OUTER_MARGIN
 
         def measure(a):
+            """Return a box's ``(w, h)``."""
             return F.measure_table(a) if isinstance(a, TableBox) else F.measure_annotation(a)
 
         def draw_box(a, x, y):
+            """Draw a table or annotation box at ``(x, y)``."""
             furniture.extend(F.draw_table(a, x, y) if isinstance(a, TableBox)
                              else F.draw_annotation(a, x, y, report=report))
 
-        # Title strip + stream table are bottom furniture, at the foot
-        # of the bottom-right / bottom-left columns so the band maths
-        # sizes the frame around them too. The strip stands in as a
-        # sentinel (see TITLE); the stream table stands in as itself.
+        # The title strip (as the TITLE sentinel) and the stream table dock
+        # at the bottom-right and bottom-left.
         strip = fs.title_block is not None or border == "zone"
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
@@ -4356,9 +4054,7 @@ class SvgRenderer:
             items, (dx0, dy0, dx1, dy1), sheet=sheet,
             too_small=lambda need_w, need_h, culprit: _too_small(
                 sheet, need_w, need_h, _furniture_name(culprit) if culprit else ""))
-        # The scale cell reports the ratio the drawing was placed at,
-        # which the dock has just settled. A frame grown to the drawing
-        # has no fixed page and so no scale to state.
+        # The scale cell states the fit scale; a grown frame has none.
         fit = "" if free is None else _scale_text(
             _fit_scale(dx1 - dx0, dy1 - dy0, free))
 
@@ -4382,26 +4078,32 @@ class SvgRenderer:
         return (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT), free
 
     def _table_sheet(self, fs, sheet, border) -> str:
-        """The stream table as a sheet of its own: border, title strip,
-        drawing number, and the table for a body.
+        """Return the stream table drawn as a sheet of its own.
 
-        The geometry is :func:`table_sheet_plan`'s, which the draw.io
-        exporter asks for the same sheet; this strokes it.
+        Geometry comes from :func:`table_sheet_plan`, shared with draw.io.
+        The scale cell is ruled but empty, since a table has no scale, and
+        is kept so the drawing-number budget matches the diagram sheets
+        (:func:`~pandid.render.furniture.title_strip_layout`).
 
-        The scale cell is **ruled and left empty**. A table is not
-        drawn to scale, so there is no ratio to write in the box -- but
-        the box is the form's and not the drawing's, and #370 settled
-        that it is ruled whether or not a sheet has a scale to state,
-        because a band that gives its room back changes what
-        ``drawing_number`` is budgeted. That argument does not stop at
-        the diagram: a table sheet is a sheet of the same issue, filed
-        by the same number, and its number has to survive the same
-        width. See :func:`~pandid.render.furniture.title_strip_layout`.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose streams are tabulated.
+        sheet : _Sheet or None
+            Fixed page, or ``None`` to size to the table.
+        border : str
+            ``"none"`` or ``"zone"``.
+
+        Returns
+        -------
+        str
+            SVG document.
         """
         fit_issues: list[Issue] = []
 
         def report(field: str, text: str, drawn: str,
                    room: float, need: float) -> None:
+            """Record a title-block or annotation cell that overflowed."""
             fit_issues.append(fit_issue(field, text, drawn, room, need))
 
         plan = table_sheet_plan(fs, sheet)
@@ -4428,10 +4130,28 @@ class SvgRenderer:
             title=_table_sheet_title(fs, F._options(fs)))
 
     def _place_plain(self, st_layout, sheet, margin, furniture):
-        """A fixed page carrying no furniture of its own.
+        """Lay out a fixed page with no furniture except a stream table.
 
-        The stream table docks to the foot of the sheet and the drawing
-        takes the region above it, which is what is returned.
+        Parameters
+        ----------
+        st_layout : StreamTable or None
+            Measured stream table, docked at the foot.
+        sheet : _Sheet
+            Fixed page.
+        margin : float
+            Page margin.
+        furniture : list[str]
+            SVG lines, appended to in place.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Region ``(x, y, w, h)`` left for the drawing.
+
+        Raises
+        ------
+        ValueError
+            If the page is too small.
         """
         free_w = sheet.width - 2 * margin
         free_h = sheet.height - 2 * margin
@@ -4449,25 +4169,24 @@ class SvgRenderer:
     # --- defs ---------------------------------------------------------
 
     def _baked_xform(self, u) -> tuple[int, bool, bool]:
-        """The placement transform a symbol definition must bake in.
+        """Return the placement transform baked into a symbol definition.
 
-        Two things in a drawing belong to the *drawing* rather than to
-        the attitude the equipment is installed in, and so have to
-        survive the placement: its own lettering, which stays readable
-        (:func:`_upright_text`), and a directional mark, which an axis
-        flip reverses (:func:`_upright_artwork`). Each is undone inside
-        the definition and reapplied by the ``<use>``.
+        Lettering must stay readable (:func:`_upright_text`) and a
+        directional mark must survive a flip (:func:`_upright_artwork`), so
+        these are undone inside the definition and reapplied by ``<use>``.
+        Other symbols get the identity and share one definition. A
+        directional symbol bakes only the reflection content
+        (:func:`_reflections`).
 
-        The identity for every symbol with neither -- the great majority
-        -- so those keep sharing one definition and one id however they
-        are placed.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
 
-        A directional symbol reports its placement's *reflection
-        content* rather than the placement, that being the whole of what
-        it bakes in: a half turn arrives as both flips
-        (:func:`_reflections`) and a quarter turn as none, so
-        ``orientation=90`` on an unflipped one still shares one
-        definition and the four placements that flip it share three.
+        Returns
+        -------
+        tuple[int, bool, bool]
+            ``(rotation, mirror_x, mirror_y)``.
         """
         sym = self.registry.for_unit(u)
         f = getattr(u, "frame", None)
@@ -4482,21 +4201,24 @@ class SvgRenderer:
         return (0, False, False)
 
     def _sym_id(self, u) -> str:
-        """The ``<defs>`` id a unit's ``<use>`` points at.
+        """Return the ``<defs>`` id a unit's ``<use>`` refers to.
 
-        One definition per ``(kind, variant)``, plus a suffix for
-        whatever else is baked in rather than applied by the ``<use>``:
-        the size a built-to-measure symbol was drawn at, the size a
-        *resized* unit had its line weights compensated for (see
-        :func:`_pen_scale`) or was redrawn at outright (see
-        :func:`_fold`), and the counter-transform that keeps a symbol's
-        lettering readable or its arrow pointing the way it was drawn.
+        One definition per ``(kind, variant)``, suffixed for anything baked
+        in: a built-to-measure size, a resized unit's pen compensation
+        (:func:`_pen_scale`) or redraw (:func:`_fold`), and the
+        counter-transform from :meth:`_baked_xform`. Passed through
+        :func:`~pandid.render.escape.ident` because custom kinds are
+        author-chosen.
 
-        Through :func:`~pandid.render.escape.ident` for the reason
-        :func:`arrow_marker_id` is: a ``kind`` is a key the author of a
-        custom unit chooses, and every one this library ships is already
-        a name, so the sanitising is a no-op on every sheet it draws and
-        the guard is there for the kind nobody has written yet.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+
+        Returns
+        -------
+        str
+            Definition id.
         """
         variant = getattr(u, 'variant', 'default')
         sym = self.registry.for_unit(u)
@@ -4505,15 +4227,26 @@ class SvgRenderer:
         return ident("sym", body)
 
     def _defs(self, fs, arrows=True):
+        """Return the ``<defs>`` block: arrow markers and symbol definitions.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+        arrows : bool, default=True
+            Whether to define arrowhead markers; a P&ID draws none.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
+        """
         lines = []
-        # Sorted, not raw set order: set iteration depends on the
-        # process hash seed, so an identical flowsheet would otherwise
-        # emit byte-different SVG from run to run, breaking diffs,
-        # caching and golden tests.
+        # Sort for byte-identical output across runs (set order depends on
+        # the hash seed).
         used_colors = sorted({s.color or "black" for s in fs.streams})
         lines.append('  <defs>')
-        # A sheet that draws no arrowhead defines none: only process
-        # lines ever wore one, so on a P&ID the whole set is dead.
+        # No arrowheads, no markers.
         for c in used_colors if arrows else ():
             lines.append(
                 f'    <marker id="{arrow_marker_id(c)}" viewBox="0 0 10 10" '
@@ -4524,25 +4257,15 @@ class SvgRenderer:
             lines.append(f'      <path d="M 0 0 L 10 5 L 0 10 z" fill="{escaped(c)}" />')
             lines.append('    </marker>')
 
-        # A symbol carrying its own lettering, or a directional mark,
-        # needs one definition per placement transform in use, the
-        # counter-transform being baked into the definition. A symbol
-        # built to measure needs one per size, so the box it is placed
-        # in is the box it was drawn in and the scale stays exactly 1. A
-        # symbol some unit *resized* needs one per placed size too,
-        # since the weight it is drawn at is compensated for that scale
-        # (see _pen_scale) and a definition cannot carry two. Everything
-        # else shares a single definition however it is placed.
+        # One definition per (kind, variant) unless something is baked in:
+        # a counter-transform for lettering or a directional mark, a
+        # built-to-measure size, or a resized unit's pen compensation
+        # (_pen_scale), which a shared definition cannot carry.
         used: dict[tuple, tuple] = {}
-        # Definitions some placement asks to fill a box of another
-        # shape. A <symbol> scales its viewBox to fit and centres what
-        # is left over, so a unit given a width and height of its own is
-        # drawn smaller than the box with whitespace down one pair of
-        # sides -- and portgeom, which maps its ports linearly onto the
-        # box, then puts them out in that whitespace. The two are made
-        # to agree by stretching the artwork wherever the symbol says it
-        # may be (see Symbol.stretchable); where it may not, portgeom
-        # follows the letterbox and the ports land on the drawing.
+        # Definitions placed in a box of another shape. A <symbol> would
+        # letterbox the artwork while portgeom maps ports linearly onto the
+        # box, so stretchable symbols are stretched to agree
+        # (Symbol.stretchable); for the rest portgeom follows the letterbox.
         stretched: set[tuple] = set()
         for u in fs.units:
             if u.kind in ("feed", "product"):
@@ -4553,35 +4276,20 @@ class SvgRenderer:
             key = ((u.kind, getattr(u, 'variant', 'default'), sym.id_suffix, fold, pen)
                    + xform)
             used[key] = (self._sym_id(u), sym, fold, pen, *xform)
-            # A definition redrawn at the placed size fills its box by
-            # being the size of it, so it has no aspect ratio to give
-            # up.
+            # A redrawn definition already fills its box.
             if sym.stretchable and _reshapes(sym, u) and fold == (1.0, 1.0):
                 stretched.add(key)
         for key in sorted(used):
             sym_id, sym, fold, pen, rot, mirror_x, mirror_y = used[key]
-            # The redraw first, so everything after it -- the pen
-            # division, the counter-transforms, the viewBox -- is stated
-            # in the coordinates the definition will be written in.
+            # Redraw first, so later steps use the definition's coordinates.
             art = _baked(sym.svg, *fold)
             width, height = sym.width * fold[0], sym.height * fold[1]
-            # Every weight the artwork was drawn at is baked to
-            # :attr:`~.weights.LineWeight.EQUIPMENT`, whichever rung the symbol is
-            # actually in (see :func:`_nominal`), so a trimmed symbol's
-            # weight is divided out here rather than carried by `pen`,
-            # which stays the *resize* factor alone and nothing else:
-            # :func:`_size_tag` and the cache `key` above both read it
-            # for that, and every symbol of one (kind, variant) is one
-            # class, so folding the two together would buy the cache
-            # nothing and cost `_size_tag` its meaning.
+            # Artwork is drawn at the EQUIPMENT weight (:func:`_nominal`);
+            # divide out the symbol's class weight here, and keep `pen` as
+            # the resize factor alone, which _size_tag and the key read.
             stroke = pen * LineWeight.EQUIPMENT.width / _class_weight(sym).width
-            # Either, never both. A directional symbol's *whole*
-            # drawing is held still, lettering included, so a glyph
-            # inside one would need the residual of the two rather than
-            # its own counter-transform. No symbol carries both, and
-            # test_a_directional_symbol_carries_no_lettering_of_its_own
-            # says so over the registry rather than leaving this branch
-            # to be trusted.
+            # A directional symbol has no lettering (tested over the
+            # registry), so it needs only one of the two counter-transforms.
             if sym.directional:
                 svg_str = _upright_artwork(_at_pen_scale(art, stroke),
                                            width, height, mirror_x, mirror_y)
@@ -4589,17 +4297,10 @@ class SvgRenderer:
                 svg_str = _upright_text(_at_pen_scale(art, stroke), rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
-                # preserveAspectRatio: stated only where a placement
-                # reshapes the artwork, "none" and the "xMidYMid meet"
-                # default being the same drawing whenever the scale is
-                # uniform.
+                # Stretch only where a placement reshapes the artwork.
                 fill = ' preserveAspectRatio="none"' if key in stretched else ''
-                # overflow="visible": a <symbol> viewport defaults to
-                # overflow:hidden, which clips the outer half of any
-                # stroke whose geometry sits on the viewBox edge (an
-                # ellipse with rx == w/2, say), so a circle renders thin
-                # at its four cardinal points while the diagonals stay
-                # full weight.
+                # overflow="visible" stops the viewport clipping strokes on
+                # the viewBox edge, which would thin a circle at four points.
                 box = (f"{sym.width} {sym.height}" if fold == (1.0, 1.0)
                        else f"{_art(width)} {_art(height)}")
                 svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {box}"'
@@ -4614,32 +4315,41 @@ class SvgRenderer:
 
     def _draw_units(self, fs, label_items, balloons, ink=(), joints=None,
                     quadrants=()):
+        """Return the ``units`` group and collect tags and balloons.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+        label_items : list
+            Receives tag, ``NC`` and fail-position label items.
+        balloons : list[str]
+            Receives instrument SVG, drawn later over the lines.
+        ink : sequence of _Ink, optional
+            Drawn lines for tags to avoid.
+        joints : str, optional
+            Sheet joint default, for flange marks to avoid.
+        quadrants : sequence, optional
+            Quadrant label items for tags to avoid.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
+        """
         from pandid.portgeom import unit_box
 
         lines = ['  <g id="units">']
-        # Every symbol on the sheet, paired with the unit that drew it,
-        # so a tag can step off somebody else's artwork the way it steps
-        # off somebody else's line. Built once, being the same list for
-        # every tag.
-        #
-        # The flange marks are in it under no unit at all, which is what
-        # they are: a mark on a run belongs to the joint and not to
-        # either end of it, and _tag_item's `v is not u` test then lets
-        # every tag see every one of them.
+        # Every symbol box, with its unit, for tags to avoid. Flange marks
+        # and quadrant codes have no owner, so every tag avoids them.
         symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         symbols += [(None, b) for b in flange_boxes(fs, joints)]
-        # A letter code outside a balloon is under no unit either, and
-        # for the same reason: it is lettering, not artwork, so every
-        # tag has to see it and none of them owns it.
         symbols += [(None, b) for b in map(_unit_label_box, quadrants) if b is not None]
         for u in fs.units:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines
             x, y = f.x, f.y
-            # The tag, not the name: a symbol that repeats (a trip
-            # square, a utility header flag) is drawn with the tag it
-            # shares and named apart only so the flowsheet can address
-            # each drawing of it.
+            # Draw the shared tag, not the unique name, for repeated symbols.
             safe_name = escaped(u.tag)
 
             if u.kind in ("feed", "product"):
@@ -4652,18 +4362,16 @@ class SvgRenderer:
             mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
             cx, cy = x + u_width / 2, y + u_height / 2
 
-            # A quarter turn swaps the box the artwork is drawn into;
-            # place that box centred on the frame so rotating it about
-            # the centre lands it back on the frame exactly.
+            # A quarter turn swaps the artwork box; centre it on the frame
+            # so rotating about the centre lands it on the frame.
             if rot in (90, 270):
                 bw, bh = u_height, u_width
             else:
                 bw, bh = u_width, u_height
             ux, uy = cx - bw / 2, cy - bh / 2
 
-            # Composed right-to-left by SVG, so this reads "mirror, then
-            # rotate", the order portgeom.symbol_to_box uses for the
-            # ports.
+            # SVG composes right to left: mirror, then rotate, matching
+            # portgeom.symbol_to_box.
             ops = []
             if rot:
                 ops.append(f"rotate({rot}, {_num(cx)}, {_num(cy)})")
@@ -4678,23 +4386,19 @@ class SvgRenderer:
             if u.kind == "instrument":
                 out.extend(self._draw_instrument_tag(u, x, y, u_width, u_height))
             else:
-                # A symbol that carries no tag is labelled nowhere. Only
-                # the pipe tee is one today: it is bare pipe, and an
-                # issued sheet writes nothing against a junction.
+                # Untagged symbols (a pipe tee) get no label.
                 tag_box = None
                 if u.tag:
                     item = self._tag_item(u, f, x, y, u_width, u_height, safe_name,
                                           ink, symbols)
                     tag_box = _unit_label_box(item)
                     label_items.append(item)
-                # A body that cannot carry the darkening says so in
-                # letters instead; see ISO 15519-1 §11.4.5.
+                # Letter NC where the body cannot be darkened (ISO 15519-1
+                # 11.4.5).
                 if closed_marking(u, self.registry) == "NC":
                     label_items.append(
                         self._nc_label_item(u, f, x, y, u_width, u_height, tag_box))
-                # Where an actuated valve goes when its air or power is
-                # lost. A separate question from the one above, in a
-                # separate corner; see ISA-5.1 Table 5.4.4.
+                # Fail position of an actuated valve (ISA-5.1 Table 5.4.4).
                 letters = fail_marking(u)
                 if letters:
                     label_items.append(
@@ -4704,28 +4408,24 @@ class SvgRenderer:
         return lines
 
     def _draw_taps(self, fs):
-        """The fine line from a tap point to the balloon reading it.
+        """Return the lines from tap points to the balloons reading them.
 
-        Solid where the line is an **impulse line**: a length of tubing
-        between the pipe and the element, full of the fluid the reading
-        is taken from. Dashed everywhere else, where the line carries a
-        measurement or a command -- a balloon hung off another balloon,
-        a balloon teed off a **signal line**, a trip square hung on the
-        valve it strokes. Nothing is drawn where a stream already joins
-        the two, or where the element sits directly on the line
-        (``offset=0``).
+        Solid for an impulse line (tubing full of process fluid), dashed for
+        a signal or command (a balloon on a balloon, on a signal line, or a
+        trip square on its valve); see :func:`impulse_tap`. Lines come from
+        :func:`tap_lines`, which label placement also avoids. Drawn on the
+        DETAIL rung, as ISO 15519-2 Annex A.1.02 puts an instrument
+        connection at 0.25 mm.
 
-        Which of the two it is, is a question about the *line*, asked of
-        both its ends and not of the host's class: see
-        :func:`impulse_tap`.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
 
-        Fine is the same fine as a signal stream: ISO 15519-2 Annex
-        A.1.02 puts an instrument connection on the 0,25 rung, alongside
-        the signal line and half the pipeline it taps. See
-        :attr:`~.weights.LineWeight.DETAIL`.
-
-        Which lines there are is :func:`tap_lines`' answer, since label
-        placement has to dodge exactly the ones this draws.
+        Returns
+        -------
+        list[str]
+            SVG lines, empty when there are no taps.
         """
         out = []
         for u, (tx, ty), (cx, cy) in tap_lines(fs):
@@ -4736,25 +4436,32 @@ class SvgRenderer:
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 
     def _draw_boundary(self, u, f, safe_name):
-        """A Feed or Product off-page connector flag.
+        """Return a Feed or Product off-page flag.
 
-        With an optional second line referencing the drawing the stream
-        comes from or goes to.
+        A ``reference`` adds a second line naming the connected drawing.
+
+        Parameters
+        ----------
+        u : Unit
+            Boundary unit.
+        f : Frame
+            Its frame.
+        safe_name : str
+            Escaped tag.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         ref = getattr(u, "reference", "") or ""
-        # The pennant's own geometry, which the draw.io exporter reads
-        # too; see :func:`boundary_flag`. Slightly taller where an
-        # off-page reference has to fit under the tag, and centred on
-        # the port either way -- the midpoint of the pennant's own
-        # (inset) top and bottom, not a fixed offset off ``y``, so a
-        # flag sized taller than the default 50 units keeps its point
-        # and its lettering in the middle of the ink it actually drew
-        # rather than stuck near the top of a box it does not fill.
+        # Pennant geometry is shared with draw.io (:func:`boundary_flag`).
+        # Centre on the pennant's own top and bottom, so a taller flag
+        # keeps its point and lettering in the middle of its ink.
         (bx0, top, bx1, bot), depth, east = boundary_flag(u, f)
         mid = (top + bot) / 2
         label_w = f.w
-        # The tag goes in the flat part of the flag: the point is not
-        # paper a word can be written across.
+        # Letter the flat part, not the point.
         if east:
             px0, px1, px2 = bx0, bx1 - depth, bx1
             tx = px0 + (label_w - depth) / 2
@@ -4762,12 +4469,7 @@ class SvgRenderer:
             px0, px1, px2 = bx1, bx0 + depth, bx0
             tx = bx0 + depth + (label_w - depth) / 2
         points = f"{px0},{top} {px1},{top} {px2},{mid} {px1},{bot} {px0},{bot}"
-        # The pennant is a graphical symbol on the sheet rather
-        # than a valve, a fitting or a PCE symbol, so it is drawn
-        # on ISO 10628-1 §5.3.1 b)'s rung -- the same rung
-        # ``pandid.render.drawio._boundary_cell`` states, read off
-        # the ladder here since #490 rather than written as a bare
-        # ``2`` that only happened to agree with it.
+        # Drawn on the ISO 10628-1 5.3.1 b) symbol rung, as in draw.io.
         out = [f'    <polygon points="{points}" fill="transparent" '
                f'stroke="black" stroke-width="{LineWeight.EQUIPMENT.width:g}" />']
         if ref:
@@ -4778,28 +4480,32 @@ class SvgRenderer:
         return out
 
     def _draw_instrument_tag(self, u, x, y, u_width, u_height):
-        """Functional letters over the loop number, as ISA-5.1 draws.
+        """Return the balloon lettering: function letters over loop number.
 
-        An interlock square carries the number alone: its letters are
-        only the tag prefix, and a real sheet leaves the square holding
-        one figure.
+        An interlock square carries the number alone (ISA-5.1).
+
+        Parameters
+        ----------
+        u : Instrument
+            Balloon.
+        x, y, u_width, u_height : float
+            Drawn box.
+
+        Returns
+        -------
+        list[str]
+            SVG ``<text>`` lines.
         """
         from pandid.units import split_tag
 
         variant = getattr(u, "variant", "default")
-        # The tag, not the name: a repeated square is drawn with the
-        # tag it shares and named apart only so it can be addressed.
+        # The shared tag, not the unique name.
         tag = getattr(u, "tag", "") or u.name
         top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
         if variant in _DIAMOND_BALLOONS:
-            # A diamond is widest on its horizontal diagonal and
-            # narrows to nothing at the bottom vertex, so the number
-            # cannot be centred in the box: it goes in the lower half,
-            # where ISA-5.1 draws it under the interlock designator, but
-            # only as far down as the sloping sides leave it room. Seven
-            # units below the middle of a 40 box is where a two-figure
-            # number's bottom corners clear the edges.
+            # Put the number in the lower half of the diamond, as ISA-5.1
+            # does; 7 units below centre clears a two-figure number.
             return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
                     f'font-size="11" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top)}</text>']
@@ -4807,11 +4513,8 @@ class SvgRenderer:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
                     f'font-size="12" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top)}</text>']
-        # The location bar says *where* the instrument lives and is
-        # drawn across the middle, exactly where the letters would
-        # otherwise sit. ISA-5.1 puts the letters wholly above the bar
-        # and the number wholly below, so a barred variant needs the
-        # pair pushed apart to leave the band clear.
+        # A location bar crosses the middle, so push letters above it and
+        # the number below (ISA-5.1).
         letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
         out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
                f'font-size="12" font-weight="bold" text-anchor="middle" '
@@ -4824,12 +4527,21 @@ class SvgRenderer:
 
     def _label_place(self, lpos: str, x: float, y: float, u_width: float,
                      u_height: float) -> "tuple[float, float, str, str]":
-        """Where a label on side ``lpos`` goes, and how it sets.
+        """Return a label's anchor point and text alignment for one side.
 
-        ``lpos`` is one of :data:`LABEL_POSITIONS`, or the ``top_right``
-        corner the ``NC`` marking is lettered in. A unit carrying
-        anything else is ``label-pos-unknown`` and never reaches a
-        render; the trailing ``top`` is that side and not a fallback.
+        Parameters
+        ----------
+        lpos : str
+            One of :data:`LABEL_POSITIONS`, or ``"top_right"`` for the NC
+            marking. Validation rejects anything else, so the final
+            ``top`` branch is that side, not a fallback.
+        x, y, u_width, u_height : float
+            Unit box.
+
+        Returns
+        -------
+        tuple[float, float, str, str]
+            ``(x, y, text_anchor, dominant_baseline)``.
         """
         if lpos == "bottom":
             return x + u_width / 2, y + u_height + 15, "middle", "middle"
@@ -4840,52 +4552,64 @@ class SvgRenderer:
         if lpos == "center":
             return x + u_width / 2, y + u_height / 2, "middle", "middle"
         if lpos == "top_right":
-            # Above the symbol *and to the right*: the text starts at
-            # the box's right edge on the same baseline a top label sets
-            # on. Only the NC marking is placed here.
+            # Above and to the right, on a top label's baseline (NC only).
             return x + u_width, y - 10, "start", "baseline"
         return x + u_width / 2, y - 10, "middle", "baseline"  # top
 
     def _unit_label_item(self, u, f, x, y, u_width, u_height, safe_name):
-        """Resolve a unit label's placement.
+        """Return a unit label item on its layout-chosen side.
 
-        Drawn in a final pass (see :meth:`_draw_unit_labels`) so stream
-        lines never strike through it.
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
+        safe_name : str
+            Escaped tag.
+
+        Returns
+        -------
+        tuple
+            ``(x, y, anchor, baseline, side, text)``, drawn by
+            :meth:`_draw_unit_labels`.
         """
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, safe_name)
 
     def _tag_item(self, u, f, x, y, u_width, u_height, safe_name, ink, symbols=()):
-        """The equipment tag, stepped clear of what is on the sheet.
+        """Return the equipment tag item, moved clear of drawn ink.
 
-        :func:`~pandid.layout.coordinates.assign_labels` chose the side,
-        from the faces no nozzle leaves from, which is the whole of what
-        is knowable while layout runs. It is not the whole question: a
-        face with no nozzle of its own still has the line that passes
-        it, the impulse line from a tap on that line to the balloon
-        reading it, and the balloon itself. The tag is drawn last of
-        everything, on an opaque halo, so it wins against all three --
-        and what it wins is a hole in somebody else's drawing.
+        Layout chose a side from faces without nozzles
+        (:func:`~pandid.layout.coordinates.assign_labels`), but passing
+        lines, impulse lines and balloons can still lie there, and the tag's
+        opaque halo would erase them. The tag first slides along its side,
+        then tries other free sides; the first placement that erases
+        nothing wins, otherwise the least damaging (:func:`_erases`), ties
+        keeping the earlier one. A side set on the unit or fixed by the
+        symbol is kept.
 
-        *symbols* is every other unit's box, because a free face is not
-        free paper: a nozzle is the only thing layout can see, and a
-        balloon parked just off the face is invisible to it. Both halos
-        eating a symbol on ``11_ethanol_pid`` were on a face layout was
-        right to call free -- D-301's right face carries no nozzle, and
-        LT-304 hangs off the end of the impulse line that leaves it.
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
+        safe_name : str
+            Escaped tag.
+        ink : sequence of _Ink
+            Drawn lines.
+        symbols : sequence of tuple, optional
+            ``(unit, box)`` for every symbol and owner-less mark.
 
-        So the placement is settled again here, where the ink exists.
-        The tag first steps *along* the side it was given, the same move
-        the ``NC`` and fail-position letters make: a reader scans a
-        sheet by side, so a tag beside the symbol it names on the face
-        layout chose is worth more than a tidy centring. Only when the
-        whole face is spoken for does it try another free one. The first
-        placement that deletes nothing wins; where nothing is clear the
-        least damaging wins, by :func:`_erases`, and a tie keeps the
-        earlier answer.
-
-        A side the author named is left where they put it, as is one the
-        symbol fixes (an instrument balloon's ``center``).
+        Returns
+        -------
+        tuple
+            Label item.
         """
         from pandid.layout.coordinates import free_label_sides
 
@@ -4895,19 +4619,12 @@ class SvgRenderer:
             return item
         if getattr(u, "label_pos", None) or self.registry.for_unit(u).label_pos:
             return item
-        # Only what is near this unit can be under one of its tag's
-        # candidate spots, and testing the whole sheet against every one
-        # is what would make choosing between them expensive.
+        # Test only ink near the unit, to keep the search cheap.
         pad = max(u_width, u_height) + (box[2] - box[0])
         window = (x - pad, y - pad, x + u_width + pad, y + u_height + pad)
         near = [line for line in ink if _meets(line.box, window)]
-        # This unit's own box is not among them: a tag is placed a fixed
-        # clear distance off its own symbol and never lands on it, so
-        # counting it would make every spot equally bad and the search
-        # choose nothing. The rest are grown to their ink
-        # (:func:`_obstacle`) here rather than by the caller, so the
-        # draw.io exporter -- which builds a list of its own and hands
-        # it to this method -- gets the same answer.
+        # Exclude the unit's own box, which the tag never overlaps. Grow
+        # the others to their ink here so draw.io gets the same answer.
         others = [_obstacle(b) for v, b in symbols
                   if v is not u and _meets(_obstacle(b), window)]
 
@@ -4918,9 +4635,7 @@ class SvgRenderer:
             if damage == clear:
                 break
             lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
-            # A tag steps along its face only as far as the symbol's
-            # own half width (or half height, on a side face). Past that
-            # it starts reading as the neighbour's.
+            # Slide at most half the face, or it reads as the neighbour's.
             edgewise = side in ("left", "right")
             for sx, sy in _slide(lx, ly, (u_height if edgewise else u_width) / 2, edgewise):
                 spot = (sx, sy, anchor, baseline, side, safe_name)
@@ -4932,36 +4647,31 @@ class SvgRenderer:
         return best
 
     def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):
-        """The ``NC`` abbreviation, for a body that cannot be darkened.
+        """Return the ``NC`` label for a body that cannot be darkened.
 
-        **ISO 15519-1 §11.4.5** governs the letters: it allows the state
-        to be marked with ``NC`` for *normal closed* or ``NO`` for
-        *normal open*, set **above the symbol and to the right**, and
-        illustrates that at Figure 28. The figure draws it on an unfilled
-        bowtie with the letters starting at about the valve's right-hand
-        edge, clear above the run.
+        ISO 15519-1 11.4.5 (Figure 28) letters ``NC`` above and to the
+        right of the symbol. The corner is fixed so closed valves can be
+        scanned for, and it is the corner a tag least often uses. This
+        differs from PIP PIC001 4.2.2.8's placement, deliberately: PIP
+        supplies the darkened body (4.2.2.7) and ISO the lettering (see
+        :func:`pandid.render.symbols.closed_marking`). If the tag reaches
+        into that corner, the letters step right past it.
 
-        The corner is fixed, not chosen from the valve's quarter turn:
-        reading the marking always in the same place is what lets
-        someone scan a sheet for closed valves, and the upper right is
-        the corner an equipment tag is least likely to be in, the
-        default tag sitting centred *above*.
+        Parameters
+        ----------
+        u : Unit
+            Valve or fitting.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
+        tag_box : tuple, optional
+            Where the tag landed; resolved from the frame when omitted.
 
-        This departs from PIP PIC001 4.2.2.8, which puts the letters
-        below a horizontal valve and to the right of a vertical one, and
-        which is where the darkened body of 4.2.2.7 still comes from.
-        The two are taken from different sources on purpose: PIP is the
-        only standard that fills a valve body, and ISO 15519-1 the only
-        one that letters it. See
-        :func:`pandid.render.symbols.closed_marking`.
-
-        Where the equipment tag already reaches into that corner, the
-        abbreviation steps past it rather than over it -- both are drawn
-        on opaque halos in the same final pass, so the second one down
-        would otherwise erase the first. ``tag_box`` is where that tag
-        actually landed, which is not always the side layout picked (see
-        :meth:`_tag_item`); it is resolved from the frame when a caller
-        has not already done so.
+        Returns
+        -------
+        tuple
+            Label item.
         """
         item = (*self._label_place("top_right", x, y, u_width, u_height), "top_right", "NC")
         tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
@@ -4975,54 +4685,39 @@ class SvgRenderer:
 
     def _fail_label_item(self, u, f, x, y, u_width, u_height, letters, tag_box=None,
                          ink=(), symbols=()):
-        """The fail position, in letters, beside the valve body.
+        """Return the fail-position letters beside a control valve.
 
-        The letters are **ANSI/ISA-5.1-2009 Table 5.4.4** Method B,
-        which **PIP PIC001 clause 4.5.3.2** requires over the standard's
-        own Method A stem arrows. See
-        :func:`pandid.render.symbols.fail_marking`.
+        Letters per ANSI/ISA-5.1-2009 Table 5.4.4 Method B, as PIP PIC001
+        4.5.3.2 requires (:func:`pandid.render.symbols.fail_marking`),
+        placed per PIP PIC001 4.2.4.6(1): below a horizontal valve, right of
+        a vertical one. Unlike ``NC``, which sits in a corner, these sit
+        against a face, so a quarter turn moves them.
 
-        **PIP PIC001 clause 4.2.4.6(1)** places them, and is followed
-        exactly: 0.06 inch directly below the control valve on a
-        horizontal line, and 0.06 inch to its right on a vertical one.
+        If the tag is on that side, the letters step out past it; then
+        :func:`_step_aside` slides them along the face off any line or
+        symbol, within half the face so they stay beside the body.
 
-        So the quarter turn moves these letters where it does not move
-        the ``NC`` abbreviation (:meth:`_nc_label_item`), and the two
-        are not inconsistent. ``NC`` sits in a *corner*, and a corner is
-        free whichever way a valve is laid. These letters sit against a
-        *face*, and which face is free is exactly what the quarter turn
-        changes: the face below a valve on a horizontal run is clear,
-        and the face below the same valve on a riser is its outlet
-        nozzle with the line running out of it.
+        Parameters
+        ----------
+        u : Unit
+            Valve.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
+        letters : str
+            Fail-position letters.
+        tag_box : tuple, optional
+            Where the tag landed; resolved from the frame when omitted.
+        ink : sequence of _Ink, optional
+            Drawn lines.
+        symbols : sequence of tuple, optional
+            ``(unit, box)`` for every symbol.
 
-        Where the equipment tag is already on the side the letters want
-        -- which the engine does choose for a valve on a riser -- the
-        letters step past it along that same side rather than over it,
-        both being drawn on opaque halos in the same final pass.
-        ``tag_box`` is where that tag actually landed (see
-        :meth:`_tag_item`), resolved from the frame when a caller has
-        not already done so.
-
-        A tag is not the only thing on that face, and treating it as
-        though it were is issue #223: the letters then step *out* past
-        the tag and land on the impulse line joining the valve to the
-        trip square hung below it. So the ink and the neighbouring
-        symbols are asked too, by :func:`_step_aside`, which slides the
-        mark **along** the face -- the one direction that gets it off a
-        line leaving that same face -- and holds it to half the face so
-        PIP's *directly below* survives the move. ``ink`` and
-        ``symbols`` are the sheet's, in the two forms :meth:`_tag_item`
-        takes them; a mark placed with neither still steps past its tag.
-
-        The two moves compose in the order the sheet has them: out past
-        the tag first, that one being settled by a box the mark cannot
-        share at all, then sideways off whatever the outward step landed
-        on. The tag goes into the sideways pass's obstacles as well, so
-        the slide cannot walk back onto what the step just cleared.
-
-        This does not extend to ``NC``, for the reason
-        :meth:`_nc_label_item` already rests on: a corner has nowhere to
-        slide to that is still the corner.
+        Returns
+        -------
+        tuple
+            Label item.
         """
         # 90 and 270 both stand the run on end; 0 and 180 both leave it
         # flat.
@@ -5035,51 +4730,40 @@ class SvgRenderer:
         if tag is not None and fail is not None and (
                 tag[0] < fail[2] and tag[2] > fail[0] and tag[1] < fail[3] and tag[3] > fail[1]):
             lx, ly, anchor, baseline, lpos, text = item
-            # Step along the axis the side runs off, by the overlap
-            # plus a gap. Sideways is the six _nc_label_item steps by,
-            # being the same move; downwards is tighter, a halo being 15
-            # tall against 12 of text and so already carrying a margin
-            # the horizontal one does not.
+            # Step past the tag by the overlap plus a gap; less below,
+            # since the halo already adds vertical margin.
             if upright:
                 item = (lx + tag[2] - fail[0] + 6, ly, anchor, baseline, lpos, text)
             else:
                 item = (lx, ly + tag[3] - fail[1] + 4, anchor, baseline, lpos, text)
-        # This unit's own box is left out for the reason _tag_item
-        # leaves it out: the mark is placed a fixed clear distance off
-        # its own symbol and never lands on it, so counting it would
-        # score every candidate equally badly.
+        # Exclude the unit's own box, as _tag_item does.
         others = [_obstacle(b) for v, b in symbols if v is not u]
         if tag is not None:
             others.append(tag)
-        # How far along the face the letters may go: until the near edge
-        # of their plate reaches the far end of the face, which is where
-        # the mark stops lying against the body at all. ISO 15519-1
-        # §7.2.3 is the clause for lettering beside a *symbol*, and asks
-        # for it "adjacent to the symbol"; this bound is what adjacent
-        # comes to here. Not §7.2.5, cited elsewhere in this file: that
-        # one is a *connection's* designation and governs a line number.
-        # The search takes the *smallest*
-        # clearing step, so the bound is only ever reached by a mark
-        # with nowhere to go, and there the placement is one to make by
-        # hand.
+        # Slide at most until the plate's near edge reaches the far end of
+        # the face, keeping the letters adjacent to the symbol (ISO
+        # 15519-1 7.2.3).
         plate = _unit_label_box(item)
-        # `_unit_label_box` only answers None for a `center` item, and
-        # `item` above is built with `lpos` fixed to "right" or "bottom"
-        # (see `lpos` at the top of this method) -- never reassigned to
-        # "center" on any path that reaches here.
+        # Only a "center" item has no box, and lpos is right or bottom.
         assert plate is not None
         face, along = ((u_height, plate[3] - plate[1]) if upright
                        else (u_width, plate[2] - plate[0]))
         return _step_aside(item, (face + along) / 2, ink, others)
 
     def _draw_unit_labels(self, items):
-        """Final pass: equipment tags on white halos, over the streams.
+        """Return the final label pass: tags on white halos over the lines.
 
-        Labels are placed on a free face where one exists, but a
-        passing stream (or a unit whose every face carries a nozzle) can
-        still run behind the text; the halo keeps the tag legible either
-        way. A ``center`` label sits inside its symbol, so it gets no
-        halo that would erase detail.
+        A ``center`` label sits inside its symbol and gets no halo.
+
+        Parameters
+        ----------
+        items : list[tuple]
+            Label items.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         out = ['  <g id="unit_labels">']
         for item in items:
@@ -5098,84 +4782,73 @@ class SvgRenderer:
     # --- streams ------------------------------------------------------
 
     def _tipped(self, s, arrows: bool) -> bool:
-        """Does *this drawing* head the end of this stream?
+        """Return whether this render draws an arrowhead on the stream.
 
-        :func:`wears_arrowhead` and one thing more: a P&ID draws no
-        heads at all, so ``arrows`` is false for the whole sheet. That
-        part is a property of the render rather than of the stream,
-        which is why it lives here and the rest lives where a caller
-        with no renderer can reach it.
+        :func:`wears_arrowhead`, and ``arrows`` is false on a P&ID.
+
+        Parameters
+        ----------
+        s : Stream
+            Stream.
+        arrows : bool
+            Whether the sheet draws arrowheads.
+
+        Returns
+        -------
+        bool
+            Whether to add the marker.
         """
         return arrows and wears_arrowhead(s, self.registry)
 
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True,
                       plates=None, joints=None, crossing_style="arc"):
-        """Draw every run, and the numbers written on and beside them.
+        """Return the ``streams`` group: runs, joint marks and stream numbers.
 
-        ``crossing_style`` is the mark a crossing of two unconnected
-        runs carries and ``jump_direction`` is which of the two carries
-        it; see :data:`CROSSING_STYLES`. All three are the same two path
-        commands over the same ``2 * HOP_R`` of run -- the arc sweeps
-        across it, the interruption lifts the pen over it, and
-        ``"plain"`` writes neither and leaves the ``L`` that was going
-        to be written anyway. So a crossing has the room for one exactly
-        when it has the room for the others, and
-        :func:`unmarked_crossings` needs no third answer.
+        Every crossing style uses the same ``2 * HOP_R`` of run (arc, pen
+        lift or plain line), so :func:`unmarked_crossings` is the same for
+        all. :func:`_ink` reserves a :func:`hop_box` at every crossing
+        whatever the style, so stream numbers do not move when the style
+        changes. Number placement is :func:`stream_numbers`', shared with
+        draw.io.
 
-        **Where the numbers go does not follow the style.** :func:`_ink`
-        reserves a :func:`hop_box` for every crossing whichever mark the
-        sheet draws, so a sheet redrawn in another convention keeps its
-        line numbers exactly where the arc left them. On ``"gap"`` and
-        ``"plain"`` that reserves the semicircle's paper for a mark that
-        does not cover it -- reserving paper that is clear, which is the
-        direction :func:`hop_box` already says it prefers to err in, and
-        the alternative is a change of convention that also moves every
-        number near a crossing.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+        jump_direction : str
+            Which crossing line carries the mark.
+        unit_labels : list
+            Tag items already placed, for numbers to avoid.
+        arrows : bool, default=True
+            Whether process lines get arrowheads.
+        plates : list, optional
+            Receives every opaque box reserved by the label passes, for the
+            debug overlay (:func:`pandid.render.debug.overlay`).
+        joints : str, optional
+            Sheet joint default (:func:`sheet_connections`), or ``None``.
+        crossing_style : str, default="arc"
+            Crossing mark (:data:`CROSSING_STYLES`). :meth:`render` always
+            passes its own value, whose default is ``"gap"``.
 
-        ``joints`` is the sheet's :func:`sheet_connections` answer --
-        the joint every line takes unless it says otherwise, or ``None``
-        on a drawing that marks no joints at all.
-
-        ``plates`` is an out-parameter, filled -- when a caller supplies
-        a list -- with every opaque white rectangle this pass and the
-        equipment-tag pass between them put on the sheet. Only the
-        debugging overlay asks for it, and it asks because it is drawn
-        *underneath* all of them: see
-        :func:`pandid.render.debug.overlay`. Left ``None`` nothing is
-        collected and nothing about the render changes.
-
-        The lines and symbols a number has to dodge are
-        :func:`stream_numbers`' own business, derived from the
-        flowsheet, so the two backends that ask it where a number goes
-        cannot be given different answers by being given different
-        seeds.
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         stream_geoms = [(s, stream_polyline(s)) for s in fs.streams]
-        # Which run hops what, worked out once for the whole sheet and
-        # read here rather than here and again in :func:`_ink`. Keyed by
-        # the segment that carries it, already in the order that segment
-        # is drawn in. See :func:`stream_hops`.
+        # Hops for the whole sheet, keyed by (stream, segment) in drawing
+        # order (:func:`stream_hops`).
         hops: dict[tuple[int, int], list[_Hop]] = {}
         if crossing_style != "plain":
             for hop in stream_hops(fs, jump_direction):
                 hops.setdefault((hop.stream, hop.seg), []).append(hop)
 
-        # The crossing mark, as the one path command that differs
-        # between the three styles. Everything before it -- which
-        # segments cross which, which of the two carries the mark, and
-        # the ``L`` up to the near side of the crossing -- is the same
-        # for all three, so this is the whole of what the option
-        # changes.
-        #
-        # ``M`` and not a second path element: the interruption is a
-        # break in *this* run and the run continues after it, so it is a
-        # second subpath of the same ``d``. That keeps ``marker-end`` on
-        # the run's far end, where it attaches to the last subpath, and
-        # keeps one line one element for anything reading the file back.
+        # The crossing mark is the only path command the styles differ in.
+        # A gap is an ``M`` subpath in the same ``d``, so the run stays one
+        # element and ``marker-end`` stays on its far end.
 
         def cross(far: str) -> str:
-            """The command that gets the run from one side of a crossing
-            to the other, given the far side as ``"x,y"``."""
+            """Return the path command crossing to the far side ``"x,y"``."""
             if crossing_style == "arc":
                 return f"A {HOP_R:g} {HOP_R:g} 0 0 1 {far}"
             return f"M {far}"
@@ -5183,15 +4856,9 @@ class SvgRenderer:
         lines = ['  <g id="streams">']
         for n, (s, points) in enumerate(stream_geoms):
             paint = s.color or "black"
-            # The same call ``_defs`` defines the marker under: one
-            # function, so the reference and the definition are one
-            # string rather than two spellings that agree today.
+            # Same function as _defs, so reference and definition match.
             marker_id = arrow_marker_id(paint)
-            # Escaped once, here, rather than at each of the attributes
-            # it is written into below. A checked colour
-            # (:func:`pandid.streams.check_color`) has nothing left in
-            # it to escape, and that is the point of doing it anyway:
-            # the sink is where the guarantee is cheap to read off.
+            # Escape at the sink, though check_color already restricts it.
             color = escaped(paint)
             is_signal = s.kind in _SIGNAL_KINDS
             dash = ""
@@ -5204,14 +4871,9 @@ class SvgRenderer:
             for i in range(len(points) - 1):
                 x1, y1 = points[i]
                 x2, y2 = points[i + 1]
-                # The two feet stand `HOP_R` back along the run either
-                # side of the crossing, and the mark between them is
-                # `cross`'s one command -- the arc leaving the run on
-                # `side` with sweep flag 1 throughout, which is what
-                # makes `side` follow the direction of travel, or the
-                # `M` that lifts the pen over the same span. `:g`
-                # because HOP_R is a clearance plus a pen width and so
-                # is no longer a whole number.
+                # Stop HOP_R before the crossing, then cross to HOP_R past
+                # it. Sweep flag 1 keeps the arc on the travel side; ``:g``
+                # because HOP_R is not a whole number.
                 for hop in hops.get((n, i), ()):
                     if hop.vertical:
                         foot = HOP_R if y1 < y2 else -HOP_R
@@ -5227,35 +4889,22 @@ class SvgRenderer:
             d_str = " ".join(d_parts)
 
             marker = f' marker-end="url(#{marker_id})"' if self._tipped(s, arrows) else ""
-            # A signal is drawn at half the weight of the pipe it
-            # reads, per ISO 15519-2 Annex A.1.02/A.1.03 against A.1.01.
+            # Signals at half the pipe weight (ISO 15519-2 Annex A.1.01-A.1.03).
             width = _stream_rung(is_signal).width
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
                 f'stroke="{color}" stroke-width="{width:g}"{dash}{marker} />'
             )
 
-            # The joint marks, drawn over the line rather than instead
-            # of it: the pipe runs into the nozzle and the flange faces
-            # sit across it, which is what P&ID_301 draws and what makes
-            # the mark read as hardware on the run instead of a gap.
+            # Joint marks are drawn over the line, as flange faces across
+            # the run, not as a gap in it.
             for fx, fy, angle, _at in flange_marks(s, points,
                                                    resolve_connections(s, joints)):
                 rad = math.radians(angle)
-                # A flange is a piping accessory, so the pair of faces
-                # is ISO 10628-1 §5.3.1 c) and not the rung of the run
-                # they sit across -- which is what they were drawn at
-                # before #490, when that rung was the same number.
-                #
-                # §5.3.2 settles it independently and arithmetically.
-                # The two bars are :data:`FLANGE_GAP` apart centre to
-                # centre, so at a width w they leave 5 - w of paper
-                # against that clause's floor of 2w and of 1 mm (4
-                # units). Only the c) rung clears both: at 1 unit the
-                # pair leaves exactly 4, at 2 it leaves 3, and at the
-                # run's own 4 the two faces all but merge.
-                # Along the run for the offset between the two faces,
-                # across it for the bars themselves.
+                # Flange faces are a piping accessory, ISO 10628-1 5.3.1 c)
+                # (DETAIL). That rung also satisfies 5.3.2: bars FLANGE_GAP
+                # apart leave 5 - w of paper, at least 2w and 1 mm (4
+                # units) only for w = 1. Offset along the run, bars across.
                 ax, ay = math.cos(rad) * FLANGE_GAP / 2, math.sin(rad) * FLANGE_GAP / 2
                 bx, by = -math.sin(rad) * FLANGE_TICK / 2, math.cos(rad) * FLANGE_TICK / 2
                 for sign in (-1, 1):
@@ -5268,10 +4917,8 @@ class SvgRenderer:
                     )
 
             if s.kind == "pneumatic":
-                # A supplementary symbol on a connection (ISO 15519-2
-                # Annex A.1.09, pneumatic type 433A), and the line it
-                # marks is a pneumatic signal: both are ISO 10628-1
-                # §5.3.1 c), so the mark is the rung its line is.
+                # Pneumatic hatching (ISO 15519-2 Annex A.1.09, 433A) on the
+                # line's own rung, ISO 10628-1 5.3.1 c).
                 for mx, my, horiz, _at in pneumatic_marks(points):
                     for off in HATCH_ALONG:
                         if horiz:
@@ -5283,24 +4930,9 @@ class SvgRenderer:
                                          f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" '
                                          f'stroke-width="{LineWeight.DETAIL.width:g}" />')
 
-        # Final pass: stream-number labels, each on a white halo so it
-        # reads cleanly over any line crossing beneath it.
-        #
-        # A label runs parallel to the pipe it names, turned on a
-        # vertical run so it reads bottom to top and never upside down.
-        # ISO 15519-1 §5.1.5 gives text two reading directions, from the
-        # bottom edge of the document and from its right-hand edge, and
-        # this is the second of those. Its next sentence keeps a
-        # reference designation horizontal whatever way its symbol is
-        # turned, which is about a *symbol's* designation and does not
-        # reach a connection:
-        # §7.2.5 is the clause for those, and asks for orientation
-        # *along* the connecting line. Figure 40 turns the annotation on
-        # every vertical connecting line to read bottom to top, left of
-        # the line, while boxing symbol designations flat.
-        #
-        # Where each number goes is :func:`stream_numbers`', and this
-        # pass only draws it.
+        # Final pass: stream numbers on white halos. A label on a vertical
+        # run reads bottom to top, along the line (ISO 15519-1 5.1.5,
+        # 7.2.5, Figure 40). Placement is :func:`stream_numbers`'.
         placed: list[tuple[float, float, float, float]] = [
             b for b in map(_unit_label_box, unit_labels) if b is not None
         ]
@@ -5320,26 +4952,18 @@ class SvgRenderer:
                 f'text-anchor="middle" dominant-baseline="middle" '
                 f'fill="{color}"{turn}>{escaped(name)}</text>'
             )
-            # Over the words, because a halo has no outline for the tail
-            # to meet and a tail buried under one would be a leader
-            # joined to nothing. Only a bare label ever carries one: an
-            # enclosed label never leaves its run (:func:`stream_numbers`).
+            # Draw the leader over the words so it meets the label; only a
+            # bare label has one (:func:`stream_numbers`).
             if number.leader is not None:
                 (ax0, ay0), (ax1, ay1) = number.leader
-                # In the label's own colour: it is part of the label,
-                # not a line of its own.
+                # In the label's colour, as part of the label.
                 lines.append(f'    <line x1="{ax0:.1f}" y1="{ay0:.1f}" '
                              f'x2="{ax1:.1f}" y2="{ay1:.1f}" '
                              f'stroke="{color}" '
                              f'stroke-width="{LineWeight.DETAIL.width:g}" />')
                 lines.append(f'    <path d="{_arrowhead(*number.leader)}" fill="{color}" />')
-        # ``placed`` is now every box the sheet's two label passes
-        # reserved: the equipment tags it was seeded with, each line
-        # number, each leader. Reserved and not painted -- an
-        # enclosure's box is ruled as an outline, and a label whose run
-        # had nowhere clear paints no plate at all -- so this is what
-        # the next mark has to keep off, which is what the overlay
-        # draws. This is the only point where it exists.
+        # ``placed`` now holds every box both label passes reserved, which
+        # is what the debug overlay must avoid.
         if plates is not None:
             plates.extend(placed)
         lines.append('  </g>')

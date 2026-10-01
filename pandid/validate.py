@@ -1,45 +1,28 @@
-"""Flowsheet validation.
+"""Validate a flowsheet's model and drawn geometry.
 
-Separates two kinds of problems:
+Findings have two severities:
 
-- **errors**: genuine contradictions the engine cannot honor
-  (overlapping pinned units, negative or non-finite coordinates).
-  ``render()`` raises on these rather than emit a wrong drawing.
-- **warnings**: the drawing is valid but imperfect (a stream crosses a
-  unit body, a route detours excessively, a tag spells its letters in an
-  order no standard uses, a nozzle a count asked for has no line on it).
-  Collected on ``fs.warnings`` for the caller; never fatal.
+- **errors**: contradictions the engine cannot honour, such as
+  overlapping pinned units or negative or non-finite coordinates.
+  ``render()`` raises on these rather than draw a wrong sheet.
+- **warnings**: a valid but imperfect drawing, such as a stream crossing
+  a unit, an excessive detour, control letters out of order, or a
+  counted nozzle with no line. They are collected on ``fs.warnings``.
 
-The findings are made in two halves, and :func:`validate` is both of
-them run in turn:
+:func:`validate` runs two passes:
 
-- :func:`model_issues` reads what the author wrote down -- pins, tags,
-  nozzle counts, stream names -- and touches neither a
-  :class:`~pandid.geometry.Frame` nor a :class:`~pandid.geometry.Route`.
-  It answers on a sheet that has never been laid out.
-- :func:`geometry_issues` reads the resolved geometry: overlaps,
-  coincident nozzles, crossings, detours, elevations.
+- :func:`model_issues` reads what the author wrote (pins, tags, nozzle
+  counts, stream names) and needs no layout. A render runs it before
+  building geometry, so a contradiction such as ``pin(x=nan)`` is
+  reported instead of breaking the router
+  (:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`).
+- :func:`geometry_issues` reads resolved geometry: overlaps, coincident
+  nozzles, crossings, detours and elevations. It checks the units that
+  have a frame, so one unplaced balloon does not hide every overlap.
 
-The split exists so a render can check the model **before** it builds
-any geometry, which is the order every render entry point documents.
-``pin(x=nan)`` is the case that forced it: ``pin-not-finite`` names that
-contradiction exactly, and the same coordinate is one the router starts
-from and never comes back from, so validating after ``route()`` made a
-perfect finding about a drawing nobody could obtain.
-:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw` is where the order
-is written down.
-
-Geometric checks need resolved frames, and are made over the units that
-have one. Not over the whole sheet or none of it: a balloon layout could
-not place is one unit without geometry rather than a sheet without any,
-and gating the block on the whole list let a single one of them hide
-every overlap on an otherwise fully placed drawing.
-
-Most findings are made by inspecting the finished flowsheet. Three are
-collected from where an earlier phase parked them: ``route-not-settled``
-and ``instrument-unplaced``, which only ``route()`` and ``layout()`` can
-know, and ``deprecated``, which leaves no trace in the topology or the
-geometry. See :mod:`pandid.deprecation`.
+``route-not-settled``, ``instrument-unplaced`` and ``deprecated`` are
+recorded by earlier phases and read back here; see
+:mod:`pandid.deprecation`.
 """
 
 from __future__ import annotations
@@ -55,119 +38,70 @@ if TYPE_CHECKING:
 
 _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
 
-#: How far a drawn coordinate may sit from the one it was pinned to, in
-#: px, before ``pin-not-honored`` reports it. Far tighter than
-#: :data:`_TOL`, which is slack for two boxes that merely touch: a
-#: pinned axis is *copied* onto the frame, so the only difference an
-#: honoured pin can show is the last bit of a float that went through a
-#: nozzle offset and came back.
+#: Distance in px a drawn coordinate may sit from its pin before
+#: ``pin-not-honored``. A pinned axis is copied onto the frame, so only
+#: float rounding through a nozzle offset should remain.
 _PIN_TOL = 0.05
 
-#: How far off square a drawn segment may be and still read as
-#: orthogonal, in px. Half a pixel: under it the line is on the axis and
-#: over it the sheet shows a slope.
-#:
-#: The two rules that use it are the same question asked twice.
-#: :func:`_seg_crosses_box` calls a segment vertical or horizontal to
-#: decide which side of a box to measure it against, and answers *no
-#: crossing* for anything else -- so a segment this rejects is invisible
-#: to ``route-crosses-unit`` as well as sloping, which is the second
-#: reason ``route-diagonal`` reports it.
+#: Distance in px a segment may be off square and still count as
+#: orthogonal. A sloping segment is also invisible to
+#: ``route-crosses-unit``, which is why ``route-diagonal`` reports it.
 _SQUARE_TOL = 0.5
 
-#: ``(kind, variant)`` pairs a run is *meant* to change centreline
-#: through, so ``run-off-elevation`` has nothing to tell an author who
-#: put one in a line.
-#:
-#: An eccentric reducer is flat on top, so its two nozzles both face
-#: along the run and read as one elevation to :func:`_off_elevation`
-#: while drawing a 2.4px rise. Straightening it is the one change that
-#: would break the fitting.
-#:
-#: A device that merely *has* its nozzles at different heights does not
-#: belong here: a pump's discharge is above its suction and the author
-#: still has to put the downstream nozzle on it. Membership is a rule
-#: with no geometry behind it, so ``tests/test_validate.py`` asserts the
-#: geometry over every quarter turn rather than taking it on faith.
+#: ``(kind, variant)`` pairs a run is meant to change centreline through,
+#: so ``run-off-elevation`` ignores them. An eccentric reducer is flat on
+#: top, so its two nozzles differ in height by design. A unit whose
+#: nozzles merely sit at different heights, such as a pump, does not
+#: belong here; ``tests/test_validate.py`` checks the geometry.
 OFFSET_BY_DESIGN = frozenset({
     ("reducer", "eccentric"),
 })
 
-#: ``(group, name)`` of every supplementary part whose *shape* is worked
-#: out from the body's own box, so that a body drawn in a box of another
-#: shape draws the part in the wrong one.
-#:
-#: One entry. :func:`pandid.render.iso_parts.agitator_overlays` places
-#: item 20.6's drive motor as ``a third of the shell's width`` by
-#: ``whatever fraction of this body's height that is`` -- which is the
-#: only way to say "round" in a coordinate system with no units, and is
-#: written down as such in that function. The rectangle it lands on is a
-#: square at the body's natural box and a rectangle at any other, and
-#: what is drawn inside it is a circle.
-#:
-#: **The narrowness is the measurement.** The other thirty-six
-#: registered parts are lines, bars and decks -- a tray deck is 100 x 20
-#: and is drawn 100 x 20 on any shell, a leg is a channel section, a
-#: settling arrow is a stroke -- and the whole point of stretching a
-#: shell is that a vessel is drawn at the proportions the plant has. A
-#: rule phrased as "the box is not the symbol's shape" reports
-#: ``19_absorber_stripper``'s amine contactor, drawn 110 x 340 on a
-#: 100 x 200 symbol because twenty trays need the room, and its cure
-#: would be a 170 x 340 column no draughtsman would draw.
-#:
-#: Membership is a rule with no geometry behind it, so
-#: ``tests/test_validate.py`` measures the circle rather than taking it
-#: on faith: round on the natural box, oval off it.
+#: ``(group, name)`` of supplementary parts whose shape is derived from
+#: the body's box, so they distort when the body is drawn at another
+#: aspect. Only the item 20.6 drive motor, a circle sized from the shell
+#: (:func:`pandid.render.iso_parts.agitator_overlays`); other parts are
+#: lines, bars and decks that stay correct on a stretched shell.
+#: ``tests/test_validate.py`` measures the circle.
 ROUND_PARTS = frozenset({
     (20, "motor"),
 })
 
-#: How far out of shape a symbol carrying a :data:`ROUND_PARTS` mark may
-#: be drawn before ``symbol-out-of-aspect`` says so, as a fraction.
-#:
-#: Two per cent, and both bounds are measured.
-#:
-#: *Below*, because an author works in whole drawing units and cannot
-#: write 62 : 131,7778 down exactly. Over every whole height from 100 to
-#: 400 units, the best whole width for the two stirred bodies the library
-#: draws lands within 1,02 % of their aspect -- and where the author
-#: picks both numbers it is far closer, 72 x 153 being 0,02 % out. A
-#: threshold under that would report arithmetic rather than a drawing.
-#:
-#: *Above*, because ``agitator_overlays`` names 7 % oval on the plain
-#: stirred tank and 22 % on the jacketed one as the defect it derives the
-#: motor's height to avoid. A threshold above those would leave the
-#: finding unable to say what the library already treats as wrong.
+#: Fraction a symbol carrying a :data:`ROUND_PARTS` mark may depart from
+#: its natural aspect before ``symbol-out-of-aspect``. Above the about 1%
+#: that whole-unit sizes cannot avoid, and below the 7% and 22% ovals
+#: ``agitator_overlays`` is designed to prevent.
 _ASPECT_TOL = 0.02
 
-#: The order the control-function letters of a tag have to appear in. BS
-#: ISO 15519-2:2015 §5.2.4, *Sequence of letter codes for control
-#: functions*, fixes that order as I, R, C, S, M, Z, A, and works it
-#: through on three tags: ``ICA``, ``CS`` and ``ICZA``.
-#:
-#: So ``FIC`` is right and ``FCI`` is wrong. Only these seven letters
-#: are ordered: the first letter of a tag is the measured variable
-#: (Table 2) and everything else is either a modifier (Table 3: ``D``,
-#: ``H``, ``L``, ``P``) or an ISA function letter ISO does not sequence
-#: (``T``, ``E``, ``Y``, ``V``), so those keep the position the author
-#: gave them. A letter that *is* here can still be a modifier where it
-#: qualifies a position switch rather than naming a function; see
-#: :func:`_is_control_function`.
-#:
-#: ``M`` is carried because §5.2.4 lists it and is unreachable: the
-#: clause orders it, and the control functions it orders are defined
-#: without one, so no conforming tag has a letter to put in that slot.
+#: Required order of control-function letters in a tag (BS ISO
+#: 15519-2:2015 5.2.4), so ``FIC`` is right and ``FCI`` is wrong. Only
+#: these letters move; the first letter (measured variable), modifiers
+#: (``D``, ``H``, ``L``, ``P``) and unsequenced ISA letters (``T``, ``E``,
+#: ``Y``, ``V``) keep their place. See :func:`_is_control_function` for
+#: letters that act as modifiers. ``M`` is listed by the clause but no
+#: defined control function uses it.
 CONTROL_FUNCTION_SEQUENCE = "IRCSMZA"
 
 
 @dataclass(frozen=True)
 class Issue:
-    """A single validation finding."""
+    """A single validation finding.
+
+    Attributes
+    ----------
+    severity : str
+        ``"error"`` or ``"warning"``.
+    code : str
+        Short kebab-case category.
+    message : str
+        Human-readable description.
+    """
     severity: str        # "error" | "warning"
     code: str            # short kebab-case category
     message: str
 
     def __str__(self) -> str:
+        """Return ``[severity] code: message``."""
         return f"[{self.severity}] {self.code}: {self.message}"
 
 
@@ -189,32 +123,24 @@ def _overlap(a: tuple[float, float, float, float],
 
 
 def _is_control_function(letters: str, i: int) -> bool:
-    """Is ``letters[i]`` one of the letters §5.2.4 puts in order?
+    """Return whether ``letters[i]`` is a control function ISO 5.2.4 orders.
 
-    Two letters that are in :data:`CONTROL_FUNCTION_SEQUENCE` are not
-    control functions where they stand.
+    Two cases are not: the first letter, which is the measured variable,
+    and the ``C`` after ``S`` in a position tag such as ``ZSC``, where it
+    means closed (ANSI/ISA-5.1-2009 Table 5.2.1). ``FSC`` and ``ZAC`` are
+    still checked.
 
-    **The first**, which is the measured variable: ``C`` opens a
-    conductivity tag as legitimately as it closes ``FIC``.
+    Parameters
+    ----------
+    letters : str
+        Tag letters.
+    i : int
+        Letter index.
 
-    **The ``C`` that closes a position switch.** ANSI/ISA-5.1-2009 Table
-    5.2.1 reads ``Z`` as *Position, dimension* and ``S`` as *Switch*, and
-    a position switch is qualified by the position it switches at:
-    ``O`` for open and ``C`` for closed, which do for a valve what the
-    ``H`` and ``L`` of ``LAH`` do for a measurement. So the ``C`` in
-    ``ZSC`` is a modifier and keeps its place, exactly as that ``H``
-    does. Read as *Control (closed loop)* it made ``ZSC`` -- a standard
-    ISA valve-position switch -- a tag the library reported a conformance
-    warning against, and offered ``ZCS`` as the cure.
-
-    ``O`` needs no exception of its own: it is not one of the seven
-    letters, which is why ``ZSO`` was never reported. That was luck
-    rather than a correct reading, and this is the reading.
-
-    Narrow on purpose. Only a **position** tag qualifies its switch this
-    way, so ``FSC`` -- flow, switching and control, spelled out of order
-    -- is still reported, and so is ``ZAC``, whose ``C`` closes no
-    switch.
+    Returns
+    -------
+    bool
+        Whether the letter is sequenced.
     """
     c = letters[i].upper()
     if i == 0 or c not in CONTROL_FUNCTION_SEQUENCE:
@@ -224,18 +150,35 @@ def _is_control_function(letters: str, i: int) -> bool:
 
 
 def _control_functions(letters: str) -> list[str]:
-    """The sequenced letters of a tag, in the order it spells them."""
+    """Return the sequenced letters of a tag, in the order written.
+
+    Parameters
+    ----------
+    letters : str
+        Tag letters.
+
+    Returns
+    -------
+    list[str]
+        Control-function letters.
+    """
     return [c for i, c in enumerate(letters) if _is_control_function(letters, i)]
 
 
 def _in_sequence(letters: str) -> str:
-    """*letters*, with its control functions in ISO 15519-2 order.
+    """Return the tag letters with control functions in ISO 15519-2 order.
 
-    Only those letters move. A modifier keeps the position it was given,
-    since ``H`` in ``LAH`` says which limit alarmed and reordering it
-    would say something else. :func:`_is_control_function` decides which
-    is which, and is asked here rather than restated, so the letters
-    taken out cannot differ from the slots put back.
+    Only control-function letters move; modifiers keep their positions.
+
+    Parameters
+    ----------
+    letters : str
+        Tag letters.
+
+    Returns
+    -------
+    str
+        Reordered letters.
     """
     ordered = iter(sorted(_control_functions(letters),
                           key=lambda c: CONTROL_FUNCTION_SEQUENCE.index(c.upper())))
@@ -246,42 +189,56 @@ def _in_sequence(letters: str) -> str:
 
 
 def _family_stem(port_name: str) -> str | None:
-    """The family ``port_name`` is a numbered member of, else ``None``.
+    """Return the family stem of a numbered port.
 
-    ``in_3`` answers ``"in"``; ``inlet``, ``sig_in`` and ``tube_out``
-    answer None, because a trailing word is not a number and a nozzle
-    without one is declared outright by its class.
+    ``in_3`` gives ``"in"``; ``inlet``, ``sig_in`` and ``tube_out`` give
+    ``None``. Read from the unit's port names rather than the symbol, since
+    :class:`~pandid.units.Block` has no port series. Whether the count was
+    stated explicitly is checked by the caller.
 
-    Five classes build a numbered member -- ``Mixer(n_inlets=)``,
-    ``Splitter(n_outlets=)``, ``Column``/``Reactor(n_feeds=)``,
-    ``Column(n_draws=)`` and ``Block(inputs=)``, which
-    ``tests/test_port_annotations`` pins in ``_DECLARED_FAMILIES``. Each
-    spells its family as a stem, an underscore and a 1-based index;
-    nothing else numbers a port. Whether a *count was written down* for
-    this particular member is a question this function cannot answer --
-    ``feed_1`` is spelled the same whether ``n_feeds`` was named or left
-    at its default of one -- and is not its job: see the caller for the
-    live-alias check that answers it instead.
+    Parameters
+    ----------
+    port_name : str
+        Port name.
 
-    Read off the **unit's own port list** and not the symbol's
-    :class:`~pandid.render.symbols.PortSeries`, which writes the same
-    naming rule down. :class:`~pandid.units.Block` has no series at all:
-    its family is split across up to four faces, so ``block_symbol``
-    authors an anchor per connection -- and a check that asked the
-    symbol would be silent on the one class whose whole connection list
-    is counted.
+    Returns
+    -------
+    str or None
+        Stem before ``_<digits>``, or ``None``.
     """
     stem, sep, index = port_name.rpartition("_")
     return stem if sep and stem and index.isdigit() else None
 
 
 def _and(names: list[str]) -> str:
-    """``"a"``, ``"a and b"``, ``"a, b and c"``: a sentence's join."""
+    """Join names as ``"a"``, ``"a and b"`` or ``"a, b and c"``.
+
+    Parameters
+    ----------
+    names : list[str]
+        Names to join.
+
+    Returns
+    -------
+    str
+        Joined phrase.
+    """
     return " and ".join(filter(None, [", ".join(names[:-1]), *names[-1:]]))
 
 
 def _square(x1, y1, x2, y2) -> bool:
-    """True if this segment is drawn along an axis rather than sloping."""
+    """Return whether a segment lies along an axis.
+
+    Parameters
+    ----------
+    x1, y1, x2, y2 : float
+        Segment end points.
+
+    Returns
+    -------
+    bool
+        True within :data:`_SQUARE_TOL`.
+    """
     return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
@@ -304,37 +261,50 @@ def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
 
 
 def _pinned_y(unit) -> bool:
-    """True when this unit's elevation was written down by hand.
+    """Return whether a unit has an explicit pixel ``y`` pin.
 
-    ``pin(row=...)`` is a grid cell rather than a coordinate, so it is
-    not a number anyone did nozzle arithmetic on and does not count.
+    A ``row`` pin is a grid cell, not a coordinate, and does not count.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to check.
+
+    Returns
+    -------
+    bool
+        Whether ``pin_.y`` is set.
     """
     pin = getattr(unit, "pin_", None)
     return pin is not None and getattr(pin, "y", None) is not None
 
 
 def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
-    """How far these two connected nozzles near-miss by, else ``None``.
+    """Return how far two connected nozzles miss a straight run.
 
-    *su*/*du* are the units at the two ends of one stream and *sp*/*dp*
-    their resolved ports. Answers ``(offset, span, source_is_shorter)``:
-    the miss, the extent it was measured against, and which end that
-    extent belongs to -- all three together, so the message cannot name
-    one device and quote the other one's height at it.
+    Parameters
+    ----------
+    su, du : Unit
+        Source and destination units.
+    sp, dp : ResolvedPort
+        Their resolved ports.
+
+    Returns
+    -------
+    tuple[float, float, bool] or None
+        ``(offset, span, source_is_shorter)``: the vertical miss, the
+        shorter unit's height it is measured against, and which end that
+        is. ``None`` when the run is not a facing E/W pair, the offset is
+        by design or sub-pixel, or it clears the shorter unit.
     """
     from pandid.portgeom import unit_box
 
-    # Only a pair of nozzles that both face along the run has one
-    # elevation: a vertical face is a deliberate turn, and two of them
-    # make a riser, where the difference in y is the run's *length*.
-    # Opposite faces, and the destination on the side the source points
-    # at, so a run that leaves east and arrives from the east -- having
-    # doubled back -- is not measured as a step in a straight line.
+    # Only facing E/W nozzles share one elevation; vertical faces make a
+    # riser, and a run that doubles back is not a straight line.
     if {sp.face, dp.face} != {"E", "W"} or (sp.face == "E") != (dp.point[0] > sp.point[0]):
         return None
 
-    # Offset by design: the fitting is *for* the step. See
-    # OFFSET_BY_DESIGN.
+    # The fitting is meant to step; see OFFSET_BY_DESIGN.
     for u in (su, du):
         if (u.kind, getattr(u, "variant", "default")) in OFFSET_BY_DESIGN:
             return None
@@ -343,16 +313,9 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     if offset <= _TOL:
         return None  # sub-pixel; nothing is drawn differently
 
-    # The threshold is the shorter symbol's own extent across the run,
-    # taken off the *drawn* box so a unit given an explicit height is
-    # measured at the size it got. A nozzle offset the author did not
-    # subtract is bounded by how tall the shorter device is, while a
-    # deliberate change of elevation clears that device entirely.
-    #
-    # Half that extent is measurably wrong: over this repo's examples
-    # eight of the misses land on exactly half and two land just past it
-    # (a sight glass 6.3 off a 12.5 body), so half either drops them to
-    # a floating-point tie-break or misses them outright.
+    # Compare with the shorter drawn unit's height: an unadjusted nozzle
+    # offset is smaller than that, while a deliberate change of elevation
+    # clears the unit. Half the height misses real cases.
     sb, db = unit_box(su, su.frame), unit_box(du, du.frame)
     sh, dh = sb[3] - sb[1], db[3] - db[1]
     span = min(sh, dh)
@@ -361,19 +324,21 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
 
 def _crowded(heads: list[tuple[float, str]], floor: float
              ) -> tuple[float, str, str] | None:
-    """The tightest adjacent pair of heads on one face, if too tight.
+    """Return the tightest adjacent pair of arrowheads on a face, if too tight.
 
-    *heads* is every nozzle on the face that wears one, as
-    ``(position along the face, port name)``. Answers
-    ``(pitch, nearer port, further port)``.
+    Pairs under :data:`_TOL` are left to ``coincident-ports``.
 
-    Adjacent pairs only, and one finding per face: what an author does
-    about it -- a bigger box, or a nozzle moved off the face -- is one
-    action.
+    Parameters
+    ----------
+    heads : list[tuple[float, str]]
+        ``(position along the face, port name)`` for each arrowhead.
+    floor : float
+        Minimum pitch.
 
-    A pair under ``_TOL`` is left alone, because two nozzles on one
-    point are already ``coincident-ports``, which is the truer thing to
-    say about them.
+    Returns
+    -------
+    tuple[float, str, str] or None
+        ``(pitch, nearer port, further port)``, or ``None``.
     """
     order = sorted(heads)
     pairs = sorted((b[0] - a[0], a[1], b[1]) for a, b in zip(order, order[1:]))
@@ -381,38 +346,26 @@ def _crowded(heads: list[tuple[float, str]], floor: float
 
 
 def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
-    """The findings that read the model alone (errors first).
+    """Return the findings that need no layout, errors first.
 
-    Nothing here touches a :class:`~pandid.geometry.Frame` or a
-    :class:`~pandid.geometry.Route`, so every one of these answers on a
-    sheet that has never been laid out -- which is exactly where a
-    render asks them, before it hands the sheet to an engine that has to
-    assume the coordinates in it are numbers.
+    These run before a render builds geometry. ``gravity-turned`` is here
+    because a turn comes only from the pin, which layout copies onto the
+    frame unchanged; the frame is preferred when there is one.
 
-    ``gravity-turned`` belongs here and not with the geometry because a
-    quarter turn is *intent*: :class:`~pandid.geometry.Pin` is the only
-    thing that sets one, and layout copies it onto the
-    :class:`~pandid.geometry.Frame` unchanged
-    (:mod:`pandid.layout`), so the pin and the frame cannot disagree
-    about it. The check still prefers the frame where there is one,
-    since that is the placement that got drawn.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to check.
+    tabulates : bool, default=True
+        :func:`~pandid.render.svg.tabulates_boundary_flows` for the
+        diagram. Only ``stream-table-missing`` reads it: ISO 10628-1
+        4.3.2 d) requires a stream table on a PFD, not on a P&ID (4.4.2)
+        or BFD (4.2).
 
-    ``tabulates`` is
-    :func:`~pandid.render.svg.tabulates_boundary_flows` on the diagram
-    this is about, and is true by default because so is the diagram it
-    defaults to. One finding reads it: ``stream-table-missing`` answers
-    ISO 10628-1 4.3.2 d), a *process flow diagram*'s clause, and is
-    silent on the two kinds of sheet that clause does not reach -- a
-    P&ID, which answers 4.4.2, and a block flow diagram, which answers
-    4.2 and carries a flow rate under 4.2.3 rather than under its own
-    minimum content at 4.2.2.
-
-    Not ``arrows``, which is what this argument used to be. A P&ID both
-    draws no arrowhead and owes no stream table, so one boolean carried
-    both facts for as long as there were two kinds of sheet; a BFD draws
-    the arrowhead and owes no stream table, and parts them. Nothing here
-    reads ``arrows`` -- :func:`geometry_issues` is where that question
-    is still asked.
+    Returns
+    -------
+    list[Issue]
+        Errors, then warnings.
     """
     from difflib import get_close_matches
 
@@ -426,11 +379,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     errors: list[Issue] = []
     warnings: list[Issue] = []
 
-    # --- deprecated API (recorded at the call, not recomputed here) ---
-    # The only finding here that is not about the drawing. A deprecated
-    # call leaves no trace in the geometry, so nothing later in this
-    # function could detect it; :mod:`pandid.deprecation` records it as
-    # it happens and this reads it back.
+    # --- deprecated API (recorded at the call) ---
     warnings.extend(deprecation_findings(fs))
 
     # --- pin sanity ---
@@ -449,30 +398,13 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
 
     # --- a label side no renderer places ---
-    # Hard, and hard for the reason an unregistered *variant* is: a value
-    # outside :data:`~pandid.render.svg.LABEL_POSITIONS` used to fall
-    # through both backends' side tables to ``top``, draw the tag on the
-    # wrong side of the symbol, and say nothing.
-    #
-    # The wrong side is the smaller half of it. A stated ``label_pos`` is
-    # read as a deliberate choice, so
-    # :meth:`~pandid.render.svg.SvgRenderer._tag_item` skips the search
-    # that steps a tag clear of the ink under it -- and a typo therefore
-    # both misplaces the tag and nails it there, on a pipe if that is
-    # where ``top`` lands. Neither half is visible from the drawing
-    # unless the author already knows which side they asked for.
-    #
-    # Here rather than in ``Unit.__init__`` because a spec file sets the
-    # attribute directly and a unit built before the renderer is asked
-    # anything is not yet wrong. This is the earliest point every path
-    # into a drawing passes through: a model error raises before any
-    # geometry exists (:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`),
-    # so the render refuses rather than emitting the wrong sheet.
+    # An error: an unknown label_pos would draw the tag at the top and,
+    # being an explicit choice, skip the search that moves tags off ink.
+    # Checked here rather than in Unit.__init__ because a spec sets the
+    # attribute directly; every drawing path validates the model first.
     for u in fs.units:
         side = getattr(u, "label_pos", None)
-        # Falsy is *unset*, not a sixth side: layout and the renderer
-        # both spell the question ``label_pos or "top"``, so an empty
-        # string already means "you choose" everywhere it is read.
+        # Empty means unset; readers use ``label_pos or "top"``.
         if not side or side in LABEL_POSITIONS:
             continue
         close = get_close_matches(str(side).strip().lower(), LABEL_POSITIONS, n=1, cutoff=0.6)
@@ -485,19 +417,10 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
               f"nozzle leaves from"))
 
     # --- a kind the symbol library has no artwork for ---
-    # ``SymbolRegistry.get`` answers an unregistered *kind* with a blank
-    # 60x60 box under the id ``sym_generic``. That is deliberate for a
-    # `Unit` subclass from outside this package, which has no artwork to
-    # find; what it is not is a way of saying so. The two spellings of
-    # one mistake were handled oppositely -- an unregistered *variant* of
-    # a registered kind raises and names the catalogue, and the same typo
-    # one key up drew an empty rectangle with no ports on the sheet, in
-    # both backends, with nothing on ``fs.warnings``.
-    #
-    # Made here rather than in the registry because ``get`` is asked for
-    # a symbol on every port resolution, so one unit would report the
-    # same loss a dozen times in a render, and because the finding is
-    # about the *unit*, which the registry never sees.
+    # SymbolRegistry.get draws an unregistered kind as a blank 60x60 box,
+    # which is right for an external Unit subclass but silent for a typo.
+    # Reported here, once per kind, because the registry is asked on every
+    # port resolution and never sees the unit.
     catalogue = sorted({getattr(units, name).kind for name in units.__all__
                         if default_registry.variants(getattr(units, name).kind)})
     unknown: set[str] = set()
@@ -505,8 +428,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         if default_registry.variants(u.kind) or u.kind in unknown:
             continue
         unknown.add(u.kind)
-        # The registry's own answer for this kind, measured rather than
-        # restated: what the sheet draws is what the finding describes.
+        # Describe the box the registry actually draws.
         blank = default_registry.get(u.kind)
         close = get_close_matches(u.kind, catalogue, n=1, cutoff=0.6)
         warnings.append(Issue(
@@ -518,38 +440,23 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
               f"default_registry.register({u.kind!r}, Symbol(...))"))
 
     # --- turned symbols whose function is gravity ---
-    # ISO 15519-1:2010 §11.4.2, *Orientation of graphical symbols*,
-    # excepts from turning any symbol for a component or device whose
-    # function depends on gravity, and names two of them: the open tank
-    # (2061) and the cyclone separator (X 2618), drawn at Figure 22 b).
-    # Those must not be turned.
-    #
-    # Soft despite the clause's *must not*: the sheet draws and every
-    # nozzle lands on ink, so the only thing wrong is what the drawing
-    # says about the plant. Refusing would also stop the library
-    # checking its own artwork, since ``tests/test_symbol_invariants``
-    # turns every registered symbol through 90° and 270°.
-    #
-    # Mirroring is left alone: §11.4.2 excepts *turning* only.
-    #
-    # Read off the resolved frame where there is one, since that is the
-    # placement that got drawn, and off the pin before layout has run.
-    # The solver reseeds from the pin, so the two agree.
+    # ISO 15519-1:2010 11.4.2 excepts symbols whose function depends on
+    # gravity from turning, naming the open tank (2061) and the cyclone
+    # (X 2618). A warning: the sheet still draws, and
+    # tests/test_symbol_invariants turns every symbol. Mirroring is not
+    # covered. Read from the frame when placed, else the pin.
     for u in fs.units:
         placed = u.frame if u.frame is not None else u.pin_
         turn = int(getattr(placed, "orientation", 0) or 0)
         variant = getattr(u, "variant", "default")
-        # A variant no symbol answers to is the renderer's complaint to
-        # make, with the catalogue to hand; asking for the artwork here
-        # would raise out of a function whose contract is to report.
+        # Leave an unknown variant to the renderer; looking it up here
+        # would raise.
         if not turn or variant not in default_registry.variants(u.kind):
             continue
         if not default_registry.for_unit(u).gravity_fixed:
             continue
-        # ISO's own way out, from the lettering paragraph of the same
-        # clause: draw a fresh symbol in the orientation actually wanted
-        # rather than turning this one. Two families ship one, the lying
-        # drum, so name it where it exists.
+        # ISO's remedy is a symbol drawn in the wanted orientation; suggest
+        # the lying variant where one exists.
         lying = ("horizontal" if variant != "horizontal"
                  and "horizontal" in default_registry.variants(u.kind) else "")
         warnings.append(Issue(
@@ -561,35 +468,13 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                f"down rather than the upright one turned" if lying else "")))
 
     # --- a round mark drawn as an oval ---
-    # An explicit ``width``/``height`` is taken as the *final* box
-    # (:func:`pandid.portgeom.resolve_size`), so a box of a different
-    # shape from the symbol's own scales the artwork unevenly. That is
-    # ordinary and wanted for a shell -- a vessel is drawn at the
-    # proportions the plant has -- and it is a defect for the one mark
-    # the library sizes from the body's own box: see :data:`ROUND_PARTS`.
-    #
-    # **Nothing was watching the two ends of that arrangement.** The box
-    # is written in an example and the aspect is a property of the
-    # artwork, so a change to the artwork moves the aspect out from under
-    # a number nobody edits. That is what happened: adding item 20.6's
-    # motor took the stirred reactor's box from 62 x 100 to 62 x 131,8,
-    # and ``examples/10_ethanol_pfd.py``'s hard-coded 80 x 100 -- right
-    # the day it was written -- became a 70 % stretch that drew the motor
-    # as a flat oval, on the gallery, with nothing said.
-    #
-    # Read off the model rather than the frame. ``resolve_size`` is what
-    # layout sizes the box with, so the two agree, and answering before
-    # anything is placed is the earlier and better moment to be told.
-    #
-    # Two things this deliberately does not fire on, because
-    # ``resolve_size`` already accounts for both. A **quarter turn** swaps
-    # the symbol's own box, so a 12 x 25 arrestor drawn 25 x 12 is
-    # measured against 25 x 12 and is not a stretch. A **boundary flag**
-    # is sized to the label it has to hold, so its own box is the wide
-    # one and the pennant is not stretched either. Neither could reach
-    # here in any case -- a flag and a fitting carry no parts -- but a
-    # measurement that needed them excluded by name would be measuring
-    # the wrong thing.
+    # An explicit width/height is the final box
+    # (:func:`pandid.portgeom.resolve_size`), so a box of another shape
+    # stretches the artwork. That is fine for a shell but distorts the
+    # marks in :data:`ROUND_PARTS`. Changing a symbol's artwork can make a
+    # hard-coded example size wrong, so this is checked. Read from the
+    # model, before layout; resolve_size already handles quarter turns and
+    # label-sized boundary flags.
     for u in fs.units:
         variant = getattr(u, "variant", "default")
         if variant not in default_registry.variants(u.kind):
@@ -598,9 +483,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         marks = [ov for ov in sym.overlays if (ov.group, ov.name) in ROUND_PARTS]
         if not marks:
             continue
-        # The box that gets drawn, and the box the artwork is round in.
-        # The quarter turn swaps the second exactly as ``resolve_size``
-        # swaps it for the first.
+        # Compare the drawn box with the natural box, swapped for a turn.
         placed = u.frame if u.frame is not None else u.pin_
         w, h = resolve_size(u, placed)
         nat_w, nat_h = sym.width, sym.height
@@ -612,10 +495,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         out_of_shape = max(across, down) / min(across, down) - 1.0
         if out_of_shape <= _ASPECT_TOL:
             continue
-        # The cure is a box of the right shape, so the message does the
-        # arithmetic: the height the author asked for, kept, and the
-        # width that goes with it. Named that way round because height is
-        # what an author sizes a vertical body by.
+        # Suggest the width that fits the current height.
         fits = nat_w / nat_h * h
         iso = [default_registry.part(ov.group, ov.name).iso for ov in marks]
         named = _and([f"ISO item {p.item} {p.reg}" for p in iso])
@@ -630,10 +510,9 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             f"height it has, or leave width= and height= unset and let the symbol "
             f"size itself"))
 
-    # --- tag spelling --- Soft, not hard: the
-    # letters still read, and a sheet whose house style differs from
-    # ISO's is not a sheet the engine should refuse to draw. One finding
-    # per tag, so an interlock square drawn four times says it once.
+    # --- tag spelling ---
+    # A warning, since house styles differ. One finding per tag, so a
+    # repeated interlock square reports once.
     spelled: set[str] = set()
     for u in fs.units:
         if not isinstance(u, Instrument) or u.tag in spelled:
@@ -649,43 +528,12 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             f"orders them {sequence}, so this tag reads {ordered!r}"))
 
     # --- a counted nozzle with no line on it ---
-    # The sheet draws a unit taking four streams and shows three, so it
-    # asserts a stream that does not exist. Issue #183 is the defect it
-    # came from: a loop over ``(1, 2, 3)`` wiring ``in_2``, ``in_3`` and
-    # ``in_4``.
-    #
-    # **The narrowness is the measurement.** Every shipped example leaves
-    # ports carrying no stream, and every one is legitimate -- signal
-    # connections, dry exchanger sides, duties, reliefs, drains, vents,
-    # station drain legs that end off the sheet, and single nozzles a
-    # class offers and a service did not need. A nozzle a class
-    # *declares* is offered whether the sheet uses it or not, and leaving
-    # one open is a drawing decision. A **numbered** nozzle is not
-    # offered, it is asked for: ``n_inlets=4`` is a number the author
-    # wrote, so a bare member of that family is that number not being
-    # met. None of them is one.
-    #
-    # Counts are deliberately not written down here. Three figures in
-    # this comment and its twin in docs/api.md drifted as the corpus
-    # grew, and by 0.1.3 the same paragraph carried two that contradicted
-    # each other. ``tests/test_validate.py`` measures the corpus; prose
-    # states the rule.
-    #
-    # It shows on the paper too. A family is spread evenly for however
-    # many members it has, connected or not, so a mixer with
-    # ``n_inlets=4`` and three lines draws them 11.7px apart around a
-    # 17.5px hole instead of 17.5px apart -- the missing nozzle moves
-    # every line that *is* drawn.
-    #
-    # One finding per family, not per member: two dangling inlets on one
-    # mixer is one wrong count with one thing to do about it.
-    #
-    # No standard is cited because none legislates it. ISO 15519-1
-    # clause 12 governs how a connecting line is drawn and never that a
-    # connection point must carry one; the words "nozzle" and
-    # "connection point" do not appear in it. This is the drawing
-    # contradicting its own declaration, which needs no external
-    # authority.
+    # A numbered nozzle family is a count the author wrote (n_inlets=4),
+    # so an unconnected member is a missing stream; the gap also spaces
+    # the drawn lines wrongly. Declared single nozzles (drains, vents,
+    # duties, spare sides) are offers and may stay open. One finding per
+    # family. No standard requires this; the drawing contradicts its own
+    # declaration. tests/test_validate.py measures the examples.
     for u in fs.units:
         families: dict[str, list[str]] = {}
         for name in u.ports:
@@ -693,39 +541,14 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             if stem is not None:
                 families.setdefault(stem, []).append(name)
         for stem, members in families.items():
-            # **Process nozzles only**, the scope issue #183 sets. A
-            # balloon's ``pv`` is bare when the instrument is placed
-            # against its equipment rather than tapped off a line, and
-            # an actuator with no output is a hand valve; neither is
-            # answered by counting. No shipped class numbers a signal
-            # port, so this holds the door for one that might.
+            # Process ports only: a bare signal port is normal.
             if any(u.ports[n].role == "signal" for n in members):
                 continue
-            # A live alias for this family's sole member -- Reactor.feed,
-            # Column.feed, Tank.inlet/.outlet -- means the singular
-            # spelling still answers for it, exactly as it did back when
-            # the port itself was named that rather than ``feed_1``/
-            # ``in_1`` (see Unit._canonical_port_name). The class offers
-            # that one un-asked, the same as any other fixed nozzle, so
-            # it is not "a count that went unmet" -- only a family with
-            # no alias at all, or one raised past its aliased arity, is.
-            #
-            # Found by scanning the instance rather than trying ``stem``
-            # itself: ``feed_1``'s alias is spelled ``feed`` (the stem),
-            # but ``in_1``'s is spelled ``inlet`` (not the stem ``in``),
-            # since #342 kept the name a tank's single connection has
-            # always had. Both are a plain instance attribute set beside
-            # the family in ``__init__`` and never a second entry in
-            # ``ports`` -- see either class's own comment on it -- so
-            # this is the one test that answers for any such alias,
-            # however it is spelled.
-            #
-            # ``name not in u.ports`` is what tells an alias from the
-            # port's own attribute: ``_add_port`` also does
-            # ``setattr(self, "in_1", port)``, under the nozzle's real
-            # name, and that is not a second spelling to excuse -- a
-            # ``Mixer("M", n_inlets=1)`` has no alias at all and its
-            # lone ``in_1`` is still a count somebody wrote.
+            # A sole member with a live alias (Reactor.feed, Column.feed,
+            # Tank.inlet) is offered by the class, not counted by the
+            # author, so skip it. Aliases are instance attributes outside
+            # ``ports``; the port's own attribute (``in_1``) is in ports and
+            # does not count, so Mixer(n_inlets=1) is still checked.
             sole = u.ports[members[0]]
             if len(members) == 1 and any(
                 name not in u.ports and not name.startswith("_") and value is sole
@@ -737,17 +560,11 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             if not loose:
                 continue
             n, piped = len(members), len(members) - len(loose)
-            # ``in_1..in_4`` only where the run really is 1 to n. No
-            # constructor here leaves a gap in the middle, but a
-            # hand-written ``PORTS`` list can, and ``in_1..in_7`` said
-            # of four nozzles would be the message inventing three.
+            # Abbreviate as ``in_1..in_4`` only for an unbroken run.
             run = [f"{stem}_{i}" for i in range(1, n + 1)]
             named = (f"{members[0]}..{members[-1]}" if n > 2 and members == run
                      else _and(members))
-            # Name the whole run and the arithmetic over it. Only the
-            # author knows whether a line was meant and missed or a
-            # nozzle never wanted, so the message offers both cures
-            # rather than guessing.
+            # Offer both cures: connect, or build with fewer.
             it = "it" if len(loose) == 1 else "them"
             cure = (f"Connect {it}, or build {u.name} with the {piped} it uses."
                     if piped else
@@ -762,50 +579,21 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"{n} connections and draws {piped}. {cure}"))
 
     # --- a counted number landing on a name already taken ---
-    # The stream table is one column per distinct
-    # name, so two streams answering to one name are drawn as two lines
-    # and tabulated as one: a column, and the properties in it,
-    # disappear off the sheet. Both lines also carry the same label, so
-    # the drawing asserts they are the same stream.
-    #
-    # **Only a name the counter invented is reported**, and that
-    # narrowness is the whole check. Sharing a name is ordinary: a run
-    # drawn in several `connect` calls is one stream and is meant to be
-    # labelled once, and `examples/10_ethanol_pfd.py` draws `S-305` over
-    # five of them while `examples/11_ethanol_pid.py` gives four pairs
-    # of segments one line number each. Neither is a defect and neither
-    # can be told from a mistyped duplicate, because both are the author
-    # writing one name twice on purpose.
-    #
-    # `renumber_streams`'s grouping does not separate them either: those
-    # nine shipped runs sit across two to four groups apiece, since what
-    # joins two segments into a group is an inline valve or fitting and
-    # a condenser, a drum or a pump is not one.
-    #
-    # What *is* separable is a name nobody chose. A group with no
-    # explicit name and no line-number components is named by counting,
-    # and the count's one promise -- `renumber_streams`, and
-    # `docs/api.md` under "Stream numbering" -- is that it hands out a
-    # name no other stream answers to. A counted name that collides is
-    # that promise broken, whoever caused it, and there is no reading of
-    # it the author intended.
-    #
-    # Soft, not hard: every line is drawn and the sheet is readable, and
-    # the cure is a rename the author has to choose. What was wrong with
-    # it before was the silence.
+    # The stream table has one column per name, so two streams with one
+    # name lose a column. Authors share names on purpose (one run drawn in
+    # several connect calls, or one line number over several segments), so
+    # only names the counter invented are reported: renumber_streams
+    # promises an unused name. A warning, since the cure is a rename.
     counted: dict[str, list] = {}
     taken: dict[str, int] = {}
     for group in fs._stream_groups():
-        # The group's name comes from the counter only when nobody named
-        # it: an explicit `name=` outranks the count, and line-number
-        # components build a name out of what the author wrote down.
+        # Counted only when no stream has an explicit name or line number.
         chosen = any(not s.auto_named or s.has_line_number for s in group)
         name = group[0].name
         taken[name] = taken.get(name, 0) + 1
         if not chosen:
             counted.setdefault(name, []).append(group)
-    # A signal or duty line is numbered off the same counter and shares
-    # the sequence with the process runs, so it can be collided with too.
+    # Signal and duty lines share the counter, so include them.
     for s in fs.streams:
         if s.kind == "material":
             continue
@@ -815,8 +603,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     for name, groups in counted.items():
         if taken[name] < 2:
             continue
-        # Name the ends of the counted runs, so an author looking at a
-        # sheet of identical labels knows which one to go to.
+        # Name the ends of the counted runs so they can be found.
         where = _and([f"{g[0].source.owner.name} to {g[-1].dest.owner.name}"
                       for g in groups[:2]])
         plural = "run" if len(groups) == 1 else "runs"
@@ -831,23 +618,12 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             f"Flowsheet(stream_number_start=...)"))
 
     # --- a title-block cell that cannot hold what it was given ---
-    # The strip is fixed geometry (ISO 5457 for where it sits, ISO 7200
-    # for what goes in it), so a value longer than its cell is lettered
-    # smaller, abbreviated, or drawn across the rule -- one of the three,
-    # field by field, and the choice is
-    # :func:`~pandid.render.furniture.title_strip_layout`'s. Whichever it
-    # is, the author has to hear about it: an accepted value silently
-    # altered and then issued is what this whole module exists to stop,
-    # and a drawing number is exactly the field an ellipsis turns into
-    # somebody else's document.
-    #
-    # Asked *here*, in the model half, because every width the strip
-    # rules is a constant: the answer needs no page size, no layout and
-    # no routing, so `validate()` can give it before a render exists
-    # rather than only describing one that already happened. The two
-    # renderers ask the same function while they draw and replace these
-    # with their own -- see ``_FIT_CODES`` in :mod:`pandid.render.svg` --
-    # so the finding is made once however many ways the sheet comes out.
+    # The strip (ISO 5457 position, ISO 7200 content) is fixed, so a long
+    # value is shrunk, abbreviated or overflows, per
+    # :func:`~pandid.render.furniture.title_strip_layout`. Silently altered
+    # values, such as a truncated drawing number, must be reported. Widths
+    # are constants, so this needs no layout; renderers replace these
+    # findings with their own (``_FIT_CODES`` in :mod:`pandid.render.svg`).
     if fs.title_block is not None:
         from datetime import datetime
 
@@ -857,24 +633,14 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         from pandid.render.svg import fit_issue
 
         tb = fs.title_block
-        # The two fallbacks handed over *unchosen*, exactly as both
-        # renderers hand them over: the strip picks between the block's
-        # value and these, and it picks after reading whitespace as the
-        # blank it means. Choosing here instead is what made a title of
-        # spaces a truncation the sheet reported and this did not -- the
-        # finding has to describe the sheet that will be drawn, and the
-        # only way to be sure of that is to ask it the same question.
+        # Pass the fallbacks unchosen, as the renderers do, so blank
+        # handling matches the drawn sheet.
         warnings.extend(fit_issue(*found) for found in title_strip_fit(
             tb, fs.name, datetime.now().strftime("%Y-%m-%d")))
 
         # --- a company name that wraps out through the strip ---
-        # The one cell of the strip that answers a long value by
-        # *growing*, and the one that can therefore lose it in a
-        # direction the width checks above cannot see: every wrapped
-        # line is inside its own cell, and the stack of them is not
-        # inside the strip. Centred on the depth, so it runs out of both
-        # ends at once -- over the drawing above and off the sheet
-        # below.
+        # The company cell grows by wrapping, and the wrapped stack can
+        # overflow the strip top and bottom.
         over = company_overflow(tb)
         if over is not None:
             rows, room, need = over
@@ -888,29 +654,13 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"the drawing office puts on a sheet"))
 
         # --- a signatory the strip does not letter ---
-        # ``drawn_by``/``checked_by``/``approved_by`` are *backfills*:
-        # the strip letters them into the BY/CHK'D/APP'D cells of the
-        # newest revision row, which is the only place on the sheet
-        # those three columns exist. Which of them the strip does not
-        # letter is :func:`~pandid.render.furniture.
-        # undrawn_signatories`, asked rather than worked out again --
-        # it is the same question the strip answers when it fills the
-        # row. It goes undrawn two ways:
-        #
-        # * there is no revision at all, so there is no row to fill; or
-        # * the newest revision states a signatory of its own, which is
-        #   the more specific claim and wins the cell.
-        #
-        # Both end with the sheet issuing without the creator or the
-        # approver ISO 7200 4.3 makes mandatory data fields, so both are
-        # reported, and separately: the cure differs. A row that states
-        # the *same* name is not reported -- the value is on the sheet,
-        # and which field put it there is nobody's problem.
-        #
-        # Reported rather than drawn: ruling a row for a revision the
-        # drawing office never raised would put a revision history on
-        # the sheet to carry two initials, and the revision is the thing
-        # being signed for.
+        # drawn_by, checked_by and approved_by fill the newest revision
+        # row's BY / CHK'D / APP'D cells
+        # (:func:`~pandid.render.furniture.undrawn_signatories`). They go
+        # undrawn when there is no revision, or when the newest revision
+        # names its own signatory. ISO 7200 4.3 makes the creator and
+        # approver mandatory, so both cases are reported, separately since
+        # the cures differ. No row is invented for them.
         unfilled = [f"{field}={value!r}"
                     for field, value, displaced in undrawn_signatories(tb)
                     if not displaced]
@@ -938,36 +688,12 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"the revision and let the block fill the row"))
 
     # --- an ingoing or outgoing material with nothing to report ---
-    # ISO 10628-1:2014 4.3.2, *Process flow diagram*, lists what a PFD
-    # must carry at a minimum. Item d) is the name of each ingoing and
-    # outgoing material together with its flow rate or quantity, and item
-    # f) is the operating conditions that characterise the process.
-    #
-    # The stream table is where a sheet answers that, and it drops a
-    # column with nothing in it -- an internal one, which 4.3.3 a)
-    # leaves optional. At the sheet edge the clause above is a *shall*,
-    # so the column is kept however empty it is
-    # (:func:`pandid.render.furniture._table_streams`): dropping it
-    # would conceal the omission rather than show it, and conceal
-    # exactly what the standard asks to be reported. This says in words
-    # what a column of dashes means, since a sheet full of them is easy
-    # to read past.
-    #
-    # **Only on a sheet that tabulates something**, and that narrowness
-    # is the check. A sheet with no properties anywhere has not left a
-    # feed out, it has not taken the practice up at all -- and pandid
-    # ships ``show_stream_table=False``, so that is the library's
-    # decision as much as the author's and wants its own answer rather
-    # than a finding per boundary line on every drawing. Seven of the 21
-    # shipped examples are in that state -- counted as the sheets on which
-    # no stream carries a property at all -- and none of them is what
-    # this is for. A sheet that tabulates its other streams and not this
-    # one has left it out, and the author is the only one who can say
-    # what belongs in it.
-    #
-    # Soft, not hard. The sheet draws, the column is there and the line
-    # is named on it; what is missing is a number nobody but the author
-    # has.
+    # ISO 10628-1:2014 4.3.2 d) requires a PFD to state each ingoing and
+    # outgoing material's flow rate. The stream table keeps a boundary
+    # column even when empty (:func:`pandid.render.furniture._table_streams`);
+    # this says what a column of dashes means. Only on a sheet that
+    # tabulates other streams: a sheet with no properties at all is
+    # handled below.
     runs = fs._named_runs()
     if any(s.properties for segments in runs.values() for s in segments):
         for name, segments in runs.items():
@@ -992,40 +718,11 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"keeps the column on purpose"))
     else:
         # --- a PFD with material crossing its edge and no table at all ---
-        # The check above answers a sheet that has taken up tabulating and
-        # left one column short. This is the sheet that has not taken up
-        # the practice at all -- pandid ships ``show_stream_table=False``,
-        # so a render before this line is ever reached has already chosen
-        # not to draw one. ISO 10628-1:2014 4.3.2 c) and d) make the route
-        # and the denomination and flow rate of every ingoing and outgoing
-        # material a process flow diagram's minimum content regardless, so
-        # a PFD with a Feed or a Product and nothing tabulated anywhere is
-        # short of it whether or not the author ever opened the stream
-        # table's door.
-        #
-        # The other two kinds of sheet answer other clauses, so the check
-        # reads ``tabulates``: true exactly when the sheet this render is
-        # for is a PFD (see
-        # :func:`~pandid.render.svg.tabulates_boundary_flows`). A P&ID
-        # answers 4.4.2. A block flow diagram answers 4.2, and its
-        # minimum content is 4.2.2 -- the flow rate is listed under
-        # 4.2.3, the clause of what a block diagram *may* also carry, so
-        # a BFD without one is short of nothing.
-        #
-        # That is not the same question as ``arrows`` and used to be
-        # asked as if it were. A BFD heads its lines (4.2.2 c)) and owes
-        # no rate, which no single boolean can say: read as ``arrows``,
-        # ``12_block_flow_diagram`` was reported for a stream table its
-        # own clause never asked it for.
-        #
-        # One finding for the sheet and not one per line: unlike the check
-        # above, there is no other column here to contrast an empty one
-        # against, so there is one thing to say rather than one per line
-        # that says it.
-        #
-        # Soft, not hard, for the same reason the check above is: the
-        # sheet draws either way, and what is missing is data nobody but
-        # the author has.
+        # ISO 10628-1:2014 4.3.2 c) and d) still apply to a PFD with no
+        # stream table. ``tabulates`` is true only for a PFD
+        # (:func:`~pandid.render.svg.tabulates_boundary_flows`): a P&ID
+        # answers 4.4.2, and a BFD lists flow rate as optional (4.2.3). One
+        # finding for the sheet.
         if tabulates:
             crossed = list(dict.fromkeys(
                 name for name, segments in runs.items()
@@ -1046,30 +743,21 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
 
 
 def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
-    """The findings that read the resolved geometry (errors first).
+    """Return the findings that need resolved geometry, errors first.
 
-    Everything here needs frames, routes, or a note an earlier phase
-    left behind, so none of it can be asked of a sheet before
-    :meth:`~pandid.flowsheet.Flowsheet.layout` and
-    :meth:`~pandid.flowsheet.Flowsheet.route` have run. Asked early it
-    is silent rather than wrong: ``route_converged`` starts true and
-    ``unplaced_instruments`` starts empty, so a sheet that has not been
-    laid out is told nothing about placements nothing has attempted.
-
-    ``arrows`` says whether the drawing being checked puts an arrowhead
-    on the end of a process line, which a PFD and a block flow diagram
-    do and a P&ID does not. It is a property of the *render* rather than
-    of the flowsheet, and it is a boolean rather than a diagram name so
-    that the spelling of that name stays one question, asked in
-    :func:`pandid.render.svg.draws_arrowheads`.
-    :meth:`pandid.flowsheet.Flowsheet.validate` resolves it.
+    Before :meth:`~pandid.flowsheet.Flowsheet.layout` and
+    :meth:`~pandid.flowsheet.Flowsheet.route` have run these are silent
+    rather than wrong: nothing is placed, ``route_converged`` starts true
+    and ``unplaced_instruments`` starts empty.
 
     Parameters
     ----------
     fs : Flowsheet
         Drawing whose resolved geometry is checked.
-    arrows : bool, optional
-        Whether process stream arrows appear on this rendering.
+    arrows : bool, default=True
+        Whether this rendering draws arrowheads on process lines (a PFD or
+        BFD, not a P&ID); :func:`pandid.render.svg.draws_arrowheads`
+        decides, via :meth:`pandid.flowsheet.Flowsheet.validate`.
 
     Returns
     -------
@@ -1088,13 +776,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     errors: list[Issue] = []
     warnings: list[Issue] = []
 
-    # --- routing settled? (reported by route(), not recomputed here)
-    # --- Placing an instrument moves an obstacle and routing around an
-    # obstacle moves an instrument, so a dense sheet can trade between
-    # two arrangements instead of settling on one. The drawing is still
-    # coherent -- the lines are drawn to where the balloons are -- but
-    # which arrangement it caught is arbitrary, and the author cannot
-    # see that without being told.
+    # --- routing settled? (recorded by route()) ---
+    # Placing instruments and routing around them can alternate on a
+    # dense sheet; the drawing is coherent but which state it caught is
+    # arbitrary.
     if not fs.route_converged:
         warnings.append(Issue(
             "warning", "route-not-settled",
@@ -1116,28 +801,13 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"{search_result.exact_trials} exact trials"
         ))
 
-    # --- a balloon nothing could place (recorded by layout, not
-    # --- recomputed here) --- An attached instrument takes its frame
-    # from its host, so a chain of them has to end on something the
-    # ranker positions. One that does not is left frameless by
-    # :func:`~pandid.layout.attach.place_attached`, which sweeps until a
-    # pass places nothing and then stops.
-    #
-    # Read from where that sweep parked it rather than looked for here,
-    # because ``frame is None`` on its own does not say which of two
-    # things happened: layout has not run, or layout ran and gave up.
-    # Only the sweep can tell them apart, and a sheet validated before
-    # layout must not be told its balloons are unplaceable.
-    #
-    # Hard, not soft. There is no drawing to warn about: the renderer
-    # refuses a frameless unit outright, so the instrument the author
-    # asked for reaches no sheet. Saying it here names the balloon and
-    # the cure, in place of a bare "lacks a frame" out of the middle of
-    # a bounding-box sweep.
+    # --- a balloon nothing could place (recorded by layout) ---
+    # An attached instrument is placed from its host, so a chain of them
+    # must end on a placed unit. Read from place_attached's record,
+    # because ``frame is None`` alone cannot tell "not laid out yet" from
+    # "gave up". An error: the renderer refuses a frameless unit.
     for u in fs.unplaced_instruments:
-        # A stream host is not placed itself; what stops it anchoring a
-        # balloon is an end that never was, so name the thing that is
-        # actually missing in each case.
+        # Name what is actually missing for each kind of host.
         where = (f"stream {u.host.name}, which has an end nothing placed"
                  if isinstance(u.host, Stream) else
                  f"{u.host.name}, which is unplaced itself")
@@ -1151,47 +821,18 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"anchor at all, which lays it out like any other unit"))
 
     # --- geometric checks (need resolved frames) ---
-    # Over the units that have one, not over the whole sheet or none of
-    # it. Before layout nothing is placed and there is nothing to check;
-    # after it the only frameless unit is a balloon reported above as
-    # ``instrument-unplaced``, and one of those used to take every
-    # overlap, coincidence and crowded face on the sheet down with it --
-    # including for the units that placed perfectly.
+    # Check the placed units, so one unplaced balloon does not hide the
+    # rest.
     placed = [u for u in fs.units if u.frame is not None]
     if placed:
         # Soft: a placement the sheet did not honour.
         #
-        # A pinned axis is honoured exactly, so a drawn coordinate that
-        # is not the one the author wrote means something moved the unit
-        # after the solver read its pin -- and every way that happens
-        # today happens silently. Both numbers are known here and
-        # nowhere else: the asked-for one is on the unit
-        # (:func:`~pandid.portgeom.pin_intent`) and the drawn one is on
-        # its frame, so this is the one place the two can be held
-        # against each other.
-        #
-        # It is deliberately one check and not one per cause. The
-        # project's signature defect is a value accepted, quietly
-        # altered and shipped, and this catches the shape of it rather
-        # than the instances: an attached balloon standing in a grid
-        # cell nothing can read (#467) and a port-pinned nozzle walked
-        # off its run by a later transform (#294, the defect that made
-        # the intent worth storing) are the same finding here, as is the
-        # next one. Both of those causes have since been closed at the
-        # source -- the balloon's absolute pin is honoured and the
-        # nozzle relation survives the transform -- which is what this
-        # check is for: it is written to the shape, so it went on
-        # holding the drawing to the pin while the causes underneath it
-        # were fixed one at a time.
-        #
-        # Soft rather than hard because there *is* a drawing and it is
-        # coherent -- the lines are drawn to where the units ended up.
-        # What the author cannot see is that it is not the drawing they
-        # asked for.
+        # A pinned axis is copied exactly, so a different drawn coordinate
+        # means something moved the unit afterwards. One check covers every
+        # cause, comparing :func:`~pandid.portgeom.pin_intent` with the
+        # frame. A warning: the drawing is coherent, just not as asked.
         for u in placed:
-            # Each miss already worded, because a rank and a coordinate
-            # are not the same sentence and neither is phrased where the
-            # other's numbers are in scope.
+            # Messages, worded per axis kind.
             missed: list[str] = []
             for axis, (port_name, want) in pin_intent(u).items():
                 drawn = (port_point(u, u.frame, port_name)[0 if axis == "x" else 1]
@@ -1200,23 +841,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     nozzle = f".{port_name}" if port_name is not None else ""
                     missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
                                   f"drawn at {drawn:g}, {abs(drawn - want):g} away")
-            # The grid half of the same question. A rank is compared as a
-            # rank: the frame carries the one the sheet stood the unit
-            # in, and a pin naming one the frame does not is a pin
-            # nothing read -- which is how an attached balloon's is
-            # dropped, and the more natural spelling for a balloon at
-            # that. A unit the sheet gave no rank at all says so rather
-            # than quoting ``None`` at the author.
-            #
-            # A rank an absolute coordinate on the same axis supersedes
-            # is not one the sheet declined to read: ``pin(col=7, x=222)``
-            # means x, by the placement rule
-            # :func:`pandid.layout.control._place_free` states and
-            # records -- it writes no ``col`` where it used none. Holding
-            # the drawing to the overridden half reported a correct sheet
-            # twice, and a check that cries wolf teaches an author to
-            # stop reading it. The coordinate that did the superseding is
-            # held above, so nothing goes unheld.
+            # Grid ranks: compare the pinned col/row with the frame's. Skip a
+            # rank superseded by an absolute pin on the same axis
+            # (:func:`pandid.layout.control._place_free`); the coordinate
+            # is checked above.
             pin = u.pin_
             for axis, absolute in (("col", "x"), ("row", "y")) if pin is not None else ():
                 want, rank = getattr(pin, axis), getattr(u.frame, axis)
@@ -1225,11 +853,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 missed.append(f"{u.name} was pinned {axis}={want} and is "
                               + (f"drawn in {axis}={rank}" if rank is not None
                                  else f"drawn with no {axis} of its own"))
-            # An attached balloon is placed from its host or from an
-            # absolute pin (#467), and stands in no grid at all -- so a
-            # rank is the half of a pin nothing here can read, and the
-            # cure names the two spellings that do work in place of the
-            # one that was written.
+            # An attached balloon has no grid rank, so suggest what works.
             cure = ("An attached balloon stands in no grid: it is placed from "
                     "its host, or from an absolute pin. Say where with "
                     f"{u.name}.pin(x=..., y=...), aim it with "
@@ -1242,26 +866,13 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 warnings.append(Issue("warning", "pin-not-honored", f"{said}. {cure}"))
 
         boxes = [(u, unit_box(u, u.frame)) for u in placed]
-        # A stream with an unplaced end has no drawn path, so there is
-        # no line to measure a crossing, a detour or an elevation
-        # against.
+        # Only streams with both ends placed have a drawn path.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
 
-        # A block letters its name *inside* its box, so a box too narrow
-        # for the name draws the name out through both sides of it and
-        # across whatever is beside it. `block_symbol` widens a box it
-        # sizes itself, which is why this can only happen to a block
-        # given a `width` of its own -- and an explicit width wins
-        # outright, so the drawing is what the author asked for and the
-        # finding is soft. It had no channel at all: the renderer has a
-        # `text-overruns-cell` code for exactly this shape of defect and
-        # only sheet furniture ever raised it.
-        #
-        # Under its own code, not `text-overruns-cell`: `SvgRenderer`
-        # replaces every finding under one of those with its own before
-        # returning, so a finding made here under that code would be
-        # deleted by the render it is about.
+        # A block's name is lettered inside its box, so an explicit width
+        # that is too narrow overruns it. A warning, under its own code:
+        # SvgRenderer replaces ``text-overruns-cell`` findings with its own.
         for u, box in boxes:
             if not isinstance(u, Block) or not u.tag:
                 continue
@@ -1278,33 +889,13 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
         # Hard: a nozzle drawn off the body it belongs to.
         #
-        # The stream is drawn to its nozzle correctly and the nozzle is
-        # not on the equipment, so the line ends in blank paper next to
-        # a symbol it never reaches. Nothing said so: 21_alumina_refinery
-        # shipped with M-901's third inlet 8,9px below the bottom of the
-        # tank and validate() was silent on it (#488).
-        #
-        # Only the ports the artwork actually places. One it does not
-        # falls back to the centre of the box, which is inside it by
-        # construction and is reported -- when two of them land on each
-        # other -- by ``coincident-ports`` below, under a message that
-        # names the real defect.
-        #
-        # Every symbol in this library now keeps its nozzles on its own
-        # box by construction: a fixed one is authored at a coordinate
-        # the invariant suite checks, and a family is confined to
-        # :attr:`~pandid.render.symbols.Symbol.bands` by
-        # :func:`~pandid.render.symbols.spread`. So this is silent on
-        # every sheet the registry can draw, and it is here for the two
-        # cases that outrun that: a symbol a third party registered, and
-        # the next family built to a unit's own count.
-        #
-        # Measured against :func:`~pandid.portgeom.unit_box`, which is
-        # the box the router treats as the obstacle and the box the
-        # debug overlay outlines -- so the finding names the same
-        # rectangle a reader sees. ``_TOL`` because a nozzle on the edge
-        # of its box is the ordinary case and floating point puts it a
-        # hair either side.
+        # A line to it would stop in blank paper. Registered symbols keep
+        # nozzles on their box by construction (the invariant suite and
+        # :func:`~pandid.render.symbols.spread`), so this guards third-party
+        # symbols and new families. Unanchored ports fall back to the box
+        # centre and are left to ``coincident-ports``. Measured against
+        # :func:`~pandid.portgeom.unit_box`, the router's obstacle, with
+        # ``_TOL`` for nozzles on the edge.
         for u, box in boxes:
             for name in u.ports:
                 if not is_anchored(u, name):
@@ -1331,22 +922,11 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                         f"{boxes[i][0].name} and {boxes[j][0].name} overlap"))
 
         # Hard: two live connections on one unit landing on the same
-        # point, so one stream terminates on top of the other. The
-        # runtime half of the symbol-level duplicate-nozzle rule
-        # (:meth:`pandid.render.symbols.Symbol.coincident_ports`), and
-        # the only half that can see it: a symbol may legitimately offer
-        # one face to two faceless connections, and which placement each
-        # port took is a property of the finished sheet.
-        #
-        # A boundary flag is skipped, and it is the only thing that is.
-        # The rule is about two nozzles of one *body* being drawn on one
-        # spot, where a reader cannot tell which line reaches which; a
-        # flag has no body and no second nozzle -- it is a mark saying
-        # the material crosses the sheet edge here, and every run on it
-        # leaves that mark, which is what the drawing means. Skipped by
-        # asking the unit (:attr:`pandid.units.Unit.ONE_NOZZLE_MANY_RUNS`)
-        # rather than by testing ``kind``, so the exemption is a property
-        # a class states about itself and is stated in one place.
+        # point. The runtime half of
+        # :meth:`pandid.render.symbols.Symbol.coincident_ports`, since face
+        # choice is known only on the finished sheet. Units with
+        # :attr:`pandid.units.Unit.ONE_NOZZLE_MANY_RUNS` (boundary flags)
+        # are exempt: every run on a flag meets at its mark.
         for u in placed:
             if type(u).ONE_NOZZLE_MANY_RUNS:
                 continue
@@ -1359,11 +939,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 if first is None:
                     seen[pt] = name
                     continue
-                # A port the symbol never anchored fell back to the
-                # centre of the box, where every other unanchored port
-                # also is. That is a gap in the symbol rather than a
-                # contradiction on the sheet, so it does not stop the
-                # drawing.
+                # Unanchored ports share the box centre: a symbol gap, so
+                # only a warning.
                 anchored = is_anchored(u, name) and is_anchored(u, first)
                 issue = Issue(
                     "error" if anchored else "warning", "coincident-ports",
@@ -1373,41 +950,18 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                        "of them, so both fall back to the centre of the box"))
                 (errors if anchored else warnings).append(issue)
 
-        # Soft: nozzles on one face pitched closer than the arrowheads
-        # they carry can be told apart at. A PFD ends every process line
-        # in a filled triangle (:data:`pandid.render.symbols.ARROWHEAD`)
-        # as wide across the run as it is long, so two on one face at
-        # pitch p leave ``p - ARROWHEAD`` of paper between two solid
-        # shapes; below MIN_HEAD_CLEARANCE that is thinner than ISO
-        # 128-20 allows between parallel lines.
-        #
-        # The floor is a *clearance*, not a multiple of the head, and
-        # that is the correction that matters: 10_ethanol_pfd's M-301
-        # leaves 2.5px and is a defect, while the same corpus's mixers
-        # at a 20px pitch leave 8px, which a reader resolves without
-        # effort. A rule phrased as "2.5x the head" reports both.
-        #
-        # *Both* nozzles of a pair have to wear a head. A splitter takes
-        # its heads at the far ends of its branches, so its outlet face
-        # carries bare 2px lines however tightly they are pitched.
-        #
-        # The cure is the box, so the message does the arithmetic. The
-        # drawn pitch is linear in the extent of the box across the
-        # face, so the extent that clears the floor is the one the unit
-        # has, scaled by how far short it fell. A symbol that keeps its
-        # aspect is centred rather than stretched and would not answer
-        # to that; none reaches here, since the only ports one carries
-        # are a balloon's and a signal line wears no head.
-        #
-        # Moving a nozzle is offered only where the symbol has another
-        # face for it. Everything this fires on today is placed by a
-        # port series, and a series declares one face.
+        # Soft: arrowheads on one face too close to tell apart. Two heads
+        # (:data:`pandid.render.symbols.ARROWHEAD`) at pitch p leave
+        # ``p - ARROWHEAD`` of paper, which must be at least
+        # MIN_HEAD_CLEARANCE (ISO 128-20). Both ports of a pair must carry
+        # a head. The message suggests a box size, scaling the face extent
+        # by the shortfall, and a move only where the symbol offers
+        # another face.
         for u in placed if arrows else ():
             heads: dict[str, list[tuple[float, str]]] = {}
             for name, port in u.ports.items():
                 s = port.stream
-                # The head is the path's ``marker-end``, so it lands on
-                # the nozzle the stream arrives at and on no other.
+                # The head is at the destination end only.
                 if s is None or s.dest is not port:
                     continue
                 if not wears_arrowhead(s, default_registry):
@@ -1425,11 +979,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 room = math.ceil(across * MIN_NOZZLE_PITCH / pitch)
                 crowd = (f", the tightest of the {len(on_face)} it carries there"
                          if len(on_face) > 2 else "")
-                # Two heads at this pitch either leave a strip of paper
-                # too thin to read or have run into each other. Same
-                # finding, but the measurement is worded for the one
-                # that happened rather than quoting a clearance of
-                # "-0.3px".
+                # Word the message for a thin gap or an overlap.
                 gap = pitch - ARROWHEAD
                 measured = (
                     f"which leaves {gap:.1f}px of paper between two "
@@ -1439,8 +989,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     if gap > 0 else
                     f"which overlaps two {ARROWHEAD:.0f}px arrowheads by "
                     f"{-gap:.1f}px, so the two heads are drawn over each other")
-                # Only where the artwork really offers somewhere else to
-                # put it.
+                # Suggest a move only where the artwork offers another face.
                 movable = [n for n in (first, second)
                            if len(port_faces(u, n, u.frame)) > 1]
                 elsewhere = (f", or move {u.name}.{movable[0]} onto another face "
@@ -1471,49 +1020,20 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                               f"stream {s.name} crosses {u.name}"))
                         break
 
-            # Soft: a segment drawn on the slant. BS ISO 15519-1:2010
-            # §12.1 wants connecting lines run horizontally or
-            # vertically, but lets a line go oblique where doing so
-            # makes the diagram clearer -- the exception is why this
-            # warns rather than refuses, and the exception is also why
-            # nothing can decide for the author.
-            #
-            # One ``via()`` waypoint is what produces it. ``via`` states
-            # the middle of the path and nothing squares the two ends up
-            # against it, so a single point off the axis of both nozzles
-            # leaves two sloping segments where the author expected an
-            # elbow. ``tests/test_route_invariants`` and
-            # ``tests/test_render`` hold the shipped corpus orthogonal,
-            # so the sheets in this repo are clean and an author drawing
-            # their own had nothing watching at all.
-            #
-            # Neither route finding beside it can see this.
-            # ``route-detour`` measures Manhattan length, and a
-            # diagonal's is exactly the elbow's that replaces it -- the
-            # same dx and the same dy -- so squaring one up does not move
-            # the ratio by a pixel. ``route-crosses-unit`` is blind to a
-            # sloping segment outright (:data:`_SQUARE_TOL`), so a
-            # diagonal run straight through a vessel is reported by
-            # nothing at all.
-            #
-            # One finding per stream: the whole path is one ``via()``
-            # call and one thing to fix.
+            # Soft: a segment drawn on the slant. BS ISO 15519-1:2010 12.1
+            # wants horizontal or vertical lines but allows oblique ones
+            # where clearer, so this warns. A single off-axis via() point is
+            # the usual cause. route-detour cannot see it (same Manhattan
+            # length) and route-crosses-unit ignores sloping segments. One
+            # finding per stream.
             slopes = [(a, b) for a, b in zip(pts, pts[1:]) if not _square(*a, *b)]
             if slopes:
                 (x1, y1), (x2, y2) = slopes[0]
                 more = ("" if len(slopes) == 1 else
                         f", the first of {len(slopes)} on it")
-                # Only the author knows which corner they meant, so the
-                # message offers the ones the segment allows rather than
-                # guessing -- less any that is already a point on the
-                # path, since turning at one of those doubles the line
-                # back on itself instead of squaring it. With a single
-                # ``via()`` waypoint that leaves exactly one.
-                #
-                # Off a manual route the cure is the ``via()`` call; off
-                # an automatic one there is nothing to edit, since the
-                # router draws right angles only and a slope there is a
-                # path resolved against geometry that has since moved.
+                # Offer the corners that do not double the line back. On an
+                # automatic route a slope means stale geometry, so suggest
+                # routing again.
                 corners = [c for c in ((x1, y2), (x2, y1))
                            if all(math.dist(c, p) > _SQUARE_TOL for p in pts)]
                 named = " or ".join(f"({cx:g}, {cy:g})"
@@ -1542,27 +1062,17 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
 
-        # Soft: a horizontal run whose two ends nearly, but not quite,
-        # share an elevation. Units are pinned by their top-left corner,
-        # so a row pinned to convenient corner-y values puts its
-        # *nozzles* wherever each symbol happens to carry them and the
-        # router draws a step into the device and back out. Nothing
-        # errors and no nozzle leaves its ink; the sheet is silently,
-        # subtly wrong.
-        #
-        # ``pin(port=...)`` is the cure, so the message names it.
+        # Soft: a horizontal run whose ends nearly share an elevation.
+        # Pinning units by their top-left corner leaves nozzles slightly
+        # off level, and the router draws a step. ``pin(port=...)`` is the
+        # cure.
         for s in drawn:
-            # A signal line carries a measurement, not a fluid, so it
-            # has no elevation to be off. Its balloon end is placed by
-            # ``add_instrument``'s anchor and ``offset=`` rather than by
-            # a pin.
+            # Signal lines have no elevation to be off.
             if s.kind in SIGNAL_KINDS:
                 continue
             su, du = s.source.owner, s.dest.owner
-            # This finding's whole content is that a hand-written
-            # elevation was arrived at by corner arithmetic, so it is
-            # only raised where a hand-written elevation exists. On an
-            # auto-laid-out sheet the engine is free to move them.
+            # Only where an elevation was pinned by hand; layout may move
+            # free units.
             if not (_pinned_y(su) or _pinned_y(du)):
                 continue
             src = resolve_port(su, su.frame, s.source.name)
@@ -1571,11 +1081,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if near is None:
                 continue
             offset, span, at_source = near
-            # Name the shorter device and the elevation to put it on:
-            # its own half-height is the arithmetic that went missing.
-            # Which end that is comes back from the call that measured
-            # ``span``, so the sentence cannot name one device and quote
-            # the other one's height at it.
+            # Suggest pinning the shorter unit's nozzle to the other's level.
             if at_source:
                 dev, port, target = su, s.source.name, dst.point[1]
             else:
@@ -1589,32 +1095,28 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"That is corner arithmetic rather than a step: pin the nozzle, "
                 f"{dev.name}.pin(port={port!r}, y={target:g})"))
 
-    # Soft: two runs drawn side by side with less paper between them
-    # than ISO 10628-1 5.3.2 leaves. The clause floors the gap at twice
-    # the wider of the two lines and never under 1 mm, which in drawing
-    # units -- one unit is 0,25 mm, see pandid.render.weights.M -- is
-    # ``max(2 * wider, 4)``.
-    #
-    # Measured edge to edge and only where the two actually run beside
-    # each other: parallel, on the same axis, and overlapping in
-    # projection. Two runs that merely lie on nearby lines without ever
-    # being side by side are not a pair a reader can confuse.
-    #
-    # This became reportable when #490 widened a main flow line to the
-    # 0,4 M the standard asks: at 0,2 M the same routes cleared the
-    # floor and none of them fired. The routes have not moved -- the
-    # pens either side of them have -- so the finding is about spacing
-    # the runs, and the systemic answer (the router's own separation is
-    # 6 units and is derived from nothing) is #498. Reported rather than
-    # silently drawn, because a sheet that no longer conforms should say
-    # so on the sheet that fails rather than in an issue.
+    # Soft: two parallel runs closer than ISO 10628-1 5.3.2 allows: twice
+    # the wider line and at least 1 mm, which is ``max(2 * wider, 4)``
+    # drawing units (one unit is 0.25 mm; pandid.render.weights.M). Only
+    # runs that overlap in projection count.
     warnings.extend(_crowded_lines(fs))
 
     return errors + warnings
 
 
 def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
-    """ISO 10628-1 5.3.2, over every pair of parallel runs on the sheet."""
+    """Return ``lines-crowded`` findings for parallel runs (ISO 10628-1 5.3.2).
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    list[Issue]
+        One warning per crowded pair, tightest first.
+    """
     from pandid.render.svg import stream_polyline, _stream_rung
     from pandid.render.weights import M
     from pandid.streams import SIGNAL_KINDS
@@ -1623,9 +1125,7 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
     floor_mm = 1.0              # the clause's absolute minimum
 
     segments = []
-    # A stream with an unplaced end has no drawn path, so there is no
-    # line to measure a clearance against -- the same guard the rest of
-    # ``geometry_issues`` applies before it reads a route.
+    # Only streams with both ends placed have a drawn path.
     for s in fs.streams:
         if s.source.owner.frame is None or s.dest.owner.frame is None:
             continue
@@ -1646,13 +1146,8 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
             need = max(2 * max(aw, bw), floor_mm / unit_mm)
             if gap >= need - 1e-9:
                 continue
-            # ...and only where they are *parallel lines* rather than two
-            # segments that happen to lie on nearby lines. The clause is
-            # about a pair a reader has to tell apart, so the two have to
-            # run together for at least as far as they would have to be
-            # apart -- which needs no constant of its own and drops the
-            # pairs that merely abut end to end. Two on the shipped
-            # corpus do exactly that, at zero overlap.
+            # Count only pairs that run together for at least the required
+            # gap, not segments that merely abut end to end.
             overlap = min(a_hi, b_hi) - max(a_lo, b_lo)
             if overlap <= need:
                 continue
@@ -1676,20 +1171,25 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
 
 def validate(fs: "Flowsheet", *, arrows: bool = True,
              tabulates: bool = True) -> list["Issue"]:
-    """Return all validation issues for the flowsheet (errors first).
+    """Return all validation issues for the flowsheet, errors first.
 
-    Both halves -- :func:`model_issues` and :func:`geometry_issues` --
-    over the sheet as it stands, which is what a caller asking "what is
-    wrong with this?" means. A render asks the two separately and at
-    different moments; see
-    :meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`.
+    Runs :func:`model_issues` and :func:`geometry_issues` on the sheet as
+    it stands. A render runs them separately, before and after geometry
+    (:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`).
 
-    ``arrows`` is :func:`geometry_issues`' argument and ``tabulates`` is
-    :func:`model_issues`', both passed straight through. Two facts about
-    one drawing and not one fact twice: see
-    :func:`~pandid.render.svg.tabulates_boundary_flows`.
-    :meth:`pandid.flowsheet.Flowsheet.validate` resolves both from a
-    single diagram name, which is the spelling a caller has.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to check.
+    arrows : bool, default=True
+        Passed to :func:`geometry_issues`.
+    tabulates : bool, default=True
+        Passed to :func:`model_issues`.
+
+    Returns
+    -------
+    list[Issue]
+        Errors, then warnings.
     """
     found = model_issues(fs, tabulates=tabulates) + geometry_issues(fs, arrows=arrows)
     return ([i for i in found if i.severity == "error"]

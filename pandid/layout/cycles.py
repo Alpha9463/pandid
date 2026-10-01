@@ -1,4 +1,9 @@
-"""Phase 0: Cycle Breaking (Feedback Arc Set)."""
+"""Mark the process streams that close a cycle as return lines.
+
+Placement needs an acyclic process graph. A depth-first walk marks each
+back edge with ``Stream._is_recycle``; those streams are drawn right to
+left and state a reversed claim (:mod:`pandid.layout.claims`).
+"""
 
 from typing import TYPE_CHECKING
 
@@ -9,16 +14,23 @@ if TYPE_CHECKING:
 
 
 def break_cycles(fs: "Flowsheet") -> None:
-    """Identify and mark recycle streams using DFS back-edge detection.
+    """Mark the back edges of the process graph as recycle streams.
 
-    This phase ensures the layout algorithm works on a Directed Acyclic
-    Graph (DAG). Streams marked as is_recycle=True will be drawn
-    backward, while all others flow forward through the ranks.
+    Only process streams count: a signal is not a step along the flow, so a
+    control loop is never a cycle here. The walk starts from units with no
+    incoming process stream, in flowsheet order, and then from any unit not
+    yet reached. Streams with ``draw_as_recycle=True`` are walked last from
+    each unit, which makes them the likeliest back edge.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose streams are marked. Every stream's recycle mark is reset
+        first.
     """
     from pandid.layout.stages import process_streams, process_units
 
-    # 1. Reset all recycles (private field; is_recycle is read-only to
-    #    callers)
+    # Reset every mark; ``is_recycle`` is read-only to callers.
     for s in fs.streams:
         s._is_recycle = False
 
@@ -26,15 +38,7 @@ def break_cycles(fs: "Flowsheet") -> None:
     if not units:
         return
 
-    # 2. Build adjacency over the *process* runs -- material, between
-    #    two units that carry material. A signal is not a step along the
-    #    flow, so a control loop closing on the valve it commands is not
-    #    a cycle here and there is nothing in it to tear. That was the
-    #    old engine's defect and not a simplification: with signals in,
-    #    a loop's feedback wire was marked a recycle, then excluded from
-    #    every phase that places anything, so its two ends were placed
-    #    with no relationship to each other and the router drew it the
-    #    long way round (#430).
+    # Build adjacency over process streams only.
     adj: dict["Unit", list["Stream"]] = {u: [] for u in units}
     in_degree: dict["Unit", int] = {u: 0 for u in units}
 
@@ -44,9 +48,7 @@ def break_cycles(fs: "Flowsheet") -> None:
         adj[s.source.owner].append(s)
         in_degree[s.dest.owner] += 1
             
-    # Sort outgoing streams so draw_as_recycle=True are traversed LAST.
-    # In DFS, a stream traversed later is more likely to hit a node
-    # already on the recursion stack, classifying it as the back-edge.
+    # Walk draw_as_recycle streams last so they are the likeliest back edge.
     for u in units:
         adj[u].sort(key=lambda s: s.draw_as_recycle)
         
@@ -54,27 +56,16 @@ def break_cycles(fs: "Flowsheet") -> None:
     stack: set["Unit"] = set()
 
     def dfs(start: "Unit") -> None:
-        """Walk from ``start`` with an explicit stack instead of the
-        call stack, so the depth of the longest unbranched chain never
-        meets Python's recursion limit (#413).
+        """Walk depth first from one unit, marking back edges.
 
-        Each frame is a node plus how far through *its own* adjacency
-        list it has gotten -- exactly the state a recursive call would
-        otherwise hold on the real stack -- so an edge is visited, and
-        a back edge marked, in precisely the order the recursive walk
-        used to: pushing a frame for ``v`` and looping happens the
-        instant a recursive call to ``dfs(v)`` would have, and a frame
-        is popped, with ``u`` dropped from ``stack``, at the same point
-        a recursive call would have returned. This is a mechanical
-        rewrite of the recursion below, not a re-ordering of it:
+        An explicit stack of ``(unit, next edge index)`` frames replaces
+        recursion, so a long chain cannot reach Python's recursion limit.
+        Edges are visited in the same order a recursive walk would use.
 
-            def dfs(u):
-                visited.add(u); stack.add(u)
-                for s in adj[u]:
-                    v = s.dest.owner
-                    if v in stack: s._is_recycle = True
-                    elif v not in visited: dfs(v)
-                stack.remove(u)
+        Parameters
+        ----------
+        start : Unit
+            Unit to start from.
         """
         visited.add(start)
         stack.add(start)
@@ -96,11 +87,10 @@ def break_cycles(fs: "Flowsheet") -> None:
                 stack.remove(u)
                 frames.pop()
 
-    # Start DFS from feed nodes (in-degree == 0)
+    # Start from units with no incoming process stream.
     feeds = [u for u in units if in_degree[u] == 0]
 
-    # If no feeds exist (a perfectly closed loop), start from the unit
-    # with the highest out-degree as a heuristic root.
+    # A closed loop has no such unit: start from the highest out-degree.
     if not feeds:
         highest = max(units, key=lambda x: len(adj[x]))
         feeds = [highest]
@@ -109,7 +99,7 @@ def break_cycles(fs: "Flowsheet") -> None:
         if f not in visited:
             dfs(f)
 
-    # Catch any disconnected components
+    # Reach every component the walk has not visited.
     for u in units:
         if u not in visited:
             dfs(u)

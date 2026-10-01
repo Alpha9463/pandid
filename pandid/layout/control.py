@@ -1,26 +1,16 @@
-"""Stage 2: the instrumentation, against frozen process geometry.
+"""Place instrument balloons against the settled process geometry.
 
-Every balloon on the sheet lands here, and the process boxes are read
-and never written. A balloon with a host resolves against it, exactly as
-it always has (:func:`~pandid.layout.attach.place_attached`); a
-free-standing one -- a controller in a panel, a logic square between two
-loops -- has no host to resolve against, so it is put near the things it
-is wired to, in the nearest space nothing else has claimed.
-
-The old engine ranked a free-standing balloon with the equipment, and
-the signal into it was read as a step along the process: a controller
-was pushed a full column east of its transmitter, and the loop it closed
-became a cycle the flow graph then had to be torn to break. Placing it
-here instead is what leaves no control loop in the flow graph at all.
+Process frames are read and never written. An attached balloon resolves
+against its host (:func:`~pandid.layout.attach.place_attached`). A
+free-standing balloon, such as a panel controller or a logic symbol, is
+placed near the units it is wired to, in the nearest free space.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-# The gaps the coordinate pass left between one grid line and the next,
-# which is what a grid line the sheet never used is worth (see
-# :func:`_lane`). Imported rather than restated so the two cannot drift.
+# Grid gaps, used to place a pinned column or row the sheet does not use.
 from pandid.layout.coordinates import COL_GAP, ROW_GAP
 
 if TYPE_CHECKING:
@@ -28,23 +18,31 @@ if TYPE_CHECKING:
     from pandid.geometry import Frame
     from pandid.units import Unit
 
-#: How far apart a free-standing balloon and anything already drawn are
-#: kept, so a signal line has a lane to reach it by.
+#: Clearance between a free-standing balloon and anything already drawn,
+#: leaving a lane for its signal lines.
 CLEARANCE = 30.0
 
-#: The lattice a free spot is looked for on. Coarse enough that the
-#: search over a crowded sheet is short, fine enough that a balloon does
-#: not jump a whole column to dodge a line.
+#: Lattice spacing of the free-spot search, in drawing units.
 STEP = 25.0
 
-#: How far the search may walk before it gives up and stacks the balloon
-#: where it wanted to be. A sheet that full has a different problem, and
-#: ``validate()`` reports the overlap.
+#: Rings searched before a balloon is left at its preferred spot, where
+#: ``validate()`` reports any overlap.
 REACH = 40
 
 
 def place_control(fs: "Flowsheet") -> bool:
-    """Place every balloon. True when one of them moved."""
+    """Place every attached and free-standing balloon.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with settled process frames.
+
+    Returns
+    -------
+    bool
+        Whether any balloon moved.
+    """
     from pandid.layout.attach import place_attached
 
     moved = place_attached(fs)
@@ -52,7 +50,18 @@ def place_control(fs: "Flowsheet") -> bool:
 
 
 def _place_free(fs: "Flowsheet") -> bool:
-    """Put each hostless balloon beside what it is wired to."""
+    """Place each free-standing balloon near the units it is wired to.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with settled process frames.
+
+    Returns
+    -------
+    bool
+        Whether any free-standing balloon moved.
+    """
     from pandid.geometry import Frame
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size
@@ -64,11 +73,8 @@ def _place_free(fs: "Flowsheet") -> bool:
     taken = [u.frame for u in fs.units
              if u.frame is not None and u not in set(pending)]
     moved = False
-    # Resolved in the order the sheet holds them, and a balloon wired
-    # only to balloons still waiting is placed against whatever *is*
-    # settled rather than deferred: a panel of controllers wired to each
-    # other has no root to start from, and a sheet drawn late is better
-    # than a sheet not drawn.
+    # Place in flowsheet order. A balloon wired only to unplaced balloons
+    # is placed against what is settled, so wired panels terminate.
     for inst in pending:
         w, h = resolve_size(inst)
         x, y = _spot(fs, inst, w, h, taken)
@@ -78,22 +84,16 @@ def _place_free(fs: "Flowsheet") -> bool:
         pin = inst.pin_
         inst.frame = Frame(
             x=x, y=y, w=w, h=h, label_pos="center",
-            # The rank :func:`_spot` actually stood the balloon in, and
-            # only where it used one: an absolute coordinate on an axis
-            # wins over the grid there, so recording the superseded
-            # ``col`` would claim a lane the balloon may not be in.
-            # Carried because the frame is the record of what was drawn
-            # -- a balloon put in column 3 *is* in column 3 -- and
-            # ``pin-not-honored`` reads it to tell a grid pin that was
-            # honoured from one that was dropped on the floor.
+            # Record a grid rank only where the pin used one; an absolute
+            # coordinate on that axis supersedes it. ``pin-not-honored``
+            # reads these to check grid pins.
             col=pin.col if pin is not None and pin.x is None else None,
             row=pin.row if pin is not None and pin.y is None else None,
             orientation=pin.orientation if pin else 0.0,
             mirrored=pin.mirrored if pin else False,
             mirror_y=pin.mirror_y if pin else False,
-            # Faces chosen in layout ride across the re-place, for the
-            # reason an attached balloon's do: re-deciding here would
-            # move a nozzle the router has already drawn to.
+            # Keep chosen faces; changing them would move a nozzle the
+            # router has already reached.
             port_faces=dict(old.port_faces) if old is not None else {},
         )
         taken.append(inst.frame)
@@ -102,17 +102,28 @@ def _place_free(fs: "Flowsheet") -> bool:
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
           taken: list["Frame"]) -> tuple[float, float]:
-    """Where this balloon goes: the author's answer, or the nearest free.
+    """Return a free-standing balloon's top-left corner.
 
-    **A pin is an answer on the axis it names, and nothing at all on the
-    axis it does not.** So ``pin(col=3)`` alone fixes the column and
-    leaves the balloon free to step up or down to clear what is already
-    drawn, and ``pin(col=3, row=1)`` is the whole answer and no search
-    is made. That distinction is what the short-circuit here used to
-    get wrong: it fired for ``pin.x``/``pin.y`` only, so a grid pin was
-    computed exactly and then handed to :func:`_nearest_free`, which
-    walked the balloon straight off the column it had been put in
-    (#444).
+    A pin fixes only the axes it names. ``pin(col=3)`` fixes the column and
+    lets the balloon search up and down it; ``pin(col=3, row=1)`` is final.
+    Unpinned axes search outward from the centroid of the units it is
+    wired to.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with settled process frames.
+    inst : Unit
+        Free-standing balloon.
+    w, h : float
+        Balloon size.
+    taken : list[Frame]
+        Frames already drawn.
+
+    Returns
+    -------
+    tuple[float, float]
+        Top-left corner.
     """
     pin = inst.pin_
     centre = _centroid(fs, inst)
@@ -129,18 +140,26 @@ def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
 
 def _lane(grid: dict[int, tuple[float, float]], index: int | None,
           gap: float) -> float | None:
-    """Where the grid line the author named is, in pixels.
+    """Return the pixel start of a named grid line.
 
-    ``None`` where no line was named, but **never** because the sheet
-    did not happen to use that one: ``pin(col=7)`` on a three-column
-    sheet is a column four past the last, and the old answer -- drop the
-    pin and put the balloon by its wires instead -- silently drew
-    something the author did not ask for. Beyond either end the grid is
-    continued at its own average pitch, and a gap inside it is
-    interpolated across, so a named line always resolves somewhere.
+    An index outside the sheet's grid is extrapolated at the grid's average
+    pitch, and a gap inside it is interpolated, so a pinned line always
+    resolves. A one-line grid uses its own size plus ``gap`` as the pitch.
 
-    A sheet with a single column has no pitch of its own to continue at,
-    so that column's own box and the gap after it stand in.
+    Parameters
+    ----------
+    grid : dict[int, tuple[float, float]]
+        Start and size of each used grid line.
+    index : int or None
+        Line the author named.
+    gap : float
+        Gap between lines, used when the pitch cannot be measured.
+
+    Returns
+    -------
+    float or None
+        Start of the line, or ``None`` when no line was named or the grid
+        is empty.
     """
     if index is None or not grid:
         return None
@@ -163,22 +182,20 @@ def _lane(grid: dict[int, tuple[float, float]], index: int | None,
 
 def _grid(fs: "Flowsheet") -> tuple[dict[int, tuple[float, float]],
                                     dict[int, tuple[float, float]]]:
-    """The columns and rows stage 1 drew: where each starts, and how deep.
+    """Return the start and size of each grid column and row stage 1 used.
 
-    The size is carried because :func:`_lane` needs a pitch to continue
-    the grid past its last line, and a one-column sheet has none to
-    measure.
+    Only process units count, so a balloon placed earlier in stage 2 cannot
+    add a grid line that later balloons are measured against.
 
-    Stage 1's units only, and asked of :mod:`pandid.layout.stages`,
-    which is where that boundary is drawn -- restating it here as an
-    ``isinstance`` would be a second definition of the sheet's own cut.
-    A balloon is placed in stage 2 and *consumes* the grid, so letting
-    one back in would have it move the lanes the balloons after it are
-    measured against: once a balloon's frame carries the rank it was
-    stood in, the first ``pin(col=7)`` on a three-column sheet makes a
-    column 7 for the next one to be measured off. No balloon reached
-    this before that rank was recorded, so excluding them keeps the grid
-    exactly what it has always been.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with settled process frames.
+
+    Returns
+    -------
+    tuple[dict[int, tuple[float, float]], dict[int, tuple[float, float]]]
+        Columns and rows, each mapping index to ``(start, largest size)``.
     """
     from pandid.layout.stages import process_units
 
@@ -199,7 +216,21 @@ def _grid(fs: "Flowsheet") -> tuple[dict[int, tuple[float, float]],
 
 
 def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
-    """The middle of everything this balloon is wired to."""
+    """Return the centre of the placed units a balloon is wired to.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with settled frames.
+    inst : Unit
+        Free-standing balloon.
+
+    Returns
+    -------
+    tuple[float, float]
+        Mean centre of its placed peers, or a point below the sheet's
+        bottom-left corner when none is placed.
+    """
     points = []
     for port in inst.ports.values():
         stream = port.stream
@@ -211,8 +242,7 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
     if points:
         return (sum(p[0] for p in points) / len(points),
                 sum(p[1] for p in points) / len(points))
-    # Wired to nothing placed: stand it off the sheet's own bottom left,
-    # where it is visible and in nothing's way.
+    # Wired to nothing placed: put it below the sheet's bottom-left corner.
     frames = [u.frame for u in fs.units if u.frame is not None and u is not inst]
     if not frames:
         return 0.0, 0.0
@@ -221,18 +251,28 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
 
 def _nearest_free(x: float, y: float, w: float, h: float, taken: list["Frame"],
                   free_x: bool, free_y: bool) -> tuple[float, float]:
-    """The spot nearest ``(x, y)`` that no drawn box already holds.
+    """Return the free spot nearest a preferred corner.
 
-    Walked as rings on a lattice so the answer is a function of the
-    sheet and not of the order the rings happened to be generated in:
-    within a ring the candidates are visited in a fixed order, and the
-    first that clears everything wins.
+    Candidates are lattice rings of growing Chebyshev radius, each walked
+    in a fixed order, so the result does not depend on generation order.
+    A pinned axis is not searched; with both axes pinned the preferred
+    corner is returned even if it overlaps.
 
-    An axis the author pinned is not searched. A balloon pinned to a
-    column steps *up and down* that column to find its room and never
-    leaves it, which is what a column pin means; one pinned on both
-    axes is placed where it was put, overlap and all, since the author
-    has already answered and ``validate()`` reports what results.
+    Parameters
+    ----------
+    x, y : float
+        Preferred top-left corner.
+    w, h : float
+        Box size.
+    taken : list[Frame]
+        Frames already drawn.
+    free_x, free_y : bool
+        Whether the search may move along each axis.
+
+    Returns
+    -------
+    tuple[float, float]
+        First clear corner within :data:`REACH` rings, else ``(x, y)``.
     """
     if not (free_x or free_y):
         return x, y
@@ -247,7 +287,18 @@ def _nearest_free(x: float, y: float, w: float, h: float, taken: list["Frame"],
 
 
 def _ring(radius: int) -> list[tuple[int, int]]:
-    """The lattice points at Chebyshev distance ``radius``, clockwise."""
+    """Return the lattice offsets at one Chebyshev radius, clockwise.
+
+    Parameters
+    ----------
+    radius : int
+        Ring radius in lattice steps.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        Offsets starting at the top-left corner of the ring.
+    """
     if radius == 0:
         return [(0, 0)]
     out = [(dx, -radius) for dx in range(-radius, radius + 1)]
@@ -258,7 +309,20 @@ def _ring(radius: int) -> list[tuple[int, int]]:
 
 
 def _hits(x: float, y: float, w: float, h: float, taken: list["Frame"]) -> bool:
-    """Would a box here touch anything already drawn?"""
+    """Return whether a box comes within :data:`CLEARANCE` of a drawn frame.
+
+    Parameters
+    ----------
+    x, y, w, h : float
+        Candidate box.
+    taken : list[Frame]
+        Frames already drawn.
+
+    Returns
+    -------
+    bool
+        Whether the padded box overlaps any frame.
+    """
     for frame in taken:
         if (x < frame.x_max + CLEARANCE and x + w + CLEARANCE > frame.x
                 and y < frame.y_max + CLEARANCE and y + h + CLEARANCE > frame.y):

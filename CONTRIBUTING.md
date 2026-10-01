@@ -1,14 +1,14 @@
 # Contributing to `pandid`
 
-Thanks for helping. This covers setup, the checks that have to pass, and the
-four things about this codebase a new contributor will otherwise get wrong.
+This guide covers setup, the checks that must pass, the Git workflow, and four
+rules about this codebase that new contributors most often miss.
 
 ## Setup
 
 Python 3.11 or later. From a checkout:
 
 ```bash
-pip install -e '.[dev]'          # pytest, ruff, mypy
+pip install -e '.[dev]'          # pytest, ruff, mypy, pyright
 pip install -e '.[dev,pdf]'      # ...plus the export backend, for PDF/PNG output
 ```
 
@@ -17,13 +17,10 @@ import only the Python standard library. The `pdf` extra is optional and is
 imported lazily inside `pandid/render/export.py`, only when the output path ends
 in `.pdf` or `.png`.
 
-Everything in that extra has to arrive as a *wheel* on Windows, Linux and macOS
-for every Python the classifiers claim. That is not a preference: it is the bug
-`[pdf]` was rebuilt to fix. The old backend, cairosvg, reaches libcairo through
-cairocffi, which `dlopen`s a shared library no wheel ships, so `pip install
-'pandid[pdf]'` reported success and the first export died in the *import* with
-`OSError: no library called "cairo-2" was found`. Read the `pandid/render/export.py`
-docstring before changing that dependency list.
+Every package in that extra must install from a binary wheel on Windows, Linux
+and macOS for every supported Python. A dependency that loads a system library
+at import time installs cleanly and then fails on the first export. Read the
+`pandid/render/export.py` docstring before changing that dependency list.
 
 Optionally install the commit hooks, which mirror the CI lint gates:
 
@@ -52,29 +49,20 @@ not auto-formatted, so don't reformat `pandid/` in a feature PR.
 ### A test you add must type-check clean
 
 Both `mypy` and Pyright gate `pandid/`. CI does not run Pyright on `tests/`,
-which has a separate backlog. **Any test written from now on should produce no
-new Pyright findings** on the new code:
+which has an existing backlog of findings. A new or changed test must add no
+Pyright findings:
 
 ```bash
 python -m pyright tests/test_your_thing.py
 ```
 
-This is forward-looking only. `tests/` carries a large backlog of Pyright
-findings that is deliberately not being cleaned up — a user never opens
-`tests/`, so the old noise costs them nothing, while a new test written
-carelessly adds to a pile nobody will ever clear cheaply. Holding the line where
-the test is written is free; a sweep is not.
+`pandid/` and `examples/` have no Pyright errors; keep it that way, since users
+copy the examples.
 
-`pandid/` and `examples/` have no Pyright errors, and should stay that way — the
-examples are what a user copies, so a warning there lands in their editor.
-
-When the checker complains, the fix is almost never a `cast` or a
-`# type: ignore`. Those hide the question rather than answering it. Ask whether
-the value can really be bad at run time: if it can, that is a bug worth a test;
-if it cannot, the *types* are lying and the honest fix is usually a better API.
-`portgeom.pinned_x()` exists because `unit.pin_.x + port_offset(unit, p)[0]`
-reached through two `Optional`s and made the reader match the `[0]` to the `.x`
-by hand — the checker was right, seventy-two times over.
+Avoid `cast` and `# type: ignore`. If a value can be invalid at run time, handle
+it and test it; if it cannot, fix the types or the API. For example,
+`portgeom.pinned_x()` replaces `unit.pin_.x + port_offset(unit, p)[0]`, which
+read through two optional values and paired the index with the axis by hand.
 
 Keep a PR to one concern. If a change touches rendering, say so and show what
 moved (see *Goldens* below).
@@ -121,14 +109,17 @@ rewriting shared branch history after review begins.
 
 1. **Topology** (`pandid/flowsheet.py`, `pandid/units.py`, `pandid/ports.py`,
    `pandid/streams.py`) holds units, ports and stream connectivity.
-2. **Geometry.** `pandid/layout/` places the process first and the
-   instrumentation onto it: it breaks cycles, solves a system of difference
-   constraints per axis over the faces the symbols fix, reduces crossings,
-   hands out coordinates, and then places every balloon against that frozen
-   geometry -- emitting each unit's resolved `Frame`, and finally port-face
-   selection and label placement. `pandid/portgeom.py` is the single source of
-   truth for port geometry, and `pandid/routing/` is the visibility graph and
-   the A\* search over it.
+2. **Geometry.** `pandid/layout/` places process units first and instruments
+   second. It breaks cycles, fits each axis by weighted least squares to the
+   placement claims each unit makes about its neighbours, turns the fit into
+   grid columns and rows with crossing-reduction sweeps, converts the grid to
+   pixel coordinates, and writes each unit's `Frame`. It then places
+   instruments against that geometry and selects port faces and label
+   positions. `pandid/routing/` builds a visibility graph and runs an A\*
+   search over it. After the first route, `Flowsheet.route()` runs a bounded
+   refinement and layout search that keeps a change only when the routed
+   drawing improves. `pandid/portgeom.py` is the single source of truth for
+   port geometry.
 3. **Render** (`pandid/render/`) produces the SVG output and the symbol
    registry, with `pandid/validate.py` and `pandid/document.py` beside it.
 
@@ -193,8 +184,8 @@ To add or change an equipment symbol:
    or by a `STAYS_ON_BASE` entry giving the word from the rule — a support, a
    roof, a cladding, an attitude, a drawn internal, a certification rating, a
    body style — that makes it a style rather than a device. Regenerate with
-   `python scripts/gen_devices.py` and commit that file too. Tests hold it to
-   its generator and check that each registered drawing has one owner.
+   `python scripts/gen_devices.py` and commit that file too. Tests check it
+   against its generator and check that each registered drawing has one owner.
 
 The shape's `aspect` comes across with it, as `Symbol.stretchable`. The stencil
 author has already answered whether the drawing may be reshaped to fill a box of
@@ -437,15 +428,15 @@ same PR, add a section for it to
 When a call turns out to be the wrong shape, fix the shape and retire the old
 one. Don't keep a wrong API alive for compatibility.
 
-**A deprecation lives for one release.** The six announced in 0.1.2 were deleted
-in 0.1.3. That is the whole window, and it is short on purpose: two spellings of
-one thing are two things to test, to document, and to keep drawing the same
-sheet.
+**A deprecation lives for one release**: one announced in 0.1.2 is removed in
+0.1.3. Two spellings of one call are two things to test, document and keep
+drawing the same sheet.
 
 Declare it as a module constant beside the code that honours it:
 
 ```python
 from pandid.deprecation import Deprecation
+from pandid.units import Unit
 
 RETIRED = Deprecation(
     what="Pump(cooled=True)",           # the call an author types today
@@ -461,9 +452,7 @@ class Pump(Unit):
             RETIRED.warn(self, where=name)
 ```
 
-Both halves of that pair are invented. An example naming a spelling the library
-really has is one real retirement away from teaching the reverse of what the
-library does.
+Both spellings in that example are invented.
 
 That one call emits both signals: a standard `DeprecationWarning`, and a
 `deprecated` finding on `fs.validate()`. Both are the same sentence, built once,
@@ -515,10 +504,11 @@ python scripts/drawio_samples.py
 git tag v0.1.1 && git push origin v0.1.1
 ```
 
-`.github/workflows/release.yml` takes it from there. It re-runs the four gates
-against the tagged commit, refuses to build if the tag and `pandid.__version__`
-disagree, builds the sdist and wheel, and publishes to PyPI over Trusted
-Publishing. Nothing is uploaded from a laptop and there is no API token to leak.
+`.github/workflows/release.yml` takes it from there. It runs the full CI
+workflow against the tagged commit, refuses to build if the tag and
+`pandid.__version__` disagree, builds the sdist and wheel, and publishes to PyPI
+over Trusted Publishing. Nothing is uploaded from a laptop and there is no API
+token to leak.
 
 ## Reporting a bug
 

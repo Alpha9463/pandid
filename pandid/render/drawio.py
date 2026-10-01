@@ -1,102 +1,71 @@
-"""draw.io / diagrams.net (``.drawio``) export.
+"""Export a flowsheet to draw.io / diagrams.net (``.drawio``).
 
-The SVG backend draws a finished picture. This one hands the reader back
-the *model*: units as draw.io vertices, streams as draw.io edges between
-them, so an author can open the sheet, drag a column two hundred units
-left and have its lines follow. It is also the way to Visio, which
-draw.io exports natively.
+The SVG backend draws a finished picture; this one exports the model:
+units as draw.io vertices and streams as edges between them, so an
+author can move a unit in draw.io and its lines follow. draw.io also
+exports to Visio.
 
-**The symbols in this library are draw.io's own P&ID stencils**,
-vendored and converted (see NOTICE), so the export does not trace
-geometry: it names the shape. ``mxgraph.pid.valves.gate_valve`` is a key
-draw.io's stencil registry already answers to.
-:func:`scripts.vendor_symbols.drawio_shape_key` derives it from the two
-names in the stencil file itself, by draw.io's own rule, at the moment
-the artwork is converted, and
-:attr:`~pandid.render.symbols.Symbol.drawio_shape` carries it here. A
-key that has stopped resolving is the quietest failure this file can
-have -- draw.io answers one with a plain rectangle rather than an error
--- so ``tests/test_drawio.py`` walks every symbol the library can draw
-and holds each reference against the vendored stencils.
+The library's symbols are draw.io's own P&ID stencils, vendored and
+converted (see NOTICE), so the export names each shape rather than
+tracing it. ``mxgraph.pid.valves.gate_valve`` is a key draw.io's stencil
+registry resolves. :func:`scripts.vendor_symbols.drawio_shape_key`
+derives it from the stencil file by draw.io's own rule, and
+:attr:`~pandid.render.symbols.Symbol.drawio_shape` carries it here. draw.io
+draws an unresolved key as a plain rectangle without an error, so
+``tests/test_drawio.py`` checks every reference against the vendored
+stencils.
 
-Three things fall out of that arrangement:
+Three things follow:
 
-* **Sizing.** draw.io scales a stencil into the box the cell is given,
-  stretching it where the stencil says ``aspect="variable"`` and
-  centring it uniformly where it says ``"fixed"`` -- the same question
-  :func:`pandid.portgeom.ink_box` asks of
-  :attr:`~pandid.render.symbols.Symbol.stretchable`, since that flag
-  *is* the stencil's own attribute. So the box is the whole of the
-  mapping, and the reproportioning ``SCALE`` in
-  ``scripts/vendor_symbols.py`` applies to four families is already in
-  the box the layout engine used. This holds only while every referenced
-  stencil is ``variable``, and a test pins that.
-* **Ports.** A draw.io fixed connection point is a fraction of the
-  cell's box, which is what :func:`pandid.portgeom.port_point` already
-  computes in absolute terms; dividing through is the whole conversion.
-* **Ink.** ``scripts/mxgraph_to_svg.py`` converts a stencil with its
-  fill state starting at ``none`` and every stroke at ``#111``, standing
-  in for the ``fillColor``/``strokeColor`` draw.io would have taken from
-  the style. Saying those two back in the style reproduces the sheet's
-  ink, ``<fillcolor>`` overrides inside the stencil included, since
-  draw.io honours those itself.
+* **Sizing.** draw.io scales a stencil into its cell, stretching where
+  the stencil says ``aspect="variable"`` and letterboxing where it says
+  ``"fixed"``, the question :func:`pandid.portgeom.ink_box` asks of
+  :attr:`~pandid.render.symbols.Symbol.stretchable`. The cell box is
+  therefore the whole mapping; a test pins that every referenced
+  stencil is ``variable``.
+* **Ports.** A draw.io fixed connection point is a fraction of the cell
+  box; dividing :func:`pandid.portgeom.port_point` through by the box
+  is the conversion.
+* **Ink.** ``scripts/mxgraph_to_svg.py`` converts stencils with fill
+  ``none`` and strokes ``#111``, standing in for the style's
+  ``fillColor`` and ``strokeColor``, so stating those in the style
+  reproduces the sheet's ink.
 
-What is *not* free is written down rather than discovered in draw.io.
-:data:`_APPROXIMATIONS` is every symbol this library draws itself
-because draw.io has no stencil for it, each with the sentence saying
-what its stand-in loses; the stand-ins are draw.io *built-ins* rather
-than stencils, so a reference there cannot fail to resolve the way a
-stencil key could. Sheet furniture is docked where the sheet docks it
-and ruled the way the sheet rules it
+Symbols draw.io has no stencil for are listed in :data:`_APPROXIMATIONS`,
+each stood in for by a draw.io built-in (which cannot fail to resolve)
+with a sentence saying what it loses. Every such loss is reported on
+``fs.warnings`` (:data:`APPROXIMATED`), as is any title-block cell that
+had to abbreviate, through :data:`~pandid.render.furniture.Reporter`.
+Sheet furniture is docked and ruled as on the sheet
 (:meth:`DrawioRenderer._furniture`).
 
-**Nothing on the sheet is silently absent.** Written down is not the
-same as said, so every one of those sentences is *reported*: a stand-in
-that loses something names the unit and what it lost on
-``fs.warnings`` (:data:`APPROXIMATED`), and a title-block cell that had
-to abbreviate its value says so there too, in the words the rendered
-sheet uses and through the same
-:data:`~pandid.render.furniture.Reporter`. An export that says nothing
-lost nothing.
+A composed symbol (a body carrying ISO 10628-2 parts, such as an agitator
+in a reactor) names no stencil of its own, since a stencil reference
+names one shape. It is exported as the body's cell with one child cell
+per part, placed by the same fractions the SVG uses
+(:meth:`DrawioRenderer._overlay_cells`). The ten group-28 agitators name
+draw.io's ``mxgraph.pid.agitators`` stencils; other parts use
+:data:`_PART_APPROXIMATIONS`.
 
-**A composed symbol is a group of cells, not a shape.** A body carrying
-ISO 10628-2 supplementary parts -- an agitator in a reactor, trays in a
-column, a settling arrow in a separating vessel -- names no stencil of
-its own, and that is deliberate: a stencil reference names *one* shape,
-so a stirred tank exported under the vessel's own reference would come
-out a bare vessel, the right outline with the thing that made it a
-reactor silently gone. It is drawn instead as **the body's cell with one
-child cell per part**, each placed by the same fractions of the body's
-box the SVG uses (:meth:`DrawioRenderer._overlay_cells`), so the two
-backends draw the same parts in the same places from one set of numbers.
-The ten group-28 agitators name draw.io's own ``mxgraph.pid.agitators``
-stencils; the other twenty-seven parts have :data:`_PART_APPROXIMATIONS`,
-which is :data:`_APPROXIMATIONS` for parts and carries the same sentence
-each about what its stand-in loses.
+With ``page_size`` the export is a sheet: the file states the page,
+furniture docks to it, and the drawing is fitted into what is left,
+through the same :func:`~pandid.render.furniture.dock` and
+:func:`~pandid.render.svg._fit_scale` as the SVG; ``border="zone"`` rules
+the page. Without it the drawing keeps its own coordinates (see
+:class:`_Fit`).
 
-**A model, or a sheet.** Given ``page_size`` this stops being a drawing
-on an unbounded canvas and becomes paper: the file states the page, the
-furniture docks to it rather than to the drawing's own bounds, and the
-drawing is fitted into what the furniture leaves, all through the same
-:func:`~pandid.render.furniture.dock` and
-:func:`~pandid.render.svg._fit_scale` the rendered sheet uses.
-``border="zone"`` then rules that page. Without a page size none of it
-happens and the drawing keeps its own coordinates. See :class:`_Fit`.
+Not exported: a symbol's own lettering held upright under a turn (the
+"M" on a motor operator), which draw.io turns with the shape.
 
-**One** piece of sheet detail has no draw.io construct at all, and
-simply is not drawn: a symbol's own lettering held upright under a turn
-(the "M" on a motor operator), which draw.io turns with the shape.
-
-The output is a plain uncompressed ``mxfile``. draw.io reads that as
-readily as its compressed form, and it diffs.
+The output is a plain uncompressed ``mxfile``, which draw.io reads and
+which diffs cleanly.
 
 What draw.io actually does
 --------------------------
 
-Everything below was read out of draw.io's and mxGraph's own source
-rather than inferred from behaviour, because none of it can be checked
-here: nothing in this repository opens a ``.drawio`` file. Each item
-says where it came from. Line numbers drift; the function names do not.
+Read from draw.io's and mxGraph's source, since nothing in this
+repository opens a ``.drawio`` file. Each item names its source
+functions.
 
 * **A shape reference that misses fails silently, and there is no log.**
   ``mxCellRenderer.createShape`` asks ``mxStencilRegistry.getStencil``
@@ -114,10 +83,10 @@ says where it came from. Line numbers drift; the function names do not.
   ``parseStencilSet``, as above.
   ``scripts/vendor_symbols.drawio_shape_key`` implements the same rule.
 * **A style is ``split(';')`` then ``indexOf('=')``, with no escaping
-  anywhere.** So ``;`` is the *only* character a value cannot contain --
-  parentheses, commas, ampersands, hyphens and slashes, of which 49 of
-  the 136 distinct vendored keys carry at least one (none carry an
-  ampersand or a slash), are all safe. Two traps: a
+  anywhere.** So ``;`` is the *only* character a value cannot contain;
+  parentheses,
+  commas, ampersands, hyphens and slashes in stencil keys are safe.
+  Two traps: a
   value of exactly ``none`` **deletes** the key rather than setting it
   (so ``shape=none`` draws a plain rectangle), and a token containing no
   ``=`` is looked up as a *named style*. ``mxStylesheet.getCellStyle``,
@@ -186,9 +155,7 @@ from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
 from pandid.portgeom import _xform, port_point, symbol_to_box, unit_box
-# ISO 10628-1 5.3.1 c)'s in-line detail band: imported rather than
-# repeated, since the sheet draws a part and its body at exactly that
-# ratio and an export at another one is a second drawing.
+# ISO 10628-1 5.3.1 c) detail weight, shared so parts match the sheet.
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
@@ -214,216 +181,126 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
 
-#: The one ink the sheet is drawn in, and the one draw.io has to be told
-#: to draw it in. ``scripts/mxgraph_to_svg.py`` converts every stencil
-#: stroke to this and fills a solid part of one with it;
-#: :data:`pandid.render.symbols._BODY_INK` is the same colour, for the
-#: same reason. Repeated here rather than imported from the script,
-#: which is not part of the installed package.
+# Stencil ink, as scripts/mxgraph_to_svg.py converts it and as
+# symbols._BODY_INK; repeated because scripts/ is not installed.
 _INK = "#111"
 
-#: What the fill starts at, for everything this file draws itself: a
-#: monochrome sheet lets the paper through.
+# Fill for everything this file draws itself: the paper shows through.
 _NO_FILL = "none"
 
-#: What a *vendored stencil* is filled with, which is not that. draw.io
-#: draws its shape, and no P&ID palette in it names a ``fillColor``, so
-#: the page colour is what the artwork was authored under: its body is
-#: the last ``<fillstroke>`` in the shape and covers the nozzles behind
-#: it. See ``scripts/mxgraph_to_svg.DEFAULT_FILL``, the same colour for
-#: the same reason. Written ``none`` here, the sphere's shell ran
-#: through both its crown nozzles on the export as well as the sheet.
+# Fill for a vendored stencil: the page colour its artwork was authored
+# under, so its body covers the nozzles behind it
+# (scripts/mxgraph_to_svg.DEFAULT_FILL).
 _PAPER = "#ffffff"
 
-#: No ink at all. The same word, and it works for the same reason:
-#: draw.io's ``mxStylesheet.getCellStyle`` *deletes* a key whose value
-#: is exactly ``none`` rather than setting it, so the cell inherits
-#: neither the style's colour nor the stylesheet default's, and
-#: ``mxShape.configureCanvas`` strokes nothing. A cell drawn in it keeps
-#: its geometry and stays selectable and connectable, which is the whole
-#: point of using it for a junction that draws no ink of its own;
-#: ``shape=none`` is the trap next door, since deleting *that* key falls
-#: back to the default vertex and draws a plain rectangle.
+# No stroke. mxStylesheet.getCellStyle deletes a key whose value is
+# ``none``, so the cell strokes nothing but stays selectable and
+# connectable. (``shape=none`` is the trap: deleting that key draws the
+# default rectangle.)
 _NO_STROKE = "none"
 
 # --- line weights -----------------------------------------------------
-# Every width below comes off :class:`~.weights.LineWeight`, the same
-# ladder the sheet is drawn from, so the two backends cannot disagree
-# about a rung. Until #490 this file held its own copies of two of them
-# with a note saying both had to be edited together; a ladder they both
-# read is the version of that note a machine can keep.
-#
-# A pen has to be *stated* on every cell here, which is the one thing
-# this backend has to say that the sheet does not: all 319 vendored
-# stencils declare ``strokewidth="inherit"``, putting the pen in the
-# cell's style rather than in the stencil's own coordinate space, so a
-# cell that says nothing draws at draw.io's default 1 whatever rung the
-# element is on.
-#
-# And every one of them goes through ``fit.length``. A width is a
-# drawing dimension like any other, so on a sheet fitted to a fixed page
-# it scales with the drawing; stating one flat draws it out of
-# proportion with the lines beside it.
+# Every width comes from :class:`~.weights.LineWeight`, the ladder the
+# sheet uses. A pen must be stated on every cell, because the vendored
+# stencils declare ``strokewidth="inherit"`` and would otherwise draw at
+# draw.io's default 1. Every width goes through ``fit.length`` so it
+# scales with a fitted drawing.
 
-#: The ink a *line* is drawn in, which is not quite the ink a symbol is
-#: drawn in: the SVG renderer strokes a stream ``black`` and a converted
-#: stencil ``#111``, and this is the first of those, written the way a
-#: draw.io style writes a colour. A hundredth of a shade apart, and
-#: copied rather than unified, since unifying them here would be this
-#: file quietly editing the sheet.
+# Ink for lines: the SVG strokes streams ``black`` and stencils ``#111``,
+# and both are kept as the sheet has them.
 _LINE_INK = "#000000"
 
-#: The glyph draw.io hops a crossing line with, of the five its Format
-#: panel offers (``none``, ``arc``, ``gap``, ``sharp``, ``line`` --
-#: ``EditorFormatPanel.addLineJumps``). ``arc`` because the sheet draws
-#: a semicircle: :meth:`SvgRenderer._draw_streams` writes ``A 5 5 0 0
-#: 1`` and nothing else, and ``gap`` breaks the line instead while
-#: ``sharp`` and ``line`` are a chevron and a pair of ticks.
-#:
-#: The arc is not quite a semicircle at draw.io's end:
-#: ``mxConnector.paintLine`` draws a *cubic* whose two control points
-#: stand off the run by ``1,3`` times the hop's half-extent, putting the
-#: crown at ``0,75 x 1,3 = 0,975`` of it. So a hop sized to the sheet's
-#: radius is a hundredth of a unit shallower. There is no key that makes
-#: it an arc of a circle.
-#:
-#: **Which side it bulges is draw.io's and not the author's.**
-#: ``paintLine`` takes the sign from the segment's own direction -- ``f
-#: = (round(n.x) < 0 || (round(n.x) == 0 && round(n.y) <= 0)) ? 1 : -1``
-#: -- which works out to *east* for every vertical run and *north* for
-#: every horizontal one, whichever way round the run was routed. The
-#: sheet fixes its sweep flag instead of its sign, so its hop follows
-#: the routing: east down a run and west up the identical run. A
-#: difference a reader comparing the two drawings will see.
+# draw.io's ``jumpStyle`` for the sheet's arc hop (one of none, arc, gap,
+# sharp, line; EditorFormatPanel.addLineJumps). mxConnector.paintLine
+# draws a cubic whose crown is 0.975 of the hop's half-extent, so it is
+# slightly shallower than a semicircle. draw.io chooses the bulge side
+# from the segment direction (east of vertical runs, north of horizontal
+# ones), while the sheet follows the routing direction, so the two can
+# bulge on opposite sides.
 _JUMP_STYLE = "arc"
 
-#: ``jumpStyle`` for each of :data:`~pandid.render.svg.CROSSING_STYLES`
-#: the export writes one for.
-#:
-#: The mapping is the identity on the two it has, which is why the sheet
-#: spells its option in draw.io's own words rather than in a third
-#: vocabulary that would need a table kept in step. ``"plain"`` is
-#: absent on purpose: a sheet that marks no crossing writes no
-#: ``jumpStyle`` at all, and :func:`_hops` returns nothing to write one
-#: on -- ``jumpStyle=none`` would be a longer way of saying it and would
-#: leave the edges reordered for jumps that are not there.
+# ``jumpStyle`` for each crossing style draw.io can draw; the names are
+# draw.io's. ``"plain"`` is absent: it writes no jumpStyle, and _hops
+# leaves the edge order unchanged.
 _JUMP_STYLES = {"arc": _JUMP_STYLE, "gap": "gap"}
 
-#: An edge that is never hopped, whatever is written after it.
-#:
-#: The sheet's jump pass builds its two lists of segments from
-#: ``fs.streams`` and from nothing else
-#: (:meth:`SvgRenderer._draw_streams`), so on paper only a *stream* hops
-#: and only a stream is hopped. Everything else this file writes as an
-#: edge -- a ruled line of furniture, an instrument connection, a line
-#: number's leader -- is an edge because that is how the format says "a
-#: line between two points", not because it is a connection anything
-#: flows along.
-#:
-#: draw.io has no such distinction and would hop any of them, so the
-#: rule is stated rather than left to the emission order that happens to
-#: hold today: ``updateLineJumps`` skips a candidate whose style says
-#: ``noJump=1``. Saying it makes the drawing right whichever way round
-#: the cells are written, which matters here more than usual, since
-#: :func:`_hops` reorders them.
+# Style for edges that are not streams (furniture rules, instrument
+# connections, leaders). Only streams hop or are hopped on the sheet, but
+# draw.io would hop any edge, and _hops reorders edges, so the rule is
+# stated with ``noJump=1``.
 _NO_HOP = "noJump=1;"
 
 
 def _jump_size(radius: float, weight: float) -> int:
-    """draw.io's ``jumpSize``, for a hop of *radius* on a line of
-    *weight*.
+    """Return draw.io's ``jumpSize`` for a hop of ``radius`` on a line of ``weight``.
 
-    Not the radius. ``mxConnector.paintLine`` computes the hop's
-    half-extent along the run as ``(parseInt(jumpSize) - 2) / 2 +
-    this.strokewidth``, so the number in the style is two units of its
-    own plus twice the pen -- and the pen is the *edge's* pen, which is
-    why this takes one: a signal line and the pipe it crosses are hopped
-    by the same radius but stated with different sizes. Solved for
-    ``jumpSize`` that is ``2 (radius - weight) + 2``.
+    ``mxConnector.paintLine`` makes the hop's half-extent
+    ``(parseInt(jumpSize) - 2) / 2 + strokewidth``, using the edge's own
+    pen, so ``jumpSize = 2 (radius - weight) + 2``. ``parseInt`` truncates,
+    so the value is rounded here. The floor of 1 stops a negative
+    half-extent drawing the hop inside out (draw.io's default is 6).
 
-    ``parseInt`` and not ``parseFloat``, so a fractional value is
-    **truncated** rather than rounded; the answer is rounded here
-    instead, which is worth at most a quarter of a unit of radius and
-    never the whole unit truncation would cost. One is the floor because
-    a ``jumpSize`` small enough to make the half-extent negative would
-    draw the hop inside out, and draw.io's own default is 6
-    (``Graph.defaultJumpSize``).
+    Parameters
+    ----------
+    radius : float
+        Hop radius in drawing units.
+    weight : float
+        Edge stroke width.
+
+    Returns
+    -------
+    int
+        ``jumpSize`` value.
     """
     return max(1, round(2.0 * (radius - weight) + 2.0))
 
 
 def _hops(polylines: dict, direction: str,
           style: str = "arc") -> "tuple[list, set, set]":
-    """Which edges carry the hop, and the order that lets draw.io draw
-    it.
+    """Return the stream edge order, the edges that hop, and the hops lost.
 
-    ``polylines`` is ``{key: points}`` for every **stream** on the
-    sheet, in the order the streams are to be written; ``direction`` is
-    :meth:`Flowsheet.to_svg`'s own ``jump_direction`` and ``style`` its
-    ``crossing_style``. Returns the keys in the order they must be
-    emitted in, and the set of them that is to carry a
-    :data:`_JUMP_STYLES` entry.
+    The sheet's rule picks the hopping line: a vertical segment hops a
+    horizontal one (the reverse under ``jump_direction="horizontal"``),
+    for crossings strictly inside both segments and at least ``HOP_R``
+    from the hopper's segment ends, as
+    :meth:`SvgRenderer._draw_streams` draws them.
 
-    ``style="plain"`` marks nothing, so nothing hops, nothing has to be
-    written after anything else and nothing is lost: the keys come back
-    in exactly the order they went in. That is the same early return an
-    unrecognised ``direction`` takes and for the same reason -- the
-    reordering below exists only to let draw.io draw a jump, and a sheet
-    with no jump on it must not have its edges shuffled for one.
+    ``mxGraphView.updateLineJumps`` hops an edge only over edges written
+    before it, so each hopper must follow everything it crosses. Edges are
+    emitted in a stable topological order ("crossed before crossing", ties
+    by original index), so a sheet without crossings keeps its order.
 
-    **Which line hops** is the sheet's rule, taken from the same place
-    :meth:`SvgRenderer._draw_streams` takes it: a *vertical* segment
-    crossing a *horizontal* one hops it, or the other way round under
-    ``jump_direction="horizontal"``. Strictly inside both segments, as
-    the sheet has it, so a run that merely ends on another one is a
-    junction and is not hopped. Any other spelling of ``direction`` hops
-    nothing, which is what the SVG does with one too.
+    ``jumpStyle`` is per edge and cannot be aimed. Where two edges each
+    hop the other (a cycle), or a crossing is too near a segment end for
+    the sheet to draw an arc, an edge that would hop the wrong line or
+    draw a hop the sheet does not gives up its style: a flat crossing is
+    ambiguous, but a reversed hop states something false.
 
-    **Which line draw.io *lets* hop** is z-order, and that is the half
-    the exporter has to build rather than state: ``updateLineJumps``
-    intersects an edge only against the edges written before it, so the
-    hopping edge has to be written after every edge it crosses. The
-    streams are therefore emitted in a topological order of "crossed
-    before crossing" rather than in ``fs.streams`` order -- stable, by
-    original index, so a sheet with no crossing on it comes out in
-    exactly the order it always did, and so does every part of a sheet
-    that is not involved in one.
+    Parameters
+    ----------
+    polylines : dict
+        ``{key: points}`` for every stream, in write order.
+    direction : str
+        ``jump_direction``; any value other than ``"vertical"`` or
+        ``"horizontal"`` hops nothing.
+    style : str, default="arc"
+        ``crossing_style``; one without a draw.io jump style (``"plain"``)
+        hops nothing.
 
-    Only the *hop* is per-edge; a style key cannot say "hop on my
-    vertical segments and not my horizontal ones", and it does not have
-    to. An edge H that is crossed at c is written *before* the edge V
-    that hops it, so H cannot hop at c whether or not it carries
-    ``jumpStyle`` for a crossing of its own elsewhere. "Hopper after
-    crossed" is the whole constraint.
-
-    Where it does not hold is a **cycle**: V's vertical crosses H's
-    horizontal *and* H's vertical crosses V's horizontal, so each has to
-    be written after the other. draw.io's model cannot express that pair
-    and neither can this function; it satisfies every constraint it can
-    and leaves the remainder in stream order.
-
-    An edge stranded that way then **gives up its hop**, because
-    ``jumpStyle`` cannot be aimed -- an edge carrying it hops every
-    earlier edge it crosses, and after a cycle one of those is an edge
-    that was supposed to hop *it*. A lost hop leaves a reader with an
-    ambiguous four-way; a kept one would draw the wrong line passing
-    over, which reads as a fact about the piping and is not one. So the
-    sheet loses a hop rather than gaining a wrong one, and the filter at
-    the end of this function is where.
-
-No sheet in the shipped corpus reaches it. What does is a sheet whose
-    recycle runs the length of the paper against a train that washes
-    counter-current to it: two runs then cross each other twice, which is
-    the shape, and a batch process is where it turns up. A test builds
-    that pair directly rather than waiting for a drawing to grow one, and
-    pins that the emitted order satisfies every crossing it kept.
+    Returns
+    -------
+    order : list
+        Keys in write order.
+    kept : set
+        Keys that carry ``jumpStyle``.
+    lost : set
+        ``(hopper, crossed, x, y)`` for each crossing the sheet hops and
+        the export draws flat.
     """
     keys = list(polylines)
     if style not in _JUMP_STYLES or direction not in ("vertical", "horizontal"):
         return keys, set(), set()
-    # The two families of segment, by the edge that owns each.
-    # `_draw_streams` keeps the same two lists and tests the same strict
-    # containment.
+    # Hopping and crossed segments by owner, as _draw_streams splits them.
     hopping: list = []
     crossed: list = []
     for key, points in polylines.items():
@@ -436,49 +313,25 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
                     (key, min(y1, y2), max(y1, y2), x1))
     # (crossed, hopper): the crossed edge must be written first.
     after: dict = {key: set() for key in keys}
-    # The mirror of it, and the only thing that makes a lost hop
-    # tellable from a wrong one below: who is entitled to hop *me*.
+    # Who may hop each edge, to tell a lost hop from a wrong one.
     hopped_by: dict = {key: set() for key in keys}
     hops: set = set()
-    # Every crossing, keyed by where it is as well as who is in it. Two
-    # runs can cross each other **more than once** -- that is exactly the
-    # shape that makes a cycle -- so a pair is not a crossing, and
-    # counting pairs under-reports a sheet that loses both.
+    # Crossings keyed by position too: two runs may cross more than once.
     crossings: set = set()
-    # The crossings the sheet draws **flat** and draw.io would not, which
-    # is the band between "strictly inside the segment" and "inside it by
-    # ``HOP_R``". ``updateLineJumps`` drops an intersection only within
-    # half a pixel of the jumping segment's ends, so anything further in
-    # than that gets an arc; the sheet needs ``HOP_R`` of segment either
-    # side to have room to draw one, and draws the rest flat. Keyed by
-    # the edge that would hop, because that is what has to give the style
-    # up -- ``jumpStyle`` cannot be aimed at one crossing.
+    # Crossings the sheet draws flat (within HOP_R of a segment end) but
+    # draw.io would hop, keyed by the edge that must then drop its style.
     marginal: dict = {key: set() for key in keys}
     for hop_key, lo, hi, at in hopping:
         for cross_key, c_lo, c_hi, c_at in crossed:
-            # ``HOP_R`` and not a bare containment, because this asks the
-            # same question ``_draw_streams`` asks and has to get the same
-            # answer: the arc spans ``2 * HOP_R`` about the crossing, so
-            # one nearer than that to the end of its segment is drawn
-            # flat on the sheet. Asking draw.io to hop it would put a
-            # jump in the file where the drawing has none, which is the
-            # same disagreement between the two backends as a hop drawn
-            # the wrong way round, only quieter.
+            # Same test as _draw_streams: the arc needs HOP_R either side.
             if not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
                 if c_lo < at < c_hi and lo < c_at < hi and hop_key != cross_key:
-                    # Both ways round. The sheet draws this crossing flat,
-                    # so *neither* of the two may carry the style once the
-                    # other precedes it -- and which of them is the one at
-                    # risk is not decided by which orientation would have
-                    # hopped: the edge that gets the arc is whichever is
-                    # written second, and that is settled below.
+                    # Drawn flat, so whichever edge is written second must
+                    # not carry the style.
                     marginal[hop_key].add(cross_key)
                     marginal[cross_key].add(hop_key)
                 continue
-            # A run crossing itself is one line, not two, and draw.io
-            # does not hop it either: an edge is pushed onto
-            # `validEdges` after its own jumps are computed, so it never
-            # intersects itself.
+            # A run never hops itself, in draw.io either.
             if hop_key == cross_key:
                 continue
             hops.add(hop_key)
@@ -488,9 +341,8 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
             crossings.add((hop_key, cross_key, *point))
     if not hops:
         return keys, hops, set()
-    # Kahn's, taking the lowest original index each round -- `keys` is
-    # already in that order, so `ready[0]` is it -- which keeps the
-    # emitted order as close to the stream order as the crossings allow.
+    # Kahn's algorithm, lowest original index first, to stay near stream
+    # order.
     order: list = []
     done: set = set()
     while len(done) < len(keys):
@@ -501,77 +353,48 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
         done.add(ready[0])
     # Whatever the cycle left behind, in stream order.
     order += [key for key in keys if key not in done]
-    # A cycle leaves at least one edge written after an edge that was
-    # supposed to hop *it*, and ``jumpStyle`` cannot be aimed: an edge
-    # that carries it hops every earlier edge it crosses, the ones it
-    # has no business hopping included. So an edge whose own hopper now
-    # precedes it gives the key up, and the crossing comes out flat.
-    # Losing a hop leaves a reader with an ambiguous four-way; keeping
-    # one would draw the wrong line passing over, which reads as a fact
-    # about the piping and is not one.
-    #
-    # A run with no cycle in it never reaches this: the topological
-    # order puts every one of ``hopped_by[key]`` after ``key``, so the
-    # filter passes everything and the emitted document is unchanged to
-    # the byte.
+    # Drop the style from an edge written after one entitled to hop it
+    # (only possible in a cycle; otherwise this keeps every hop).
     rank = {key: n for n, key in enumerate(order)}
-    # The second way an edge loses its style, and it has nothing to do
-    # with cycles: it crosses an earlier edge too near the end of its own
-    # segment for the sheet to have drawn an arc there. draw.io would
-    # draw one anyway, and a jump in the file where the drawing has none
-    # says the wrong pipe passes over just as loudly as a jump the wrong
-    # way round. The style is per edge, so the edge gives up every hop it
-    # had; each of them is then reported below.
+    # Also drop it from an edge with a marginal crossing against an earlier
+    # edge, since draw.io would draw a hop the sheet does not.
     kept = {key for key in hops
             if all(rank[other] > rank[key] for other in hopped_by[key])
             and all(rank[other] > rank[key] for other in marginal[key])}
-    # The third return is what the caller owes the reader: every crossing
-    # the sheet hops and this file will not, as ``(hopper, crossed)``.
-    #
-    # Counted per *crossing* and not per edge that surrendered its style,
-    # because those are different sets and the smaller one under-reports.
-    # An edge inside a cycle can keep ``jumpStyle`` -- nothing entitled to
-    # hop it precedes it -- and still lose a crossing of its own, to an
-    # edge the ordering had to put after it. Both are the same loss to a
-    # reader: a crossing the sheet draws hopped and this file draws flat,
-    # so the two exports of one drawing disagree about which pipe passes
-    # over. The release that added :data:`_EXPORT_CODES` decided such a
-    # thing is said out loud rather than discovered.
+    # Every crossing the sheet hops and the export draws flat, per crossing
+    # rather than per edge, so the caller can report each one.
     lost = {(hop_key, cross_key, x, y)
             for hop_key, cross_key, x, y in crossings
             if hop_key not in kept or rank[cross_key] > rank[hop_key]}
     return order, kept, lost
 
 
-#: pandid turns a symbol clockwise; draw.io names the same four
-#: attitudes after the compass point the shape's own east ends up on.
-#: ``mxShape.getShapeRotation`` adds 90 for ``south``, 180 for ``west``
-#: and 270 for ``north``, so this is that table read the other way. The
-#: identity is absent: a cell with no ``direction`` is already upright,
-#: and saying so would only make every style longer.
+# Clockwise turn -> draw.io ``direction`` (mxShape.getShapeRotation adds
+# 90 for south, 180 for west, 270 for north). No entry for 0.
 _DIRECTION = {90: "south", 180: "west", 270: "north"}
 
 
 def _placed_rect(frame, x: float, y: float, w: float, h: float
                  ) -> "tuple[float, float, float, float]":
-    """One child rectangle, stated in symbol fractions, in the placed cell.
+    """Return a child rectangle, given in symbol fractions, in the placed cell.
 
-    A parent's ``direction`` and its flips say how *its own shape* paints
-    inside its bounds. mxGraph does not carry them into a child's
-    geometry -- a child is positioned by its own numbers, relative to the
-    parent's origin and nothing else -- so a child that is a piece **of
-    the drawing** rather than a shape beside it has to be turned here or
-    the symbol comes apart the moment it is laid on its side.
+    mxGraph does not apply a parent's ``direction`` or flips to a child's
+    geometry, so a child that is part of the drawing is turned here, through
+    :func:`~pandid.portgeom.symbol_to_box` on the unit square, the same map
+    the ports use. :meth:`DrawioRenderer._inscribed` fills the whole box
+    and needs none of this.
 
-    Both corners go through :func:`~pandid.portgeom.symbol_to_box`, which
-    is the map the nozzles and the SVG artwork are already placed by, so
-    a part cannot drift from the port it is drawn under. The unit square
-    is used as the symbol's box, because these rectangles are fractions
-    of it; a quarter turn comes back with its axes swapped, which is what
-    the cell did too.
+    Parameters
+    ----------
+    frame : Frame
+        Parent unit's frame.
+    x, y, w, h : float
+        Rectangle in symbol fractions.
 
-    :meth:`DrawioRenderer._inscribed` needs none of this: it fills the
-    whole box whatever shape the box is.
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x, y, w, h)`` in cell fractions; axes swapped by a quarter turn.
     """
     rot, mirror_x, mirror_y = _xform(frame)
     corners = [symbol_to_box(px, py, 1.0, 1.0, rot, mirror_x, mirror_y)[:2]
@@ -582,34 +405,40 @@ def _placed_rect(frame, x: float, y: float, w: float, h: float
 
 
 def _turn_keys(frame) -> list[str]:
-    """The quarter turn, restated for a child cell.
+    """Return the ``direction`` key that turns a child cell's shape with its parent.
 
-    The child's *geometry* is turned by :func:`_placed_rect`; this is the
-    other half, which is how the shape paints inside it. ``mxLine`` draws
-    across its box horizontally and turns only for ``direction`` north or
-    south, and an agitator's stencil has a top and a bottom. It is the
-    parent's own direction rather than a fresh decision: the whole
-    drawing turns together.
+    :func:`_placed_rect` turns the child's geometry; this turns how the
+    shape paints inside it (``mxLine`` and agitator stencils are not
+    symmetric).
+
+    Parameters
+    ----------
+    frame : Frame
+        Parent unit's frame.
+
+    Returns
+    -------
+    list[str]
+        ``["direction=..."]``, or empty when unturned.
     """
     rot, _mirror_x, _mirror_y = _xform(frame)
     return [] if rot not in _DIRECTION else [f"direction={_DIRECTION[rot]}"]
 
 
 class _Fit(NamedTuple):
-    """Where the drawing sits on the paper, and how big.
+    """Map drawing coordinates onto the page.
 
-    A page size makes the export a *sheet*: the furniture docks to the
-    paper and the drawing is fitted into whatever the bands leave, which
-    is :meth:`SvgRenderer.render`'s ``<g id="drawing"
-    transform="translate(...) scale(...)">`` and nothing more. Every
-    coordinate that belongs to the **drawing** goes through this on the
-    way out; every coordinate that belongs to the **sheet** -- the
-    furniture, the border -- does not, because the sheet is already in
-    page units. That is the same division the SVG makes by putting one
-    of them inside the group and the other outside it.
+    With a page size the drawing is fitted into the space the furniture
+    leaves, as the SVG's ``<g id="drawing" transform=...>`` does. Drawing
+    coordinates go through this; sheet coordinates (furniture, border) do
+    not. Without a page it is the identity.
 
-    Without a page there is no fitting to do and this is the identity,
-    which is why the unpaged export is unchanged to the last coordinate.
+    Attributes
+    ----------
+    scale : float
+        Scale factor.
+    dx, dy : float
+        Translation.
     """
     scale: float
     dx: float
@@ -617,44 +446,37 @@ class _Fit(NamedTuple):
 
     @classmethod
     def identity(cls) -> "_Fit":
+        """Return the identity fit, for an export without a page."""
         return cls(1.0, 0.0, 0.0)
 
     def at(self, x: float, y: float) -> "tuple[float, float]":
+        """Return a drawing point on the page."""
         return (self.dx + self.scale * x, self.dy + self.scale * y)
 
     def box(self, b) -> "tuple[float, float, float, float]":
+        """Return a drawing box ``(x0, y0, x1, y1)`` on the page."""
         return (*self.at(b[0], b[1]), *self.at(b[2], b[3]))
 
     def length(self, v: float) -> float:
-        """A distance, which scales but does not translate: a stroke
-        width, a mark's size. The SVG's transform scales these too,
-        being a transform on the group rather than on each coordinate in
-        it.
-        """
+        """Return a length (stroke width, mark size) scaled but not translated."""
         return self.scale * v
 
 
 class _Piece(NamedTuple):
-    """One built-in placed *inside* a stand-in's cell, in fractions of it.
+    """A built-in shape placed inside a stand-in's cell, in fractions of it.
 
-    :attr:`_Approximation.inscribed` draws a second outline filling the
-    same box, which is the whole answer for a square with a diamond in
-    it. It is not the answer for a drawing whose parts sit at different
-    places along the cell: a steam trap is a body 4 M across with a 1 M
-    run each side of it, so an ``ellipse`` over the whole cell draws an
-    oval a module and a half too wide and swallows both leads.
+    For stand-ins whose parts sit at different places along the cell, such
+    as a steam trap's body between two leads. The rectangle is converted
+    like an :class:`~pandid.render.symbols.Overlay`
+    (:meth:`DrawioRenderer._pieces`); the parent cell draws nothing and
+    holds the connection points.
 
-    So a stand-in may instead be a *list* of built-ins with a rectangle
-    each, stated in fractions of the cell exactly as
-    :class:`~pandid.render.symbols.Overlay` states a part's -- and
-    converted by the same arithmetic, in :meth:`DrawioRenderer._pieces`.
-    The parent cell then draws nothing itself and is the box the
-    connection points are fractions of, which is what keeps a stream
-    landing where it was routed.
-
-    ``shape`` is a built-in, never a stencil key, for
-    :class:`_Approximation`'s own reason. ``None`` is draw.io's
-    rectangle, which is a real answer for a piece that is one.
+    Attributes
+    ----------
+    shape : str or None
+        draw.io built-in (never a stencil key); ``None`` is the rectangle.
+    x, y, w, h : float
+        Rectangle in fractions of the cell.
     """
 
     shape: "str | None"
@@ -665,42 +487,37 @@ class _Piece(NamedTuple):
 
 
 class _Approximation(NamedTuple):
-    """A draw.io built-in standing in for a symbol draw.io has no
-    stencil for.
+    """A draw.io built-in standing in for a symbol with no draw.io stencil.
 
-    ``shape`` is a *built-in* shape name and deliberately never a
-    stencil key: the whole hazard this file guards against is a
-    reference that silently fails to resolve, and a built-in is compiled
-    into draw.io rather than loaded from a file, so it cannot. ``None``
-    is draw.io's default rectangle. See :data:`_BUILTIN_SHAPES` for what
-    counts as a built-in and why the set is wider than mxGraph's own.
+    Built-ins are compiled into draw.io, so unlike stencil keys they cannot
+    fail to resolve. The accepted names are ``_BUILTIN_SHAPES`` in
+    ``tests/test_drawio.py`` (mxGraph's built-ins plus draw.io's own).
 
-    ``flip_h`` mirrors the built-in, for the one shape whose draw.io
-    version points the other way. ``fill`` is the colour the symbol's
-    own artwork fills itself with, which for a balloon is opaque white
-    and not the transparent default: an ISA balloon is drawn over the
-    line it reads and knocks a hole in it, and a transparent one would
-    have a process line running across the tag inside it. ``stroke`` and
-    ``weight`` are the ink, which is the symbol's own and not always the
-    sheet's stencil ink: a pipe tee is *pipe*, drawn black at the
-    pipeline's weight, and drawing it at a stencil's ``#111`` hairline
-    put a visibly lighter, thinner rule across every junction on the
-    sheet. ``weight`` defaults to :attr:`~.weights.LineWeight.EQUIPMENT`
-    and is stated as :attr:`~.weights.LineWeight.DETAIL` on every entry whose
-    :class:`~.symbols.Symbol` carries :attr:`~.symbols.Symbol.trim` --
-    a balloon and the two in-line mixers this table stands in for --
-    rather than read off ``sym`` here: the two must already agree, since
-    a stand-in draws the outline a real stencil would have, and stating
-    it lets a reader see the class at the entry rather than chase it
-    into the registry. ``lost`` says what the sheet has that the
-    stand-in does not, in words, and is the point of the table: an
-    approximation nobody wrote down is indistinguishable from a
-    mistake.
-
-    ``inscribed`` is a *second* built-in, drawn inside the first and
-    filling the same box, for a symbol that is two outlines rather than
-    one. See :meth:`DrawioRenderer._vertex`, which emits it as a child
-    of the cell.
+    Attributes
+    ----------
+    shape : str or None
+        Built-in shape name; ``None`` is draw.io's default rectangle.
+    lost : str
+        What the sheet draws that the stand-in does not; reported under
+        :data:`APPROXIMATED`. Empty when nothing is lost.
+    flip_h : bool
+        Mirror the built-in, for a shape draw.io points the other way.
+    fill : str
+        The symbol's own fill; opaque white for a balloon, which masks the
+        line it is drawn over.
+    stroke : str
+        Ink colour; a pipe tee uses the line's black, not the stencil's.
+    weight : float
+        Stroke width: EQUIPMENT, or DETAIL for symbols whose
+        :class:`~.symbols.Symbol` carries :attr:`~.symbols.Symbol.trim`
+        (balloons and the in-line mixers).
+    keys : tuple
+        Extra style keys.
+    inscribed : str or None
+        A second built-in filling the same box, for a symbol that is two
+        outlines (:meth:`DrawioRenderer._vertex`).
+    pieces : tuple[_Piece, ...]
+        Built-ins placed within the cell instead of ``shape``.
     """
 
     shape: str | None
@@ -714,66 +531,30 @@ class _Approximation(NamedTuple):
     pieces: "tuple[_Piece, ...]" = ()
 
 
-#: How far a cell's proportions may drift from its symbol's before the
-#: export says the drawing is being reproportioned
-#: (:meth:`DrawioRenderer._report_reshape`).
-#:
-#: A ratio, not a length, and loose on purpose: the layout engine sizes a
-#: box in drawing units and rounds, so a symbol placed "at its own size"
-#: arrives a hair off square and a strict comparison would report every
-#: balloon on the sheet. One part in a thousand is far tighter than any
-#: reproportioning a reader could see and far looser than that rounding.
+# Relative aspect drift allowed before _report_reshape reports a
+# reproportioned symbol; looser than layout rounding, tighter than anything
+# visible.
 _ASPECT_SLACK = 1e-3
 
-#: The code every ``lost`` sentence is reported under.
-#:
-#: ``lost`` is written down for each stand-in and was read by nothing:
-#: a ``Conveyor`` exported as a bare rectangle, the belt and its two
-#: rollers gone, and ``fs.warnings == []``. A stand-in is a deliberate
-#: approximation and not an error -- the module docstring's claim is that
-#: it is not a *silent* one -- so it is a warning naming the unit and the
-#: sentence beside its entry in :data:`_APPROXIMATIONS`.
+#: Warning code for a stand-in that loses part of its symbol; the message
+#: names the unit and the stand-in's ``lost`` sentence.
 APPROXIMATED = "drawio-approximated"
 
-#: A crossing the sheet hops and this file cannot. ``jumpStyle`` is per
-#: edge and draw.io only lets an edge hop the edges written before it, so
-#: two runs that each cross the other twice want to be written after each
-#: other and neither can be; see :func:`_hops`. The hop is dropped rather
-#: than drawn backwards -- a hop states which pipe passes over, and
-#: backwards it is a false statement where a flat crossing is only an
-#: ambiguous one -- and this is that drop said out loud.
+#: Warning code for a crossing the sheet hops and the export draws flat
+#: (see :func:`_hops`): a flat crossing is ambiguous, a reversed hop would
+#: be wrong.
 HOP_DROPPED = "drawio-hop-dropped"
 
-#: The codes this backend puts on ``fs.warnings`` itself, as against the
-#: validator's findings about the diagram. Replaced rather than added to
-#: on each export, the way ``SvgRenderer.render`` replaces its own.
+# Codes this backend puts on fs.warnings; replaced on each export.
 _EXPORT_CODES = (*_RENDER_CODES, *_LABEL_CODES, APPROXIMATED, HOP_DROPPED)
 
 
-#: Every symbol this library draws itself, and what draw.io is asked for
-#: instead.
-#:
-#: This began as the fourteen hand-drawn symbols plus the block and has
-#: grown with every built-to-size shape since (crushers, mills,
-#: evaporators, kilns, centrifuges and the rest): draw.io's P&ID library
-#: has no stencil for any of them, so there is no key to derive and none
-#: is invented. What is here instead is a built-in shape chosen to be
-#: the nearest honest statement, with the difference recorded.
-#:
-#: The balloons are the ones that matter, a P&ID being mostly balloons.
-#: Every one keeps its outline -- a circle stays a circle, a diamond a
-#: diamond, the computer hexagon a hexagon -- and what goes is the
-#: *location* marking layered on it: the bar across a panel balloon, the
-#: square around a shared-display one. So an exported balloon says
-#: "instrument" correctly and stops saying where the instrument lives.
-#: Nothing here is a silent loss; it is a loss with a sentence against
-#: it.
-
-#: Opaque, as every balloon's own artwork is: a balloon is drawn over
-#: the line it reads and knocks a hole in it, and a transparent one
-#: would have that line running through the tag inside it.
+# Balloon fill: opaque, so a balloon masks the line it is drawn over.
 _BALLOON_FILL = "#ffffff"
 
+# Every symbol the library draws itself (no draw.io stencil exists), with
+# the built-in drawn instead and what it loses. Balloons keep their
+# outline and lose only the location marking (bar or surrounding square).
 _APPROXIMATIONS = {
     # ISA balloons -----------------------------------------------
     # Every balloon carries the DETAIL rung: a PCE symbol is ISO
@@ -794,11 +575,8 @@ _APPROXIMATIONS = {
     ("instrument", "computer"): _Approximation(
         # The computer hexagon, drawn as one.
         "hexagon", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
-    # A square with a diamond inscribed in it, which is two outlines and
-    # so two cells. Nothing lost, so nothing listed. `logic` is the same
-    # Symbol under its second name (pandid.render.symbols registers one
-    # object twice), so the two entries have to say the same thing or
-    # the two spellings would draw differently.
+    # A diamond inscribed in a square: two outlines, two cells. ``logic``
+    # is the same Symbol as ``sis``, so the entries must match.
     ("instrument", "sis"): _Approximation(
         None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=LineWeight.DETAIL.width),
     ("instrument", "logic"): _Approximation(
@@ -812,73 +590,37 @@ _APPROXIMATIONS = {
     # turned round, which is that triangle flipped.
     ("mixer", "default"): _Approximation("triangle", ""),
     ("splitter", "default"): _Approximation("triangle", "", flip_h=True),
-    # Bare pipe: three runs meeting, with no body at all. **The pipes
-    # draw the junction and the cell draws nothing.**
-    # :meth:`DrawioRenderer._constraint` lands every stream that meets a
-    # tee on the box **centre** rather than on its nozzle, so three
-    # edges end on one point: flush by construction, with no tolerance
-    # to get wrong, and each leg collinear with its own approach, since
-    # a tee's nozzles are the midpoints of three faces and the centre is
-    # on the axis of all three. Nothing is lost, so nothing is listed.
-    #
-    # The cell stays, invisible, because it is what the three edges are
-    # *attached* to: a reader who drags the junction takes all three
-    # pipes with it, where three floating endpoints would come apart.
+    # Bare pipe: the cell draws nothing. _constraint lands every stream on
+    # the box centre, so the three edges meet at one point, collinear with
+    # their approaches. The invisible cell keeps the edges attached when
+    # the junction is dragged.
     ("tee", "default"): _Approximation(None, "", stroke=_NO_STROKE),
-    # An off-page flag is a rectangle with one end drawn to a point, and
-    # `offPageConnector` is that polygon exactly -- five points, flat
-    # back, no notch (drawio Shapes.js,
-    # OffPageConnectorShape.redrawPath). It points south as drawn, so
-    # the flag states a `direction` to turn it: `north` for a flag
-    # pointing east, `south` for one pointing west. See _BOUNDARY_SHAPE,
-    # which has to compute `size` per cell and so cannot live in this
-    # table. Not `step`, whose sixth point cuts a chevron notch into the
-    # flag's back with no setting that removes it (`fixedSize` is a flag
-    # rather than a length).
+    # Drawn as ``offPageConnector`` (Shapes.js OffPageConnectorShape), five
+    # points with a flat back, turned by ``direction``; see _BOUNDARY_SHAPE,
+    # which sizes it per cell. Not ``step``, whose notch cannot be removed.
     ("feed", "default"): _Approximation(None, ""),
     ("product", "default"): _Approximation(None, ""),
-    # Built to its belt run rather than scaled to it, so it is written
-    # by hand here and not generated. draw.io has "Drier (Roller
-    # Conveyor Belt)", which this artwork is adapted from -- but adapted
-    # by dropping the drier housing and making the roller spacing a
-    # parameter, so referencing it would draw a drier where the sheet
-    # has a conveyor. A rectangle is wrong in a way the reader can see.
+    # Built to its length, so no stencil. draw.io's "Drier (Roller Conveyor
+    # Belt)" would draw a drier.
     ("conveyor", "default"): _Approximation(
         None, "the belt and its two rollers"),
-    # Not an approximation at all, and here to say so: a block flow
-    # diagram's block is one rectangle, and draw.io's default vertex is
-    # one rectangle.
+    # Exact: a BFD block is draw.io's default rectangle.
     ("block", "default"): _Approximation(None, ""),
-    # A shell with a serpentine tube pass, drawn here because ISO has no
-    # tubular-reactor symbol and neither has draw.io's P&ID set: its
-    # nearest shape is a heat exchanger, which is a different piece of
-    # equipment on a P&ID.
+    # Neither ISO nor draw.io has a tubular reactor; draw.io's nearest is an
+    # exchanger, which is different equipment.
     ("reactor", "tubular"): _Approximation(
         None, "the tube pass inside the shell"),
-    # ISO's separating vessel with one group-29 characteristic in it --
-    # items 8.3, 8.6 and 8.8, built by composition (see
-    # ``SymbolRegistry._register_composed``). The **mark** is not lost:
-    # it is emitted as a child cell, as every composed part is. What the
-    # rectangle loses is the body's V bottom, and it loses it because
-    # draw.io has a stencil for each of these three *complete* but none
-    # for the outline underneath them -- and a composed symbol may not
-    # name a stencil, which is what stops a body's reference being reused
-    # for a body-plus-parts drawing.
+    # Composed separating vessels (items 8.3, 8.6, 8.8): the mark is a child
+    # cell; the rectangle loses the V bottom, since draw.io has no stencil
+    # for the bare body and a composed symbol may not name a stencil.
     ("separator", "gravity"): _Approximation(
         None, "the V bottom the collected phase draws off through"),
     ("separator", "electrostatic"): _Approximation(
         None, "the V bottom the collected phase draws off through"),
     ("separator", "electromagnetic"): _Approximation(
         None, "the V bottom the collected phase draws off through"),
-    # ISO group 11. The vendored set has no crusher and no mill under any
-    # name, and the nearest built-in to a trapezoid is a rectangle: there
-    # is no ``trapezoid`` in mxGraph's own shapes or in draw.io's
-    # ``Shapes.js``, and naming a *stencil* for it is the silent-miss
-    # this whole table exists to avoid. So the mouth-and-throat outline
-    # goes, and with it the mark that says which of the two machines this
-    # is -- which is why both sentences below name it. The group-29
-    # characteristic inside is **not** lost on the nine composed
-    # variants: it is emitted as a child cell, as every composed part is.
+    # ISO group 11: no crusher or mill stencil and no trapezoid built-in, so a
+    # rectangle. The group-29 mark is still exported as a child cell.
     ("crusher", "default"): _Approximation(
         None, "the trapezoid outline and the two jaws drawn down it"),
     ("crusher", "cone"): _Approximation(
@@ -905,13 +647,8 @@ _APPROXIMATIONS = {
     # the bare trapezoid, neither mark drawn.
     ("crushing_machine", "default"): _Approximation(
         None, "the trapezoid outline"),
-    # Evaporators. The vendored set has one evaporator and it is
-    # ``hex/thin_film``, a wiped-film column that is nothing like these
-    # bodies; there is no dished shell in it either, so the nearest
-    # built-in is a rectangle and what goes is the whole drawing -- the
-    # heads, and the element inside that says which machine this is. Each
-    # sentence names its own element, since that is the part a reader of
-    # the exported sheet is being told they have lost.
+    # Evaporators: no matching stencil (hex/thin_film is a wiped-film
+    # column), so a rectangle; each sentence names the lost element.
     ("evaporator", "default"): _Approximation(
         None, "the dished heads and the boxed heating element between the tubesheets"),
     ("evaporator", "calandria"): _Approximation(
@@ -922,24 +659,15 @@ _APPROXIMATIONS = {
         None, "the dished heads and the long tube bundle"),
     ("evaporator", "plate"): _Approximation(
         None, "the dished heads and the plate pack between them"),
-    # Kilns. Nothing upstream draws a sloping shell, a windbox or a
-    # burden column, and naming a *stencil* that half-fits is the silent
-    # miss this table exists to avoid -- so all three fall back to a
-    # rectangle and say what that costs. The rotary kiln's sentence names
-    # the fall first because the fall is the symbol.
+    # Kilns: no stencil, so a rectangle.
     ("kiln", "default"): _Approximation(
         None, "the shell's fall from feed end to discharge, its riding rings and its drive"),
     ("kiln", "fluidized_bed"): _Approximation(
         None, "the dished crown, the windbox cone and the distributor grid over it"),
     ("kiln", "shaft"): _Approximation(
         None, "the charging cone, the discharge cone and the calcining zone between them"),
-    # ISO group 9, CENTRIFUGES. Same absence as group 11's: no crusher or
-    # mill in the vendored set, and no centrifuge either, so the square
-    # outline goes along with whichever mark says how the row separates.
-    # ``default`` and ``decanter`` are the same Symbol under two registry
-    # keys (see ``symbols.SymbolRegistry._register_centrifuges``), so the
-    # two entries say the same thing, the way ``instrument/sis`` and
-    # ``instrument/logic`` already do above.
+    # ISO group 9: no centrifuge stencil. ``default`` and ``decanter`` are
+    # one Symbol, so their entries match.
     ("centrifuge", "default"): _Approximation(
         None, "the square outline, the basket's solid walls and the screw"),
     ("centrifuge", "high_speed"): _Approximation(
@@ -958,21 +686,16 @@ _APPROXIMATIONS = {
         None, "the square outline, the basket's broken walls and the pusher plate"),
     ("centrifuge", "skimmer"): _Approximation(
         None, "the square outline, the basket's broken walls and the skimmer tube"),
-    # ISO group 18's solids handling. The vendored set has a "Screw Pump",
-    # which is a different machine, and nothing at all for either elevator.
-    # The screw conveyor's casing really is a rectangle, so only the flight
-    # is lost; the two elevators lose everything inside the box, and the
-    # Z-form loses the box's own shape as well.
+    # ISO group 18: no stencils (draw.io's "Screw Pump" is a different
+    # machine). The screw casing is a rectangle; elevators lose their
+    # interiors, and the Z-form its outline.
     ("conveyor", "screw"): _Approximation(
         None, "the screw's axis and the turns of its flight"),
     ("elevator", "default"): _Approximation(
         None, "the belt, its two pulleys and the loading and discharge chutes"),
     ("elevator", "z_form"): _Approximation(
         None, "the Z-shaped casing, the belt's three runs and its four pulleys"),
-    # ISO 10628-2 group 4, hand-drawn because none of the three is a
-    # vendored stencil and none has a built-in that keeps its outline
-    # honest -- a dome on a shell and a shaft on a flange are no nearer
-    # a circle or a triangle than a crusher's trapezoid is.
+    # ISO group 4: no stencil or close built-in.
     ("boiler", "default"): _Approximation(
         None, "the shell's own outline and the dome on its crown"),
     ("stack", "default"): _Approximation(
@@ -1036,36 +759,15 @@ _APPROXIMATIONS = {
         weight=LineWeight.DETAIL.width),
     ("fitting", "mixing_path"): _Approximation(
         None, "the box and the three mixing elements in it", weight=LineWeight.DETAIL.width),
-    # ISO 10628-2 item 24.15 (2181), the steam trap. draw.io has a shape
-    # called "Steam Trap" and it is an empty rectangle byte-identical to
-    # the same file's "Desuper Heater", so there is no stencil to name
-    # here -- see the block in ``scripts/vendor_symbols.py``.
-    #
-    # Three pieces rather than one shape, because the drawing is not one
-    # shape: a body 4 M across with a 1 M run each side of it. A single
-    # ``ellipse`` over the cell would draw an oval a module and a half
-    # too wide and swallow both leads, and would then be a stand-in whose
-    # own sentence understated it -- the body outline is the part a
-    # reader would take on trust. The fractions are the symbol's own
-    # dimensions divided by its width, so the two backends draw the body
-    # and the leads at one set of numbers and cannot drift.
-    #
-    # ``line`` is mxGraph's own ``mxLine``, which paints a single stroke
-    # across its box at mid-height; it turns only for ``direction`` north
-    # or south, and nothing here sets one. So a lead is a box as tall as
-    # the body with the run drawn through its middle, which puts the ink
-    # on the centre line both nozzles sit on.
-    #
-    # What is genuinely not drawable is the mark, and that is the whole
-    # of ``lost``: no built-in draws a chord across an ellipse, and none
-    # fills one side of it.
+    # Item 24.15 (2181). draw.io's "Steam Trap" is an empty rectangle (see
+    # scripts/vendor_symbols.py), so three pieces: two ``line`` leads
+    # (mxLine strokes its box at mid-height) and an ``ellipse`` body, in
+    # the symbol's own proportions. Only the diagonal and the half fill
+    # are lost.
     ("fitting", "steam_trap"): _Approximation(
         None,
         "the 45-degree diameter across the body and the discharge half filled below it",
-        # Transparent, like every stand-in here that is not a balloon:
-        # the drawn body fills white, and so do the two in-line mixers'
-        # boxes, and neither is exported opaque. See
-        # ``test_only_the_balloons_are_drawn_opaque``.
+        # Transparent: only balloons are exported opaque.
         weight=LineWeight.DETAIL.width,
         pieces=(
             _Piece("line", 0.0, 0.0, TRAP_LEAD / TRAP_W, 1.0),
@@ -1076,12 +778,8 @@ _APPROXIMATIONS = {
     # Item 12.4, the kneader: the casing and the wave its blades draw.
     ("kneader", "default"): _Approximation(
         None, "the casing and the wave the blades draw across it"),
-    # ISO 10628-2 group 7, SCREENING DEVICES, SIEVES AND RAKES: no
-    # vendored stencil under any name (``separator/sifter`` keeps its
-    # own, and is not one of these seven rows -- see
-    # ``symbols._SCREEN_OUTLINE``), so the wall-and-point outline goes
-    # with whichever mark tells the row apart. 7.7's own larger outline
-    # is the same absence at its own size.
+    # ISO group 7: no stencil (separator/sifter keeps its own and is not one
+    # of these rows), so the outline goes with the mark.
     ("screening_device", "general"): _Approximation(
         None, "the wall-and-point outline and the corner-to-corner mesh diagonal"),
     ("screening_device", "coarse_rake"): _Approximation(
@@ -1098,22 +796,12 @@ _APPROXIMATIONS = {
         None, "the outline, the reel's two rollers and the dashed rails between them"),
 }
 
-#: What draw.io is asked for to draw one ISO 10628-2 supplementary part,
-#: for the parts draw.io has no shape of its own for.
-#:
-#: The ten group-28 agitators are **not** here and want nothing here:
-#: draw.io ships ``mxgraph.pid.agitators``, which is those ten items and
-#: nothing else, so each part names its own stencil
-#: (:attr:`~pandid.render.symbols.OverlayPart.drawio_shape`) and the
-#: export draws a real agitator.
-#:
-#: The other fifteen are stood in for by built-ins, on
-#: :data:`_APPROXIMATIONS`' rule and for its reason -- a built-in is
-#: compiled into draw.io and so cannot fail to resolve.
-#: ``partialRectangle`` earns its place four times over: it draws a
-#: rectangle with only the sides it is asked for, which is exactly what a
-#: channel-section leg, a support ring, a skirt and a pair of
-#: precipitator plates each are.
+# Built-in stand-ins for ISO 10628-2 parts draw.io has no shape for. The
+# ten group-28 agitators are absent: they name draw.io's own
+# ``mxgraph.pid.agitators`` stencils
+# (:attr:`~pandid.render.symbols.OverlayPart.drawio_shape`).
+# ``partialRectangle`` draws only the sides asked for, which fits legs,
+# rings, skirts and precipitator plates.
 _PART_APPROXIMATIONS = {
     # ---- group 26, apparatus elements ----
     # A channel section closed at the foot and open at the top, which is
@@ -1172,21 +860,14 @@ _PART_APPROXIMATIONS = {
     # A coil standing on a baseline. The baseline is drawn.
     (29, "electromagnetic"): _Approximation(
         "line", "the three turns standing on the coil's baseline"),
-    # 29.4 to 29.14, the eleven marks that say how a machine crushes.
-    # Seven of the eleven -- counted as the entries below with
-    # ``shape=None`` -- are combinations of lines, circles and an X that
-    # no built-in draws, so they take draw.io's default rectangle and
-    # what it gives is the mark's extent, the same answer 27.7's field
-    # of dots takes and for the same reason. The other four name a
-    # built-in that draws part of the mark.
+    # 29.4 to 29.14: most have no built-in and use the rectangle as the
+    # mark's extent; the rest name a built-in that draws part of it.
     (29, "disc"): _Approximation(
         None, "the shaft, its two plates and the arms between them; "
               "the box is the rotor's extent"),
     (29, "crushing"): _Approximation(None, "the X between the box's corners"),
-    # A rectangle for the pair rather than an ``ellipse``: one oval
-    # filling a box twice as wide as it is tall is a different drawing,
-    # not a reduced one, and it would export 29.6 and 29.11 -- which
-    # differ only in whether the two wheels overlap -- as the same oval.
+    # A rectangle, not an ellipse: an oval would be a different drawing and
+    # would make 29.6 and 29.11 identical.
     (29, "gear"): _Approximation(None, "the two meshing wheels; the box is the pair's extent"),
     (29, "hammer"): _Approximation(
         None, "the four hammers on their rotor; the box is the rotor's extent"),
@@ -1212,45 +893,26 @@ _PART_APPROXIMATIONS = {
         None, "the two arrows and the opposite ways they point"),
 }
 
-#: The size the *drawing* is lettered at: an equipment tag, an
-#: instrument's letters, a boundary flag's service name. Twelve, because
-#: that is what ``SvgRenderer._draw_unit_labels``,
-#: ``_draw_instrument_tag`` and ``_draw_boundary`` all set, and a sheet
-#: exported at a different size from the one it renders at is two
-#: drawings. A line number's size is the sheet's
-#: :data:`~pandid.render.svg.NUMBER_TYPE`, imported rather than
-#: repeated: it is the one number both backends letter the same string
-#: with.
+# Type size for drawing lettering (tags, instrument letters, flag names),
+# matching the SVG renderer's 12. Line numbers use svg.NUMBER_TYPE.
 _TAG_TYPE = 12.0
 
 
 class _Tags(NamedTuple):
-    """The sheet's equipment-tag pass, which this exporter had never
-    run.
+    """Result of the sheet's equipment-tag placement pass.
 
-    ``at`` is where each unit's tag ended up, by ``id(unit)``: the side
-    it settled on and how far along that side it was stepped, in
-    **drawing** units. ``plates`` is the opaque white rectangle each of
-    those tags lays on the paper -- the tag itself, and the ``NC`` and
-    fail-position letters that go in the corners beside it.
-
-    ``plates`` is the point. :func:`~pandid.render.svg.stream_numbers`
-    takes the plates already on the sheet as its seed and steps a line
-    number clear of them; an exporter passing ``[]`` gets that
-    function's documented caveat -- "a placement that dodges every
-    symbol and every line but may still land under a tag". Over the 21
-    examples that is seventeen numbers on five sheets, nine of them on
-    ``11_ethanol_pid``, four on ``14_tank_farm``, two on
-    ``20_molecular_sieve_dryer`` and one each on ``09_line_numbers`` and
-    ``13_mineral_dewatering``. Each strikes its tag, which is enough to
-    lose it, and the sheet writes none of them there.
-
-    ``codes`` is every letter code written *outside* a balloon, placed:
-    :func:`~pandid.render.svg.quadrant_labels`' own items. They are a
-    third thing here because they are a third thing on the sheet -- a
-    code is neither a unit's label nor a line's, so nothing in this
-    exporter carried one and six alarms went out of ``11_ethanol_pid``
-    unlettered. See :func:`_quadrant_cell`.
+    Attributes
+    ----------
+    at : dict
+        ``id(unit)`` -> ``(side, dx, dy)``: the side the tag settled on and
+        its step along it, in drawing units.
+    plates : list
+        Opaque boxes of tags and ``NC``/fail letters, which
+        :func:`~pandid.render.svg.stream_numbers` must keep line numbers
+        off.
+    codes : list
+        :func:`~pandid.render.svg.quadrant_labels` items, exported by
+        :func:`_quadrant_cell`.
     """
     at: dict
     plates: list
@@ -1258,33 +920,30 @@ class _Tags(NamedTuple):
 
 
 def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
-    """Run the sheet's equipment-tag placement, without drawing
-    anything.
+    """Run the sheet's tag placement without drawing anything.
 
-    :meth:`SvgRenderer._tag_item` is the search and it is called here
-    rather than re-derived, for the reason
-    :func:`~pandid.render.furniture.dock` and
-    :func:`~pandid.render.svg.stream_numbers` are: a second
-    implementation of a *search* does not drift, it answers differently
-    on the first crowded corridor. What is repeated is only the walk
-    over the units, which is fused into ``SvgRenderer._draw_units`` with
-    the drawing of them and so cannot be called on its own; the three
-    placements it dispatches to (:meth:`~SvgRenderer._tag_item`,
-    :meth:`~SvgRenderer._nc_label_item`,
-    :meth:`~SvgRenderer._fail_label_item`) and the halo each lands on
-    (``_unit_label_box``) are the sheet's own.
+    Calls the sheet's own placement methods
+    (:meth:`~SvgRenderer._tag_item`, :meth:`~SvgRenderer._nc_label_item`,
+    :meth:`~SvgRenderer._fail_label_item`) so the two backends cannot
+    disagree; only the walk over units is repeated. Text is escaped before
+    measuring, as the sheet measures the escaped string. Instruments,
+    boundary flags and untagged units are skipped, as on the sheet.
 
-    The text goes through :func:`~pandid.render.escape.escaped` before
-    it is measured because the sheet measures the escaped string --
-    ``_unit_label_box`` sizes a halo from ``len(text)``, and an
-    ampersand in a tag is five characters to it. The same function as
-    the sheet's, so the two passes measure the same string.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+    registry : SymbolRegistry
+        Symbol registry.
+    joints : str or None
+        Sheet joint default, whose flange marks tags avoid.
+    direction : str
+        ``jump_direction``.
 
-    Three kinds of unit are skipped, and each for the reason the sheet
-    skips it: an instrument writes its tag *inside* its balloon, so
-    there is no halo; a boundary flag writes its service name inside the
-    pennant, likewise; and a unit with no tag -- the pipe tee is the
-    only one today -- is labelled nowhere at all.
+    Returns
+    -------
+    _Tags
+        Tag placements, plates and quadrant codes.
     """
     from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
                                    flange_boxes, quadrant_labels)
@@ -1292,18 +951,9 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     sheet = SvgRenderer(registry)
     ink = _ink(fs, direction)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    # ``joints`` is the sheet's answer about its connections, and it is
-    # threaded in for the same reason ``ink`` is: on a flanged sheet the
-    # marks are ink the tag has to step off, and a pass told about the
-    # lines and the symbols but not about those places one tag here and
-    # another one there. See :func:`~pandid.render.svg.flange_boxes`.
-    # ``None`` on a sheet that marks no joints, and then this adds
-    # nothing.
+    # Flange marks are ink tags must avoid, as on the sheet.
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
-    # A letter code outside a balloon is placed before either label pass
-    # runs, so both are told where it went; ``SvgRenderer._draw_units``
-    # seeds itself with the same boxes and this pass has to see the same
-    # paper taken, or the two settle a crowded tag on different sides.
+    # Quadrant codes are placed first, as in _draw_units, so tags see them.
     codes = quadrant_labels(fs, direction)
     symbols += [(None, b) for b in map(_unit_label_box, codes) if b is not None]
     at: dict = {}
@@ -1319,11 +969,8 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
                                    ink, symbols)
             tag_box = _unit_label_box(item)
             items.append(item)
-            # The side, and the step along it, said the way a draw.io
-            # style has to say it: `_LABEL_SIDE` states the side and the
-            # geometry offset states the step, so the step is measured
-            # against where that same side would have put the tag
-            # untouched.
+            # Record the side and the step from that side's untouched spot,
+            # as draw.io states them (_LABEL_SIDE plus an offset).
             side = item[4]
             base = sheet._label_place(side, x, y, w, h)
             at[id(u)] = (side, item[0] - base[0], item[1] - base[1])
@@ -1338,28 +985,27 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
-    """One letter code written outside a balloon, as a text cell.
+    """Return a quadrant letter code as a text cell.
 
-    ``item`` is :func:`~pandid.render.svg.quadrant_labels`' own, so the
-    code is exported into the quadrant the sheet drew it in rather than
-    into a second opinion about where ISO 15519-2 §5.1.3 puts it.
+    Placed where :func:`~pandid.render.svg.quadrant_labels` put it, in its
+    own cell since a balloon's label is its tag, with a white
+    ``labelBackgroundColor`` halo. The text arrives HTML-escaped from the
+    sheet and :func:`_attr` escapes it again for XML; only the width is
+    measured on the unescaped text.
 
-    A cell of its own because a draw.io cell carries **one** label and
-    the balloon's is its tag. The anchor becomes a box and an ``align``
-    the way :func:`_strip_label` makes one -- see :data:`_TEXT_INSET` --
-    and ``labelBackgroundColor`` is the halo the sheet letters a code
-    on; see :data:`_NUMBER_PLATE`.
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    item : tuple
+        Quadrant label item.
+    fit : _Fit
+        Page fit.
 
-    The text arrives already escaped once, for the HTML layer -- the
-    sheet built it with :func:`~pandid.render.escape.escaped`
-    (:func:`~pandid.render.svg._quadrant_block`), the same call
-    :func:`_html_text` makes at every other label site. :func:`_attr`
-    escapes it again, for the XML layer, so it is passed straight
-    through rather than unescaped and escaped once -- that used to
-    undo the HTML-layer escaping and let a quadrant code carrying its
-    own markup (``annotate(safety="<b>SIL 2</b>")``) reach draw.io as a
-    tag. Only the width measurement wants the raw code, since a box is
-    sized to what is drawn rather than to its escaped spelling.
+    Returns
+    -------
+    list[str]
+        ``mxCell`` XML lines.
     """
     import html as _html
 
@@ -1383,31 +1029,28 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
 
 
 def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
-    """The ``fontSize`` key for a piece of lettering **in the drawing**.
+    """Return the ``fontSize`` key for lettering in the drawing.
 
-    Two things happen to it that do not happen to a piece of furniture.
+    The size scales with :class:`_Fit`, as the SVG's group transform
+    scales its text. Text inside a shape (a flag or balloon) is also capped
+    so ``lines`` lines fit ``box``'s depth, since mxGraph does not shrink
+    text to fit.
 
-    **It scales.** ``page_size`` makes the export a sheet, and the
-    drawing is then fitted into whatever the furniture leaves. On the
-    rendered sheet that fitting is one ``<g transform="scale(s)">``
-    around the whole drawing, and a ``font-size="12"`` inside it comes
-    out at ``12 s``. draw.io has no such group -- :class:`_Fit`
-    multiplies every coordinate on the way out instead -- so the type
-    has to be multiplied with them or the sheet's own proportion between
-    a symbol and the tag beside it is lost. On ``11_ethanol_pid`` the
-    ratio is 0,76, a third again too much ink on every label.
+    Parameters
+    ----------
+    nominal : float
+        Unscaled size.
+    fit : _Fit
+        Page fit.
+    lines : int, default=1
+        Lines of text inside the shape.
+    box : tuple, optional
+        Cell box in drawing units, for the cap.
 
-    **It is capped where it is written *inside* the shape.** A boundary
-    flag and an ISA balloon carry their text in the cell, so ``lines``
-    of it at :data:`_LINE_BOX` each have to fit ``box``'s depth. Nothing
-    in mxGraph shrinks type to fit -- see :data:`_LINE_BOX` -- so a
-    label too tall for its cell is drawn across the shape's top and
-    bottom edges, and with ``overflow=hidden`` cut there: two lines of
-    12 need 28,8 in a pennant 26 deep.
-
-    ``box`` is in **drawing** units, since
-    :meth:`DrawioRenderer._cell_box` is, so the cap is taken there and
-    the fit applied to the answer.
+    Returns
+    -------
+    str
+        ``fontSize=...``.
     """
     size = nominal
     if box is not None and lines > 0:
@@ -1417,20 +1060,21 @@ def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str
 
 
 def _attr(value) -> str:
-    """One XML attribute value, quoted and escaped.
+    """Return an XML attribute value, quoted and escaped.
 
-    Written out rather than reached for in the standard library because
-    the escaping has to be exactly this: draw.io reads a cell's
-    ``value`` as *HTML*, so a ``<br>`` between an instrument's letters
-    and its number has to arrive at the HTML parser as a tag, which
-    means leaving this function as ``&lt;br&gt;`` and no further.
-    Escaping the five and only the five is what does that.
+    Escapes exactly the five XML entities, so a ``<br>`` in a label reaches
+    draw.io's HTML parser as a tag. Characters XML 1.0 2.2 cannot represent
+    are removed first, as :func:`~pandid.render.escape.escaped` does.
 
-    What it does share with :func:`~pandid.render.escape.escaped` is the
-    removal first. A character XML 1.0 §2.2 has no spelling for -- a
-    ``NUL`` in a tag read out of a spec file -- cannot be escaped into
-    legality by any of the five substitutions, and one of them in one
-    attribute makes the whole document unreadable to draw.io.
+    Parameters
+    ----------
+    value : object
+        Value to write.
+
+    Returns
+    -------
+    str
+        Quoted attribute value.
     """
     text = writable(value)
     for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"),
@@ -1440,30 +1084,22 @@ def _attr(value) -> str:
 
 
 def _html_text(value) -> str:
-    """Author text bound for an HTML-flavoured draw.io ``value``.
+    """Return author text escaped for an HTML draw.io ``value``.
 
-    Escaped here for the *HTML* layer, so that a tag the author typed --
-    ``<b>P-1</b>`` as a unit's own name, say -- reaches mxGraph's HTML
-    parser as the four characters ``<b>`` and not as a bold tag.
-    :func:`_attr` then escapes the result again, for the *XML* layer the
-    file itself is: this turns ``<`` into ``&lt;``, and ``_attr`` turns
-    that leading ``&`` into ``&amp;``, so the file reads back ``&lt;``
-    and the HTML parser shows it literally.
+    Escapes ``&``, ``<`` and ``>`` for the HTML layer; :func:`_attr` then
+    escapes for XML, so typed markup shows literally. Quotes need no HTML
+    escaping in element content. Only the library's own ``<br>`` bypasses
+    this: escape each piece of author text, then join with ``<br>``.
 
-    Three characters only, ``&``/``<``/``>``, and not the five
-    :func:`_attr` escapes: a cell's ``value`` becomes HTML *content*
-    (``innerHTML``), not an HTML attribute, and a quote or an apostrophe
-    means nothing there -- ``8"`` in a line number needs no help from
-    this layer, only from the XML one underneath it, which already gives
-    it one.
+    Parameters
+    ----------
+    value : object
+        Author text.
 
-    Only the library's own ``<br>`` may skip this and reach :func:`_attr`
-    raw: it is the one piece of real HTML any label composes, and it has
-    to arrive at the HTML parser unescaped to read as a line break rather
-    than as the word ``br``. A label built from both is composed by
-    escaping each piece of author text with this and then joining with a
-    literal ``<br>``, never by joining first and escaping the whole
-    string once -- that cannot tell the two apart.
+    Returns
+    -------
+    str
+        Escaped text.
     """
     text = writable(value)
     for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")):
@@ -1472,34 +1108,38 @@ def _html_text(value) -> str:
 
 
 def _num(v: float) -> str:
-    """A coordinate, at the precision draw.io files are written to.
+    """Return a coordinate rounded to two decimals, for stable diffs.
 
-    Two decimals: the drawing unit is a CSS pixel, so this is a
-    hundredth of a pixel, and rounding is what keeps the file diffable
-    against the last export instead of churning in the sixteenth digit.
+    Parameters
+    ----------
+    v : float
+        Coordinate in drawing units (CSS pixels).
+
+    Returns
+    -------
+    str
+        Formatted number.
     """
     return f"{round(float(v), 2):g}"
 
 
 def _dash(pattern: str) -> list[str]:
-    """A stroke dash, as draw.io states one, or nothing for a solid
-    line.
+    """Return draw.io dash style keys for an SVG dash pattern.
 
-    Two things about the translation are not obvious and both come from
-    ``mxSvgCanvas2D.createDashPattern``.
+    ``mxSvgCanvas2D.createDashPattern`` splits on spaces (a comma gives
+    ``NaN``), so commas become spaces. ``fixDash=1`` stops draw.io
+    multiplying the pattern by the stroke width, so the numbers stay in
+    drawing units.
 
-    The separator is a **space**: mxGraph splits the pattern on ``' '``
-    and runs each part through ``Number()``, so a comma survives into
-    ``Number("5,4")``, comes back ``NaN``, and takes the whole pattern
-    with it. SVG writes the same pattern with commas, which is why this
-    is a translation rather than a copy.
+    Parameters
+    ----------
+    pattern : str
+        SVG ``stroke-dasharray``, or empty for a solid line.
 
-    ``fixDash=1`` is what makes the numbers mean what they say. Without
-    it draw.io multiplies every length by the **stroke width** --
-    ``stroke-dasharray = pattern x strokeWidth x scale`` -- so a dash
-    written for a 1-unit signal line comes out twice as long on a 2-unit
-    process line. With it the multiplier is 1 and the numbers are
-    drawing units, as they are everywhere else in this library.
+    Returns
+    -------
+    list[str]
+        Style keys; empty for a solid line.
     """
     if not pattern:
         return []
@@ -1507,46 +1147,63 @@ def _dash(pattern: str) -> list[str]:
 
 
 def _fraction(v: float) -> str:
-    """A connection point, as draw.io writes one: a fraction of the
-    cell's box.
+    """Return a connection-point fraction rounded to six places.
 
-    Six figures rather than two, because this one is multiplied by a box
-    that may be two hundred units across before it becomes a coordinate.
+    Six places, since it is multiplied by a box up to hundreds of units
+    across.
+
+    Parameters
+    ----------
+    v : float
+        Fraction of the cell box.
+
+    Returns
+    -------
+    str
+        Formatted number.
     """
     return f"{round(float(v), 6):g}"
 
 
 class DrawioRenderer:
-    """Renders a Flowsheet to a draw.io ``mxfile`` document.
+    """Render a laid-out Flowsheet to a draw.io ``mxfile`` document.
 
-    Satisfies :class:`pandid.render.Renderer`, so it is a backend beside
-    :class:`~pandid.render.svg.SvgRenderer` rather than a converter
-    bolted onto one. It reads the same resolved geometry the SVG
-    renderer reads -- frames from layout, waypoints from routing, port
-    points from :mod:`pandid.portgeom` -- and never re-derives any of
-    it, which is what lets the two agree to the pixel.
+    A :class:`pandid.render.Renderer` beside
+    :class:`~pandid.render.svg.SvgRenderer`. It reads the same resolved
+    geometry (layout frames, routed waypoints, :mod:`pandid.portgeom` port
+    points) without re-deriving any, so the two backends agree.
+
+    Parameters
+    ----------
+    registry : SymbolRegistry, optional
+        Symbols to draw with; ``default_registry`` when omitted.
     """
 
     def __init__(self, registry=None):
+        """Store the registry and start an empty findings list."""
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
-        # What this export could not carry across, collected as it is
-        # written and handed to the flowsheet at the end of
-        # :meth:`render`. A list rather than a callback because the
-        # methods that find these are deep in the cell writers and a
-        # renderer is built fresh for each render
-        # (:meth:`~pandid.flowsheet.Flowsheet.to_drawio`).
+        # What the export could not carry across, handed to the flowsheet
+        # at the end of render(). A renderer is built fresh per export.
         self._findings: list = []
 
     def _report(self, field: str, text: str, drawn: str,
                 room: float, need: float) -> None:
-        """A cell that could not hold what it was given
-        (:data:`~pandid.render.furniture.Reporter`).
+        """Record a cell that could not hold its text.
 
-        The same sentence the sheet's own renderer produces, from the
-        same function: the two backends measure one strip with one set of
-        cell widths, so which file was exported must not change what the
-        author is told about it.
+        A :data:`~pandid.render.furniture.Reporter`, giving the same finding
+        as the SVG backend.
+
+        Parameters
+        ----------
+        field : str
+            Field name.
+        text : str
+            Text supplied.
+        drawn : str
+            Text drawn.
+        room, need : float
+            Width available and width needed.
         """
         self._findings.append(fit_issue(field, text, drawn, room, need))
 
@@ -1560,86 +1217,70 @@ class DrawioRenderer:
                show_stream_table: "bool | str" = False, **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
-        ``diagram`` says which drawing this is, in the spelling
-        :meth:`~pandid.flowsheet.Flowsheet.to_svg` takes it: a P&ID
-        draws its process lines without arrowheads and so exports them
-        without one.
+        The file always states a page size, because draw.io reads a file
+        without one as the reader's locale default paper and bounds PDF
+        export by it (see :meth:`_document`). Export findings replace those
+        of any earlier export on ``fs.warnings``. The debug overlay is
+        refused.
 
-        ``page_size`` puts the model on **paper**. Without it the
-        drawing keeps its own coordinates and the furniture docks to its
-        own bounds, which is what a model is; with it the file carries
-        the page draw.io is to rule, the furniture docks to that page
-        instead, and the drawing is fitted into what the furniture
-        leaves -- the same three things :meth:`SvgRenderer.render` does
-        with the same argument, so the two open at the same size on the
-        same paper.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Laid-out and routed flowsheet.
+        diagram : str, optional
+            ``"pfd"`` (default), ``"p&id"`` (or ``"pid"``) or ``"bfd"``, as
+            for :meth:`~pandid.flowsheet.Flowsheet.to_svg`. A P&ID exports
+            its process lines without arrowheads.
+        page_size : str, optional
+            ``"A4"`` to ``"A0"``: the file carries that page, furniture docks
+            to it and the drawing is fitted between, as on the SVG sheet.
+            ``None`` keeps the drawing's own coordinates and docks furniture
+            to its bounds.
+        border : str, optional
+            ``"zone"`` draws the frame, sheet edge and lettered band;
+            ``"none"`` leaves the page edge as the paper's. Defaults to
+            ``"none"``, or ``"zone"`` for a table sheet.
+        connections : str, optional
+            Joint marked on P&ID streams that state none: ``"flanged"`` or
+            ``"none"``. Ignored outside a P&ID
+            (:func:`~pandid.render.svg.sheet_connections`).
+        jump_direction : str, default="vertical"
+            Which of two crossing lines carries the crossing mark. Exported
+            as a style key on the marking edges and as their z-order
+            (:func:`_hops`).
+        crossing_style : str, default="gap"
+            ``"gap"``, ``"arc"`` or ``"plain"``
+            (:data:`~pandid.render.svg.CROSSING_STYLES`). The first two
+            are draw.io line-jump styles; ``"plain"`` writes none.
+        show_stream_table : bool or str, default=False
+            ``True`` docks the stream table at the foot of the sheet as a
+            real table, measured as on the SVG sheet; ``"sheet"`` exports
+            the table as its own sheet.
+        **opts
+            Refused, including ``debug``.
 
-        What it does **not** decide is whether the file states a page
-        size at all. It always does, because draw.io does not offer a
-        document the option of having none: a file that states no size
-        is not read as unpaged, it is read as being on whatever paper
-        the reader's locale defaults to, and PDF export then bounds the
-        drawing by that. The long note beside the ``paper`` attributes
-        below is the evidence, and :meth:`_page_box` is the size.
+        Returns
+        -------
+        str
+            ``mxfile`` XML document.
 
-        ``border`` rules that page. ``"zone"`` draws the frame, the
-        sheet edge and the lettered band between them; ``"none"`` leaves
-        the page's own edge to be the paper's, which is what the sheet
-        does too -- an unruled sheet draws no rectangle, it just stops.
-
-        ``connections`` marks the joint a P&ID draws on a stream that
-        does not say its own, exactly as :meth:`SvgRenderer.render`
-        takes the same argument: ``"flanged"``, ``"none"``, or ``None``
-        to mark nothing a stream has not stated. Ignored outside a
-        P&ID. See :func:`~pandid.render.svg.sheet_connections`.
-
-        ``crossing_style`` says what mark a crossing carries --
-        ``"arc"``, ``"gap"`` or ``"plain"`` -- and means exactly what it
-        means on the sheet; see
-        :data:`~pandid.render.svg.CROSSING_STYLES`. Two of the three are
-        draw.io's own line-jump styles and export as one; ``"plain"``
-        writes no style at all and reorders no edge, so an exported
-        crossing looks like the drawn one whichever is chosen. An
-        unknown spelling is refused here rather than exported as the
-        default.
-
-        ``jump_direction`` says which of two crossing lines carries that
-        mark, and means what it means on the sheet: ``"vertical"`` puts
-        it on the vertical runs. It reaches draw.io as a style key on
-        the marking edges *and* as the order those edges are written in,
-        since z-order is what breaks the tie. See :func:`_hops`.
-
-        ``show_stream_table`` docks the stream property table at the
-        foot of the sheet and rules it as the grid it is, exactly as
-        :meth:`SvgRenderer .render` does with the same argument: both
-        backends measure it with
-        :func:`~pandid.render.furniture.stream_table_layout`, so the
-        columns are the same columns and the section headings fall in
-        the same places.
-
-        The debug overlay remains refused. It is scaffolding for whoever
-        is writing a placement rather than part of the drawing.
+        Raises
+        ------
+        ValueError
+            If an argument is invalid, the page is too small, or a unit has
+            no frame.
         """
         from pandid.render.svg import (
             _page, _resolve_sheet, check_render_arguments,
             reject_unknown_options, wants_table_sheet)
 
-        # `debug` is not a keyword this signature names, so it arrives in
-        # `**opts` and used to be dropped: a .drawio document has no
-        # coordinate overlay to draw, and returning one silently without
-        # it told the caller nothing. `Flowsheet.render` refuses the
-        # argument for this path in so many words; a backend called
-        # directly gets the general answer.
+        # Refuse unknown options, debug included: a .drawio file has no
+        # overlay to draw.
         reject_unknown_options("DrawioRenderer.render()", opts)
         arrows = draws_arrowheads(diagram)
         self._findings = []
-        # Before anything branches, and for the reason the sheet asks it
-        # before it lays a drawing out: an argument this export cannot
-        # honour is refused whether or not this particular document
-        # would have shown it. The table sheet returns below without
-        # ever reaching `sheet_connections`, so an unknown `connections`
-        # was accepted here and marked nothing -- the same swallowing
-        # `jump_direction` had on every sheet.
+        # Check every argument before branching, so the table-sheet path
+        # does not silently accept a bad value it never uses.
         check_render_arguments(
             fs, show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, connections=connections,
@@ -1650,9 +1291,8 @@ class DrawioRenderer:
                 if u.frame is None:
                     raise ValueError(
                         f"Unit '{u.name}' lacks a frame even after layout was run.")
-        # A table sheet is a formal drawing rather than a table on
-        # paper, so it rules the frame the reference sets do; see
-        # :meth:`SvgRenderer.render`, which defaults it the same way.
+        # A table sheet gets the zone frame unless border is stated, as in
+        # SvgRenderer.render.
         if table_sheet and border is None:
             border = "zone"
         border, _diagram = _resolve_sheet(border, diagram)
@@ -1661,30 +1301,17 @@ class DrawioRenderer:
             return self._table_sheet(fs, sheet, border)
 
         body: list[str] = []
-        # Sheet furniture first: a later cell draws over an earlier one,
-        # and the boxes are behind the drawing on the sheet. The border
-        # is behind even those, which is the order _place_furniture
-        # splices it in at.
-        # `bool()` and not the value: the table sheet returned above, so
-        # what is left here is the table on the diagram or no table.
+        # Cell order is z-order: border, then furniture, behind the
+        # drawing. The table sheet has returned, so the stream-table
+        # argument is now a plain bool.
         furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table))
         body.extend(self._border(frame, border))
         body.extend(furniture)
-        # Then equipment, then the runs between it, then the balloons --
-        # which is the SVG renderer's own order, and it is that order
-        # for the same reason: a balloon's opaque body knocks out the
-        # line an in-line element straddles, and a cell drawn earlier is
-        # a cell drawn under.
-        #
-        # That leaves an edge to a balloon naming a cell that appears
-        # later in the file, which the format allows: an mxCell's
-        # ``source``/``target`` is a reference resolved by id over the
-        # whole document, not a back-pointer into what has been read so
-        # far. It has to be, since z-order *is* cell order and draw.io
-        # lets a user send an edge behind the shapes it joins. The
-        # sheet's equipment-tag pass, run once: it settles where every
-        # tag lands *and* hands the line-number search the plates it has
-        # to step clear of. See :class:`_Tags`.
+        # Then equipment, runs and balloons, in the SVG renderer's order, so
+        # a balloon's opaque body masks what it straddles. An edge may name
+        # a later balloon cell, since mxCell source/target resolve by id
+        # over the whole document. The tag pass (:class:`_Tags`) runs once
+        # and also gives the line-number search the tag plates to avoid.
         joints = sheet_connections(diagram, connections)
         tags = _tag_pass(fs, self.registry, joints, jump_direction)
         balloons: list[str] = []
@@ -1693,142 +1320,103 @@ class DrawioRenderer:
                 self._vertex(u, i, fit, tags))
         body.extend(self._edges(fs, arrows, fit, tags, jump_direction, joints,
                                 crossing_style))
-        # Instrumentation goes on over the lines, as it does on the
-        # sheet: the tap runs from the plant to the balloon and the
-        # balloon's opaque body then knocks out both it and any process
-        # line an in-line element straddles. Same three passes, same
-        # order, same reason.
+        # Taps then balloons over the lines, as on the sheet.
         body.extend(self._taps(fs, fit))
         body.extend(balloons)
-        # The codes lettered outside the balloons go on last, over
-        # everything, exactly as `_draw_unit_labels` puts them on the
-        # sheet: a code is written on paper the search cleared for it,
-        # and it is haloed for the lines it could not clear.
+        # Balloon quadrant codes last, haloed, as on the sheet.
         for n, code in enumerate(tags.codes):
             body.extend(_quadrant_cell(f"q{n}", code, fit))
 
         return self._document(fs, sheet, frame, body)
 
     def _table_sheet(self, fs, sheet, border) -> str:
-        """The stream table's own sheet, as a draw.io document.
+        """Return the stream table's own sheet as a draw.io document.
 
-        The same drawing the sheet renders for
-        ``show_stream_table="sheet"`` and by the same arithmetic:
-        :func:`~pandid.render.svg.table_sheet_plan` wraps the table to
-        the page, docks the strip and rules the frame, and what is left
-        here is the format. Every block comes out as a real
-        ``shape=table`` -- rows and cells a reader can edit -- which is
-        what the docked table already exports as.
+        Geometry comes from :func:`~pandid.render.svg.table_sheet_plan`, as
+        on the SVG sheet, and every block is an editable ``shape=table``.
+        The frame is the page on a paged export and the table's bounds
+        otherwise.
 
-        The frame is the page's, not the drawing's, on a paged export
-        and the table's own bounds on an unpaged one; a table sheet has
-        no diagram whose coordinates could be kept, so there is no
-        third case here of the kind :meth:`_furniture` has.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose streams are tabulated.
+        sheet : _Sheet or None
+            Fixed page, or ``None``.
+        border : str
+            ``"none"`` or ``"zone"``.
+
+        Returns
+        -------
+        str
+            ``mxfile`` XML document.
         """
         from pandid.render.svg import table_sheet_plan
 
         plan = table_sheet_plan(fs, sheet)
-        # What the sheet has to report about itself joins what the
-        # export found, so the two backends put the same sentence on
-        # ``fs.warnings`` for the same drawing.
+        # Report the plan's findings, as the SVG backend does.
         self._findings.extend(plan.findings)
         body = list(self._border(plan.frame, border))
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
             body += _stream_table(f"st{i}", part, bx, by)
         x, y, w, h = plan.strip
-        # No scale: a table is not drawn to scale, and the cell is left
-        # unruled where there is no ratio to report.
+        # A table has no scale to state.
         body += self._title_strip("f0", plan.block, x, y, w, h,
                                   plan.name, plan.date, "")
         return self._document(fs, sheet, plan.frame, body)
 
     def _document(self, fs, sheet, frame, body: list[str]) -> str:
-        """The draw.io file around a sheet's cells: the paper it states,
-        the page *view* it asks for, and the model wrapper.
+        """Return the draw.io file around a sheet's cells.
 
-        Two sheets come out of this exporter -- the diagram and the stream
-        table's own sheet -- and the paper both open on is the one
-        statement in the file no reader can override. Written twice, the
-        two would be free to disagree about it.
+        Shared by the diagram and the table sheet so both state their page
+        the same way.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet, for the name, page id and warnings.
+        sheet : _Sheet or None
+            Fixed page, or ``None``.
+        frame : tuple[float, float, float, float]
+            Frame the cells are placed against.
+        body : list[str]
+            Cell XML lines.
+
+        Returns
+        -------
+        str
+            ``mxfile`` XML document.
         """
-        # **The page and the page *view* are two separate statements.**
-        # Function names are the anchors below; both repositories move.
+        # Page size and page view are separate statements (function names
+        # below refer to the drawio sources).
         #
-        # **The size is never optional.**
-        # `Editor.prototype.readGraphState` (drawio,
-        # js/grapheditor/Editor.js) parses pageWidth/pageHeight into
-        # `graph.pageFormat` and, when either is absent, has no `else`
-        # branch at all: the format keeps whatever `resetGraph` left,
-        # which is `mxGraph.prototype.pageFormat`. That is not "no page"
-        # and not reliably A4 either -- js/grapheditor/Graph.js sets it
-        # by locale, A4 portrait 827x1169 everywhere except
-        # en-us/en-ca/es-mx, which get US Letter 850x1100. So a file
-        # stating no size opens on whatever paper the *reader's* machine
-        # picks, and is a different document in Brisbane and in Houston.
+        # Always state the size. With pageWidth/pageHeight absent,
+        # Editor.readGraphState keeps mxGraph's locale default (A4, or US
+        # Letter for en-us/en-ca/es-mx), and PDF export (js/export.js
+        # renderPage) bounds the drawing by whole page tiles of that size.
+        # PNG and SVG use the drawing's own extent. The stated size is the
+        # sheet the SVG backend draws (:meth:`_page_box`).
         #
-        # **And the size is what bounds a PDF.** The headless renderer
-        # both drawio-desktop and the export server run (js/export.js,
-        # `renderPage`) sets `graph.pdfPageVisible = !imagePageVisible`
-        # for every PDF export, whatever `page` says, and then bounds
-        # the export by `graph.view.getBackgroundPageBounds()`, which
-        # snaps outward to a whole number of page tiles: a
-        # 1950-unit-wide drawing against an 827-wide default tile comes
-        # back as a 3x1 grid cut across the joins. PNG and SVG are
-        # unaffected -- `Graph.prototype.getSvg` resolves the default
-        # exportType='diagram' to `getGraphBounds()`, the drawing's own
-        # extent. So the size is stated either way, and what is stated
-        # is the sheet the SVG backend would have drawn: see
-        # :meth:`_page_box`.
+        # page= only sets the page view. A model with no paper says
+        # page="0", which also makes export compute the origin from the
+        # content (autoOrigin), so drawings with negative coordinates are
+        # not clipped. A fixed page has every cell within [0, sheet].
         #
-        # **The page view is the separate question**, and
-        # `readGraphState` spends `page` on `graph.pageVisible` and
-        # `pageBreaksVisible` -- editor chrome -- and on nothing about
-        # `pageFormat`. A model with no paper has no page to rule, so
-        # page="0" is the true thing for it to say, and it is also what
-        # makes such a model export whole: `renderPage` sets
-        # `autoOrigin` when `page` is not "1", which mxPrintPreview
-        # documents as "Specifies if the origin should be automatically
-        # computed based on the top, left corner of the actual diagram
-        # contents". An unpaged export keeps the drawing's own
-        # coordinates and those routinely run left of or above zero
-        # (`12_block_flow_diagram`'s frame starts at x = -34,
-        # `03_distillation_train`'s at y = -165), so anchored at zero
-        # each would lose its left or top edge to the tile before it. A
-        # fixed page is the opposite case on both counts: there *is*
-        # paper and every coordinate already lies within [0, sheet].
-        #
-        # **pageScale stays 1 and stays stated.** drawio's own default
-        # is 1, but it reaches it by overriding
-        # `mxGraph.prototype.pageScale`, which is 1.5. Nothing else is
-        # needed to stop a re-fit: every rescaling path in the sources
-        # is driven by a request parameter or a checkbox rather than by
-        # any attribute a document carries. `math` would matter -- the
-        # diagramly `getSvg` force-typesets before measuring when it is
-        # on -- and is off here.
+        # pageScale is stated as 1, since mxGraph's own default is 1.5;
+        # math is off so export does not re-typeset before measuring.
         page_w, page_h = self._page_box(sheet, frame)
         paper = (f'page="{0 if sheet is None else 1}" pageScale="1" '
                  f'pageWidth="{_num(page_w)}" pageHeight="{_num(page_h)}"')
-        # A stable page id, so exporting the same flowsheet twice gives
-        # the same file. draw.io generates a random one; a random one
-        # here would make every re-export a diff of one line that means
-        # nothing.
+        # A stable page id, so re-exporting gives an identical file.
         page = hashlib.sha256(fs.name.encode("utf-8")).hexdigest()[:16]
-        # What this export could not carry across joins the validator's
-        # findings, exactly as ``SvgRenderer.render`` puts the sheet's
-        # there: one list, whichever document was asked for. Findings
-        # from an earlier export are dropped rather than added to -- a
-        # drawing number shortened and re-exported must stop warning
-        # about the old one.
+        # Replace earlier export findings with this export's, as
+        # SvgRenderer.render does.
         fs.warnings = [w for w in fs.warnings
                        if getattr(w, "code", "") not in _EXPORT_CODES] + self._findings
         return "\n".join([
             '<?xml version="1.0" encoding="UTF-8"?>',
-            # ``agent`` is where draw.io writes the user-agent string of
-            # whatever produced the file, so it is where the version
-            # belongs; ``host`` stays the bare application name, which
-            # is what it names. A bare ``agent="pandid"`` could not tell
-            # 0.1.0 output from 0.1.2 output, which is the whole
-            # complaint.
+            # agent carries the generator and version; host is the
+            # application name.
             f'<mxfile host="pandid" agent={_attr(generator())} type="device">',
             f'  <diagram id="pandid-{page}" name={_attr(fs.name)}>',
             '    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" '
@@ -1848,95 +1436,89 @@ class DrawioRenderer:
 
     @staticmethod
     def _id(index: int) -> str:
-        """The cell id for the unit at ``index`` in ``fs.units``.
+        """Return the cell id for the unit at ``index`` in ``fs.units``.
 
-        Derived from the position rather than from the tag: a tag
-        repeats (a trip square is one piece of logic drawn wherever it
-        acts), and two cells under one id is a file draw.io reads as one
-        cell. ``0`` and ``1`` are the model's own root cells, which is
-        what the prefix keeps clear of.
+        Positional, because tags repeat (a trip square drawn in several
+        places), and prefixed to avoid the root cells ``0`` and ``1``.
+
+        Parameters
+        ----------
+        index : int
+            Unit index.
+
+        Returns
+        -------
+        str
+            Cell id.
         """
         return f"u{index}"
 
     @staticmethod
     def _approximation(u, sym) -> "_Approximation | None":
-        """The stand-in for a unit draw.io has no stencil for, or None.
+        """Return the built-in stand-in for a symbol without a stencil.
 
-        None for every vendored symbol, which is the great majority, and
-        for a kind with no artwork at all -- a
-        :class:`~pandid.units.Unit` subclass from outside this package,
-        which draws a generic box on the sheet and gets draw.io's
-        default vertex here, the same statement either way.
+        ``None`` for vendored symbols, compositions on a vendored body
+        (:attr:`~pandid.render.symbols.Symbol.drawio_body_shape`, with parts
+        as child cells), and kinds with no artwork, which get draw.io's
+        default vertex as they get a generic box on the sheet.
 
-        A **composition** whose body was vendored is in the first case,
-        not the second: it carries the body's reference under
-        :attr:`~pandid.render.symbols.Symbol.drawio_body_shape`, the
-        body's stencil draws the outline, and the parts are child cells
-        (:meth:`_overlay_cells`). One whose body was drawn here falls
-        through to the table like any other hand-drawn symbol.
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        sym : Symbol
+            Its symbol.
+
+        Returns
+        -------
+        _Approximation or None
+            Stand-in from :data:`_APPROXIMATIONS`.
         """
         if sym.drawio_shape or sym.drawio_body_shape:
             return None
         return _APPROXIMATIONS.get((u.kind, getattr(u, "variant", "default")))
 
     def _placement(self, u, sym) -> "tuple[list[str], bool, bool]":
-        """The style keys that place a symbol, and the flips they came
-        out as.
+        """Return the style keys placing a symbol, and its net flips.
 
-        The flips come back with the keys because the connection points
-        below have to be stated in a frame draw.io will then flip, so
-        the two have to be worked out together or they disagree about
-        which side of the box a nozzle is on.
+        The flips are returned so :meth:`_constraint` states connection
+        points in the frame draw.io then flips. A directional symbol is
+        never flipped: its artwork states a direction (a cooler versus a
+        heater), so like :func:`pandid.render.svg._upright_artwork` only its
+        ports move, and they are stated as coordinates.
 
-        A **directional** symbol takes no flip at all, and that is not
-        an omission. Its artwork *is* a statement of direction -- a
-        cooler is the heater's circle and zigzag with the arrowhead at
-        the other end of the diagonal, and nothing else tells the two
-        apart -- so the SVG renderer holds the drawing still under a
-        flip and lets only the nozzles move
-        (:func:`pandid.render.svg._upright_artwork`). Flipping the
-        draw.io shape would draw the sibling symbol and say the opposite
-        thing about which way the heat goes. The nozzles still move,
-        because they are stated as coordinates below and not inferred
-        from the shape.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+
+        Returns
+        -------
+        tuple[list[str], bool, bool]
+            Style keys, ``flip_h`` and ``flip_v``.
         """
         f = u.frame
         if u.kind in ("feed", "product"):
-            # A flag states its whole placement in :meth:`_flag_shape`:
-            # it is never turned (the sheet does not turn one either)
-            # and its mirror is a `direction` rather than a flip, since
-            # the shape it is drawn with already points a quarter away
-            # from where it is wanted.
+            # A flag is placed in _flag_shape, by direction, not flips.
             return [], False, False
         rot = int(getattr(f, "orientation", 0) or 0)
         keys = []
         if rot in _DIRECTION:
-            # anchorPointDirection=0 rides with the turn and only with
-            # it: it stops draw.io turning this cell's connection points
-            # along with the shape, which it only ever would for a cell
-            # that states a direction. A *vertex* key -- mxGraph reads
-            # it off the shape being connected to, not off the edge --
-            # and :meth:`_constraint` is where it is wanted.
-            #
-            # legacyAnchorPoints=1 pins *which* of draw.io's two anchor
-            # algorithms honours it. Every fraction this file writes is
-            # a fraction of the box *as placed*, so only the legacy one
-            # is right, and relying on its being the default is a nozzle
-            # that moves when draw.io changes its mind.
+            # anchorPointDirection=0 (a vertex key) stops draw.io turning
+            # the connection points with the shape; legacyAnchorPoints=1
+            # pins the anchor algorithm that honours it, since every
+            # fraction here is of the box as placed.
             keys += [f"direction={_DIRECTION[rot]}", "anchorPointDirection=0",
                      "legacyAnchorPoints=1"]
         if sym.directional:
             flip_h, flip_v = False, False
         else:
             flip_h, flip_v = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
-        # A fitting turned end for end draws its stencil mirrored, and a
-        # left-pointing splitter draws draw.io's own triangle mirrored.
-        # Both are the *drawing* differing from the shape being named
-        # rather than anything the author asked for, so both compose
-        # with the placement instead of overriding it -- and both are
-        # folded in here, in the one place, because :meth:`_constraint`
-        # has to state its fractions in a frame draw.io will then flip
-        # and would otherwise be answering from a different sum.
+        # A stencil or stand-in that points the other way composes its flip
+        # with the placement; folded in here so _constraint uses the same
+        # net flip.
         approx = self._approximation(u, sym)
         if sym.drawio_flip_h or (approx is not None and approx.flip_h):
             flip_h = not flip_h
@@ -1947,60 +1529,49 @@ class DrawioRenderer:
         return keys, flip_h, flip_v
 
     def _shape(self, u, sym, fit: "_Fit") -> list[str]:
-        """The style keys naming what draw.io is to draw for this unit.
+        """Return the style keys naming what draw.io draws for a unit.
 
-        ``fit`` is here for the pen. A symbol's outline is a **drawing**
-        dimension, so it scales with the drawing exactly as a pipe's
-        does (:class:`_Fit`), and stating it unscaled beside a stream
-        stated scaled would put the two back out of proportion at the
-        other end.
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        sym : Symbol
+            Its symbol.
+        fit : _Fit
+            Drawing fit, which scales the outline like every pen.
+
+        Returns
+        -------
+        list[str]
+            Style keys.
         """
         weight = (f"strokeWidth="
                   f"{fit.length(_svg._class_weight(sym).width):g}")
         if u.kind in ("feed", "product"):
             return self._flag_shape(u, fit)
-        # A composition names no stencil of its own -- that is what stops
-        # a body's reference being reused for a body-plus-parts drawing,
-        # which would export a stirred tank as a bare vessel. What it does
-        # carry is the stencil that draws its *body*, and that one is true
-        # of the cell this method is styling, because the parts get cells
-        # of their own beside it (:meth:`_overlay_cells`).
+        # A composition names its body's stencil; the parts get child
+        # cells (:meth:`_overlay_cells`).
         stencil = sym.drawio_shape or sym.drawio_body_shape
         if stencil:
-            # A vendored stencil: name it and let draw.io draw its own
-            # artwork. `outlineConnect=0` is what draw.io's own P&ID
-            # palette sets, and it matters here more than there: it
-            # stops a stream being dropped onto the shape's outline
-            # instead of onto the nozzle it was routed to.
-            #
-            # And the pen, which was not being written at all. Every
-            # vendored stencil declares `strokewidth="inherit"`, which
-            # is a stencil saying "take the pen from the cell" -- and
-            # the cell said nothing, so draw.io's default 1 drew every
-            # symbol lighter than the pipes around it. See
-            # :func:`pandid.render.svg._class_weight`.
+            # A vendored stencil. outlineConnect=0, as draw.io's P&ID
+            # palette sets, keeps a stream on its routed nozzle rather than
+            # the outline. Stencils use strokewidth="inherit", so state the
+            # pen (:func:`pandid.render.svg._class_weight`).
             keys = [f"shape={stencil}", "outlineConnect=0",
                     f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
                     weight]
             return keys
-        # The stand-in, or draw.io's default vertex. Its mirror, where
-        # it needs one, is applied in :meth:`_placement` with everything
-        # else that flips.
+        # The stand-in, or the default vertex; flips are in _placement.
         approx = self._approximation(u, sym)
         shape = approx.shape if approx is not None else None
         keys = [] if shape is None else [f"shape={shape}"]
         keys += ["rounded=0", "whiteSpace=wrap"]
         if approx is None:
-            # A kind with no artwork at all: the sheet draws
-            # `_generic_symbol`'s 60-unit box, ruled at the same weight
-            # everything else is.
+            # No artwork: the generic box, as on the sheet.
             return keys + [f"strokeColor={_INK}", f"fillColor={_NO_FILL}", weight]
         if approx.pieces:
-            # The drawing is in the pieces (:meth:`_pieces`), so the cell
-            # itself draws nothing: left visible it would rule a box
-            # round a symbol that has none. It stays a real vertex --
-            # this is what the connection points are fractions of, and
-            # what a reader drags -- and only its ink is taken away.
+            # The pieces draw the symbol (:meth:`_pieces`); the cell stays
+            # an invisible vertex for connection points and dragging.
             return keys + ["strokeColor=none", f"fillColor={_NO_FILL}"]
         return keys + [*approx.keys, f"strokeColor={approx.stroke}",
                        f"fillColor={approx.fill}",
@@ -2008,35 +1579,27 @@ class DrawioRenderer:
 
     @staticmethod
     def _flag_shape(u, fit: "_Fit") -> list[str]:
-        """The off-page flag, as draw.io's own five-point connector
-        polygon.
+        """Return the style keys for an off-page flag.
 
-        ``offPageConnector`` draws ``(0,0) (w,0) (w,h-s) (w/2,h)
-        (0,h-s)``: a rectangle with one end drawn to a point,
-        flat-backed, which is the pennant
-        :func:`~pandid.render.svg.boundary_flag` describes. It points
-        *south*, so it is turned a quarter: mxShape adds 270 degrees for
-        ``direction=north`` and swaps the painting box's width and
-        height first, which lands the tip on the middle of the east edge
-        and leaves the cell's own bounding box alone. ``south`` is the
-        same shape turned the other way, tip west, which is a mirrored
-        flag.
+        draw.io's ``offPageConnector`` is the pennant
+        :func:`~pandid.render.svg.boundary_flag` describes, pointing south,
+        so it is turned with ``direction=north`` (tip east) or ``south``
+        (tip west). ``size`` is a fraction of the shape's height, which is
+        the cell's width after the turn. The anchor keys stop draw.io
+        resolving connection points against rotated bounds, as in
+        :meth:`_placement`.
 
-        ``size`` is a *fraction of the shape's own height*, and that
-        height is the cell's **width** after the quarter turn, so the
-        fifteen units the sheet cuts the point back by is fifteen over
-        the width of this particular flag rather than a constant.
+        Parameters
+        ----------
+        u : Unit
+            Feed or Product.
+        fit : _Fit
+            Drawing fit.
 
-        The two anchor keys are here because ``direction`` is: draw.io
-        resolves a fixed connection point against bounds it rotates by
-        90 for a north or south direction, which would take every
-        fraction against a transposed rectangle.
-        ``anchorPointDirection=0`` is what stops that, and
-        ``legacyAnchorPoints=1`` pins *which* of draw.io's two anchor
-        algorithms honours it -- the legacy one, which is the default,
-        is the one in which ``anchorPointDirection=0`` suppresses the
-        bounds swap as well as the rotation. Saying so is cheap and the
-        alternative is a file whose nozzles depend on a default.
+        Returns
+        -------
+        list[str]
+            Style keys.
         """
         (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
         width = x1 - x0
@@ -2046,66 +1609,48 @@ class DrawioRenderer:
                 "anchorPointDirection=0", "legacyAnchorPoints=1",
                 "rounded=0", "whiteSpace=wrap",
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
-                # The pennant is a symbol outline and is ruled like one,
-                # and like one it scales with the drawing. It was stated
-                # flat here, which on a paged sheet drew the flag
-                # heavier than the pipe running into it. The §5.3.1 b)
-                # rung and not c): a Feed or a Product is a boundary
-                # marker on the flow line (ISO 10628-1 §5.3.3.2's
-                # in/outgoing-flow arrow) and a graphical symbol on the
-                # sheet, not one of §5.3.1 c)'s classes. It is no longer
-                # the pipe's own rung, which is what it used to be read
-                # as; ``SvgRenderer._draw_boundary`` states the same one.
+                # A symbol outline on the ISO 10628-1 5.3.1 b) rung, scaled
+                # with the drawing, as SvgRenderer._draw_boundary draws it.
                 f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
 
     def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
-        """A unit's label text, the style keys that place it, and how
-        far the sheet stepped it off that side.
+        """Return a unit's label text, placing keys and tag offset.
 
-        An instrument's tag goes *inside* its balloon, letters over
-        number, which is where a sheet writes it and where draw.io's
-        default centred label puts it. Everything else is labelled on
-        the side the sheet settles on -- which is
-        :func:`pandid.layout.coordinates.assign_labels`' choice and then
-        :meth:`SvgRenderer._tag_item`'s, because a face with no nozzle
-        on it is not yet free paper. See :func:`_tag_pass`, which runs
-        that same search here without drawing anything.
+        An instrument's tag goes inside its balloon. Other tags go on the
+        side the sheet settled on (:func:`_tag_pass`, the same search as
+        :meth:`SvgRenderer._tag_item`). ``NC`` and fail-position letters
+        follow the tag, since a draw.io cell has one label.
 
-        Two markings ride along on the label because they have nowhere
-        else to go: ``NC`` for a valve declared normally closed whose
-        body cannot carry the darkening, and the fail-position letters.
-        The renderer places both as small labels of their own against
-        the corner of the symbol; there is no second label on a draw.io
-        cell, so they follow the tag rather than being dropped.
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        fit : _Fit
+            Drawing fit; lettering scales with it (:func:`_drawn_type`).
+        tags : _Tags
+            Tag placements from the tag pass.
 
-        ``fit`` is here because every one of these is lettering **in the
-        drawing**, and the drawing is scaled. See :func:`_drawn_type`.
+        Returns
+        -------
+        tuple[str, list[str], tuple[float, float]]
+            HTML label, style keys and the ``(dx, dy)`` offset.
         """
         from pandid.units import split_tag
 
         if u.kind == "instrument":
             letters, number = split_tag(getattr(u, "type", "") or u.tag,
                                         getattr(u, "number", "") or "")
-            # A diamond carries the number alone, as the sheet draws it:
-            # its letters are only the tag prefix and there is no room
-            # under them.
+            # A diamond carries the number alone, as on the sheet.
             if getattr(u, "variant", "default") in _DIAMOND_BALLOONS:
                 parts = [number or letters.upper()]
             else:
                 parts = [letters.upper(), number]
             parts = [part for part in parts if part]
-            # Each piece escaped before it is joined, not after: `parts`
-            # is author text (a tag's letters and number), the `<br>` is
-            # the library's own, and only composing this way keeps the
-            # two apart once :func:`_attr` escapes the result again; see
-            # :func:`_html_text`.
+            # Escape each part before joining, so only the <br> is markup
+            # (:func:`_html_text`).
             text = "<br>".join(_html_text(part) for part in parts)
-            # A balloon's tag is written inside the balloon, so its type
-            # is capped to what the balloon holds. The sheet sets the
-            # letters at 12 and the number at 11 and a draw.io label has
-            # one size for the whole of it, so the pair goes out at the
-            # larger of the two -- the letters are what a reader picks
-            # the loop out by.
+            # Capped to fit the balloon; one size for both lines, the
+            # letters' 12 rather than the number's 11.
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
                           "align=center",
                           _drawn_type(_TAG_TYPE, fit, lines=len(parts),
@@ -2116,24 +1661,9 @@ class DrawioRenderer:
             reference = getattr(u, "reference", "") or ""
             if reference:
                 lines.append(reference)
-            # Inside the flag, over the off-page reference, which is
-            # where the sheet writes it: a boundary flag's label *is*
-            # its content (:meth:`SvgRenderer._draw_boundary`).
-            #
-            # Centred on the cell, where the sheet centres it on the
-            # *flat* part of the pennant -- half the point's depth to
-            # the blunt end of the difference, under four units on a
-            # flag eighty wide. There is no key that says "centre me in
-            # the shape minus its point".
-            #
-            # The type is capped to the pennant, which a side label does
-            # not need: a flag carrying an off-page reference is 26
-            # units deep and two lines at the sheet's own 12 want 28,8
-            # of draw.io's line box, so the pair is set a shade smaller
-            # rather than laid across the pennant's edges. The sheet
-            # does not have to make that trade -- it sets the reference
-            # at 10,5 on a baseline of its own -- and a draw.io label
-            # has one size and one line height for the whole of it.
+            # Centred inside the flag, as the sheet writes it, capped to the
+            # pennant: draw.io has one size and line height per label, so
+            # tag and reference are set slightly smaller to fit.
             return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE["center"] + [
                 _drawn_type(_TAG_TYPE, fit, lines=len(lines),
                             box=self._cell_box(u))], (0.0, 0.0)
@@ -2144,64 +1674,62 @@ class DrawioRenderer:
             lines.append(letters)
         side, dx, dy = tags.at.get(id(u), (
             (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0))
-        # No cap: a tag on a side of a symbol is written on the paper
-        # beside it, not in the cell, so there is no box for it to
-        # overflow. `_LABEL_SIDE` gives the label its own box outside
-        # the cell and mxGraph draws it at whatever size it is told
-        # (`mxGraphView.updateVertexLabelOffset`).
+        # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
         ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx), fit.length(dy))
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
-        """The rectangle draw.io is handed for this unit.
+        """Return the rectangle draw.io is given for a unit.
 
-        :func:`~pandid.portgeom.unit_box` for everything with artwork
-        that fills its box, which is everything drawn from a stencil:
-        draw.io stretches a ``variable`` stencil into the cell exactly
-        as :func:`~pandid.portgeom.ink_box` stretches the symbol into
-        the frame, so the box *is* the mapping.
+        :func:`~pandid.portgeom.unit_box`, which a variable stencil fills.
+        An off-page flag uses its pennant box, which is inset top and bottom
+        (:func:`~pandid.render.svg.boundary_flag`), so connection fractions
+        land on the pennant.
 
-        An off-page flag is the one thing that is drawn smaller than its
-        box. Its pennant fills the box left to right and is inset twelve
-        or fifteen units top and bottom off the box's own height
-        (:func:`~pandid.render.svg.boundary_flag`), so handing draw.io
-        the whole box would draw a flag taller than the sheet rules one
-        at. The cell is the pennant, which is also what
-        makes the connection points below come out right: a fraction is
-        a fraction of *this* rectangle, and the port sits on the middle
-        of the pennant's end rather than halfway down a box the drawing
-        does not reach the bottom of.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Box ``(x0, y0, x1, y1)``.
         """
         if u.kind in ("feed", "product"):
             return boundary_flag(u, u.frame).box
         return unit_box(u, u.frame)
 
     def _vertex(self, u, index: int, fit: "_Fit", tags: "_Tags") -> list[str]:
-        """One unit, as a draw.io vertex.
+        """Return one unit as a draw.io vertex and its child cells.
 
-        The ``<mxPoint as="offset">`` is how far the sheet stepped this
-        unit's tag along the side it settled on.
-        ``mxGraphView.updateCellState`` reads a *vertex* geometry's
-        offset into ``state.absoluteOffset``, and
-        ``mxCellRenderer.getLabelBounds`` starts its non-edge branch
-        from exactly that -- so it displaces the label and leaves the
-        cell alone, which is what a tag stepping clear of somebody
-        else's line is.
+        The ``<mxPoint as="offset">`` moves the label, not the cell, by the
+        tag's step along its side. Child cells draw a second outline
+        (:meth:`_inscribed`), stand-in pieces (:meth:`_pieces`) and
+        supplementary parts (:meth:`_overlay_cells`).
 
-        A symbol that is **two outlines** gets a second cell, inscribed
-        in the first: see :meth:`_inscribed`. A symbol whose parts sit at
-        different places along the cell gets one cell per part: see
-        :meth:`_pieces`. A **composed** symbol gets one cell per
-        supplementary part: see :meth:`_overlay_cells`.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        index : int
+            Unit index, for the cell id.
+        fit : _Fit
+            Drawing fit.
+        tags : _Tags
+            Tag placements.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
         """
         sym = self.registry.for_unit(u)
         approx = self._approximation(u, sym)
         if approx is not None and approx.lost:
-            # A stand-in with nothing in its ``lost`` sentence loses
-            # nothing -- a ring support really is three sides of a
-            # rectangle -- so only the ones that do are reported.
+            # Report only stand-ins that lose something.
             self._findings.append(Issue(
                 "warning", APPROXIMATED,
                 f"{u.name} has no draw.io stencil and is exported as a stand-in, "
@@ -2229,38 +1757,28 @@ class DrawioRenderer:
         ]
 
     def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
-        """Say so when draw.io will stretch a drawing the sheet holds still.
+        """Report a stand-in draw.io will stretch where the sheet letterboxes.
 
-        :attr:`~pandid.render.symbols.Symbol.stretchable` is a *stencil*
-        attribute, and for every vendored reference it is true -- the
-        module docstring says the box is then the whole of the mapping,
-        and a test pins that every referenced stencil is ``variable``.
-        A **stand-in** has no such attribute to carry: draw.io scales a
-        built-in into whatever cell it is given, and there is no way to
-        ask an ``ellipse`` to stay a circle.
+        Vendored stencils are variable and match the sheet. A built-in
+        stand-in for an unstretchable symbol fills its cell, while
+        :func:`~pandid.portgeom.ink_box` centres the artwork on the sheet,
+        so a unit sized to another aspect is reported. Silent when the
+        aspect matches.
 
-        So for the twelve symbols that may not be distorted, the two
-        backends part company the moment an author sizes one to a box of
-        another shape: :func:`~pandid.portgeom.ink_box` centres the
-        artwork on the sheet and leaves the letterbox blank, and draw.io
-        stretches it to the cell. That is a real divergence and it used
-        to be silent, which is the one thing this backend promises not to
-        be. It is reported rather than repaired because repairing it
-        means handing draw.io the letterboxed rectangle instead of the
-        unit's box, and a cell that is not the unit's box is a different
-        change with its own consequences for every port fraction on it.
-
-        Silent in the ordinary case, which is the point: a symbol drawn
-        at its own proportions has nothing to report.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+        approx : _Approximation or None
+            Its stand-in.
         """
         if approx is None or sym.stretchable:
             return
         x0, y0, x1, y1 = self._cell_box(u)
         w, h = x1 - x0, y1 - y0
-        # The symbol's box **as placed**: a quarter turn swaps its width
-        # and height, and the cell is turned with it. Comparing against
-        # the unturned box reported every upright symbol laid on its side
-        # as reproportioned, which is a drawing that was never resized.
+        # Compare with the symbol's box as placed, turn included.
         _px, _py, bw, bh = symbol_to_box(0.0, 0.0, sym.width, sym.height, *_xform(u.frame))
         if not (w > 0 and h > 0 and bw > 0 and bh > 0):
             return
@@ -2277,36 +1795,31 @@ class DrawioRenderer:
     @staticmethod
     def _pieces(u, approx: "_Approximation | None", cid: str,
                 w: float, h: float, fit: "_Fit") -> list[str]:
-        """A stand-in that is several built-ins, one cell each.
+        """Return a multi-piece stand-in as one child cell per built-in.
 
-        See :class:`_Piece` for why.
+        See :class:`_Piece`. mxGraph does not turn a child's geometry with
+        its parent, so each piece's rectangle is mapped through
+        :func:`~pandid.portgeom.symbol_to_box` (as ports and SVG artwork
+        are) and the parent's quarter turn is restated on it. Pieces are
+        ``connectable=0`` and ``movable=0``, as in :meth:`_inscribed`.
 
-        **The placement has to be applied here, by hand.** A parent's
-        ``direction`` and its flips are properties of how *its own shape*
-        paints inside its bounds; mxGraph does not turn a child's
-        geometry with them, and a child that is not a shape of the parent
-        but a piece *of the drawing* has to be turned by the same
-        quarter or the symbol comes apart. Left unturned, a trap laid on
-        its side exported as three tall slivers side by side inside a
-        cell that was itself upright -- ink that met none of the nozzles.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        approx : _Approximation or None
+            Its stand-in.
+        cid : str
+            Parent cell id.
+        w, h : float
+            Parent cell size.
+        fit : _Fit
+            Drawing fit.
 
-        Two halves, and both are needed:
-
-        * **Where the piece is.** Its rectangle is stated in the
-          *symbol's* frame, so both corners go through
-          :func:`~pandid.portgeom.symbol_to_box` -- the same map the
-          nozzles and the SVG artwork are placed by, so a piece cannot
-          drift from the port it is drawn under.
-        * **Which way the piece paints.** ``mxLine`` draws across its box
-          horizontally and turns only for ``direction`` north or south,
-          so the quarter turn is restated on each child. It is the
-          parent's own ``direction``, not a fresh decision: the whole
-          drawing turns together.
-
-        ``connectable=0`` and ``movable=0`` for the reasons
-        :meth:`_inscribed` gives -- a piece is *part of* the symbol, and
-        a stream belongs on the parent's connection points rather than
-        on a lead the parent happens to be drawn with.
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty without pieces.
         """
         if approx is None or not approx.pieces:
             return []
@@ -2331,45 +1844,36 @@ class DrawioRenderer:
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
                        fit: "_Fit", frame: "Frame", name: str) -> list[str]:
-        """One cell per ISO supplementary part, grouped under the body's.
+        """Return one child cell per ISO supplementary part on a composed body.
 
-        **This is what a composed symbol exports as.** A composition names
-        no stencil (:func:`pandid.render.symbols.compose` clears it),
-        because a stencil reference names *one* shape and draw.io draws
-        whatever that name resolves to -- so a stirred tank exported under
-        the vessel's own reference would come out a bare vessel, the right
-        outline with the thing that made it a reactor silently gone.
-        Instead the cell above draws the body and each part gets a cell of
-        its own inside it.
+        A composition names no stencil, since a stencil would draw only the
+        body; each part becomes a child cell instead. An
+        :class:`~pandid.render.symbols.Overlay` is in fractions of the body
+        box, which is the parent cell, so the conversion is a multiply
+        (``tests/test_drawio.py`` checks it against the SVG). Children move
+        and resize with the parent; ``connectable=0`` and ``movable=0`` as
+        in :meth:`_inscribed`. Parts use the detail pen (ISO 10628-1 5.3.1,
+        :data:`_PART_STROKE`).
 
-        The geometry is the composition's own arithmetic, unchanged: an
-        :class:`~pandid.render.symbols.Overlay` states its rectangle as
-        **fractions of the body's box**, a child's geometry is relative to
-        its parent's, and the parent's box *is* the body's box -- so
-        multiplying the four fractions by the cell's width and height is
-        the whole conversion, and the two backends place a part by one set
-        of numbers. ``tests/test_drawio.py`` measures that against the SVG.
+        Parameters
+        ----------
+        cid : str
+            Parent cell id.
+        sym : Symbol
+            Composed symbol.
+        w, h : float
+            Parent cell size.
+        fit : _Fit
+            Drawing fit.
+        frame : Frame
+            Unit placement; the caller guarantees one exists.
+        name : str
+            Unit name, for findings.
 
-        The pair holds together under editing for the reasons
-        :meth:`_inscribed` sets out: a child moves with its parent and
-        ``Graph.isRecursiveVertexResize`` scales it with its parent, so a
-        reader who drags or resizes a column takes its trays with it.
-        ``connectable=0`` keeps a stream from landing on a tray instead of
-        on the nozzle it was routed to, and ``movable=0`` keeps a reader
-        who grabs the middle of a vessel from dragging its agitator out of
-        it.
-
-        The pen is the part's and not the body's: ISO 10628-1 §5.3.1 puts
-        an outline at 0,5 mm and the detail inside it at 0,25, and the
-        sheet draws them at exactly that ratio (:data:`_PART_STROKE`).
-
-        The frame arrives as an argument rather than being read back off
-        the unit, and so does the tag. On a unit the frame is a
-        ``Frame | None``, and this method has no useful answer for a
-        unit that was never laid out -- :meth:`render` already refuses
-        one by name, before any cell is written. So the caller is the
-        one that knows the frame is there, and handing it over is what
-        keeps that fact in the signature instead of in a comment.
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty without overlays.
         """
         if not sym.overlays:
             return []
@@ -2384,24 +1888,16 @@ class DrawioRenderer:
                     f"shape={approx.shape}"]
                 keys += [] if approx is None else list(approx.keys)
                 if approx is not None and approx.lost:
-                    # The body's rule, one level down: a part stood in
-                    # for by a built-in that does not draw all of it
-                    # says so, naming the unit it is drawn on.
+                    # Report a part stand-in that loses something.
                     self._findings.append(Issue(
                         "warning", APPROXIMATED,
                         f"{name or cid}: the {overlay.name} part has no draw.io "
                         f"stencil and is exported as a stand-in, which loses "
                         f"{approx.lost}"))
-            # A chiral part's second hand. The SVG reflects the artwork
-            # about its rectangle's own centre line and so does this: the
-            # child's box is the same box either way, and only what is
-            # drawn inside it turns round.
+            # A chiral part's other hand, flipped within its own box.
             if overlay.mirror:
                 keys.append("flipH=1")
-            # The placement, which a child does not inherit: see
-            # :func:`_placed_rect`. Without it a stirred tank laid on its
-            # side exported as an upright agitator across a vessel drawn
-            # the other way, both of them reproportioned.
+            # Children do not inherit placement (:func:`_placed_rect`).
             ox, oy, ow, oh = _placed_rect(frame, overlay.x, overlay.y, overlay.w, overlay.h)
             style = ";".join([
                 "html=1", "rounded=0", *keys, *_turn_keys(frame),
@@ -2420,47 +1916,34 @@ class DrawioRenderer:
     @staticmethod
     def _inscribed(cid: str, approx: "_Approximation | None",
                    w: float, h: float, fit: "_Fit") -> list[str]:
-        """The second outline of a symbol that has two, as a child of
-        the first.
+        """Return a symbol's second outline as a child of its first.
 
-        The safety-instrumented-system balloon is the case and today the
-        only one: ANSI/ISA-5.1-2009 Table 5.1.1 column B draws it as a
-        **square with an inscribed diamond**, where a bare
-        ``shape=rhombus`` is Table 5.1.2's generic interlock and the
-        symbol of the variant next door.
+        Used for the safety-instrumented-system balloon, a square with an
+        inscribed diamond (ANSI/ISA-5.1-2009 Table 5.1.1 column B); a bare
+        rhombus is Table 5.1.2's interlock. A child cell, not an inline
+        compressed stencil, keeps the file plain and diffable.
 
-        **A child cell rather than a stencil.** Every shape named in
-        :data:`_APPROXIMATIONS` is a draw.io *built-in* and never a
-        stencil key. An inline ``shape=stencil(<deflated base64>)``
-        would carry its artwork in the style, but a compressed blob is
-        not the "plain uncompressed ``mxfile`` ... and it diffs" this
-        file promises, and it would be the one shape
-        ``tests/test_drawio.py`` has no stencil set to check.
+        The child moves and resizes with the parent
+        (``Graph.isRecursiveVertexResize``; a ``childLayout`` would disable
+        that). ``connectable=0`` keeps streams on the parent's points and
+        ``movable=0`` stops the child being dragged out. Its fill is none,
+        as the parent is already opaque.
 
-        The pair holds together under editing:
+        Parameters
+        ----------
+        cid : str
+            Parent cell id.
+        approx : _Approximation or None
+            Stand-in.
+        w, h : float
+            Parent cell size.
+        fit : _Fit
+            Drawing fit.
 
-        * **moving.** A child's geometry is relative to its parent's
-          origin, so the parent moves and the child comes with it.
-        * **resizing.** ``Graph.isRecursiveVertexResize`` answers yes
-          for any non-swimlane vertex that has children, is not
-          collapsed, states no ``childLayout`` and does not say
-          ``recursiveResize=0`` -- which is this cell -- and
-          ``mxVertexHandler.isRecursiveResize`` defers to it.
-          ``resizeChildCells`` then scales the child by the ratio of the
-          new box to the old, so the diamond stays inscribed. This is
-          why the child is a plain vertex and not a group with a layout:
-          a ``childLayout`` would switch the recursion *off*.
-        * ``connectable=0``, so a stream dropped on the balloon lands on
-          the square. Every fraction :meth:`_constraint` writes is a
-          fraction of the square's box.
-        * ``movable=0``, because the diamond is *part of* the symbol.
-          The child is drawn over the parent -- children are validated
-          after their parents -- so a reader clicking the middle of the
-          balloon grabs the diamond and would otherwise drag it out of
-          its square.
-
-        ``fillColor`` is not the parent's: the square is already opaque
-        white and knocks the hole in the line the balloon is dropped on.
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty without an inscribed shape.
         """
         if approx is None or approx.inscribed is None:
             return []
@@ -2479,14 +1962,24 @@ class DrawioRenderer:
     # ---------------------------------------------------- streams
 
     def _fraction(self, u, sym, point) -> "tuple[float, float]":
-        """An absolute point on a unit, as the fraction draw.io states
-        one in.
+        """Return a point on a unit as a draw.io connection fraction.
 
-        The arithmetic :meth:`_constraint` describes, taken on any point
-        rather than only on a nozzle, because a tap line ends somewhere
-        that is not a nozzle: the midpoint of a face of the host's box
-        (:func:`pandid.layout.attach._anchor`), which is a point on the
-        cell and not a port of it.
+        Used for ports and for tap points, which are face midpoints, not
+        ports. The fraction is reflected through the cell's flips.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+        point : tuple[float, float]
+            Absolute point.
+
+        Returns
+        -------
+        tuple[float, float]
+            Fractions of the cell box.
         """
         px, py = point
         x0, y0, x1, y1 = self._cell_box(u)
@@ -2497,62 +1990,51 @@ class DrawioRenderer:
         return (1.0 - fx if flip_h else fx, 1.0 - fy if flip_v else fy)
 
     def _constraint(self, u, sym, port_name: str) -> "tuple[float, float]":
-        """Where a stream meets a port, as the fraction draw.io states
-        one in.
+        """Return where a stream meets a port, as a connection fraction.
 
-        draw.io resolves a fixed connection point by taking the fraction
-        of the cell's bounding box, then applying the cell's own flips
-        to it. So the fraction to *write* is the one that lands on the
-        port after those flips, which is the drawn fraction reflected
-        back through them.
+        draw.io applies the cell's flips to the fraction, so the drawn
+        fraction is reflected back through them (:meth:`_fraction`).
+        ``anchorPointDirection=0`` on the vertex (:meth:`_placement`) stops
+        draw.io rotating the point again, since
+        :func:`~pandid.portgeom.port_point` is already turned.
+        ``exitPerimeter=0``/``entryPerimeter=0`` on the edge stop it
+        projecting an inboard nozzle onto the bounding box.
 
-        Two style keys keep that the whole of the arithmetic, and they
-        are set in two different places because mxGraph reads them in
-        two different places:
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+        port_name : str
+            Port name.
 
-        ``anchorPointDirection=0``, on the **vertex**
-        (:meth:`_placement`, beside the ``direction`` it answers), stops
-        draw.io rotating the anchor with the shape. It would otherwise
-        state the point in the symbol's own upright frame and turn it,
-        which is a second, equivalent way to arrive here -- and the
-        wrong one to pick, because the point being divided through is
-        :func:`~pandid.portgeom.port_point`'s, which has *already* been
-        through the turn. Undoing a turn to let draw.io redo it is two
-        chances to disagree about a nozzle that is not in doubt.
-
-        ``exitPerimeter=0``/``entryPerimeter=0``, on the **edge**, stop
-        draw.io projecting the point out onto the shape's perimeter. A
-        nozzle inboard of the box -- a dome crown, a shell wall drawn
-        inside the extent because brackets widen it -- is where the pipe
-        meets the equipment, and projecting it would slide the line off
-        the drawing onto the bounding box, which is exactly the
-        distinction :func:`pandid.portgeom.resolve_port` keeps between a
-        port's point and its routing anchor.
+        Returns
+        -------
+        tuple[float, float]
+            Fractions of the cell box.
         """
         if u.kind == "tee":
-            # A junction, not a nozzle. On the sheet the meeting is
-            # drawn by the tee's own twelve-unit mark and the pipes stop
-            # at the box edge; draw.io has no built-in that draws that
-            # mark without also drawing a stub out the side, so the
-            # pipes are carried the last six units in and the cell draws
-            # nothing.
-            #
-            # The centre, so all three legs end on one point: flush by
-            # construction, with no tolerance to get wrong. Each leg
-            # stays straight, a tee's three nozzles being face midpoints
-            # with the centre on the axis of all three.
+            # A tee is a junction: no built-in draws its mark, so all three
+            # legs run to the centre and the cell draws nothing.
             x0, y0, x1, y1 = self._cell_box(u)
             return self._fraction(u, sym, ((x0 + x1) / 2, (y0 + y1) / 2))
         return self._fraction(u, sym, port_point(u, u.frame, port_name))
 
     @staticmethod
     def _ends(exit_at, entry_at) -> list[str]:
-        """The style keys pinning an edge's two ends to fixed points on
-        its cells.
+        """Return the style keys pinning an edge's ends to cell points.
 
-        ``None`` for an end that is not pinned to a cell at all, which
-        is a floating point stated in the geometry instead. See
-        :meth:`_taps`.
+        Parameters
+        ----------
+        exit_at, entry_at : tuple[float, float] or None
+            Fractions on the source and target cells; ``None`` for a
+            floating end stated in the geometry (:meth:`_taps`).
+
+        Returns
+        -------
+        list[str]
+            Style keys.
         """
         keys = []
         for prefix, at in (("exit", exit_at), ("entry", entry_at)):
@@ -2566,47 +2048,47 @@ class DrawioRenderer:
                direction: str = "vertical",
                joints: "str | None" = None,
                crossing_style: str = "gap") -> list[str]:
-        """Every stream, as a draw.io edge between the two ports it
-        joins.
+        """Return every stream as a draw.io edge between its two ports.
 
-        ``joints`` is the sheet's
-        :func:`~pandid.render.svg.sheet_connections` answer, threaded in
-        for the same reason ``arrows`` is: the flange mark is a fact
-        about the drawing, and the export draws the drawing.
+        Cells are built in ``fs.streams`` order, so a run's number goes on
+        its first segment as on the sheet, and written in hop order, since
+        draw.io breaks crossing ties by z-order (:func:`_hops`).
 
-        ``direction`` is the sheet's ``jump_direction``, and it settles
-        two things at once: which edges carry a :data:`_JUMP_STYLES`
-        entry, and **the order the edges come out in**, since draw.io
-        breaks the tie between two crossing lines by z-order. Both are
-        :func:`_hops`' answer, and ``crossing_style`` says which entry
-        -- or, at ``"plain"``, that there is none and the sheet marks no
-        crossing at all.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being exported.
+        arrows : bool
+            Whether process lines get arrowheads.
+        fit : _Fit
+            Drawing fit.
+        tags : _Tags
+            Tag placements, whose plates the numbers avoid.
+        direction : str, default="vertical"
+            The sheet's ``jump_direction``.
+        joints : str, optional
+            Sheet joint default (:func:`~pandid.render.svg.sheet_connections`).
+        crossing_style : str, default="gap"
+            Crossing mark (:data:`_JUMP_STYLES`), or ``"plain"`` for none.
 
-        The cells are therefore built in ``fs.streams`` order and
-        *written* in the hop order. Building them in stream order is not
-        incidental: a line number is written on the first segment of its
-        run to carry it, and "first" has to mean first in the flowsheet
-        or a crossing somewhere else on the sheet would move a number
-        onto a different segment of a run it was not otherwise involved
-        in.
+        Returns
+        -------
+        list[str]
+            Cell XML lines: edges, then number enclosures.
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
-        # Where the sheet writes each line number, by the sheet's own
-        # search rather than by centring it on the edge -- seeded with
-        # the equipment tags the sheet seeds it with, so the search is
-        # offered the same paper. See :func:`_number_geometry` and
-        # :class:`_Tags`.
+        # Place numbers by the sheet's own search, seeded with the tag
+        # plates (:func:`_number_geometry`, :class:`_Tags`).
         placed = stream_numbers(fs, list(tags.plates), joints, direction)
         numbers = {number.name: number for number in placed}
         shape = enclosure_shape(fs)
-        # The same list the sheet reports, from the same placement: both
-        # backends ask one function where a number goes, so both owe the
-        # author the same account of what the shape landed on.
+        # Same findings as the sheet, from the same placement.
         self._findings += label_findings(fs, shape, placed, direction)
         polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
         order, hops, lost = _hops(polylines, direction, crossing_style)
 
         def _run(key):
+            """Return a stream's name for a message."""
             return fs.streams[key].name or f"stream {key + 1}"
 
         for hop_key, cross_key, x, y in sorted(lost):
@@ -2628,83 +2110,41 @@ class DrawioRenderer:
 
             keys = [
                 "html=1",
-                # edgeStyle=none: draw the polyline that was routed,
-                # segment for segment, rather than handing the path back
-                # to draw.io's own orthogonal router. The router would
-                # re-derive a path from the same waypoints and is
-                # entitled to a different one, and the first thing a
-                # reader does with this file is check that it looks like
-                # the sheet. The cost is that a block dragged in draw.io
-                # leaves its end leg sloping until the author re-routes
-                # it, which is a thing they can see and fix.
+                # edgeStyle=none draws the routed polyline rather than
+                # letting draw.io re-route it. A dragged block then leaves
+                # a sloping end leg for the author to fix.
                 "edgeStyle=none", "rounded=0", "orthogonalLoop=1", "jettySize=auto",
                 *self._ends((ex, ey), (tx, ty)),
                 f"strokeColor={s.color or _LINE_INK}",
-                # ISO 10628-1 §5.3.1 a) for a material run and c) for a
-                # control or data line, the same two rungs
-                # ``SvgRenderer._draw_streams`` picks between.
+                # ISO 10628-1 5.3.1 a) for material, c) for signals.
                 f"strokeWidth={fit.length(_stream_rung(signal).width):g}",
             ]
-            # The semicircle this run hops the runs it crosses with,
-            # where the direction selects it. Sized off the edge's own
-            # pen, since draw.io's jumpSize is stated net of it; see
-            # :func:`_jump_size`.
+            # The crossing mark on hopping runs, sized net of the pen
+            # (:func:`_jump_size`).
             if n in hops:
                 weight = fit.length(_stream_rung(signal).width)
-                # One ``jumpSize`` for either mark: ``mxShape`` reads
-                # the half-extent off it before it branches on the
-                # style, so the arc and the gap span the same run --
-                # which is what the sheet does with ``HOP_R`` too.
+                # One jumpSize for arc and gap, as HOP_R is on the sheet.
                 keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}",
                          f"jumpSize={_jump_size(fit.length(HOP_R), weight)}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
-                # Through the fit, like the pen beside it. A flow head
-                # is twelve units of *drawing*, and stating it flat on a
-                # sheet fitted to three quarters of its own size drew a
-                # head a third too big at the end of a line correctly
-                # thinned -- the same slip as the missing stroke widths,
-                # in the same function.
+                # The head is drawing size, so it scales with the fit.
                 keys += ["endArrow=block", "endFill=1",
                          f"endSize={fit.length(ARROWHEAD):g}"]
             else:
                 keys.append("endArrow=none")
             keys.append("startArrow=none")
 
-            # A number names a *run*, and a run survives the valves and
-            # fittings in it: renumber_streams() gives every segment of
-            # one the same name, and the sheet writes it once. Writing
-            # it on each segment would put the same number on a line
-            # three times over, so the first segment to carry it is the
-            # one that carries it here too. A signal line is unlabelled
-            # on the sheet and stays unlabelled here.
+            # A number names a run, which keeps its name through valves and
+            # fittings, so only its first segment is labelled. Signal lines
+            # are unlabelled, as on the sheet.
             label = ""
             number = None
-            # An enclosed number is a cell of its own and not this
-            # edge's label: draw.io can rule a *rectangle* round an edge
-            # label (`labelBorderColor`) and nothing else, so a diamond
-            # or a circle has to be a vertex carrying the number as its
-            # value. Both shapes then come out the same way, which is
-            # worth more than the one shape that could have ridden the
-            # edge.
-            #
-            # **The cost is that the shape does not ride the run.** It
-            # is a child of the root at absolute coordinates, so
-            # dragging the plant in diagrams.net leaves it where the
-            # sheet put it; `sN-box` is an id convention and not a
-            # link. draw.io has exactly one construct that would give it
-            # one -- a vertex child of the edge with `relative="1"`,
-            # placed by `mxGraphView.getPoint` off the same arc-length
-            # fraction :func:`_number_geometry` already computes -- and
-            # taking it costs the z-order: a child is drawn with its
-            # parent, so an enclosure attached to `s3` is painted before
-            # `s7`, and `s7` crossing it is drawn through the shape and
-            # the number in it. That is the defect the pass order above
-            # exists to prevent, and it is the one a reader *cannot*
-            # repair, where a shape left behind by an edit is a stale
-            # snapshot they re-export. It is the choice
-            # :meth:`to_drawio` already states for a zone grid, and the
-            # trade :func:`_leader` and :meth:`_taps` already take.
+            # An enclosed number is its own vertex, since an edge label can
+            # only have a rectangular border. It sits at absolute
+            # coordinates, so it does not follow the run when edited; a
+            # child of the edge would follow but would be painted before
+            # later runs, which could then cross the number.
             boxed = False
             if not signal and s.name not in labelled:
                 labelled.add(s.name)
@@ -2720,12 +2160,8 @@ class DrawioRenderer:
                             keys.append("horizontal=0")
 
             style = ";".join(keys) + ";"
-            # The ends are the two nozzles, and they are stated as
-            # constraints above; what goes in the array is the turns
-            # between them. A run with no turn in it carries no array at
-            # all, which is how draw.io writes a straight edge and keeps
-            # a straight run from reading as a route that happens to
-            # have no points left.
+            # Ends are constraints; the array holds only the turns, and a
+            # straight run has none.
             waypoints = points[1:-1]
             along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
@@ -2736,15 +2172,9 @@ class DrawioRenderer:
                 *([f'            <mxPoint x="{_num(offset[0])}" y="{_num(offset[1])}" '
                    'as="offset" />'] if offset is not None else []),
             ]
-            # `x` on the edge's own geometry is where the label sits
-            # along the run; the `offset` beside it is where it sits
-            # across. Both are the *label's*, and they ride on the same
-            # mxGeometry as the waypoints because mxGeometry has a field
-            # for each and mxObjectCodec decodes them independently --
-            # an `<Array as="points">` and an `<mxPoint as="offset">`
-            # are two named children of one element, and draw.io writes
-            # exactly this shape itself when a reader drags a label
-            # along a routed edge (`mxEdgeHandler.moveLabel`).
+            # The geometry's x places the label along the run and its
+            # offset across it, beside the waypoints, as draw.io itself
+            # writes a dragged edge label (mxEdgeHandler.moveLabel).
             head = ('          <mxGeometry relative="1" as="geometry"'
                     + ('' if along is None else f' x="{_fraction(along)}"'))
             if body:
@@ -2759,85 +2189,52 @@ class DrawioRenderer:
                 *geometry,
                 '        </mxCell>',
             ]
-            # The hatch marks ride on their edge and go out with it,
-            # wherever the hop order puts it: a child cell is resolved
-            # by its parent's id, but draw.io writes a parent before its
-            # children and so does this.
+            # Hatches, flanges and leaders are written after their edge.
             if s.kind == "pneumatic":
                 cells[n] += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
             cells[n] += _flanges(f"s{n}", s, points, resolve_connections(s, joints),
                                  s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
-            # Held back rather than written here; see the return.
+            # Enclosures are written after every edge; see the return.
             if boxed:
                 boxes += _enclosure(f"s{n}", number, shape,
                                     s.color or _LINE_INK, fit)
         out: list[str] = []
         for n in order:
             out += cells[n]
-        # Every enclosure after every edge, and not after its own. Order
-        # is z-order here, so an enclosure written with its edge is
-        # painted before whichever runs the hop order puts later -- and
-        # one of those crossing it would be drawn straight across the
-        # number, whose own opaque plate is painted with this cell and
-        # so cannot save it. A number that has to be read across a
-        # passing run is the whole reason the sheet draws a plate at
-        # all. The sheet has the same rule for the same reason:
-        # :meth:`SvgRenderer._draw_streams` writes the numbers in a pass
-        # of their own after the last pipe.
-        #
-        # After every *run*, and deliberately not after everything: the
-        # taps and the balloons follow, here and on the sheet both
-        # (:meth:`DrawioRenderer.render`). Instrumentation goes over the
-        # lines because a balloon's body has to knock out the tap
-        # reaching it and whatever it straddles, and a stream number has
-        # been drawn in that pass, under that rule, since long before
-        # this option existed. Moving the enclosures past it would put
-        # them in a place the sheet does not draw them, which is the one
-        # thing the two backends may not do differently.
+        # Enclosures after every run, so no later run is painted across a
+        # number, as SvgRenderer._draw_streams draws numbers last. They
+        # stay before taps and balloons, which come after the runs on the
+        # sheet too.
         return out + boxes
 
     def _taps(self, fs, fit: "_Fit") -> list[str]:
-        """Every instrument connection, as a draw.io edge.
+        """Return every instrument connection as a draw.io edge.
 
-        The line from a tap to the balloon reading it. It is not a
-        stream and so is not in ``fs.streams``, and an exporter that
-        walks only the streams hands back a sheet of balloons floating
-        free of the plant. ISO 15519-2 §5.1.1 (document page 8, under
-        Figure 6) does not leave that open: a PCI symbol **shall** be
-        connected two ways, as Figure 6 draws it. To the process system
-        it takes a solid functional connection line carrying nothing
-        about signal direction or signal type; to the control system it
-        takes a functional connection line that is solid or dashed
-        according to which diagram this is (Clause 6).
+        Taps are not streams, but ISO 15519-2 5.1.1 (Figure 6) requires a
+        PCI symbol to be connected to the process and the control system.
+        Endpoints come from :func:`~pandid.render.svg.tap_lines` and line
+        type from :func:`~pandid.render.svg.impulse_tap`, as on the sheet.
 
-        Which of the two a given line is, is
-        :func:`~pandid.render.svg.impulse_tap`'s answer and not this
-        file's, and the endpoints are
-        :func:`~pandid.render.svg.tap_lines`': there is one derivation
-        of where a tap runs and the SVG renderer draws from the same
-        one.
+        The balloon end is pinned to the balloon's centre, so the line
+        follows the balloon; balloons are written after, so their bodies
+        mask it. The other end is pinned to a host unit's face, or is a
+        floating point on a host stream, since draw.io would choose its own
+        point on an edge. A tap is one straight line, sloping if the
+        balloon is not level or square with the host, as on the sheet.
 
-        **An edge and not a drawn line**, because the balloon is the
-        thing an author moves and a drawn line would come away from it.
-        The balloon end is pinned to the balloon's own cell, at the
-        centre, which is where the sheet runs it to and where the
-        balloon's opaque body then knocks it out -- the balloons are
-        written after these, so draw.io stacks them the same way.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being exported.
+        fit : _Fit
+            Drawing fit.
 
-        The other end is pinned to the *host's* cell where the host is a
-        piece of plant, since the tap is the midpoint of a face of that
-        cell and moves with it. Where the host is a **stream** the end
-        is a floating point instead: draw.io can join an edge to another
-        edge, but the point it would pick is its own, and a tap that
-        slid to the middle of the pipe would be a different statement
-        about where the reading is taken.
-
-        One thing is reproduced faithfully rather than fixed: issue #170
-        records that a tap is a single straight line, so a tap whose
-        balloon is neither level with nor square to its host is drawn
-        sloping rather than doglegged. The export slopes it too.
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
         out: list[str] = []
@@ -2854,19 +2251,13 @@ class DrawioRenderer:
                 "html=1", "edgeStyle=none", "rounded=0",
                 *self._ends(exit_at, (entry[0], entry[1])),
                 f"strokeColor={_LINE_INK}",
-                # ISO 15519-2 Annex A.1.02 puts an instrument connection
-                # on the 0,25 rung, alongside the signal line and half
-                # the pipeline it taps. See LineWeight.DETAIL in
-                # pandid.render.svg.
+                # ISO 15519-2 Annex A.1.02: the 0.25 mm DETAIL rung.
                 f"strokeWidth={fit.length(LineWeight.DETAIL.width):g}",
             ]
             if not impulse_tap(inst):
                 keys += _dash(_TAP_DASH)
-            # No head at either end: the line says what the instrument
-            # is on, not which way anything flows. §5.1.1 above says so
-            # in as many words. And no hop over it either: a tap is not
-            # one of the runs the sheet's jump pass looks at. See
-            # :data:`_NO_HOP`.
+            # No arrowheads (ISO 15519-2 5.1.1) and no jumps
+            # (:data:`_NO_HOP`).
             keys += ["endArrow=none", "startArrow=none", _NO_HOP.rstrip(";")]
             style = ";".join(keys) + ";"
             terminals = f' source="{self._id(source)}"' if source is not None else ""
@@ -2887,18 +2278,20 @@ class DrawioRenderer:
 
     @staticmethod
     def _drawing_box(fs) -> "tuple[float, float, float, float]":
-        """The drawing's own bounding box, which is what the furniture
-        docks around.
+        """Return the drawing's bounding box, which furniture docks around.
 
-        Every unit's drawn box and every route waypoint, which is
-        :meth:`SvgRenderer.render`'s step 1 on any sheet with a unit on
-        it: the dock places a box relative to this rectangle, so a
-        rectangle measured differently would dock the same equipment
-        list somewhere else. The one sheet this does not hold for is an
-        empty one, where this short-circuits to ``(0.0, 0.0, 0.0, 0.0)``
-        rather than step 1's own nominal-page-size fallback -- moot in
-        practice, since there is no equipment list either way for the
-        dock to place wrong.
+        Unit boxes and route waypoints, as in :meth:`SvgRenderer.render`; an
+        empty flowsheet gives zeros.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``(x0, y0, x1, y1)``.
         """
         if not fs.units:
             return (0.0, 0.0, 0.0, 0.0)
@@ -2917,44 +2310,28 @@ class DrawioRenderer:
 
     @staticmethod
     def _page_box(sheet, frame) -> "tuple[float, float]":
-        """The page the file states, as ``(width, height)`` in drawing
-        units.
+        """Return the page the file states, in drawing units.
 
-        Drawing units, not millimetres, which is what makes an A3 page
-        1587 by 1123 rather than 420 by 297: pageWidth and pageHeight
-        are read straight into `graph.pageFormat` and measured against
-        the same coordinates every cell in the file is placed at.
+        Drawing units, since pageWidth and pageHeight are measured in cell
+        coordinates (A3 is 1587 by 1123). A fixed page is the sheet.
+        Without one, it is the furniture frame out through the border band
+        (:func:`~pandid.render.furniture.sheet_rect`) and
+        :data:`~pandid.render.furniture.OUTER_MARGIN`, so a zone border stays
+        on the page; ``tests/test_drawio.py`` checks every cell lies inside.
+        Only the extent is used: with ``page="0"`` draw.io positions the page
+        from the drawing's top-left.
 
-        **Given paper, the paper.** The dock has already fitted the
-        drawing into what the sheet's furniture left, so the page and
-        the sheet are one thing.
+        Parameters
+        ----------
+        sheet : _Sheet or None
+            Fixed page, or ``None``.
+        frame : tuple[float, float, float, float]
+            Furniture frame.
 
-        **Without paper, the extent of what this file draws.** There is
-        a page either way -- see :meth:`render` for why draw.io leaves
-        nobody the option of having none -- and the size is measured
-        from the rectangle these cells are actually placed against,
-        which is :meth:`_furniture`'s ``frame``: the dock hangs every
-        box off it, and :meth:`_border` rules the sheet edge at
-        :func:`~pandid.render.furniture.sheet_rect` of it. So the page
-        is that frame, out through the border band -- which an unruled
-        sheet keeps as plain margin -- and out again by
-        :data:`~pandid.render.furniture.OUTER_MARGIN`. Sized from any
-        other rectangle it could leave a zone border hanging over the
-        edge of its own page.
-
-        On a furnished sheet that lands exactly on
-        ``SvgRenderer._place_furniture``'s viewBox. On an unfurnished
-        one the two differ by five units a side, the SVG taking a flat
-        55 margin off the drawing where the dock takes 26 and the band
-        and margin make it 50. ``tests/test_drawio.py`` asserts what
-        matters: that every cell the file writes lands inside the page
-        it states.
-
-        Only the *extent* is taken, never the corner. ``page="0"`` has
-        draw.io position the unpaged page from the drawing's own
-        top-left, so adding the frame's own offset in would inflate the
-        page by however far the author pinned the first vessel from
-        zero.
+        Returns
+        -------
+        tuple[float, float]
+            ``(width, height)``.
         """
         if sheet is not None:
             return (sheet.width, sheet.height)
@@ -2962,47 +2339,34 @@ class DrawioRenderer:
         return (ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN)
 
     def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False):
-        """Title block, annotations, table boxes and the stream table,
-        docked where the sheet docks them and ruled as the tables they
-        are.
+        """Return the docked furniture cells, the frame and the drawing fit.
 
-        **Docked, not stacked.** Where a box lands is
-        :func:`pandid.render.furniture.dock`'s answer and not this
-        file's, so both backends put the same measurements to the same
-        function: the equipment list to the top right, the legend to the
-        top left, the notes wherever they were aligned and the title
-        strip into the bottom-right corner.
+        Placement is :func:`pandid.render.furniture.dock`, shared with the
+        SVG sheet. Without a page the frame grows around the drawing's own
+        bounds; with one, the drawing is fitted into what the furniture
+        leaves. Boxes with columnar rows export as editable ``shape=table``
+        grids, ruled only where the sheet rules them: annotations have no
+        inner rules (:data:`_ANNOTATION_KEYS`), table boxes rule every
+        cell. Boxes of plain lines stay text boxes.
 
-        The one thing that cannot follow the sheet is the *frame*. A
-        rendered sheet may be a fixed page, and then the furniture docks
-        to the paper; a ``.drawio`` file is an unbounded canvas with no
-        paper in it, so the dock is given the drawing's own bounds and
-        grows a frame around them. On a sheet drawn at
-        ``page_size="A3"`` the corners are therefore the drawing's
-        rather than the page's, which is the only relationship that
-        survives the reader re-laying the model out by hand.
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose title block and annotations are drawn.
+        sheet : _Sheet, optional
+            Fixed page.
+        show_stream_table : bool, default=False
+            Whether to dock the stream table.
 
-        **Ruled, not run together.** A box whose rows have columns in
-        them is a *table*, and draw.io has real ones: a ``shape=table``
-        carrying ``shape=tableRow`` children carrying
-        ``shape=partialRectangle`` cells, which open as an editable grid
-        rather than as one string of text with ``<br>`` in it. Every
-        equipment list, legend, note list,
-        :class:`~pandid.document.TableBox` and stream table goes out as
-        one. A box whose rows are plain strings stays a box: ruling a
-        single column into a grid would invent structure the author did
-        not write.
+        Returns
+        -------
+        tuple[list[str], tuple, _Fit]
+            Cell XML lines, the frame ``(x, y, w, h)`` and the fit.
 
-        **Ruled where the sheet rules it, and not everywhere a grid
-        could be ruled.** A table's rows and cells are what make it
-        editable; its *lines* are a separate question and the answer is
-        the sheet's. An :class:`~pandid.document.Annotation` is drawn on
-        paper as a box with a title bar and rows of text -- no column
-        rules, no row rules -- so it is exported with
-        ``rowLines=0;columnLines=0`` and keeps its cells (see
-        :data:`_ANNOTATION_KEYS`). A :class:`~pandid.document.TableBox`
-        really does rule every cell (``draw_table`` strokes a rectangle
-        apiece) and so keeps both.
+        Raises
+        ------
+        ValueError
+            If the page is too small for the furniture.
         """
         from pandid.document import TableBox
 
@@ -3014,12 +2378,8 @@ class DrawioRenderer:
             w, h = (F.measure_table(a) if isinstance(a, TableBox)
                     else F.measure_annotation(a))
             items.append((a, a.align, w, h))
-        # Last into the bottom-left column, which is where the sheet
-        # puts it: `put_bottom` stacks upward from the frame edge, so
-        # the table sits against the foot of the sheet with anything
-        # else docked there above it. The measurement is the sheet's own
-        # -- there is one stream table and both backends ask the same
-        # function for it.
+        # The stream table docks last at bottom-left, against the foot of
+        # the sheet, measured as on the SVG sheet.
         table = F.stream_table_layout(fs) if show_stream_table else None
         if table is not None:
             items.append((table, "bottom-left", table.w, table.h))
@@ -3028,35 +2388,18 @@ class DrawioRenderer:
         if sheet is None:
             placed, frame, free = F.dock(items, inner)
         else:
-            # Rebound so the closure below closes over a `_Sheet`, not
-            # the parameter's `_Sheet | None`: `dock` only ever calls
-            # `too_small` from inside its own `sheet is not None`
-            # branch, so by the time this lambda runs the page it
-            # named is exactly this one.
+            # Rebind so the closure's type is _Sheet, not _Sheet | None.
             page = sheet
             placed, frame, free = F.dock(
                 items, inner, sheet=page,
                 too_small=lambda need_w, need_h, culprit: _too_small(
                     page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
-        # A fixed page fits the drawing into whatever the bands leave,
-        # at the ratio the title strip's scale cell reports. Without one
-        # there is no fitting: the drawing keeps its own coordinates and
-        # the frame was grown around it.
+        # A fixed page fits the drawing into the free region; otherwise the
+        # drawing keeps its coordinates.
         fit = _Fit.identity() if free is None else _Fit(
             *_fitted(inner, free))
-        # What the title strip's own three variable fields fall back to,
-        # all three of them the sheet's answer rather than this file's:
-        # the drawing name a block with no title takes, today's date
-        # where it states none, and the ratio the dock has just settled
-        # the drawing at.
-        #
-        # Handed over *unchosen*. Picking between these and the block's
-        # own values is the strip's, because it can only be done after a
-        # field of nothing but spaces has been read as the blank it
-        # means -- and a caller that picked first handed on a whitespace
-        # title with the flowsheet name it should have fallen back to
-        # already thrown away, and a whitespace date with today's. The
-        # block is not read here at all any more, for that reason.
+        # Fallbacks for the strip's name, date and scale, passed unchosen so
+        # the strip decides after treating blank fields as empty.
         name = fs.name
         date = datetime.now().strftime("%Y-%m-%d")
         scale = "" if free is None else _scale_text(fit.scale)
@@ -3067,33 +2410,25 @@ class DrawioRenderer:
 
     @staticmethod
     def _border(frame, border: str) -> list[str]:
-        """The zone-ruled drawing frame, as cells.
+        """Return the zone-ruled drawing frame as cells.
 
-        Only where the sheet rules one. An unruled sheet draws no
-        rectangle at all -- ``_place_furniture`` takes ``sheet_rect``
-        for the canvas bounds and strokes nothing -- so an unruled
-        export draws none either, and what the reader sees as the edge
-        of the paper is the page draw.io is now told to rule. Inventing
-        a rectangle here would put ink on the sheet that the rendered
-        one does not have.
+        Only for ``border="zone"``; an unruled sheet draws no rectangle, and
+        the page draw.io rules is its edge. Geometry comes from
+        :func:`pandid.render.furniture.zone_layout`. The grid is a snapshot:
+        zone references (ISO 15519-1 Clause 9) stop being true once a reader
+        moves equipment in the editable model.
 
-        The geometry is :func:`pandid.render.furniture.zone_layout`'s,
-        so the band is divided into the same fields, lettered the same
-        way round.
+        Parameters
+        ----------
+        frame : tuple[float, float, float, float]
+            Inner frame.
+        border : str
+            ``"none"`` or ``"zone"``.
 
-        A caveat worth the author knowing, and it is why this was argued
-        about rather than just added: a zone grid is an **address
-        space**. ISO 15519-1 Clause 9 addresses documents, sheets, and
-        columns, rows and zones on a sheet against it, and
-        :attr:`pandid.units._Boundary.reference` is where this library
-        writes such addresses. On paper they hold
-        because the sheet holds. In an editable model they do not: drag
-        a column two hundred units left and it is in a different zone
-        from the one every reference on the sheet names, while the grid
-        still looks authoritative. So what is exported here is a
-        **snapshot of the grid at export time**, true of the drawing as
-        it left pandid and no longer true of it once the reader has
-        moved anything.
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
         """
         if border != "zone":
             return []
@@ -3118,7 +2453,24 @@ class DrawioRenderer:
     def _furniture_cell(self, cid: str, obj, x, y, w, h,
                         name: str = "", date: str = "",
                         scale: str = "") -> list[str]:
-        """One docked piece of furniture, as the cells that draw it."""
+        """Return the cells drawing one docked piece of furniture.
+
+        Parameters
+        ----------
+        cid : str
+            Cell id prefix.
+        obj : TitleBlock, StreamTable, TableBox or Annotation
+            The furniture.
+        x, y, w, h : float
+            Docked box.
+        name, date, scale : str, default=""
+            Title-strip fallbacks.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
+        """
         from pandid.document import TableBox, TitleBlock
 
         if isinstance(obj, TitleBlock):
@@ -3128,14 +2480,9 @@ class DrawioRenderer:
         title = getattr(obj, "title", "") or ""
         if isinstance(obj, TableBox):
             size, _ncol, col_w, _row_h = F._table_layout(obj)
-            # A TableBox rules its own columns, and _table_layout's
-            # widths already carry that ruling's padding and sum to the
-            # measured box. A table's border and every rule inside it
-            # are drawn by the *container*, from the container's own
-            # style (``TableShape.paintTableForeground``), so the weight
-            # has to be stated there or draw.io rules the whole grid at
-            # its default 1 where the sheet strokes each cell at
-            # ``_CELL_RULE``.
+            # The table container draws the border and every rule
+            # (TableShape.paintTableForeground), so state the cell-rule
+            # weight there.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
                           x, y, w, h, col_w, (size + 10) if title else 0.0,
@@ -3143,38 +2490,25 @@ class DrawioRenderer:
                           col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
-            # Columnar: an equipment schedule, a legend, a numbered note
-            # list. The columns are measured off their own text at the
-            # size they will be drawn at, not shared out in proportion;
-            # see :func:`columns`.
+            # Columnar (equipment list, legend, notes): columns measured
+            # from their text (:func:`columns`).
             size, _row_h, title_h, _col_w = F._ann_layout(obj)
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
             ncol = max(len(r) for r in grid)
-            # Left, as the sheet sets a row, with the first column bold
-            # where there is more than one -- draw_annotation's own
-            # rule. The same list of weights is what the columns are
-            # measured in, so the key column is measured in the face its
-            # key is drawn in.
+            # Left-aligned, first column bold, as draw_annotation sets it;
+            # columns are measured in the same weights.
             heavy = [True] + [False] * (ncol - 1)
             return _table(cid, title, [], grid, x, y, w, h,
                           columns(grid, [size] * ncol, w, bold=heavy), title_h,
                           font=size,
-                          # `_ANNOTATION_KEYS` leaves the container's
-                          # own border as the only rule this box draws,
-                          # so the weight stated here is the weight of
-                          # the rectangle the sheet strokes around a
-                          # legend. It was unstated, and draw.io's
-                          # default 1 drew it two thirds as heavy.
+                          # The border is this box's only rule.
                           keys=(_ANNOTATION_KEYS + f"fontSize={size + 1:g};"
                                 + f"strokeWidth={F._BOX_RULE:g};"),
                           col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
                                     for b in heavy])
-        # Not tabular: a titled box of free-form lines, which is what it
-        # is on the sheet too. Anything docked that is neither an
-        # Annotation nor a TableBox lands here as well, on the two
-        # things every box has -- a title and some rows -- rather than
-        # being dropped for being neither.
+        # Free-form lines, or any other docked object with a title and
+        # rows.
         size = getattr(obj, "font_size", 11.0)
         _s, _row_h, title_h, _col_w = F._ann_layout(obj) if rows or title else (
             size, 0.0, 0.0, [])
@@ -3183,55 +2517,38 @@ class DrawioRenderer:
 
     def _title_strip(self, cid: str, block, x, y, w, h, name: str, date: str,
                      scale: str) -> list[str]:
-        """The engineering title strip, ruled where the sheet rules it.
+        """Return the title strip as cells, ruled where the sheet rules it.
 
-        The strip is one rectangle and three columns: a revision grid on
-        the left, a company cell in the middle, and on the right an
-        information block of bands of unequal depth -- a title band with
-        the sheet count tucked into its corner, a status band, and a
-        bottom band ruled into DRAWING No / SCALE / DATE / REV. Only the
-        first is a uniform grid, and a draw.io table gives every cell in
-        a row that row's height (``TableLayout.layoutRow``), so the
-        other two cannot be tables without becoming a list of label and
-        value, one field per row -- which holds every value and looks
-        nothing like the sheet.
+        The parts come from
+        :func:`~pandid.render.furniture.title_strip_layout`, as
+        :func:`~pandid.render.furniture.draw_title_strip` uses, so this
+        method does no strip arithmetic. Only the revision history is a
+        real table (:func:`_rev_table`); the other bands have rows of
+        unequal depth, which a draw.io table cannot hold, so they are a
+        rectangle, rules and text cells, each with its own id. Overflowing
+        fields are reported (:meth:`_report`).
 
-        So the bands go out as what they are: a rectangle, some rules,
-        and text at the sizes and weights the sheet letters them at,
-        read from :func:`~pandid.render.furniture.title_strip_layout`,
-        which :func:`~pandid.render.furniture.draw_title_strip` strokes
-        into SVG from the same list of parts. **There is no strip
-        arithmetic in this method at all**: a band whose depth is 0,4 of
-        the block is 0,4 of it in both backends because neither backend
-        works it out.
+        Parameters
+        ----------
+        cid : str
+            Cell id prefix.
+        block : TitleBlock
+            Title block.
+        x, y, w, h : float
+            Docked strip box.
+        name, date, scale : str
+            Fallbacks for the name, date and scale cells.
 
-        **The revision history stays a real table**, and it is the only
-        piece that could be one: a grid of six named columns with one
-        row per revision, and the one part of an issued title block a
-        reader actually edits. See :func:`_rev_table`.
-
-        The cost, plainly: the eleven identification fields are not
-        cells of a grid, so a reader changing the drawing number
-        double-clicks a text label and there is no column rule to drag.
-        Every field is still a cell of its own with its own id, and so
-        is every rule.
-
-        ``report`` is why the layout is asked for by name rather than
-        with the arguments alone. The strip is fixed geometry and a value
-        too long for its cell is abbreviated to an ellipsis, which tells
-        a reader that something was cut and tells the program that
-        supplied it nothing -- so an issued sheet exported to draw.io
-        carried a *wrong drawing number* silently. The sheet has said so
-        since the cells were ruled; this says it too, in the same words.
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
         """
         strip = F.title_strip_layout(block, name, date, x + w, y + h, scale,
                                      report=self._report)
         bx, by, bw, bh = strip.box
-        # Flush to the frame, exactly as the sheet's own strip is:
-        # `_strip_size` reports the sheet's rectangle and `dock` puts
-        # its bottom-right corner on the frame's. The strip's rule and
-        # the frame's are then coincident and two units wide apiece,
-        # which is what the rendered sheet draws.
+        # Flush to the frame's bottom-right, rules coincident, as on the
+        # sheet.
         out = _rect(cid, bx, by, bw, bh,
                     "rounded=0;html=1;movable=1;"
                     f"strokeColor={_LINE_INK};fillColor={_NO_FILL};"
@@ -3245,95 +2562,45 @@ class DrawioRenderer:
         return out
 
 
-#: The sheet's opaque plate under a line number, said in a style, and
-#: written **only where the sheet writes one**: a label lays its plate
-#: down where it would cover nothing but the run it names, and nowhere
-#: else, so a number the sheet has to write across a foreign run
-#: carries no ``labelBackgroundColor`` here either. See
-#: :attr:`~pandid.render.svg.StreamNumber.words`. Kept ahead of
-#: :data:`_NUMBER_KEYS` in the style string, which is where it has
-#: always been written.
-#:
-#: mxGraph paints an opaque box behind a label sized to the measured
-#: text, on an edge exactly as on a vertex -- ``mxText.configureCanvas``
-#: calls ``setFontBackgroundColor`` and ``mxSvgCanvas2D`` either writes
-#: a CSS ``background-color`` or inserts a ``<rect>`` before the glyphs,
-#: and nothing in that path asks whether the cell is an edge. So a
-#: number written over its own run still reads, which is the whole
-#: reason the sheet draws a plate at all.
+# Opaque plate behind a line number, written only where the sheet lays one
+# (:attr:`~pandid.render.svg.StreamNumber.words`). mxGraph paints a label
+# background on edges as on vertices.
 _NUMBER_PLATE = "labelBackgroundColor=#ffffff"
 
-#: What a line number is, over and above where it is put and what it is
-#: written on.
-#:
-#: ``verticalLabelPosition`` is **not** here, though it places every
-#: *vertex* label in this file: it has no effect at all on an edge.
-#: ``mxCellRenderer.getLabelBounds`` takes a separate branch for an
-#: edge, starting from ``state.absoluteOffset`` and adding only the
-#: text's spacing, and the final ``if (!isEdge)`` guard skips
-#: ``rotateLabelBounds`` -- the only place either label-position style
-#: changes any geometry. The other reader, ``updateVertexLabelOffset``,
-#: is vertex-only by name. An edge label is moved by its geometry and by
-#: nothing else.
-#:
-#: ``horizontal=0`` is the exception, added per number in
-#: :meth:`DrawioRenderer._edges` for one on a vertical run. The sheet
-#: turns such a number a quarter to read bottom to top (ISO 15519-1
-#: §7.2.5, and §5.1.5 for the reading direction taken from the
-#: right-hand edge of the document), so the paper the search reserved
-#: for it is 13 units across by however long the string is; written flat
-#: the label occupies the **transpose** of that. Two of the sixteen
-#: numbers on ``11_ethanol_pid`` and seven of the twenty-four on
-#: ``13_mineral_dewatering`` are vertical -- counted as
-#: :attr:`~pandid.render.svg.StreamNumber.vertical` over what
-#: :func:`~pandid.render.svg.stream_numbers` returns for each sheet,
-#: which is 69 of the corpus's 286 line numbers in all.
-#:
-#: Unlike the two above it does reach an edge label:
-#: ``mxText.getTextRotation`` defers to ``mxShape.getTextRotation``,
-#: which adds ``mxText.verticalTextRotation`` -- **-90**, bottom to top,
-#: the way round the sheet turns it -- whenever ``horizontal`` is not 1.
-#: That is a property of the *shape*, and an edge has one
-#: (``mxConnector``). The opaque halo turns with it: ``mxSvgCanvas2D``
-#: puts the background on the same transformed group as the glyphs.
+# Line-number label keys. verticalLabelPosition is omitted because it has
+# no effect on edge labels (mxCellRenderer.getLabelBounds). horizontal=0 is
+# added per number on a vertical run (DrawioRenderer._edges), turning it to
+# read bottom to top as the sheet does (ISO 15519-1 7.2.5, 5.1.5); it does
+# rotate edge labels and their background.
 _NUMBER_KEYS = ["verticalAlign=middle", "align=center"]
 
 
 def _number_geometry(number, points, fit: "_Fit"):
-    """A line number's place on its edge: how far along, and how far
-    across.
+    """Return a line number's position on its edge as draw.io states it.
 
-    ``mxGraphView.getPoint`` is the whole of the mechanism and it is
-    exact enough to reproduce the sheet's own placement rather than
-    approximate it. For an edge whose geometry is ``relative``,
-    ``geometry.x`` runs -1 to +1 over the routed polyline's Euclidean
-    arc length -- ``dist = Math.round((geometry.x / 2 + 0.5) *
-    state.length)`` -- and ``geometry.offset``, an ``<mxPoint
-    as="offset">``, displaces the label from there in plain drawing
-    units, multiplied by the view's zoom and by nothing else.
+    For a relative edge geometry, ``geometry.x`` runs -1 to +1 over the
+    routed polyline's arc length (``mxGraphView.getPoint``), and
+    ``geometry.offset`` displaces the label in drawing units. The offset
+    is used rather than ``geometry.y``, whose sign depends on the
+    direction the segment was routed in. The along-run figure projects the
+    number onto its own segment, clamped to it, so the number stays on that
+    segment when the drawing is edited.
 
-    **The offset and not ``geometry.y``**, which is the other
-    displacement on offer and is a trap. ``getPoint`` applies it as
-    ``(nx * gy, -ny * gy)`` where ``nx = dy/segment`` and ``ny =
-    dx/segment``, so its sign is taken from the direction the segment
-    happens to be *routed* in: the same positive number puts a label
-    above a run drawn left to right and below the identical run drawn
-    right to left. Which end of a stream is its source is a fact about
-    the process and not about the paper, so a perpendicular offset
-    stated that way would put half this sheet's numbers on the wrong
-    side of their lines. The offset is axis-aligned and direction-free,
-    and the sheet's answer is already an absolute point.
+    Parameters
+    ----------
+    number : StreamNumber or None
+        Placed number.
+    points : list[tuple[float, float]]
+        Stream polyline.
+    fit : _Fit
+        Sheet-to-file transform.
 
-    The along-run figure is taken by projecting that point onto the
-    segment the number names -- clamped to the segment, so a number the
-    sheet slid past the end of a short run stays attached to it and the
-    overrun goes into the offset instead. The label lands on the same
-    paper either way; what the clamping buys is that the number rides
-    its own segment when a reader drags the plant about, rather than
-    jumping to whichever piece of the route the arc length then points
-    at.
-
-    Returns ``(None, None)`` for an edge with no number on it.
+    Returns
+    -------
+    tuple
+        ``(x, (dx, dy))`` for the geometry and offset, ``(None, offset)``
+        if the segment is not on this edge, or ``(None, None)`` for no
+        number.
     """
     if number is None:
         return None, None
@@ -3342,15 +2609,12 @@ def _number_geometry(number, points, fit: "_Fit"):
     span = (dx * dx + dy * dy) ** 0.5
     if span <= 0:
         return None, None
-    # The foot of the perpendicular from the number onto its own
-    # segment, held inside it.
+    # Foot of the perpendicular onto the segment, clamped to it.
     t = min(1.0, max(0.0, ((number.x - ax) * dx + (number.y - ay) * dy) / (span * span)))
     foot = (ax + t * dx, ay + t * dy)
 
-    # ...and where that foot falls along the *whole* polyline, which is
-    # what draw.io measures the fraction against. The segment is found
-    # by identity on its endpoints, since stream_polyline is what both
-    # the number and the edge were built from.
+    # Position along the whole polyline, which draw.io measures against.
+    # Both come from stream_polyline, so endpoints match exactly.
     lengths = [((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5
                for p, q in zip(points, points[1:])]
     total = sum(lengths)
@@ -3369,42 +2633,32 @@ def _number_geometry(number, points, fit: "_Fit"):
 
 
 def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
-    """The leader a displaced line number is tied back to its run with.
+    """Return the leader joining a displaced line number to its run.
 
-    Where :func:`~pandid.render.svg.stream_numbers` finds no clear paper
-    alongside a run it writes the number off the line and draws a leader
-    back to it, and ISO 15519-1 §6.4 says how that leader ends. It
-    **shall** carry one of three terminators, chosen by what it lands on:
-    a dot inside an object, an arrowhead on the outline of an object or
-    on a connection, an oblique stroke across several parallel
-    connections. A line number's leader ends on a connection, so it
-    wears an arrowhead. Without one the number is a string of characters
-    floating in blank paper, attached to nothing, which is what
-    ``AE-304-150-80-SS`` on ``11_ethanol_pid`` was in every exported
-    file.
+    ISO 15519-1 6.4 requires a terminator; a leader ending on a
+    connection gets an arrowhead (``endArrow=block;endFill=1``, as
+    :func:`~pandid.render.svg._arrowhead` draws). The leader is a free
+    edge between two ``mxPoint`` terminals, so unlike the number it does
+    not follow the run when the drawing is edited, the same trade as
+    :meth:`DrawioRenderer._taps`. ``noJump=1`` because a leader is not a
+    connection (:data:`_NO_HOP`). Drawn at the DETAIL weight, as ISO 128-22
+    makes a leader a narrow line.
 
-    An edge whose two terminals are stated as ``mxPoint``\\ s and
-    neither as a cell is how draw.io writes a free-standing rule -- what
-    :func:`_segment` emits for the sheet furniture -- and
-    ``endArrow=block;endFill=1`` is the filled triangle
-    :func:`~pandid.render.svg._arrowhead` draws.
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    number : StreamNumber
+        Placed number with a leader.
+    ink : str
+        Label colour, as :data:`_LINE_INK` spells it.
+    fit : _Fit
+        Sheet-to-file transform.
 
-    The honest cost is that **it does not ride the run**. Its two ends
-    are absolute points, so dragging the plant leaves the leader where
-    it was while the number itself -- which *is* on the edge's geometry
-    -- moves with the line. That is the trade
-    :meth:`DrawioRenderer._taps` takes for a tap whose host is a stream,
-    for the same reason: draw.io can join an edge to another edge, but
-    the point it picks is its own, and a leader that slid along the pipe
-    would point somewhere the sheet does not.
-
-    ``noJump=1`` because a leader is not a connection and the sheet's
-    jump pass never sees one; see :data:`_NO_HOP`. ``ink`` is the
-    label's colour, which ``stream_numbers`` takes from ``s.color``, so
-    it is passed in, in the spelling :data:`_LINE_INK` settles on rather
-    than in the SVG's ``black``. The weight is
-    :attr:`~pandid.render.weights.LineWeight.DETAIL`, because §6.4 hands the
-    leader itself to ISO 128-22 where it is a narrow line.
+    Returns
+    -------
+    list[str]
+        XML lines for the leader cell.
     """
     (ax, ay), (bx, by) = number.leader
     style = (f"edgeStyle=none;rounded=0;html=1;startArrow=none;endArrow=block;"
@@ -3424,45 +2678,37 @@ def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
     ]
 
 
-#: The draw.io shape each stream-label enclosure is drawn with. All
-#: three are built-ins drawn to fill their cell, and the cell is
-#: :attr:`~pandid.render.svg.StreamNumber.box` -- the same box the sheet
-#: fits the same shape into -- so neither backend derives a geometry the
-#: other could disagree about. Nothing is approximated here and so
-#: nothing is listed in :data:`_APPROXIMATIONS`: draw.io's rhombus is
-#: the quadrilateral through the four edge-midpoints of its box, and its
-#: ellipse in a square box is a circle.
+# draw.io built-in for each stream-label enclosure, drawn to fill
+# StreamNumber.box exactly as the SVG does; none is an approximation.
 _ENCLOSURE_SHAPE = {"diamond": "rhombus", "circle": "ellipse", "box": "rounded=0"}
 
 
 def _enclosure(edge_id: str, number, shape: str, ink: str, fit: "_Fit") -> list[str]:
-    """The shape ruled round a stream label, as a cell of its own.
+    """Return the enclosure round a stream label as its own cell.
 
-    Carries the number as its ``value``, because the edge no longer
-    does: see :meth:`DrawioRenderer._edges` for why an enclosed number
-    leaves the edge.
+    The cell carries the number (see :meth:`DrawioRenderer._edges`). It
+    is unfilled, so it never hides a crossing run; a
+    ``labelBackgroundColor`` plate is written only where the SVG draws one
+    (:func:`~pandid.render.svg._enclosure_svg`). A vertical run sets the
+    text bottom to top with ``horizontal=0``.
 
-    ``fillColor=none`` and not :data:`_BALLOON_FILL`, which is the one
-    place a shape in this file is *not* filled and is the sheet's own
-    answer restated: an enclosure that filled its box would delete
-    whatever run crossed it, and a drawing missing a line is worse than
-    a crowded one. See :func:`~pandid.render.svg._enclosure_svg` for the
-    argument. ``labelBackgroundColor`` is then what keeps the number
-    readable -- the sheet's opaque plate, said in a style, exactly as
-    :data:`_NUMBER_PLATE` says it for a bare number on an edge -- and it
-    is written **only where the sheet writes the plate**, which is where
-    the plate covers nothing but this label's own run. Nine of the 286
-    labels on the shipped corpus have no such place on a run they may
-    not leave; those nine get no ``labelBackgroundColor`` and are read
-    across whatever crosses them, in both files, rather than rubbing it
-    out in either.
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    number : StreamNumber
+        Placed number.
+    shape : str
+        ``"diamond"``, ``"circle"`` or ``"box"``.
+    ink : str
+        Label colour.
+    fit : _Fit
+        Sheet-to-file transform.
 
-    The rest is the sheet's:
-    :data:`~pandid.render.svg._ENCLOSURE_STROKE` for the pen, through
-    the fit like every other drawn length, and ``horizontal=0`` on a
-    vertical run to turn the number bottom to top -- on a *vertex* this
-    time, where it is the ordinary way to set text on end and needs none
-    of the argument :data:`_NUMBER_KEYS` has to make for an edge.
+    Returns
+    -------
+    list[str]
+        XML lines for the enclosure cell.
     """
     x0, y0, x1, y1 = number.box
     x, y = fit.at(x0, y0)
@@ -3483,12 +2729,9 @@ def _enclosure(edge_id: str, number, shape: str, ink: str, fit: "_Fit") -> list[
     ]
 
 
-#: How a label on each of the four sides of a box is asked for in a
-#: draw.io style. ``verticalLabelPosition``/``labelPosition`` put the
-#: label's *box* outside the cell, and the ``verticalAlign``/``align``
-#: beside each pull the text back against the cell it belongs to;
-#: stating only the first of each pair leaves the text centred on the
-#: cell it was just moved off.
+# Style keys for a label on each side of a cell. The position key moves
+# the label box outside the cell; the align key pulls the text back
+# against it.
 _LABEL_SIDE = {
     "top": ["verticalLabelPosition=top", "verticalAlign=bottom", "align=center"],
     "bottom": ["verticalLabelPosition=bottom", "verticalAlign=top", "align=center"],
@@ -3504,60 +2747,41 @@ _LABEL_SIDE = {
 # The pneumatic cross-hatch
 # ----------------------------------------------------------------
 
-#: The angle a hatch stroke is drawn at, in draw.io's clockwise degrees,
-#: on a horizontal run. The sheet strokes it 6 units along the run by 10
-#: across (:data:`~pandid.render.svg.HATCH_ARM`), which is ``atan2(-10,
-#: 6)``; a vertical run is the same mark on a run turned a quarter, so
-#: it is this plus ninety.
+# Hatch stroke angle on a horizontal run, in draw.io's clockwise degrees:
+# atan2(-10, 6) for the SVG's 6-along, 10-across stroke
+# (:data:`~pandid.render.svg.HATCH_ARM`). Add 90 on a vertical run.
 _HATCH_ANGLE = -59.04
-#: The box the stroke is drawn across. ``line`` strokes its box's
-#: horizontal centreline edge to edge, so the width *is* the stroke's
-#: length: 6 along by 10 across is a stroke 11.66 long.
+# Hatch stroke length (box width for shape=line): sqrt(6^2 + 10^2).
 _HATCH_LEN = 11.66
 
 
 def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
-    """The double cross-hatch that marks a pneumatic line, hung on its
-    edge.
+    """Return the double cross-hatch marking a pneumatic line.
 
-    ISO 15519-2 §6.2 (document page 14) is what makes this worth the
-    trouble rather than decoration: it keeps the symbols that mark a
-    signal medium -- pneumatic, hydraulic and the rest, drawn in Annex A
-    -- for telling a minority apart from an otherwise electric sheet.
+    ISO 15519-2 6.2 keeps signal-medium marks for distinguishing a
+    minority medium (Annex A). draw.io cannot draw them natively: it has no
+    signal-line edge template, a stencil on an edge replaces the line, and
+    markers exist only at the ends. Each mark is therefore a child vertex
+    on the edge, placed by arc length (``mxGeometry.x`` in -1..1) with its
+    top-left on the point, so it moves when the line is re-routed. Its angle
+    is fixed at export, and the double hatch is two ``line`` cells.
+    Positions come from :func:`~pandid.render.svg.pneumatic_marks`.
 
-    Which is ``examples/11``'s case: most of its signal lines are
-    electric or software and the pneumatic ones run to actuators.
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    points : list[tuple[float, float]]
+        Stream polyline.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Sheet-to-file transform.
 
-    **There is no native way to draw it.** ``Sidebar-PID.js`` registers
-    no edge template at all and no stencil in the set is a signal line.
-    Nor can a stencil describe an edge: ``mxShape.paint`` takes the
-    stencil branch before the edge branch, so a stencil named on an edge
-    is stretched into the route's bounding box and the line is not
-    drawn. And mxGraph puts a marker at an edge's two ends and nowhere
-    else -- ``mxConnector.createMarker`` is called twice, with
-    ``pts[0]`` and ``pts[n-1]``.
-
-    What there is, is a **child vertex on the edge**, the mechanism
-    draw.io's own edge labels ride on. ``mxGraphView.getPoint`` maps
-    ``mxGeometry.x`` in ``[-1, 1]`` onto distance along the *routed*
-    polyline by arc length, and ``mxGraphView.updateCellState`` puts the
-    child's **top-left** on the point it returns -- not its centre,
-    which is why every offset below carries a ``-length/2``.
-    ``mxGeometry.offset`` displaces it in plain drawing units. Nothing
-    is cached, so dragging a balloon re-routes the line and the marks
-    move with it.
-
-    Two departures from the sheet, neither silent:
-
-    * **the stroke does not re-orient.** mxGraph has no auto-orientation
-      for a shape on an edge (``labelAutoRotate`` turns *text*, not
-      shapes), so the angle is computed here from the segment the mark
-      falls on and written as a ``rotation``. Re-route the line through
-      a turn and a mark keeps the angle it was exported with.
-    * **the mark is a built-in ``line``, twice**, rather than one glyph,
-      so the double hatch is two cells a reader can select apart.
-
-    Where the marks fall is :func:`~pandid.render.svg.pneumatic_marks`'.
+    Returns
+    -------
+    list[str]
+        XML lines for the hatch cells.
     """
     from pandid.render.svg import pneumatic_marks
 
@@ -3570,9 +2794,7 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
     half = length / 2
     out: list[str] = []
     for n, mark in enumerate(pneumatic_marks(points)):
-        # mxGeometry.x runs -1 at the source end to +1 at the target
-        # end, by arc length; the mark already knows how far along it
-        # is, so this is the whole conversion.
+        # mxGeometry.x runs -1 to +1 from source to target by arc length.
         rel = max(-1.0, min(1.0, 2.0 * mark.along / total - 1.0))
         horiz = mark.horizontal
         angle = _HATCH_ANGLE if horiz else _HATCH_ANGLE + 90.0
@@ -3597,35 +2819,35 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
 
 
 def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
-    """The flanged-connection marks on one line, hung on its edge.
+    """Return the flanged-joint marks on one line.
 
-    **It does not ride on the arrowhead's path, and it could not.** An
-    arrowhead is a terminal on an edge: ``_ends`` states the two nozzles
-    as ``exitX``/``entryX`` constraints and the head itself is three
-    style keys, ``endArrow=block;endFill=1;endSize=...``. draw.io's
-    arrow vocabulary is the ``mxMarker`` registry -- classic, block,
-    open, oval, diamond, ERone and the rest -- and there is no flange in
-    it, nor any way to register one in a file rather than in the
-    application. Worse, the terminal marker is drawn *at* the end point
-    and rotated to the segment, which is an arrowhead's geometry and not
-    a flange's: the mark stands **off** the nozzle by
-    :data:`~pandid.render.svg.FLANGE_STANDOFF`, and there is no marker
-    property that displaces one along its line. And a line has two ends
-    but wants marks on however many of them take one, which
-    ``startArrow``/``endArrow`` cannot express independently of the
-    head.
+    draw.io's end markers cannot draw a flange: there is no flange marker,
+    markers sit on the end point rather than
+    :data:`~pandid.render.svg.FLANGE_STANDOFF` off it, and both ends are
+    already used by the arrowhead. So, as in :func:`_hatches`, each bar is
+    a child vertex on the edge, two per mark. Positions come from
+    :func:`~pandid.render.svg.flange_marks`, so both backends mark the same
+    joints.
 
-    So it gets its own cells, by the same mechanism :func:`_hatches`
-    uses and for the same reason -- a child vertex on the edge, placed
-    by arc length along the routed polyline, which rides the line when
-    draw.io re-routes it. Two cells per mark, because two bars is what
-    the mark *is*.
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    s : Stream
+        Stream.
+    points : list[tuple[float, float]]
+        Stream polyline.
+    ends : str or None
+        Joint for the stream's ends.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Sheet-to-file transform.
 
-    Where the marks fall is :func:`~pandid.render.svg.flange_marks`', so
-    the export marks the joints the sheet marks and in the places the
-    sheet marks them. A flange lands hard against an equipment outline,
-    where one rule here and another there is the difference between a
-    joint and a collision.
+    Returns
+    -------
+    list[str]
+        XML lines for the flange cells.
     """
     total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
                 for (ax, ay), (bx, by) in zip(points, points[1:]))
@@ -3637,11 +2859,8 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
     out: list[str] = []
     for n, mark in enumerate(flange_marks(s, points, ends)):
         rel = max(-1.0, min(1.0, 2.0 * mark.along / total - 1.0))
-        # The bar is drawn *across* the run, and `line` strokes its
-        # box's horizontal centreline, so the box turns a further
-        # quarter.
-        # ISO 10628-1 §5.3.1 c), and §5.3.2 for why; see the same
-        # pair in ``SvgRenderer._draw_streams``.
+        # Turn a further quarter so the bar crosses the run. DETAIL
+        # weight per ISO 10628-1 5.3.1 c) and 5.3.2, as in the SVG.
         style = (f"shape=line;rotation={mark.angle + 90.0:g};strokeColor={ink};"
                  f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};fillColor={_NO_FILL};"
                  "html=1;resizable=0;movable=1;")
@@ -3667,65 +2886,48 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
 # Furniture, as draw.io tables
 # ----------------------------------------------------------------
 
-#: The three shapes a draw.io table is built from, in the styles
-#: draw.io's own ``Graph.createTable`` writes -- which is what its
-#: Insert > Table calls, so this is the file the application itself
-#: would have produced.
-#:
-#: ``childLayout=tableLayout`` is the only key ``Graph.isTable`` tests,
-#: and ``shape=table`` is load-bearing beyond the painting:
-#: ``Graph.isSwimlane`` answers yes for it, and without that
-#: ``getActualStartSize`` returns zero and the ``startSize`` title band
-#: is not ruled at all. ``rowLines``/``columnLines`` default on and are
-#: drawn by the **table**, from its cells' geometry, in the table's own
-#: ink -- which is why every row and cell below switches its own four
-#: edges off and inherits the colour rather than stroking anything
-#: itself.
+# Table styles as draw.io's Graph.createTable writes them.
+# childLayout=tableLayout marks a table; shape=table is needed for the
+# startSize title band. The table rules row and column lines itself, so
+# rows and cells turn their own edges off and inherit its colour.
 _TABLE_SHAPE = ("shape=table;childLayout=tableLayout;container=1;collapsible=0;"
                 "fixedHeader=1;html=1;whiteSpace=wrap;align=center;"
                 "verticalAlign=middle;fontStyle=1;"
                 f"strokeColor={_INK};fillColor={_NO_FILL};")
-#: A row is a swimlane turned on its side (``horizontal=0``) with no
-#: label strip of its own (``startSize=0``).
-#: ``points``/``portConstraint`` are draw.io's own and worth keeping:
-#: they give a row a connection point at each end, so an edge can be
-#: drawn to a line of a schedule.
+# A row is a horizontal swimlane with no label strip; points and
+# portConstraint give it a connection point at each end.
 _TABLE_ROW = ("shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;"
               "swimlaneBody=0;strokeColor=inherit;fillColor=none;"
               "collapsible=0;dropTarget=0;fixedHeader=1;"
               "points=[[0,0.5],[1,0.5]];portConstraint=eastwest;"
               "top=0;left=0;right=0;bottom=0;")
-#: ``pointerEvents=1`` is not decoration: an unfilled cell is
-#: click-through without it, and a schedule whose cells cannot be
-#: clicked is not editable.
+# pointerEvents=1 keeps unfilled cells clickable.
 _TABLE_CELL = ("shape=partialRectangle;html=1;whiteSpace=wrap;connectable=0;"
                "strokeColor=inherit;overflow=hidden;"
                "top=0;left=0;bottom=0;right=0;pointerEvents=1;")
-#: A heading row is filled and set bold, which is what the sheet does
-#: with one and what draw.io's own table templates do. There is no
-#: header *flag* in the format: a heading is a row whose cells are
-#: styled like one.
+# Heading cells are filled and bold; draw.io has no header flag.
 _TABLE_HEAD = "fillColor=#eeeeee;fontStyle=1;align=center;"
 _TABLE_BODY = "fillColor=none;"
 
 
 def _distribute(weights, total: float) -> list[float]:
-    """``total`` split between columns in proportion to ``weights``.
+    """Return ``total`` split between columns in proportion to ``weights``.
 
-    The last column takes the remainder rather than its own share, so
-    the parts sum to the total exactly. That is not tidiness:
-    ``childLayout=tableLayout`` lays a row out from its cells, and cells
-    that do not add up to their row are a table whose right-hand rule
-    does not meet its own frame. Nothing repairs that on load, either --
-    draw.io's layout manager short-circuits on the root change that
-    every file load produces -- so what is written is what is drawn
-    until the reader's first edit.
+    Parts are rounded to two decimals and the last takes the remainder,
+    so the cells sum exactly to their row: draw.io's table layout does not
+    correct a mismatch on load.
 
-    The parts are rounded to the precision they will be *written* at
-    before the remainder is taken, and the remainder is taken from the
-    rounded total. Doing it the other way round is how three exact
-    thirds of an eighty-unit strip become 26.67 three times and a table
-    one hundredth of a unit too tall.
+    Parameters
+    ----------
+    weights : iterable of float
+        Relative widths; negative values count as 0.
+    total : float
+        Width to split.
+
+    Returns
+    -------
+    list[float]
+        Column widths summing to ``total`` rounded to two decimals.
     """
     ws = [max(float(w), 0.0) for w in weights] or [1.0]
     span = sum(ws)
@@ -3741,147 +2943,94 @@ def _distribute(weights, total: float) -> list[float]:
     return out
 
 
-#: Clearance between a cell's rule and the text in it, both sides
-#: together.
-#:
-#: **There is no ``mxConstants.LABEL_INSET``** in mxGraph or in
-#: draw.io's fork of it -- a search of both trees returns nothing. What
-#: is really taken off a cell before the text starts is the *spacing*:
-#: ``mxText.prototype.spacing`` is 2 and is added to each of the four
-#: sides on top of whatever ``spacingLeft``/``spacingRight`` the style
-#: states, and ``mxCellRenderer.rotateLabelBounds`` then narrows the
-#: label's bounds by ``spacingLeft + spacingRight`` -- but only while
-#: ``labelPosition`` is ``center`` and ``verticalLabelPosition`` is
-#: ``middle``, which for a table cell they are. Every cell here says
-#: ``spacingLeft=3`` or ``4``, so seven or eight of the twelve is spent
-#: before a letter is drawn.
-#:
-#: The rest is the gutter, and it is generous rather than exact.
-#: :func:`~pandid.render.furniture.text_width` sets a bold capital at
-#: ``_ADV_BOLD`` = 0,62 em where Helvetica Bold sets ``HPSSH`` at 0,689,
-#: eleven per cent wider. That estimate is the only measurement either
-#: backend has, so the slack is where the difference between it and the
-#: face has to live; at eight, one unit was left and the legend clipped
-#: ``HPSSH`` to ``HPSSI``.
+# Clearance between a cell's rules and its text, both sides together.
+# draw.io adds mxText.spacing (2) to the style's spacingLeft/Right (3 or 4
+# here), using 7 to 8 of the 12; the rest absorbs the error of
+# furniture.text_width, which underestimates bold capitals by about 11%.
 _CELL_PAD = 12.0
 
-#: A line of text, as a multiple of its font size, which is what a row
-#: has to be at least as tall as.
-#:
-#: Every label this file writes is an HTML label -- ``html=1``, and
-#: draw.io's ``Graph.isHtmlLabel`` also answers yes to anything carrying
-#: ``whiteSpace=wrap`` -- so it goes out through
-#: ``mxSvgCanvas2D.getTextCss``, which writes ``line-height`` from
-#: ``mxConstants.LINE_HEIGHT``. That is 1.2,
-#: ``mxConstants.ABSOLUTE_LINE_HEIGHT`` is false and
-#: ``mxSvgCanvas2D.lineHeightCorrection`` is 1, so what reaches the
-#: browser is the *unitless* ``line-height: 1.2``: a line's box is 1,2
-#: times its font size and ``n`` lines are ``n`` times that. (The
-#: plain-SVG path measures a single line as the font size flat and only
-#: steps by 1,2 between lines. It is not the path taken here.)
-#:
-#: **Nothing shrinks type to fit.** There is no font-scaling pass
-#: anywhere in mxGraph: ``mxText.updateSize`` sets a ``max-height`` and
-#: an ``overflow`` and leaves the size alone, and ``TableLayout`` never
-#: measures a string at all -- it takes each row's height from the
-#: geometry and normalises the rows to fill the table. A row shorter
-#: than its own line box loses the difference off the top and bottom of
-#: every letter in it: eleven-point values in fourteen-unit rows are
-#: fine, and draw.io's default twelve needs 14,4.
+# Line box height as a multiple of font size. HTML labels get the
+# unitless CSS line-height 1.2 (mxConstants.LINE_HEIGHT). mxGraph never
+# shrinks text to fit, so a row shorter than its line box clips letters.
 _LINE_BOX = 1.2
 
 
 def _line_box(size: float) -> float:
-    """How tall one line at ``size`` draws. See :data:`_LINE_BOX`."""
+    """Return the line box height for a font size (:data:`_LINE_BOX`).
+
+    Parameters
+    ----------
+    size : float
+        Font size.
+
+    Returns
+    -------
+    float
+        Line height.
+    """
     return size * _LINE_BOX
 
-#: How a :class:`~pandid.document.TableBox`'s per-column
-#: ``l``/``c``/``r`` alignment is said in a draw.io style. The sheet's
-#: own default is centred (``draw_table``), so a column that says
-#: nothing gets nothing said about it.
+# Style keys for TableBox column alignment; unstated columns are centred.
 _ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4;",
               "c": "align=center;"}
 
-# The weight the drawing frame is ruled at is
-# :data:`pandid.render.furniture.FRAME_RULE`, stated there with the
-# other two weights of the border and read by both backends. mxGraph
-# strokes a rectangle on its path, so it lays one unit of ink *inside*
-# the rectangle the title strip docks to. The strip is the sheet's own
-# rectangle and the sheet docks it flush, setting its bottom band's
-# value on a baseline five units above its own edge, so the clearance is
-# in the layout where it belongs.
+# The frame weight is pandid.render.furniture.FRAME_RULE, shared by both
+# backends; the title strip's layout already clears the frame's ink.
 
-#: How far into its line box a baseline falls, as a fraction of the font
-#: size.
-#:
-#: The sheet states a piece of lettering the way SVG does, at a
-#: **baseline**; draw.io states one the way CSS does, as a box a line is
-#: laid out in. This is the conversion, and it is the only place in this
-#: file where the two ways of saying where a letter sits meet.
-#:
-#: A line box is :data:`_LINE_BOX` = 1,2 em. Inside it the browser
-#: stacks half-leading, then the ascent, then the baseline: ``(1,2 -
-#: (ascent + descent)) / 2 + ascent``. Helvetica's own ascent and
-#: descent are 0,770 and 0,230, which sum to one em and put the baseline
-#: at 0,87; Arial, which is what a machine without Helvetica resolves
-#: draw.io's font stack to, reports 0,905 and 0,212 and puts it at
-#: 0,947. 0,9 is right for neither -- it is a compromise between the
-#: two, about 0,4 of a unit out for Helvetica and 0,6 out for Arial at
-#: size 12,5, and there is no third number that is right for both -- a
-#: browser measures the face it actually loaded and this file cannot.
-#: Both errors are inside the error of
-#: :func:`~pandid.render.furniture.text_width`.
+# Baseline depth within a line box, as a fraction of font size: converts
+# the SVG's baseline positions to draw.io's CSS boxes. Helvetica gives
+# 0.87 and Arial 0.947 in a 1.2 em box; 0.9 splits the difference, within
+# the error of furniture.text_width.
 _BASELINE = 0.9
 
-#: What a draw.io cell takes off its own rectangle before a letter is
-#: drawn.
-#:
-#: ``mxText.spacing`` is 2 and is added to each of the four sides
-#: (``this.spacingLeft = this.spacing + parseInt(spacingLeft || 0)``,
-#: and so on), and ``mxCellRenderer.rotateLabelBounds`` then shifts the
-#: label bounds by ``mxText.getSpacing()`` and narrows them by
-#: ``spacingLeft + spacingRight``. Worked through for each alignment --
-#: the ``bounds.x -= margin.x * bounds.width`` at the head of that
-#: function is undone by the ``x + this.margin.x * w`` in
-#: ``mxText.paint`` -- the answer is the same every time: **the text is
-#: laid out inside the cell rectangle inset by two units on every
-#: side**. So a cell whose text must start at the sheet's ``x`` begins
-#: two units left of it, and one whose text must end there ends two
-#: units right.
+# Inset draw.io applies on every side of a cell before text (mxText.spacing
+# = 2). A cell whose text must start at the SVG's x begins 2 units left.
 _TEXT_INSET = 2.0
 
 
 def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
+    """Return the alignment style keys for each column.
+
+    Parameters
+    ----------
+    col_align : sequence of str or None
+        ``"l"``, ``"c"`` or ``"r"`` per column; missing columns are centred.
+    ncol : int
+        Number of columns.
+
+    Returns
+    -------
+    list[str]
+        Style fragment per column.
+    """
     align = list(col_align or [])
     return [_ALIGN_KEY.get(align[c] if c < len(align) else "c", "align=center;")
             for c in range(ncol)]
 
 
 def columns(rows, sizes, total: float, bold=None) -> list[float]:
-    """Column widths for a grid, measured off the text rather than
-    shared out.
+    """Return column widths measured from the text.
 
-    A *proportional* share of the box is not a measurement of anything:
-    a narrow column beside a wide one gets a narrow share of a box that
-    is only just wide enough, which clipped the legend's ``HPSSH`` to
-    ``HPSS``. So every column is measured at
-    :func:`pandid.render.furniture.text_width`, which is what the SVG
-    renderer rules its own columns with, plus the clearance a cell
-    needs. Slack goes to the **last** column, the one holding prose; a
-    shortfall is shared out in proportion, since a box too narrow for
-    its contents has to clip somewhere and the sheet clips it too.
+    Each column is as wide as its widest text
+    (:func:`pandid.render.furniture.text_width`, as the SVG measures) plus
+    :data:`_CELL_PAD`. Slack goes to the last column; a shortfall is shared
+    in proportion, as the SVG clips.
 
-    ``sizes`` is the font size per column, because a title block sets
-    its field captions smaller than its values and a column has to be
-    measured at the size it will be *drawn* at.
+    Parameters
+    ----------
+    rows : list[list[str]]
+        Cell text.
+    sizes : sequence of float
+        Font size per column; the last applies to any extra columns.
+    total : float
+        Table width.
+    bold : sequence of bool, optional
+        Whether each column is bold, which is about 11% wider.
 
-    ``bold`` is the same statement about *weight*, per column, and a
-    sequence because the title strip sets its captions light and its
-    **values** bold. Bold is the wider face -- ``_ADV_BOLD`` against
-    ``_ADV`` is 0,62 against 0,56, eleven per cent -- so a column
-    measured in the wrong face clips or wastes the room the column
-    beside it needed. The caller states it because the caller is what
-    writes the ``fontStyle=1`` into the cell's own style.
+    Returns
+    -------
+    list[float]
+        Column widths summing to ``total``.
     """
     from pandid.render.furniture import text_width
 
@@ -3908,89 +3057,59 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
            font: float = 11.0, col_keys=(), row_h: "float | None" = None,
            heights=None, keys: str = "", row_widths=None,
            cell_keys=None) -> list[str]:
-    """A ruled grid, as draw.io's own table: container, rows, cells.
+    """Return a ruled grid as a draw.io table: container, rows and cells.
 
-    ``widths`` are absolute column widths and must sum to ``w``; they
-    come from :func:`columns`, or from the sheet's own ruling where it
-    has one (a revision strip is ruled at fixed widths and this
-    reproduces them). ``start`` is the height of the title band, which
-    is a table container's swimlane head and carries the box's title; a
-    box with no title is given ``startSize=0`` and no band at all.
+    mxGraph does not inherit style from a parent cell (only ``inherit``
+    for stroke and fill colours), so the font size is stated on every
+    cell. It precedes ``col_keys``, so a column's own size wins.
+    Dimensions are rounded before rows and cells are cut, so parts sum
+    exactly to the whole (:func:`_distribute`).
 
-    ``font`` is the size the cells are *drawn* at, and it is stated **on
-    every cell** rather than left to draw.io or to the table. draw.io's
-    default is 12 while every box on the sheet measures its own text at
-    its ``font_size``, and a column measured at 11 and drawn at 12 is a
-    column three-quarters of a letter too narrow.
+    Parameters
+    ----------
+    cid : str
+        Container cell id.
+    title : str
+        Title in the swimlane head; empty for none.
+    headers : list[str]
+        Heading row, or empty.
+    rows : list[list[str]]
+        Body rows.
+    x, y, w, h : float
+        Table rectangle.
+    widths : list[float]
+        Column widths summing to ``w`` (from :func:`columns` or a fixed
+        ruling).
+    start : float, default=0.0
+        Title band height; 0 for no band.
+    header_last : bool, default=False
+        Put the heading row at the foot, as a revision history does.
+    font : float, default=11.0
+        Cell font size; draw.io's default is 12.
+    col_keys : sequence of str, optional
+        Extra style per column.
+    row_h : float, optional
+        Fixed row height; the table is then as tall as its rows.
+    heights : sequence of float, optional
+        Relative row heights, distributed over the body height.
+    keys : str, default=""
+        Extra container style, such as ``rowLines=0``.
+    row_widths : list[list[float]], optional
+        Cell widths per row, allowing a row with fewer (merged) cells.
+    cell_keys : list[list[str]], optional
+        Style per cell, replacing the heading and body styles.
 
-    Saying it once on the container does not work, because **mxGraph
-    does not inherit a style from a parent cell.**
-    ``mxGraph.getCellStyle`` resolves a cell's own style string against
-    the stylesheet's default and stops; the only key on a draw.io table
-    that reaches down the tree is the literal value ``inherit``, which
-    ``Graph.getCellStyle`` special-cases for ``strokeColor``,
-    ``fillColor`` and ``gradientColor`` alone -- which is why every row
-    and cell here says ``strokeColor=inherit`` in as many words rather
-    than simply not mentioning ink. A ``fontSize`` on the container
-    styles the container's *own* label, the table's title band, and
-    nothing else.
-
-    It goes in ahead of ``col_keys`` so a column that sets a size of its
-    own still wins: a style is parsed left to right into a dictionary
-    (``mxStylesheet.getCellStyle``), so the last statement of a key
-    stands.
-
-    ``row_h`` rules every row at that height and lets the table be as
-    tall as its rows come to; the default fills ``h`` instead. Eleven
-    title-block fields stretched to fill an eighty-unit strip are rows
-    5.6 units tall, which draw no text at all and read as a grid of
-    empty rules.
-
-    ``header_last`` puts the heading row at the foot, which is where a
-    revision history has it: the newest revision sits against the
-    heading and the older ones climb away from it.
-
-    ``heights`` rules the rows at *stated* depths rather than at one
-    depth. A revision grid is the case: the sheet rules its revisions at
-    14 apiece and leaves whatever is over as blank paper above them, so
-    the grid is not a uniform stack and cannot be written as one. They
-    are shared out through :func:`_distribute` like the widths, and so
-    add up to the table exactly as written.
-
-    ``keys`` are table-level style keys for the caller's own case --
-    ``rowLines=0`` for a grid the sheet does not rule across, a
-    ``strokeWidth`` for one it rules lighter. They go on the container,
-    which is where a table draws its own row and column lines from
-    (``TableShape.paintTableForeground`` reads
-    ``rowLines``/``columnLines`` off exactly this style).
-
-    ``row_widths`` rules each row's cells at *stated* widths rather than
-    at one set of column widths, and it is what lets a row hold a
-    **different number of cells** from the row above it: the cell count
-    of a row is the length of its own width list. A stream table's
-    section heading is the case -- one cell spanning the whole table,
-    which is the single rectangle the sheet strokes for it and what a
-    merged cell is in this format. A table rules a column line at a
-    cell's edge, so a row of one cell is a row with no column line in
-    it, which is again what the sheet draws.
-
-    ``cell_keys`` states each cell's own style, ``[row][column]``. It is
-    for a table whose cells are not uniform across a row -- a stream
-    table fills its heading row, its row labels and its values three
-    different greys and sets two of the three left rather than centred.
-    It replaces the row-level heading/body style rather than being added
-    to it, because a caller that states what every cell is filled with
-    does not want a default underneath it saying something else first.
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     body = [row for row in rows]
     if headers:
         body = body + [headers] if header_last else [headers] + body
     head_at = (len(body) - 1) if (headers and header_last) else (0 if headers else None)
     ncol = max((len(r) for r in body), default=1)
-    # Every dimension is rounded to the precision it is written at
-    # *before* the rows and cells are cut out of it, so the parts add up
-    # to the whole as written rather than as computed. See
-    # :func:`_distribute`.
+    # Round before cutting rows and cells, so parts sum as written.
     w, start = round(float(w), 2), round(float(start), 2)
     if row_h is not None and body:
         h = round(start + row_h * len(body), 2)
@@ -3999,10 +3118,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     widths = _distribute(list(widths)[:ncol] or [1.0] * ncol, w)
     if len(widths) < ncol:
         widths = _distribute([1.0] * ncol, w)
-    # Each row's own widths get the same treatment the shared ones do:
-    # rounded to the precision they are written at, with the last cell
-    # taking the remainder, so a ragged row still meets the table's
-    # right-hand rule.
+    # Per-row widths are distributed the same way.
     ragged = [_distribute(rw, w) for rw in row_widths] if row_widths else None
     rows_h = _distribute(list(heights) if heights else [1.0] * len(body),
                          h - start) if body else []
@@ -4051,15 +3167,17 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
 
 
 def _fill(colour: str) -> str:
-    """A sheet fill, as draw.io states one.
+    """Return a sheet fill in draw.io's six-digit hex form.
 
-    The sheet writes its greys the short way (``#eee``) and its paper by
-    name (``white``), which is CSS and is what an SVG consumer reads. A
-    ``.drawio`` file is read by draw.io's own colour handling before it
-    is ever read by a browser, so both are written out in the six-digit
-    form its style strings and its colour picker are written in. The
-    colour itself does not change: the fill is the sheet's, said the
-    other way.
+    Parameters
+    ----------
+    colour : str
+        CSS colour such as ``"white"`` or ``"#eee"``.
+
+    Returns
+    -------
+    str
+        The same colour as ``#rrggbb`` where it was a name or short hex.
     """
     if colour == "white":
         return "#ffffff"
@@ -4069,15 +3187,21 @@ def _fill(colour: str) -> str:
 
 
 def _stream_cell(cell) -> str:
-    """One :class:`~pandid.render.furniture.StreamCell`'s own style.
+    """Return the style for one stream-table cell.
 
-    Three things per cell, all of them the layout's rather than this
-    file's: the grey it is filled with, whether it is set bold, and
-    which way it is set. The sheet insets text against a rule by
-    :data:`~pandid.render.furniture._STREAM_PAD`; a draw.io cell insets
-    its own label by :data:`_TEXT_INSET` before any ``spacingLeft`` is
-    added, so what is stated here is the difference and a row label
-    starts the same distance in from its rule in either backend.
+    Fill, weight and alignment come from the layout. Left-aligned text is
+    inset by :data:`~pandid.render.furniture._STREAM_PAD` less draw.io's
+    own :data:`_TEXT_INSET`, matching the SVG.
+
+    Parameters
+    ----------
+    cell : StreamCell
+        Laid-out cell.
+
+    Returns
+    -------
+    str
+        Style fragment.
     """
     if cell.anchor == "start":
         align = f"align=left;spacingLeft={_num(F._STREAM_PAD - _TEXT_INSET)};"
@@ -4088,32 +3212,25 @@ def _stream_cell(cell) -> str:
 
 
 def _stream_table(cid: str, table, x, y) -> list[str]:
-    """The stream property table, as draw.io's own table.
+    """Return the stream property table as a draw.io table.
 
-    It is a grid on the sheet -- read across for one property, down for
-    one stream -- so it is a grid here: a ``shape=table`` a reader can
-    widen a column of, rather than lettering arranged to look like one.
+    Every cell is ruled, as the SVG strokes each cell, at
+    :data:`~pandid.render.furniture._CELL_RULE`. A section heading is a row
+    with one full-width cell, which draws no column lines.
 
-    **Ruled where the sheet rules it.** Every cell of a stream table is
-    stroked on all four sides
-    (:func:`~pandid.render.furniture.draw_stream_table` strokes a
-    rectangle apiece), so a rule between every row and every column is
-    the sheet's own answer and draw.io's ``rowLines``/``columnLines``
-    defaults are right here -- unlike the revision grid, where the
-    default put six lines into a strip the sheet rules none across. The
-    *weight* is not draw.io's default: the sheet rules this grid at
-    :data:`~pandid.render.furniture._CELL_RULE`, the lighter of its two
-    weights, and left unsaid the container would rule the whole table at
-    1.
+    Parameters
+    ----------
+    cid : str
+        Container cell id.
+    table : StreamTable
+        Laid-out table.
+    x, y : float
+        Top-left corner.
 
-    The section headings come through as themselves.
-    ``fs.stream_table_sections`` puts a full-width heading row into the
-    table before a named property, and the sheet strokes that as one
-    rectangle across the whole grid; here it is one cell across the
-    whole row (see :func:`_table`'s ``row_widths``), which is the same
-    rectangle and is what a merged cell is in this format. A table rules
-    its column lines at its cells' own edges, so the row that has one
-    cell is ruled the way the sheet rules it: across, and not down.
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     values = [[c.text for c in row] for row in table.rows]
     widths = [[c.w for c in row] for row in table.rows]
@@ -4127,43 +3244,45 @@ def _stream_table(cid: str, table, x, y) -> list[str]:
 
 def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
               title_h: float = 0.0) -> list[str]:
-    """A box of free-form lines, for furniture that is not a grid.
+    """Return a box of free-form lines, such as a notes list.
 
-    A note list written as sentences has one column, and ruling one
-    column into a table would invent a structure the author did not
-    write. The lines go into one cell, which is what the sheet draws
-    too.
+    Drawn as the SVG draws it
+    (:func:`~pandid.render.furniture.draw_annotation`): the box, a centred
+    bold title one point larger with a rule under it, and the lines in one
+    left-aligned cell. The font size is stated, since draw.io defaults to
+    12.
 
-    **The title band is the sheet's**, and it was not here: the box went
-    out as one cell holding the title and the notes as one run of
-    ``<br>``-separated lines, left-aligned and set at the body size,
-    where :func:`~pandid.render.furniture.draw_annotation` centres the
-    title, sets it bold and a point larger, and rules a line under it.
-    The reader saw ``GENERAL NOTES`` reading as the first note. So it is
-    three cells: the box, the title on its own with the sheet's own
-    weight and size, and the rule.
+    Parameters
+    ----------
+    cid : str
+        Base cell id.
+    title : str
+        Title, or empty.
+    rows : list[str]
+        Lines of text.
+    x, y, w, h : float
+        Box rectangle.
+    font : float, default=11.0
+        Body font size.
+    title_h : float, default=0.0
+        Title band height.
 
-    ``font`` for the reason :func:`_table` states one: the box was
-    measured off its own ``font_size``
-    (:func:`~pandid.render.furniture.measure_annotation`) and draw.io
-    would otherwise set it at 12, which is a notes box whose lines are
-    wider and taller than the box measured for them.
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     box = ("rounded=0;whiteSpace=wrap;html=1;movable=1;"
            f"strokeColor={_INK};fillColor={_NO_FILL};"
            f"strokeWidth={F._BOX_RULE:g};")
     out = _rect(cid, x, y, w, h, box)
     if title:
-        # Centred, bold and one point larger, which is draw_annotation's
-        # own rule; the band is `_ann_layout`'s so the rule under it
-        # lands where the sheet rules it.
+        # As draw_annotation: centred, bold, one point larger.
         out += _strip_label(f"{cid}-t", ("text", x + w / 2, y + title_h - 6,
                                          title, font + 1, "middle", True, "black"))
         out += _segment(f"{cid}-r", x, y + title_h, x + w, y + title_h,
                         _INK, F._BOX_UNDERLINE)
-    # The body, in the sheet's own gutter: `draw_annotation` sets a row
-    # at `pad` = 9 from the box edge, less the two units a draw.io cell
-    # spends before its first letter (:data:`_TEXT_INSET`).
+    # Body gutter: the SVG's 9 less draw.io's _TEXT_INSET.
     body = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
             f"align=left;verticalAlign=top;spacingLeft=7;fontSize={font:g};"
             f"fontColor={_LINE_INK};")
@@ -4177,32 +3296,28 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
     ]
 
 
-#: What an :class:`~pandid.document.Annotation` is ruled with, over and
-#: above being a table.
-#:
-#: **No internal rules at all.** The sheet draws one of these as a box
-#: with a title bar, one line under the title, and rows of text: no
-#: column rules and no row rules. ``rowLines``/``columnLines`` are read
-#: off the table container's own style by
-#: ``TableShape.paintTableForeground``, and switching both off leaves
-#: the container's border and its ``startSize`` title band -- exactly
-#: the two rules the sheet does draw.
-#:
-#: The rows and cells stay. They are what makes the box an editable grid
-#: and they cost no ink: every one already says
-#: ``top=0;left=0;right=0;bottom=0`` and strokes nothing itself.
+# Annotation tables draw only the border and title band, as the SVG does;
+# rows and cells remain for editing and stroke nothing.
 _ANNOTATION_KEYS = "rowLines=0;columnLines=0;"
 
 
 def _fitted(inner, free) -> "tuple[float, float, float]":
-    """The scale and offset that centre the drawing in the region left
-    for it.
+    """Return the scale and offset that centre the drawing in ``free``.
 
-    :func:`pandid.render.svg._fit_scale` for the ratio and
-    :meth:`SvgRenderer._fit` for the centring, said as three numbers
-    instead of as an SVG transform string. Deriving the ratio here would
-    be a second opinion about how big the drawing comes out, and the
-    title strip's scale cell reports the first one.
+    Uses :func:`pandid.render.svg._fit_scale`, so the title strip's scale
+    cell matches.
+
+    Parameters
+    ----------
+    inner : tuple[float, float, float, float]
+        Drawing bounds ``(x0, y0, x1, y1)``.
+    free : tuple[float, float, float, float]
+        Region ``(x, y, w, h)`` left for the drawing.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        ``(scale, offset_x, offset_y)``.
     """
     from pandid.render.svg import _fit_scale
 
@@ -4214,7 +3329,22 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
 
 
 def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
-    """A bare rectangle, for the two the drawing frame is built from."""
+    """Return a bare rectangle cell, used for the drawing frame.
+
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    x, y, w, h : float
+        Rectangle.
+    style : str
+        Cell style.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
+    """
     return [
         f'        <mxCell id="{cid}" value="" style={_attr(style)} '
         f'vertex="1" parent="1">',
@@ -4225,17 +3355,26 @@ def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
 
 
 def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
-    """A plain ruled line between two fixed points.
+    """Return a ruled line between two points, as draw.io writes a free rule.
 
-    An edge rather than a vertex, because that is what a line joining
-    two points is in this format, and an edge with both terminals stated
-    as points and neither as a cell is how draw.io itself writes a
-    free-standing rule.
+    ``noJump=1``, since furniture rules are not connections
+    (:data:`_NO_HOP`).
 
-    ``noJump=1`` because it is a **rule and not a connection**. Every
-    one of these is furniture -- a zone tick, a title-strip rule, the
-    line under a notes box's heading -- and :data:`_NO_HOP` is where
-    that is argued.
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    x1, y1, x2, y2 : float
+        End points.
+    ink : str
+        Stroke colour.
+    weight : float
+        Stroke width.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     style = (f"edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;"
              f"strokeColor={ink};strokeWidth={weight:g};movable=1;{_NO_HOP}")
@@ -4250,18 +3389,28 @@ def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
     ]
 
 
-#: Half the box a zone letter is centred in. The glyph is placed by its
-#: centre and a draw.io label is centred in its cell, so the cell is
-#: drawn around the point rather than from it.
+# Half the cell a zone letter is centred in.
 _LABEL_HALF = 8.0
 
 
 def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
-    """One piece of lettering, centred on a point: a zone's letter or
-    numeral.
+    """Return bold lettering centred on a point, such as a zone letter.
 
-    ``text`` with no stroke and no fill, which is draw.io's own way of
-    writing a caption that is lettering and not a box.
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    cx, cy : float
+        Centre.
+    text : str
+        Text.
+    size : float
+        Font size.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     style = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
              f"align=center;verticalAlign=middle;fontStyle=1;fontSize={size:g};"
@@ -4277,31 +3426,44 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
 
 
 def _strip_rule(cid: str, part) -> list[str]:
-    """One of the strip's rules, as an edge between two points."""
+    """Return one title-strip rule as an edge.
+
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    part : tuple
+        ``(kind, x1, y1, x2, y2, weight)``.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
+    """
     _kind, x1, y1, x2, y2, weight = part
     return _segment(cid, x1, y1, x2, y2, _LINE_INK, weight)
 
 
 def _strip_label(cid: str, part) -> list[str]:
-    """One piece of the title strip's lettering, as a draw.io text cell.
+    """Return one piece of title-strip lettering as a text cell.
 
-    ``part`` is :class:`~pandid.render.furniture.Strip`'s own: a string,
-    a size, a ``text-anchor`` and a **baseline**, which is how SVG says
-    where a letter sits. The conversion to the box draw.io says it in is
-    :data:`_BASELINE` for the baseline and :data:`_TEXT_INSET` for the
-    anchor, and both are stated there rather than here.
+    The strip gives an SVG baseline and ``text-anchor``; :data:`_BASELINE`
+    and :data:`_TEXT_INSET` convert them to a draw.io box one line tall.
+    Text does not wrap and overflow stays visible, so a slightly
+    underestimated width runs past the box rather than wrapping.
 
-    The cell is exactly one line box tall plus the inset, so the line
-    draw.io lays out in it *is* the line the sheet draws, rather than a
-    line floating in a taller box. Nothing wraps and nothing clips:
-    ``whiteSpace`` is left unsaid (so ``mxText.wrap`` is false) and
-    ``overflow`` defaults to visible, which means a string this file
-    measured a shade narrow than the browser sets it runs on past its
-    box instead of being folded onto a second line halfway through a
-    drawing number. The width does not move the text either way --
-    align=left fixes the left edge, align=right the right, align=center
-    the centre -- so it is a measurement for the reader's selection
-    handle rather than for the layout.
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    part : tuple
+        ``(kind, x, y, text, size, anchor, bold, ink)`` from
+        :class:`~pandid.render.furniture.Strip`.
+
+    Returns
+    -------
+    list[str]
+        XML lines, empty for empty text.
     """
     _kind, tx, ty, text, size, anchor, bold, ink = part
     if not text:
@@ -4329,42 +3491,28 @@ def _strip_label(cid: str, part) -> list[str]:
 
 
 def _rev_table(cid: str, grid) -> list[str]:
-    """The revision history, as draw.io's own table.
+    """Return the revision history as an editable draw.io table.
 
-    The one part of the strip that is a grid, and the one part a reader
-    edits: the next thing that happens to an issued drawing is a
-    revision, and this is where it is written. So it is a real
-    ``shape=table`` with real rows and cells rather than lettering that
-    looks like one.
+    Ruled as the SVG rules it: column lines only (``rowLines=0``), at the
+    strip hairline, plus one rule above the heading row at the foot. The
+    blank space above the oldest revision becomes blank rows to type into.
 
-    **Ruled to the sheet's rules and no others.** ``rowLines=0``,
-    because the sheet draws no rule *between* revisions -- it tells them
-    apart by their lettering, and ruling each one would put six more
-    lines into the busiest corner of the drawing.
-    ``Graph.getTableLines`` builds one horizontal line per row only
-    while ``rowLines`` is not ``0`` and takes the vertical ones from a
-    separate ``columnLines``, so switching the first off leaves the
-    column rules the sheet does draw. The single horizontal the sheet
-    draws -- above the heading row at the foot -- is a segment of its
-    own, at the weight the sheet strokes it.
+    Parameters
+    ----------
+    cid : str
+        Container cell id.
+    grid : RevGrid
+        Laid-out revision grid.
 
-    ``strokeWidth`` is the sheet's own hairline for those column rules.
-    The table's outer border is drawn at the same weight and is
-    invisible for it: the strip's own two-unit rectangle is on three of
-    its edges and the company cell's rule on the fourth, so there is no
-    edge of this table that is not already inked by something heavier.
-
-    The blank paper above the oldest revision goes out as blank rows of
-    the same depth. That is what the sheet leaves there -- ruled
-    vertically, ruled across not at all -- and it is somewhere for the
-    reader to type.
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     headings = [heading for heading, _cw in grid.cols]
     rows = [row for row in grid.rows]
-    # Filler first, then the revisions oldest to newest, then the
-    # heading at the foot. The remainder that is not a whole row goes
-    # into the topmost filler rather than being ruled as a short row of
-    # its own.
+    # Filler rows, then revisions oldest to newest, then the heading. A
+    # partial row's remainder goes into the topmost filler row.
     blank = grid.header_y - grid.y - grid.row_h * len(rows)
     whole = int(round(blank / grid.row_h - 0.5)) if blank > 0 else 0
     heights: list[float] = []
@@ -4386,10 +3534,16 @@ def _rev_table(cid: str, grid) -> list[str]:
 
 
 def _strip_size(block) -> "tuple[float, float]":
-    """How much room the exported title strip needs: the sheet's own
-    rectangle.
+    """Return the title strip size, as the SVG measures it.
 
-    ``measure_title_strip``'s answer repeated, which is what makes the
-    exported strip land on the same paper the rendered one does.
+    Parameters
+    ----------
+    block : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height.
     """
     return F.measure_title_strip(block)

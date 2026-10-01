@@ -1,30 +1,11 @@
-"""Where the sheet is cut in two: process, then control.
+"""Split a sheet into its process stage and its control stage.
 
-A P&ID is drawn in that order and read in that order. The pipes and the
-equipment they join are the drawing; the instrumentation is furniture
-hung on it afterwards, and a signal wire has never moved a pipe. The
-engine draws the same boundary:
-
-- **Stage 1, process.** Every unit that carries material, and every
-  stream of kind ``"material"``. Positioned, coordinated and routed.
-- **Stage 2, control.** Every instrument -- attached to a host *and*
-  free-standing -- and every signal run, placed against stage 1's
-  frozen geometry and then routed around it.
-
-The old engine cut at *has a host* instead, which is a different line in
-two ways that both hurt. A free-standing controller carried a rank, so
-the signal from its transmitter was read as a step along the flow and
-pushed it a full column east; and the control loop it closed was a cycle
-in the flow graph, so phase 0 tore one of its wires and the two ends of
-that wire were then placed with no relationship to each other. Cutting
-at process-versus-control leaves no control loop in the flow graph to
-tear.
-
-Freezing stage 1 also breaks the loop behind
-:data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES`: a balloon can no
-longer move a process line, so placement and routing stop chasing each
-other. The cost is that a signal line can never ask a process line to
-move aside, and for a P&ID that is the correct priority.
+Stage 1 places and routes process units (everything that carries
+material) and material streams. Stage 2 places instruments and routes
+signal and energy lines against the frozen stage 1 geometry, so a signal
+never moves a process line. Free-standing and attached instruments both
+belong to stage 2, so a control loop never forms a cycle in the process
+graph.
 """
 
 from __future__ import annotations
@@ -39,45 +20,90 @@ if TYPE_CHECKING:
 
 
 def slot(unit: "Unit") -> "_Slot":
-    """The solver scratch state every unit carries during a run.
+    """Return the solver state a unit carries during layout.
 
-    ``None`` only before :func:`pandid.layout._seed_slots`, which is the
-    first thing ``layout()`` does, so every phase below can say so
-    rather than checking. Asserted rather than assumed: a phase reading
-    a slot that is not there has been called out of order, and that is
-    worth stopping for.
+    Parameters
+    ----------
+    unit : Unit
+        Unit being laid out.
+
+    Returns
+    -------
+    _Slot
+        Scratch placement seeded by :func:`pandid.layout._seed_slots`.
+
+    Raises
+    ------
+    AssertionError
+        If layout has not seeded the slot, meaning a pass ran out of order.
     """
     assert unit._slot is not None, f"{unit.name} has no slot; layout ran out of order"
     return unit._slot
 
 
 def is_control(unit: "Unit | None") -> bool:
-    """True for a balloon, whether or not it hangs on anything.
+    """Return whether a unit is an instrument balloon.
 
-    The question is what the unit *is*, not what it is tied to: a
-    free-standing controller is as much instrumentation as one taped to
-    the line it reads, and the sheet is laid out around neither.
+    Parameters
+    ----------
+    unit : Unit or None
+        Unit to test.
+
+    Returns
+    -------
+    bool
+        ``True`` for any instrument, attached or free-standing.
     """
     return unit is not None and unit.kind == "instrument"
 
 
 def process_units(fs: "Flowsheet") -> list["Unit"]:
-    """The units stage 1 places: everything that carries material."""
+    """Return the units stage 1 places.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read.
+
+    Returns
+    -------
+    list[Unit]
+        Every unit that is not an instrument, in flowsheet order.
+    """
     return [u for u in fs.units if not is_control(u)]
 
 
 def control_units(fs: "Flowsheet") -> list["Unit"]:
-    """The balloons stage 2 places, in the order the sheet holds them."""
+    """Return the instruments stage 2 places.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read.
+
+    Returns
+    -------
+    list[Unit]
+        Every instrument, in flowsheet order.
+    """
     return [u for u in fs.units if is_control(u)]
 
 
 def is_process_stream(stream: "Stream") -> bool:
-    """True for a run stage 1 positions against.
+    """Return whether stage 1 places units against a stream.
 
-    Kind, not endpoint: an ``"energy"`` line is a duty rather than a
-    pipe and states no order between the two boxes it joins, and a
-    signal is a measurement. Only material puts one unit downstream of
-    another.
+    Only a material stream between two process units states an order;
+    an energy line is a duty and a signal is a measurement.
+
+    Parameters
+    ----------
+    stream : Stream
+        Stream to test.
+
+    Returns
+    -------
+    bool
+        Whether the stream is material and joins two process units.
     """
     src, dst = stream.source.owner, stream.dest.owner
     return (stream.kind == "material" and src is not None and dst is not None
@@ -85,15 +111,34 @@ def is_process_stream(stream: "Stream") -> bool:
 
 
 def process_streams(fs: "Flowsheet") -> list["Stream"]:
-    """The runs stage 1 positions against."""
+    """Return the streams stage 1 places units against.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read.
+
+    Returns
+    -------
+    list[Stream]
+        Process streams, in flowsheet order.
+    """
     return [s for s in fs.streams if is_process_stream(s)]
 
 
 def signal_streams(fs: "Flowsheet") -> list["Stream"]:
-    """Every run stage 2 draws: the wires, and the duties beside them.
+    """Return the streams stage 2 routes.
 
-    An energy line is grouped with the signals because stage 1 does not
-    position against it, so it is drawn against frozen geometry exactly
-    as a wire is -- not because it is one.
+    Energy lines are included because stage 1 does not place against them.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read.
+
+    Returns
+    -------
+    list[Stream]
+        Every stream that is not a process stream, in flowsheet order.
     """
     return [s for s in fs.streams if not is_process_stream(s)]

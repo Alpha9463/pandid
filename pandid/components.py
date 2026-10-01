@@ -1,7 +1,6 @@
-"""Component: an entry in a flowsheet's chemical-species registry.
+"""Define an entry in a flowsheet's chemical species list.
 
-Carries no thermophysical data yet; a future mass/energy balance backend
-attaches property calculations here.
+No property data is attached; a future balance backend can add it.
 """
 
 from __future__ import annotations
@@ -11,5 +10,15 @@ from dataclasses import dataclass
 
 @dataclass
 class Component:
+    """A chemical species registered on a flowsheet.
+
+    Attributes
+    ----------
+    name : str
+        Species name.
+    formula : str or None
+        Chemical formula.
+    """
+
     name: str
     formula: str | None = None

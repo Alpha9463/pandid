@@ -1,21 +1,15 @@
-"""Retiring an API: one declaration, two signals.
+"""Declare deprecated API spellings and report them two ways.
 
-A deprecated spelling lives for exactly one release: it works throughout
-the release it is announced in and is deleted in the next -- the six
-announced in 0.1.2 were gone in 0.1.3. ``CONTRIBUTING.md`` states the
-rule; this module makes it cost one line to obey.
+A deprecated spelling works for the release that announces it and is
+removed in the next (see ``CONTRIBUTING.md``). One :class:`Deprecation`,
+declared as a module constant beside the code that honours it, emits:
 
-Two signals come out of one declaration:
+- a :class:`DeprecationWarning`; and
+- a ``deprecated`` finding from :func:`pandid.validate.validate`, since
+  Python hides :class:`DeprecationWarning` outside ``__main__`` by
+  default.
 
-- a standard :class:`DeprecationWarning`, for anyone whose warning
-  filters show them; and
-- a ``deprecated`` finding from :func:`pandid.validate.validate`,
-  because Python ignores :class:`DeprecationWarning` by default outside
-  ``__main__``, and ``fs.validate()`` is what an author is told to run.
-
-They cannot drift apart: :meth:`Deprecation.warn` builds **one**
-sentence and hands the same string to ``warnings.warn`` and to the
-:class:`~pandid.validate.Issue` it records::
+Both carry the same sentence::
 
     RETIRED = Deprecation(
         what="Pump(cooled=True)",
@@ -29,38 +23,13 @@ sentence and hands the same string to ``warnings.warn`` and to the
             if cooled:
                 RETIRED.warn(self, where=name)
 
-Invented, both halves of it: an example naming a spelling the library
-really has is one real retirement away from teaching the reverse of what
-the library does. ``tests/test_deprecation.py`` exercises the mechanism
-through this same pair, for the same reason.
+The spellings in this example are invented.
 
-A deprecation is declared as a **module constant beside the code that
-honours it**, so the sentence an author reads sits next to the branch
-that triggers it, and so :func:`declarations` can enumerate what this
-version is retiring without anybody keeping a list.
-
-Where the finding is kept
--------------------------
-
-``validate()`` runs on a flowsheet after layout, while a deprecated call
-happens at *construction*, often before ``fs.add()`` -- so there may be
-no flowsheet in scope to record against. The finding rides on the object
-the author is already holding, and :func:`findings` collects from
-everything the sheet holds when ``validate()`` runs.
-
-A carrier is the flowsheet itself, or anything it holds a list of:
-units, streams, loops, components, annotations. That is the general rule
-rather than a list of the classes that have a deprecation today, so the
-first customer needs no edit here. A unit built and never added keeps
-its finding and is never reported, which is correct: ``validate()``
-answers for the drawing.
-
-A carrier is required. A finding with nothing to ride on reaches no
-sheet's ``validate()``, and the only home left for it is the process --
-which is one sheet's finding read out by every *other* sheet built in
-the same interpreter. Such a call still raises its
-:class:`DeprecationWarning`, which is the signal that does not need a
-sheet to arrive.
+A deprecated call often happens before the object is added to a sheet,
+so the finding is stored on a carrier: the flowsheet, or a unit, stream,
+loop, component or annotation it holds. :func:`findings` collects them
+when ``validate()`` runs. A carrier never added to a sheet is never
+reported.
 """
 
 from __future__ import annotations
@@ -74,58 +43,41 @@ from pandid.validate import Issue
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
-#: The code every deprecation reports under. One code for all of them:
-#: the code is what a caller filters on, and "this sheet uses something
-#: that is going away" is one thing to filter for. What went and what
-#: replaces it is the message's job.
+#: Validation code for every deprecation finding.
 CODE = "deprecated"
 
-#: The instance attribute a carrier's findings are kept in. Named only
-#: here: a carrier does not declare it, and nothing outside this module
-#: reads it.
+#: Instance attribute holding a carrier's findings; private to this module.
 _ATTR = "_deprecations"
 
-#: The flowsheet attributes whose members can carry a finding: every
-#: list a :class:`~pandid.flowsheet.Flowsheet` holds of objects an
-#: author built and still has a handle on. ``streams`` is in it even
-#: though a stream is minted by ``connect()``, since ``connect()``'s own
-#: signature is what a deprecation there would be about.
+#: Flowsheet lists whose members can carry a finding.
 _HELD = ("units", "streams", "loops", "components", "annotations")
 
 
 @dataclass(frozen=True)
 class Deprecation:
-    """One retired spelling: what goes, what replaces it, and when.
+    """One deprecated spelling, its replacement and its removal release.
 
-    Frozen, and so hashable, so a caller can put the ones it cares about
-    in a set.
+    Frozen, so it is hashable.
 
-    Args:
-        what: The call being retired, spelled the way an author types it
-            (``"Valve(variant='control')"``). Not a prose description:
-            the author has to find this string in their own file.
-        instead: The call that replaces it, spelled the same way.
-            Required, and required to be a *call*, so the finding ends
-            on the line the author types next.
-        removed_in: The release the old spelling stops working in.
-            Always the release after the one it is announced in.
-        note: What the author will find has changed besides the
-            spelling, where the replacement is not a drop-in. Empty by
-            default, because a deprecation should name an *equivalent*
-            call and most do; see below for the one that must not.
+    Parameters
+    ----------
+    what : str
+        The deprecated call as an author types it, such as
+        ``"Valve(variant='control')"``.
+    instead : str
+        The replacement call, spelled the same way.
+    removed_in : str
+        Release in which the old spelling stops working: the one after the
+        announcing release.
+    note : str, default=""
+        What else changes when the replacement is not a drop-in. It is
+        printed before the replacement, so the message still ends on the
+        call to type.
 
-    When the replacement is not a drop-in
-    -------------------------------------
-    A deprecation is a promise that the sentence it prints is enough to
-    act on, and "use X instead" read against a drawing that is not the
-    old one is a promise broken silently: the sheet changes shape at the
-    next render and the author was told it was a rename.
-
-    :attr:`note` is where that is said, and it goes **before** the
-    replacement so the sentence still ends on the line the author types.
-    Leave it empty and nothing is claimed but the substitution, which is
-    what an equivalent spelling wants; fill it in and the author is
-    warned before they act.
+    Raises
+    ------
+    ValueError
+        If ``what``, ``instead`` or ``removed_in`` is empty.
     """
 
     what: str
@@ -134,8 +86,7 @@ class Deprecation:
     note: str = ""
 
     def __post_init__(self) -> None:
-        # ``note`` is not here: empty is its default and its ordinary
-        # value, since most replacements are drop-ins and claim nothing.
+        """Validate the required fields; ``note`` may be empty."""
         for field, value in (("what", self.what), ("instead", self.instead),
                              ("removed_in", self.removed_in)):
             if not str(value).strip():
@@ -146,15 +97,19 @@ class Deprecation:
                 )
 
     def message(self, where: str = "") -> str:
-        """The one sentence both signals carry.
+        """Return the sentence both signals carry.
 
-        *where* is the thing on the sheet that has to be edited -- a
-        unit tag, a stream name -- and is left out when the call named
-        nothing in particular. It goes in front, as every other finding
-        in :mod:`pandid.validate` puts it. The replacement comes last,
-        so the sentence ends on the line the author types next -- which
-        is why :attr:`note`, where there is one, goes in between rather
-        than at the end.
+        Parameters
+        ----------
+        where : str, default=""
+            Item to edit, such as a unit tag or stream name; omitted when
+            empty.
+
+        Returns
+        -------
+        str
+            ``"<where>: <what> is deprecated and is removed in pandid
+            <removed_in>; [<note>, so ]use <instead>"``.
         """
         lead = f"{where}: " if where else ""
         caveat = f"{self.note.rstrip('. ')}, so " if self.note else ""
@@ -163,29 +118,26 @@ class Deprecation:
 
     def warn(self, carrier: object, *, where: str = "",
              stacklevel: int = 3) -> None:
-        """Emit both signals for one deprecated call.
+        """Emit the warning and record the finding for one deprecated call.
 
-        The sentence is built once and used twice: the
-        ``DeprecationWarning`` a filter shows and the finding
-        ``validate()`` reports are the same ``str`` object.
+        The same string is used for both. A carrier records each distinct
+        sentence once; the warning is emitted every time.
 
-        *carrier* is the object the finding rides on until
-        ``validate()`` runs: the unit under construction, the stream,
-        the flowsheet. Required, and required to be able to hold the
-        finding, so that a call with nothing to attach to fails here
-        rather than quietly reporting against sheets it has no
-        connection to.
+        Parameters
+        ----------
+        carrier : object
+            Object the finding is stored on until ``validate()`` runs: the
+            unit being built, the stream or the flowsheet.
+        where : str, default=""
+            Item to edit, passed to :meth:`message`.
+        stacklevel : int, default=3
+            Warning stack level. 3 points at the author's call through one
+            library frame; a helper adding a frame passes 4.
 
-        *stacklevel* defaults to 3 so the warning points at the author's
-        line: 1 is this method, 2 is the library function that called
-        it, 3 is where that function was called from. A helper that adds
-        a frame between the two passes 4.
-
-        Recorded once per distinct sentence per carrier, since a
-        constructor that triggers the same deprecation twice has given
-        the author one thing to fix. The ``DeprecationWarning`` is still
-        emitted each time; suppressing a repeat is what the ``warnings``
-        module's own filters are for.
+        Raises
+        ------
+        TypeError
+            If ``carrier`` cannot store attributes.
         """
         if not hasattr(carrier, "__dict__"):
             raise TypeError(
@@ -201,22 +153,36 @@ class Deprecation:
 
 
 def _recorded(obj: object) -> list[Issue]:
-    """The findings sitting on one carrier.
+    """Return the findings stored on one carrier.
 
-    Through ``__dict__`` rather than ``getattr``, so a class attribute
-    sharing the name cannot be found instead and
-    :meth:`pandid.units.Unit.__getattr__` -- which turns an unknown name
-    into a message about the unit's ports -- is never entered.
+    Reads ``__dict__`` directly, so a class attribute of the same name is
+    ignored and :meth:`pandid.units.Unit.__getattr__` is never called.
+
+    Parameters
+    ----------
+    obj : object
+        Possible carrier.
+
+    Returns
+    -------
+    list[Issue]
+        Stored findings, possibly empty.
     """
     return list(getattr(obj, "__dict__", {}).get(_ATTR, ()))
 
 
 def findings(fs: "Flowsheet") -> list[Issue]:
-    """Every deprecation this sheet triggered, and no other sheet's.
+    """Return every deprecation finding this sheet's objects carry.
 
-    Called by :func:`pandid.validate.validate`, which reports rather
-    than recomputes: the findings were built at the deprecated call, the
-    only moment that knows one was made.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being validated.
+
+    Returns
+    -------
+    list[Issue]
+        Findings on the flowsheet and on the objects it holds.
     """
     out = _recorded(fs)
     for held in _HELD:
@@ -226,16 +192,17 @@ def findings(fs: "Flowsheet") -> list[Issue]:
 
 
 def declarations() -> dict[str, Deprecation]:
-    """Every deprecation this version declares, keyed by where.
+    """Return every deprecation this version declares.
 
-    Imports each of pandid's own modules and collects the module-level
-    :class:`Deprecation` constants in them, which is why the convention
-    is a module constant rather than one built inline at the call: a
-    declaration nothing can enumerate outlives its release quietly.
-    ``tests/test_deprecation.py`` enumerates them and holds each to a
-    ``removed_in`` that has not shipped yet.
+    Imports each pandid module and collects its module-level
+    :class:`Deprecation` constants. ``tests/test_deprecation.py`` uses this
+    to check that no ``removed_in`` release has shipped.
 
-    A constant imported into a second module appears under both names.
+    Returns
+    -------
+    dict[str, Deprecation]
+        Declarations keyed by ``"module.NAME"``. A constant imported into a
+        second module appears under both names.
     """
     import importlib
     import pkgutil
