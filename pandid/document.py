@@ -1,26 +1,18 @@
 """Drawing documentation: the title block and sheet furniture.
 
-Attach a :class:`TitleBlock` to a flowsheet
-(``fs.title_block = TitleBlock(...)``) and the sheet is drawn with a
-full-width engineering title strip (revision history + company/logo cell
-+ client / project / status / drawing-number / title / date / scale /
-rev cells), the data fields ISO 7200 specifies for a title block and ISO
-10628-1 §5.1.2 requires on a process diagram. Seven of the eight ISO
-7200 mandatory fields have a cell; the eighth, document type, does not.
-A PFD carries a title strip as readily as a P&ID does, so the strip
-follows the block, not the border: ``border="zone"`` adds the zone-ruled
-drawing frame around it.
+Set ``fs.title_block = TitleBlock(...)`` to draw a full-width title strip:
+revision history, company cell, and client, project, status, drawing
+number, title, date, scale and revision cells. These are the ISO 7200
+title-block fields that ISO 10628-1 5.1.2 requires on a process diagram;
+seven of the eight mandatory ISO 7200 fields have a cell, and document
+type does not. The strip follows the title block, not the border, so a
+PFD carries one too; ``border="zone"`` adds the zone-ruled frame.
 
-Around the drawing you can place *generic titled boxes*:
-:class:`Annotation` (a title over free-form, optionally columnar, text)
-and :class:`TableBox` (a title over a bordered header+rows grid).
-Equipment lists, notes, and legends are all just :class:`Annotation`
-boxes; :func:`equipment_list`, :func:`notes` and :func:`legend` are thin
-constructors for the common cases.
-
-Add them with ``fs.annotations.append(...)`` (or
-``fs.add_annotation(...)``); a box on the flowsheet is a box on the
-sheet, whichever border is drawn.
+Sheet furniture is generic titled boxes: :class:`Annotation` (a title
+over free or columnar text) and :class:`TableBox` (a title over a
+bordered grid). :func:`equipment_list`, :func:`notes` and :func:`legend`
+build the common annotations. Add a box with ``fs.annotations.append(...)``
+or ``fs.add_annotation(...)``; it is drawn whichever border is used.
 """
 
 import re
@@ -31,21 +23,34 @@ from typing import Any, Literal
 # Location references (ISO 15519-1:2010 Clause 9)
 # --------------------------------------------------------------
 
-#: How a zone may be spelled. ISO 15519-1 §5.1.2 builds the grid from
-#: columns designated with numbers and rows designated with letters, and
-#: calls the cross-section of one column and one row a zone. So a zone is
-#: its row letter followed by its column number (Table 2's ``B3``), and a
-#: row or a column on its own is the letter or the number alone. ``3B``
-#: is neither, and is the mistake this rejects.
+# A zone, row or column (ISO 15519-1 5.1.2): rows are letters and columns
+# numbers, so a zone is row then column ("B3"); "3B" is refused.
 _ZONE = re.compile(r"\A(?:[A-Za-z]+[0-9]+|[A-Za-z]+|[0-9]+)\Z")
 
-# The two signs Clause 9 reserves. A field containing one would be read
-# as a separator by whoever reads the finished string, so they are
-# refused in the parts rather than escaped.
+# Signs Clause 9 reserves as separators; refused inside a part.
 _SEPARATORS = "/."
 
 
 def _clean(value, field_name: str) -> str:
+    """Return one location-reference part as stripped text.
+
+    Parameters
+    ----------
+    value : object
+        Part value; ``None`` or empty gives ``""``.
+    field_name : str
+        Part name, for error messages.
+
+    Returns
+    -------
+    str
+        Stripped text.
+
+    Raises
+    ------
+    ValueError
+        If the part contains whitespace, ``/`` or ``.``.
+    """
     text = str(value or "").strip()
     bad = sorted({c for c in text if c in _SEPARATORS or c.isspace()})
     if bad:
@@ -61,17 +66,10 @@ def _clean(value, field_name: str) -> str:
 def location_reference(document="", sheet="", zone="") -> str:
     """Compose an ISO 15519-1 Clause 9 location reference.
 
-    Clause 9, *Location references*, covers a reference to a document, to
-    a sheet of a document, and to a column, a row or a zone on a sheet,
-    each of them spelled against the §5.1.2 grid. It reserves the solidus
-    for the sheet and the full stop for the column, row or zone, and
-    fixes the order they are presented in: document, then sheet, then
-    column, row or zone.
-
-    So the three parts always appear in that order, each introduced by
-    its own sign, and a part left out narrows the *scope* of the
-    reference rather than changing its shape. That is what Table 2
-    tabulates, and this function reproduces all seven of its rows:
+    The parts appear in the order document, sheet, then column, row or
+    zone; the solidus introduces the sheet and the full stop the zone. A
+    part left out narrows the reference's scope without changing its
+    shape. This reproduces all seven rows of Clause 9 Table 2:
 
     ================================  ==================================
     ``location_reference(...)``       result (Table 2)
@@ -87,22 +85,30 @@ def location_reference(document="", sheet="", zone="") -> str:
     ``(zone="B3")``                   ``/.B3``  zone B3 on this sheet
     ================================  ==================================
 
-    A document with nothing after it is the document itself,
-    ``PFD-302``, which is what a real sheet's off-page connector
-    carries, and what :attr:`pandid.units.Feed.reference` has always
-    been given. The helper is therefore a way to *spell* a reference
-    that names a sheet or a zone as well, not a new kind of value: it
-    returns a plain string and ``reference=`` still takes one.
+    A document alone (``PFD-302``) is what an off-page connector usually
+    carries. The result is a plain string for ``reference=``.
 
-    ``zone`` is validated against §5.1.2 (rows are letters, columns are
-    numbers, and a zone is the row's letter then the column's number),
-    so ``"3B"`` raises rather than reaching a drawing back to front. The
-    sheet reference is only checked for the two reserved signs, since
-    sheet numbering is the drawing office's (ISO 15519-1 §5.2.3 requires
-    only that the sheets of a set relate to one another).
+    Parameters
+    ----------
+    document : str, default=""
+        Document number.
+    sheet : str, default=""
+        Sheet number; only checked for the reserved signs, since sheet
+        numbering is the drawing office's (ISO 15519-1 5.2.3).
+    zone : str, default=""
+        Zone (``"B3"``), row (``"B"``) or column (``"3"``), checked against
+        ISO 15519-1 5.1.2.
 
-    Raises :class:`ValueError` if every part is empty: a reference to
-    nothing is not a scope, it is a blank.
+    Returns
+    -------
+    str
+        Location reference.
+
+    Raises
+    ------
+    ValueError
+        If every part is empty, a part contains whitespace or a reserved
+        sign, or ``zone`` is not a zone, row or column.
     """
     document = _clean(document, "document")
     sheet = _clean(sheet, "sheet")
@@ -121,9 +127,7 @@ def location_reference(document="", sheet="", zone="") -> str:
             "reference by what it leaves out, so there is nothing an empty one "
             "could mean."
         )
-    # The solidus marks the sheet field whether or not that field has a
-    # number in it: Table 2 writes zone B3 of single-sheet diagram 4334
-    # as "4334/.B3", keeping the sign and dropping only the sheet.
+    # Keep the solidus when only the zone is given ("4334/.B3", Table 2).
     out = document
     if sheet or zone:
         out += "/" + sheet
@@ -136,9 +140,13 @@ def location_reference(document="", sheet="", zone="") -> str:
 class Revision:
     """One row of the revision history.
 
-    ``checked``/``approved`` are optional per-row initials; when omitted
-    the strip leaves those cells blank (typical for early, un-checked
-    revisions).
+    Attributes
+    ----------
+    rev, date, description : str
+        Revision mark, date and description.
+    by, checked, approved : str
+        Initials; ``checked`` and ``approved`` may be blank, which leaves
+        their cells empty.
     """
     rev: str = ""
     date: str = ""
@@ -152,41 +160,33 @@ class Revision:
 class TitleBlock:
     """Title-block metadata for a drawing sheet.
 
-    ``title`` and ``subtitle`` are the two title lines (e.g. an area
-    name over the drawing type, ``"Ethanol Purification A300"`` /
-    ``"Process Flow Diagram 1"``). ``company`` fills the logo/company
-    cell, ``status`` the issue-status cell (e.g.
-    ``"ISSUED FOR REVIEW"``).
+    ``client`` and ``project`` are not ISO 7200 fields (ISO 7200's legal
+    owner is ``company``), but issued sheets name them; a blank one draws
+    no line. A blank ``sheet`` or ``of_sheets`` draws its default of
+    ``"1"``, since half a count names no sheet. The scale cell is always
+    ruled, so the other cells keep their widths; left blank, it shows the
+    ratio the drawing was placed at when ``page_size`` fixes the page.
 
-    ``client`` and ``project`` head the information block, above the
-    title. Neither is an ISO 7200 field: ISO 5457 specifies no
-    title-block data fields at all and defers them to ISO 7200, whose
-    mandatory "legal owner" is the organisation issuing the drawing,
-    which is ``company`` here. An issued sheet names its client anyway,
-    so the pair is drawn. Either may be left blank and the line for it
-    is not ruled.
-
-    ``sheet`` and ``of_sheets`` are the two halves of the ``SHEET n of
-    m`` count in the title band, and they are the only two fields that
-    default to something other than blank: a drawing with no set behind
-    it is sheet 1 of 1. **A blank half draws that default**, on both
-    backends and however the block is edited, because half a count reads
-    as a different sheet -- ``SHEET  of 1`` names no sheet at all, and
-    is short enough that no width check would ever have spoken up about
-    it.
-
-    ``scale`` is the scale cell. Left blank, the sheet reports the ratio
-    the renderer actually placed the drawing at, which is a real number
-    once ``page_size`` fixes the page and nothing at all on a sheet
-    sized to fit its drawing, which is at no scale to state. Give the
-    field a value (``"NTS"``, ``"1:100"``) to state one regardless.
-
-    The cell is **ruled either way**. A title block is a form and its
-    boxes belong to the form, so an unstated scale leaves an empty box
-    rather than removing one -- and the three cells beside it keep their
-    widths, which is what stops ``drawing_number`` being budgeted one
-    width by ``to_svg()`` and a narrower one by
-    ``to_svg(page_size=...)``.
+    Attributes
+    ----------
+    title, subtitle : str
+        Title lines, such as ``"Ethanol Purification A300"`` over
+        ``"Process Flow Diagram 1"``.
+    drawing_number, project, client : str
+        Information cells.
+    company : str
+        Logo and company cell: the organisation issuing the drawing.
+    status : str
+        Issue status, such as ``"ISSUED FOR REVIEW"``.
+    sheet, of_sheets : str
+        The ``SHEET n of m`` count; both default to ``"1"``.
+    scale : str
+        Scale cell, such as ``"NTS"`` or ``"1:100"``; blank to report the
+        placed scale, if any.
+    drawn_by, checked_by, approved_by, date : str
+        Initials and date.
+    revisions : list[Revision]
+        Revision history.
     """
     title: str = ""
     subtitle: str = ""
@@ -206,64 +206,50 @@ class TitleBlock:
 
 
 def _drawn_text(value: Any) -> str:
-    """A title-block field's value as the text a sheet draws from it.
+    """Return the text a title-block field draws.
 
-    Every field of :class:`TitleBlock` and :class:`Revision` is
-    annotated ``str`` and **nothing enforces it**, so
-    ``TitleBlock(sheet=1, of_sheets=3)`` is an ordinary thing for an
-    engineer to type and has always drawn ``SHEET 1 of 3``. This is the
-    one place that says what a value which is not text draws, so the
-    two doors into a block cannot answer differently about it: the
-    constructor's, and the spec reader's
-    (:meth:`~pandid.Flowsheet.from_dict`).
+    Fields are annotated ``str`` but not enforced, so ``sheet=1`` works.
+    The constructor and :meth:`~pandid.Flowsheet.from_dict` both use this,
+    so a written spec reads back. ``None`` (YAML's empty value) is blank.
+    Whitespace is kept; the drawn cell strips it.
 
-    They used to. ``to_dict()`` wrote back the ``0`` an author set on
-    ``sheet`` and the reader refused to read it -- a document this
-    package had just written and would not accept, which is a broken
-    public round trip and not a choice anyone made. Refusing a
-    non-string at *both* doors was the other consistent answer and is
-    not the one taken: it would break ``sheet=1``, which reads
-    naturally and works today.
+    Parameters
+    ----------
+    value : Any
+        Field value.
 
-    ``None`` is the blank the strip already draws for it, and the blank
-    a file means -- YAML reads ``title:`` with nothing after it as
-    ``None``, and an author who wrote nothing after the colon wrote
-    nothing. Everything else is drawn as written; there is no second
-    vocabulary of types here, because the question this answers is what
-    a cell letters and ``str`` answers it for anything.
-
-    Whitespace is **not** trimmed here. A field of nothing but spaces
-    is the blank it means, but that is the *cell's* reading of it
-    (:func:`~pandid.render.furniture._field`, which strips this before
-    drawing) -- a file keeps what its author typed, so a spec that
-    round-trips through here comes back out unchanged.
+    Returns
+    -------
+    str
+        ``""`` for ``None``, else ``str(value)``.
     """
     return "" if value is None else str(value)
 
 
 def _drawn_text_fields(cls: type) -> frozenset[str]:
-    """The fields of *cls* that hold drawn text, read off the dataclass.
+    """Return the dataclass fields that hold drawn text.
 
-    A field whose default is a string holds text. The block's one list
-    field, ``revisions``, is built by a factory and has no string
-    default, so it leaves itself out without being named -- and so does
-    any field somebody later adds that is not text.
+    A field with a string default holds text, so ``revisions`` and any
+    later non-text field are left out. This is the test
+    :func:`~pandid.render.furniture._class_defaults` uses, so the spec
+    reader and the strip agree.
 
-    Derived rather than listed because a written-out list of the
-    fourteen has fallen behind this block before, and because it is the
-    same test
-    :func:`~pandid.render.furniture._class_defaults` uses to find the
-    default a blank cell draws. One derivation, so the reader and the
-    strip agree about which fields are text on the day a field is added
-    rather than on the day a cell is noticed drawing the wrong thing.
+    Parameters
+    ----------
+    cls : type
+        :class:`TitleBlock` or :class:`Revision`.
+
+    Returns
+    -------
+    frozenset[str]
+        Field names.
     """
     return frozenset(f.name for f in fields(cls) if isinstance(f.default, str))
 
 
-# The nine positions a box can dock to on the sheet *frame* (not the
-# drawing), as a 3x3 grid: the box goes flush against the frame edges
-# its ``align`` names, so ``"top-right"`` puts its top-right corner in
-# the frame's and ``"top"`` centres it on the top edge.
+# Nine docking positions on the sheet frame, not the drawing: "top-right"
+# puts the box's corner in the frame's corner, "top" centres it on the
+# top edge.
 _ALIGN = {
     "top-left", "top", "top-right",
     "left", "center", "right",
@@ -272,24 +258,53 @@ _ALIGN = {
 
 
 def _resolve_align(align, default):
-    """The effective alignment, checked against the dock's nine."""
+    """Return the alignment, checked against the nine docking positions.
+
+    Parameters
+    ----------
+    align : str or None
+        Requested alignment; ``None`` for ``default``.
+    default : str
+        Box type's default.
+
+    Returns
+    -------
+    str
+        Alignment.
+
+    Raises
+    ------
+    ValueError
+        If the alignment is not a docking position.
+    """
     value = default if align is None else align
     if value not in _ALIGN:
         raise ValueError(f"align must be one of {sorted(_ALIGN)}, got {value!r}")
     return value
 
 
-#: A :class:`TableBox` column's alignment: left, centre or right, spelled
-#: short. The spelled-out word is the obvious guess, and both renderers
-#: used to answer it by silently centring rather than raising.
+# TableBox column alignments: left, centre, right.
 _COL_ALIGN = {"l", "c", "r"}
 
 
 def _resolve_col_align(col_align):
-    """``col_align``, checked entry by entry against the three spellings
-    the renderers key off. ``None`` passes through unchanged; a table
-    with no ``col_align`` is centred by default and that is not this
-    function's business to say.
+    """Return ``col_align`` after checking each entry.
+
+    Parameters
+    ----------
+    col_align : list[str] or None
+        ``"l"``, ``"c"`` or ``"r"`` per column; ``None`` centres every
+        column.
+
+    Returns
+    -------
+    list[str] or None
+        ``col_align`` unchanged.
+
+    Raises
+    ------
+    ValueError
+        If an entry is not ``"l"``, ``"c"`` or ``"r"``.
     """
     if col_align is None:
         return None
@@ -304,24 +319,34 @@ def _resolve_col_align(col_align):
 
 @dataclass
 class Annotation:
-    """A generic titled box placed on the sheet.
+    """Titled text box placed on the sheet.
 
-    Placement (see :data:`_ALIGN`):
+    A row is a string (one left-aligned line) or a sequence of cells that
+    align into columns, enough for an equipment schedule
+    (``("T-301", "Beer Column")``) or a legend (``("SS", "316L")``).
 
-    * ``align`` docks the box flush to the sheet frame at one of nine
-      positions (corners, edge-centres, or dead centre). This is the
-      usual way.
-    * ``position=(x, y)`` instead pins the box's **top-left corner** at
-      absolute sheet coordinates, ignoring ``align``: the escape hatch
-      for hand-placed furniture.
-    * ``margin`` insets a docked box from the frame edge (default ``0``
-      = flush).
+    Attributes
+    ----------
+    title : str
+        Box title.
+    rows : list
+        Lines or cell sequences.
+    align : str
+        Docking position on the sheet frame, one of nine (corners, edge
+        centres or ``"center"``); default ``"top-right"``.
+    position : tuple[float, float] or None
+        Top-left corner in sheet coordinates; overrides ``align``.
+    margin : float
+        Inset of a docked box from the frame; 0 is flush.
+    width : float or None
+        Box width; sized to content when ``None``.
+    font_size : float
+        Type size.
 
-    ``rows`` entries are either a plain ``str`` (one left-aligned line)
-    or a tuple/list of cell strings that align into columns (first
-    column left, the rest following at shared column stops), enough to
-    lay out an equipment schedule (``("T-301", "Beer Column")``) or a
-    legend (``("SS", "316L")``) without a full table.
+    Raises
+    ------
+    ValueError
+        If ``align`` is not a docking position.
     """
     title: str = ""
     rows: list = field(default_factory=list)
@@ -332,17 +357,40 @@ class Annotation:
     font_size: float = 11.0
 
     def __post_init__(self):
+        """Check the alignment."""
         self.align = _resolve_align(self.align, "top-right")
 
 
 @dataclass
 class TableBox:
-    """A bordered table (title, header row, body rows) placed on the
-    sheet. Cells are stringified as-is; ``col_align`` is per-column
-    ``"l"``/``"c"``/``"r"`` (defaults to centered).
+    """Bordered table with a title, header row and body rows.
 
-    Placement (``align`` / ``position`` / ``margin``) works exactly as
-    for :class:`Annotation`.
+    Cells are drawn with ``str``. Placement works as for
+    :class:`Annotation`.
+
+    Attributes
+    ----------
+    title : str
+        Table title.
+    headers : list[str]
+        Header cells.
+    rows : list[list]
+        Body rows.
+    align : str
+        Docking position; default ``"bottom-right"``.
+    position : tuple[float, float] or None
+        Top-left corner; overrides ``align``.
+    margin : float
+        Inset of a docked box from the frame.
+    font_size : float
+        Type size.
+    col_align : list[str] or None
+        ``"l"``, ``"c"`` or ``"r"`` per column; centred when ``None``.
+
+    Raises
+    ------
+    ValueError
+        If ``align`` or a ``col_align`` entry is invalid.
     """
     title: str = ""
     headers: list[str] = field(default_factory=list)
@@ -354,179 +402,90 @@ class TableBox:
     col_align: list[str] | None = None
 
     def __post_init__(self):
+        """Check the alignment and column alignments."""
         self.align = _resolve_align(self.align, "bottom-right")
         self.col_align = _resolve_col_align(self.col_align)
 
 
 @dataclass
 class StreamTableOptions:
-    """How the stream property table is drawn, on the sheet that draws
-    it: ``fs.stream_table``.
+    """Stream property table options for one sheet: ``fs.stream_table``.
 
-    Every flowsheet has one, so nothing is imported and nothing is
-    constructed to use it::
+    Every flowsheet has one::
 
         fs.stream_table.font_size = 8.0
         fs.stream_table.column_width = "auto"
 
-    **An object rather than an attribute apiece, on purpose.**
-    ``render()`` already carries nine keywords and three of the four
-    output calls restate every one of them, so a table option spelled
-    there costs four signatures; and a table option means nothing to
-    ``to_drawio()`` differently from ``to_svg()``, because it describes
-    the sheet rather than the file. Settling it on the flowsheet says it
-    once for every way the sheet comes out. A bare
-    ``fs.stream_table_font_size`` would have done as much for the first
-    option and nothing for the two that followed it a release later:
-    each such attribute adds a prefix-string to ``Flowsheet``'s
-    namespace, a line to its ``__init__``, a key to the spec's top level
-    and a paragraph to the docs, and nothing groups them. One object
-    costs none of that, an option is a field rather than a fifth
-    signature change, and validation of the group has somewhere to live.
+    The options describe the sheet, not the output file, so they live on
+    the flowsheet rather than as keywords on every render call.
+    :attr:`font_size` scales both width floors, so a smaller table keeps
+    its proportions. The last two fields are read only by a render with
+    ``show_stream_table="sheet"``, whose title block is derived by
+    :func:`table_sheet_block`. Section headings are content, so they are
+    :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections`, not an
+    option.
 
-    The three sizing fields compose. :attr:`font_size` scales both width
-    floors, since both are stated at the type size they were chosen
-    against; so a table sized down keeps its proportions, and a table
-    sized down *and* ``"auto"``-ruled has no floor left to scale.
-
-    The last two say who the table's own sheet is, and are read only by
-    a render that asks for one (``show_stream_table="sheet"``). They are
-    here rather than on :class:`TitleBlock` because a flowsheet has one
-    title block and that one is the *diagram's*: the table sheet's is
-    derived from it (:func:`table_sheet_block`), and what a derivation
-    needs is the two fields it cannot work out for itself.
-
-    :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections` is *not*
-    here, deliberately. It is content and not a setting -- the heading
-    text drawn in the table, authored per sheet exactly as
-    ``title_block`` and ``annotations`` are -- and it is a flowsheet
-    attribute for the reason those two are.
+    Attributes
+    ----------
+    font_size : float or None
+        Type size in drawing units, or ``None`` to choose from the column
+        count (10.5 up to 18 columns, smaller beyond). Row height and
+        minimum column widths scale with it, so a stated size also shrinks
+        the ruling.
+    label_width : float or "auto"
+        Minimum width of the row-label column; ``"auto"`` rules it at its
+        content. A long label still widens the column past this floor.
+    column_width : float or "auto"
+        Minimum width of every stream column. All stream columns share one
+        width, measured over every name and value, so ``"auto"`` is
+        content-ruled: one long value widens every column.
+    sheet_subtitle : str
+        Subtitle of the table's own sheet; the diagram's title stays above
+        it.
+    sheet_drawing_number : str
+        Drawing number of the table's own sheet. Blank derives the
+        diagram's number plus :data:`TABLE_SHEET_SUFFIX`; the diagram's own
+        number is refused. With both blank, the table sheet is unnumbered
+        and reported as :data:`~pandid.render.svg.TABLE_SHEET_UNNUMBERED`.
     """
 
-    #: Type size for the whole table, in drawing units, or ``None`` to
-    #: let the table pick one from how many columns it has (10.5 up to
-    #: 18 columns, shrinking from there). What is set here **rules the
-    #: table and not only its lettering**: the row height and the
-    #: minimum column widths follow it in proportion, so a table that
-    #: overruns its page has a remedy short of a bigger page.
-    #:
-    #: The two regimes part company only above 18 columns, where the
-    #: automatic size is chosen to keep long values inside a column
-    #: already at its minimum width and so leaves that minimum alone. A
-    #: size stated here is the author overruling that judgement for a
-    #: sheet that has to fit a given page, and it would do nothing at
-    #: all if it did not reach the ruling as well as the glyphs.
     font_size: float | None = None
-
-    #: Narrowest the row-label column -- the leftmost one, carrying the
-    #: corner heading and every property name -- is ruled: a number of
-    #: drawing units, or ``"auto"`` to rule it at its own content.
-    #:
-    #: A number is a **floor and not a width.** The column is measured
-    #: from what goes in it and only held *up* to this, so a long
-    #: property name widens it past whatever is stated here rather than
-    #: running into the cell beside it. Stating a bigger number is
-    #: therefore the way to buy a wide label column; stating a smaller
-    #: one, or ``"auto"``, is the way to stop paying for one.
-    #:
-    #: The default keeps a table of short property names from being
-    #: ruled too narrow to read across. It is worth nothing on a sheet
-    #: whose row labels are ``Total Flow (kg/h)`` and everything on a
-    #: sheet whose rows are ``pH`` -- which is why it is a default and
-    #: not a rule.
     label_width: float | Literal["auto"] = 122.0
-
-    #: Narrowest **every** stream column is ruled: a number of drawing
-    #: units, or ``"auto"`` to rule them at their content.
-    #:
-    #: The stream columns are one width, always. A stream table is read
-    #: down for one stream and across for one property, and columns that
-    #: did not line up would be a worse drawing than a wide one; so the
-    #: width is measured once, over every stream name *and* every value
-    #: in the table, and every column is ruled at it.
-    #:
-    #: That is what makes ``"auto"`` **content-ruled rather than
-    #: fitted**, and the difference matters: one ``1013.25 mbara`` among
-    #: three-figure values rules all fifty-five columns at it. ``"auto"``
-    #: never comes out wider than the floor it drops -- it is the same
-    #: measurement without the clamp -- but it is not always narrow, and
-    #: a table that gains nothing from it is a table whose widest cell
-    #: was already doing the ruling.
     column_width: float | Literal["auto"] = 52.0
-
-    #: What the table's own sheet is called, drawn in the strip's
-    #: **subtitle** cell. The title cell above it keeps the diagram's
-    #: title, which is what tells a reader the two sheets are one
-    #: drawing set: ``Ethanol Purification A300`` over ``Stream Table``,
-    #: where the diagram reads ``Ethanol Purification A300`` over
-    #: ``Process Flow Diagram 1``.
-    #:
-    #: Read only by a render that puts the table on its own sheet
-    #: (``show_stream_table="sheet"``); a table docked at the foot of a
-    #: diagram has no title block of its own.
     sheet_subtitle: str = "Stream Table"
-
-    #: The drawing number the table's own sheet carries. Blank derives
-    #: one: the diagram's number with :data:`TABLE_SHEET_SUFFIX` after
-    #: it, so ``PFD-301`` numbers its table sheet ``PFD-301-ST``.
-    #:
-    #: **Derived, because two drawings cannot share one number**, and
-    #: stated here when the drawing office's own numbering says
-    #: otherwise -- a set that files the table as the next sheet in the
-    #: series types ``fs.stream_table.sheet_drawing_number = "PFD-303"``.
-    #: A suffix can be derived from what the flowsheet already carries
-    #: and the next free number in a series cannot: nothing here knows
-    #: what else that series has issued.
-    #:
-    #: Stating the **diagram's own** number here raises: that is the
-    #: collision the derivation exists to prevent, and a derivation
-    #: guarantees uniqueness only while nobody overrules it. Leaving
-    #: both this and the diagram's number blank draws the table sheet
-    #: unnumbered and reports it
-    #: (:data:`~pandid.render.svg.TABLE_SHEET_UNNUMBERED`); a number
-    #: invented from the flowsheet's name would be worse than the blank,
-    #: because it would look issued.
     sheet_drawing_number: str = ""
 
 
-#: What a derived table-sheet drawing number puts after the diagram's.
+#: Suffix added to the diagram's number for a derived table-sheet number.
 TABLE_SHEET_SUFFIX = "-ST"
 
 
 def table_sheet_block(block: "TitleBlock | None",
                       options: StreamTableOptions) -> TitleBlock:
-    """The title block the stream table's own sheet carries.
+    """Return the title block for the stream table's own sheet.
 
-    The diagram's, with two cells changed. Everything else is copied
-    across unread -- company, client, project, status, revisions, the
-    date, the initials -- because the table sheet is a sheet of the same
-    issue by the same office on the same day, and a table sheet that
-    named a different client would be a different document.
+    A copy of the diagram's block with the subtitle and drawing number
+    changed; the table sheet belongs to the same issue. The revision list
+    is shared, not copied. A flowsheet with no title block gets one
+    carrying only the subtitle.
 
-    The two that change are the two that say *which drawing this is*:
-    the subtitle, which is what the sheet is called
-    (:attr:`~StreamTableOptions.sheet_subtitle`), and the drawing
-    number, which cannot be the diagram's
-    (:attr:`~StreamTableOptions.sheet_drawing_number`).
+    Parameters
+    ----------
+    block : TitleBlock or None
+        Diagram's title block.
+    options : StreamTableOptions
+        Table options giving the subtitle and number.
 
-    A flowsheet with no title block at all still gets one here: a table
-    sheet is a drawing in its own right and a drawing without a title
-    block is a table on blank paper. It comes out carrying the subtitle
-    and nothing else, which is what there is to say.
+    Returns
+    -------
+    TitleBlock
+        Table sheet's title block.
 
-    The revision *list* is the diagram's own object rather than a copy
-    of it. Both sheets are issued at the same revision, and this block
-    is derived afresh on every render, so a copy would be a second list
-    to keep in step for no gain.
-
-    Raises :class:`ValueError` if the number stated for the table sheet
-    is the diagram's own. **A derivation cannot promise uniqueness on
-    its own**: the suffix guarantees it only while nobody overrules the
-    suffix, and ``sheet_drawing_number = "PFD-301"`` on a ``PFD-301``
-    diagram is two documents filed under one number -- the failure the
-    derivation exists to prevent, typed in by hand. It is refused rather
-    than warned about because the author stated it outright and there is
-    no reading of it that produces a filable set.
+    Raises
+    ------
+    ValueError
+        If ``options.sheet_drawing_number`` is the diagram's own number,
+        which would file two documents under one number.
     """
     diagram = TitleBlock() if block is None else block
     number = diagram.drawing_number
@@ -548,50 +507,32 @@ def table_sheet_block(block: "TitleBlock | None",
 
 
 def _same_number(a: str, b: str) -> bool:
-    """Are these one drawing number said twice?
+    """Return whether two drawing numbers are the same.
 
-    Surrounding space is stripped and the rest is **case-folded**,
-    because a drawing register does not file ``PFD-301`` and
-    ``pfd-301 `` as two drawings and neither does the person looking for
-    one. Two numbers that differ only that way are the collision this is
-    looking for, not an escape from it.
+    Outer whitespace is stripped and case folded with ``str.casefold``,
+    which also folds compatibility forms (``ß`` equals ``ss``). Interior
+    spaces, punctuation and zero-width characters stay significant.
 
-    ``str.casefold`` is aggressive by design and does more than lower the
-    case: it also folds the compatibility forms, so the ``ﬃ`` ligature
-    equals ``ffi`` and ``ß`` equals ``ss``. That is stated because it is
-    more than "case", and it is *kept* because it is the same judgement
-    one step further -- two numbers a reader could not tell apart are
-    one number, and nobody files a drawing under a ligature to
-    distinguish it from the same letters typed out.
+    Parameters
+    ----------
+    a, b : str
+        Drawing numbers.
 
-    What is deliberately **not** folded is anything that changes what a
-    reader sees: interior spaces (``PFD 301`` is not ``PFD301``), a
-    trailing full stop, or a zero-width character, all of which stay
-    distinct. Only the outer whitespace and the letter case come out.
+    Returns
+    -------
+    bool
+        Whether a register would file them as one drawing.
     """
     return a.strip().casefold() == b.strip().casefold()
 
 
-#: The shapes a stream label may be enclosed in, and ``"none"`` for the
-#: bare number on its halo. The three are what drawing offices actually
-#: rule around a stream number; there is no fourth in common use, and
-#: the set is closed rather than open for the reason
-#: :func:`_resolve_col_align` closes its own: a name outside it used to
-#: be a shape silently not drawn.
+# Stream label enclosures; "none" is the bare number on its halo.
 _ENCLOSURES = ("none", "diamond", "circle", "box")
 
 
-#: What an author reaches for instead, and what this package spells it.
-#:
-#: Named in the refusal and **not accepted**: the set stays closed, so
-#: one sheet cannot spell in ``rhombus`` what the next spells in
-#: ``diamond`` and no reader has to know both. But ``rhombus`` is the
-#: word the geometry texts use and ``oval`` the word a drawing office
-#: uses, so an author typing one of them has not made a typing mistake
-#: -- they have used the other name for the thing they want, and being
-#: handed the list without being told which of it they meant leaves
-#: them to guess. Lower-cased and stripped before the lookup, since a
-#: field taken off a form arrives that way.
+# Other names for an enclosure, suggested in the error but not accepted,
+# so every sheet spells each shape one way. Looked up stripped and
+# lower-cased.
 _ENCLOSURE_MEANT = {
     "rhombus": "diamond", "rhomb": "diamond", "lozenge": "diamond",
     "ellipse": "circle", "oval": "circle", "round": "circle",
@@ -603,16 +544,29 @@ _ENCLOSURE_MEANT = {
 
 
 def _resolve_enclosure(shape):
-    """*shape*, checked against :data:`_ENCLOSURES`.
+    """Return an enclosure name after checking it.
 
-    Called from every door into the field, because a plain attribute of
-    a closed set has more than one: :meth:`StreamLabelOptions.__post_init__`
-    for the constructor, :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`
-    for the author who assigns to it afterwards (``fs.stream_labels.enclosure
-    = "rhombus"``), :func:`~pandid.spec.to_dict` on the way out to a file
-    and :func:`~pandid.spec._read_stream_labels` on the way back in. One
-    sentence at all four, so the Python API and the file API cannot
-    disagree about what a name means.
+    Called by the constructor, by
+    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` for later
+    assignments, and by :func:`~pandid.spec.to_dict` and
+    :func:`~pandid.spec._read_stream_labels`, so the Python and file APIs
+    agree.
+
+    Parameters
+    ----------
+    shape : str
+        Enclosure name.
+
+    Returns
+    -------
+    str
+        ``shape`` unchanged.
+
+    Raises
+    ------
+    ValueError
+        If ``shape`` is not an enclosure; a known synonym is named in the
+        message.
     """
     if shape not in _ENCLOSURES:
         meant = (_ENCLOSURE_MEANT.get(shape.strip().lower())
@@ -627,75 +581,45 @@ def _resolve_enclosure(shape):
 
 @dataclass
 class StreamLabelOptions:
-    """How the stream labels -- the numbers written on the lines -- are
-    drawn, on the sheet that draws them: ``fs.stream_labels``.
+    """Stream label options for one sheet: ``fs.stream_labels``.
 
-    Every flowsheet has one, so nothing is imported and nothing is
-    constructed to use it::
+    Every flowsheet has one::
 
         fs.stream_labels.enclosure = "diamond"
 
-    A sibling of :class:`StreamTableOptions` and for its reasons: a
-    label option describes the *sheet*, so it means the same thing to
-    ``to_drawio()`` as to ``to_svg()`` and would otherwise be a tenth
-    keyword on ``render()`` restated across four output signatures.
-    The two objects are kept apart because they are two drawings -- the
-    table is the block of properties docked to the sheet, these are the
-    marks on the pipes -- and merging them would put ``enclosure``
-    beside ``column_width`` where neither can affect the other.
+    Kept apart from :class:`StreamTableOptions` because the labels and the
+    table are separate drawings.
+
+    Attributes
+    ----------
+    enclosure : {"none", "diamond", "circle", "box"}
+        Shape ruled around every stream label; ``"none"`` draws the bare
+        number on its halo.
+
+    Notes
+    -----
+    An enclosed stream number is a drafting convention (common in North
+    American practice and textbooks), not an ISO 10628 or ISO 15519 rule.
+    Every enclosure is sized to the longest label on the sheet, so all
+    match. An enclosed label stays on its run; if it does not fit, it is
+    drawn anyway and reported on ``fs.warnings`` as
+    ``enclosure-over-unit``, ``enclosure-over-line`` or
+    ``enclosure-over-label``, so spacing the sheet is the remedy. The
+    shape is an outline and its plate covers only the labelled run; where
+    the run is too short, no plate is drawn and crossing lines show
+    through the number. Long line numbers make large enclosures;
+    ``"circle"`` is the tightest but resembles an instrument balloon.
+
+    Raises
+    ------
+    ValueError
+        If ``enclosure`` is not one of the four shapes.
     """
 
-    #: The shape ruled around every stream label: ``"none"`` (the
-    #: default, the bare number on its opaque halo), ``"diamond"``,
-    #: ``"circle"`` or ``"box"``.
-    #:
-    #: **A drafting convention, not a standard.** A stream number in a
-    #: diamond is widespread in North American practice and in the
-    #: chemical-engineering textbooks, and courses and company drawing
-    #: standards ask for it; no clause of ISO 10628 or ISO 15519
-    #: prescribes a shape around a stream number, which is why this is
-    #: an option the author selects and why the default leaves the sheet
-    #: as it was.
-    #:
-    #: **One size for the whole sheet.** The enclosure is measured once,
-    #: over the longest label on it, and every enclosure is ruled at
-    #: that size -- so ``1`` and ``1000`` get the same diamond. Sizing
-    #: each to its own text is the alternative, and it draws a row of
-    #: visibly different diamonds down one sheet, which reads as a
-    #: mistake rather than as information. Same answer, and the same
-    #: argument, as the stream table's columns.
-    #:
-    #: **An enclosed label never leaves its run.** A bare number that
-    #: cannot fit on its line is written beside it, or out on a leader;
-    #: a shape is not, because the run passing through it *is* the
-    #: convention and one drawn off the line has no reading at all.
-    #: A shape too big for the paper beside its run is drawn there
-    #: anyway, crossing whatever is under it -- so **spacing the sheet
-    #: is the author's lever**, and every crossing is named on
-    #: ``fs.warnings`` after a render (``enclosure-over-unit``,
-    #: ``enclosure-over-line``, ``enclosure-over-label``) rather than
-    #: left to be found by eye.
-    #:
-    #: **Nothing is hidden by any of it.** The shape is ruled as an
-    #: outline, and the plate under the words is laid down only where
-    #: it covers the run being labelled and nothing else; where the run
-    #: is too short to hold it clear anywhere along it, no plate is laid
-    #: and the number is written straight onto the sheet with the
-    #: crossing run drawn through it. Nine of the 286 labels on the
-    #: shipped corpus are drawn that way. A number read across a run is
-    #: harder to read; a run with a piece taken out of it is not there,
-    #: and ``validate()`` cannot see it because the topology is
-    #: untouched.
-    #:
-    #: A sheet lettered with full line numbers pays for the longest of
-    #: them at every label -- ``AE-304-150-80-SS`` rules a diamond over
-    #: 200 units wide -- which is the case the convention fits worst.
-    #: ``"circle"`` is much the tightest of the three on a long label,
-    #: at the cost of reading like an instrument balloon on a sheet
-    #: that carries instruments.
     enclosure: Literal["none", "diamond", "circle", "box"] = "none"
 
     def __post_init__(self):
+        """Check the enclosure."""
         self.enclosure = _resolve_enclosure(self.enclosure)
 
 
@@ -703,18 +627,11 @@ class StreamLabelOptions:
 # Convenience constructors for the common boxes
 # --------------------------------------------------------------
 
-# The kinds an equipment list schedules: major plant, the items that
-# carry a tag on the sheet *and* a datasheet, a foundation and a
-# purchase order behind it. Nothing else is scheduled:
-#
-# * bulk items (valves, fittings, reducers, tees, vents, funnels) are
-#   bought by the line and specified by the piping class;
-# * a mixer or splitter is a branch in the piping drawn as a triangle,
-#   so scheduling one puts plant on the sheet that does not exist;
-# * sheet boundaries and instruments are not equipment at all.
-#
-# A separate valve or instrument schedule is a real drawing, so
-# ``include=`` names its rows explicitly and this rule stands aside.
+# Kinds an equipment list schedules by default: major plant with a tag,
+# datasheet and purchase order. Excluded: bulk piping items (valves,
+# fittings, reducers, tees, vents, funnels), mixers and splitters (piping
+# branches), boundaries and instruments. ``include=`` overrides this for a
+# valve or instrument schedule.
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "column", "compressor", "conveyor", "cooler",
     "cooling_tower", "crusher", "dryer", "ejector", "elevator", "evaporator",
@@ -722,22 +639,12 @@ _MAJOR_EQUIPMENT = frozenset({
     "mill", "pump", "reactor", "screening_device", "separator", "stack", "tank",
     "thickener", "turbine", "vessel",
 })
-# ``boiler``, ``stack`` and ``flare`` are here and ``vent``/``funnel`` are
-# not, for the reason ``Stack``'s own docstring gives: those two are
-# bulk piping, bought by the line, and these three are ISO 10628-2's
-# own group-4 equipment -- a stack or a flare stack has a foundation and
-# a datasheet the way a furnace does, not a piping-class entry the way a
-# vent cap does.
-# ``block`` is absent: a block flow diagram's box stands for a whole
-# section of plant, whose equipment list is a document of its own, so
-# scheduling one would say that "Reaction" is a thing somebody
-# purchases. ``include=`` still takes a block by name, for the author
-# who wants a block *index* rather than an equipment list.
+# Boilers, stacks and flares are ISO 10628-2 group-4 equipment with a
+# foundation and datasheet, unlike a vent cap. A block is absent because
+# it stands for a whole plant section; include= still accepts one.
 
-# What each kind is called in words. ``kind`` is a lookup key, so a
-# schedule that falls back to it reads ``('E-101', 'Hex')``, the source
-# code quoted at the reader in place of the equipment description an
-# engineer would write.
+# Kind -> description for an equipment list, so a row does not show the
+# lookup key (``Hex``).
 _KIND_LABELS = {
     "block": "Process Block",
     "blower": "Blower",
@@ -788,10 +695,17 @@ _KIND_LABELS = {
 
 
 def _describe(unit):
-    """The words an equipment list puts against a tag.
+    """Return the equipment-list description for a unit.
 
-    The unit's own ``description`` when it has one, otherwise what its
-    kind is called (see :data:`_KIND_LABELS`).
+    Parameters
+    ----------
+    unit : Unit
+        Unit to describe.
+
+    Returns
+    -------
+    str
+        The unit's ``description``, else its kind's name.
     """
     return (getattr(unit, "description", "")
             or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
@@ -801,26 +715,39 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
                    position=None, margin=0.0, include=None, width=None):
     """Build an :class:`Annotation` scheduling the major equipment.
 
-    Each row is ``(tag, description)``; the description is the unit's
-    ``description``, or what its kind is called when it has none. Only
-    major equipment is scheduled (see :data:`_MAJOR_EQUIPMENT`).
+    Each row is ``(tag, description)``, using the unit's ``description``
+    or its kind's name. By default only major equipment is listed
+    (:data:`_MAJOR_EQUIPMENT`); ``include`` lists any named units instead,
+    in the order given, for a valve or instrument schedule.
 
-    ``include`` names the rows explicitly instead, in the order given,
-    and takes whatever it names. That is how a valve or instrument
-    schedule, a real drawing in its own right, gets built from the same
-    flowsheet.
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet to schedule.
+    title : str, default="EQUIPMENT LIST"
+        Box title.
+    align : str, default="top-right"
+        Docking position; see :class:`Annotation`.
+    position : tuple[float, float], optional
+        Top-left corner; overrides ``align``.
+    margin : float, default=0.0
+        Inset from the frame.
+    include : Sequence[str], optional
+        Tags to list, in order.
+    width : float, optional
+        Box width.
 
-    ``align`` / ``position`` / ``margin`` place the box (see
-    :class:`Annotation`).
+    Returns
+    -------
+    Annotation
+        Equipment list.
 
-    Raises :class:`ValueError` if ``include`` names a tag the flowsheet
-    does not have. Naming a row is an assertion that it exists, and a
-    schedule silently one line short is a schedule an author reads as
-    complete -- ``include=["P-101", "P-1O2"]``, letter O for zero, drew
-    one row and said nothing. It is refused rather than warned about
-    because the check is exact and immediate: this function has the
-    flowsheet in hand, and ``fs.warnings`` describes a *render*, which
-    has not happened yet and will clear the list when it does.
+    Raises
+    ------
+    ValueError
+        If ``include`` names a tag not on the flowsheet; the message
+        suggests a close match. Raised rather than warned because a
+        schedule one row short reads as complete.
     """
     if include is None:
         chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
@@ -848,7 +775,31 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
 
 def notes(items, *, title="NOTES", align="top-right", position=None,
           margin=0.0, numbered=True, width=None):
-    """Build a numbered (or bullet) notes :class:`Annotation`."""
+    """Build a notes :class:`Annotation`.
+
+    Parameters
+    ----------
+    items : Iterable[str]
+        Note texts.
+    title : str, default="NOTES"
+        Box title.
+    align : str, default="top-right"
+        Docking position; see :class:`Annotation`.
+    position : tuple[float, float], optional
+        Top-left corner; overrides ``align``.
+    margin : float, default=0.0
+        Inset from the frame.
+    numbered : bool, default=True
+        Number the notes ``1.``, ``2.``, ...; otherwise one plain line
+        each.
+    width : float, optional
+        Box width.
+
+    Returns
+    -------
+    Annotation
+        Notes box.
+    """
     rows = []
     for i, text in enumerate(items, start=1):
         rows.append((f"{i}.", text) if numbered else text)
@@ -858,8 +809,28 @@ def notes(items, *, title="NOTES", align="top-right", position=None,
 
 def legend(entries, *, title="LEGEND", align="top-left",
            position=None, margin=0.0, width=None):
-    """Build a legend :class:`Annotation` from ``(abbr, meaning)``
-    pairs (a dict is accepted and keeps insertion order)."""
+    """Build a legend :class:`Annotation` from abbreviation pairs.
+
+    Parameters
+    ----------
+    entries : Iterable[tuple[str, str]] or dict[str, str]
+        ``(abbreviation, meaning)`` pairs; a dict keeps insertion order.
+    title : str, default="LEGEND"
+        Box title.
+    align : str, default="top-left"
+        Docking position; see :class:`Annotation`.
+    position : tuple[float, float], optional
+        Top-left corner; overrides ``align``.
+    margin : float, default=0.0
+        Inset from the frame.
+    width : float, optional
+        Box width.
+
+    Returns
+    -------
+    Annotation
+        Legend box.
+    """
     if isinstance(entries, dict):
         entries = list(entries.items())
     return Annotation(title=title, rows=[tuple(e) for e in entries],
