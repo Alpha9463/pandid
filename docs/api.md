@@ -32,12 +32,12 @@ format strings or callables.
 |---|---|
 | `add(unit)` | Register and return a `Unit`. Tags must be unique, apart from repeatable logic symbols and utility headers. |
 | `connect(source, dest, **options)` | Join ports and return a `Stream`. Process connections go from outlet to inlet. |
-| `place_on(stream, device, at=0.5)` | Put an inline device on an existing material stream. |
-| `place_valve_station_on(stream, tag, at=0.5, **options)` | Put a complete `ValveStation` on a stream. |
+| `place_on(stream, device, *, at=0.5)` | Put an inline device on an existing material stream. |
+| `place_valve_station_on(stream, tag, *, at=0.5, **options)` | Put a complete `ValveStation` on a stream. |
 | `layout()` / `route()` | Resolve equipment coordinates and stream paths. `render()` calls both. |
 | `render(path, **options)` | Write SVG, draw.io, PDF or PNG according to the extension. |
 | `to_svg(**options)` / `show(**options)` | Return SVG text or open a browser preview. |
-| `validate(diagram=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
+| `validate(*, diagram=None)` | Return `list[Issue]`; errors and warnings have a severity, code and message. |
 | `to_dict()` / `from_dict(spec)` | Serialize intent or build an equivalent sheet. |
 | `from_json(path)` / `from_yaml(path)` | Read a spec file; YAML needs `pandid[yaml]`. |
 
@@ -61,13 +61,14 @@ also carries `title_block`, `annotations`, `stream_table`, `stream_labels` and
 | Option | Values | Effect |
 |---|---|---|
 | `diagram` | `"pfd"` (default), `"p&id"`, `"bfd"` | Drawing conventions and validation context. |
-| `show_stream_table` | `False`, `True`, `"sheet"` | Omit the table, draw it on the sheet, or give it its own sheet. |
-| `border` / `page_size` | `"zone"` / ISO A-series size | Add a zone border or set the physical sheet size. |
-| `connections` | connection style | Default joint style for streams; a stream's `ends` overrides it. |
-| `jump_direction` | `"vertical"`, `"horizontal"` | Which crossing line carries the jump. |
-| `crossing_style` | `"gap"`, `"arc"`, `"plain"` | Crossing mark. |
-| `debug` | `False`, `True`, or grid spacing | Draw the coordinate overlay. |
-| `check` | `True`, `False` | Raise on validation errors during rendering when true. |
+| `show_stream_table` | `False` (default), `True`, `"sheet"` | Omit the table, draw it on the sheet, or give it its own sheet. |
+| `border` | `"none"` (default), `"zone"` | Add a zone border. |
+| `page_size` | `None` (default), `"A4"` to `"A0"` | Fit the sheet to the drawing, or set the physical sheet size. |
+| `connections` | `"none"` (default), `"flanged"`, `"flanged-at-nozzles"` | Default joint style for streams; a stream's `ends` overrides it. |
+| `jump_direction` | `"vertical"` (default), `"horizontal"` | Which crossing line carries the mark. |
+| `crossing_style` | `"gap"` (default), `"arc"`, `"plain"` | Crossing mark. |
+| `debug` | `False` (default), `True`, or grid spacing | Draw the coordinate overlay. |
+| `check` | `True` (default), `False` | Raise on validation errors during rendering when true. |
 
 PDF and PNG require `pandid[pdf]`. `.drawio` writes an editable diagrams.net
 file. SVG output has no optional dependencies.
