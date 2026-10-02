@@ -153,3 +153,81 @@ def test_a_decimal_geometry_value_is_refused_on_reading():
     data["units"][1]["width"] = Decimal(70)
     with pytest.raises(SpecError, match="width must be a number"):
         Flowsheet.from_dict(data)
+
+
+def _flagged() -> tuple[Flowsheet, Any, Any]:
+    """Return a two-flag sheet with a tabulated stream.
+
+    Returns
+    -------
+    tuple
+        The sheet, its feed and its stream.
+    """
+    fs = Flowsheet("flags")
+    feed = fs.add(U.Feed("F"))
+    run = fs.connect(feed.outlet, fs.add(U.Product("PR")).inlet)
+    run.properties = {"Flow (kg/h)": 1}
+    return fs, feed, run
+
+
+@pytest.mark.parametrize("name, value", [("color", True), ("dasharray", 4)])
+def test_a_stream_style_must_be_text(name, value):
+    """Check that a non-text colour or dash pattern is refused, not drawn wrongly."""
+    _fs, _feed, run = _flagged()
+    with pytest.raises(TypeError, match=f"{name}=.* must be text"):
+        setattr(run, name, value)
+
+
+def test_a_numeric_flag_reference_is_drawn_as_text():
+    """Check that reference=100 draws "100" in both backends instead of crashing."""
+    fs, feed, _run = _flagged()
+    feed.reference = 100
+    assert ">100<" in fs.to_svg()
+    assert "100" in fs.to_drawio()
+
+
+@pytest.mark.parametrize("name", ["sheet_drawing_number", "sheet_subtitle"])
+def test_a_numeric_table_sheet_field_is_drawn_as_text(name):
+    """Check that a numeric table-sheet number or subtitle draws as text."""
+    fs, _feed, _run = _flagged()
+    setattr(fs.stream_table, name, 100)
+    assert "100" in fs.to_svg(show_stream_table="sheet")
+    assert "100" in fs.to_drawio(show_stream_table="sheet")
+
+
+DOORS = {
+    "Unit(width=)": lambda v: U.Pump("P-1", width=v),
+    "unit.height =": lambda v: setattr(U.Pump("P-1"), "height", v),
+    "block.width =": lambda v: setattr(U.Block("B", inputs=1), "width", v),
+    "pin(x=)": lambda v: U.Pump("P-1").pin(x=v),
+    "via()": lambda v: _flagged()[2].via([(v, 0)]),
+    "Annotation(margin=)": lambda v: Annotation(rows=["a"], margin=v),
+    "annotation.position =": lambda v: setattr(Annotation(rows=["a"]), "position", (v, 0)),
+    "TableBox(font_size=)": lambda v: TableBox(rows=[["a"]], font_size=v),
+}
+
+
+@pytest.mark.parametrize("door", DOORS, ids=list(DOORS))
+def test_a_decimal_is_refused_where_layout_computes_with_it(door):
+    """Check that a Decimal geometry value is refused at once, naming the fix."""
+    with pytest.raises(TypeError, match=r"must be a number.*float\(value\)"):
+        DOORS[door](Decimal(10))
+
+
+@pytest.mark.parametrize("door", DOORS, ids=list(DOORS))
+def test_a_real_number_is_still_accepted_where_layout_computes_with_it(door):
+    """Check that the same doors still take an int, a float and a Fraction."""
+    for value in (10, 10.5, Fraction(10)):
+        DOORS[door](value)
+
+
+def test_a_grid_rank_must_be_a_whole_number():
+    """Check that pin col and row refuse a float or bool and take any integer."""
+    pump = U.Pump("P-1")
+    refused: tuple[Any, ...] = (1.0, True)
+    for value in refused:
+        with pytest.raises(TypeError, match="whole number"):
+            pump.pin(col=value)
+    pump.pin(col=2, row=3)
+    pin = pump.pin_
+    assert pin is not None and (pin.col, pin.row) == (2, 3)

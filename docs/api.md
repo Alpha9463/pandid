@@ -26,7 +26,10 @@ line_numbering_scheme="{size}-{service}-{sequence}-{spec}",
 line_number_start=1001, loop_number_start=101,
 valve_station_tag_scheme="{letters}-{number}{suffix}", auto_faces=True)`
 sets numbering and automatic port-face selection. Numbering schemes can be
-format strings or callables.
+format strings or callables. The three number starts are integers; a float,
+even `1.0`, raises `TypeError`. Sizes, `pin()` coordinates and `via()`
+waypoints take any real number (`int`, `float` or numpy); a `Decimal` raises
+`TypeError`.
 
 | Method | Purpose |
 |---|---|

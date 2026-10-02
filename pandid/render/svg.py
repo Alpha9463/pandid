@@ -1811,7 +1811,9 @@ def boundary_flag(u, frame) -> Pennant:
     Pennant
         Flag geometry.
     """
-    inset = _FLAG_INSET_REF if (getattr(u, "reference", "") or "") else _FLAG_INSET
+    from pandid.portgeom import _flag_reference
+
+    inset = _FLAG_INSET_REF if _flag_reference(u) else _FLAG_INSET
     if u.kind == "feed" and not frame.mirrored:
         x0, x1 = frame.x + 50 - frame.w, frame.x + 50
     else:
@@ -3433,7 +3435,10 @@ def _table_sheet_title(fs: "Flowsheet", options) -> str:
     str
         Title parts joined with ``" - "``.
     """
-    parts = [p for p in (_sheet_title(fs), options.sheet_subtitle) if p]
+    from pandid.document import _drawn_text
+
+    # The subtitle is drawn text, so a number such as 100 reads "100".
+    parts = [p for p in (_sheet_title(fs), _drawn_text(options.sheet_subtitle)) if p]
     return " - ".join(parts)
 
 
@@ -4454,7 +4459,9 @@ class SvgRenderer:
         list[str]
             SVG lines.
         """
-        ref = getattr(u, "reference", "") or ""
+        from pandid.portgeom import _flag_reference
+
+        ref = _flag_reference(u)
         # Pennant geometry is shared with draw.io (:func:`boundary_flag`).
         # Centre on the pennant's own top and bottom, so a taller flag
         # keeps its point and lettering in the middle of its ink.

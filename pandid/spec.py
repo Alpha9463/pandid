@@ -74,7 +74,6 @@ entries.
 from __future__ import annotations
 
 import json
-import numbers
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import fields as dataclass_fields
@@ -85,6 +84,7 @@ from typing import Any, Literal, cast
 from math import isfinite
 
 from pandid import devices as device_types
+from pandid._checks import is_real as _is_real, is_whole as _is_integral
 from pandid import units as unit_types
 from pandid.components import Component
 from pandid.document import (
@@ -256,49 +256,12 @@ def _text(value: Any, where: str) -> str:
     return value
 
 
-def _is_real(value: Any) -> bool:
-    """Return whether a value is a real number the geometry can use.
-
-    Any ``numbers.Real`` counts, so numpy scalars and ``Fraction`` are
-    accepted as the Python API accepts them. ``bool`` is excluded, and so
-    is ``Decimal``, which is not a ``numbers.Real`` and cannot be mixed with
-    the floats layout computes.
-
-    Parameters
-    ----------
-    value : Any
-        Value to check.
-
-    Returns
-    -------
-    bool
-        Whether it is a non-bool real number.
-    """
-    return isinstance(value, numbers.Real) and not isinstance(value, bool)
-
-
-def _is_integral(value: Any) -> bool:
-    """Return whether a value is a whole number of any integer type.
-
-    Parameters
-    ----------
-    value : Any
-        Value to check.
-
-    Returns
-    -------
-    bool
-        Whether it is a non-bool ``numbers.Integral``, such as ``int`` or
-        ``numpy.int64``.
-    """
-    return isinstance(value, numbers.Integral) and not isinstance(value, bool)
-
-
 def _shown(value: Any) -> bool:
     """Return whether a value is text or a number that is only displayed.
 
     Line-number components and stream properties are drawn, not computed
-    with, so ``Decimal`` is accepted there as well as any real number.
+    with, so ``Decimal`` is accepted there as well as any real number
+    (:func:`pandid._checks.is_real`).
 
     Parameters
     ----------
@@ -317,7 +280,8 @@ def _number(value: Any, where: str) -> float:
     """Check that a value is a real number, returned unchanged.
 
     It is not coerced to float, because ``120`` and ``120.0`` are written
-    differently in the SVG. See :func:`_is_real` for what counts.
+    differently in the SVG. See :func:`pandid._checks.is_real` for what
+    counts.
 
     Parameters
     ----------

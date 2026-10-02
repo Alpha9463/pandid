@@ -18,6 +18,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from pandid._checks import check_real
 from pandid.geometry import Route
 
 if TYPE_CHECKING:
@@ -217,12 +218,21 @@ class Stream:
 
         Raises
         ------
+        TypeError
+            If ``color`` or ``dasharray`` is not text or ``None``.
         ValueError
             If a checked field receives an invalid value.
         """
         check = self._CHECKED.get(name)
         if check is not None and value is not None:
-            check(str(value), self)
+            # Both are written into SVG and draw.io styles as text; a bool or
+            # number passes the shape check as str() but breaks the renderers.
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"{_names(self)}{name}={value!r} must be text, such as "
+                    f"{'black' if name == 'color' else '4,2'!r}"
+                )
+            check(value, self)
         object.__setattr__(self, name, value)
 
     @property
@@ -303,9 +313,14 @@ class Stream:
 
         Raises
         ------
+        TypeError
+            If a coordinate is not a number.
         ValueError
             If this stream is the handle of a split logical run.
         """
+        for i, point in enumerate(waypoints):
+            for axis, value in zip("xy", point):
+                check_real(value, f"{_names(self)}via waypoint {i} {axis}")
         if self._logical_segments:
             raise ValueError("via() on a split run is ambiguous; route a physical segment instead")
         if self.route is None:
