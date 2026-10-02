@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title other than `""`, such as `0` or `None`, is written as stated, so
   `from_dict()` refuses it with a `SpecError` instead of silently redrawing
   the box without it.
+- **The spec reader accepts numpy numbers (#536).** Every numeric field reads
+  any `numbers.Real`, and every whole-number field any `numbers.Integral`, so
+  a value such as `numpy.int64` from pandas round-trips instead of being
+  refused. Values are kept as given. `Decimal` is accepted where it is only
+  displayed (line-number components and stream properties) and still refused
+  for geometry, which cannot be computed with it.
 
 ## [0.1.5] - 2026-08-26
 
