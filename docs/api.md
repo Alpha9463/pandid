@@ -29,7 +29,10 @@ sets numbering and automatic port-face selection. Numbering schemes can be
 format strings or callables. The three number starts are integers; a float,
 even `1.0`, raises `TypeError`. Sizes, `pin()` coordinates and `via()`
 waypoints take any real number (`int`, `float` or numpy); a `Decimal` raises
-`TypeError`.
+`TypeError`. Loop and instrument numbers are integers or text; a float raises
+`TypeError`. Drawn text such as a description, reference or table cell may be
+given as a number; it is drawn as text and round-trips through a spec;
+names and settings must be text.
 
 | Method | Purpose |
 |---|---|
