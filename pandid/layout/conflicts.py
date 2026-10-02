@@ -10,12 +10,18 @@ from pandid.route_geometry import stream_polyline
 from pandid.routing.metrics import crossing_pairs
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from pandid.flowsheet import Flowsheet
 
 
+# Tolerances in drawing units: how far a box or segment may reach into a
+# body before it counts, how far off an axis a segment may be and still be
+# orthogonal, and how close two points are to be the same point.
 _BODY_TOL = 1.0
 _SQUARE_TOL = 0.5
 _POINT_TOL = 0.05
+# Outward unit step for each face, with y increasing down the sheet.
 _DIRECTION = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}
 
 
@@ -144,6 +150,7 @@ def _exit_conflicts(
     index_by_id: dict[int, int],
     at_source: bool,
     points: list[tuple[float, float]],
+    hosts: Sequence[object],
 ) -> set[Conflict]:
     """Name a detached, inward, or obstructed automatic nozzle exit.
 
@@ -161,6 +168,8 @@ def _exit_conflicts(
         Whether to inspect the source rather than the destination.
     points : list[tuple[float, float]]
         Final route waypoints.
+    hosts : Sequence[object]
+        Each unit's ``host`` (``None`` when it has none), by global index.
 
     Returns
     -------
@@ -186,7 +195,7 @@ def _exit_conflicts(
     for blocker_index, box in boxes:
         if blocker_index == owner_index or fs.units[blocker_index] is other:
             continue
-        if getattr(fs.units[blocker_index], "host", None) is stream:
+        if hosts[blocker_index] is stream:
             continue
         if segment_crosses_box(ordered[0], next_point, box):
             result.add(
@@ -209,6 +218,9 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
         Deterministically ordered conflicts with global object indices.
     """
     index_by_id = {id(unit): index for index, unit in enumerate(fs.units)}
+    # Read once: asking per segment misses the attribute on every unit
+    # that has none, which dominated this pass.
+    hosts = [getattr(unit, "host", None) for unit in fs.units]
     boxes = [
         (index, unit_box(unit, unit.frame))
         for index, unit in enumerate(fs.units)
@@ -234,10 +246,14 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
             if route.used_fallback:
                 conflicts.add(Conflict("fallback", streams=(stream_index,)))
             conflicts.update(
-                _exit_conflicts(fs, stream_index, boxes, index_by_id, True, route.waypoints)
+                _exit_conflicts(
+                    fs, stream_index, boxes, index_by_id, True, route.waypoints, hosts
+                )
             )
             conflicts.update(
-                _exit_conflicts(fs, stream_index, boxes, index_by_id, False, route.waypoints)
+                _exit_conflicts(
+                    fs, stream_index, boxes, index_by_id, False, route.waypoints, hosts
+                )
             )
         start = resolve_port(source, source.frame, stream.source.name).point
         end = resolve_port(dest, dest.frame, stream.dest.name).point
@@ -254,7 +270,7 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
             for unit_index, box in boxes:
                 if unit_index in (source_index, dest_index):
                     continue
-                if getattr(fs.units[unit_index], "host", None) is stream:
+                if hosts[unit_index] is stream:
                     continue
                 if segment_crosses_box(a, b, box):
                     conflicts.add(Conflict("route-crosses-unit", (stream_index,), (unit_index,)))

@@ -1002,6 +1002,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
         # Soft: a route passing through a unit body it does not connect
         # to, and grossly indirect routes.
+        # Each unit's host, read once: asking per segment misses the
+        # attribute on every unit that has none, which dominated this loop.
+        hosted = [(u, box, getattr(u, "host", None)) for u, box in boxes]
         for s in drawn:
             if not (s.route and s.route.waypoints):
                 continue
@@ -1012,8 +1015,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             for k in range(len(pts) - 1):
                 (x1, y1), (x2, y2) = pts[k], pts[k + 1]
-                for u, box in boxes:
-                    if u is src_u or u is dst_u or getattr(u, "host", None) is s:
+                for u, box, host in hosted:
+                    if u is src_u or u is dst_u or host is s:
                         continue  # in-line elements own their line
                     if _seg_crosses_box(x1, y1, x2, y2, box):
                         warnings.append(Issue("warning", "route-crosses-unit",

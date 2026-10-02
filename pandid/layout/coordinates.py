@@ -11,6 +11,7 @@ would make streams across the cut run against their nozzle faces.
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import replace
 from typing import TYPE_CHECKING, Callable
@@ -700,9 +701,11 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
             boxes[v] = occupied_box(v, pads)
         settled.update(group)
 
+    # Only x changes from here on, so a row index built now stays valid.
+    rows = _RowIndex(units)
     for u, new_x in _stack_offsets(fs, units, band_of):
         lower, upper = grid_limits(u, "x", boxes)
-        if lower <= new_x <= upper and not _overlaps_x(u, new_x, units):
+        if lower <= new_x <= upper and not _overlaps_x(u, new_x, rows.near(u)):
             slot(u).x = new_x
             boxes[u] = occupied_box(u, pads)
 
@@ -765,6 +768,97 @@ def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
 #: Clearance a sideways nudge leaves beside the moved unit, enough to draw
 #: a run and write its number.
 STACK_CLEAR = 40.0
+
+
+# Band height of _RowIndex in drawing units: about one symbol, so most
+# units span one or two bands.
+_ROW_BAND = 100.0
+
+
+class _RowIndex:
+    """Index units by vertical extent for the horizontal collision check.
+
+    Each unit is filed under every :data:`_ROW_BAND` band its slot spans, so
+    :meth:`near` returns only units that can share a row with the query.
+    Built from current slots; valid while no ``y`` or ``h`` changes, which
+    holds through the horizontal pass of :func:`_straighten`. ``x`` is not
+    indexed and is read live by :func:`_overlaps_x`.
+
+    A unit whose extent is not finite cannot be banded, so it is returned
+    for every query, and a query from such a unit returns every unit; the
+    full scan's answer is kept either way.
+
+    Parameters
+    ----------
+    units : list[Unit]
+        Units to index; those without a ``y`` are left out.
+    """
+
+    def __init__(self, units: list["Unit"]) -> None:
+        """Build the band table."""
+        self._units = list(units)
+        self._bands: dict[int, list["Unit"]] = defaultdict(list)
+        self._unbanded: list["Unit"] = []
+        for u in self._units:
+            s = slot(u)
+            if s.y is None:
+                continue
+            span = self._span(s.y, s.h)
+            if span is None:
+                self._unbanded.append(u)
+                continue
+            for band in span:
+                self._bands[band].append(u)
+
+    @staticmethod
+    def _span(y: float, h: float) -> "range | None":
+        """Return the band numbers a vertical extent touches.
+
+        Parameters
+        ----------
+        y : float
+            Top coordinate.
+        h : float
+            Height.
+
+        Returns
+        -------
+        range or None
+            Band numbers from the top band to the bottom band, inclusive, or
+            ``None`` when the extent is not finite.
+        """
+        if not (math.isfinite(y) and math.isfinite(y + h)):
+            return None
+        return range(math.floor(y / _ROW_BAND), math.floor((y + h) / _ROW_BAND) + 1)
+
+    def near(self, u: "Unit") -> list["Unit"]:
+        """Return the units that may share a row with ``u``, each once.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit about to move.
+
+        Returns
+        -------
+        list[Unit]
+            Candidates for :func:`_overlaps_x`, in index order; empty when
+            ``u`` has no ``y``, and every unit when its extent is not finite.
+        """
+        s = slot(u)
+        if s.y is None:
+            return []
+        span = self._span(s.y, s.h)
+        if span is None:
+            return self._units
+        seen: set[int] = set()
+        out: list["Unit"] = []
+        for band in span:
+            for other in self._bands.get(band, ()):
+                if id(other) not in seen:
+                    seen.add(id(other))
+                    out.append(other)
+        return out + self._unbanded
 
 
 def _overlaps_x(u: "Unit", new_x: float, units: list["Unit"]) -> bool:
