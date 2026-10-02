@@ -154,7 +154,7 @@ import math
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
-from pandid.portgeom import _xform, port_point, symbol_to_box, unit_box
+from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
 # ISO 10628-1 5.3.1 c) detail weight, shared so parts match the sheet.
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
@@ -1658,7 +1658,7 @@ class DrawioRenderer:
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
-            reference = getattr(u, "reference", "") or ""
+            reference = _flag_reference(u)
             if reference:
                 lines.append(reference)
             # Centred inside the flag, as the sheet writes it, capped to the

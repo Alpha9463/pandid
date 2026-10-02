@@ -77,12 +77,14 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import fields as dataclass_fields
+from decimal import Decimal
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Literal, cast
 from math import isfinite
 
 from pandid import devices as device_types
+from pandid._checks import is_real as _is_real, is_whole as _is_integral
 from pandid import units as unit_types
 from pandid.components import Component
 from pandid.document import (
@@ -254,11 +256,32 @@ def _text(value: Any, where: str) -> str:
     return value
 
 
+def _shown(value: Any) -> bool:
+    """Return whether a value is text or a number that is only displayed.
+
+    Line-number components and stream properties are drawn, not computed
+    with, so ``Decimal`` is accepted there as well as any real number
+    (:func:`pandid._checks.is_real`).
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+
+    Returns
+    -------
+    bool
+        Whether it is text, a non-bool real number or a ``Decimal``.
+    """
+    return isinstance(value, (str, Decimal)) or _is_real(value)
+
+
 def _number(value: Any, where: str) -> float:
-    """Check that a value is a number, returned unchanged.
+    """Check that a value is a real number, returned unchanged.
 
     It is not coerced to float, because ``120`` and ``120.0`` are written
-    differently in the SVG.
+    differently in the SVG. See :func:`pandid._checks.is_real` for what
+    counts.
 
     Parameters
     ----------
@@ -270,14 +293,14 @@ def _number(value: Any, where: str) -> float:
     Returns
     -------
     float
-        The value, int or float.
+        The value, of the type given.
 
     Raises
     ------
     SpecError
-        If it is not a number or is a bool.
+        If it is not a real number, or is a bool or ``Decimal``.
     """
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if not _is_real(value):
         raise SpecError(f"{where} must be a number, got {value!r}")
     return value
 
@@ -304,7 +327,7 @@ def _column_width(value: Any, where: str) -> float | Literal["auto"]:
     """
     if value == "auto":
         return "auto"
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if not _is_real(value):
         raise SpecError(f'{where} must be a number or "auto", got {value!r}')
     return value
 
@@ -322,14 +345,14 @@ def _integer(value: Any, where: str) -> int:
     Returns
     -------
     int
-        The value.
+        The value, of the integer type given.
 
     Raises
     ------
     SpecError
-        If it is not an int or is a bool.
+        If it is not a ``numbers.Integral`` or is a bool.
     """
-    if isinstance(value, bool) or not isinstance(value, int):
+    if not _is_integral(value):
         raise SpecError(f"{where} must be a whole number, got {value!r}")
     return value
 
@@ -382,7 +405,7 @@ def _faces(value: Any, where: str) -> int | list[str]:
     SpecError
         If it is neither a whole number nor a list of text.
     """
-    if isinstance(value, bool) or isinstance(value, int):
+    if isinstance(value, bool) or _is_integral(value):
         return _integer(value, where)
     return [_text(face, f"{where}[{i}]") for i, face in enumerate(_sequence(value, where))]
 
@@ -464,14 +487,14 @@ def _component(value: Any, where: str) -> str | float:
     Returns
     -------
     str or float
-        The value.
+        The value, unchanged; any number type accepted by :func:`_shown`.
 
     Raises
     ------
     SpecError
         If it is neither text nor a number.
     """
-    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+    if not _shown(value):
         raise SpecError(
             f"{where} must be text or a number (an imperial size carries its own "
             f"inch mark, e.g. '6\"'), got {value!r}"
@@ -1101,7 +1124,7 @@ def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
             "may not, because nothing else on the sheet knows what this loop measures"
         )
     number = data.get("number")
-    if number is not None and (not isinstance(number, (str, int)) or isinstance(number, bool)):
+    if number is not None and not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
     try:
         return fs.add_loop(_text(data["variable"], f"{where}.variable"), number)
@@ -1140,7 +1163,7 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
         )
     type_ = _text(data["type"], f"{where}.type")
     number = data.get("number", "")
-    if not isinstance(number, (str, int)) or isinstance(number, bool):
+    if not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
     kwargs: dict[str, Any] = {}
@@ -1699,7 +1722,8 @@ def _read_properties(entry: Any, where: str) -> dict[str, str | float]:
     Parameters
     ----------
     entry : Any
-        Mapping of property name to text (with units) or number.
+        Mapping of property name to text (with units) or number, including
+        ``Decimal`` (:func:`_shown`).
     where : str
         Spec path, for error messages.
 
@@ -1715,7 +1739,7 @@ def _read_properties(entry: Any, where: str) -> dict[str, str | float]:
     """
     out: dict[str, str | float] = {}
     for key, value in _mapping(entry, where).items():
-        if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        if not _shown(value):
             raise SpecError(
                 f"{where}[{key!r}] must be text or a number (values carry their own "
                 f"units, e.g. '25 C'), got {value!r}"

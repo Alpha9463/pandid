@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass, field, fields, replace
 from typing import Any, Literal
 
+from pandid._checks import check_real
+
 # --------------------------------------------------------------
 # Location references (ISO 15519-1:2010 Clause 9)
 # --------------------------------------------------------------
@@ -317,6 +319,33 @@ def _resolve_col_align(col_align):
     return col_align
 
 
+def _check_box_number(box: object, name: str, value: Any) -> None:
+    """Refuse a non-number for an annotation or table box's layout field.
+
+    Parameters
+    ----------
+    box : Annotation or TableBox
+        Box being set.
+    name : str
+        Field name.
+    value : Any
+        New value.
+
+    Raises
+    ------
+    TypeError
+        If ``margin``, ``width`` or ``font_size`` is not a number, or a
+        ``position`` coordinate is not one. ``None`` is allowed where the
+        field takes it.
+    """
+    where = f"{type(box).__name__}.{name}"
+    if name in ("margin", "width", "font_size") and value is not None:
+        check_real(value, where)
+    elif name == "position" and value is not None:
+        for i, coordinate in enumerate(value):
+            check_real(coordinate, f"{where}[{i}]")
+
+
 @dataclass
 class Annotation:
     """Titled text box placed on the sheet.
@@ -345,6 +374,9 @@ class Annotation:
 
     Raises
     ------
+    TypeError
+        If ``margin``, ``width``, ``font_size`` or a ``position``
+        coordinate is not a number, at construction or on assignment.
     ValueError
         If ``align`` is not a docking position.
     """
@@ -359,6 +391,24 @@ class Annotation:
     def __post_init__(self):
         """Check the alignment."""
         self.align = _resolve_align(self.align, "top-right")
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set a field, refusing a non-number for a layout field.
+
+        Parameters
+        ----------
+        name : str
+            Field name.
+        value : Any
+            New value.
+
+        Raises
+        ------
+        TypeError
+            If a layout field receives a non-number.
+        """
+        _check_box_number(self, name, value)
+        super().__setattr__(name, value)
 
 
 @dataclass
@@ -389,6 +439,9 @@ class TableBox:
 
     Raises
     ------
+    TypeError
+        If ``margin``, ``font_size`` or a ``position`` coordinate is not a
+        number, at construction or on assignment.
     ValueError
         If ``align`` or a ``col_align`` entry is invalid.
     """
@@ -405,6 +458,24 @@ class TableBox:
         """Check the alignment and column alignments."""
         self.align = _resolve_align(self.align, "bottom-right")
         self.col_align = _resolve_col_align(self.col_align)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set a field, refusing a non-number for a layout field.
+
+        Parameters
+        ----------
+        name : str
+            Field name.
+        value : Any
+            New value.
+
+        Raises
+        ------
+        TypeError
+            If a layout field receives a non-number.
+        """
+        _check_box_number(self, name, value)
+        super().__setattr__(name, value)
 
 
 @dataclass
@@ -489,7 +560,8 @@ def table_sheet_block(block: "TitleBlock | None",
     """
     diagram = TitleBlock() if block is None else block
     number = diagram.drawing_number
-    stated = options.sheet_drawing_number
+    # Drawn text, so a number such as 100 is read as "100".
+    stated = _drawn_text(options.sheet_drawing_number)
     if stated and _same_number(stated, number):
         raise ValueError(
             f"fs.stream_table.sheet_drawing_number={stated!r} is the diagram's "

@@ -21,6 +21,7 @@ from collections.abc import Mapping, Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
+from pandid._checks import check_real, check_whole
 from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
@@ -435,7 +436,11 @@ class Unit:
         ------
         AttributeError
             If the attribute is fixed at construction and already set.
+        TypeError
+            If ``width`` or ``height`` is not a number or ``None``.
         """
+        if name in ("width", "height") and value is not None:
+            check_real(value, f"{self.__dict__.get('name', '?')}: {name}")
         if name in self._FIXED_AT_CONSTRUCTION and name in self.__dict__:
             raise AttributeError(
                 f"{self.name}: {name} is read-only. It is read once, in "
@@ -607,11 +612,21 @@ class Unit:
         ------
         KeyError
             If ``port`` is not a port of this unit.
+        TypeError
+            If ``x`` or ``y`` is not a number, or ``col`` or ``row`` not a
+            whole number.
         ValueError
             If the named port locates no coordinate, or a face set with
             :meth:`nozzle` cannot be reached under the new transform.
         """
         from dataclasses import replace
+
+        for axis, value in (("x", x), ("y", y)):
+            if value is not None:
+                check_real(value, f"{self.name}: pin {axis}")
+        for axis, value in (("col", col), ("row", row)):
+            if value is not None:
+                check_whole(value, f"{self.name}: pin {axis}")
 
         from pandid.geometry import normalize_mirror, normalize_orientation
 

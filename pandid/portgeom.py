@@ -424,6 +424,27 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     }[face.upper()]
 
 
+def _flag_reference(unit: "Unit") -> str:
+    """Return the off-page reference a boundary flag draws, as text.
+
+    ``reference`` is not enforced to be ``str``, so ``100`` draws ``"100"``,
+    as a title-block field does (:func:`pandid.document._drawn_text`).
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit, usually a Feed or Product.
+
+    Returns
+    -------
+    str
+        The reference, or ``""`` when it is unset.
+    """
+    from pandid.document import _drawn_text
+
+    return _drawn_text(getattr(unit, "reference", None))
+
+
 def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
     """Return the size of a unit's placed box.
 
@@ -449,7 +470,7 @@ def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
         # Measure each string separately, since scripts differ in width.
         from pandid.render.symbols import label_span
         w = unit.width if unit.width is not None else max(
-            80.0, label_span(unit.tag), label_span(getattr(unit, "reference", "") or ""))
+            80.0, label_span(unit.tag), label_span(_flag_reference(unit)))
         return w, unit.height if unit.height is not None else sym.height
 
     sym_w, sym_h = sym.width, sym.height

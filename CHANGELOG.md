@@ -21,6 +21,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title other than `""`, such as `0` or `None`, is written as stated, so
   `from_dict()` refuses it with a `SpecError` instead of silently redrawing
   the box without it.
+- **The spec reader accepts numpy numbers (#536).** Every numeric field reads
+  an `int`, `float` or numpy number (a `numbers.Real` other than `Fraction`),
+  and every whole-number field any `numbers.Integral`, so a value such as
+  `numpy.int64` from pandas round-trips instead of being refused. Values are
+  kept as given. `Decimal` is accepted where it is only displayed
+  (line-number components and stream properties) and still refused for
+  geometry, which cannot be computed with it.
+- **Values that drew wrongly or crashed a render are refused or drawn as
+  text (#536).** A `Decimal` or `Fraction` size, `pin()` coordinate,
+  `via()` waypoint or annotation margin, width, font size or position raises
+  `TypeError` when set, rather than crashing the render; `pin()` ranks must
+  be whole numbers. `Stream.color` and `dasharray` must be text. A numeric
+  flag `reference` or table-sheet `sheet_drawing_number` or `sheet_subtitle`
+  is drawn as text.
 
 ## [0.1.5] - 2026-08-26
 
