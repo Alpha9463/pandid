@@ -1486,7 +1486,7 @@ class Flowsheet:
 
     def add_valve_station(
         self, tag: str, *,
-        x: float | None = None, y: float | None = None, mirrored: bool = False,
+        x: float | None = None, y: float | None = None, mirrored: bool | None = None,
         variant: str = "control", number: str | int | None = None,
         isolation: bool = True, reducers: bool = True, bypass: bool = True,
         drains: int = 2, description: str = "", bypass_over: str | None = None,
@@ -1512,8 +1512,9 @@ class Flowsheet:
             Control valve tag, from which member tags are derived.
         x, y : float or None, optional
             Station left edge and run centreline; give both or neither.
-        mirrored : bool, default=False
-            Pipe the pinned run east to west.
+        mirrored : bool or None, optional
+            Pipe the pinned run east to west. Left unstated, the run is
+            piped west to east.
         variant : str, default="control"
             Control valve symbol.
         number : str, int or None, optional
@@ -1574,13 +1575,11 @@ class Flowsheet:
                 f"an x and the run's centreline y together; got "
                 f"x={x!r}, y={y!r}"
             )
-        # These describe a drawn run, which an unpinned station does not have:
-        # its members are laid out by the engine. Mirroring an unpinned
-        # station turned every nozzle away from its neighbour, so all four
-        # are refused without x and y. Distances default below, so "stated"
-        # means the author gave one.
+        # These describe a drawn run, which an unpinned station does not have;
+        # the engine lays out its members. Each defaults to None, so any value
+        # given, mirrored=False included, is named in the refusal.
         stated = [
-            f"{name}=" for name, given in (("mirrored", bool(mirrored)),
+            f"{name}=" for name, given in (("mirrored", mirrored is not None),
                                            ("gap", gap is not None),
                                            ("bypass_rise", bypass_rise is not None),
                                            ("drain_drop", drain_drop is not None))
@@ -1708,7 +1707,8 @@ class Flowsheet:
                    "reduction": red, "expansion": exp, "control": control}
 
         if x is not None and y is not None:
-            # Apply the spacing defaults now that the run is drawn.
+            # Apply the run defaults now that the run is drawn.
+            mirrored = bool(mirrored)
             gap = DEFAULT_GAP if gap is None else gap
             bypass_rise = DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise
             drain_drop = DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop
@@ -1781,7 +1781,7 @@ class Flowsheet:
         from pandid.stations import StationAssembly
 
         self._station_assemblies.append(StationAssembly(
-            station=station, mirrored=mirrored,
+            station=station, mirrored=bool(mirrored),
             gap=DEFAULT_GAP if gap is None else gap,
             bypass_rise=DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise,
             drain_drop=DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop,
