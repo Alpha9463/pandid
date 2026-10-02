@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Number starts must be integers (#533).** `stream_number_start`,
+  `line_number_start` and `loop_number_start` raise `TypeError` for a float,
+  `Decimal`, string or `bool`, at construction and on assignment. Any integer
+  type, including `numpy.int64`, is stored as an `int`. A float start used to
+  draw `S1.0`, and `to_dict()` then dropped it, so the sheet read back as `S1`.
+
+### Fixed
+
+- **`to_dict()` keeps a stated annotation title that is falsy (#533).** A
+  title other than `""`, such as `0` or `None`, is written as stated, so
+  `from_dict()` refuses it with a `SpecError` instead of silently redrawing
+  the box without it.
+
 ## [0.1.5] - 2026-08-26
 
 ### Fixed
