@@ -105,10 +105,19 @@ def _sheet(real: Any, whole: Any) -> Flowsheet:
     return fs
 
 
-def test_a_real_number_that_is_not_a_float_round_trips():
-    """Check that a Fraction, a numbers.Real but not a float, reads back and draws the same."""
-    fs = _sheet(Fraction(1), 1)
-    assert Flowsheet.from_dict(fs.to_dict()).to_svg() == fs.to_svg()
+def test_any_real_type_layout_can_format_is_a_number():
+    """Check the real-number rule: floats and non-rational reals, not Fraction or Decimal."""
+
+    class Reading:
+        """A stand-in real type that is neither ``float`` nor rational."""
+
+    numbers.Real.register(Reading)
+    reading = Reading()
+    assert spec._number(reading, "x") is reading
+    # Fraction cannot be formatted with ":g" before Python 3.12.
+    for refused in (True, Fraction(1, 2), Decimal(1), "1"):
+        with pytest.raises(SpecError, match="must be a number"):
+            spec._number(refused, "x")
 
 
 def test_numpy_numbers_round_trip():
@@ -207,17 +216,18 @@ DOORS = {
 }
 
 
+@pytest.mark.parametrize("value", [Decimal(10), Fraction(21, 2)], ids=["Decimal", "Fraction"])
 @pytest.mark.parametrize("door", DOORS, ids=list(DOORS))
-def test_a_decimal_is_refused_where_layout_computes_with_it(door):
-    """Check that a Decimal geometry value is refused at once, naming the fix."""
+def test_a_decimal_or_fraction_is_refused_where_layout_computes_with_it(door, value):
+    """Check that a value layout cannot compute or format with is refused at once."""
     with pytest.raises(TypeError, match=r"must be a number.*float\(value\)"):
-        DOORS[door](Decimal(10))
+        DOORS[door](value)
 
 
 @pytest.mark.parametrize("door", DOORS, ids=list(DOORS))
 def test_a_real_number_is_still_accepted_where_layout_computes_with_it(door):
-    """Check that the same doors still take an int, a float and a Fraction."""
-    for value in (10, 10.5, Fraction(10)):
+    """Check that the same doors still take an int and a float."""
+    for value in (10, 10.5):
         DOORS[door](value)
 
 

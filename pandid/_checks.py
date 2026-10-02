@@ -1,10 +1,11 @@
 """Check the type of numbers that enter layout through the Python API.
 
-Layout computes with floats, so a coordinate, size or rank must be a real
-number: any ``numbers.Real`` (``int``, ``float``, numpy scalars,
-``Fraction``) but not ``bool``, and not ``Decimal``, which cannot be mixed
-with floats. :mod:`pandid.spec` uses the same predicates, so a value the
-reader refuses is refused at the Python door too.
+Layout computes with floats and writes numbers with float format specs, so
+a coordinate, size or rank must be a real number of a kind both accept:
+``int``, ``float`` or a numpy scalar, but not ``bool``, ``Decimal`` (which
+cannot be mixed with floats) or ``Fraction`` (which cannot be formatted
+with ``:g`` before Python 3.12). :mod:`pandid.spec` uses the same
+predicates, so a value the reader refuses is refused at the Python door too.
 """
 
 from __future__ import annotations
@@ -25,9 +26,12 @@ def is_real(value: Any) -> bool:
     Returns
     -------
     bool
-        Whether it is a non-bool ``numbers.Real``.
+        Whether it is a non-bool ``numbers.Real`` that is integral or not
+        rational, which excludes ``Fraction`` but keeps numpy floats.
     """
-    return isinstance(value, numbers.Real) and not isinstance(value, bool)
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return False
+    return isinstance(value, numbers.Integral) or not isinstance(value, numbers.Rational)
 
 
 def is_whole(value: Any) -> bool:
@@ -48,7 +52,7 @@ def is_whole(value: Any) -> bool:
 
 
 def _hint(value: Any) -> str:
-    """Return advice for a ``Decimal``, which is the common near miss.
+    """Return advice for a ``Decimal`` or ``Fraction``, the common near misses.
 
     Parameters
     ----------
@@ -60,7 +64,7 @@ def _hint(value: Any) -> str:
     str
         A sentence to append, or ``""``.
     """
-    if isinstance(value, Decimal):
+    if isinstance(value, (Decimal, numbers.Rational)) and not isinstance(value, numbers.Integral):
         return "; layout computes with floats, so pass float(value)"
     return ""
 
