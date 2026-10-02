@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A float loop or instrument number is refused (#534).** `add_loop()`,
   `Loop` and `Instrument` raise `TypeError` for a number such as `303.0`,
   which used to draw as `F-303.0`. Text and any integer type are accepted.
+- **`add_valve_station()` names `mirrored=False` on an unplaced station
+  (#541).** `mirrored` now defaults to `None`, like `gap`, `bypass_rise` and
+  `drain_drop`, so a station with no `x`/`y` refuses it by name whatever its
+  value. A pinned station draws `mirrored=False` as before, and
+  `place_valve_station_on()` still accepts it.
 
 ## [0.1.5] - 2026-08-26
 
