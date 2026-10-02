@@ -35,6 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   be whole numbers. `Stream.color` and `dasharray` must be text. A numeric
   flag `reference` or table-sheet `sheet_drawing_number` or `sheet_subtitle`
   is drawn as text.
+- **The spec reader reads a number in drawn text as the text drawn (#534).**
+  A description, reference, formula, flowsheet name, stream-table section
+  heading, table-sheet number or subtitle, note, box row or cell, or table
+  header given as a number round-trips instead of raising `SpecError` after
+  the Python API drew it. Names, settings such as `variant` and
+  `col_align`, and annotation titles must still be text.
+- **A float loop or instrument number is refused (#534).** `add_loop()`,
+  `Loop` and `Instrument` raise `TypeError` for a number such as `303.0`,
+  which used to draw as `F-303.0`. Text and any integer type are accepted.
 
 ## [0.1.5] - 2026-08-26
 

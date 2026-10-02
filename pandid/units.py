@@ -21,7 +21,7 @@ from collections.abc import Mapping, Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
-from pandid._checks import check_real, check_whole
+from pandid._checks import check_real, check_whole, is_whole
 from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
@@ -3762,7 +3762,17 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     -------
     tuple[str, str]
         Letters and loop number.
+
+    Raises
+    ------
+    TypeError
+        If ``number`` is neither text nor a whole number, so a float such
+        as ``101.0`` does not draw as ``LIC-101.0``.
     """
+    if number is not None and not (isinstance(number, str) or is_whole(number)):
+        raise TypeError(
+            f"an instrument's loop number is text or a whole number (an int), got {number!r}"
+        )
     if number != "" and number is not None:
         return type.strip(), str(number).strip()
     tag = type.strip()

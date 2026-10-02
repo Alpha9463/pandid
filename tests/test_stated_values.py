@@ -241,3 +241,87 @@ def test_a_grid_rank_must_be_a_whole_number():
     pump.pin(col=2, row=3)
     pin = pump.pin_
     assert pin is not None and (pin.col, pin.row) == (2, 3)
+
+
+def _numbered_labels() -> Flowsheet:
+    """Return a sheet with numbers in its drawn-text fields.
+
+    Returns
+    -------
+    Flowsheet
+        Sheet whose name, descriptions, references, formula, section
+        heading, table-sheet number and subtitle, and box contents are
+        numbers.
+    """
+    from pandid.components import Component
+    from pandid.document import legend, notes
+
+    # Typed Any: the annotations say str, and the point is a number.
+    n: Any = 100
+    fs = Flowsheet(n * 20)
+    feed = fs.add(U.Feed("F", reference=n))
+    pump = fs.add(U.Pump("P-101", description=n + 1))
+    run = fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, fs.add(U.Product("PR")).inlet)
+    run.properties = {"Flow": 5}
+    fs.add_component(Component("water", formula=n))
+    fs.add_instrument("FT", 1, sensing=run, description=n)
+    sections: Any = [("Flow", 2026)]
+    fs.stream_table_sections = sections
+    fs.annotations.append(Annotation(title="Data", rows=[("CW", 1200)]))
+    fs.annotations.append(notes([350, "a note"]))
+    fs.annotations.append(legend({10: "ten"}))
+    fs.annotations.append(TableBox(title="T", headers=[n, "b"], rows=[[1, 2.5]]))
+    fs.stream_table.sheet_drawing_number = n
+    fs.stream_table.sheet_subtitle = n
+    return fs
+
+
+@pytest.mark.parametrize("table", [True, "sheet"], ids=["diagram", "table sheet"])
+def test_numbers_in_drawn_text_read_back_as_the_text_drawn(table):
+    """Check that a number in a drawn-text field round-trips to the same sheet."""
+    fs = _numbered_labels()
+    back = Flowsheet.from_dict(fs.to_dict())
+    assert back.to_svg(show_stream_table=table) == fs.to_svg(show_stream_table=table)
+
+
+@pytest.mark.parametrize(
+    "path, value, message",
+    [
+        (("units", 1, "name"), 0, r"name must be text"),
+        (("units", 1, "variant"), 0, r"variant must be text"),
+        (("streams", 0, "name"), 0, r"name must be text"),
+        (("annotations", 0, "title"), 101, r"title must be text"),
+        (("units", 1, "description"), [1, 2], r"description must be text"),
+    ],
+    ids=["unit name", "variant", "stream name", "annotation title", "list as text"],
+)
+def test_identifiers_and_structure_stay_strict(path, value, message):
+    """Check that names, settings, titles and non-scalar text are still refused."""
+    data = _numbered_labels().to_dict()
+    target = data
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    with pytest.raises(SpecError, match=message):
+        Flowsheet.from_dict(data)
+
+
+def test_a_loop_or_instrument_number_must_be_an_integer_or_text():
+    """Check that a float loop number is refused rather than drawn as F-303.0."""
+    fs = Flowsheet("loops")
+    number: Any = 303.0
+    with pytest.raises(TypeError, match="loop number"):
+        fs.add_loop("F", number)
+    with pytest.raises(TypeError, match="loop number"):
+        U.Instrument("LIC", number)
+    assert fs.add_loop("F", 303).number == "303"
+    assert U.Instrument("LIC", "101A").name == "LIC-101A"
+
+
+def test_a_numpy_integer_loop_number_is_accepted():
+    """Check that a numpy integer loop number draws as the integer."""
+    numpy = pytest.importorskip("numpy")
+    fs = Flowsheet("numpy")
+    assert fs.add_loop("F", numpy.int64(303)).number == "303"
+    assert U.Instrument("LIC", numpy.int64(101)).name == "LIC-101"

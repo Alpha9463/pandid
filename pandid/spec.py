@@ -276,6 +276,37 @@ def _shown(value: Any) -> bool:
     return isinstance(value, (str, Decimal)) or _is_real(value)
 
 
+def _drawn(value: Any, where: str) -> str:
+    """Read a drawn-text field as the text it draws.
+
+    A number such as ``1200`` in a data box is what an engineer writes, and
+    YAML reads it as an ``int``; the sheet draws ``str()`` of it, so the
+    reader does too, through :func:`~pandid.document._drawn_text` as the
+    title block does. ``None`` (an empty YAML value) is blank. Identifiers
+    and settings stay strict and use :func:`_text`.
+
+    Parameters
+    ----------
+    value : Any
+        Value to read.
+    where : str
+        Spec path, for error messages.
+
+    Returns
+    -------
+    str
+        The text drawn.
+
+    Raises
+    ------
+    SpecError
+        If it is a list or mapping rather than a single value.
+    """
+    if isinstance(value, (Mapping, list, tuple, set)):
+        raise SpecError(f"{where} must be text, got {value!r}")
+    return _drawn_text(value)
+
+
 def _number(value: Any, where: str) -> float:
     """Check that a value is a real number, returned unchanged.
 
@@ -727,7 +758,7 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     start = data.get("line_number_start", DEFAULT_LINE_NUMBER_START)
     loop_start = data.get("loop_number_start", DEFAULT_LOOP_NUMBER_START)
     fs = Flowsheet(
-        _text(data["name"], f"{where}: 'name'"),
+        _drawn(data["name"], f"{where}: 'name'"),
         stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
         stream_number_start=_integer(stream_start, f"{where}: 'stream_number_start'"),
         line_numbering_scheme=_text(line_scheme, f"{where}: 'line_numbering_scheme'"),
@@ -850,7 +881,7 @@ def _read_component(entry: Any, where: str) -> Component:
     formula = data.get("formula")
     return Component(
         _text(data["name"], f"{where}.name"),
-        None if formula is None else _text(formula, f"{where}.formula"),
+        None if formula is None else _drawn(formula, f"{where}.formula"),
     )
 
 
@@ -917,9 +948,11 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     _check_keys(data, allowed, where)
 
     kwargs: dict[str, Any] = {}
-    for key in ("variant", "description", "reference"):
+    if "variant" in data:
+        kwargs["variant"] = _text(data["variant"], f"{where}.variant")
+    for key in ("description", "reference"):
         if key in data:
-            kwargs[key] = _text(data[key], f"{where}.{key}")
+            kwargs[key] = _drawn(data[key], f"{where}.{key}")
     for key in ("width", "height"):
         if key in data:
             kwargs[key] = _number(data[key], f"{where}.{key}")
@@ -1167,9 +1200,12 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
     kwargs: dict[str, Any] = {}
-    for key in ("variant", "display", "description", "reference"):
+    for key in ("variant", "display"):
         if key in data:
             kwargs[key] = _text(data[key], f"{where}.{key}")
+    for key in ("description", "reference"):
+        if key in data:
+            kwargs[key] = _drawn(data[key], f"{where}.{key}")
     for key in ("width", "height"):
         if key in data:
             kwargs[key] = _number(data[key], f"{where}.{key}")
@@ -1289,9 +1325,12 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
     for key in ("offset", "angle", "width", "height"):
         if key in entry:
             kwargs[key] = _number(entry[key], f"{where}.{key}")
-    for key in ("variant", "display", "description", "reference", "label_pos"):
+    for key in ("variant", "display", "label_pos"):
         if key in entry:
             kwargs[key] = _text(entry[key], f"{where}.{key}")
+    for key in ("description", "reference"):
+        if key in entry:
+            kwargs[key] = _drawn(entry[key], f"{where}.{key}")
     try:
         inst = fs.add_balloon(element, **kwargs)
     except (TypeError, ValueError) as e:
@@ -1906,7 +1945,8 @@ def _read_section(entry: Any, where: str) -> tuple[str, str]:
             f"{where}: a section is [before_key, heading] (the property row the heading "
             f"is injected above), got {pair!r}"
         )
-    return _text(pair[0], f"{where}[0]"), _text(pair[1], f"{where}[1]")
+    # The key is matched against property names; the heading is drawn.
+    return _text(pair[0], f"{where}[0]"), _drawn(pair[1], f"{where}[1]")
 
 
 def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
@@ -1944,7 +1984,7 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
         options.column_width = _column_width(data["column_width"], f"{where}.column_width")
     for key in ("sheet_subtitle", "sheet_drawing_number"):
         if key in data:
-            setattr(options, key, _text(data[key], f"{where}.{key}"))
+            setattr(options, key, _drawn(data[key], f"{where}.{key}"))
     return options
 
 
@@ -2075,6 +2115,9 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
 def _read_rows(entry: Any, where: str) -> list:
     """Read annotation rows: text lines, or lists of cells.
 
+    Lines and cells are drawn text (:func:`_drawn`), so a number reads as
+    the string the sheet draws.
+
     Parameters
     ----------
     entry : Any
@@ -2094,11 +2137,11 @@ def _read_rows(entry: Any, where: str) -> list:
     """
     rows: list = []
     for i, row in enumerate(_sequence(entry, where)):
-        if isinstance(row, str):
-            rows.append(row)
-        else:
+        if isinstance(row, (list, tuple)):
             cells = _sequence(row, f"{where}[{i}]")
-            rows.append(tuple(_text(c, f"{where}[{i}][{j}]") for j, c in enumerate(cells)))
+            rows.append(tuple(_drawn(c, f"{where}[{i}][{j}]") for j, c in enumerate(cells)))
+        else:
+            rows.append(_drawn(row, f"{where}[{i}]"))
     return rows
 
 
@@ -2146,7 +2189,8 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         if kind == "notes":
             if "items" not in data:
                 raise SpecError(f"{where}: a notes box needs 'items' (the list of note texts)")
-            items = [_text(t, f"{where}.items") for t in _sequence(data["items"], f"{where}.items")]
+            items = [_drawn(t, f"{where}.items")
+                     for t in _sequence(data["items"], f"{where}.items")]
             if "numbered" in data:
                 kwargs["numbered"] = _flag(data["numbered"], f"{where}.numbered")
             return notes(items, **kwargs)
@@ -2160,7 +2204,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
             return legend(pairs, **kwargs)
         if kind == "table":
             if "headers" in data:
-                kwargs["headers"] = [_text(h, f"{where}.headers")
+                kwargs["headers"] = [_drawn(h, f"{where}.headers")
                                      for h in _sequence(data["headers"], f"{where}.headers")]
             if "col_align" in data:
                 kwargs["col_align"] = [_text(a, f"{where}.col_align")

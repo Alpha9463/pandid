@@ -35,6 +35,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pandid._checks import is_whole
+
 if TYPE_CHECKING:
     from pandid.streams import Stream
     from pandid.units import Instrument, Unit
@@ -62,6 +64,8 @@ class Loop:
 
     Raises
     ------
+    TypeError
+        If ``number`` is neither text nor a whole number.
     ValueError
         If ``variable`` is not one letter or ``number`` is empty.
     """
@@ -73,6 +77,11 @@ class Loop:
                 f"a loop's measured variable is a single ISA letter ('F' for flow, 'L' "
                 f"for level, 'T' for temperature), got {variable!r}. The function "
                 f"letters stay on each instrument, so the loop takes only the first one"
+            )
+        # A float would draw as F-303.0; loop numbers are integers or text.
+        if not (isinstance(number, str) or is_whole(number)):
+            raise TypeError(
+                f"a loop number is text or a whole number (an int), got {number!r}"
             )
         number = str(number).strip()
         if not number:
