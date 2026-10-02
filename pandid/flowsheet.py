@@ -9,6 +9,7 @@ renders the drawing.
 from __future__ import annotations
 from contextlib import contextmanager
 from math import isfinite
+from numbers import Integral
 from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
@@ -412,6 +413,38 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
 _UnitT = TypeVar("_UnitT", bound="Unit")
 
 
+def _whole_number(value: Any, name: str) -> int:
+    """Return a number start as an ``int``, refusing anything else.
+
+    Stream, line and loop numbers are integers, so a float (even ``1.0``),
+    a ``Decimal``, a string or a ``bool`` is refused rather than drawn as
+    ``S1.0``. Any integral type, such as ``numpy.int64``, is accepted.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    name : str
+        Attribute name, for the error message.
+
+    Returns
+    -------
+    int
+        The value as a built-in ``int``.
+
+    Raises
+    ------
+    TypeError
+        If ``value`` is not an integer.
+    """
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise TypeError(
+            f"{name} must be a whole number (an int), got {value!r}; stream, line "
+            f"and loop numbers are integers"
+        )
+    return int(value)
+
+
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
 
@@ -485,6 +518,11 @@ class Flowsheet:
             :data:`~pandid.stations.DEFAULT_VALVE_STATION_TAG_SCHEME`.
         auto_faces : bool, default=True
             Whether movable port faces are chosen automatically.
+
+        Raises
+        ------
+        TypeError
+            If a number start is not an integer.
         """
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
@@ -567,6 +605,87 @@ class Flowsheet:
         """
         self._auto_faces = value
         self._invalidate_layout()
+
+    @property
+    def stream_number_start(self) -> int:
+        """Return the first ``n`` in ``stream_naming_scheme``.
+
+        Returns
+        -------
+        int
+            First generated stream number.
+        """
+        return self._stream_number_start
+
+    @stream_number_start.setter
+    def stream_number_start(self, value: int) -> None:
+        """Set the first generated stream number.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not an integer.
+        """
+        self._stream_number_start = _whole_number(value, "stream_number_start")
+
+    @property
+    def line_number_start(self) -> int:
+        """Return the first generated ``sequence`` component of a line number.
+
+        Returns
+        -------
+        int
+            First generated line sequence number.
+        """
+        return self._line_number_start
+
+    @line_number_start.setter
+    def line_number_start(self, value: int) -> None:
+        """Set the first generated line sequence number.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not an integer.
+        """
+        self._line_number_start = _whole_number(value, "line_number_start")
+
+    @property
+    def loop_number_start(self) -> int:
+        """Return the first number :meth:`add_loop` allocates.
+
+        Returns
+        -------
+        int
+            First loop number.
+        """
+        return self._loop_number_start
+
+    @loop_number_start.setter
+    def loop_number_start(self, value: int) -> None:
+        """Set the first loop number :meth:`add_loop` allocates.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not an integer.
+        """
+        self._loop_number_start = _whole_number(value, "loop_number_start")
 
     def add_annotation(self, annotation):
         """Add an annotation or table box to the sheet.

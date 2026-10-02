@@ -2681,7 +2681,8 @@ def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
     """Write one ``annotations:`` entry.
 
     Equipment lists, notes and legends are written as plain annotations
-    with the same rows, so they draw the same.
+    with the same rows, so they draw the same. A title other than the
+    default ``""`` is written as stated, even when falsy.
 
     Parameters
     ----------
@@ -2694,7 +2695,9 @@ def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
         Annotation entry.
     """
     entry: dict[str, Any] = {"type": "table" if isinstance(box, TableBox) else "annotation"}
-    if box.title:
+    # Compare with the default rather than test for truth: a stated 0 or
+    # None is written, so the reader refuses it instead of dropping it.
+    if box.title != "":
         entry["title"] = box.title
     if isinstance(box, TableBox):
         if box.headers:
