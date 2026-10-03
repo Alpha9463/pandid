@@ -2747,12 +2747,12 @@ _LABEL_SIDE = {
 # The pneumatic cross-hatch
 # ----------------------------------------------------------------
 
-# Hatch stroke angle on a horizontal run, in draw.io's clockwise degrees:
-# atan2(-10, 6) for the SVG's 6-along, 10-across stroke
-# (:data:`~pandid.render.svg.HATCH_ARM`). Add 90 on a vertical run.
-_HATCH_ANGLE = -59.04
-# Hatch stroke length (box width for shape=line): sqrt(6^2 + 10^2).
-_HATCH_LEN = 11.66
+# Hatch stroke angle on a horizontal run, in draw.io's clockwise degrees,
+# and stroke length (box width for shape=line), both from the SVG stroke
+# (:data:`~pandid.render.svg.HATCH_ARM`). Add 90 on a vertical run. Rounded
+# to two places, as the export writes them.
+_HATCH_ANGLE = round(math.degrees(math.atan2(-2 * _svg.HATCH_ARM[1], 2 * _svg.HATCH_ARM[0])), 2)
+_HATCH_LEN = round(2 * math.hypot(*_svg.HATCH_ARM), 2)
 
 
 def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
