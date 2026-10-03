@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Decimal`, string or `bool`, at construction and on assignment. Any integer
   type, including `numpy.int64`, is stored as an `int`. A float start used to
   draw `S1.0`, and `to_dict()` then dropped it, so the sheet read back as `S1`.
+- **The pneumatic hatch is drawn from `HATCH_ARM` (#304).** The SVG renderer
+  drew the hatch strokes from bare numbers, and the draw.io exporter
+  hard-coded an angle and length it said came from `HATCH_ARM`, which nothing
+  read. Both now take the stroke from `pandid.render.svg.HATCH_ARM`, so
+  changing it changes both. No drawing changes.
+
+### Removed
+
+- **`Port.side` (#304).** The field was never passed by any port and never
+  read by layout, routing or rendering; it was always `None`.
 
 ### Fixed
 

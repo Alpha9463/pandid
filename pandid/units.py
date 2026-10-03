@@ -772,7 +772,7 @@ class Unit:
 
             raise unreachable_face(self, port_name, face, options)
 
-    def _add_port(self, name: str, direction: str, role: str, side: str | None = None) -> Port:
+    def _add_port(self, name: str, direction: str, role: str) -> Port:
         """Create a port and expose it as an attribute.
 
         Parameters
@@ -783,8 +783,6 @@ class Unit:
             ``"inlet"`` or ``"outlet"``.
         role : str
             One of :data:`_VALID_ROLES`.
-        side : str or None, optional
-            Reserved.
 
         Returns
         -------
@@ -802,7 +800,7 @@ class Unit:
             raise ValueError(
                 f"Invalid role {role!r} for port {name!r}. Allowed roles are: {_VALID_ROLES}"
             )
-        port = Port(name=name, owner=self, direction=direction, role=role, side=side)
+        port = Port(name=name, owner=self, direction=direction, role=role)
         self.ports[name] = port
         setattr(self, name, port)
         # A new port can join a series, so drop the cached membership.

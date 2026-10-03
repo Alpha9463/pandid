@@ -34,8 +34,6 @@ class Port:
     role : str
         Port role, such as ``"process"``, ``"feed"``, ``"vapor"``,
         ``"energy"`` or ``"signal"``.
-    side : str or None
-        Reserved; not read by layout, routing or rendering.
     stream : Stream or None
         Connected stream, if any.
     state : State or None
@@ -46,6 +44,5 @@ class Port:
     owner: Unit = field(repr=False)
     direction: str
     role: str
-    side: str | None = None
     stream: Stream | None = field(default=None, repr=False)
     state: State | None = field(default=None, repr=False)

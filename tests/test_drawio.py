@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import html
 import importlib.util
+import math
 from dataclasses import dataclass
 from decimal import Decimal
 import pathlib
@@ -34,6 +35,7 @@ from pandid.render.svg import (
     HOP_R,
     _class_weight,
     _LEADER_HEAD,
+    HATCH_ARM,
     _page,
     boundary_flag,
     impulse_tap,
@@ -855,13 +857,13 @@ def test_three_runs_meeting_at_a_tee_close_on_one_point():
     assert legs == 3, "the fixture stopped exercising a three-way junction"
 
 
-def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
-    """Place pneumatic markers at the rendered positions.
+def _pneumatic_sheet() -> Flowsheet:
+    """Return a routed sheet with one pneumatic signal line.
 
     Returns
     -------
-    None
-        No value is returned; pytest records assertion failures.
+    Flowsheet
+        Sheet whose only stream is pneumatic and carries hatch marks.
     """
     fs = Flowsheet("pneumatic")
     valve = fs.add(units.Valve("FV-101", variant="control"))
@@ -870,6 +872,18 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
     pic.pin(x=100, y=100)
     fs.connect(pic.sig_out, valve.actuator, kind="pneumatic")
     fs.route()
+    return fs
+
+
+def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
+    """Place pneumatic markers at the rendered positions.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = _pneumatic_sheet()
     root = _model(fs, check=False)
     cells = {c.get("id"): c for c in root.findall("mxCell")}
     marks = pneumatic_marks(stream_polyline(fs.streams[0]))
@@ -891,6 +905,65 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
         assert abs(float(offset.get("x")) + half) <= 3 or abs(float(offset.get("y")) + half) <= 3
         # Keep the pneumatic line solid.
     assert "dashed" not in _style(cells["s0"])
+
+
+def _svg_hatch_strokes(fs: Flowsheet) -> list[tuple[float, float]]:
+    """Return the angle and length of each SVG hatch stroke.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Angle in degrees, from ``atan2`` of the stroke, and length, per
+        stroke in the streams group.
+    """
+    body = fs.to_svg(check=False).split('<g id="streams">', 1)[1].split("</g>", 1)[0]
+    strokes = []
+    for found in re.finditer(
+        r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"', body
+    ):
+        x1, y1, x2, y2 = map(float, found.groups())
+        strokes.append((math.degrees(math.atan2(y2 - y1, x2 - x1)), math.hypot(x2 - x1, y2 - y1)))
+    return strokes
+
+
+def test_the_svg_hatch_is_drawn_from_hatch_arm(monkeypatch):
+    """Check that the SVG hatch strokes follow ``HATCH_ARM``.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Fixture used to change the stroke reach.
+    """
+    fs = _pneumatic_sheet()
+    along, across = HATCH_ARM
+    assert {round(length, 1) for _, length in _svg_hatch_strokes(fs)} == {
+        round(2 * math.hypot(along, across), 1)
+    }
+    monkeypatch.setattr("pandid.render.svg.HATCH_ARM", (along, 2 * across))
+    assert {round(length, 1) for _, length in _svg_hatch_strokes(fs)} == {
+        round(2 * math.hypot(along, 2 * across), 1)
+    }
+
+
+def test_the_hatch_stroke_is_the_same_in_both_backends():
+    """Check that draw.io hatch strokes have the SVG strokes' angle and length."""
+    fs = _pneumatic_sheet()
+    svg_strokes = _svg_hatch_strokes(fs)
+    assert svg_strokes, "the fixture stopped exercising the hatch"
+    hatches = [c for c in _model(fs, check=False).findall("mxCell") if c.get("parent") == "s0"]
+    assert len(hatches) == len(svg_strokes)
+    for (angle, length), hatch in zip(svg_strokes, hatches):
+        style = _style(hatch)
+        scale = float(style["strokeWidth"]) / LineWeight.DETAIL.width
+        assert float(style["rotation"]) == pytest.approx(angle, abs=0.5)
+        geo = hatch.find("mxGeometry")
+        assert geo is not None
+        assert float(geo.get("width", "nan")) / scale == pytest.approx(length, abs=0.2)
 
 
 def test_a_dash_is_stated_in_drawing_units():

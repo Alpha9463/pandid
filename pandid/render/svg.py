@@ -1823,9 +1823,11 @@ def boundary_flag(u, frame) -> Pennant:
 
 
 #: Positions of the two strokes of a pneumatic double cross-hatch along
-#: the run, relative to the mark, and how far each reaches across it.
-#: Each stroke leans 6 units along by 10 across, so it reads as a slash.
+#: the run, relative to the mark.
 HATCH_ALONG = (-2.5, 1.5)
+#: Half-reach of each stroke along and across the run. Each stroke leans
+#: 6 units along by 10 across, so it reads as a slash. The draw.io
+#: exporter derives its stroke angle and length from this.
 HATCH_ARM = (3.0, 5.0)
 
 
@@ -4926,16 +4928,18 @@ class SvgRenderer:
             if s.kind == "pneumatic":
                 # Pneumatic hatching (ISO 15519-2 Annex A.1.09, 433A) on the
                 # line's own rung, ISO 10628-1 5.3.1 c).
+                along, across = HATCH_ARM
                 for mx, my, horiz, _at in pneumatic_marks(points):
                     for off in HATCH_ALONG:
                         if horiz:
-                            lines.append(f'    <line x1="{mx+off-3:.1f}" y1="{my+5:.1f}" '
-                                         f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" '
-                                         f'stroke-width="{LineWeight.DETAIL.width:g}" />')
+                            x1, y1 = mx + off - along, my + across
+                            x2, y2 = mx + off + along, my - across
                         else:
-                            lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
-                                         f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" '
-                                         f'stroke-width="{LineWeight.DETAIL.width:g}" />')
+                            x1, y1 = mx - across, my + off - along
+                            x2, y2 = mx + across, my + off + along
+                        lines.append(f'    <line x1="{x1:.1f}" y1="{y1:.1f}" '
+                                     f'x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}" '
+                                     f'stroke-width="{LineWeight.DETAIL.width:g}" />')
 
         # Final pass: stream numbers on white halos. A label on a vertical
         # run reads bottom to top, along the line (ISO 15519-1 5.1.5,
