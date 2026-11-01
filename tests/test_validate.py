@@ -2,7 +2,8 @@
 
 import pytest
 
-from pandid import Flowsheet, units as U
+from pandid import Condenser, Flowsheet, units as U
+from pandid.portgeom import pinned_y, port_point
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
 
@@ -2060,3 +2061,108 @@ def test_two_runs_that_only_meet_end_to_end_are_not_parallel_lines():
     fs.connect(b.outlet, bp.inlet)
     fs.layout()
     assert _crowded_lines(fs) == []
+
+
+# --- a line drawn through the unit it connects to (#468) -----------------------
+
+
+def _exchanger_run() -> tuple[Flowsheet, U.HeatExchanger, U.Feed, U.Product]:
+    """E-101 between a feed below it and a product to its right.
+
+    ``shell_in`` is on the N face and ``shell_out`` on the S face, so a line from
+    the feed has to come round to the top, and one to the product round from
+    the bottom.
+    """
+    fs = Flowsheet("own unit")
+    feed = fs.add(U.Feed("F")).pin(x=200, y=300)
+    e = fs.add(U.HeatExchanger("E-101")).pin(x=300, y=100)
+    prod = fs.add(U.Product("P")).pin(x=600, y=40)
+    fs.connect(feed.outlet, e.shell_in)
+    fs.connect(e.shell_out, prod.inlet)
+    fs.route()
+    return fs, e, feed, prod
+
+
+def _own_unit_findings(fs: Flowsheet) -> list[str]:
+    return [
+        i.message
+        for i in fs.validate()
+        if i.code == "route-crosses-unit" and "drawn through" in i.message
+    ]
+
+
+def test_a_line_drawn_up_through_the_unit_it_runs_to_is_reported():
+    """The case from the amine sheet: the nozzle is on the N face and the line
+    comes up from the south, through the tube bundle, to reach it."""
+    fs, e, feed, _ = _exchanger_run()
+    (x, _), (_, y) = port_point(e, e.frame, "shell_in"), port_point(feed, feed.frame, "outlet")
+    fs.streams[0].via([(x, y)])
+
+    (said,) = _own_unit_findings(fs)
+    assert said.startswith("stream S1 is drawn through E-101, which it runs to")
+    assert "E-101.shell_in" in said and "N face" in said
+
+
+def test_a_line_that_leaves_through_the_wrong_face_of_its_source_is_reported():
+    """The same shape at the other end: out of the S nozzle, then up through
+    the exchanger to the product above it."""
+    fs, e, _, prod = _exchanger_run()
+    (x, _), (_, y) = port_point(e, e.frame, "shell_out"), port_point(prod, prod.frame, "inlet")
+    fs.streams[1].via([(x, y)])
+
+    (said,) = _own_unit_findings(fs)
+    assert said.startswith("stream S2 is drawn through E-101, which it leaves from")
+    assert "E-101.shell_out" in said and "S face" in said
+
+
+def test_a_line_that_reaches_its_nozzle_from_the_nozzle_face_is_not_reported():
+    """Every run ends inside its own box's outline at the nozzle; that is not
+    the line crossing the unit."""
+    fs, *_ = _exchanger_run()
+    assert _own_unit_findings(fs) == []
+
+
+def test_a_line_leaving_along_the_top_of_a_round_shell_is_not_reported():
+    """A condenser's top nozzle sits on the circle, below the corner of its box,
+    so a line leaving it sideways runs inside the box without entering the
+    shell. Example 19 draws its reflux line exactly so."""
+    fs = Flowsheet("round shell")
+    feed = fs.add(U.Feed("F"))
+    e = fs.add(Condenser("E-402", width=70, height=70)).pin(mirrored="y").pin(x=300, y=100)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=pinned_y(e, "shell_out"))
+    fs.connect(feed.outlet, e.shell_in)
+    run = fs.connect(e.shell_out, prod.inlet)
+    fs.route()
+    run.via([port_point(e, e.frame, "shell_out")])
+    assert _own_unit_findings(fs) == []
+
+
+def test_a_branch_drawn_from_the_middle_of_its_tee_is_not_reported():
+    """A tee is drawn as lines meeting at its centre, so a branch that starts
+    there and doubles back out through its own nozzle is drawing the tee.
+    Example 20 draws its branches this way."""
+    fs = Flowsheet("tee")
+    tee = fs.add(U.Tee()).pin(x=300, y=200)
+    side = fs.add(U.Product("B")).pin(x=500, y=400)
+    fs.connect(fs.add(U.Feed("F")).pin(x=60, y=100).outlet, tee.inlet)
+    fs.connect(tee.outlet, fs.add(U.Product("P")).pin(x=500, y=100).inlet)
+    branch = fs.connect(tee.branch, side.inlet)
+    fs.route()
+    assert tee.frame is not None
+    (x, _), (_, y) = port_point(tee, tee.frame, "branch"), port_point(side, side.frame, "inlet")
+    branch.via([(x, tee.frame.y + tee.frame.h / 2), (x, y)])
+    assert _own_unit_findings(fs) == []
+
+
+def test_a_straight_line_drawn_through_the_unit_it_runs_to_is_reported():
+    """via([]) asks for no corners, and the sheet draws a straight line from
+    nozzle to nozzle -- here up through E-101 to the nozzle on its top. The
+    check reads that line, not only the waypoints."""
+    fs = Flowsheet("direct")
+    feed = fs.add(U.Feed("F")).pin(x=330, y=300)
+    e = fs.add(U.HeatExchanger("E-101")).pin(x=300, y=100)
+    fs.connect(feed.outlet, e.shell_in).via([])
+    fs.to_svg()
+
+    (said,) = _own_unit_findings(fs)
+    assert said.startswith("stream S1 is drawn through E-101, which it runs to")
