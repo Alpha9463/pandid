@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pandid.inline import position
 from pandid.layout.stages import process_streams, process_units
 
 if TYPE_CHECKING:
@@ -161,7 +162,7 @@ def infer_backbone(fs: Flowsheet) -> Backbone:
         covered.update(path)
         runs.append(BackboneRun(
             source_index, dest_index, tuple(members), tuple(path),
-            tuple(streams[index]._inline_at for index in path[:-1]),
+            tuple(position(streams[index]) for index in path[:-1]),
         ))
     if len(covered) != len(streams):
         raise ValueError("material cycle requires cycle breaking before inference")

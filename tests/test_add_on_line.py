@@ -11,7 +11,7 @@ from pandid.portgeom import port_point
 from pandid.state import State
 
 
-def test_place_on_keeps_the_logical_stream_and_places_the_valve() -> None:
+def test_add_on_keeps_the_line_handle_and_places_the_valve() -> None:
     """Keep the caller's stream handle through insertion and a spec round-trip.
 
     Returns
@@ -27,7 +27,7 @@ def test_place_on_keeps_the_logical_stream_and_places_the_valve() -> None:
     instrument = fs.add_instrument("FT", 101, sensing=run, at=0.6)
     valve = Valve("HV-101")
 
-    assert fs.place_on(run, valve, at=0.4) is valve
+    assert fs.add(valve, on=run, at=0.4) is valve
     assert fs.streams[0] is run
     assert run.dest is valve.inlet
     assert fs.streams[1].source is valve.outlet
@@ -54,7 +54,7 @@ def test_place_on_keeps_the_logical_stream_and_places_the_valve() -> None:
     assert rebuilt.units[-1].host is rebuilt.streams[0]
 
 
-def test_place_on_orders_repeated_insertions_by_fraction() -> None:
+def test_add_on_orders_insertions_by_fraction() -> None:
     """Insert devices in run order even when calls arrive in reverse order.
 
     Returns
@@ -66,8 +66,8 @@ def test_place_on_orders_repeated_insertions_by_fraction() -> None:
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
     run = fs.connect(feed.outlet, product.inlet)
-    later = fs.place_on(run, Valve("HV-2"), at=0.75)
-    earlier = fs.place_on(run, Valve("HV-1"), at=0.25)
+    later = fs.add(Valve("HV-2"), on=run, at=0.75)
+    earlier = fs.add(Valve("HV-1"), on=run, at=0.25)
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-2", "Product"]
     assert [s._inline_at for s in fs.streams] == [0.25, 0.75, None]
@@ -77,7 +77,7 @@ def test_place_on_orders_repeated_insertions_by_fraction() -> None:
     assert earlier.frame.x < later.frame.x
     rebuilt = Flowsheet.from_dict(fs.to_dict())
     assert rebuilt.to_dict() == fs.to_dict()
-    rebuilt.place_on(rebuilt.streams[0], Valve("HV-3"), at=0.5)
+    rebuilt.add(Valve("HV-3"), on=rebuilt.streams[0], at=0.5)
     assert [s._inline_at for s in rebuilt.streams] == [0.25, 0.5, 0.75, None]
 
 
@@ -93,8 +93,8 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
     run = fs.connect(feed.outlet, product.inlet)
-    first = fs.place_on(run, Valve("HV-1"), at=0.25)
-    second = fs.place_on(run, Valve("HV-2"), at=0.75)
+    first = fs.add(Valve("HV-1"), on=run, at=0.25)
+    second = fs.add(Valve("HV-2"), on=run, at=0.75)
 
     fs.layout()
     assert fs._coarse_layout_candidate is True
@@ -134,8 +134,8 @@ def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> 
     product = fs.add(Product("Product"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, product.inlet)
-    first = fs.place_on(run, Valve("HV-1"), at=0.25)
-    second = fs.place_on(run, Valve("HV-2"), at=0.75)
+    first = fs.add(Valve("HV-1"), on=run, at=0.25)
+    second = fs.add(Valve("HV-2"), on=run, at=0.75)
 
     fs.layout()
     assert fs._coarse_layout_candidate is True
@@ -165,7 +165,7 @@ def test_south_discharge_does_not_put_inline_valves_above_its_outlet() -> None:
     reactor = fs.add(Reactor("R-101"))
     product = fs.add(Product("Product")).pin(y=50)
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_on(run, Valve("HV-1"), at=0.5)
+    fs.add(Valve("HV-1"), on=run, at=0.5)
 
     fs.layout()
     assert fs._coarse_layout_candidate is False
@@ -188,7 +188,7 @@ def test_inline_chain_preserves_a_pinned_branch_origin() -> None:
     product = fs.add(Product("Product"))
     branch = fs.add(Product("Branch"))
     run = fs.connect(feed.outlet, tee.inlet)
-    valve = fs.place_on(run, Valve("HV-1"), at=0.5)
+    valve = fs.add(Valve("HV-1"), on=run, at=0.5)
     fs.connect(tee.outlet, product.inlet)
     fs.connect(tee.branch, branch.inlet)
 
@@ -214,7 +214,7 @@ def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
     feed_a = fs.add(Feed("Feed A"))
     product_a = fs.add(Product("Product A"))
     run = fs.connect(feed_a.outlet, product_a.inlet)
-    fs.place_on(run, Valve("HV-A").pin(orientation=180), at=0.5)
+    fs.add(Valve("HV-A").pin(orientation=180), on=run, at=0.5)
 
     feed_b = fs.add(Feed("Feed B"))
     valve_b = fs.add(Valve("HV-B"))
@@ -239,7 +239,7 @@ def test_rotation_only_pin_places_inline_valve_on_its_host_run() -> None:
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100)
     product = fs.add(Product("Product")).pin(port="inlet", x=900, y=100)
     run = fs.connect(feed.outlet, product.inlet)
-    valve = fs.place_on(run, Valve("V").pin(orientation=90), at=0.5)
+    valve = fs.add(Valve("V").pin(orientation=90), on=run, at=0.5)
 
     fs.layout()
     assert fs._coarse_layout_candidate is True
@@ -267,8 +267,8 @@ def test_adjacent_logical_runs_use_their_own_fractions() -> None:
     product = fs.add(Product("Product"))
     upstream = fs.connect(feed.outlet, middle.inlet)
     downstream = fs.connect(middle.outlet, product.inlet)
-    first = fs.place_on(upstream, Valve("HV-A"), at=0.25)
-    second = fs.place_on(downstream, Valve("HV-B"), at=0.75)
+    first = fs.add(Valve("HV-A"), on=upstream, at=0.25)
+    second = fs.add(Valve("HV-B"), on=downstream, at=0.75)
 
     fs.layout()
     assert fs._coarse_layout_candidate is True
@@ -305,8 +305,8 @@ def test_adjacent_roots_with_handwired_preference_keep_full_placement() -> None:
     upstream = fs.connect(feed.outlet, first_boundary.inlet)
     middle = fs.connect(first_boundary.outlet, handwired.inlet)
     downstream = fs.connect(handwired.outlet, product.inlet)
-    fs.place_on(upstream, Valve("HV-A"), at=0.1)
-    fs.place_on(downstream, Valve("HV-B"), at=0.9)
+    fs.add(Valve("HV-A"), on=upstream, at=0.1)
+    fs.add(Valve("HV-B"), on=downstream, at=0.9)
     fs._set_inline_at(middle, 0.25)
 
     fs.layout()
@@ -320,7 +320,7 @@ def test_adjacent_roots_with_handwired_preference_keep_full_placement() -> None:
     assert quality.bends < 12
 
 
-def test_place_on_refuses_invalid_calls_without_mutation() -> None:
+def test_add_on_refuses_invalid_calls_without_mutation() -> None:
     """Reject unsupported inputs before adding a unit or splitting a stream.
 
     Returns
@@ -335,17 +335,17 @@ def test_place_on_refuses_invalid_calls_without_mutation() -> None:
     before = fs.to_dict()
     for device, at in ((Valve("V-1"), 0), (Tee(), 0.5), (Valve("V-2"), 1)):
         with pytest.raises(ValueError):
-            fs.place_on(run, device, at=at)
+            fs.add(device, on=run, at=at)
         assert fs.to_dict() == before
         assert run.dest is product.inlet
     run.via([(200, 100)])
     before = fs.to_dict()
     with pytest.raises(ValueError, match="manual"):
-        fs.place_on(run, Valve("V-3"), at=0.5)
+        fs.add(Valve("V-3"), on=run, at=0.5)
     assert fs.to_dict() == before
 
 
-def test_place_on_restores_ports_after_numbering_failure() -> None:
+def test_add_on_restores_ports_after_numbering_failure() -> None:
     """Restore every pre-existing object if renumbering rejects a split.
 
     Returns
@@ -362,7 +362,7 @@ def test_place_on_restores_ports_after_numbering_failure() -> None:
     before = fs.to_dict()
 
     with pytest.raises(ValueError, match="unknown"):
-        fs.place_on(run, device, at=0.5)
+        fs.add(device, on=run, at=0.5)
 
     assert fs.to_dict() == before
     assert fs.streams == [run]
@@ -372,7 +372,7 @@ def test_place_on_restores_ports_after_numbering_failure() -> None:
     assert device.inlet.stream is None and device.outlet.stream is None
 
 
-def test_place_on_respects_branch_and_exact_device_pin() -> None:
+def test_add_on_respects_branch_and_exact_device_pin() -> None:
     """Keep a branch junction and an exact pinned device as placed.
 
     Returns
@@ -389,7 +389,7 @@ def test_place_on_respects_branch_and_exact_device_pin() -> None:
     run = fs.connect(junction.outlet, product.inlet)
     fs.connect(junction.branch, branch.inlet)
     valve = Valve("HV-101").pin(x=400, y=180)
-    fs.place_on(run, valve, at=0.2)
+    fs.add(valve, on=run, at=0.2)
 
     fs.to_svg()
     assert valve.frame is not None and (valve.frame.x, valve.frame.y) == (400, 180)
@@ -410,9 +410,70 @@ def test_position_after_pinned_device_uses_full_run_fraction() -> None:
     product = fs.add(Product("Product")).pin(port="inlet", x=900, y=100)
     run = fs.connect(feed.outlet, product.inlet)
     first = Valve("HV-1").pin(x=300, y=92.5)
-    fs.place_on(run, first, at=0.25)
-    later = fs.place_on(run, Valve("HV-2"), at=0.75)
+    fs.add(first, on=run, at=0.25)
+    later = fs.add(Valve("HV-2"), on=run, at=0.75)
 
     fs.to_svg()
     assert first.frame is not None and first.frame.x == 300
     assert later.frame is not None and abs(later.frame.cx - 700) < 1
+
+
+def test_devices_without_at_go_in_the_order_added() -> None:
+    """Put several devices on a line without inventing fractions for them.
+
+    Returns
+    -------
+    None
+        They sit in the order added, spread evenly, and round-trip.
+    """
+    fs = Flowsheet("Three valves")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100)
+    product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=100)
+    line = fs.connect(feed.outlet, product.inlet)
+    valves = [fs.add(Valve(f"HV-{n}"), on=line) for n in (1, 2, 3)]
+
+    assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-2", "HV-3", "Product"]
+    assert infer_backbone(fs).runs[0].inline_at == (0.25, 0.5, 0.75)
+    fs.layout()
+    centres = [valve.frame.cx for valve in valves if valve.frame is not None]
+    assert centres == pytest.approx([400, 700, 1000], abs=1)
+    spec = fs.to_dict()
+    assert not any("inline_at" in entry for entry in spec["streams"])
+    assert Flowsheet.from_dict(spec).to_dict() == spec
+
+
+def test_a_device_with_at_goes_before_any_with_a_larger_at() -> None:
+    """Order a stated fraction among devices added without one.
+
+    Returns
+    -------
+    None
+        Each unstated device keeps its place relative to the stated ones.
+    """
+    fs = Flowsheet("Mixed positions")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.add(Valve("HV-1"), on=line)
+    fs.add(Valve("HV-2"), on=line, at=0.6)
+    fs.add(Valve("HV-3"), on=line)
+    fs.add(Valve("HV-4"), on=line, at=0.3)
+
+    assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-4", "HV-2", "HV-3", "Product"]
+    assert infer_backbone(fs).runs[0].inline_at == pytest.approx((0.15, 0.3, 0.6, 0.8))
+
+
+def test_at_without_on_is_refused() -> None:
+    """Refuse a position that names no line, for a device and a station.
+
+    Returns
+    -------
+    None
+        Nothing is added.
+    """
+    fs = Flowsheet("No line")
+    with pytest.raises(ValueError, match="on="):
+        fs.add(Valve("HV-1"), at=0.5)
+    with pytest.raises(ValueError, match="on="):
+        fs.add_valve_station("CV-1", at=0.5)
+    assert fs.units == []

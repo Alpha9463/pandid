@@ -141,7 +141,7 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
     reactor = fs.add(Reactor("R-101")).pin(col=0)
     product = fs.add(Product("Product")).pin(col=product_col)
     run = fs.connect(reactor.outlet, product.inlet)
-    station = fs.place_valve_station_on(run, "CV-101")
+    station = fs.add_valve_station("CV-101", on=run)
 
     fs.layout()
     first = [(unit.frame.x, unit.frame.y) for unit in fs.units]
@@ -181,7 +181,7 @@ def test_station_does_not_force_an_outward_facing_elbow() -> None:
     feed = fs.add(Feed("Feed")).pin(x=1300, y=300)
     reactor = fs.add(Reactor("R-101")).pin(x=100, y=100, orientation=90)
     run = fs.connect(feed.outlet, reactor.feed)
-    station = fs.place_valve_station_on(run, "CV-101")
+    station = fs.add_valve_station("CV-101", on=run)
 
     fs.layout()
     assert feed.frame is not None and reactor.frame is not None
@@ -209,7 +209,7 @@ def test_station_compacts_an_equipment_train_from_a_pinned_origin() -> None:
     product = fs.add(Product("Product"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, product.inlet)
-    station = fs.place_valve_station_on(run, "CV-101")
+    station = fs.add_valve_station("CV-101", on=run)
 
     fs.route()
     assert reactor.frame is not None and product.frame is not None
@@ -239,7 +239,7 @@ def test_branch_station_keeps_a_clear_compact_default_route() -> None:
     waste = fs.add(Product("Waste"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, separator.feed)
-    fs.place_valve_station_on(run, "CV-101")
+    fs.add_valve_station("CV-101", on=run)
     fs.connect(separator.overflow, product.inlet)
     fs.connect(separator.underflow, waste.inlet)
 
@@ -270,7 +270,7 @@ def test_builtin_layout_route_checks_coarse_quality(explicit_engine: bool) -> No
     product = fs.add(Product("Product"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_valve_station_on(run, "CV-101")
+    fs.add_valve_station("CV-101", on=run)
 
     if explicit_engine:
         fs.layout(engine=default_layout_engine)
@@ -303,7 +303,7 @@ def test_coarse_quality_trials_leave_final_search_to_the_live_drawing(
     product = fs.add(Product("Product"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_valve_station_on(run, "CV-101")
+    fs.add_valve_station("CV-101", on=run)
 
     search = Mock(wraps=search_mod.search_layout)
     monkeypatch.setattr(search_mod, "search_layout", search)
@@ -329,7 +329,7 @@ def test_custom_router_uses_full_station_layout() -> None:
     product = fs.add(Product("Product"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_valve_station_on(run, "CV-101")
+    fs.add_valve_station("CV-101", on=run)
 
     fs.layout()
     assert fs._coarse_layout_candidate is True
@@ -350,7 +350,7 @@ def test_custom_layout_survives_custom_routing_after_a_coarse_layout() -> None:
     reactor = fs.add(Reactor("R-101"))
     product = fs.add(Product("Product"))
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_valve_station_on(run, "CV-101")
+    fs.add_valve_station("CV-101", on=run)
     fs.layout()
     assert fs._coarse_layout_candidate is True
     assert reactor.frame is not None
@@ -374,7 +374,7 @@ def test_delegated_builtin_layout_route_checks_coarse_quality() -> None:
     reactor = fs.add(Reactor("R-101"))
     product = fs.add(Product("Product"))
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_valve_station_on(run, "CV-101")
+    fs.add_valve_station("CV-101", on=run)
 
     fs.layout(engine=_DelegateLayout())
     assert fs._coarse_layout_candidate is True
@@ -382,7 +382,7 @@ def test_delegated_builtin_layout_route_checks_coarse_quality() -> None:
     assert fs._coarse_layout_candidate is False
 
 
-def test_place_valve_station_on_retains_run_and_fraction() -> None:
+def test_station_on_a_line_retains_the_line_and_fraction() -> None:
     """Insert a station into one material run without replacing its handle.
 
     Returns
@@ -396,7 +396,7 @@ def test_place_valve_station_on_retains_run_and_fraction() -> None:
     run = fs.connect(feed.outlet, product.inlet, size=80, service="P")
     instrument = fs.add_instrument("FT", 101, sensing=run, at=0.75)
 
-    station = fs.place_valve_station_on(run, "CV-101", at=0.3)
+    station = fs.add_valve_station("CV-101", on=run, at=0.3)
     assert fs.streams[0] is run
     assert run.dest is station.inlet
     assert station.outlet.stream is not None
@@ -428,7 +428,7 @@ def test_station_insertion_rejects_invalid_run_without_mutation() -> None:
     run = fs.connect(feed.outlet, product.inlet)
     original = fs.to_dict()
     with pytest.raises(ValueError, match="fraction"):
-        fs.place_valve_station_on(run, "CV-101", at=1)
+        fs.add_valve_station("CV-101", on=run, at=1)
     assert fs.to_dict() == original
     assert run.dest is product.inlet
 
@@ -445,15 +445,8 @@ def test_station_reverse_flow_and_optional_members() -> None:
     feed = fs.add(Feed("Feed")).pin(mirrored=True).pin(port="outlet", x=1300, y=300)
     product = fs.add(Product("Product")).pin(mirrored=True).pin(port="inlet", x=100, y=300)
     run = fs.connect(feed.outlet, product.inlet)
-    station = fs.place_valve_station_on(
-        run,
-        "CV-101",
-        at=0.7,
-        isolation=False,
-        reducers=False,
-        bypass=False,
-        drains=0,
-        mirrored=True,
+    station = fs.add_valve_station(
+        "CV-101", on=run, at=0.7, isolation=False, reducers=False, bypass=False, drains=0
     )
 
     fs.layout()
@@ -568,8 +561,8 @@ def test_two_stations_use_fractions_of_the_original_run() -> None:
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=2000, y=300)
     run = fs.connect(feed.outlet, product.inlet)
-    later = fs.place_valve_station_on(run, "CV-2", at=0.7)
-    earlier = fs.place_valve_station_on(run, "CV-1", at=0.3)
+    later = fs.add_valve_station("CV-2", on=run, at=0.7)
+    earlier = fs.add_valve_station("CV-1", on=run, at=0.3)
 
     fs.layout()
     assert earlier.control.frame is not None and later.control.frame is not None
@@ -591,14 +584,7 @@ def test_inline_pass_does_not_scatter_a_tee_free_station() -> None:
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=1800, y=300)
     run = fs.connect(feed.outlet, product.inlet)
-    station = fs.place_valve_station_on(
-        run,
-        "CV-101",
-        at=0.5,
-        gap=80,
-        bypass=False,
-        drains=0,
-    )
+    station = fs.add_valve_station("CV-101", on=run, at=0.5, bypass=False, drains=0)
 
     fs.layout()
     xs = [unit.frame.x for unit in station.members]
@@ -622,20 +608,21 @@ def test_spec_rejects_missing_station_tees_before_layout() -> None:
         Flowsheet.from_dict(spec)
 
 
-def test_inline_api_defaults_to_the_midpoint() -> None:
-    """Use the run midpoint when the caller omits a fraction.
+def test_a_device_or_station_without_at_sits_mid_line() -> None:
+    """Draw a lone item at the line's midpoint without storing a fraction.
 
     Returns
     -------
     None
-        A valve and a station each store a preferred half-run position.
+        Nothing the author did not type is stored or written to the spec.
     """
     valve_sheet = Flowsheet("Default valve")
     feed = valve_sheet.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = valve_sheet.add(Product("Product")).pin(port="inlet", x=1300, y=300)
     run = valve_sheet.connect(feed.outlet, product.inlet)
-    valve = valve_sheet.place_on(run, Valve("HV-1"))
-    assert run._inline_at == 0.5
+    valve = valve_sheet.add(Valve("HV-1"), on=run)
+    assert run._inline_at is None
+    assert "inline_at" not in valve_sheet.to_dict()["streams"][0]
     valve_sheet.layout()
     assert valve.frame is not None and abs(valve.frame.cx - 700) < 1
 
@@ -643,8 +630,11 @@ def test_inline_api_defaults_to_the_midpoint() -> None:
     feed = station_sheet.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = station_sheet.add(Product("Product")).pin(port="inlet", x=1300, y=300)
     run = station_sheet.connect(feed.outlet, product.inlet)
-    station = station_sheet.place_valve_station_on(run, "CV-1")
-    assert run._inline_at == 0.5
+    station = station_sheet.add_valve_station("CV-1", on=run)
+    assert run._inline_at is None
+    spec = station_sheet.to_dict()
+    assert "at" not in spec["stations"][0]
+    assert Flowsheet.from_dict(spec).to_dict() == spec
     station_sheet.layout()
     assert station.control.frame is not None
     assert abs(station.control.frame.cx - 700) < 1

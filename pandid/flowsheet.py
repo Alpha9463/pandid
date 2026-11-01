@@ -703,8 +703,9 @@ class Flowsheet:
         self.annotations.append(annotation)
         return annotation
 
-    def add(self, unit: _UnitT) -> _UnitT:
-        """Add a unit to the sheet.
+    def add(self, unit: _UnitT, *, on: Stream | None = None,
+            at: float | None = None) -> _UnitT:
+        """Add a unit to the sheet, optionally in a line.
 
         Tags must be unique, except for symbols that show one thing in
         several places: an interlock or logic square, and a utility header
@@ -713,10 +714,20 @@ class Flowsheet:
         repeat keeps its drawn tag but is given a unique name such as
         ``I-1 (2)``. A refused unit leaves the sheet unchanged.
 
+        With ``on``, a valve, reducer or fitting is put in that line, which
+        keeps its handle. Devices sit in flow order: in the order they are
+        added, except that one given ``at`` goes before any with a larger
+        ``at``.
+
         Parameters
         ----------
         unit : Unit
             Unit to add.
+        on : Stream or None, optional
+            Material line returned by :meth:`connect` to put the unit in.
+        at : float or None, optional
+            Rough position on that line, as a fraction strictly between 0
+            and 1 in the direction of flow.
 
         Returns
         -------
@@ -726,9 +737,16 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the unit is already on this or another sheet, or its name is
-            taken by a unit it may not repeat.
+            If the unit is already on this or another sheet, its name is
+            taken by a unit it may not repeat, ``at`` is given without
+            ``on``, or the unit cannot go in that line.
         """
+        if on is not None:
+            from pandid.inline import insert_device
+
+            return insert_device(self, on, unit, at=at)
+        if at is not None:
+            raise ValueError(f"{unit.name}: at= is a position on the line given by on=")
         clash = self._refuse_unaddable(unit)
         if clash is not None:
             # Derive the new name from the tag; a tee has none, so use its name.
@@ -1150,91 +1168,6 @@ class Flowsheet:
         stream._inline_at = float(at)
         self._invalidate_layout()
 
-    def place_on(self, run: Stream, device: _UnitT, *, at: float = 0.5) -> _UnitT:
-        """Insert a simple inline device on a material run.
-
-        The original stream remains the run's stable handle. Its physical
-        segments and the device are added to this flowsheet in flow order.
-
-        Parameters
-        ----------
-        run : Stream
-            Existing material run or handle returned by an earlier insertion.
-        device : Unit
-            Fresh two-port valve, reducer, or fitting.
-        at : float, default=0.5
-            Preferred fraction of the complete run.
-
-        Returns
-        -------
-        Unit
-            The inserted device.
-
-        Raises
-        ------
-        ValueError
-            If the run, device, or fraction cannot be inserted safely.
-        """
-        from pandid.inline import insert_device
-
-        return insert_device(self, run, device, at=at)
-
-    def place_valve_station_on(self, run: Stream, tag: str, *, at: float = 0.5,
-                               **station_options) -> "ValveStation":
-        """Build and place a valve station on a material run.
-
-        Parameters
-        ----------
-        run : Stream
-            Original material run handle.
-        tag : str
-            Control valve tag used to name the station members.
-        at : float, default=0.5
-            Preferred fraction of the complete run.
-        **station_options : Any
-            Options accepted by ``add_valve_station`` other than coordinates.
-
-        Returns
-        -------
-        ValveStation
-            The station handle with its members wired into the run.
-
-        Raises
-        ------
-        ValueError
-            If the run, fraction, or station options are invalid.
-        """
-        from dataclasses import replace
-
-        from pandid.inline import insert_station
-
-        if (isinstance(at, bool) or not isinstance(at, (int, float))
-                or not isfinite(at) or not 0 < at < 1):
-            raise ValueError("station fraction must be a finite number between 0 and 1")
-        if "x" in station_options or "y" in station_options:
-            raise ValueError("stream-relative stations do not accept x or y")
-        local = {}
-        for key, default in (("gap", DEFAULT_GAP),
-                             ("bypass_rise", DEFAULT_BYPASS_RISE),
-                             ("drain_drop", DEFAULT_DRAIN_DROP)):
-            value = station_options.pop(key, default)
-            if (isinstance(value, bool) or not isinstance(value, (int, float))
-                    or not isfinite(value) or value <= 0):
-                raise ValueError(f"{key} must be a positive finite number")
-            local[key] = float(value)
-        mirrored = station_options.pop("mirrored", False)
-        if not isinstance(mirrored, bool):
-            raise ValueError("mirrored must be a boolean")
-        with self._unchanged_if_it_raises():
-            station = self.add_valve_station(tag, **station_options)
-            index = next(i for i, assembly in enumerate(self._station_assemblies)
-                         if assembly.station is station)
-            self._station_assemblies[index] = replace(
-                self._station_assemblies[index], mirrored=mirrored, **local,
-            )
-            insert_station(self, run, station, at=at)
-        return station
-
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """Return the one anchor an :meth:`add_instrument` call named.
 
@@ -1497,6 +1430,7 @@ class Flowsheet:
         service: str | float | None = None,
         sequence: str | float | None = None, spec: str | float | None = None,
         insulation: str | float | None = None,
+        on: Stream | None = None, at: float | None = None,
     ) -> "ValveStation":
         """Build a wired control valve station.
 
@@ -1505,6 +1439,8 @@ class Flowsheet:
         the station as one assembly when its run has a clear straight
         corridor. ``mirrored``, ``gap``, ``bypass_rise`` and ``drain_drop``
         describe a drawn run, so they are refused without ``x`` and ``y``.
+        With ``on`` the station is put in that line, as
+        :meth:`add` puts a device there.
 
         Parameters
         ----------
@@ -1537,6 +1473,10 @@ class Flowsheet:
             :mod:`pandid.stations`.
         size, schedule, service, sequence, spec, insulation : str, float or None, optional
             Line-number components for the bypass and drain legs.
+        on : Stream or None, optional
+            Material line returned by :meth:`connect` to put the station in.
+        at : float or None, optional
+            Rough position on that line, as for :meth:`add`.
 
         Returns
         -------
@@ -1548,8 +1488,10 @@ class Flowsheet:
         ValueError
             If ``drains`` is out of range, a bypass lacks isolation, only one
             of ``x`` and ``y`` is given, run options are given without them,
-            or ``bypass_over`` names an unknown or omitted member.
+            ``bypass_over`` names an unknown or omitted member, ``at`` is
+            given without ``on``, or the station cannot go in that line.
         """
+        from pandid.inline import insert_station, split_point
         from pandid.portgeom import port_offset, resolve_size
         from pandid.stations import (
             BYPASS_ANCHORS, ROLE_WORDS, ValveStation, member_tag, member_mirror,
@@ -1557,6 +1499,10 @@ class Flowsheet:
         )
         from pandid.units import Reducer, Tee, Valve
 
+        if on is not None:
+            split_point(self, on, at)  # refuse before any member is added
+        elif at is not None:
+            raise ValueError(f"{tag}: at= is a position on the line given by on=")
         if drains not in (0, 1, 2):
             raise ValueError(
                 f"{tag}: drains= is how many drain valves the station carries, 0, 1 "
@@ -1787,6 +1733,8 @@ class Flowsheet:
             drain_drop=DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop,
             bypass_over=bypass_over,
         ))
+        if on is not None:
+            insert_station(self, on, station, at=at)
         return station
 
     def add_component(self, component: "Component") -> "Component":
