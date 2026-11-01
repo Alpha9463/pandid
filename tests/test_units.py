@@ -711,6 +711,37 @@ def test_only_the_kettle_carries_the_bottoms_draw():
         plate.bottoms
 
 
+class _CountingPorts(dict):
+    """A port table that counts how often it is listed."""
+
+    listed = 0
+
+    def __iter__(self):
+        """Count a listing, then list."""
+        type(self).listed += 1
+        return super().__iter__()
+
+
+def test_a_probe_for_an_absent_attribute_does_not_list_the_ports():
+    """The renderer asks every unit for attributes only some classes carry,
+    such as ``large_end``, and discards the error; listing the ports for each
+    discarded message was a measurable part of a large render (#574). The
+    list is still written when the error is shown."""
+    pump = U.Pump("P-101")
+    ports = _CountingPorts(pump.ports)
+    pump.__dict__["ports"] = ports
+    assert getattr(pump, "large_end", "inlet") == "inlet"
+    assert not hasattr(pump, "normal_position")
+    assert _CountingPorts.listed == 0
+    misspelt = "dischrage"
+    with pytest.raises(AttributeError) as typo:
+        getattr(pump, misspelt)
+    assert str(typo.value) == (
+        "Pump 'P-101' has no attribute or port 'dischrage'; "
+        "available ports: ['discharge', 'suction']"
+    )
+
+
 # Exactly what 0.1.0 shipped, in order. Written out here rather than read off
 # the class so the test compares against the release and not against itself.
 #

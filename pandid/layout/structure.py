@@ -21,8 +21,6 @@ class Edge:
     ----------
     stream, source, dest : int
         Process-stream and process-unit indices.
-    source_role, dest_role : str
-        Port roles at the two ends of the connection.
     recycle : bool
         Cycle-break decision already made for this stream.
     """
@@ -30,8 +28,6 @@ class Edge:
     stream: int
     source: int
     dest: int
-    source_role: str
-    dest_role: str
     recycle: bool
 
 
@@ -41,16 +37,12 @@ class ArmRegion:
 
     Attributes
     ----------
-    entry_stream : int
-        The stream leaving the split on this arm.
-    units, streams : tuple[int, ...]
-        Process indices on any forward path through the arm, including
-        the shared split and merge endpoints.
+    units : tuple[int, ...]
+        Process-unit indices on any forward path through the arm,
+        including the shared split and merge endpoints.
     """
 
-    entry_stream: int
     units: tuple[int, ...]
-    streams: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -273,7 +265,6 @@ def _branch_regions(
             arms = []
             for entry in exits:
                 region = {split, entry.dest, merge}
-                arm_streams = {entry.stream}
                 stack = [entry.dest]
                 while stack:
                     unit = stack.pop()
@@ -282,17 +273,10 @@ def _branch_regions(
                     for edge in outgoing[unit]:
                         if not to_merge & (1 << rank[edge.dest]):
                             continue
-                        arm_streams.add(edge.stream)
                         if edge.dest not in region:
                             region.add(edge.dest)
                             stack.append(edge.dest)
-                arms.append(
-                    ArmRegion(
-                        entry.stream,
-                        tuple(sorted(region, key=rank.__getitem__)),
-                        tuple(sorted(arm_streams)),
-                    )
-                )
+                arms.append(ArmRegion(tuple(sorted(region, key=rank.__getitem__))))
             result.append(BranchRegion(split, merge, tuple(arms), bool(unavoidable & merge_bit)))
     return tuple(result)
 
@@ -323,8 +307,6 @@ def infer(fs: Flowsheet) -> Structure:
             position,
             index[stream.source.owner],
             index[stream.dest.owner],
-            stream.source.role,
-            stream.dest.role,
             stream.is_recycle,
         )
         for position, stream in enumerate(streams)

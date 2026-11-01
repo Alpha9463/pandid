@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import copy
+import inspect
+import sys
+from collections import Counter
 from dataclasses import replace
 
 from pandid import Flowsheet, units as U
-from pandid.layout.quality import admissible, measure_final
+from pandid.layout import trials
+from pandid.layout.quality import Quality, accepts, admissible, measure_final
+from pandid.layout.settle import settle
 from pandid.layout.trials import evaluate_trial
 from pandid.routing.metrics import crossing_count
 
@@ -152,7 +157,7 @@ def test_nonconvergent_geometry_is_never_admissible() -> None:
     hard[6] = 1
     nonconvergent = replace(current, hard=tuple(hard))
     improved = replace(nonconvergent, length=nonconvergent.length * 0.5)
-    assert not admissible(nonconvergent, improved)
+    assert not admissible(nonconvergent, improved, preserve_crossing_pairs=True)
 
 
 def test_pin_violation_cannot_move_to_another_unit() -> None:
@@ -208,3 +213,191 @@ def test_crossings_count_only_between_streams() -> None:
         [(0, 0), (0, 5)],
     ]
     assert crossing_count(paths) == 1
+
+
+def test_every_trial_settles_with_the_one_settle_loop(monkeypatch) -> None:
+    """Settle a refinement trial with ``settle``, as the search does (#574).
+
+    The default trial ran a second loop of its own, which ended the pass cap
+    differently and ignored a moved tap.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces ``settle`` with a recording wrapper.
+
+    Returns
+    -------
+    None
+        The trial settles once, through ``settle``.
+    """
+    fs = _branched_sheet()
+    calls: list[tuple] = []
+
+    def recording(candidate: Flowsheet, router=None, *, face_choices=()) -> None:
+        """Record a settlement and run it.
+
+        Parameters
+        ----------
+        candidate : Flowsheet
+            Detached drawing being settled.
+        router : Router or None, optional
+            Router passed on.
+        face_choices : tuple, optional
+            Trial face preferences passed on.
+        """
+        calls.append(face_choices)
+        settle(candidate, router, face_choices=face_choices)
+
+    monkeypatch.setattr(trials, "settle", recording)
+    evaluate_trial(fs, lambda frames: None)
+    assert calls == [()]
+
+
+def test_the_acceptance_gate_applies_the_mode_each_caller_states() -> None:
+    """One gate, whose modes are stated by every caller (#574).
+
+    It was written three times, and two defaulted to keeping crossing pairs
+    where the third did not.
+
+    Returns
+    -------
+    None
+        Each mode refuses exactly what it names.
+    """
+    current = measure_final(_branched_sheet())
+    smaller = replace(current, area=current.area * 0.9)
+    assert accepts(current, smaller, preserve_crossing_pairs=True, strict=False)
+
+    crossed = replace(smaller, crossing_pairs=current.crossing_pairs | {(98, 99)})
+    assert not accepts(current, crossed, preserve_crossing_pairs=True, strict=False)
+    assert accepts(current, crossed, preserve_crossing_pairs=False, strict=False)
+
+    # Within the per-sheet 2 % allowance, which strict mode does not grant.
+    longer = replace(smaller, length=current.length * 1.01)
+    assert accepts(current, longer, preserve_crossing_pairs=True, strict=False)
+    assert not accepts(current, longer, preserve_crossing_pairs=True, strict=True)
+
+    same, more = Counter({"route-detour": 1}), Counter({"route-detour": 2})
+    old_size, wider = (100.0, 80.0), (100.5, 80.0)
+    for warnings, extents, expected in (
+        ((same, same), (old_size, old_size), True),
+        ((same, more), None, False),
+        (None, (old_size, wider), False),
+    ):
+        verdict = accepts(
+            current,
+            smaller,
+            preserve_crossing_pairs=True,
+            strict=True,
+            warnings=warnings,
+            extents=extents,
+        )
+        assert verdict == expected
+
+
+def test_every_layout_caller_judges_through_the_one_gate_in_its_own_mode(monkeypatch) -> None:
+    """Drive each acceptance caller and record how it asks the gate (#574).
+
+    The gate was written three times, with ``preserve_crossing_pairs``
+    defaulting to True in two copies and False in the third. A caller that
+    judged a proposal inline again would not reach ``accepts`` and fails
+    here, as would one that changed the mode it has always used; and no
+    gate may default the mode.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces ``accepts`` with a recording wrapper, and the layout
+        engine with one that moves a row so ``refine_rows`` reaches its gate.
+
+    Returns
+    -------
+    None
+        Each caller asks once per proposal, in the mode it has always used.
+    """
+    from pandid.layout import coarse, default_layout_engine, quality
+    from pandid.layout.stages import process_units, slot
+
+    for gate in (quality.accepts, quality.admissible, coarse._acceptable):
+        for mode in ("preserve_crossing_pairs", "strict", "preserve_size"):
+            parameter = inspect.signature(gate).parameters.get(mode)
+            assert parameter is None or parameter.default is inspect.Parameter.empty, (
+                f"{gate.__name__} defaults {mode}"
+            )
+
+    asked: set[tuple[str, bool, bool, bool, bool]] = set()
+    real = quality.accepts
+
+    def recording(
+        before: Quality,
+        after: Quality,
+        *,
+        preserve_crossing_pairs: bool,
+        strict: bool,
+        warnings: tuple[Counter[str], Counter[str]] | None = None,
+        extents: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    ) -> bool:
+        """Record who asked the gate and in which mode, then ask it.
+
+        Parameters
+        ----------
+        before, after : Quality
+            Measurements passed on.
+        preserve_crossing_pairs, strict : bool
+            Mode passed on.
+        warnings, extents : tuple or None, optional
+            Further checks passed on.
+
+        Returns
+        -------
+        bool
+            The gate's verdict.
+        """
+        caller = sys._getframe(1).f_code.co_name
+        asked.add(
+            (caller, preserve_crossing_pairs, strict, warnings is not None, extents is not None)
+        )
+        return real(
+            before,
+            after,
+            preserve_crossing_pairs=preserve_crossing_pairs,
+            strict=strict,
+            warnings=warnings,
+            extents=extents,
+        )
+
+    fs = _branched_sheet()
+    monkeypatch.setattr(quality, "accepts", recording)
+    monkeypatch.setattr(trials, "accepts", recording)
+    real_layout = default_layout_engine.layout
+
+    def lowered(fs: Flowsheet, *, row_compaction: float) -> None:
+        """Lay out as the engine does, then move the first row down 1 px.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Trial drawing.
+        row_compaction : float
+            Row spacing ``refine_rows`` is trying, passed on.
+        """
+        real_layout(fs, row_compaction=row_compaction)
+        first = slot(process_units(fs)[0])
+        first.y = (first.y or 0.0) + 1.0
+
+    monkeypatch.setattr(default_layout_engine, "layout", lowered)
+
+    evaluate_trial(fs, lambda frames: None)
+    trials.row_final_better(fs, fs)
+    trials.refine_rows(copy.deepcopy(fs))
+    coarse._acceptable(fs, fs, preserve_crossing_pairs=True, preserve_size=False)
+    coarse._acceptable(fs, fs, preserve_crossing_pairs=False, preserve_size=True)
+    # (caller, preserve_crossing_pairs, strict, warnings compared, extents compared)
+    assert asked == {
+        ("_evaluate_candidate", True, False, False, False),
+        ("row_final_better", True, True, True, False),
+        ("refine_rows", True, True, True, False),
+        ("_acceptable", True, True, True, False),
+        ("_acceptable", False, True, True, True),
+    }

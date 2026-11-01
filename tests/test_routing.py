@@ -1,13 +1,16 @@
 """Check obstacle geometry, path search, crossing pricing, and the default router."""
 
 import heapq
+import re
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
 from pandid.flowsheet import Flowsheet
-from pandid.units import Feed, HeatExchanger, Product, Pump, Valve, Vessel
+from pandid.geometry import Route
+from pandid.streams import Stream
+from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.routing import DefaultRouter, get_outward_dir, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
@@ -410,6 +413,9 @@ def _straight_run(bad=None):
 def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
     """Reject a non-finite coordinate before the path search starts.
 
+    ``pin()`` refuses one where it is written (#574). A frame set another
+    way, such as by a custom layout engine, is refused by the router.
+
     Parameters
     ----------
     bad : float
@@ -418,10 +424,45 @@ def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
     Returns
     -------
     None
-        ``route()`` raises and names the unit.
+        ``pin()`` and ``route()`` raise and name the unit.
     """
+    with pytest.raises(ValueError, match="E-101: pin x must be a finite number"):
+        _straight_run(bad)
+    fs = _straight_run()
+    fs.layout()
+    frame = fs.units[1].frame
+    assert frame is not None
+    frame.x = bad
     with pytest.raises(ValueError, match="E-101 has a non-finite x="):
-        _straight_run(bad).route()
+        fs.route()
+
+
+def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
+    """Block exactly the halo drawn behind a tag, and nothing for no tag.
+
+    The router measured the unit's name at 7.5 px a character, capped at
+    150 px, where the renderer draws the tag at 6.6 px a character plus 8
+    with no cap; and an element whose tag its balloon carries still blocked
+    a box (#574).
+
+    Returns
+    -------
+    None
+        The one label obstacle is as wide as the drum's drawn halo.
+    """
+    fs = Flowsheet("tag-obstacle")
+    name = "V-101-FEED-SURGE-DRUM-FIRST-STAGE"
+    fs.add(Vessel(name, label_pos="top")).pin(x=300, y=200)
+    element = fs.add(Fitting("FE-303", variant="venturi")).pin(x=100, y=400)
+    fs.add_balloon(element, at="S", offset=46)
+    fs.layout()
+    graph = VisibilityGraph(fs)
+    bodies = {id(rect) for _, rect in graph.body_obstacles}
+    labels = [rect for rect in graph.obstacles if id(rect) not in bodies]
+    svg = fs.to_svg(check=False)
+    halo = re.search(rf'<rect [^>]*width="([\d.]+)"[^>]*/>\s*<text [^>]*>{name}</text>', svg)
+    assert halo is not None
+    assert [round(rect.x_max - rect.x_min, 1) for rect in labels] == [float(halo.group(1))]
 
 
 def test_the_search_is_bounded_by_the_size_of_the_graph():
@@ -851,6 +892,33 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
     )
 
 
+def test_a_recycle_search_returns_the_cheapest_path():
+    """Estimate a recycle's remaining bend at the recycle's own bend cost.
+
+    A recycle bend costs ``BEND_PENALTY / 2``. The heuristic used to add the
+    full ``BEND_PENALTY``, so the node on the cheap west route, which still
+    needs a bend, looked 250 dearer than it is, and the search settled the
+    goal through the penalised east route first (#574).
+
+    Returns
+    -------
+    None
+        The west route, 450 against the east route's 550, is returned.
+    """
+    west = [(0.0, 0.0), (0.0, 50.0), (0.0, 100.0), (100.0, 100.0)]
+    east = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]
+    nodes = set(west) | set(east)
+    edges: dict = {n: [] for n in nodes}
+    for path in (west, east):
+        for a, b in zip(path, path[1:]):
+            edges[a].append(b)
+            edges[b].append(a)
+    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    penalties = {((0.0, 0.0), (100.0, 0.0)): 100.0}
+    routed = find_path(graph, (0.0, 0.0), (100.0, 100.0), edge_penalties=penalties, is_recycle=True)
+    assert routed == west, f"returned the dearer route: {routed}"
+
+
 def test_a_forced_terminal_crossing_still_routes():
     """Find the only route although its goal lies on a recorded line.
 
@@ -917,6 +985,33 @@ def _obstacle_bypass_tie(fs):
     p = fs.add(Product("P")).pin(x=400, y=200)
     fs.add(Vessel("V-101", width=100, height=100, label_pos="center")).pin(x=150, y=150)
     return fs.connect(f.outlet, p.inlet)
+
+
+def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
+    """Never move a ``via()`` route to separate it from another line.
+
+    Both runs lie on y=200 and overlap. Separation used to offset the
+    interior run of each and write it back, so every ``route()`` moved them
+    another 3 px (#574).
+
+    Returns
+    -------
+    None
+        Both routes keep their exact points over three routes.
+    """
+    fs = Flowsheet("via-shared-track")
+    f1 = fs.add(Feed("F1")).pin(x=40, y=90)
+    p1 = fs.add(Product("P1")).pin(x=560, y=90)
+    f2 = fs.add(Feed("F2")).pin(x=40, y=290)
+    p2 = fs.add(Product("P2")).pin(x=560, y=290)
+    upper = [(100.0, 100.0), (150.0, 100.0), (150.0, 200.0), (450.0, 200.0), (450.0, 100.0)]
+    lower = [(100.0, 300.0), (200.0, 300.0), (200.0, 200.0), (400.0, 200.0), (400.0, 300.0)]
+    s1 = fs.connect(f1.outlet, p1.inlet).via(list(upper))
+    s2 = fs.connect(f2.outlet, p2.inlet).via(list(lower))
+    for _ in range(3):
+        fs.route()
+        assert s1.route is not None and s1.route.waypoints == upper
+        assert s2.route is not None and s2.route.waypoints == lower
 
 
 def test_a_manual_routes_geometry_is_recorded_for_later_streams():
@@ -1128,6 +1223,9 @@ def test_a_manual_route_off_lane_still_breaks_the_tie():
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
     """Preview separation without changing routes, and match the real pass.
 
+    The routes are automatic ones, set directly: a ``via()`` route is
+    never separated (#574).
+
     Returns
     -------
     None
@@ -1139,15 +1237,12 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
     fs = Flowsheet("preview-vs-real")
     f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
     p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
-    s1 = fs.connect(f1.outlet, p1.inlet).via(
-        [(0.0, 50.0), (0.0, 100.0), (300.0, 100.0), (300.0, 150.0)]
-    )
+    s1 = fs.connect(f1.outlet, p1.inlet)
+    s1.route = Route([(0.0, 50.0), (0.0, 100.0), (300.0, 100.0), (300.0, 150.0)])
     f2 = fs.add(Feed("F2")).pin(x=2000, y=1000)
     p2 = fs.add(Product("P2")).pin(x=2000, y=1000)
-    s2 = fs.connect(f2.outlet, p2.inlet).via(
-        [(100.0, 50.0), (100.0, 100.0), (400.0, 100.0), (400.0, 150.0)]
-    )
-    assert s1.route is not None and s2.route is not None  # ``via()`` sets both routes.
+    s2 = fs.connect(f2.outlet, p2.inlet)
+    s2.route = Route([(100.0, 50.0), (100.0, 100.0), (400.0, 100.0), (400.0, 150.0)])
 
     raw_s1, raw_s2 = list(s1.route.waypoints), list(s2.route.waypoints)
     preview = preview_separated_waypoints(fs.streams)
@@ -1165,14 +1260,49 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
     assert s1.route.waypoints != raw_s1 or s2.route.waypoints != raw_s2
 
 
-def test_a_later_streams_recording_uses_separated_not_raw_geometry():
+def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     """Record the separated route so later streams price its drawn path.
+
+    The crossing index is rebuilt from the separation preview (#509). A
+    ``via()`` route is never separated (#574), so the preview is replaced by
+    one that lowers every route 6 px, and the recording must follow it.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the separation preview.
 
     Returns
     -------
     None
-        The second manual route is recorded at its separated y coordinate.
+        The second manual route is recorded at its previewed y coordinate.
     """
+    from pandid.routing import separation
+
+    def lowered(
+        streams: list[Stream], spacing: float = 6.0
+    ) -> dict[int, list[tuple[float, float]]]:
+        """Return every route 6 px lower, as a separation preview.
+
+        Parameters
+        ----------
+        streams : list[Stream]
+            Streams routed so far.
+        spacing : float, default=6.0
+            Unused.
+
+        Returns
+        -------
+        dict[int, list[tuple[float, float]]]
+            Lowered waypoints keyed by ``id(stream)``.
+        """
+        return {
+            id(s): [(x, y + 6.0) for x, y in s.route.waypoints]
+            for s in streams
+            if s.route is not None
+        }
+
+    monkeypatch.setattr(separation, "preview_separated_waypoints", lowered)
     recorded: list[list[tuple[float, float]]] = []
     original_record = CrossingIndex.record
 
@@ -1213,9 +1343,7 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry():
         CrossingIndex.record = original_record
 
     assert s2.route is not None
-    assert s2.route.waypoints[1][1] == 106.0, (
-        f"expected separate_streams to move s2's shared run to y=106: {s2.route.waypoints}"
-    )
+    assert s2.route.waypoints[1][1] == 100.0, f"the via() route moved: {s2.route.waypoints}"
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
     assert s2_recordings[-1][1][1] == 106.0, (

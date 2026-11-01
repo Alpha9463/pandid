@@ -10,7 +10,10 @@ import math
 import pytest
 
 from pandid import Flowsheet, units as U
+from pandid.geometry import Route
+from pandid.routing.separation import separate_streams
 from pandid.routing.visibility import VisibilityGraph
+from pandid.streams import Stream
 
 
 def test_route_report_uses_drawn_nozzles_for_length_baseline() -> None:
@@ -377,6 +380,23 @@ def test_a_port_does_not_overshoot_the_lane_it_is_leaving_for():
     assert _headings(wp) == ["N", "E"], f"expected one bend out of the PSV, got {wp}"
 
 
+def _routed_through(stream: Stream, points: list[tuple[float, float]]) -> None:
+    """Give a stream an automatic route through ``points``.
+
+    The separation tests below build their geometry this way and call
+    ``separate_streams`` directly. ``via()`` would mark the route manual,
+    and a manual route is never separated (#574).
+
+    Parameters
+    ----------
+    stream : Stream
+        Stream to route.
+    points : list[tuple[float, float]]
+        Waypoints, as the router would leave them.
+    """
+    stream.route = Route(list(points))
+
+
 def test_separation_only_moves_runs_that_actually_collide():
     # Clustering tracks with a window of twice the spacing would chain runs a
     # comfortable 12px apart into one cluster and then pack them onto the
@@ -389,12 +409,11 @@ def test_separation_only_moves_runs_that_actually_collide():
         streams.append(fs.connect(f.outlet, p.inlet))
     # Two interior runs sharing a corridor two spacings apart, and two on top
     # of each other. Only the second pair has anything to resolve.
-    streams[0].via([(50, 100), (50, 200), (400, 200), (400, 300)])
-    streams[1].via([(50, 460), (50, 212), (400, 212), (400, 500)])
-    streams[2].via([(150, 760), (150, 850), (500, 850), (500, 900)])
-    streams[3].via([(150, 1060), (150, 850), (500, 850), (500, 1100)])
-    fs.layout()
-    fs.route()
+    _routed_through(streams[0], [(50, 100), (50, 200), (400, 200), (400, 300)])
+    _routed_through(streams[1], [(50, 460), (50, 212), (400, 212), (400, 500)])
+    _routed_through(streams[2], [(150, 760), (150, 850), (500, 850), (500, 900)])
+    _routed_through(streams[3], [(150, 1060), (150, 850), (500, 850), (500, 1100)])
+    separate_streams(fs)
 
     clear = [s.route.waypoints[1][1] for s in streams[:2]]
     assert clear == [200, 212], f"already-legible runs were moved: {clear}"
@@ -417,11 +436,10 @@ def test_a_stream_jogging_between_its_nozzles_keeps_both_of_them():
     jog = fs.connect(fa.outlet, pa.inlet)
     other = fs.connect(fb.outlet, pb.inlet)
     # Both of the jog's horizontals are port-attached, at 100 and at 106.
-    jog.via([(0, 100), (100, 100), (100, 106), (200, 106)])
+    _routed_through(jog, [(0, 100), (100, 100), (100, 106), (200, 106)])
     # An interior run of another stream, laid across the same corridor 1px off.
-    other.via([(0, 300), (50, 300), (50, 101), (150, 101), (150, 400), (200, 400)])
-    fs.layout()
-    fs.route()
+    _routed_through(other, [(0, 300), (50, 300), (50, 101), (150, 101), (150, 400), (200, 400)])
+    separate_streams(fs)
 
     wp = jog.route.waypoints
     assert wp[0][1] == 100 and wp[1][1] == 100, f"source nozzle run moved: {wp}"
@@ -449,10 +467,11 @@ def test_separated_runs_end_up_at_least_the_minimum_apart():
         p = fs.add(U.Product(f"P-{i}")).pin(x=600, y=300 + 40 * i)
         s = fs.connect(f.outlet, p.inlet)
         # The shared horizontal is interior, so all three are free to move.
-        s.via([(50 + i, 300 + 40 * i), (50 + i, y), (500 + i, y), (500 + i, 300 + 40 * i)])
+        _routed_through(
+            s, [(50 + i, 300 + 40 * i), (50 + i, y), (500 + i, y), (500 + i, 300 + 40 * i)]
+        )
         streams.append(s)
-    fs.layout()
-    fs.route()
+    separate_streams(fs)
 
     ys = sorted(s.route.waypoints[1][1] for s in streams)
     gaps = [b - a for a, b in zip(ys, ys[1:])]

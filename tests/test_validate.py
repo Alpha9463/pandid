@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from pandid import Condenser, Flowsheet, units as U
+from pandid import Condenser, Flowsheet, Pin, units as U
 from pandid.portgeom import pinned_y, port_point
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
@@ -1649,10 +1649,12 @@ def test_a_drawing_the_renderer_refused_is_not_remembered_as_the_one_made():
 # --- the model is checked before any geometry is built ------------------------
 # A render used to lay out and route first and validate the result, so a
 # sheet the validator would refuse outright was handed to the engine
-# anyway. ``pin(x=nan)`` is the case that shows it: `pin-not-finite` names
+# anyway. A NaN pin is the case that shows it: `pin-not-finite` names
 # the contradiction exactly, and the same coordinate is one the router
 # starts from and does not come back from, so the finding was made about a
-# drawing nobody could obtain.
+# drawing nobody could obtain. ``pin()`` now refuses one where it is written
+# (#574), so these tests set it through ``pin_``, the setter that restores a
+# stored placement.
 #
 # Every test below therefore runs with `no_geometry` in place. Without it a
 # regression would not fail this file, it would hang it.
@@ -1684,7 +1686,8 @@ def _off_sheet(value=float("nan"), axis="x"):
     """A three-unit run whose middle unit is pinned at *value* on *axis*."""
     fs = Flowsheet("not-finite")
     f = fs.add(U.Feed("F")).pin(x=60, y=100)
-    hx = fs.add(U.HeatExchanger("E-101")).pin(**{axis: value, "y" if axis == "x" else "x": 100})
+    hx = fs.add(U.HeatExchanger("E-101"))
+    hx.pin_ = Pin(**{axis: value, "y" if axis == "x" else "x": 100})
     p = fs.add(U.Product("P")).pin(x=600, y=100)
     fs.connect(f.outlet, hx.tube_in)
     fs.connect(hx.tube_out, p.inlet)
@@ -1737,7 +1740,8 @@ def test_the_model_error_is_the_one_reported(no_geometry):
     happening.
     """
     fs = Flowsheet("both")
-    a = fs.add(U.Tank("T-1")).pin(x=float("nan"), y=100)
+    a = fs.add(U.Tank("T-1"))
+    a.pin_ = Pin(x=float("nan"), y=100)
     b = fs.add(U.Pump("P-1")).pin(x=100, y=100)
     fs.add(U.Tank("T-2")).pin(x=100, y=100)
     fs.connect(a.outlet, b.suction)

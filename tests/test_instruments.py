@@ -145,6 +145,16 @@ def test_interlock_square_carries_only_its_number():
     assert ">2<" in svg and ">I<" not in svg
 
 
+@pytest.mark.parametrize("variant", ["sis", "interlock"])
+def test_a_diamond_with_no_number_letters_in_capitals_in_both_backends(variant):
+    """Letters stand in for a missing number, in capitals as on every other
+    balloon; the SVG drew them as typed while draw.io capitalised (#574)."""
+    fs = Flowsheet("i")
+    fs.add(U.Instrument("is", variant=variant))
+    assert ">IS</text>" in fs.to_svg()
+    assert 'value="IS"' in fs.to_drawio()
+
+
 def test_the_two_trip_squares_are_the_two_isa_symbols_they_claim_to_be():
     """ANSI/ISA-5.1-2009 draws these as two different symbols, and conflating
     them is what the bare square used to do.

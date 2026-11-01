@@ -192,6 +192,51 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
     return line_number
 
 
+def _format_stream_name(scheme: "str | Callable[[int], str]", number: int) -> str:
+    """Return a generated stream name from the naming scheme.
+
+    Parameters
+    ----------
+    scheme : str or Callable[[int], str]
+        Format string over ``n``, or a callable of the number.
+    number : int
+        The stream's number.
+
+    Returns
+    -------
+    str
+        Stream name.
+
+    Raises
+    ------
+    ValueError
+        If the format string cannot format a number: it names a field
+        other than ``n``, looks up into the number, has a format spec an
+        integer does not take, or is malformed.
+    """
+    if callable(scheme):
+        return scheme(number)
+    try:
+        return scheme.format(n=number)
+    except (KeyError, IndexError):
+        # Name the field as written; an IndexError's own text does not.
+        # ``n.real`` and ``n[0]`` look up through ``n``, so compare the root.
+        roots = (name.partition(".")[0].partition("[")[0]
+                 for _, name, _, _ in Formatter().parse(scheme) if name is not None)
+        field = next((root for root in roots if root != "n"), "") or "{}"
+        raise ValueError(
+            f"stream_naming_scheme {scheme!r} asks for {field!r}, which is not "
+            f"part of a stream name; the only field is 'n', the stream's number"
+        ) from None
+    except (AttributeError, TypeError, ValueError) as exc:
+        # {n.foo}, {n[0]}, {n:q}, an unclosed brace: the number cannot be
+        # written that way.
+        raise ValueError(
+            f"stream_naming_scheme {scheme!r} cannot write a stream number: {exc}. "
+            f"Write it as {{n}}, with a format spec if needed, such as 'S{{n:03d}}'"
+        ) from None
+
+
 def _spell(port: "Port") -> str:
     """Return ``"<unit>.<port>"`` for messages.
 
@@ -523,6 +568,8 @@ class Flowsheet:
         ------
         TypeError
             If a number start is not an integer.
+        ValueError
+            If ``stream_naming_scheme`` cannot format a stream number.
         """
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
@@ -605,6 +652,38 @@ class Flowsheet:
         """
         self._auto_faces = value
         self._invalidate_layout()
+
+    @property
+    def stream_naming_scheme(self) -> "str | Callable[[int], str]":
+        """Return the format, or callable of the number, for stream names.
+
+        Returns
+        -------
+        str or Callable[[int], str]
+            Current scheme.
+        """
+        return self._stream_naming_scheme
+
+    @stream_naming_scheme.setter
+    def stream_naming_scheme(self, value: "str | Callable[[int], str]") -> None:
+        """Set the stream naming scheme, checking a format string's fields.
+
+        Checked here rather than when a stream is named, so a bad field is
+        reported where it was written.
+
+        Parameters
+        ----------
+        value : str or Callable[[int], str]
+            Format string over ``n``, or a callable of the number.
+
+        Raises
+        ------
+        ValueError
+            If the format string cannot format a stream number.
+        """
+        if not callable(value):
+            _format_stream_name(value, DEFAULT_STREAM_NUMBER_START)
+        self._stream_naming_scheme = value
 
     @property
     def stream_number_start(self) -> int:
@@ -2524,9 +2603,7 @@ class Flowsheet:
             name = (_format_line_number(self.line_numbering_scheme, carrier)
                     if carrier is not None else
                     # A callable gets the same number a format string does.
-                    self.stream_naming_scheme(number)
-                    if callable(self.stream_naming_scheme)
-                    else self.stream_naming_scheme.format(n=number))
+                    _format_stream_name(self.stream_naming_scheme, number))
         for s in group:
             if s.auto_named:
                 s.name = name

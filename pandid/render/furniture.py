@@ -89,9 +89,8 @@ def script_counts(s: str) -> "tuple[int, int, int]":
     Wide and fullwidth codepoints (``unicodedata.east_asian_width`` W or F)
     draw about a full em. Ambiguous ones are counted narrow, the UAX #11
     default without context. Combining marks (categories Mn and Me) advance
-    nothing. Used by the tag halo
-    (:func:`pandid.render.svg._unit_label_box`) and block labels
-    (:func:`pandid.render.symbols.label_span`).
+    nothing. Used by the tag halo (:func:`pandid.portgeom.tag_width`) and
+    block labels (:func:`pandid.render.symbols.label_span`).
 
     Parameters
     ----------

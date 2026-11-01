@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Callable
 
 from pandid.layout.halo import Pad
 from pandid.layout.stages import slot
+from pandid.portgeom import unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -864,12 +865,16 @@ class _RowIndex:
 def _overlaps_x(u: "Unit", new_x: float, units: list["Unit"]) -> bool:
     """Return whether a horizontal move crowds a neighbouring unit.
 
+    Units are compared by the boxes they draw
+    (:func:`~pandid.portgeom.unit_box`), so a feed flag drawn left of its
+    frame is judged where it is drawn.
+
     Parameters
     ----------
     u : Unit
         Unit to move.
     new_x : float
-        Proposed left coordinate.
+        Proposed left coordinate of its frame.
     units : list[Unit]
         Units that may be beside it.
 
@@ -881,13 +886,15 @@ def _overlaps_x(u: "Unit", new_x: float, units: list["Unit"]) -> bool:
     s = slot(u)
     if s.y is None:
         return True
+    x0, y0, x1, y1 = unit_box(u, replace(s, x=new_x))
     for other in units:
         o = slot(other)
         if other is u or o.x is None or o.y is None:
             continue
-        if s.y + s.h <= o.y or s.y >= o.y + o.h:
+        ox0, oy0, ox1, oy1 = unit_box(other, o)
+        if y1 <= oy0 or y0 >= oy1:
             continue
-        if not (new_x + s.w + STACK_CLEAR <= o.x or new_x >= o.x + o.w + STACK_CLEAR):
+        if not (x1 + STACK_CLEAR <= ox0 or x0 >= ox1 + STACK_CLEAR):
             return True
     return False
 

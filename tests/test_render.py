@@ -98,9 +98,9 @@ def test_render_svg_with_manual_placements(tmp_path):
     # Pinned position is honored; dimensions come from the symbol.
     assert '<use href="#sym_hex" x="100" y="10"' in content
 
-    # Stream paths carry their waypoints
-    assert "150.0,20.0" in content
-    assert "150.0,150.0" in content
+    # Stream paths carry their waypoints, exactly as via() was given them
+    assert "150,20" in content
+    assert "150,150" in content
     assert '<path d="' in content
 
 

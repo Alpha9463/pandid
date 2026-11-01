@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pandid import Flowsheet, units as U
 
@@ -32,6 +34,30 @@ def test_naming_scheme_is_keyword_only():
     argument fails loudly rather than being silently adopted as the scheme."""
     with pytest.raises(TypeError):
         Flowsheet("Test", "TB")
+
+
+@pytest.mark.parametrize("scheme, field", [("S-{num}", "num"), ("S-{0}", "0")])
+def test_a_naming_scheme_asking_for_an_unknown_field_is_refused_when_set(scheme, field):
+    """A field other than ``n`` is named as soon as the scheme is set, as a
+    ``ValueError`` the command line reports, not a ``KeyError`` at render."""
+    with pytest.raises(ValueError, match=f"asks for '{field}'.*'n'"):
+        Flowsheet("Test", stream_naming_scheme=scheme)
+    fs = Flowsheet("Test")
+    with pytest.raises(ValueError, match=f"asks for '{field}'"):
+        fs.stream_naming_scheme = scheme
+    assert fs.stream_naming_scheme == "S{n}"
+
+
+@pytest.mark.parametrize("scheme", ["S-{n.foo}", "S-{n[0]}", "S-{n:q}", "S-{n", "S-}"])
+def test_a_naming_scheme_that_cannot_format_a_number_is_refused_when_set(scheme):
+    """Any format failure is the same ``ValueError`` naming the scheme, not a
+    raw ``AttributeError``, ``TypeError`` or unexplained ``ValueError``."""
+    with pytest.raises(ValueError, match=re.escape(f"stream_naming_scheme {scheme!r}")):
+        Flowsheet("Test", stream_naming_scheme=scheme)
+    fs = Flowsheet("Test")
+    with pytest.raises(ValueError, match=re.escape(f"stream_naming_scheme {scheme!r}")):
+        fs.stream_naming_scheme = scheme
+    assert fs.stream_naming_scheme == "S{n}"
 
 
 def test_connect_rejects_wrong_directions():

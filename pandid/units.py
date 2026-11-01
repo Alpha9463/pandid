@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
@@ -141,6 +141,35 @@ _LAYOUT_INPUTS = frozenset(
 )
 
 
+class _NoSuchAttribute(AttributeError):
+    """A unit has no such attribute or port; worded only when shown.
+
+    Layout and rendering ask every unit for attributes only some classes
+    carry, such as ``large_end``, with ``getattr(unit, name, default)``, and
+    discard the error. Listing the ports for each of those messages was a
+    measurable part of a large render, so :meth:`__str__` writes it.
+
+    Parameters
+    ----------
+    cls_name, where, name : str
+        Class name, unit tag and the attribute asked for.
+    ports : Mapping[str, Port]
+        The unit's ports, listed in the message.
+    """
+
+    def __init__(self, cls_name: str, where: str, name: str,
+                 ports: "Mapping[str, Port]") -> None:
+        """Keep what the message needs, without writing it."""
+        super().__init__(name)
+        self._parts = (cls_name, where, name, ports)
+
+    def __str__(self) -> str:
+        """Return the message, naming the ports the unit does have."""
+        cls_name, where, name, ports = self._parts
+        return (f"{cls_name} {where!r} has no attribute or port {name!r}; "
+                f"available ports: {sorted(ports)}")
+
+
 class Unit:
     """A piece of equipment, flag, fitting or instrument on a flowsheet.
 
@@ -244,6 +273,10 @@ class Unit:
 
     # Renamed port name -> (new name, Deprecation); resolves to the same Port.
     _RETIRED_PORT_ALIASES: dict[str, tuple[str, Deprecation]] = {}
+
+    # Deprecated variant -> Deprecation, warned in __init__. An error never
+    # offers one as the alternative (_compose_onto).
+    _DEPRECATED_VARIANTS: Mapping[str, Deprecation] = {}
 
     # Attributes read once in __init__ to build ports and artwork (such as a
     # column's internals or a reactor's agitator); __setattr__ refuses a
@@ -1060,10 +1093,7 @@ class Unit:
                     direction, role, dep = retired
                     dep.warn(self, where=where)
                     return self._add_port(name, direction, role)
-                raise AttributeError(
-                    f"{type(self).__name__} {where!r} has no "
-                    f"attribute or port {name!r}; available ports: {sorted(ports)}"
-                )
+                raise _NoSuchAttribute(type(self).__name__, where, name, ports)
             raise AttributeError(name)
 
 
@@ -1680,22 +1710,104 @@ class Valve(_NormallyPositioned):
             )
 
 
-def _compose_onto(unit, *groups) -> None:
+#: One composition keyword as :func:`_compose_onto` takes it:
+#: ``(keyword, value, place)``, where ``place(value, variant)`` returns the
+#: overlays that draw the part on that body.
+_Part = tuple[str, "str | None", "Callable[[str, str], tuple]"]
+
+
+def _placed(parts: "Sequence[tuple[str, str, Callable[[str, str], tuple]]]",
+            variant: str) -> tuple:
+    """Return the overlays that draw the stated parts on one body.
+
+    Parameters
+    ----------
+    parts : Sequence[tuple[str, str, Callable[[str, str], tuple]]]
+        Stated parts, each ``(keyword, value, place)``.
+    variant : str
+        Body variant.
+
+    Returns
+    -------
+    tuple[Overlay, ...]
+        Overlays in drawing order.
+    """
+    return tuple(overlay for _, value, place in parts for overlay in place(value, variant))
+
+
+def _carries(kind: str, variant: str, overlays: tuple) -> bool:
+    """Return whether a body can be drawn with these parts on it.
+
+    Asks the registry the renderer draws with
+    (:meth:`~pandid.render.symbols.SymbolRegistry.composed`), so the rule is
+    :func:`~pandid.render.symbols.compose`'s and is not restated here.
+
+    Parameters
+    ----------
+    kind, variant : str
+        Body.
+    overlays : tuple[Overlay, ...]
+        Parts placed on it.
+
+    Returns
+    -------
+    bool
+        Whether the composition can be drawn.
+    """
+    from pandid.render.symbols import default_registry
+
+    try:
+        default_registry.composed(kind, variant, overlays)
+    except ValueError:
+        return False
+    return True
+
+
+def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     """Set a unit's overlays from its composition keywords.
 
     Nothing is set when no part was asked for, so the unit draws exactly as
-    one that cannot compose.
+    one that cannot compose. A part the body cannot carry is refused here,
+    by the check the renderer makes, rather than when the sheet is drawn.
 
     Parameters
     ----------
     unit : Unit
-        Unit to compose onto.
-    *groups : Iterable
-        Overlay groups in the order requested.
+        Unit to compose onto, with its variant resolved.
+    *parts : tuple[str, str or None, Callable[[str, str], tuple]]
+        ``(keyword, value, place)`` in drawing order, where
+        ``place(value, variant)`` returns the overlays that draw the part on
+        that body. A ``None`` value draws nothing.
+
+    Raises
+    ------
+    ValueError
+        If the body cannot carry the stated parts. The message names the
+        parts and the current variants that can.
     """
-    overlays = tuple(overlay for group in groups for overlay in group)
-    if overlays:
-        unit.overlays = overlays
+    from pandid.render.symbols import default_registry
+
+    stated = [(keyword, value, place) for keyword, value, place in parts if value is not None]
+    overlays = _placed(stated, unit.variant)
+    if not overlays:
+        return
+    # An unregistered variant keeps the registry's own message.
+    default_registry.get(unit.kind, unit.variant)
+    if not _carries(unit.kind, unit.variant, overlays):
+        # Name the part that fails alone, or all of them if only the
+        # combination does.
+        culprits = [part for part in stated
+                    if not _carries(unit.kind, unit.variant, _placed([part], unit.variant))]
+        able = [variant for variant in default_registry.variants(unit.kind)
+                if variant != unit.variant
+                and variant not in type(unit)._DEPRECATED_VARIANTS
+                and _carries(unit.kind, variant, _placed(stated, variant))]
+        named = " and ".join(f"{keyword}={value!r}" for keyword, value, _ in culprits or stated)
+        raise ValueError(
+            f"{unit.name}: {type(unit).__name__} variant {unit.variant!r} cannot carry "
+            f"{named}; variants that can: {', '.join(able) or 'none'}"
+        )
+    unit.overlays = overlays
 
 
 #: Deprecated vessel variants that drew a support into the shell artwork.
@@ -2194,12 +2306,17 @@ class Vessel(_MultiPortVessel):
     :meth:`~_MultiPortVessel.nozzle` for moving a port.
 
     ``supports`` draws an ISO 10628-2 group-26 support under or against
-    any variant::
+    the shell::
 
         Vessel("D-301", supports="skirt")     # 26.3 C2007
         Vessel("D-302", supports="leg")       # 26.1 C2005, a pair
         Vessel("D-303", supports="bracket")   # 26.2 C2006, a pair
         Vessel("D-304", supports="ring")      # 26.4 C2008, a pair
+
+    Not every variant can carry every support: a bracket or ring against a
+    horizontal drum's wall, or any support under ``"electrical_heating"``,
+    would move a nozzle onto another face. Such a pair raises
+    ``ValueError`` naming the variants that can.
 
     Parameters
     ----------
@@ -2215,6 +2332,11 @@ class Vessel(_MultiPortVessel):
         construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Raises
+    ------
+    ValueError
+        If the variant cannot carry the support.
     """
 
     inlets: tuple[Port, ...]
@@ -2315,10 +2437,12 @@ class Vessel(_MultiPortVessel):
         ("drain", "outlet", "liquid"),
     ]
 
-    # No support unless ``supports`` names one; any variant takes one.
+    # No support unless ``supports`` names one; __init__ refuses one the
+    # variant cannot carry.
     COMPOSITION = {"supports": None}
     # The supports overlay is composed in __init__.
     _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
+    _DEPRECATED_VARIANTS = _VESSEL_SUPPORT_VARIANTS
 
     def __init__(
         self,
@@ -2344,12 +2468,12 @@ class Vessel(_MultiPortVessel):
         )
         self._init_connections(inputs, outputs)
         # Check the variant the author typed, not the alias it resolved to.
-        if variant in _VESSEL_SUPPORT_VARIANTS:
-            _VESSEL_SUPPORT_VARIANTS[variant].warn(self, where=name)
+        if variant in self._DEPRECATED_VARIANTS:
+            self._DEPRECATED_VARIANTS[variant].warn(self, where=name)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
 
-        _compose_onto(self, () if supports is None else support_overlays(supports))
+        _compose_onto(self, ("supports", supports, lambda name, _body: support_overlays(name)))
 
 
 if TYPE_CHECKING:
@@ -4678,7 +4802,7 @@ class Evaporator(Unit):
         from pandid.render.iso_parts import support_overlays
 
         self.supports = supports
-        _compose_onto(self, () if supports is None else support_overlays(supports))
+        _compose_onto(self, ("supports", supports, lambda name, _body: support_overlays(name)))
 
 
 #: Default thickener rake: ISO 10628-2 item 28.4 C2021, the cross-beam
@@ -4767,7 +4891,7 @@ class Thickener(Unit):
         from pandid.render.iso_parts import rake_overlays
 
         self.rake = rake
-        _compose_onto(self, () if rake is None else rake_overlays(rake))
+        _compose_onto(self, ("rake", rake, lambda name, _body: rake_overlays(name)))
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
@@ -4951,7 +5075,9 @@ class Reactor(Unit):
     ``"impeller"`` or ``"disc"``. It is drawn with its drive motor (ISO
     item 20.6 C0082, as in item 1.27 X8006), which carries the ``drive``
     port. ``internals`` is one of the eight ISO group-27 internals, such as
-    ``"packing"`` or ``"fluidised_bed"``. Either may be ``None``.
+    ``"packing"`` or ``"fluidised_bed"``. Either may be ``None``. A
+    ``"tubular"`` body cannot carry an agitator, since the motor above it
+    would move a nozzle onto another face.
 
     When ``agitator`` is not given, the default and jacketed bodies get the
     general agitator unless ``internals`` is named; name both for a stirred
@@ -4982,7 +5108,8 @@ class Reactor(Unit):
     Raises
     ------
     ValueError
-        If ``n_feeds`` is less than 1.
+        If ``n_feeds`` is less than 1, or the body cannot carry the
+        agitator.
     """
 
     outlet: Port
@@ -5074,6 +5201,8 @@ class Reactor(Unit):
     # tubular and plain bodies are not stirred.
     _STIRRED = ("default", "jacketed")
 
+    _DEPRECATED_VARIANTS = {"plain": REACTOR_VARIANT_PLAIN, "mixing": REACTOR_VARIANT_MIXING}
+
     # The agitator default depends on body and internals.
     COMPOSITION = {"agitator": _UNSTATED, "internals": None}
     # Both choose overlays, and agitator the drive port, in __init__.
@@ -5148,10 +5277,8 @@ class Reactor(Unit):
             reference=reference,
         )
         # Check the variant the author typed, not the alias it resolved to.
-        if variant == "plain":
-            REACTOR_VARIANT_PLAIN.warn(self, where=name)
-        elif variant == "mixing":
-            REACTOR_VARIANT_MIXING.warn(self, where=name)
+        if variant in self._DEPRECATED_VARIANTS:
+            self._DEPRECATED_VARIANTS[variant].warn(self, where=name)
         if agitator is _UNSTATED:
             agitator = self.composition_defaults(self.variant, {"internals": internals})["agitator"]
         self.agitator = agitator
@@ -5165,8 +5292,9 @@ class Reactor(Unit):
 
         _compose_onto(
             self,
-            () if internals is None else internals_overlays(internals),
-            () if agitator is None else agitator_overlays(agitator, self.kind, self.variant),
+            ("internals", internals, lambda name, _body: internals_overlays(name)),
+            # Placed by the body's aspect, so a motor stays round on any body.
+            ("agitator", agitator, lambda name, body: agitator_overlays(name, self.kind, body)),
         )
         # The agitator brings the motor and its drive port.
         if agitator is not None:
@@ -5935,7 +6063,9 @@ class Column(Unit):
         self.trays = trays
         from pandid.render.iso_parts import internals_overlays
 
-        _compose_onto(self, () if internals is None else internals_overlays(internals, trays))
+        _compose_onto(
+            self, ("internals", internals, lambda name, _body: internals_overlays(name, trays))
+        )
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         self.draws = tuple(self._add_port(draw, "outlet", "draw") for draw in draw_names)
         if n_feeds == 1:

@@ -160,7 +160,7 @@ from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
-from pandid.render.escape import escaped, writable
+from pandid.render.escape import writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _furniture_name, _LABEL_CODES, _RENDER_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _too_small,
@@ -925,8 +925,8 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     Calls the sheet's own placement methods
     (:meth:`~SvgRenderer._tag_item`, :meth:`~SvgRenderer._nc_label_item`,
     :meth:`~SvgRenderer._fail_label_item`) so the two backends cannot
-    disagree; only the walk over units is repeated. Text is escaped before
-    measuring, as the sheet measures the escaped string. Instruments,
+    disagree; only the walk over units is repeated. Tags are measured as
+    drawn, unescaped, as on the sheet. Instruments,
     boundary flags and untagged units are skipped, as on the sheet.
 
     Parameters
@@ -965,8 +965,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
         x, y, w, h = f.x, f.y, f.w, f.h
         tag_box = None
         if u.tag:
-            item = sheet._tag_item(u, f, x, y, w, h, escaped(u.tag),
-                                   ink, symbols)
+            item = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols)
             tag_box = _unit_label_box(item)
             items.append(item)
             # Record the side and the step from that side's untouched spot,
@@ -989,9 +988,8 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
 
     Placed where :func:`~pandid.render.svg.quadrant_labels` put it, in its
     own cell since a balloon's label is its tag, with a white
-    ``labelBackgroundColor`` halo. The text arrives HTML-escaped from the
-    sheet and :func:`_attr` escapes it again for XML; only the width is
-    measured on the unescaped text.
+    ``labelBackgroundColor`` halo. The text arrives as drawn and is measured
+    so; it is escaped for HTML and then for XML only where it is written.
 
     Parameters
     ----------
@@ -1007,12 +1005,10 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
     list[str]
         ``mxCell`` XML lines.
     """
-    import html as _html
-
     lx, ly, anchor, _baseline, _lpos, text = item
     size = fit.length(_TAG_TYPE)
     x, y = fit.at(lx, ly)
-    box_w = F.text_width(_html.unescape(text), size) + 2 * _TEXT_INSET
+    box_w = F.text_width(text, size) + 2 * _TEXT_INSET
     box_h = _line_box(size) + 2 * _TEXT_INSET
     left, align = ((x + _TEXT_INSET - box_w, "right") if anchor == "end"
                    else (x - _TEXT_INSET, "left"))
@@ -1020,7 +1016,7 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
              f"labelBackgroundColor=#ffffff;align={align};"
              f"verticalAlign=middle;fontSize={size:g};fontColor={_LINE_INK};")
     return [
-        f'        <mxCell id="{cid}" value={_attr(text)} style={_attr(style)} '
+        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} style={_attr(style)} '
         f'vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(left)}" y="{_num(y - box_h / 2)}" '
         f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
@@ -1126,24 +1122,26 @@ def _num(v: float) -> str:
 def _dash(pattern: str) -> list[str]:
     """Return draw.io dash style keys for an SVG dash pattern.
 
-    ``mxSvgCanvas2D.createDashPattern`` splits on spaces (a comma gives
-    ``NaN``), so commas become spaces. ``fixDash=1`` stops draw.io
-    multiplying the pattern by the stroke width, so the numbers stay in
-    drawing units.
+    ``mxSvgCanvas2D.createDashPattern`` splits on single spaces (a comma
+    gives ``NaN``, and a doubled space a zero-length dash), so the lengths
+    are rejoined with one space each, however SVG separated them.
+    ``fixDash=1`` stops draw.io multiplying the pattern by the stroke width,
+    so the numbers stay in drawing units.
 
     Parameters
     ----------
     pattern : str
-        SVG ``stroke-dasharray``, or empty for a solid line.
+        SVG ``stroke-dasharray``; empty or ``"none"`` for a solid line.
 
     Returns
     -------
     list[str]
         Style keys; empty for a solid line.
     """
-    if not pattern:
+    if not pattern or pattern == "none":
         return []
-    return ["dashed=1", f"dashPattern={pattern.replace(',', ' ')}", "fixDash=1"]
+    lengths = " ".join(pattern.replace(",", " ").split())
+    return ["dashed=1", f"dashPattern={lengths}", "fixDash=1"]
 
 
 def _fraction(v: float) -> str:
