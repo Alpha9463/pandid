@@ -986,6 +986,40 @@ def test_a_dash_is_stated_in_drawing_units():
     assert style["fixDash"] == "1"
 
 
+@pytest.mark.parametrize(
+    ("dasharray", "pattern"),
+    [("7, 4", "7 4"), ("7 ,  4", "7 4"), ("9 3,2 3", "9 3 2 3"), ("none", None)],
+)
+def test_a_dash_draws_in_drawio_as_the_svg_draws_it(dasharray, pattern):
+    """Read a dash as SVG does: any comma and space separate, ``none`` is solid.
+
+    ``"7, 4"`` used to become ``7  4``, which mxGraph splits into
+    ``[7, 0, 4]``, and ``"none"`` was marked dashed (#574).
+
+    Parameters
+    ----------
+    dasharray : str
+        Stream ``dasharray``.
+    pattern : str or None
+        Expected ``dashPattern``, or ``None`` for a solid line.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = Flowsheet("dashes")
+    a = fs.add(units.Tank("T-1"))
+    b = fs.add(units.Tank("T-2"))
+    a.pin(x=100, y=100)
+    b.pin(x=500, y=100)
+    fs.connect(a.outlet, b.inlet).dasharray = dasharray
+    fs.route()
+    style = _style(_cells(fs, check=False)["s0"])
+    assert style.get("dashPattern") == pattern
+    assert ("dashed" in style) == (pattern is not None)
+
+
 def test_a_turned_cell_pins_which_anchor_algorithm_reads_its_fractions():
     """Use the anchor algorithm matching the placed cell bounds.
 

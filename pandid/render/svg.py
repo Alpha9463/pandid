@@ -483,7 +483,7 @@ def _quadrant_block(box, codes, side: int) -> list:
         (lx,
          cy + _QUADRANTS[name][1] * (_QUADRANT_BAND + _QUADRANT_PITCH / 2
                                      + i * _QUADRANT_PITCH),
-         anchor, "middle", lpos, escaped(code))
+         anchor, "middle", lpos, code)
         for name in codes
         for i, code in enumerate(codes[name])
     ]
@@ -2132,7 +2132,8 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     Parameters
     ----------
     item : tuple
-        ``(x, y, anchor, baseline, label_pos, text)``.
+        ``(x, y, anchor, baseline, label_pos, text)``, with the text as
+        drawn, unescaped; :meth:`SvgRenderer._draw_unit_labels` escapes it.
 
     Returns
     -------
@@ -4396,7 +4397,7 @@ class SvgRenderer:
                 # Untagged symbols (a pipe tee) get no label.
                 tag_box = None
                 if u.tag:
-                    item = self._tag_item(u, f, x, y, u_width, u_height, safe_name,
+                    item = self._tag_item(u, f, x, y, u_width, u_height, u.tag,
                                           ink, symbols)
                     tag_box = _unit_label_box(item)
                     label_items.append(item)
@@ -4514,10 +4515,11 @@ class SvgRenderer:
         cx, cy = x + u_width / 2, y + u_height / 2
         if variant in _DIAMOND_BALLOONS:
             # Put the number in the lower half of the diamond, as ISA-5.1
-            # does; 7 units below centre clears a two-figure number.
+            # does; 7 units below centre clears a two-figure number. Letters
+            # standing in for a missing number are capitals, as draw.io's.
             return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
                     f'font-size="11" text-anchor="middle" '
-                    f'dominant-baseline="middle">{escaped(bot or top)}</text>']
+                    f'dominant-baseline="middle">{escaped(bot or top.upper())}</text>']
         if not top:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
                     f'font-size="12" text-anchor="middle" '
@@ -4565,7 +4567,7 @@ class SvgRenderer:
             return x + u_width, y - 10, "start", "baseline"
         return x + u_width / 2, y - 10, "middle", "baseline"  # top
 
-    def _unit_label_item(self, u, f, x, y, u_width, u_height, safe_name):
+    def _unit_label_item(self, u, f, x, y, u_width, u_height, tag):
         """Return a unit label item on its layout-chosen side.
 
         Parameters
@@ -4576,8 +4578,8 @@ class SvgRenderer:
             Its frame.
         x, y, u_width, u_height : float
             Unit box.
-        safe_name : str
-            Escaped tag.
+        tag : str
+            Tag as drawn, unescaped.
 
         Returns
         -------
@@ -4586,9 +4588,9 @@ class SvgRenderer:
             :meth:`_draw_unit_labels`.
         """
         lpos = f.label_pos or "top"
-        return (*self._label_place(lpos, x, y, u_width, u_height), lpos, safe_name)
+        return (*self._label_place(lpos, x, y, u_width, u_height), lpos, tag)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, safe_name, ink, symbols=()):
+    def _tag_item(self, u, f, x, y, u_width, u_height, tag, ink, symbols=()):
         """Return the equipment tag item, moved clear of drawn ink.
 
         Layout chose a side from faces without nozzles
@@ -4608,8 +4610,8 @@ class SvgRenderer:
             Its frame.
         x, y, u_width, u_height : float
             Unit box.
-        safe_name : str
-            Escaped tag.
+        tag : str
+            Tag as drawn, unescaped.
         ink : sequence of _Ink
             Drawn lines.
         symbols : sequence of tuple, optional
@@ -4622,7 +4624,7 @@ class SvgRenderer:
         """
         from pandid.layout.coordinates import free_label_sides
 
-        item = self._unit_label_item(u, f, x, y, u_width, u_height, safe_name)
+        item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)
         if box is None or not (ink or symbols):
             return item
@@ -4647,7 +4649,7 @@ class SvgRenderer:
             # Slide at most half the face, or it reads as the neighbour's.
             edgewise = side in ("left", "right")
             for sx, sy in _slide(lx, ly, (u_height if edgewise else u_width) / 2, edgewise):
-                spot = (sx, sy, anchor, baseline, side, safe_name)
+                spot = (sx, sy, anchor, baseline, side, tag)
                 cost = _erases(_unit_label_box(spot), near, others)
                 if cost < damage:
                     best, damage = spot, cost
@@ -4684,7 +4686,7 @@ class SvgRenderer:
         """
         item = (*self._label_place("top_right", x, y, u_width, u_height), "top_right", "NC")
         tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
-            u, f, x, y, u_width, u_height, escaped(u.tag)))
+            u, f, x, y, u_width, u_height, u.tag))
         nc = _unit_label_box(item)
         if tag is not None and nc is not None and (
                 tag[0] < nc[2] and tag[2] > nc[0] and tag[1] < nc[3] and tag[3] > nc[1]):
@@ -4734,7 +4736,7 @@ class SvgRenderer:
         lpos = "right" if upright else "bottom"
         item = (*self._label_place(lpos, x, y, u_width, u_height), lpos, letters)
         tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
-            u, f, x, y, u_width, u_height, escaped(u.tag)))
+            u, f, x, y, u_width, u_height, u.tag))
         fail = _unit_label_box(item)
         if tag is not None and fail is not None and (
                 tag[0] < fail[2] and tag[2] > fail[0] and tag[1] < fail[3] and tag[3] > fail[1]):
@@ -4784,7 +4786,7 @@ class SvgRenderer:
                            f'height="{ry1 - ry:.1f}" fill="white" />')
             out.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
                        f'font-size="12" text-anchor="{anchor}" '
-                       f'dominant-baseline="{baseline}">{text}</text>')
+                       f'dominant-baseline="{baseline}">{escaped(text)}</text>')
         out.append('  </g>')
         return out
 

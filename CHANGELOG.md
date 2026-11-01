@@ -71,6 +71,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   takes `supports`, `agitator`, `internals` or `rake` now runs the
   renderer's composition check when it is built, and raises `ValueError`
   naming the part and the variants that can carry it.
+- **A draw.io dash matches the SVG dash (#574).** `dasharray="7, 4"` was
+  exported as `7  4`, which draw.io reads as `[7, 0, 4]`, and `"none"` was
+  exported as dashed. Lengths are rejoined with single spaces, and `"none"`
+  is solid.
+- **A tag halo is measured on the text drawn (#574).** The white box behind
+  an equipment tag was measured on the escaped text, so `R&D` got a box
+  26 px too wide in both backends.
+- **An interlock diamond with letters and no number is lettered in capitals
+  in SVG (#574),** as draw.io already did.
 - **YAML reads a leading zero or a colon as the text written (#574).**
   PyYAML follows YAML 1.1, which read loop number `0101` as octal, drawing
   `FT-65`, and size `1:30` as base 60, 90. The YAML reader now takes only
