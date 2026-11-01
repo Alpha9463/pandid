@@ -1560,6 +1560,66 @@ def test_the_reactor_forms_that_did_not_change():
     assert drawn(units.Reactor("R-103", agitator="anchor")) == [(28, "anchor"), (20, "motor")]
 
 
+# Each composition keyword that names a part, and the ISO group it names one from.
+_PART_KEYWORDS = {"supports": 26, "rake": 28, "agitator": 28, "internals": 27}
+_COMPOSING = [
+    (cls, keyword, variant)
+    for cls in (units.Vessel, units.Evaporator, units.Thickener, units.Column, units.Reactor)
+    for keyword in cls.COMPOSITION
+    if keyword in _PART_KEYWORDS
+    # Deprecated variants included: they are still built and drawn.
+    for variant in default_registry.variants(cls.kind)
+]
+
+
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.parametrize(
+    ("cls", "keyword", "variant"),
+    _COMPOSING,
+    ids=[f"{cls.__name__}-{keyword}-{variant}" for cls, keyword, variant in _COMPOSING],
+)
+def test_a_body_and_part_either_draw_or_are_refused_when_built(cls, keyword, variant):
+    """No body and part construct and then fail to render (#574).
+
+    A ring under a horizontal drum, or a stirrer on a plug-flow tube, grows
+    the box until a nozzle lands on the wrong face. That used to construct and
+    then raise at render, naming an internal symbol id.
+    """
+    for part in [None, *default_registry.part_names(_PART_KEYWORDS[keyword])]:
+        try:
+            unit = cls("X-1", variant=variant, **{keyword: part})
+        except ValueError as refused:
+            assert f"variant {variant!r} cannot carry {keyword}={part!r}" in str(refused)
+            continue
+        fs = Flowsheet("composed")
+        fs.add(unit)
+        fs.to_svg()
+
+
+@pytest.mark.parametrize(
+    ("build", "message"),
+    [
+        (
+            lambda: units.Vessel("D-301", variant="horizontal", supports="ring"),
+            "D-301: Vessel variant 'horizontal' cannot carry supports='ring'; "
+            "variants that can: default, dished, dome, insulated, jacketed, swaged",
+        ),
+        (
+            lambda: units.Reactor("R-301", variant="tubular", agitator="anchor"),
+            "R-301: Reactor variant 'tubular' cannot carry agitator='anchor'; "
+            "variants that can: default, jacketed",
+        ),
+    ],
+    ids=["ring-on-a-drum", "stirrer-in-a-tube"],
+)
+def test_a_part_the_body_cannot_carry_is_refused_by_name(build, message):
+    """The refusal names the part and the bodies that take it, leaving out
+    deprecated ones, rather than an internal symbol id."""
+    with pytest.raises(ValueError) as refused:
+        build()
+    assert str(refused.value) == message
+
+
 def test_the_agitator_default_is_the_same_answer_wherever_it_is_asked_for():
     """The constructor and a serializer read one rule, not two.
 

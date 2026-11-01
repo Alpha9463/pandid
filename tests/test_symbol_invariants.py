@@ -1932,7 +1932,8 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
                 units.Vessel("X-1", variant=variant, supports=supports)
             )
         except ValueError as exc:
-            assert "grows the box" in str(exc), f"vessel/{variant} + {supports}: {exc}"
+            # Refused when built, by the composition check (#574).
+            assert "cannot carry supports=" in str(exc), f"vessel/{variant} + {supports}: {exc}"
             continue
         assert drawn.bands == sym.bands, (
             f"vessel/{variant} on {supports}s lost the wall its body declares"

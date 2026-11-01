@@ -64,6 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   track with another line and wrote them back, so every `route()` moved it
   another 3 px. Every run of a `via()` route is now fixed and is never
   rewritten; other lines separate from it.
+- **A part the body cannot carry is refused when the unit is built
+  (#574).** `Vessel(variant="horizontal", supports="ring")` and
+  `Reactor(variant="tubular", agitator="anchor")` were accepted and then
+  failed at render with an error naming an internal symbol. A unit that
+  takes `supports`, `agitator`, `internals` or `rake` now runs the
+  renderer's composition check when it is built, and raises `ValueError`
+  naming the part and the variants that can carry it.
 - **YAML reads a leading zero or a colon as the text written (#574).**
   PyYAML follows YAML 1.1, which read loop number `0101` as octal, drawing
   `FT-65`, and size `1:30` as base 60, 90. The YAML reader now takes only
