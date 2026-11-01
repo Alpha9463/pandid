@@ -91,6 +91,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settle on a dearer route first. On sheet 18 two recycle lines move to
   routes of the same length, bends and crossings that run along their
   start lane.
+- **Layout keeps clear of a feed flag where it is drawn (#574).** An
+  unmirrored feed flag is drawn leftward from its nozzle, past its frame.
+  The column-stacking check and free-standing balloon placement tested the
+  frame, so a balloon could land on a flag with a long tag. Both now use
+  the drawn box, `pandid.portgeom.unit_box`.
 - **YAML reads a leading zero or a colon as the text written (#574).**
   PyYAML follows YAML 1.1, which read loop number `0101` as octal, drawing
   `FT-65`, and size `1:30` as base 60, 90. The YAML reader now takes only

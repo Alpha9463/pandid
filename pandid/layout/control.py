@@ -15,8 +15,10 @@ from pandid.layout.coordinates import COL_GAP, ROW_GAP
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
-    from pandid.geometry import Frame
     from pandid.units import Unit
+
+#: A drawn box, ``(x_min, y_min, x_max, y_max)``.
+_Box = tuple[float, float, float, float]
 
 #: Clearance between a free-standing balloon and anything already drawn,
 #: leaving a lane for its signal lines.
@@ -64,13 +66,15 @@ def _place_free(fs: "Flowsheet") -> bool:
     """
     from pandid.geometry import Frame
     from pandid.layout.stages import is_control
-    from pandid.portgeom import resolve_size
+    from pandid.portgeom import resolve_size, unit_box
 
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
         return False
 
-    taken = [u.frame for u in fs.units
+    # What each unit draws, so a balloon keeps off a feed flag drawn left
+    # of its frame.
+    taken = [unit_box(u, u.frame) for u in fs.units
              if u.frame is not None and u not in set(pending)]
     moved = False
     # Place in flowsheet order. A balloon wired only to unplaced balloons
@@ -96,12 +100,12 @@ def _place_free(fs: "Flowsheet") -> bool:
             # router has already reached.
             port_faces=dict(old.port_faces) if old is not None else {},
         )
-        taken.append(inst.frame)
+        taken.append(unit_box(inst, inst.frame))
     return moved
 
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
-          taken: list["Frame"]) -> tuple[float, float]:
+          taken: list[_Box]) -> tuple[float, float]:
     """Return a free-standing balloon's top-left corner.
 
     A pin fixes only the axes it names. ``pin(col=3)`` fixes the column and
@@ -117,8 +121,8 @@ def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
         Free-standing balloon.
     w, h : float
         Balloon size.
-    taken : list[Frame]
-        Frames already drawn.
+    taken : list[tuple[float, float, float, float]]
+        Boxes already drawn.
 
     Returns
     -------
@@ -249,7 +253,7 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
     return (min(f.x for f in frames), max(f.y_max for f in frames) + CLEARANCE * 2)
 
 
-def _nearest_free(x: float, y: float, w: float, h: float, taken: list["Frame"],
+def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
                   free_x: bool, free_y: bool) -> tuple[float, float]:
     """Return the free spot nearest a preferred corner.
 
@@ -264,8 +268,8 @@ def _nearest_free(x: float, y: float, w: float, h: float, taken: list["Frame"],
         Preferred top-left corner.
     w, h : float
         Box size.
-    taken : list[Frame]
-        Frames already drawn.
+    taken : list[tuple[float, float, float, float]]
+        Boxes already drawn.
     free_x, free_y : bool
         Whether the search may move along each axis.
 
@@ -308,23 +312,23 @@ def _ring(radius: int) -> list[tuple[int, int]]:
     return out
 
 
-def _hits(x: float, y: float, w: float, h: float, taken: list["Frame"]) -> bool:
-    """Return whether a box comes within :data:`CLEARANCE` of a drawn frame.
+def _hits(x: float, y: float, w: float, h: float, taken: list[_Box]) -> bool:
+    """Return whether a box comes within :data:`CLEARANCE` of a drawn box.
 
     Parameters
     ----------
     x, y, w, h : float
         Candidate box.
-    taken : list[Frame]
-        Frames already drawn.
+    taken : list[tuple[float, float, float, float]]
+        Boxes already drawn, as :func:`~pandid.portgeom.unit_box` gives them.
 
     Returns
     -------
     bool
-        Whether the padded box overlaps any frame.
+        Whether the padded box overlaps any drawn box.
     """
-    for frame in taken:
-        if (x < frame.x_max + CLEARANCE and x + w + CLEARANCE > frame.x
-                and y < frame.y_max + CLEARANCE and y + h + CLEARANCE > frame.y):
+    for x0, y0, x1, y1 in taken:
+        if (x < x1 + CLEARANCE and x + w + CLEARANCE > x0
+                and y < y1 + CLEARANCE and y + h + CLEARANCE > y0):
             return True
     return False

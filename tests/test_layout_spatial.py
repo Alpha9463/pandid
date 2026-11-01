@@ -71,6 +71,21 @@ def test_row_index_reads_x_moved_after_it_was_built():
     assert _overlaps_x(mover, 100, index.near(mover))
 
 
+def test_a_feed_flag_is_judged_by_the_box_it_draws():
+    """Check a feed flag where it is drawn, left of its frame, either way round.
+
+    An unmirrored flag keeps its nozzle at ``x + 50`` and is drawn leftward
+    from it, so a 110-wide flag framed at x=200 is drawn from x=140 (#574).
+    """
+    pump = _unit("P", (0, 0, 60, 40))
+    feed = U.Feed("F")
+    feed._slot = _Slot(w=110, h=40, x=200, y=0)
+    # STACK_CLEAR short of the frame, so 60 into the drawn flag.
+    assert _overlaps_x(pump, 200 - 60 - STACK_CLEAR, [pump, feed])
+    # The flag moving: a frame STACK_CLEAR clear of the pump draws over it.
+    assert _overlaps_x(feed, 60 + STACK_CLEAR, [pump, feed])
+
+
 def _stacked(n: int) -> Flowsheet:
     """Return a row of ``n`` blocks, each fed over its roof as well.
 

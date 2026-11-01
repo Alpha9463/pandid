@@ -5,7 +5,7 @@ from pandid.layout import _seed_slots
 from pandid.layout.cycles import break_cycles
 from pandid.layout.coordinates import assign_coordinates
 from pandid.layout.place import assign_positions
-from pandid.portgeom import port_point
+from pandid.portgeom import port_point, unit_box
 from pandid.routing.metrics import real_bends
 
 
@@ -741,6 +741,29 @@ def test_a_free_standing_balloon_is_placed_near_what_it_is_wired_to():
         and fic.frame.y < valve.frame.y_max
         and fic.frame.y_max > valve.frame.y
     )
+
+
+def test_a_free_standing_balloon_stays_off_a_feed_flag_where_it_is_drawn():
+    """Keep a balloon clear of the flag drawn, not of the flag's frame.
+
+    An unmirrored feed flag keeps its nozzle at ``frame.x + 50`` and is drawn
+    leftward from it, so a long tag reaches far left of its frame. The
+    balloon used to be kept clear of the frame only, and landed on the
+    flag (#574).
+    """
+    fs = Flowsheet("panel")
+    valve = fs.add(D.ControlValve("FV-101")).pin(x=500, y=300)
+    feed = fs.add(U.Feed("FEED FROM UNIT 100 STORAGE AREA")).pin(x=880, y=290)
+    fs.connect(feed.outlet, fs.add(U.Product("P")).pin(x=1200, y=600).inlet)
+    fic = fs.add(U.Instrument("FIC-101")).pin(y=300)
+    fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+
+    assert fic.frame is not None and feed.frame is not None
+    x0, y0, x1, y1 = unit_box(fic, fic.frame)
+    fx0, fy0, fx1, fy1 = unit_box(feed, feed.frame)
+    assert fx0 < feed.frame.x, "the flag is meant to be drawn left of its frame"
+    assert not (x0 < fx1 and x1 > fx0 and y0 < fy1 and y1 > fy0), "the balloon is on the flag"
 
 
 # --- reserving the space stage 2 will need (#428) ------------------------------
