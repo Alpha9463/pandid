@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pandid import Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
+import pytest
+
+from pandid import ControlValve, Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
 from scripts.layout_compare import _fingerprint
@@ -146,3 +148,29 @@ def test_routing_a_mounted_sheet_again_draws_the_same_sheet() -> None:
     fs.route()
     assert _fingerprint(fs) == first
     assert fs.to_svg() == fs.to_svg()
+
+
+@pytest.mark.parametrize("pin", [{}, {"orientation": 0}, {"mirrored": "y"}])
+def test_a_control_valve_sits_on_its_pipe_without_a_jog(pin: dict[str, object]) -> None:
+    """Check that a turned or mirrored valve keeps both nozzles on the pipe.
+
+    Parameters
+    ----------
+    pin : dict[str, object]
+        Orientation or mirroring the author pinned, if any.
+    """
+    fs = Flowsheet("No jog")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    line = fs.connect(feed.outlet, product.inlet)
+    valve = ControlValve("FV-101")
+    if pin:
+        valve.pin(**pin)
+    fs.add(valve, on=line)
+
+    fs.route()
+    assert feed.frame is not None and valve.frame is not None
+    pipe_y = port_point(feed, feed.frame, "outlet")[1]
+    assert port_point(valve, valve.frame, "inlet")[1] == pytest.approx(pipe_y)
+    assert port_point(valve, valve.frame, "outlet")[1] == pytest.approx(pipe_y)
+    assert measure_final(fs).bends == 0

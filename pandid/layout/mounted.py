@@ -450,9 +450,10 @@ def _on_corridor(
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame centred on a leg point, piped in flow order.
 
-    A device with an orientation pin keeps it and is centred on the point.
-    Otherwise the first quarter turn that puts both nozzles on the leg,
-    inlet upstream, is used.
+    A pinned device keeps its pinned turn. Otherwise the first quarter turn
+    that puts both nozzles on the leg, inlet upstream, is used. Either way
+    the inlet is put on the leg, since a symbol's nozzles need not be at
+    its box centre.
 
     Parameters
     ----------
@@ -471,21 +472,23 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     (ax, ay), (bx, by) = leg
     level = _level(leg)
     forward = 1 if (bx - ax if level else by - ay) > 0 else -1
-    if unit.pin_ is not None:
-        assert unit.frame is not None
-        return _candidate(unit, point, int(unit.frame.orientation))
     direction = (forward, 0) if level else (0, forward)
     ordinate = ay if level else ax
     base = (0 if forward > 0 else 180) if level else (90 if forward > 0 else 270)
-    for turn in (base, (base + 180) % 360, (base + 90) % 360, (base + 270) % 360):
+    if unit.pin_ is not None:
+        assert unit.frame is not None
+        turns = [int(unit.frame.orientation)]
+    else:
+        turns = [base, (base + 180) % 360, (base + 90) % 360, (base + 270) % 360]
+    candidates = []
+    for turn in turns:
         candidate = _candidate(unit, point, turn)
         inlet = port_point(unit, candidate, "inlet")
         shift = ordinate - inlet[1 if level else 0]
-        candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
-                            y=candidate.y + (shift if level else 0.0))
-        if _on_corridor(unit, candidate, direction, ordinate):
-            return candidate
-    return _candidate(unit, point, base)
+        candidates.append(replace(candidate, x=candidate.x + (0.0 if level else shift),
+                                  y=candidate.y + (shift if level else 0.0)))
+    return next((c for c in candidates if _on_corridor(unit, c, direction, ordinate)),
+                candidates[0])
 
 
 def _main_width(assembly: StationAssembly) -> float:
