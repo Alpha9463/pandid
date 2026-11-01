@@ -26,11 +26,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeping crossing pairs. Every trial now settles with `settle()` and is
   judged by `pandid.layout.quality.accepts`, whose mode each caller states.
   No drawing changes.
+- **A missed attribute lookup on a unit no longer lists its ports (#574).**
+  Rendering asks every unit for attributes only some classes carry, such as
+  `large_end`, and discards the `AttributeError`; building its port list
+  each time cost about 60 ms of the alumina refinery render. The list is
+  written only when the error is shown, so a mistyped port still names the
+  ports there are.
 
 ### Removed
 
 - **`Port.side` (#304).** The field was never passed by any port and never
   read by layout, routing or rendering; it was always `None`.
+- **Unused code (#574):** `pandid.layout.stages.control_units` and
+  `signal_streams`; `Edge.source_role` and `dest_role`, and
+  `ArmRegion.entry_stream` and `streams`, in `pandid.layout.structure`; the
+  `_EVAP_CALANDRIA_PITCH` constant; and `scripts/ports_bench.py`,
+  `renumber_bench.py` and `layout_bench.py`, which nothing ran.
+  `scripts/route_bench.py` remains the layout and routing benchmark.
 
 ### Fixed
 

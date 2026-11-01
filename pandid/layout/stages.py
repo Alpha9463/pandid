@@ -73,22 +73,6 @@ def process_units(fs: "Flowsheet") -> list["Unit"]:
     return [u for u in fs.units if not is_control(u)]
 
 
-def control_units(fs: "Flowsheet") -> list["Unit"]:
-    """Return the instruments stage 2 places.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet to read.
-
-    Returns
-    -------
-    list[Unit]
-        Every instrument, in flowsheet order.
-    """
-    return [u for u in fs.units if is_control(u)]
-
-
 def is_process_stream(stream: "Stream") -> bool:
     """Return whether stage 1 places units against a stream.
 
@@ -124,21 +108,3 @@ def process_streams(fs: "Flowsheet") -> list["Stream"]:
         Process streams, in flowsheet order.
     """
     return [s for s in fs.streams if is_process_stream(s)]
-
-
-def signal_streams(fs: "Flowsheet") -> list["Stream"]:
-    """Return the streams stage 2 routes.
-
-    Energy lines are included because stage 1 does not place against them.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet to read.
-
-    Returns
-    -------
-    list[Stream]
-        Every stream that is not a process stream, in flowsheet order.
-    """
-    return [s for s in fs.streams if not is_process_stream(s)]

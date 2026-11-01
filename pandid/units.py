@@ -141,6 +141,35 @@ _LAYOUT_INPUTS = frozenset(
 )
 
 
+class _NoSuchAttribute(AttributeError):
+    """A unit has no such attribute or port; worded only when shown.
+
+    Layout and rendering ask every unit for attributes only some classes
+    carry, such as ``large_end``, with ``getattr(unit, name, default)``, and
+    discard the error. Listing the ports for each of those messages was a
+    measurable part of a large render, so :meth:`__str__` writes it.
+
+    Parameters
+    ----------
+    cls_name, where, name : str
+        Class name, unit tag and the attribute asked for.
+    ports : Mapping[str, Port]
+        The unit's ports, listed in the message.
+    """
+
+    def __init__(self, cls_name: str, where: str, name: str,
+                 ports: "Mapping[str, Port]") -> None:
+        """Keep what the message needs, without writing it."""
+        super().__init__(name)
+        self._parts = (cls_name, where, name, ports)
+
+    def __str__(self) -> str:
+        """Return the message, naming the ports the unit does have."""
+        cls_name, where, name, ports = self._parts
+        return (f"{cls_name} {where!r} has no attribute or port {name!r}; "
+                f"available ports: {sorted(ports)}")
+
+
 class Unit:
     """A piece of equipment, flag, fitting or instrument on a flowsheet.
 
@@ -1064,10 +1093,7 @@ class Unit:
                     direction, role, dep = retired
                     dep.warn(self, where=where)
                     return self._add_port(name, direction, role)
-                raise AttributeError(
-                    f"{type(self).__name__} {where!r} has no "
-                    f"attribute or port {name!r}; available ports: {sorted(ports)}"
-                )
+                raise _NoSuchAttribute(type(self).__name__, where, name, ports)
             raise AttributeError(name)
 
 
