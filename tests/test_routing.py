@@ -410,6 +410,9 @@ def _straight_run(bad=None):
 def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
     """Reject a non-finite coordinate before the path search starts.
 
+    ``pin()`` refuses one where it is written (#574). A frame set another
+    way, such as by a custom layout engine, is refused by the router.
+
     Parameters
     ----------
     bad : float
@@ -418,10 +421,17 @@ def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
     Returns
     -------
     None
-        ``route()`` raises and names the unit.
+        ``pin()`` and ``route()`` raise and name the unit.
     """
+    with pytest.raises(ValueError, match="E-101: pin x must be a finite number"):
+        _straight_run(bad)
+    fs = _straight_run()
+    fs.layout()
+    frame = fs.units[1].frame
+    assert frame is not None
+    frame.x = bad
     with pytest.raises(ValueError, match="E-101 has a non-finite x="):
-        _straight_run(bad).route()
+        fs.route()
 
 
 def test_the_search_is_bounded_by_the_size_of_the_graph():

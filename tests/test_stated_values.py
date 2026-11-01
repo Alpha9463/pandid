@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import numbers
 from decimal import Decimal
 from fractions import Fraction
@@ -110,6 +111,10 @@ def test_any_real_type_layout_can_format_is_a_number():
 
     class Reading:
         """A stand-in real type that is neither ``float`` nor rational."""
+
+        def __float__(self) -> float:
+            """Return the value, as every ``numbers.Real`` can."""
+            return 1.0
 
     numbers.Real.register(Reading)
     reading = Reading()
@@ -229,6 +234,34 @@ def test_a_real_number_is_still_accepted_where_layout_computes_with_it(door):
     """Check that the same doors still take an int and a float."""
     for value in (10, 10.5):
         DOORS[door](value)
+
+
+NOT_FINITE = [math.nan, math.inf, -math.inf]
+
+
+@pytest.mark.parametrize("value", NOT_FINITE, ids=["nan", "inf", "-inf"])
+@pytest.mark.parametrize("door", DOORS, ids=list(DOORS))
+def test_nan_or_infinity_is_refused_where_layout_computes_with_it(door, value):
+    """Check that a float with no position is refused, not drawn as ``nan``."""
+    with pytest.raises(ValueError, match="finite"):
+        DOORS[door](value)
+
+
+@pytest.mark.parametrize("value", NOT_FINITE, ids=["nan", "inf", "-inf"])
+def test_the_spec_reader_refuses_nan_or_infinity(value):
+    """Check that a spec number with no position is refused by name."""
+    for refuse in (spec._number, spec._column_width):
+        with pytest.raises(SpecError, match="x must be a finite number"):
+            refuse(value, "x")
+    run = {"from": ["F", "outlet"], "to": ["PR", "inlet"], "via": [[10, value]]}
+    flags = [{"kind": "Feed", "name": "F"}, {"kind": "Product", "name": "PR"}]
+    with pytest.raises(SpecError, match=r"via\[0\]\.y must be a finite number"):
+        Flowsheet.from_dict({"name": "T", "units": flags, "streams": [run]})
+    note = {"type": "annotation", "rows": ["a"], "font_size": value}
+    with pytest.raises(SpecError, match="font_size must be a finite number"):
+        Flowsheet.from_dict({"name": "T", "annotations": [note]})
+    with pytest.raises(SpecError, match="font_size must be a finite number"):
+        Flowsheet.from_dict({"name": "T", "stream_table": {"font_size": value}})
 
 
 def test_a_grid_rank_must_be_a_whole_number():

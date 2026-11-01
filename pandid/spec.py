@@ -21,6 +21,7 @@ The format::
     line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
     line_number_start: 1001       # the 1001 in 6"-P-1001-A1A
     loop_number_start: 101        # where an unnumbered loop starts
+    valve_station_tag_scheme: "{letters}-{number}{suffix}"   # HV-303A
     auto_faces: true              # engine picks each movable face
     components: [{name: Water, formula: H2O}]
 
@@ -112,6 +113,7 @@ from pandid.flowsheet import (
 from pandid.loops import Loop
 from pandid.portgeom import pin_intent, port_refusal
 from pandid.ports import Port
+from pandid.stations import DEFAULT_VALVE_STATION_TAG_SCHEME
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
 
@@ -308,7 +310,7 @@ def _drawn(value: Any, where: str) -> str:
 
 
 def _number(value: Any, where: str) -> float:
-    """Check that a value is a real number, returned unchanged.
+    """Check that a value is a finite real number, returned unchanged.
 
     It is not coerced to float, because ``120`` and ``120.0`` are written
     differently in the SVG. See :func:`pandid._checks.is_real` for what
@@ -329,10 +331,13 @@ def _number(value: Any, where: str) -> float:
     Raises
     ------
     SpecError
-        If it is not a real number, or is a bool or ``Decimal``.
+        If it is not a real number, is a bool or ``Decimal``, or is NaN or
+        infinite.
     """
     if not _is_real(value):
         raise SpecError(f"{where} must be a number, got {value!r}")
+    if not isfinite(value):
+        raise SpecError(f"{where} must be a finite number, got {value!r}")
     return value
 
 
@@ -354,13 +359,13 @@ def _column_width(value: Any, where: str) -> float | Literal["auto"]:
     Raises
     ------
     SpecError
-        If it is neither.
+        If it is neither, or is NaN or infinite.
     """
     if value == "auto":
         return "auto"
     if not _is_real(value):
         raise SpecError(f'{where} must be a number or "auto", got {value!r}')
-    return value
+    return _number(value, where)
 
 
 def _integer(value: Any, where: str) -> int:
@@ -638,7 +643,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
 _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
     "line_numbering_scheme", "line_number_start", "loop_number_start",
-    "auto_faces", "components", "units", "loops",
+    "valve_station_tag_scheme", "auto_faces", "components", "units", "loops",
     "instruments", "streams", "stations", "stream_table_sections", "stream_table",
     "stream_labels", "title_block", "annotations",
 }
@@ -757,6 +762,7 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     line_scheme = data.get("line_numbering_scheme", DEFAULT_LINE_NUMBERING_SCHEME)
     start = data.get("line_number_start", DEFAULT_LINE_NUMBER_START)
     loop_start = data.get("loop_number_start", DEFAULT_LOOP_NUMBER_START)
+    tag_scheme = data.get("valve_station_tag_scheme", DEFAULT_VALVE_STATION_TAG_SCHEME)
     fs = Flowsheet(
         _drawn(data["name"], f"{where}: 'name'"),
         stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
@@ -764,6 +770,7 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         line_numbering_scheme=_text(line_scheme, f"{where}: 'line_numbering_scheme'"),
         line_number_start=_integer(start, f"{where}: 'line_number_start'"),
         loop_number_start=_integer(loop_start, f"{where}: 'loop_number_start'"),
+        valve_station_tag_scheme=_text(tag_scheme, f"{where}: 'valve_station_tag_scheme'"),
         auto_faces=_flag(data.get("auto_faces", True), f"{where}: 'auto_faces'"),
     )
 
@@ -2199,9 +2206,18 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
                 raise SpecError(f"{where}: a legend box needs 'entries' (abbreviation -> meaning)")
             entries = data["entries"]
             pairs = (list(entries.items()) if isinstance(entries, Mapping)
-                     else [tuple(_sequence(e, f"{where}.entries")) for e in
-                           _sequence(entries, f"{where}.entries")])
-            return legend(pairs, **kwargs)
+                     else [tuple(_sequence(e, f"{where}.entries[{i}]"))
+                           for i, e in enumerate(_sequence(entries, f"{where}.entries"))])
+            for i, pair in enumerate(pairs):
+                if len(pair) != 2:
+                    raise SpecError(
+                        f"{where}.entries[{i}] must have two items, an abbreviation "
+                        f"and its meaning, got {list(pair)!r}"
+                    )
+            # Drawn text, as an annotation's cells are (_read_rows).
+            return legend([(_drawn(abbreviation, f"{where}.entries[{i}][0]"),
+                            _drawn(meaning, f"{where}.entries[{i}][1]"))
+                           for i, (abbreviation, meaning) in enumerate(pairs)], **kwargs)
         if kind == "table":
             if "headers" in data:
                 kwargs["headers"] = [_drawn(h, f"{where}.headers")
@@ -2209,7 +2225,8 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
             if "col_align" in data:
                 kwargs["col_align"] = [_text(a, f"{where}.col_align")
                                        for a in _sequence(data["col_align"], f"{where}.col_align")]
-            kwargs["rows"] = [_sequence(row, f"{where}.rows[{i}]")
+            kwargs["rows"] = [[_drawn(cell, f"{where}.rows[{i}][{j}]")
+                               for j, cell in enumerate(_sequence(row, f"{where}.rows[{i}]"))]
                               for i, row in enumerate(_sequence(data.get("rows", []),
                                                                 f"{where}.rows"))]
             return TableBox(**kwargs)
@@ -2262,6 +2279,11 @@ def to_dict(fs: Flowsheet) -> dict:
             "a callable line_numbering_scheme cannot be written to a spec; use a format "
             f"string such as {DEFAULT_LINE_NUMBERING_SCHEME!r}"
         )
+    if not isinstance(fs.valve_station_tag_scheme, str):
+        raise SpecError(
+            "a callable valve_station_tag_scheme cannot be written to a spec; use a format "
+            f"string such as {DEFAULT_VALVE_STATION_TAG_SCHEME!r}"
+        )
     spec: dict[str, Any] = {"name": fs.name}
     if fs.stream_naming_scheme != "S{n}":
         spec["stream_naming_scheme"] = fs.stream_naming_scheme
@@ -2275,6 +2297,8 @@ def to_dict(fs: Flowsheet) -> dict:
     # later in the sheet's series.
     if fs.loop_number_start != DEFAULT_LOOP_NUMBER_START:
         spec["loop_number_start"] = fs.loop_number_start
+    if fs.valve_station_tag_scheme != DEFAULT_VALVE_STATION_TAG_SCHEME:
+        spec["valve_station_tag_scheme"] = fs.valve_station_tag_scheme
     if not fs.auto_faces:
         spec["auto_faces"] = False
     if fs.components:
@@ -2813,22 +2837,79 @@ def from_json(path: str | Path) -> Flowsheet:
     """
     text = Path(path).read_text(encoding="utf-8")
     try:
-        data = json.loads(text)
+        data = json.loads(text, object_pairs_hook=_unique_keys)
     except json.JSONDecodeError as e:
         raise SpecError(f"{path}: not valid JSON, {e.msg} at line {e.lineno}, column {e.colno}")
+    except SpecError as e:
+        raise SpecError(f"{path}: {e}") from None
     return from_dict(data)
+
+
+def _written_twice(key: Any, line: int | None = None) -> SpecError:
+    """Return the error for a key written twice in one mapping.
+
+    Parameters
+    ----------
+    key : Any
+        The repeated key.
+    line : int or None, optional
+        1-based line of the second one, where the parser knows it.
+
+    Returns
+    -------
+    SpecError
+        Error to raise.
+    """
+    at = "" if line is None else f" (line {line})"
+    return SpecError(
+        f"{key!r} is written twice in one mapping{at}; only one value can be "
+        f"kept, so delete the other"
+    )
+
+
+def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Return a JSON object's pairs as a dict, refusing a repeated key.
+
+    ``json`` keeps the last of two equal keys, which silently drops a value
+    the author wrote.
+
+    Parameters
+    ----------
+    pairs : list[tuple[str, Any]]
+        The object's members in file order.
+
+    Returns
+    -------
+    dict[str, Any]
+        The object.
+
+    Raises
+    ------
+    SpecError
+        If a key appears twice.
+    """
+    data: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in data:
+            raise _written_twice(key)
+        data[key] = value
+    return data
 
 
 _YAML_LOADER: Any = None
 
 
 def _core_schema_loader(yaml_module) -> Any:
-    """Return a safe PyYAML loader using YAML 1.2 core-schema booleans.
+    """Return a safe PyYAML loader that reads scalars as YAML 1.2 does.
 
     PyYAML follows YAML 1.1, which reads ``N``, ``on``, ``yes`` and the
-    like as booleans and unquoted dates as dates, turning ``at: N`` into
-    ``False``. This loader treats only ``true`` and ``false`` as booleans
-    and leaves dates as text. It is built once and cached.
+    like as booleans, unquoted dates as dates, a number with a leading
+    zero as octal and one with a colon as base 60. That turns ``at: N``
+    into ``False``, loop number ``0101`` into 65 and size ``1:30`` into 90.
+    This loader treats only ``true`` and ``false`` as booleans, reads only
+    plain decimals as numbers and leaves the rest as the text written. It
+    also refuses a key written twice in one mapping, which PyYAML would
+    otherwise drop. It is built once and cached.
 
     Parameters
     ----------
@@ -2842,10 +2923,32 @@ def _core_schema_loader(yaml_module) -> Any:
     """
     global _YAML_LOADER
     if _YAML_LOADER is None:
-        dropped = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:timestamp"}
+        dropped = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:timestamp",
+                   "tag:yaml.org,2002:int", "tag:yaml.org,2002:float"}
 
         class Loader(yaml_module.SafeLoader):
-            """Safe loader without YAML 1.1 booleans and timestamps."""
+            """Safe loader with YAML 1.2 booleans and decimal numbers only."""
+
+            def construct_mapping(self, node, deep=False):
+                """Build a mapping, refusing a key written twice.
+
+                Keys merged in with ``<<`` may be overridden, as YAML
+                allows; only keys written in the mapping itself count.
+                """
+                if isinstance(node, yaml_module.MappingNode):
+                    seen = set()
+                    for key_node, _value in node.value:
+                        if key_node.tag == "tag:yaml.org,2002:merge":
+                            continue
+                        key = self.construct_object(key_node, deep=deep)
+                        try:
+                            repeated = key in seen
+                        except TypeError:
+                            continue  # unhashable; the base class names it
+                        if repeated:
+                            raise _written_twice(key, key_node.start_mark.line + 1)
+                        seen.add(key)
+                return super().construct_mapping(node, deep=deep)
 
         Loader.yaml_implicit_resolvers = {
             char: [(tag, pattern) for tag, pattern in resolvers if tag not in dropped]
@@ -2855,6 +2958,19 @@ def _core_schema_loader(yaml_module) -> Any:
             "tag:yaml.org,2002:bool",
             re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
             list("tTfF"),
+        )
+        # Decimal only: no octal, hex, binary, base 60 or underscores.
+        Loader.add_implicit_resolver(
+            "tag:yaml.org,2002:int",
+            re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$"),
+            list("-+0123456789"),
+        )
+        # A decimal point is required, so ``0101`` stays text.
+        Loader.add_implicit_resolver(
+            "tag:yaml.org,2002:float",
+            re.compile(r"^(?:[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
+                       r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"),
+            list("-+0123456789."),
         )
         _YAML_LOADER = Loader
     return _YAML_LOADER
@@ -2895,6 +3011,8 @@ def from_yaml(path: str | Path) -> Flowsheet:
         data = yaml.load(text, Loader=_core_schema_loader(yaml))
     except yaml.YAMLError as e:
         raise SpecError(f"{path}: not valid YAML, {e}") from None
+    except SpecError as e:
+        raise SpecError(f"{path}: {e}") from None
     if data is None:
         raise SpecError(f"{path} is empty; a spec needs at least a 'name'")
     return from_dict(data)

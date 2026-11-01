@@ -1087,6 +1087,24 @@ def test_flowsheet_level_options():
     assert fs.auto_faces is True
 
 
+def test_a_valve_station_tag_scheme_survives_a_round_trip():
+    """The third numbering scheme is read and written like the other two."""
+    fs = Flowsheet("T", valve_station_tag_scheme="{letters}{number}{suffix}")
+    spec = fs.to_dict()
+    assert spec["valve_station_tag_scheme"] == "{letters}{number}{suffix}"
+    back = Flowsheet.from_dict(spec)
+    assert back.valve_station_tag_scheme == "{letters}{number}{suffix}"
+    bypass = back.add_valve_station("CV-303").bypass
+    assert bypass is not None and bypass.name == "HV303C"
+    assert "valve_station_tag_scheme" not in Flowsheet("T").to_dict()
+
+
+def test_a_callable_valve_station_tag_scheme_cannot_be_written_out():
+    fs = Flowsheet("T", valve_station_tag_scheme=lambda role, control: f"{control}/{role}")
+    with pytest.raises(SpecError, match="callable valve_station_tag_scheme"):
+        fs.to_dict()
+
+
 def test_auto_faces_off_survives_a_round_trip():
     """A sheet whose faces were settled by hand has to come back settled by
     hand; silently re-enabling the selector would redraw it on reload."""
@@ -1446,6 +1464,32 @@ def test_annotation_boxes():
     assert table.headers == ["Tag", "Line"] and table.col_align == ["l", "c"]
 
 
+def test_table_cells_and_legend_entries_read_as_the_text_drawn():
+    """A null cell is blank and a number is its text, as in an annotation row,
+    so a box does not draw ``None`` or ``101.0`` where the file left a gap."""
+    fs = Flowsheet.from_dict(
+        _spec(
+            annotations=[
+                {"type": "table", "rows": [["TI-1", None, 101]]},
+                {"type": "legend", "entries": {"SS": None, 1: 2.5}},
+                {"type": "legend", "entries": [["SS", None], [3, 4]]},
+                {"type": "annotation", "rows": [["TI-1", None, 101]]},
+            ]
+        )
+    )
+    table, by_mapping, by_list, note_box = fs.annotations
+    assert table.rows == [["TI-1", "", "101"]]
+    assert by_mapping.rows == [("SS", ""), ("1", "2.5")]
+    assert by_list.rows == [("SS", ""), ("3", "4")]
+    assert note_box.rows == [("TI-1", "", "101")]
+
+
+@pytest.mark.parametrize("entry", [["SS"], ["SS", "316L", "extra"]])
+def test_a_legend_entry_must_pair_an_abbreviation_with_its_meaning(entry):
+    with pytest.raises(SpecError, match=r"annotations\[0\]\.entries\[0\].*two items"):
+        Flowsheet.from_dict(_spec(annotations=[{"type": "legend", "entries": [entry]}]))
+
+
 def test_stream_table_sections():
     fs = Flowsheet.from_dict(_spec(stream_table_sections=[["Benzene", "Mass Fraction"]]))
     assert fs.stream_table_sections == [("Benzene", "Mass Fraction")]
@@ -1539,6 +1583,56 @@ def test_yaml_reads_the_keys_that_were_written(tmp_path):
     assert fs.units[-1].host is fs.units[0]
     assert fs.units[-1].at == "N"
     assert fs.title_block.revisions[0].date == "2026-05-18"
+
+
+@pytest.mark.skipif(not _HAS_YAML, reason="PyYAML is an optional extra")
+def test_yaml_reads_a_leading_zero_or_a_colon_as_written(tmp_path):
+    """YAML 1.1 reads ``0101`` as octal 65 and ``1:30`` as base 60, 90.
+
+    A loop number, a line sequence and a size are written that way on real
+    drawings, so each reads as the text written. Decimals still read as
+    numbers.
+    """
+    path = tmp_path / "fs.yaml"
+    path.write_text(
+        "name: T\n"
+        "units:\n"
+        "  - {kind: Vessel, name: V-1, pin: {x: 60.5, y: 120}}\n"
+        "  - {kind: Vessel, name: V-2}\n"
+        "instruments: [{type: FT, number: 0101, sensing: V-1}]\n"
+        "streams:\n"
+        "  - {from: [V-1, outlet], to: [V-2, inlet], sequence: 0010, size: 1:30}\n",
+        encoding="utf-8",
+    )
+    fs = Flowsheet.from_yaml(path)
+    assert fs.units[-1].name == "FT-0101"
+    stream = fs.streams[0]
+    assert (stream.sequence, stream.size) == ("0010", "1:30")
+    pin = fs.units[0].pin_
+    assert pin is not None and (pin.x, pin.y) == (60.5, 120)
+
+
+def test_a_key_written_twice_in_json_is_refused(tmp_path):
+    """JSON keeps the last of two equal keys, silently dropping the first."""
+    path = tmp_path / "fs.json"
+    path.write_text(
+        '{"name": "T", "units": [{"kind": "Pump", "name": "P-1", "name": "P-2"}]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(SpecError, match="'name' is written twice"):
+        Flowsheet.from_json(path)
+
+
+@pytest.mark.skipif(not _HAS_YAML, reason="PyYAML is an optional extra")
+def test_a_key_written_twice_in_yaml_is_refused(tmp_path):
+    """YAML keeps the last of two equal keys, silently dropping the first."""
+    path = tmp_path / "fs.yaml"
+    path.write_text(
+        "name: T\nunits:\n  - kind: Pump\n    name: P-1\n    name: P-2\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SpecError, match=r"'name' is written twice.*line 5"):
+        Flowsheet.from_yaml(path)
 
 
 def test_from_yaml_without_pyyaml_says_exactly_what_to_install(tmp_path, monkeypatch):

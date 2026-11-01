@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import pytest
 
-from pandid import Flowsheet, units as U
+from pandid import Flowsheet, Pin, units as U
 from pandid.document import Revision, TitleBlock
 from pandid.render import furniture as F
 from pandid.render.drawio import DrawioRenderer
@@ -1177,7 +1177,7 @@ def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
 def test_a_model_error_leaves_the_whole_flowsheet_alone():
     """Verify that a model error leaves the whole flowsheet alone."""
     fs = _sheet(streams=3)
-    fs.units[0].pin(x=float("nan"), y=10.0)
+    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses one (#574)
     before = _state(fs)
     with pytest.raises(ValueError, match="Flowsheet validation failed"):
         fs.to_svg(page_size="A3")
@@ -1193,7 +1193,7 @@ def test_a_model_error_erases_no_finding_from_the_last_render():
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     kept = [w.code for w in fs.warnings]
     assert "stream-table-section-unused" in kept
-    fs.units[0].pin(x=float("nan"), y=10.0)
+    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses one (#574)
     with pytest.raises(ValueError, match="Flowsheet validation failed"):
         fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert [w.code for w in fs.warnings] == kept

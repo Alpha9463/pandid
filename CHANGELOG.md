@@ -59,6 +59,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `drain_drop`, so a station with no `x`/`y` refuses it by name whatever its
   value. A pinned station draws `mirrored=False` as before, and
   `place_valve_station_on()` still accepts it.
+- **YAML reads a leading zero or a colon as the text written (#574).**
+  PyYAML follows YAML 1.1, which read loop number `0101` as octal, drawing
+  `FT-65`, and size `1:30` as base 60, 90. The YAML reader now takes only
+  plain decimals as numbers, so `0101`, `0010` and `1:30` stay text.
+- **A key written twice in a JSON or YAML spec is refused (#574).** Both
+  parsers kept the last value and silently dropped the first.
+  `from_json()` and `from_yaml()` raise `SpecError` naming the key.
+- **A bad field in `stream_naming_scheme` raises `ValueError` when set
+  (#574).** `"S-{num}"` raised a raw `KeyError` at render, which the
+  command line printed as a traceback. It is now refused on construction or
+  assignment, naming the field, as the other two schemes are.
+- **`valve_station_tag_scheme` round-trips through a spec (#574).**
+  `to_dict()` dropped it and the spec format had no key for it. It is
+  written when it differs from the default and read back; a callable raises
+  `SpecError`, as the other two schemes do.
+- **NaN and infinity are refused (#574).** A size, `pin()` coordinate,
+  `via()` waypoint or annotation margin, width, font size or position
+  raises `ValueError`, and the spec reader `SpecError`. A NaN font size was
+  written into the SVG as `font-size="nan"`, and an infinite waypoint
+  crashed routing.
+- **Table cells and legend entries read as the text drawn (#574).** A null
+  table cell or legend meaning drew `None` where an annotation row drew a
+  blank; all three now read the same way. A legend entry that is not a pair
+  raises `SpecError`.
 
 ## [0.1.5] - 2026-08-26
 

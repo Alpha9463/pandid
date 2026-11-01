@@ -26,13 +26,15 @@ line_numbering_scheme="{size}-{service}-{sequence}-{spec}",
 line_number_start=1001, loop_number_start=101,
 valve_station_tag_scheme="{letters}-{number}{suffix}", auto_faces=True)`
 sets numbering and automatic port-face selection. Numbering schemes can be
-format strings or callables. The three number starts are integers; a float,
-even `1.0`, raises `TypeError`. Sizes, `pin()` coordinates and `via()`
-waypoints take any real number (`int`, `float` or numpy); a `Decimal` raises
-`TypeError`. Loop and instrument numbers are integers or text; a float raises
-`TypeError`. Drawn text such as a description, reference or table cell may be
-given as a number; it is drawn as text and round-trips through a spec;
-names and settings must be text.
+format strings or callables; a stream naming scheme that names a field other
+than `{n}` raises `ValueError` when set. The three number starts are integers;
+a float, even `1.0`, raises `TypeError`. Sizes, `pin()` coordinates and `via()`
+waypoints take any finite real number (`int`, `float` or numpy); a `Decimal`
+raises `TypeError`, and NaN or infinity raises `ValueError`. Loop and
+instrument numbers are integers or text; a float raises `TypeError`. Drawn
+text such as a description, reference or table cell may be given as a number;
+it is drawn as text and round-trips through a spec; names and settings must be
+text.
 
 | Method | Purpose |
 |---|---|
@@ -278,8 +280,11 @@ streams:
   - {from: [P-101, discharge], to: [Product, inlet]}
 ```
 
-A spec can also define components, loops, instruments, line properties,
-`pin`, `port_faces`, a title block, annotations and stream-table options.
+A spec can also define the numbering schemes and starts, components, loops,
+instruments, line properties, `pin`, `port_faces`, a title block, annotations
+and stream-table options. YAML reads only plain decimals as numbers, so
+`0101` and `1:30` stay text. A key written twice in one mapping raises
+`SpecError`.
 Custom `Unit` subclasses are Python-only and cannot round-trip through the
 built-in spec format.
 
