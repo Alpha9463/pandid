@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hard-coded an angle and length it said came from `HATCH_ARM`, which nothing
   read. Both now take the stroke from `pandid.render.svg.HATCH_ARM`, so
   changing it changes both. No drawing changes.
+- **Layout trials are settled and judged one way (#574).** A default
+  refinement trial ran its own settle loop, which ended at the pass cap
+  differently from `settle()` and missed a moved instrument tap, and the
+  acceptance gate was written three times with different defaults for
+  keeping crossing pairs. Every trial now settles with `settle()` and is
+  judged by `pandid.layout.quality.accepts`, whose mode each caller states.
+  No drawing changes.
 
 ### Removed
 

@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import copy
-from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, cast
 
-from pandid.layout.quality import Quality, admissible, improves, measure_final
+from pandid.layout.quality import Quality, accepts, measure_final, warning_counts
 from pandid.layout.settle import settle
 
 if TYPE_CHECKING:
@@ -43,88 +42,12 @@ class TrialResult:
     after: Quality
 
 
-def _legacy_geometry_state(fs: Flowsheet) -> tuple:
-    """Capture face and label geometry for the default trial path.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Settled legacy trial drawing.
-
-    Returns
-    -------
-    tuple
-        Frame boxes, selected faces, and label positions.
-    """
-    return tuple(
-        None
-        if unit.frame is None
-        else (
-            unit.frame.x,
-            unit.frame.y,
-            unit.frame.w,
-            unit.frame.h,
-            unit.frame.label_pos,
-            tuple(sorted(unit.frame.port_faces.items())),
-        )
-        for unit in fs.units
-    )
-
-
-def _settle_legacy(
-    fs: Flowsheet,
-    router: Router | None,
-    face_choices: tuple[tuple[int, str, str], ...],
-) -> None:
-    """Retain the existing default-refinement trial settlement.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Detached drawing with proposed frames installed.
-    router : Router or None
-        Router used on each bounded pass.
-    face_choices : tuple[tuple[int, str, str], ...]
-        Trial-only automatic face preferences.
-
-    Returns
-    -------
-    None
-        Legacy final geometry is stored on the candidate.
-    """
-    from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.layout.control import place_control
-    from pandid.layout.coordinates import assign_labels
-    from pandid.layout.faces import select_faces
-    from pandid.routing import DefaultRouter
-
-    if router is None:
-        router = DefaultRouter()
-    preferred = {(index, port): face for index, port, face in face_choices}
-    fs.route_converged = False
-    moved = False
-    for _ in range(MAX_PLACEMENT_PASSES):
-        select_faces(fs, preferred)
-        assign_labels(fs)
-        before_route = _legacy_geometry_state(fs)
-        router.route(fs)
-        moved = place_control(fs)
-        if not moved and _legacy_geometry_state(fs) == before_route:
-            fs.route_converged = True
-            fs._route_stale = False
-            return
-    if moved:
-        router.route(fs)
-    fs._route_stale = False
-
-
 def _evaluate_candidate(
     fs: Flowsheet,
     move: Callable[[list[Frame | None]], None],
     router: Router | None = None,
     *,
     face_choices: tuple[tuple[int, str, str], ...] = (),
-    canonical: bool = False,
     before: Quality | None = None,
 ) -> tuple[TrialResult, Flowsheet]:
     """Settle and score a proposed drawing on an isolated copy.
@@ -141,8 +64,6 @@ def _evaluate_candidate(
     face_choices : tuple[tuple[int, str, str], ...], optional
         Trial-only automatic face preferences. They never modify author
         nozzle choices and must survive final face selection to qualify.
-    canonical : bool, optional
-        Use the opt-in final-box settlement contract when true.
     before : Quality or None, optional
         Already-measured quality of ``fs`` for repeated search trials.
 
@@ -181,10 +102,7 @@ def _evaluate_candidate(
     for unit, frame in zip(candidate.units, frames):
         unit.frame = frame
     candidate._route_stale = True
-    if canonical:
-        settle(candidate, router, face_choices=face_choices)
-    else:
-        _settle_legacy(candidate, router, face_choices)
+    settle(candidate, router, face_choices=face_choices)
     after = measure_final(candidate)
     faces_held = all(
         candidate.units[index].frame is not None
@@ -192,7 +110,8 @@ def _evaluate_candidate(
         for index, port, face in face_choices
     )
     result = TrialResult(
-        qualified=faces_held and admissible(before, after) and improves(before, after),
+        qualified=faces_held
+        and accepts(before, after, preserve_crossing_pairs=True, strict=False),
         before=before,
         after=after,
     )
@@ -408,7 +327,7 @@ def refine_rows(fs: Flowsheet) -> bool:
         return False
 
     before = measure_final(fs)
-    warnings = Counter(issue.code for issue in fs.validate() if issue.severity == "warning")
+    warnings = warning_counts(fs)
     seed_y = tuple(slot(unit).y for unit in process_units(fs))
     winner: Flowsheet | None = None
     best = (before.hard, before.crossings, before.bends, before.length, before.area)
@@ -421,10 +340,8 @@ def refine_rows(fs: Flowsheet) -> bool:
         trial._route_stale = True
         settle(trial)
         after = measure_final(trial)
-        trial_warnings = Counter(
-            issue.code for issue in trial.validate() if issue.severity == "warning"
-        )
-        if not _row_quality_better(before, after, warnings, trial_warnings):
+        if not accepts(before, after, preserve_crossing_pairs=True, strict=True,
+                       warnings=(warnings, warning_counts(trial))):
             continue
         rank = (after.hard, after.crossings, after.bends, after.length, after.area)
         if rank < best:
@@ -435,33 +352,6 @@ def refine_rows(fs: Flowsheet) -> bool:
     _publish_candidate(fs, winner)
     fs._search_seed_frames = None
     return True
-
-
-def _row_quality_better(before: Quality, after: Quality,
-                        old_warnings: Counter[str], new_warnings: Counter[str]) -> bool:
-    """Apply the completed-drawing gate to a row-spacing candidate.
-
-    Parameters
-    ----------
-    before, after : Quality
-        Baseline and proposed final geometry measurements.
-    old_warnings, new_warnings : Counter[str]
-        Validation warning counts by code for each drawing.
-
-    Returns
-    -------
-    bool
-        Whether every measured rule is preserved and one improves.
-    """
-    return (
-        admissible(before, after)
-        and after.bends <= before.bends
-        and after.excess_bends <= before.excess_bends
-        and after.length <= before.length + 1e-6
-        and after.area <= before.area + 1e-6
-        and all(count <= old_warnings[code] for code, count in new_warnings.items())
-        and improves(before, after)
-    )
 
 
 def row_final_better(reference: Flowsheet, candidate: Flowsheet) -> bool:
@@ -477,11 +367,6 @@ def row_final_better(reference: Flowsheet, candidate: Flowsheet) -> bool:
     bool
         Whether the candidate improves without any measured regression.
     """
-    before, after = measure_final(reference), measure_final(candidate)
-    old_warnings = Counter(
-        issue.code for issue in reference.validate() if issue.severity == "warning"
-    )
-    new_warnings = Counter(
-        issue.code for issue in candidate.validate() if issue.severity == "warning"
-    )
-    return _row_quality_better(before, after, old_warnings, new_warnings)
+    return accepts(measure_final(reference), measure_final(candidate),
+                   preserve_crossing_pairs=True, strict=True,
+                   warnings=(warning_counts(reference), warning_counts(candidate)))

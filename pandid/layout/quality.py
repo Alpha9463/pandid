@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -216,15 +217,14 @@ def measure_final(fs: Flowsheet) -> Quality:
     )
 
 
-def admissible(before: Quality, after: Quality, *,
-               preserve_crossing_pairs: bool = True) -> bool:
+def admissible(before: Quality, after: Quality, *, preserve_crossing_pairs: bool) -> bool:
     """Check the per-sheet hard and soft regression limits.
 
     Parameters
     ----------
     before, after : Quality
         Measurements of the current and proposed completed drawing.
-    preserve_crossing_pairs : bool, optional
+    preserve_crossing_pairs : bool
         Require every crossed stream pair to have existed before the move.
 
     Returns
@@ -247,6 +247,77 @@ def admissible(before: Quality, after: Quality, *,
         and after.length <= before.length * 1.02 + 0.1
         and after.area <= before.area * 1.02 + 1.0
     )
+
+
+def warning_counts(fs: Flowsheet) -> Counter[str]:
+    """Count a completed drawing's validation warnings by code.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed drawing to inspect.
+
+    Returns
+    -------
+    Counter[str]
+        Number of each warning reported by validation.
+    """
+    return Counter(issue.code for issue in fs.validate() if issue.severity == "warning")
+
+
+def accepts(
+    before: Quality,
+    after: Quality,
+    *,
+    preserve_crossing_pairs: bool,
+    strict: bool,
+    warnings: tuple[Counter[str], Counter[str]] | None = None,
+    extents: tuple[tuple[float, float], tuple[float, float]] | None = None,
+) -> bool:
+    """Decide whether a routed proposal may replace the current drawing.
+
+    The one acceptance gate for layout trials. Every caller states its mode,
+    so no two callers can differ by a default. A proposal must be
+    :func:`admissible`, must :func:`improve <improves>` the drawing, and
+    must pass every further check the caller asks for.
+
+    Parameters
+    ----------
+    before, after : Quality
+        Measurements of the current and proposed completed drawing.
+    preserve_crossing_pairs : bool
+        Require every crossed stream pair to have existed before.
+    strict : bool
+        Refuse any rise in bends, excess bends, route length or frame area,
+        rather than allowing :func:`admissible`'s per-sheet margin.
+    warnings : tuple[Counter[str], Counter[str]] or None, optional
+        Current and proposed :func:`warning_counts`; no code may rise.
+    extents : tuple[tuple[float, float], tuple[float, float]] or None, optional
+        Current and proposed drawing width and height; neither may grow.
+
+    Returns
+    -------
+    bool
+        Whether the proposal is safe and materially better.
+    """
+    if not admissible(before, after, preserve_crossing_pairs=preserve_crossing_pairs):
+        return False
+    if strict and not (
+        after.bends <= before.bends
+        and after.excess_bends <= before.excess_bends
+        and after.length <= before.length + 1e-6
+        and after.area <= before.area + 1e-6
+    ):
+        return False
+    if warnings is not None:
+        old, new = warnings
+        if any(count > old[code] for code, count in new.items()):
+            return False
+    if extents is not None:
+        old_size, new_size = extents
+        if any(new > old + 1e-6 for old, new in zip(old_size, new_size)):
+            return False
+    return improves(before, after)
 
 
 def search_admissible(seed: Quality, incumbent: Quality, after: Quality) -> bool:

@@ -44,7 +44,7 @@ def test_default_route_preserves_the_qualified_settled_drawing(stem: str) -> Non
     ports = tuple(tuple(unit.ports.values()) for unit in fs.units)
     fs.route()
 
-    assert admissible(result.after, measure_final(fs))
+    assert admissible(result.after, measure_final(fs), preserve_crossing_pairs=True)
     assert all(live is original for live, original in zip(fs.units, units))
     assert all(live is original for live, original in zip(fs.streams, streams))
     assert all(tuple(unit.ports.values()) == original for unit, original in zip(fs.units, ports))

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import copy
+from collections import Counter
 from dataclasses import replace
 
 from pandid import Flowsheet, units as U
-from pandid.layout.quality import admissible, measure_final
+from pandid.layout import trials
+from pandid.layout.quality import accepts, admissible, measure_final
+from pandid.layout.settle import settle
 from pandid.layout.trials import evaluate_trial
 from pandid.routing.metrics import crossing_count
 
@@ -152,7 +155,7 @@ def test_nonconvergent_geometry_is_never_admissible() -> None:
     hard[6] = 1
     nonconvergent = replace(current, hard=tuple(hard))
     improved = replace(nonconvergent, length=nonconvergent.length * 0.5)
-    assert not admissible(nonconvergent, improved)
+    assert not admissible(nonconvergent, improved, preserve_crossing_pairs=True)
 
 
 def test_pin_violation_cannot_move_to_another_unit() -> None:
@@ -208,3 +211,84 @@ def test_crossings_count_only_between_streams() -> None:
         [(0, 0), (0, 5)],
     ]
     assert crossing_count(paths) == 1
+
+
+def test_every_trial_settles_with_the_one_settle_loop(monkeypatch) -> None:
+    """Settle a refinement trial with ``settle``, as the search does (#574).
+
+    The default trial ran a second loop of its own, which ended the pass cap
+    differently and ignored a moved tap.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces ``settle`` with a recording wrapper.
+
+    Returns
+    -------
+    None
+        The trial settles once, through ``settle``.
+    """
+    fs = _branched_sheet()
+    calls: list[tuple] = []
+
+    def recording(candidate: Flowsheet, router=None, *, face_choices=()) -> None:
+        """Record a settlement and run it.
+
+        Parameters
+        ----------
+        candidate : Flowsheet
+            Detached drawing being settled.
+        router : Router or None, optional
+            Router passed on.
+        face_choices : tuple, optional
+            Trial face preferences passed on.
+        """
+        calls.append(face_choices)
+        settle(candidate, router, face_choices=face_choices)
+
+    monkeypatch.setattr(trials, "settle", recording)
+    evaluate_trial(fs, lambda frames: None)
+    assert calls == [()]
+
+
+def test_the_acceptance_gate_applies_the_mode_each_caller_states() -> None:
+    """One gate, whose modes are stated by every caller (#574).
+
+    It was written three times, and two defaulted to keeping crossing pairs
+    where the third did not.
+
+    Returns
+    -------
+    None
+        Each mode refuses exactly what it names.
+    """
+    current = measure_final(_branched_sheet())
+    smaller = replace(current, area=current.area * 0.9)
+    assert accepts(current, smaller, preserve_crossing_pairs=True, strict=False)
+
+    crossed = replace(smaller, crossing_pairs=current.crossing_pairs | {(98, 99)})
+    assert not accepts(current, crossed, preserve_crossing_pairs=True, strict=False)
+    assert accepts(current, crossed, preserve_crossing_pairs=False, strict=False)
+
+    # Within the per-sheet 2 % allowance, which strict mode does not grant.
+    longer = replace(smaller, length=current.length * 1.01)
+    assert accepts(current, longer, preserve_crossing_pairs=True, strict=False)
+    assert not accepts(current, longer, preserve_crossing_pairs=True, strict=True)
+
+    same, more = Counter({"route-detour": 1}), Counter({"route-detour": 2})
+    old_size, wider = (100.0, 80.0), (100.5, 80.0)
+    for warnings, extents, expected in (
+        ((same, same), (old_size, old_size), True),
+        ((same, more), None, False),
+        (None, (old_size, wider), False),
+    ):
+        verdict = accepts(
+            current,
+            smaller,
+            preserve_crossing_pairs=True,
+            strict=True,
+            warnings=warnings,
+            extents=extents,
+        )
+        assert verdict == expected
