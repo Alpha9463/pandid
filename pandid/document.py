@@ -228,6 +228,25 @@ def _drawn_text(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+def _drawn_rows(rows: Any) -> list:
+    """Return box rows as drawn text: a line, or a tuple or list of cells.
+
+    Parameters
+    ----------
+    rows : Any
+        Rows as given.
+
+    Returns
+    -------
+    list
+        Rows with each line and cell through :func:`_drawn_text`.
+    """
+    # shortcut: a row appended to .rows in place is not converted; convert at draw time if needed.
+    return [tuple(map(_drawn_text, r)) if isinstance(r, tuple)
+            else list(map(_drawn_text, r)) if isinstance(r, list)
+            else _drawn_text(r) for r in rows]
+
+
 def _drawn_text_fields(cls: type) -> frozenset[str]:
     """Return the dataclass fields that hold drawn text.
 
@@ -353,6 +372,7 @@ class Annotation:
     A row is a string (one left-aligned line) or a sequence of cells that
     align into columns, enough for an equipment schedule
     (``("T-301", "Beer Column")``) or a legend (``("SS", "316L")``).
+    Lines and cells are stored as the text drawn, so ``None`` is blank.
 
     Attributes
     ----------
@@ -408,6 +428,8 @@ class Annotation:
             If a layout field receives a non-number.
         """
         _check_box_number(self, name, value)
+        if name == "rows":
+            value = _drawn_rows(value)
         super().__setattr__(name, value)
 
 
@@ -415,8 +437,8 @@ class Annotation:
 class TableBox:
     """Bordered table with a title, header row and body rows.
 
-    Cells are drawn with ``str``. Placement works as for
-    :class:`Annotation`.
+    Cells are stored as the text drawn (:func:`_drawn_text`), so ``None``
+    is blank. Placement works as for :class:`Annotation`.
 
     Attributes
     ----------
@@ -475,6 +497,10 @@ class TableBox:
             If a layout field receives a non-number.
         """
         _check_box_number(self, name, value)
+        if name == "rows":
+            value = _drawn_rows(value)
+        elif name == "headers":
+            value = [_drawn_text(c) for c in value]
         super().__setattr__(name, value)
 
 

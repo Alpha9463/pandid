@@ -14,7 +14,7 @@ import warnings
 import pytest
 
 from pandid import Flowsheet, units
-from pandid.document import Annotation, TableBox
+from pandid.document import Annotation, TableBox, legend
 from pandid.spec import SpecError
 
 try:  # PyYAML is an optional extra, so the YAML tests skip without it
@@ -1482,6 +1482,17 @@ def test_table_cells_and_legend_entries_read_as_the_text_drawn():
     assert by_mapping.rows == [("SS", ""), ("1", "2.5")]
     assert by_list.rows == [("SS", ""), ("3", "4")]
     assert note_box.rows == [("TI-1", "", "101")]
+
+
+def test_a_null_cell_draws_blank_from_python_and_through_a_spec():
+    """A ``None`` cell or legend meaning is blank in the box itself, so the
+    sheet a spec reads back draws what the Python one did (#574)."""
+    fs = Flowsheet("T")
+    fs.annotations += [TableBox(rows=[["Insulation", None]]), legend([("SS", None)])]
+    svg = fs.to_svg()
+    assert ">None<" not in svg
+    assert 'value="None"' not in fs.to_drawio()
+    assert Flowsheet.from_dict(fs.to_dict()).to_svg() == svg
 
 
 @pytest.mark.parametrize("entry", [["SS"], ["SS", "316L", "extra"]])

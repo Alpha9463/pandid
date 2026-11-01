@@ -104,9 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NaN and infinity are refused (#574).** A size, `pin()` coordinate,
   `via()` waypoint or annotation margin, width, font size or position raises
   `ValueError` for either, and the spec reader `SpecError`.
-- **Table cells and legend entries read as the text drawn (#574).** A null
-  cell or legend meaning reads as blank and a number as its text, as in an
-  annotation row. A legend entry that is not a pair raises `SpecError`.
+- **Table cells and legend entries read as the text drawn (#574).** A `None`
+  line or cell in an `Annotation`, `TableBox` or `legend()` is blank, whether
+  built in Python or read from a spec. A legend entry in a spec that is not a
+  pair raises `SpecError`.
 - **`vessel_symbol()` refuses an inlet and an outlet on one point face
   (#507).** It raises the error the unit's constructor raises when an inlet
   and an outlet share a face that meets the box at a single point.
