@@ -2930,18 +2930,22 @@ def _core_schema_loader(yaml_module) -> Any:
         class Loader(yaml_module.SafeLoader):
             """Safe loader with YAML 1.2 booleans and decimal numbers only."""
 
-            def construct_mapping(self, node, deep=False):
-                """Build a mapping, refusing a key written twice.
+            def flatten_mapping(self, node):
+                """Refuse a key written twice in a mapping, then merge it.
 
-                Keys merged in with ``<<`` may be overridden, as YAML
-                allows; only keys written in the mapping itself count.
+                Runs on every mapping, a ``<<`` merge source included.
+                Keys merged in may be overridden, as YAML allows; only keys
+                written in the mapping itself count.
                 """
-                if isinstance(node, yaml_module.MappingNode):
+                checked = self.__dict__.setdefault("_checked", set())
+                # Merging rewrites node.value, so check each node once, first.
+                if node not in checked:
+                    checked.add(node)
                     seen = set()
                     for key_node, _value in node.value:
                         if key_node.tag == "tag:yaml.org,2002:merge":
                             continue
-                        key = self.construct_object(key_node, deep=deep)
+                        key = self.construct_object(key_node)
                         try:
                             repeated = key in seen
                         except TypeError:
@@ -2949,7 +2953,7 @@ def _core_schema_loader(yaml_module) -> Any:
                         if repeated:
                             raise _written_twice(key, key_node.start_mark.line + 1)
                         seen.add(key)
-                return super().construct_mapping(node, deep=deep)
+                super().flatten_mapping(node)
 
         Loader.yaml_implicit_resolvers = {
             char: [(tag, pattern) for tag, pattern in resolvers if tag not in dropped]

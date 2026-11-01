@@ -1647,6 +1647,18 @@ def test_a_key_written_twice_in_yaml_is_refused(tmp_path):
     )
     with pytest.raises(SpecError, match=r"'name' is written twice.*line 5"):
         Flowsheet.from_yaml(path)
+    # Also in a mapping used only as a ``<<`` merge source.
+    path.write_text(
+        "name: T\nunits: [{<<: {kind: Pump, name: P-1, name: P-2}}]\n", encoding="utf-8"
+    )
+    with pytest.raises(SpecError, match="'name' is written twice"):
+        Flowsheet.from_yaml(path)
+    # A key a merge brings in may be overridden, even in a merge source.
+    path.write_text(
+        "name: T\nunits:\n  - &m {<<: {kind: Pump, name: X}, name: P-1}\n  - {<<: *m, name: P-2}\n",
+        encoding="utf-8",
+    )
+    assert [u.name for u in Flowsheet.from_yaml(path).units] == ["P-1", "P-2"]
 
 
 def test_from_yaml_without_pyyaml_says_exactly_what_to_install(tmp_path, monkeypatch):
