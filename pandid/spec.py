@@ -2906,8 +2906,9 @@ def _core_schema_loader(yaml_module) -> Any:
     like as booleans, unquoted dates as dates, a number with a leading
     zero as octal and one with a colon as base 60. That turns ``at: N``
     into ``False``, loop number ``0101`` into 65 and size ``1:30`` into 90.
-    This loader treats only ``true`` and ``false`` as booleans, reads only
-    plain decimals as numbers and leaves the rest as the text written. It
+    This loader treats only ``true`` and ``false`` as booleans, reads
+    decimal integers without a leading zero and YAML 1.2 core-schema floats
+    as numbers, and leaves the rest as the text written. It
     also refuses a key written twice in one mapping, which PyYAML would
     otherwise drop. It is built once and cached.
 
@@ -2965,10 +2966,13 @@ def _core_schema_loader(yaml_module) -> Any:
             re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$"),
             list("-+0123456789"),
         )
-        # A decimal point is required, so ``0101`` stays text.
+        # YAML 1.2's core-schema float, less the digit strings that schema
+        # reads as integers, so ``0101`` stays text rather than becoming
+        # 101.0. ``1e3`` and ``.5`` are floats.
         Loader.add_implicit_resolver(
             "tag:yaml.org,2002:float",
-            re.compile(r"^(?:[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
+            re.compile(r"^(?:(?![-+]?[0-9]+$)[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)"
+                       r"(?:[eE][-+]?[0-9]+)?"
                        r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"),
             list("-+0123456789."),
         )

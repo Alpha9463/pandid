@@ -138,6 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PyYAML follows YAML 1.1, which read loop number `0101` as octal, drawing
   `FT-65`, and size `1:30` as base 60, 90. The YAML reader now takes only
   plain decimals as numbers, so `0101`, `0010` and `1:30` stay text.
+  `1_000` and `0x1F`, which PyYAML read as numbers, now read as text, as
+  `0o17` does; `1e3` reads as 1000.0, as in YAML 1.2.
 - **A key written twice in a JSON or YAML spec is refused (#574).** Both
   parsers kept the last value and silently dropped the first.
   `from_json()` and `from_yaml()` raise `SpecError` naming the key.

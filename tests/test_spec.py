@@ -1590,26 +1590,29 @@ def test_yaml_reads_a_leading_zero_or_a_colon_as_written(tmp_path):
     """YAML 1.1 reads ``0101`` as octal 65 and ``1:30`` as base 60, 90.
 
     A loop number, a line sequence and a size are written that way on real
-    drawings, so each reads as the text written. Decimals still read as
-    numbers.
+    drawings, so each reads as the text written, as do ``1_000``, ``0x1F``
+    and ``0o17``. Decimals still read as numbers, ``1e3`` included, as
+    YAML 1.2's core schema reads them.
     """
     path = tmp_path / "fs.yaml"
     path.write_text(
         "name: T\n"
         "units:\n"
-        "  - {kind: Vessel, name: V-1, pin: {x: 60.5, y: 120}}\n"
+        "  - {kind: Vessel, name: V-1, pin: {x: 60.5, y: 1e3}}\n"
         "  - {kind: Vessel, name: V-2}\n"
         "instruments: [{type: FT, number: 0101, sensing: V-1}]\n"
         "streams:\n"
-        "  - {from: [V-1, outlet], to: [V-2, inlet], sequence: 0010, size: 1:30}\n",
+        "  - {from: [V-1, outlet], to: [V-2, inlet], sequence: 0010, size: 1:30,\n"
+        "     spec: 1_000, service: 0x1F, schedule: 0o17}\n",
         encoding="utf-8",
     )
     fs = Flowsheet.from_yaml(path)
     assert fs.units[-1].name == "FT-0101"
     stream = fs.streams[0]
     assert (stream.sequence, stream.size) == ("0010", "1:30")
+    assert (stream.spec, stream.service, stream.schedule) == ("1_000", "0x1F", "0o17")
     pin = fs.units[0].pin_
-    assert pin is not None and (pin.x, pin.y) == (60.5, 120)
+    assert pin is not None and (pin.x, pin.y) == (60.5, 1000.0)
 
 
 def test_a_key_written_twice_in_json_is_refused(tmp_path):
