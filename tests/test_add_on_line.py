@@ -477,3 +477,26 @@ def test_at_without_on_is_refused() -> None:
     with pytest.raises(ValueError, match="on="):
         fs.add_valve_station("CV-1", at=0.5)
     assert fs.units == []
+
+
+@pytest.mark.parametrize("on_line", [True, False])
+def test_a_refused_valve_station_leaves_the_sheet_unchanged(on_line: bool) -> None:
+    """A member tag that clashes refuses the station after others are built.
+
+    Returns
+    -------
+    None
+        No member, stream or line splice survives the refusal.
+    """
+    fs = Flowsheet("Clash")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.add(Valve("HV-101A"))
+    units, streams = [u.name for u in fs.units], [s.name for s in fs.streams]
+
+    with pytest.raises(ValueError):
+        fs.add_valve_station("CV-101", on=line if on_line else None)
+
+    assert [u.name for u in fs.units] == units
+    assert [s.name for s in fs.streams] == streams

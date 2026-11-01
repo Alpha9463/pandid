@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A refused `add_valve_station()` leaves the sheet unchanged (#564).** A
+  station refused part-way, such as on a member tag clash, used to leave
+  the members already built.
 - **`route-crosses-unit` sees a line drawn through its own unit (#468).** A
   line that crosses the box of a unit it connects anywhere but at its nozzle
   is reported. A route with no waypoints, such as `via([])`, is checked like
