@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`route-crosses-unit` sees a line drawn through its own unit (#468).** The
+  check skipped the two units a stream connects, so a line drawn up through an
+  exchanger to a nozzle on its top face was not reported. A line may now meet
+  its own unit only at the nozzle, from beyond that nozzle's face; one that
+  crosses the box anywhere else, at either end, is reported with how to fix
+  it. No shipped example draws one.
 - **`to_dict()` keeps a stated annotation title that is falsy (#533).** A
   title other than `""`, such as `0` or `None`, is written as stated, so
   `from_dict()` refuses it with a `SpecError` instead of silently redrawing

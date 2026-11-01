@@ -242,6 +242,81 @@ def _square(x1, y1, x2, y2) -> bool:
     return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
+#: Outward direction of each face, in drawing coordinates (y down).
+_OUTWARD = {"N": (0.0, -1.0), "S": (0.0, 1.0), "E": (1.0, 0.0), "W": (-1.0, 0.0)}
+
+
+def _corners(pts):
+    """Return a drawn path as its corners.
+
+    Repeated points go, and so does the middle of any three on one line,
+    including a line that doubles back on itself: its ink is the stretch
+    the outer two span.
+
+    Parameters
+    ----------
+    pts : list[tuple[float, float]]
+        Drawn points.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        The same ends, with only the points the line turns at between.
+    """
+    out: list = []
+    for p in pts:
+        if out and math.dist(p, out[-1]) <= _SQUARE_TOL:
+            continue
+        if len(out) > 1 and any(abs(out[-2][i] - out[-1][i]) < _SQUARE_TOL
+                                and abs(out[-1][i] - p[i]) < _SQUARE_TOL for i in (0, 1)):
+            out.pop()
+            if math.dist(p, out[-1]) <= _SQUARE_TOL:
+                continue
+        out.append(p)
+    return out
+
+
+def _pierced_end(path, ends):
+    """Return the end of a run whose line is drawn through its own unit.
+
+    A run meets its own unit at the nozzle, which may sit inside the box
+    where the outline is not square, so the end segment may lie in the
+    box as long as it does not head inward from the nozzle: straight out
+    of the face, or along it, off the top of a round shell. Any other
+    segment in the box, or an end segment arriving from the far side, is
+    the line drawn through the equipment.
+
+    Parameters
+    ----------
+    path : list[tuple[float, float]]
+        :func:`_corners` of the drawn path, source nozzle first.
+    ends : sequence
+        ``(unit, port, box, face)`` for the source then the destination,
+        or ``None`` for an end with no anchored nozzle.
+
+    Returns
+    -------
+    tuple or None
+        The pierced end's ``(unit, port, box, face)``, or ``None``.
+    """
+    last = len(path) - 2
+    tips = ((0, ends[0], path[0], path[1]), (last, ends[1], path[-1], path[-2]))
+    for end in ends:
+        if end is None:
+            continue
+        clear = set()
+        for k, other, nozzle, far in tips:
+            if other is None or other[0] is not end[0]:
+                continue
+            dx, dy = _OUTWARD[other[3]]
+            if (far[0] - nozzle[0]) * dx + (far[1] - nozzle[1]) * dy >= -_SQUARE_TOL:
+                clear.add(k)
+        for k in range(len(path) - 1):
+            if k not in clear and segment_crosses_box(path[k], path[k + 1], end[2]):
+                return end
+    return None
+
+
 def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
     """Check whether an orthogonal segment passes through a unit box.
 
@@ -1022,6 +1097,28 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                         warnings.append(Issue("warning", "route-crosses-unit",
                                               f"stream {s.name} crosses {u.name}"))
                         break
+
+            # Soft: a line drawn through a unit it connects to (#468), which
+            # the check above skips. Nozzles without an anchor sit at the
+            # centre of the box, so every line to one is inside it.
+            path = _corners(pts)
+            ends = [(u, name, unit_box(u, u.frame), resolve_port(u, u.frame, name).face)
+                    if is_anchored(u, name) else None
+                    for u, name in ((src_u, s.source.name), (dst_u, s.dest.name))]
+            pierced = _pierced_end(path, ends) if len(path) > 1 else None
+            if pierced is not None:
+                u, name, _, face = pierced
+                verb = "leaves from" if pierced is ends[0] else "runs to"
+                cure = ("via() draws exactly the points it is given, so add the corners "
+                        "that bring the line round to that face"
+                        if s.route.manual else
+                        f"Clear room beyond that face for the router, or put the nozzle on "
+                        f"the side the line comes from, {u.name}.nozzle({name!r}, ...)")
+                warnings.append(Issue(
+                    "warning", "route-crosses-unit",
+                    f"stream {s.name} is drawn through {u.name}, which it {verb}. A line "
+                    f"meets its own unit only at the nozzle, from beyond the face the "
+                    f"nozzle is on, and {u.name}.{name} is on the {face} face. {cure}"))
 
             # Soft: a segment drawn on the slant. BS ISO 15519-1:2010 12.1
             # wants horizontal or vertical lines but allows oblique ones
