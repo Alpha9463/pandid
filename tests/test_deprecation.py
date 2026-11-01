@@ -7,6 +7,7 @@ start failing on the day that spelling was deleted -- one release after it was
 added -- which is the wrong thing for a test of the machinery to be tied to.
 """
 
+import os
 import warnings
 
 import pytest
@@ -91,10 +92,19 @@ def test_the_message_names_the_replacement_and_the_release():
 
 
 def test_the_warning_points_at_the_callers_line():
-    """stacklevel: the author's file, not pandid's."""
+    """stacklevel: the author's file, not pandid's.
+
+    Compared as paths, not strings: Windows may spell one path in two cases
+    (#574).
+    """
     with pytest.warns(DeprecationWarning) as caught:
         _OldPump("P-101")
-    assert caught[0].filename == __file__
+
+    def same(path: str) -> str:
+        """Return a path as the file system resolves and compares it."""
+        return os.path.normcase(os.path.realpath(path))
+
+    assert same(caught[0].filename) == same(__file__)
 
 
 # --- carried from construction to validate() ---------------------------------

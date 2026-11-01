@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each time cost about 60 ms of the alumina refinery render. The list is
   written only when the error is shown, so a mistyped port still names the
   ports there are.
+- **CI and release actions are pinned to commit SHAs (#574).** The publish
+  job ran `pypa/gh-action-pypi-publish@release/v1`, a branch that can move,
+  with permission to mint a PyPI token. Every action now names a commit,
+  with its version in a comment.
 
 ### Removed
 
