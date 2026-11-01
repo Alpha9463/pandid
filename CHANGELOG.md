@@ -22,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`unit-overlap` says how to clear it (#434).** The finding named the two
   units and stopped. It now names one of them and the call that moves it: an
   attached balloon is moved with `at=` and `offset=`, giving their current
-  values, and a pinned unit, or one the layout placed, with `pin()`.
+  values, and a pinned unit, or one the layout placed, with `pin()`. A
+  suggested `attach()` repeats the balloon's `relation=` and `angle=`, so
+  following it does not change what the balloon draws.
 
 ### Removed
 

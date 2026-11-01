@@ -128,7 +128,14 @@ def _overlap_cure(a, b) -> str:
     Names one unit and the call that moves it. An attached balloon that
     is not pinned is placed from its host, so ``at=`` and ``offset=`` move
     it; a pin outranks that standoff, so a pinned unit is moved by its pin.
-    Each test prefers the later unit, usually the one added on top.
+    An attached balloon stands in no grid, so only an ``x`` or ``y`` pin
+    counts for one. Each test prefers the later unit, usually the one
+    added on top.
+
+    The calls name the unit in words, since a tag such as ``FT-101`` is
+    not a Python name. A suggested ``attach()`` repeats any ``angle`` or
+    ``relation`` other than its default, which it would otherwise reset,
+    so following it moves the balloon without changing what it draws.
 
     Parameters
     ----------
@@ -142,28 +149,37 @@ def _overlap_cure(a, b) -> str:
     """
     from pandid.streams import Stream
 
+    def attached(u) -> bool:
+        return getattr(u, "host", None) is not None
+
     def pinned(u) -> bool:
         pin = u.pin_
-        return pin is not None and any(
-            getattr(pin, f) is not None for f in ("col", "row", "x", "y"))
+        axes = ("x", "y") if attached(u) else ("col", "row", "x", "y")
+        return pin is not None and any(getattr(pin, f) is not None for f in axes)
 
     def how(u) -> str:
         pin = u.pin_
-        grid = pin is not None and pin.x is None and pin.y is None
-        return f"{u.name}.pin(col=..., row=...)" if grid else f"{u.name}.pin(x=..., y=...)"
+        grid = not attached(u) and pin is not None and pin.x is None and pin.y is None
+        return f"call .pin({'col=..., row=...' if grid else 'x=..., y=...'}) on {u.name}"
 
     for u, other in ((b, a), (a, b)):
         host = getattr(u, "host", None)
         if host is None or pinned(u):
             continue
-        where = (f"how far along {host.name} it taps, 0 to 1 (now {u.at:g})"
-                 if isinstance(host, Stream) else
-                 f"the face of {host.name} it sits by, 'N', 'S', 'E' or 'W' "
-                 f"(now {u.at!r})")
+        stream = isinstance(host, Stream)
+        where = (f"how far along {host.name} it taps, 0 to 1 (now {u.at:g})" if stream else
+                 f"the face of {host.name} it sits by, 'N', 'S', 'E' or 'W' (now {u.at!r})")
+        kept = ((f", angle={u.angle:g}" if u.angle != 90.0 else "")
+                + (f", relation={u.relation!r}" if u.relation != "sensing" else ""))
+        pin = u.pin_
+        grid = (f". Its col= and row= pin does not move an attached balloon; an "
+                f"x= and y= pin does: {how(u)}"
+                if pin is not None and (pin.col is not None or pin.row is not None) else "")
         return (f"{u.name} hangs off {host.name}, so say where on it: at= is "
                 f"{where}, and offset= how far it stands off (now {u.offset:g}). "
-                f"Change them on add_instrument(), or with "
-                f"{u.name}.attach({host.name}, at=..., offset=...)")
+                f"Change them on add_instrument(), or call .attach(<the {host.name} "
+                f"{'stream' if stream else 'unit'}>, at=..., offset=...{kept}) on "
+                f"{u.name}{grid}")
     if pinned(a) and pinned(b):
         return f"Both are pinned, so move one pin clear of the other: {how(b)}"
     for u, other in ((b, a), (a, b)):

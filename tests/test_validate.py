@@ -1,6 +1,9 @@
 """Validation: hard errors raise from render(); soft issues warn."""
 
+import ast
+import re
 from dataclasses import replace
+from typing import Any
 
 import pytest
 
@@ -54,7 +57,7 @@ def test_unit_overlap_moves_an_attached_balloon_with_at_and_offset():
     said = _overlap_message(fs)
     assert said.startswith("FV-101 and FT-101 overlap. FT-101 hangs off S1")
     assert "at=" in said and "offset=" in said
-    assert "FT-101.attach(S1, at=..., offset=...)" in said
+    assert "call .attach(<the S1 stream>, at=..., offset=...) on FT-101" in said
     assert "pin(" not in said
 
 
@@ -67,7 +70,7 @@ def test_unit_overlap_moves_a_pinned_balloon_by_its_pin():
 
     said = _overlap_message(fs)
     assert "FT-101 is pinned there" in said
-    assert "FT-101.pin(x=..., y=...)" in said
+    assert "call .pin(x=..., y=...) on FT-101" in said
     assert "offset=" not in said
 
 
@@ -80,7 +83,7 @@ def test_unit_overlap_moves_one_of_two_pinned_units_by_its_pin():
 
     said = _overlap_message(fs)
     assert said.startswith("R1 and R2 overlap. Both are pinned")
-    assert "R2.pin(x=..., y=...)" in said
+    assert "call .pin(x=..., y=...) on R2" in said
 
 
 def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
@@ -93,7 +96,46 @@ def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
 
     said = _overlap_message(fs)
     assert "the layout placed both there" in said
-    assert "P-101.pin(x=..., y=...)" in said
+    assert "call .pin(x=..., y=...) on P-101" in said
+
+
+def test_unit_overlap_suggests_an_attach_that_keeps_what_the_balloon_does():
+    """attach() resets angle= and relation= to their defaults, so a suggested
+    call without them would turn a ``near`` balloon into a ``sensing`` one and
+    draw a tap line it never had. The arguments the message gives are applied
+    here as written, with only the two placeholders filled in."""
+    fs, fv, _ = _tapped_line()
+    fic = fs.add_instrument("FIC", 101, near=fv, angle=45)
+    fs.route()
+    assert fv.frame is not None and fic.frame is not None
+    fic.frame = replace(fic.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    call = re.search(r"call \.attach\(<the FV-101 unit>, (.*?)\) on FIC-101", said)
+    assert call is not None, said
+    filled: dict[str, Any] = {"at": "N", "offset": 70.0}
+    kwargs: dict[str, Any] = {}
+    for arg in call.group(1).split(", "):
+        key, value = arg.split("=", 1)
+        kwargs[key] = filled[key] if value == "..." else ast.literal_eval(value)
+    fic.attach(fv, **kwargs)
+    assert (fic.relation, fic.angle, fic.at, fic.offset) == ("near", 45.0, "N", 70.0)
+
+
+def test_unit_overlap_does_not_offer_a_grid_pin_to_an_attached_balloon():
+    """An attached balloon is placed from its host whatever its col= and row=
+    say, so changing them would move nothing. at= and offset= do, and so does
+    an x= and y= pin."""
+    fs, fv, ft = _tapped_line()
+    ft.pin(col=1, row=1)
+    fs.route()
+    assert fv.frame is not None and ft.frame is not None
+    ft.frame = replace(ft.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert "call .attach(<the S1 stream>, at=..., offset=...) on FT-101" in said
+    assert "call .pin(x=..., y=...) on FT-101" in said
+    assert "col=..." not in said
 
 
 def test_negative_pin_raises():
