@@ -1470,10 +1470,12 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     menus = {"inlet": base.port_faces.get("inlet", {}), "outlet": base.port_faces.get("outlet", {})}
     members_by_role: dict[str, list[str]] = {"inlet": [], "outlet": []}
     groups: dict[tuple[str, str], list[str]] = {}
+    by_face: dict[str, list[str]] = {}
     for port_name, face in faces:
         role = "inlet" if port_name.startswith("in_") else "outlet"
         members_by_role[role].append(port_name)
         groups.setdefault((role, face), []).append(port_name)
+        by_face.setdefault(face, []).append(port_name)
     for (role, face), members in groups.items():
         menu = menus[role]
         if face not in menu:
@@ -1485,13 +1487,18 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
         t0, inset = _face_local(face, *menu[face], base.width, base.height)
         along = base.height if face in ("W", "E") else base.width
         band = base.bands.get(face)
-        if len(members) > 1 and band is not None and band[0] >= band[1]:
-            raise bandless_face(f"{kind}/{variant}", face, band[0], members,
-                                walled_faces(base, role))
         for i, name in enumerate(members):
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
             ports[name] = _face_point(face, t, inset, base.width, base.height)
+    # Inlets and outlets count together, as in _check_face_room: one of
+    # each on a point face is two nozzles on one point.
+    for face, on_face in by_face.items():
+        band = base.bands.get(face)
+        if len(on_face) > 1 and band is not None and band[0] >= band[1]:
+            last = "inlet" if on_face[-1].startswith("in_") else "outlet"
+            raise bandless_face(f"{kind}/{variant}", face, band[0], on_face,
+                                walled_faces(base, last))
     # A lone member keeps its whole menu for nozzle() and automatic face
     # selection (:mod:`pandid.layout.faces`); members sharing a face keep
     # only their spread placement.

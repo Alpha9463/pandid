@@ -50,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`route-crosses-unit` sees a line drawn through its own unit (#468).** The
+  check skipped the two units a stream connects, so a line drawn up through an
+  exchanger to a nozzle on its top face was not reported. A line may now meet
+  its own unit only at the nozzle, from beyond that nozzle's face; one that
+  crosses the box anywhere else, at either end, is reported with how to fix
+  it. A route with no waypoints, such as `via([])`, is drawn straight between
+  its nozzles and is now checked like any other: it was skipped by the route
+  checks, so it was never reported as crossing a unit or running on the
+  slant. No shipped example draws one.
 - **`to_dict()` keeps a stated annotation title that is falsy (#533).** A
   title other than `""`, such as `0` or `None`, is written as stated, so
   `from_dict()` refuses it with a `SpecError` instead of silently redrawing
@@ -143,6 +152,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   table cell or legend meaning drew `None` where an annotation row drew a
   blank; all three now read the same way. A legend entry that is not a pair
   raises `SpecError`.
+- **`vessel_symbol()` refuses an inlet and an outlet on one point face
+  (#507).** A face whose artwork meets the box at a single point, such as a
+  cone apex, takes one connection. The drawing counted inlets and outlets
+  separately, so one of each was drawn on the same point; it now counts them
+  together, as constructing the unit already did, and gives the same error.
+  Only a custom symbol could reach this.
 
 ## [0.1.5] - 2026-08-26
 
