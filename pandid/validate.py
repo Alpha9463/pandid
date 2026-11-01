@@ -122,6 +122,81 @@ def _overlap(a: tuple[float, float, float, float],
     return boxes_overlap(a, b)
 
 
+def _overlap_cure(a, b) -> str:
+    """Return how to clear a ``unit-overlap`` between two units.
+
+    Names one unit and the call that moves it. An attached balloon that
+    is not pinned is placed from its host, so ``at=`` and ``offset=`` move
+    it; a pin outranks that standoff, so a pinned unit is moved by its pin.
+    An attached balloon stands in no grid, so only an ``x`` or ``y`` pin
+    counts for one. Each test prefers the later unit, usually the one
+    added on top.
+
+    The calls name the unit in words, since a tag such as ``FT-101`` is
+    not a Python name. A suggested ``attach()`` repeats any ``angle`` or
+    ``relation`` other than its default, which it would otherwise reset,
+    so following it moves the balloon without changing what it draws.
+
+    Parameters
+    ----------
+    a, b : Unit
+        The overlapping units, in sheet order.
+
+    Returns
+    -------
+    str
+        The remedy, as a sentence.
+    """
+    from pandid.streams import Stream
+
+    def attached(u) -> bool:
+        return getattr(u, "host", None) is not None
+
+    def pinned(u) -> bool:
+        pin = u.pin_
+        axes = ("x", "y") if attached(u) else ("col", "row", "x", "y")
+        return pin is not None and any(getattr(pin, f) is not None for f in axes)
+
+    def how(u) -> str:
+        pin = u.pin_
+        if not attached(u) and pin is not None and pin.x is None and pin.y is None:
+            return f"call .pin(col=..., row=...) on {u.name}"
+        # Repeat the port each axis is pinned by: pin() without port= places
+        # the unit's corner there instead.
+        ports = getattr(u, "_pin_ports", None) or {}
+        calls = ([(ports.get("x"), "x=..., y=...")] if ports.get("x") == ports.get("y")
+                 else [(ports.get("x"), "x=..."), (ports.get("y"), "y=...")])
+        return " and ".join(
+            f"call .pin({'' if port is None else f'port={port!r}, '}{axes}) on {u.name}"
+            for port, axes in calls)
+
+    for u, other in ((b, a), (a, b)):
+        host = getattr(u, "host", None)
+        if host is None or pinned(u):
+            continue
+        stream = isinstance(host, Stream)
+        where = (f"how far along {host.name} it taps, 0 to 1 (now {u.at:g})" if stream else
+                 f"the face of {host.name} it sits by, 'N', 'S', 'E' or 'W' (now {u.at!r})")
+        kept = ((f", angle={u.angle!r}" if u.angle != 90.0 else "")
+                + (f", relation={u.relation!r}" if u.relation != "sensing" else ""))
+        pin = u.pin_
+        grid = (f". Its col= and row= pin does not move an attached balloon; an "
+                f"x= and y= pin does: {how(u)}"
+                if pin is not None and (pin.col is not None or pin.row is not None) else "")
+        return (f"{u.name} hangs off {host.name}, so say where on it: at= is "
+                f"{where}, and offset= how far it stands off (now {u.offset:g}). "
+                f"Change them on add_instrument(), or call .attach(<the {host.name} "
+                f"{'stream' if stream else 'unit'}>, at=..., offset=...{kept}) on "
+                f"{u.name}{grid}")
+    if pinned(a) and pinned(b):
+        return f"Both are pinned, so move one pin clear of the other: {how(b)}"
+    for u, other in ((b, a), (a, b)):
+        if pinned(u):
+            return f"{u.name} is pinned there, so move its pin clear of {other.name}: {how(u)}"
+    return (f"Neither is pinned, so the layout placed both there. Pin one clear of "
+            f"the other: {how(b)}")
+
+
 def _is_control_function(letters: str, i: int) -> bool:
     """Return whether ``letters[i]`` is a control function ISO 5.2.4 orders.
 
@@ -989,12 +1064,13 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     f"{u.name} a box the family fits in, or put the connection on "
                     f"a face with room for it"))
 
-        # Hard: overlapping unit bodies.
+        # Hard: overlapping unit bodies, with the call that moves one.
         for i in range(len(boxes)):
             for j in range(i + 1, len(boxes)):
                 if _overlap(boxes[i][1], boxes[j][1]):
+                    a, b = boxes[i][0], boxes[j][0]
                     errors.append(Issue("error", "unit-overlap",
-                                        f"{boxes[i][0].name} and {boxes[j][0].name} overlap"))
+                                        f"{a.name} and {b.name} overlap. {_overlap_cure(a, b)}"))
 
         # Hard: two live connections on one unit landing on the same
         # point. The runtime half of

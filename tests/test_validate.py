@@ -1,5 +1,10 @@
 """Validation: hard errors raise from render(); soft issues warn."""
 
+import ast
+import re
+from dataclasses import replace
+from typing import Any
+
 import pytest
 
 from pandid import Condenser, Flowsheet, units as U
@@ -15,6 +20,155 @@ def test_overlapping_pins_raise():
     fs.connect(a.outlet, b.feed)
     with pytest.raises(ValueError, match="overlap"):
         fs.to_svg()
+
+
+# --- unit-overlap says how to clear it (#434) ---------------------------------
+
+
+def _overlap_message(fs: Flowsheet) -> str:
+    said = [i.message for i in fs.validate() if i.code == "unit-overlap"]
+    assert len(said) == 1, said
+    return said[0]
+
+
+def _tapped_line() -> tuple[Flowsheet, U.Valve, U.Instrument]:
+    """A valve on a line, with a transmitter attached to the line before it."""
+    fs = Flowsheet("tapped")
+    feed = fs.add(U.Feed("F"))
+    fv = fs.add(U.Valve("FV-101"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, fv.inlet)
+    fs.connect(fv.outlet, prod.inlet)
+    ft = fs.add_instrument("FT", 101, sensing=s)
+    fs.route()
+    return fs, fv, ft
+
+
+def test_unit_overlap_moves_an_attached_balloon_with_at_and_offset():
+    """A balloon placed from its line is moved by where it hangs off it.
+
+    Dropping the balloon onto the valve stands in for a crowded sheet the
+    standoff resolver could not clear. The balloon is the one to move, and the
+    message says which knobs move it rather than naming both units' pins.
+    """
+    fs, fv, ft = _tapped_line()
+    assert fv.frame is not None and ft.frame is not None
+    ft.frame = replace(ft.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert said.startswith("FV-101 and FT-101 overlap. FT-101 hangs off S1")
+    assert "at=" in said and "offset=" in said
+    assert "call .attach(<the S1 stream>, at=..., offset=...) on FT-101" in said
+    assert "pin(" not in said
+
+
+def test_unit_overlap_moves_a_pinned_balloon_by_its_pin():
+    """A pin outranks the standoff, so at= and offset= would not move it."""
+    fs, fv, ft = _tapped_line()
+    assert fv.frame is not None
+    ft.pin(x=fv.frame.x, y=fv.frame.y)
+    fs.route()
+
+    said = _overlap_message(fs)
+    assert "FT-101 is pinned there" in said
+    assert "call .pin(x=..., y=...) on FT-101" in said
+    assert "offset=" not in said
+
+
+def test_unit_overlap_moves_one_of_two_pinned_units_by_its_pin():
+    fs = Flowsheet("overlap")
+    a = fs.add(U.Reactor("R1")).pin(x=100, y=100)
+    b = fs.add(U.Reactor("R2")).pin(x=110, y=110)
+    fs.connect(a.outlet, b.feed)
+    fs.route()
+
+    said = _overlap_message(fs)
+    assert said.startswith("R1 and R2 overlap. Both are pinned")
+    assert "call .pin(x=..., y=...) on R2" in said
+
+
+def test_unit_overlap_repins_by_the_port_a_unit_is_pinned_by():
+    """pin() without port= places the corner, so the remedy repeats the port.
+
+    The suggested call is applied as written, with only the placeholders
+    filled in, and each axis must still locate the port it did."""
+    fs = Flowsheet("overlap")
+    a = fs.add(U.Valve("V-1")).pin(x=100, y=100)
+    b = fs.add(U.Valve("V-2")).pin(port="inlet", x=105, y=100)
+    c = fs.add(U.Valve("V-3")).pin(port="inlet", x=300).pin(port="outlet", y=100)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+
+    said = _overlap_message(fs)
+    call = re.search(r"call \.pin\((.*?)\) on V-2", said)
+    assert call is not None, said
+    kwargs: dict[str, Any] = {}
+    for arg in call.group(1).split(", "):
+        key, value = arg.split("=", 1)
+        kwargs[key] = 150.0 if value == "..." else ast.literal_eval(value)
+    b.pin(**kwargs)
+    assert b._pin_ports == {"x": "inlet", "y": "inlet"}
+
+    # Axes pinned by different ports get a call each.
+    from pandid.validate import _overlap_cure
+
+    cure = _overlap_cure(a, c)
+    assert (
+        "call .pin(port='inlet', x=...) on V-3 and call .pin(port='outlet', y=...) on V-3"
+    ) in cure
+
+
+def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
+    """Neither was placed by the author, so a pin is the way to say where."""
+    fs, fv, _ = _tapped_line()
+    pump = fs.add(U.Pump("P-101"))
+    fs.route()
+    assert fv.frame is not None and pump.frame is not None
+    pump.frame = replace(pump.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert "the layout placed both there" in said
+    assert "call .pin(x=..., y=...) on P-101" in said
+
+
+def test_unit_overlap_suggests_an_attach_that_keeps_what_the_balloon_does():
+    """attach() resets angle= and relation= to their defaults, so a suggested
+    call without them would turn a ``near`` balloon into a ``sensing`` one and
+    draw a tap line it never had, and a rounded angle would turn it. The
+    arguments the message gives are applied here as written, with only the
+    two placeholders filled in."""
+    fs, fv, _ = _tapped_line()
+    fic = fs.add_instrument("FIC", 101, near=fv, angle=45.1234567)
+    fs.route()
+    assert fv.frame is not None and fic.frame is not None
+    fic.frame = replace(fic.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    call = re.search(r"call \.attach\(<the FV-101 unit>, (.*?)\) on FIC-101", said)
+    assert call is not None, said
+    filled: dict[str, Any] = {"at": "N", "offset": 70.0}
+    kwargs: dict[str, Any] = {}
+    for arg in call.group(1).split(", "):
+        key, value = arg.split("=", 1)
+        kwargs[key] = filled[key] if value == "..." else ast.literal_eval(value)
+    fic.attach(fv, **kwargs)
+    assert (fic.relation, fic.angle, fic.at, fic.offset) == ("near", 45.1234567, "N", 70.0)
+
+
+def test_unit_overlap_does_not_offer_a_grid_pin_to_an_attached_balloon():
+    """An attached balloon is placed from its host whatever its col= and row=
+    say, so changing them would move nothing. at= and offset= do, and so does
+    an x= and y= pin."""
+    fs, fv, ft = _tapped_line()
+    ft.pin(col=1, row=1)
+    fs.route()
+    assert fv.frame is not None and ft.frame is not None
+    ft.frame = replace(ft.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert "call .attach(<the S1 stream>, at=..., offset=...) on FT-101" in said
+    assert "call .pin(x=..., y=...) on FT-101" in said
+    assert "col=..." not in said
 
 
 def test_negative_pin_raises():
