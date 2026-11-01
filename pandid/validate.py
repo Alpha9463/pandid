@@ -159,8 +159,16 @@ def _overlap_cure(a, b) -> str:
 
     def how(u) -> str:
         pin = u.pin_
-        grid = not attached(u) and pin is not None and pin.x is None and pin.y is None
-        return f"call .pin({'col=..., row=...' if grid else 'x=..., y=...'}) on {u.name}"
+        if not attached(u) and pin is not None and pin.x is None and pin.y is None:
+            return f"call .pin(col=..., row=...) on {u.name}"
+        # Repeat the port each axis is pinned by: pin() without port= places
+        # the unit's corner there instead.
+        ports = getattr(u, "_pin_ports", None) or {}
+        calls = ([(ports.get("x"), "x=..., y=...")] if ports.get("x") == ports.get("y")
+                 else [(ports.get("x"), "x=..."), (ports.get("y"), "y=...")])
+        return " and ".join(
+            f"call .pin({'' if port is None else f'port={port!r}, '}{axes}) on {u.name}"
+            for port, axes in calls)
 
     for u, other in ((b, a), (a, b)):
         host = getattr(u, "host", None)

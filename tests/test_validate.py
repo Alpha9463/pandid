@@ -86,6 +86,37 @@ def test_unit_overlap_moves_one_of_two_pinned_units_by_its_pin():
     assert "call .pin(x=..., y=...) on R2" in said
 
 
+def test_unit_overlap_repins_by_the_port_a_unit_is_pinned_by():
+    """pin() without port= places the corner, so the remedy repeats the port.
+
+    The suggested call is applied as written, with only the placeholders
+    filled in, and each axis must still locate the port it did."""
+    fs = Flowsheet("overlap")
+    a = fs.add(U.Valve("V-1")).pin(x=100, y=100)
+    b = fs.add(U.Valve("V-2")).pin(port="inlet", x=105, y=100)
+    c = fs.add(U.Valve("V-3")).pin(port="inlet", x=300).pin(port="outlet", y=100)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+
+    said = _overlap_message(fs)
+    call = re.search(r"call \.pin\((.*?)\) on V-2", said)
+    assert call is not None, said
+    kwargs: dict[str, Any] = {}
+    for arg in call.group(1).split(", "):
+        key, value = arg.split("=", 1)
+        kwargs[key] = 150.0 if value == "..." else ast.literal_eval(value)
+    b.pin(**kwargs)
+    assert b._pin_ports == {"x": "inlet", "y": "inlet"}
+
+    # Axes pinned by different ports get a call each.
+    from pandid.validate import _overlap_cure
+
+    cure = _overlap_cure(a, c)
+    assert (
+        "call .pin(port='inlet', x=...) on V-3 and call .pin(port='outlet', y=...) on V-3"
+    ) in cure
+
+
 def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
     """Neither was placed by the author, so a pin is the way to say where."""
     fs, fv, _ = _tapped_line()
