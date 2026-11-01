@@ -201,7 +201,8 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
         start = first.source.owner
         if start in members or _device(start):
             continue
-        segments, elements = [first], []
+        segments: list[Stream] = [first]
+        elements: list[Element] = []
         while True:
             dest = segments[-1].dest
             assembly = stations.get(id(dest))
@@ -451,9 +452,9 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame centred on a leg point, piped in flow order.
 
     A pinned device keeps its pinned turn. Otherwise the first quarter turn
-    that puts both nozzles on the leg, inlet upstream, is used. Either way
-    the inlet is put on the leg, since a symbol's nozzles need not be at
-    its box centre.
+    that puts both nozzles on the leg, inlet upstream, is used. A turn that
+    does is set with its nozzles on the leg, since they need not be at the
+    box centre; one that cannot is centred on the point.
 
     Parameters
     ----------
@@ -480,15 +481,15 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         turns = [int(unit.frame.orientation)]
     else:
         turns = [base, (base + 180) % 360, (base + 90) % 360, (base + 270) % 360]
-    candidates = []
     for turn in turns:
         candidate = _candidate(unit, point, turn)
         inlet = port_point(unit, candidate, "inlet")
         shift = ordinate - inlet[1 if level else 0]
-        candidates.append(replace(candidate, x=candidate.x + (0.0 if level else shift),
-                                  y=candidate.y + (shift if level else 0.0)))
-    return next((c for c in candidates if _on_corridor(unit, c, direction, ordinate)),
-                candidates[0])
+        candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
+                            y=candidate.y + (shift if level else 0.0))
+        if _on_corridor(unit, candidate, direction, ordinate):
+            return candidate
+    return _candidate(unit, point, turns[0])
 
 
 def _main_width(assembly: StationAssembly) -> float:
