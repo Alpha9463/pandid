@@ -2152,3 +2152,17 @@ def test_a_branch_drawn_from_the_middle_of_its_tee_is_not_reported():
     (x, _), (_, y) = port_point(tee, tee.frame, "branch"), port_point(side, side.frame, "inlet")
     branch.via([(x, tee.frame.y + tee.frame.h / 2), (x, y)])
     assert _own_unit_findings(fs) == []
+
+
+def test_a_straight_line_drawn_through_the_unit_it_runs_to_is_reported():
+    """via([]) asks for no corners, and the sheet draws a straight line from
+    nozzle to nozzle -- here up through E-101 to the nozzle on its top. The
+    check reads that line, not only the waypoints."""
+    fs = Flowsheet("direct")
+    feed = fs.add(U.Feed("F")).pin(x=330, y=300)
+    e = fs.add(U.HeatExchanger("E-101")).pin(x=300, y=100)
+    fs.connect(feed.outlet, e.shell_in).via([])
+    fs.to_svg()
+
+    (said,) = _own_unit_findings(fs)
+    assert said.startswith("stream S1 is drawn through E-101, which it runs to")

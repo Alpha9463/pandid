@@ -1081,7 +1081,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # attribute on every unit that has none, which dominated this loop.
         hosted = [(u, box, getattr(u, "host", None)) for u, box in boxes]
         for s in drawn:
-            if not (s.route and s.route.waypoints):
+            # A route with no waypoints is drawn straight between the nozzles.
+            if s.route is None:
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
             sp = port_point(src_u, src_u.frame, s.source.name)
@@ -1113,7 +1114,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                         "that bring the line round to that face"
                         if s.route.manual else
                         f"Clear room beyond that face for the router, or put the nozzle on "
-                        f"the side the line comes from, {u.name}.nozzle({name!r}, ...)")
+                        f"the side the line comes from: call .nozzle({name!r}, ...) on {u.name}")
                 warnings.append(Issue(
                     "warning", "route-crosses-unit",
                     f"stream {s.name} is drawn through {u.name}, which it {verb}. A line "
