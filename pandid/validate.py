@@ -122,6 +122,57 @@ def _overlap(a: tuple[float, float, float, float],
     return boxes_overlap(a, b)
 
 
+def _overlap_cure(a, b) -> str:
+    """Return how to clear a ``unit-overlap`` between two units.
+
+    Names one unit and the call that moves it. An attached balloon that
+    is not pinned is placed from its host, so ``at=`` and ``offset=`` move
+    it; a pin outranks that standoff, so a pinned unit is moved by its pin.
+    Each test prefers the later unit, usually the one added on top.
+
+    Parameters
+    ----------
+    a, b : Unit
+        The overlapping units, in sheet order.
+
+    Returns
+    -------
+    str
+        The remedy, as a sentence.
+    """
+    from pandid.streams import Stream
+
+    def pinned(u) -> bool:
+        pin = u.pin_
+        return pin is not None and any(
+            getattr(pin, f) is not None for f in ("col", "row", "x", "y"))
+
+    def how(u) -> str:
+        pin = u.pin_
+        grid = pin is not None and pin.x is None and pin.y is None
+        return f"{u.name}.pin(col=..., row=...)" if grid else f"{u.name}.pin(x=..., y=...)"
+
+    for u, other in ((b, a), (a, b)):
+        host = getattr(u, "host", None)
+        if host is None or pinned(u):
+            continue
+        where = (f"how far along {host.name} it taps, 0 to 1 (now {u.at:g})"
+                 if isinstance(host, Stream) else
+                 f"the face of {host.name} it sits by, 'N', 'S', 'E' or 'W' "
+                 f"(now {u.at!r})")
+        return (f"{u.name} hangs off {host.name}, so say where on it: at= is "
+                f"{where}, and offset= how far it stands off (now {u.offset:g}). "
+                f"Change them on add_instrument(), or with "
+                f"{u.name}.attach({host.name}, at=..., offset=...)")
+    if pinned(a) and pinned(b):
+        return f"Both are pinned, so move one pin clear of the other: {how(b)}"
+    for u, other in ((b, a), (a, b)):
+        if pinned(u):
+            return f"{u.name} is pinned there, so move its pin clear of {other.name}: {how(u)}"
+    return (f"Neither is pinned, so the layout placed both there. Pin one clear of "
+            f"the other: {how(b)}")
+
+
 def _is_control_function(letters: str, i: int) -> bool:
     """Return whether ``letters[i]`` is a control function ISO 5.2.4 orders.
 
@@ -914,12 +965,13 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     f"{u.name} a box the family fits in, or put the connection on "
                     f"a face with room for it"))
 
-        # Hard: overlapping unit bodies.
+        # Hard: overlapping unit bodies, with the call that moves one.
         for i in range(len(boxes)):
             for j in range(i + 1, len(boxes)):
                 if _overlap(boxes[i][1], boxes[j][1]):
+                    a, b = boxes[i][0], boxes[j][0]
                     errors.append(Issue("error", "unit-overlap",
-                                        f"{boxes[i][0].name} and {boxes[j][0].name} overlap"))
+                                        f"{a.name} and {b.name} overlap. {_overlap_cure(a, b)}"))
 
         # Hard: two live connections on one unit landing on the same
         # point. The runtime half of

@@ -1,5 +1,7 @@
 """Validation: hard errors raise from render(); soft issues warn."""
 
+from dataclasses import replace
+
 import pytest
 
 from pandid import Flowsheet, units as U
@@ -14,6 +16,84 @@ def test_overlapping_pins_raise():
     fs.connect(a.outlet, b.feed)
     with pytest.raises(ValueError, match="overlap"):
         fs.to_svg()
+
+
+# --- unit-overlap says how to clear it (#434) ---------------------------------
+
+
+def _overlap_message(fs: Flowsheet) -> str:
+    said = [i.message for i in fs.validate() if i.code == "unit-overlap"]
+    assert len(said) == 1, said
+    return said[0]
+
+
+def _tapped_line() -> tuple[Flowsheet, U.Valve, U.Instrument]:
+    """A valve on a line, with a transmitter attached to the line before it."""
+    fs = Flowsheet("tapped")
+    feed = fs.add(U.Feed("F"))
+    fv = fs.add(U.Valve("FV-101"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, fv.inlet)
+    fs.connect(fv.outlet, prod.inlet)
+    ft = fs.add_instrument("FT", 101, sensing=s)
+    fs.route()
+    return fs, fv, ft
+
+
+def test_unit_overlap_moves_an_attached_balloon_with_at_and_offset():
+    """A balloon placed from its line is moved by where it hangs off it.
+
+    Dropping the balloon onto the valve stands in for a crowded sheet the
+    standoff resolver could not clear. The balloon is the one to move, and the
+    message says which knobs move it rather than naming both units' pins.
+    """
+    fs, fv, ft = _tapped_line()
+    assert fv.frame is not None and ft.frame is not None
+    ft.frame = replace(ft.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert said.startswith("FV-101 and FT-101 overlap. FT-101 hangs off S1")
+    assert "at=" in said and "offset=" in said
+    assert "FT-101.attach(S1, at=..., offset=...)" in said
+    assert "pin(" not in said
+
+
+def test_unit_overlap_moves_a_pinned_balloon_by_its_pin():
+    """A pin outranks the standoff, so at= and offset= would not move it."""
+    fs, fv, ft = _tapped_line()
+    assert fv.frame is not None
+    ft.pin(x=fv.frame.x, y=fv.frame.y)
+    fs.route()
+
+    said = _overlap_message(fs)
+    assert "FT-101 is pinned there" in said
+    assert "FT-101.pin(x=..., y=...)" in said
+    assert "offset=" not in said
+
+
+def test_unit_overlap_moves_one_of_two_pinned_units_by_its_pin():
+    fs = Flowsheet("overlap")
+    a = fs.add(U.Reactor("R1")).pin(x=100, y=100)
+    b = fs.add(U.Reactor("R2")).pin(x=110, y=110)
+    fs.connect(a.outlet, b.feed)
+    fs.route()
+
+    said = _overlap_message(fs)
+    assert said.startswith("R1 and R2 overlap. Both are pinned")
+    assert "R2.pin(x=..., y=...)" in said
+
+
+def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
+    """Neither was placed by the author, so a pin is the way to say where."""
+    fs, fv, _ = _tapped_line()
+    pump = fs.add(U.Pump("P-101"))
+    fs.route()
+    assert fv.frame is not None and pump.frame is not None
+    pump.frame = replace(pump.frame, x=fv.frame.x, y=fv.frame.y)
+
+    said = _overlap_message(fs)
+    assert "the layout placed both there" in said
+    assert "P-101.pin(x=..., y=...)" in said
 
 
 def test_negative_pin_raises():
