@@ -210,7 +210,9 @@ def _format_stream_name(scheme: "str | Callable[[int], str]", number: int) -> st
     Raises
     ------
     ValueError
-        If the format string names a field other than ``n``.
+        If the format string cannot format a number: it names a field
+        other than ``n``, looks up into the number, has a format spec an
+        integer does not take, or is malformed.
     """
     if callable(scheme):
         return scheme(number)
@@ -225,6 +227,13 @@ def _format_stream_name(scheme: "str | Callable[[int], str]", number: int) -> st
         raise ValueError(
             f"stream_naming_scheme {scheme!r} asks for {field!r}, which is not "
             f"part of a stream name; the only field is 'n', the stream's number"
+        ) from None
+    except (AttributeError, TypeError, ValueError) as exc:
+        # {n.foo}, {n[0]}, {n:q}, an unclosed brace: the number cannot be
+        # written that way.
+        raise ValueError(
+            f"stream_naming_scheme {scheme!r} cannot write a stream number: {exc}. "
+            f"Write it as {{n}}, with a format spec if needed, such as 'S{{n:03d}}'"
         ) from None
 
 
@@ -560,7 +569,7 @@ class Flowsheet:
         TypeError
             If a number start is not an integer.
         ValueError
-            If ``stream_naming_scheme`` names a field other than ``n``.
+            If ``stream_naming_scheme`` cannot format a stream number.
         """
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
@@ -670,7 +679,7 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the format string names a field other than ``n``.
+            If the format string cannot format a stream number.
         """
         if not callable(value):
             _format_stream_name(value, DEFAULT_STREAM_NUMBER_START)

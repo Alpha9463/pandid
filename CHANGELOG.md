@@ -144,7 +144,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A bad field in `stream_naming_scheme` raises `ValueError` when set
   (#574).** `"S-{num}"` raised a raw `KeyError` at render, which the
   command line printed as a traceback. It is now refused on construction or
-  assignment, naming the field, as the other two schemes are.
+  assignment, naming the field, as the other two schemes are. A scheme that
+  cannot write a number at all, such as `"S-{n.foo}"` or `"S-{n:q}"`, raises
+  the same `ValueError`, naming the scheme.
 - **`valve_station_tag_scheme` round-trips through a spec (#574).**
   `to_dict()` dropped it and the spec format had no key for it. It is
   written when it differs from the default and read back; a callable raises

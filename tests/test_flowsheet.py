@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pandid import Flowsheet, units as U
 
@@ -42,6 +44,18 @@ def test_a_naming_scheme_asking_for_an_unknown_field_is_refused_when_set(scheme,
         Flowsheet("Test", stream_naming_scheme=scheme)
     fs = Flowsheet("Test")
     with pytest.raises(ValueError, match=f"asks for '{field}'"):
+        fs.stream_naming_scheme = scheme
+    assert fs.stream_naming_scheme == "S{n}"
+
+
+@pytest.mark.parametrize("scheme", ["S-{n.foo}", "S-{n[0]}", "S-{n:q}", "S-{n", "S-}"])
+def test_a_naming_scheme_that_cannot_format_a_number_is_refused_when_set(scheme):
+    """Any format failure is the same ``ValueError`` naming the scheme, not a
+    raw ``AttributeError``, ``TypeError`` or unexplained ``ValueError``."""
+    with pytest.raises(ValueError, match=re.escape(f"stream_naming_scheme {scheme!r}")):
+        Flowsheet("Test", stream_naming_scheme=scheme)
+    fs = Flowsheet("Test")
+    with pytest.raises(ValueError, match=re.escape(f"stream_naming_scheme {scheme!r}")):
         fs.stream_naming_scheme = scheme
     assert fs.stream_naming_scheme == "S{n}"
 
