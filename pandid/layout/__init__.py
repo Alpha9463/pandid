@@ -10,7 +10,10 @@
   whole grid columns and rows with crossing-reduction sweeps;
 - coordinates (:mod:`pandid.layout.coordinates`): grid to pixels, folded
   into bands, with instrumentation space reserved
-  (:mod:`pandid.layout.halo`).
+  (:mod:`pandid.layout.halo`);
+- pipe furniture (:mod:`pandid.layout.mounted`): unpinned valves, reducers,
+  fittings and stations stay out of the grid and are set on their routed
+  pipe.
 
 **Stage 2, control.** Instruments and signal runs, placed against the
 stage 1 geometry (:mod:`pandid.layout.control`).
@@ -21,7 +24,7 @@ the selected faces. Labels are placed last, on faces no connected nozzle
 uses.
 """
 
-from typing import Literal, Protocol, TYPE_CHECKING
+from typing import Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -82,32 +85,25 @@ def _seed_slots(fs: "Flowsheet") -> None:
 class ConstraintLayoutEngine:
     """Place units with the default automatic layout.
 
-    Equipment and stream-relative stations are placed in separate passes
-    when a station can be contracted. Other sheets use the full unit graph.
+    On a sheet with pipe furniture the grid holds the equipment and the
+    furniture is set on its routed pipe (:mod:`pandid.layout.mounted`).
+    Other sheets place every process unit in the grid.
     """
 
-    def layout(self, fs: "Flowsheet", *, use_coarse: bool = True,
-               reservation: Literal["conservative", "compact", "shared"] = "shared",
-               row_compaction: float = 0.0,
-               directional_station: bool = False,
+    def layout(self, fs: "Flowsheet", *, row_compaction: float = 0.0,
                unaligned: frozenset[int] = frozenset()) -> None:
-        """Resolve process, inline, and control geometry for a sheet.
+        """Resolve process and control geometry for a sheet.
 
         Parameters
         ----------
         fs : Flowsheet
             Sheet to lay out.
-        use_coarse : bool, optional
-            Try equipment-first placement for stream-relative stations.
-        reservation : {"conservative", "compact", "shared"}, optional
-            Attachment-corridor estimate for an isolated equipment trial.
         row_compaction : float, optional
-            Fraction of independent column-row compaction to apply.
-        directional_station : bool, optional
-            Follow explicitly mirrored station flow in a detached trial.
+            Fraction of independent column-row compaction to apply. A sheet
+            with pipe furniture ignores it.
         unaligned : frozenset[int], optional
             Global indices of units a detached trial keeps on their row
-            axis. Equipment-first placement ignores it.
+            axis.
 
         Returns
         -------
@@ -116,33 +112,23 @@ class ConstraintLayoutEngine:
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
-        from pandid.layout.coarse import (has_free_station, place_equipment_first,
-                                          place_inline_equipment_first)
         from pandid.layout.coordinates import assign_coordinates, assign_labels
         from pandid.layout.cycles import break_cycles
         from pandid.layout.faces import select_faces
-        from pandid.layout.inline import place_inline
-        from pandid.layout.station import place_stations
+        from pandid.layout.mounted import mounted_runs, place_mounted
         from pandid.layout.place import assign_positions
+        from pandid.layout.station import place_stations
 
         _seed_slots(fs)
         break_cycles(fs)
-        station_coarse = use_coarse and place_equipment_first(
-            fs, reservation=reservation, directional=directional_station
-        )
-        inline_coarse = False
-        if (use_coarse and not station_coarse and not has_free_station(fs)
-                and any(stream._logical_to is not None for stream in fs.streams)):
-            inline_coarse = place_inline_equipment_first(fs, reservation=reservation)
-        fs._coarse_layout_candidate = station_coarse or inline_coarse
-        if not fs._coarse_layout_candidate:
-            _seed_slots(fs)
+        runs = mounted_runs(fs)
+        fs._mounted_layout = bool(runs)
+        if runs:
+            place_mounted(fs, runs, unaligned=unaligned)
+        else:
             assign_positions(fs)
             assign_coordinates(fs, row_compaction=row_compaction, unaligned=unaligned)
             place_stations(fs)
-            place_inline(fs)
-        elif not inline_coarse:
-            place_inline(fs)
         # Repeat face selection and control placement until no balloon moves,
         # up to the pass limit.
         for _ in range(MAX_PLACEMENT_PASSES):

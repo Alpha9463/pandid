@@ -434,8 +434,7 @@ def place_attached(fs: "Flowsheet") -> bool:
     # make this pass depend on the last. Each balloon joins once placed.
     obstacles = [unit_box(u, u.frame) for u in fs.units
                  if u.frame is not None and not is_attached(u)]
-    coarse = fs._coarse_layout_candidate
-    keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if coarse else 0.0)
+    keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if fs._mounted_layout else 0.0)
     # Balloons chain, so place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     while pending:

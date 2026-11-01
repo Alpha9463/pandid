@@ -593,7 +593,8 @@ class Flowsheet:
         self.route_converged: bool = True
         self._layout_search_result: SearchResult | None = None
         self._search_seed_frames: tuple[Frame, ...] | None = None
-        self._coarse_layout_candidate = False
+        # Whether the last layout set pipe furniture on routed pipe.
+        self._mounted_layout = False
         self.unplaced_instruments: list = []
         # Frames and routes are cached between renders. Every mutation that
         # can move a box or a route calls _invalidate_layout(), which marks
@@ -2117,7 +2118,7 @@ class Flowsheet:
         from pandid.layout import default_layout_engine
 
         self._default_layout = engine is None or engine is default_layout_engine
-        self._coarse_layout_candidate = False
+        self._mounted_layout = False
         self._refinement_attempted = False
         self._layout_search_result = None
         self._search_seed_frames = None
@@ -2146,12 +2147,6 @@ class Flowsheet:
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
-        if router is not None and self._coarse_layout_candidate:
-            from pandid.layout import default_layout_engine
-
-            default_layout_engine.layout(self, use_coarse=False)
-            self._layout_stale = False
-            self._route_stale = True
         self._layout_search_result = None
         self._search_seed_frames = None
         default_router = router is None
@@ -2183,22 +2178,16 @@ class Flowsheet:
             from pandid.layout.trials import refine_default
             self._refinement_attempted = True
             refine_default(self)
-        if default_router and self._coarse_layout_candidate:
-            from pandid.layout.coarse import keep_if_better
-            keep_if_better(self)
         if default_router and getattr(self, "_default_layout", False):
             row_baseline = None
-            if canonical_frames:
+            if canonical_frames and not self._mounted_layout:
                 import copy
 
-                from pandid.layout.coarse import has_free_station
                 from pandid.layout.trials import refine_rows
 
-                if (not has_free_station(self)
-                        and not any(stream._logical_to is not None for stream in self.streams)):
-                    row_baseline = copy.deepcopy(self)
-                    if not refine_rows(self):
-                        row_baseline = None
+                row_baseline = copy.deepcopy(self)
+                if not refine_rows(self):
+                    row_baseline = None
             from pandid.layout.search import SearchBudget, search_layout
 
             budget = SearchBudget(4, 4, 16)

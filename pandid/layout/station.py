@@ -287,25 +287,28 @@ def _fraction(assembly: StationAssembly) -> float:
     return 0.5 if value is None else value
 
 
-def place_stations(fs: Flowsheet) -> int:
+def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = None) -> int:
     """Move feasible stations together around their member pins.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet with ordinary process coordinates assigned.
+    assemblies : list[StationAssembly] or None, optional
+        Stations to place; every station on the sheet by default.
 
     Returns
     -------
     int
         Number of complete station assemblies placed.
     """
-    if not fs._station_assemblies:
+    chosen = fs._station_assemblies if assemblies is None else assemblies
+    if not chosen:
         return 0
     units = process_units(fs)
     placed_count = 0
     groups: dict[int, list[StationAssembly]] = {}
-    for assembly in fs._station_assemblies:
+    for assembly in chosen:
         key = id(assembly.run) if assembly.run is not None else id(assembly)
         groups.setdefault(key, []).append(assembly)
     for group in groups.values():

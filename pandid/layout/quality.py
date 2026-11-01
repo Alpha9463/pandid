@@ -272,7 +272,6 @@ def accepts(
     preserve_crossing_pairs: bool,
     strict: bool,
     warnings: tuple[Counter[str], Counter[str]] | None = None,
-    extents: tuple[tuple[float, float], tuple[float, float]] | None = None,
 ) -> bool:
     """Decide whether a routed proposal may replace the current drawing.
 
@@ -292,8 +291,6 @@ def accepts(
         rather than allowing :func:`admissible`'s per-sheet margin.
     warnings : tuple[Counter[str], Counter[str]] or None, optional
         Current and proposed :func:`warning_counts`; no code may rise.
-    extents : tuple[tuple[float, float], tuple[float, float]] or None, optional
-        Current and proposed drawing width and height; neither may grow.
 
     Returns
     -------
@@ -312,10 +309,6 @@ def accepts(
     if warnings is not None:
         old, new = warnings
         if any(count > old[code] for code, count in new.items()):
-            return False
-    if extents is not None:
-        old_size, new_size = extents
-        if any(new > old + 1e-6 for old, new in zip(old_size, new_size)):
             return False
     return improves(before, after)
 

@@ -218,7 +218,7 @@ def refine_exits(fs: Flowsheet) -> bool:
 
     Each round re-lays a detached copy with the owner and blocker of every
     ``blocked-exit`` conflict kept on their row axis. Pinned units are
-    unaffected. Equipment-first layouts are left unchanged.
+    unaffected.
 
     Parameters
     ----------
@@ -232,8 +232,6 @@ def refine_exits(fs: Flowsheet) -> bool:
     """
     from pandid.layout import default_layout_engine
 
-    if fs._coarse_layout_candidate:
-        return False
     best = measure_final(fs)
     winner: Flowsheet | None = None
     held: set[int] = set()
@@ -320,10 +318,9 @@ def refine_rows(fs: Flowsheet) -> bool:
         Whether a routed compact-row trial replaced the current drawing.
     """
     from pandid.layout import default_layout_engine
-    from pandid.layout.coarse import has_free_station
     from pandid.layout.stages import process_units, slot
 
-    if has_free_station(fs) or any(stream._logical_to is not None for stream in fs.streams):
+    if fs._mounted_layout:
         return False
 
     before = measure_final(fs)
