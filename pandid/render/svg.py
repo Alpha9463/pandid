@@ -12,6 +12,7 @@ import re
 from datetime import datetime
 from functools import lru_cache
 
+from pandid.portgeom import tag_width
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, ident
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
@@ -2125,9 +2126,8 @@ def arrow_marker_id(color: str) -> str:
 def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     """Return the halo rectangle of an equipment tag.
 
-    Width is 6.6 px per narrow character (12 pt font) plus 8 px padding;
-    a wide (CJK or fullwidth) character counts a full 12 px em and a
-    combining mark nothing (:func:`~pandid.render.furniture.script_counts`).
+    Width is :func:`~pandid.portgeom.tag_width`, which the router's tag
+    obstacle also uses.
 
     Parameters
     ----------
@@ -2144,9 +2144,7 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     lx, ly, anchor, baseline, lpos, text = item
     if lpos == "center":
         return None
-    narrow, wide, zero = F.script_counts(text)
-    hw = (len(text) * 6.6 + 8 if not wide and not zero
-          else narrow * 6.6 + wide * 12 + 8)
+    hw = tag_width(text)
     hh = 15.0
     rx = lx - hw / 2 if anchor == "middle" else (lx - hw if anchor == "end" else lx)
     ry = ly - hh / 2 if baseline == "middle" else ly - hh + 3

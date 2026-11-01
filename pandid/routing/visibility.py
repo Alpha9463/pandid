@@ -202,7 +202,7 @@ class VisibilityGraph:
             Clearance around unit and label obstacles.
         """
         from pandid.layout.attach import is_attached
-        from pandid.portgeom import port_anchor
+        from pandid.portgeom import port_anchor, tag_width
 
         self.obstacles: List[Rect] = []
         self.body_obstacles: List[Tuple["Unit", Rect]] = []
@@ -237,8 +237,10 @@ class VisibilityGraph:
                 self.body_obstacles.append((u, body))
 
             lpos = f.label_pos or "top"
-            if u.kind not in ("feed", "product") and lpos != "center":
-                label_w = min(150.0, max(40.0, len(u.name) * 7.5))
+            # The halo the renderer draws behind the tag; an untagged unit,
+            # such as an element whose balloon carries its tag, draws none.
+            if u.kind not in ("feed", "product") and lpos != "center" and u.tag:
+                label_w = tag_width(u.tag)
                 if lpos == "top":
                     cx = f.x + u_width / 2
                     self.obstacles.append(Rect(cx - label_w / 2, cx + label_w / 2, f.y - 20, f.y))

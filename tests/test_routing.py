@@ -1,6 +1,7 @@
 """Check obstacle geometry, path search, crossing pricing, and the default router."""
 
 import heapq
+import re
 from types import SimpleNamespace
 from typing import cast
 
@@ -9,7 +10,7 @@ import pytest
 from pandid.flowsheet import Flowsheet
 from pandid.geometry import Route
 from pandid.streams import Stream
-from pandid.units import Feed, HeatExchanger, Product, Pump, Valve, Vessel
+from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.routing import DefaultRouter, get_outward_dir, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
@@ -434,6 +435,34 @@ def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
     frame.x = bad
     with pytest.raises(ValueError, match="E-101 has a non-finite x="):
         fs.route()
+
+
+def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
+    """Block exactly the halo drawn behind a tag, and nothing for no tag.
+
+    The router measured the unit's name at 7.5 px a character, capped at
+    150 px, where the renderer draws the tag at 6.6 px a character plus 8
+    with no cap; and an element whose tag its balloon carries still blocked
+    a box (#574).
+
+    Returns
+    -------
+    None
+        The one label obstacle is as wide as the drum's drawn halo.
+    """
+    fs = Flowsheet("tag-obstacle")
+    name = "V-101-FEED-SURGE-DRUM-FIRST-STAGE"
+    fs.add(Vessel(name, label_pos="top")).pin(x=300, y=200)
+    element = fs.add(Fitting("FE-303", variant="venturi")).pin(x=100, y=400)
+    fs.add_balloon(element, at="S", offset=46)
+    fs.layout()
+    graph = VisibilityGraph(fs)
+    bodies = {id(rect) for _, rect in graph.body_obstacles}
+    labels = [rect for rect in graph.obstacles if id(rect) not in bodies]
+    svg = fs.to_svg(check=False)
+    halo = re.search(rf'<rect [^>]*width="([\d.]+)"[^>]*/>\s*<text [^>]*>{name}</text>', svg)
+    assert halo is not None
+    assert [round(rect.x_max - rect.x_min, 1) for rect in labels] == [float(halo.group(1))]
 
 
 def test_the_search_is_bounded_by_the_size_of_the_graph():
@@ -861,6 +890,33 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
         [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],
         [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],
     )
+
+
+def test_a_recycle_search_returns_the_cheapest_path():
+    """Estimate a recycle's remaining bend at the recycle's own bend cost.
+
+    A recycle bend costs ``BEND_PENALTY / 2``. The heuristic used to add the
+    full ``BEND_PENALTY``, so the node on the cheap west route, which still
+    needs a bend, looked 250 dearer than it is, and the search settled the
+    goal through the penalised east route first (#574).
+
+    Returns
+    -------
+    None
+        The west route, 450 against the east route's 550, is returned.
+    """
+    west = [(0.0, 0.0), (0.0, 50.0), (0.0, 100.0), (100.0, 100.0)]
+    east = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]
+    nodes = set(west) | set(east)
+    edges: dict = {n: [] for n in nodes}
+    for path in (west, east):
+        for a, b in zip(path, path[1:]):
+            edges[a].append(b)
+            edges[b].append(a)
+    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    penalties = {((0.0, 0.0), (100.0, 0.0)): 100.0}
+    routed = find_path(graph, (0.0, 0.0), (100.0, 100.0), edge_penalties=penalties, is_recycle=True)
+    assert routed == west, f"returned the dearer route: {routed}"
 
 
 def test_a_forced_terminal_crossing_still_routes():

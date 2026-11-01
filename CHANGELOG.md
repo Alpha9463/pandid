@@ -80,6 +80,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   26 px too wide in both backends.
 - **An interlock diamond with letters and no number is lettered in capitals
   in SVG (#574),** as draw.io already did.
+- **The router keeps lines off the tag that is drawn (#574).** It reserved
+  7.5 px a character of the unit's name, at most 150 px, while the tag is
+  drawn 6.6 px a character plus 8 with no limit; and a unit whose balloon
+  carries its tag still reserved a box. Both now use one measurement,
+  `pandid.portgeom.tag_width`. In the gallery, the line beside `CV-205` on
+  sheet 17 moves 4.5 px.
+- **A recycle line takes its cheapest route (#574).** The search estimated
+  a remaining bend at 500 where a recycle bend costs 250, so it could
+  settle on a dearer route first. On sheet 18 two recycle lines move to
+  routes of the same length, bends and crossings that run along their
+  start lane.
 - **YAML reads a leading zero or a colon as the text written (#574).**
   PyYAML follows YAML 1.1, which read loop number `0101` as octal, drawing
   `FT-65`, and size `1:30` as base 60, 90. The YAML reader now takes only

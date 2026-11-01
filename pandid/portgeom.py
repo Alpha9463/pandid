@@ -394,6 +394,33 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     return (frame.x, frame.y, frame.x + frame.w, frame.y + frame.h)
 
 
+def tag_width(tag: str) -> float:
+    """Return the width of the white halo an equipment tag is drawn on.
+
+    6.6 px a narrow character, for 12 pt type, plus 8 px padding; a wide
+    (CJK or fullwidth) character counts a full 12 px em and a combining
+    mark nothing (:func:`~pandid.render.furniture.script_counts`). The
+    renderer draws the halo this wide
+    (:func:`pandid.render.svg._unit_label_box`) and the router keeps lines
+    off a box this wide (:class:`pandid.routing.visibility.VisibilityGraph`),
+    so a line is routed clear of the tag that is drawn.
+
+    Parameters
+    ----------
+    tag : str
+        Tag as drawn, unescaped.
+
+    Returns
+    -------
+    float
+        Halo width in drawing units.
+    """
+    from pandid.render.furniture import script_counts
+
+    narrow, wide, _zero = script_counts(tag)
+    return narrow * 6.6 + wide * 12 + 8
+
+
 def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
                                                         tuple[float, float]]:
     """Return the midpoint of one face of a unit's box and its normal.

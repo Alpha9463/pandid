@@ -232,25 +232,31 @@ def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
     return None
 
 
-def heuristic(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+def heuristic(a: Tuple[float, float], b: Tuple[float, float],
+              bend_cost: float = BEND_PENALTY) -> float:
     """Estimate the remaining A* cost between two graph nodes.
+
+    Admissible only while it never exceeds the true cost, so the bend it
+    counts must cost what the search charges for one.
 
     Parameters
     ----------
     a, b : tuple[float, float]
         Current and goal coordinates.
+    bend_cost : float, default=BEND_PENALTY
+        What the search charges for a bend; half for a recycle.
 
     Returns
     -------
     float
-        Manhattan distance plus one potential bend penalty.
+        Manhattan distance, plus one bend when the two are not aligned.
     """
     dx = abs(a[0] - b[0])
     dy = abs(a[1] - b[1])
     h = dx + dy
 
     if dx > 0 and dy > 0:
-        h += BEND_PENALTY
+        h += bend_cost
     return h
 
 
@@ -415,7 +421,7 @@ def find_path(
                 elif crossing_index.crosses(goal, _AXIS[OPPOSITE[goal_dir]]):
                     cost += bend_cost
 
-            h = heuristic(neighbor, goal)
+            h = heuristic(neighbor, goal, bend_cost)
 
             counter += 1
             heapq.heappush(queue, (cost + h, cost, counter, neighbor, ndir, path + [neighbor]))
