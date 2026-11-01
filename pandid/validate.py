@@ -169,7 +169,7 @@ def _overlap_cure(a, b) -> str:
         stream = isinstance(host, Stream)
         where = (f"how far along {host.name} it taps, 0 to 1 (now {u.at:g})" if stream else
                  f"the face of {host.name} it sits by, 'N', 'S', 'E' or 'W' (now {u.at!r})")
-        kept = ((f", angle={u.angle:g}" if u.angle != 90.0 else "")
+        kept = ((f", angle={u.angle!r}" if u.angle != 90.0 else "")
                 + (f", relation={u.relation!r}" if u.relation != "sensing" else ""))
         pin = u.pin_
         grid = (f". Its col= and row= pin does not move an attached balloon; an "

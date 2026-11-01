@@ -102,10 +102,11 @@ def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
 def test_unit_overlap_suggests_an_attach_that_keeps_what_the_balloon_does():
     """attach() resets angle= and relation= to their defaults, so a suggested
     call without them would turn a ``near`` balloon into a ``sensing`` one and
-    draw a tap line it never had. The arguments the message gives are applied
-    here as written, with only the two placeholders filled in."""
+    draw a tap line it never had, and a rounded angle would turn it. The
+    arguments the message gives are applied here as written, with only the
+    two placeholders filled in."""
     fs, fv, _ = _tapped_line()
-    fic = fs.add_instrument("FIC", 101, near=fv, angle=45)
+    fic = fs.add_instrument("FIC", 101, near=fv, angle=45.1234567)
     fs.route()
     assert fv.frame is not None and fic.frame is not None
     fic.frame = replace(fic.frame, x=fv.frame.x, y=fv.frame.y)
@@ -119,7 +120,7 @@ def test_unit_overlap_suggests_an_attach_that_keeps_what_the_balloon_does():
         key, value = arg.split("=", 1)
         kwargs[key] = filled[key] if value == "..." else ast.literal_eval(value)
     fic.attach(fv, **kwargs)
-    assert (fic.relation, fic.angle, fic.at, fic.offset) == ("near", 45.0, "N", 70.0)
+    assert (fic.relation, fic.angle, fic.at, fic.offset) == ("near", 45.1234567, "N", 70.0)
 
 
 def test_unit_overlap_does_not_offer_a_grid_pin_to_an_attached_balloon():
