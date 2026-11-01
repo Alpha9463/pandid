@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import copy
+import inspect
+import sys
 from collections import Counter
 from dataclasses import replace
 
 from pandid import Flowsheet, units as U
 from pandid.layout import trials
-from pandid.layout.quality import accepts, admissible, measure_final
+from pandid.layout.quality import Quality, accepts, admissible, measure_final
 from pandid.layout.settle import settle
 from pandid.layout.trials import evaluate_trial
 from pandid.routing.metrics import crossing_count
@@ -292,3 +294,110 @@ def test_the_acceptance_gate_applies_the_mode_each_caller_states() -> None:
             extents=extents,
         )
         assert verdict == expected
+
+
+def test_every_layout_caller_judges_through_the_one_gate_in_its_own_mode(monkeypatch) -> None:
+    """Drive each acceptance caller and record how it asks the gate (#574).
+
+    The gate was written three times, with ``preserve_crossing_pairs``
+    defaulting to True in two copies and False in the third. A caller that
+    judged a proposal inline again would not reach ``accepts`` and fails
+    here, as would one that changed the mode it has always used; and no
+    gate may default the mode.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces ``accepts`` with a recording wrapper, and the layout
+        engine with one that moves a row so ``refine_rows`` reaches its gate.
+
+    Returns
+    -------
+    None
+        Each caller asks once per proposal, in the mode it has always used.
+    """
+    from pandid.layout import coarse, default_layout_engine, quality
+    from pandid.layout.stages import process_units, slot
+
+    for gate in (quality.accepts, quality.admissible, coarse._acceptable):
+        for mode in ("preserve_crossing_pairs", "strict", "preserve_size"):
+            parameter = inspect.signature(gate).parameters.get(mode)
+            assert parameter is None or parameter.default is inspect.Parameter.empty, (
+                f"{gate.__name__} defaults {mode}"
+            )
+
+    asked: set[tuple[str, bool, bool, bool, bool]] = set()
+    real = quality.accepts
+
+    def recording(
+        before: Quality,
+        after: Quality,
+        *,
+        preserve_crossing_pairs: bool,
+        strict: bool,
+        warnings: tuple[Counter[str], Counter[str]] | None = None,
+        extents: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    ) -> bool:
+        """Record who asked the gate and in which mode, then ask it.
+
+        Parameters
+        ----------
+        before, after : Quality
+            Measurements passed on.
+        preserve_crossing_pairs, strict : bool
+            Mode passed on.
+        warnings, extents : tuple or None, optional
+            Further checks passed on.
+
+        Returns
+        -------
+        bool
+            The gate's verdict.
+        """
+        caller = sys._getframe(1).f_code.co_name
+        asked.add(
+            (caller, preserve_crossing_pairs, strict, warnings is not None, extents is not None)
+        )
+        return real(
+            before,
+            after,
+            preserve_crossing_pairs=preserve_crossing_pairs,
+            strict=strict,
+            warnings=warnings,
+            extents=extents,
+        )
+
+    fs = _branched_sheet()
+    monkeypatch.setattr(quality, "accepts", recording)
+    monkeypatch.setattr(trials, "accepts", recording)
+    real_layout = default_layout_engine.layout
+
+    def lowered(fs: Flowsheet, *, row_compaction: float) -> None:
+        """Lay out as the engine does, then move the first row down 1 px.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Trial drawing.
+        row_compaction : float
+            Row spacing ``refine_rows`` is trying, passed on.
+        """
+        real_layout(fs, row_compaction=row_compaction)
+        first = slot(process_units(fs)[0])
+        first.y = (first.y or 0.0) + 1.0
+
+    monkeypatch.setattr(default_layout_engine, "layout", lowered)
+
+    evaluate_trial(fs, lambda frames: None)
+    trials.row_final_better(fs, fs)
+    trials.refine_rows(copy.deepcopy(fs))
+    coarse._acceptable(fs, fs, preserve_crossing_pairs=True, preserve_size=False)
+    coarse._acceptable(fs, fs, preserve_crossing_pairs=False, preserve_size=True)
+    # (caller, preserve_crossing_pairs, strict, warnings compared, extents compared)
+    assert asked == {
+        ("_evaluate_candidate", True, False, False, False),
+        ("row_final_better", True, True, True, False),
+        ("refine_rows", True, True, True, False),
+        ("_acceptable", True, True, True, False),
+        ("_acceptable", False, True, True, True),
+    }
