@@ -10,6 +10,7 @@ predicates, so a value the reader refuses is refused at the Python door too.
 
 from __future__ import annotations
 
+import math
 import numbers
 from decimal import Decimal
 from typing import Any
@@ -70,7 +71,7 @@ def _hint(value: Any) -> str:
 
 
 def check_real(value: Any, where: str) -> None:
-    """Refuse a value that is not a real number.
+    """Refuse a value that is not a finite real number.
 
     Parameters
     ----------
@@ -83,11 +84,15 @@ def check_real(value: Any, where: str) -> None:
     ------
     TypeError
         If :func:`is_real` is false.
+    ValueError
+        If it is NaN or infinite, which has no place on the drawing.
     """
     if not is_real(value):
         raise TypeError(
             f"{where} must be a number (an int or float), got {value!r}{_hint(value)}"
         )
+    if not math.isfinite(value):
+        raise ValueError(f"{where} must be a finite number, got {value!r}")
 
 
 def check_whole(value: Any, where: str) -> None:

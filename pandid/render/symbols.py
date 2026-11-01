@@ -3342,7 +3342,6 @@ _EVAP_TUBE_XS = (16.0, 28.0, 40.0, 52.0, 64.0)
 
 # Calandria: three tubes either side of a central downcomer, drawn as two
 # walls at twice the 8-unit tube pitch so it does not read as a tube.
-_EVAP_CALANDRIA_PITCH = 8.0
 _EVAP_CALANDRIA_XS = (8.0, 16.0, 24.0, 56.0, 64.0, 72.0)
 _EVAP_DOWNCOMER_XS = (32.0, 48.0)
 

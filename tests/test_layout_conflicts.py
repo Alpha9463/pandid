@@ -40,7 +40,7 @@ def test_exchanging_the_blocking_unit_is_not_an_improvement() -> None:
     assert before.hard == after.hard
     assert before.crossings == after.crossings
     assert before.hard_conflicts != after.hard_conflicts
-    assert not admissible(before, after)
+    assert not admissible(before, after, preserve_crossing_pairs=True)
 
 
 def test_fixed_blocker_names_the_sealed_source_exit() -> None:

@@ -10,76 +10,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Number starts must be integers (#533).** `stream_number_start`,
-  `line_number_start` and `loop_number_start` raise `TypeError` for a float,
-  `Decimal`, string or `bool`, at construction and on assignment. Any integer
-  type, including `numpy.int64`, is stored as an `int`. A float start used to
-  draw `S1.0`, and `to_dict()` then dropped it, so the sheet read back as `S1`.
-- **The pneumatic hatch is drawn from `HATCH_ARM` (#304).** The SVG renderer
-  drew the hatch strokes from bare numbers, and the draw.io exporter
-  hard-coded an angle and length it said came from `HATCH_ARM`, which nothing
-  read. Both now take the stroke from `pandid.render.svg.HATCH_ARM`, so
-  changing it changes both. No drawing changes.
-- **`unit-overlap` says how to clear it (#434).** The finding named the two
-  units and stopped. It now names one of them and the call that moves it: an
-  attached balloon is moved with `at=` and `offset=`, giving their current
-  values, and a pinned unit, or one the layout placed, with `pin()`. A
-  suggested `attach()` repeats the balloon's `relation=` and `angle=`, so
-  following it does not change what the balloon draws.
+  `line_number_start` and `loop_number_start` raise `TypeError` for anything
+  but an integer, and store any integer type as an `int`.
+- **The pneumatic hatch is drawn from `HATCH_ARM` (#304).** The SVG and
+  draw.io pneumatic hatches both take their stroke from
+  `pandid.render.svg.HATCH_ARM`.
+- **Layout trials are settled and judged one way (#574).** Every layout
+  trial settles with `settle()` and is accepted or refused by
+  `pandid.layout.quality.accepts`.
+- **A missed attribute lookup on a unit no longer lists its ports (#574).**
+  The port list in the `AttributeError` for an unknown attribute is written
+  only when the error is shown.
+- **CI and release actions are pinned to commit SHAs (#574).** Every action
+  in `ci.yml` and `release.yml` names a commit, with its version in a
+  comment.
+- **`unit-overlap` says how to clear it (#434).** The finding names one of
+  the two units and the call that moves it: `at=` and `offset=` for an
+  attached balloon, `pin()` for any other unit. A suggested `attach()`
+  repeats the balloon's `relation=` and `angle=`.
 
 ### Removed
 
-- **`Port.side` (#304).** The field was never passed by any port and never
-  read by layout, routing or rendering; it was always `None`.
+- **`Port.side` (#304).** It was always `None`.
+- **Unused code (#574).** `pandid.layout.stages.control_units` and
+  `signal_streams`, `Edge.source_role`, `Edge.dest_role`,
+  `ArmRegion.entry_stream` and `ArmRegion.streams` in
+  `pandid.layout.structure`, `_EVAP_CALANDRIA_PITCH`, and
+  `scripts/ports_bench.py`, `renumber_bench.py` and `layout_bench.py` are
+  deleted.
 
 ### Fixed
 
-- **`route-crosses-unit` sees a line drawn through its own unit (#468).** The
-  check skipped the two units a stream connects, so a line drawn up through an
-  exchanger to a nozzle on its top face was not reported. A line may now meet
-  its own unit only at the nozzle, from beyond that nozzle's face; one that
-  crosses the box anywhere else, at either end, is reported with how to fix
-  it. A route with no waypoints, such as `via([])`, is drawn straight between
-  its nozzles and is now checked like any other: it was skipped by the route
-  checks, so it was never reported as crossing a unit or running on the
-  slant. No shipped example draws one.
+- **`route-crosses-unit` sees a line drawn through its own unit (#468).** A
+  line that crosses the box of a unit it connects anywhere but at its nozzle
+  is reported. A route with no waypoints, such as `via([])`, is checked like
+  any other.
 - **`to_dict()` keeps a stated annotation title that is falsy (#533).** A
-  title other than `""`, such as `0` or `None`, is written as stated, so
-  `from_dict()` refuses it with a `SpecError` instead of silently redrawing
-  the box without it.
-- **The spec reader accepts numpy numbers (#536).** Every numeric field reads
-  an `int`, `float` or numpy number (a `numbers.Real` other than `Fraction`),
-  and every whole-number field any `numbers.Integral`, so a value such as
-  `numpy.int64` from pandas round-trips instead of being refused. Values are
-  kept as given. `Decimal` is accepted where it is only displayed
-  (line-number components and stream properties) and still refused for
-  geometry, which cannot be computed with it.
+  title such as `0` or `None` is written as stated, so `from_dict()` refuses
+  it with `SpecError`.
+- **The spec reader accepts numpy numbers (#536).** Numeric fields take any
+  `int`, `float` or numpy number, and whole-number fields any
+  `numbers.Integral`. `Decimal` is accepted only in line-number components
+  and stream properties.
 - **Values that drew wrongly or crashed a render are refused or drawn as
-  text (#536).** A `Decimal` or `Fraction` size, `pin()` coordinate,
-  `via()` waypoint or annotation margin, width, font size or position raises
-  `TypeError` when set, rather than crashing the render; `pin()` ranks must
-  be whole numbers. `Stream.color` and `dasharray` must be text. A numeric
-  flag `reference` or table-sheet `sheet_drawing_number` or `sheet_subtitle`
-  is drawn as text.
+  text (#536).** A `Decimal` or `Fraction` size, `pin()` coordinate, `via()`
+  waypoint or annotation margin, width, font size or position raises
+  `TypeError`, as do a non-whole `pin()` rank and a non-text `Stream.color`
+  or `dasharray`. A numeric flag `reference`, `sheet_drawing_number` or
+  `sheet_subtitle` is drawn as text.
 - **The spec reader reads a number in drawn text as the text drawn (#534).**
-  A description, reference, formula, flowsheet name, stream-table section
-  heading, table-sheet number or subtitle, note, box row or cell, or table
-  header given as a number round-trips instead of raising `SpecError` after
-  the Python API drew it. Names, settings such as `variant` and
-  `col_align`, and annotation titles must still be text.
+  A description, reference, formula, flowsheet name, section heading, note,
+  box row or cell, or table header given as a number reads as its text.
+  Names, settings such as `variant` and annotation titles must still be
+  text.
 - **A float loop or instrument number is refused (#534).** `add_loop()`,
-  `Loop` and `Instrument` raise `TypeError` for a number such as `303.0`,
-  which used to draw as `F-303.0`. Text and any integer type are accepted.
+  `Loop` and `Instrument` raise `TypeError` for a number such as `303.0`.
 - **`add_valve_station()` names `mirrored=False` on an unplaced station
-  (#541).** `mirrored` now defaults to `None`, like `gap`, `bypass_rise` and
-  `drain_drop`, so a station with no `x`/`y` refuses it by name whatever its
-  value. A pinned station draws `mirrored=False` as before, and
-  `place_valve_station_on()` still accepts it.
+  (#541).** `mirrored` defaults to `None`, so a station with no `x`/`y`
+  refuses any `mirrored=` by name.
+- **A `via()` route keeps the points it was given (#574).** Line separation
+  no longer moves or rewrites any run of a `via()` route.
+- **A part the body cannot carry is refused when the unit is built
+  (#574).** A unit given `supports=`, `agitator=`, `internals=` or `rake=`
+  that its variant cannot carry, such as
+  `Vessel(variant="horizontal", supports="ring")`, raises `ValueError`
+  naming the variants that can.
+- **A draw.io dash matches the SVG dash (#574).** `dasharray="7, 4"`
+  exports as `dashPattern=7 4`, and `dasharray="none"` as a solid line.
+- **A tag halo is measured on the text drawn (#574).** A tag such as `R&D`
+  gets a halo as wide as the characters drawn, in both backends.
+- **An interlock diamond with letters and no number is lettered in capitals
+  in SVG (#574).** It matches draw.io.
+- **The router keeps lines off the tag that is drawn (#574).** The router
+  reserves the halo the renderer draws behind a tag,
+  `pandid.portgeom.tag_width` wide, and nothing for a unit with no tag.
+- **A recycle line takes its cheapest route (#574).** The route search
+  prices a recycle's remaining bend at what a recycle bend costs.
+- **Layout keeps clear of a feed flag where it is drawn (#574).** Column
+  stacking and free-standing balloon placement use the box a flag draws,
+  `pandid.portgeom.unit_box`, not its frame.
+- **YAML reads a leading zero or a colon as the text written (#574).**
+  `0101`, `0010`, `1:30`, `1_000`, `0x1F` and `0o17` read as text, and
+  decimals such as `120`, `1.5` and `1e3` as numbers.
+- **A key written twice in a JSON or YAML spec is refused (#574).**
+  `from_json()` and `from_yaml()` raise `SpecError` naming the key.
+- **A bad field in `stream_naming_scheme` raises `ValueError` when set
+  (#574).** A scheme that cannot write the number, such as `"S-{num}"` or
+  `"S-{n.foo}"`, is refused on construction or assignment, naming the
+  scheme.
+- **`valve_station_tag_scheme` round-trips through a spec (#574).**
+  `to_dict()` writes it when it differs from the default, and `from_dict()`
+  reads it.
+- **NaN and infinity are refused (#574).** A size, `pin()` coordinate,
+  `via()` waypoint or annotation margin, width, font size or position raises
+  `ValueError` for either, and the spec reader `SpecError`.
+- **Table cells and legend entries read as the text drawn (#574).** A `None`
+  line or cell in an `Annotation`, `TableBox` or `legend()` is blank, whether
+  built in Python or read from a spec. A legend entry in a spec that is not a
+  pair raises `SpecError`.
 - **`vessel_symbol()` refuses an inlet and an outlet on one point face
-  (#507).** A face whose artwork meets the box at a single point, such as a
-  cone apex, takes one connection. The drawing counted inlets and outlets
-  separately, so one of each was drawn on the same point; it now counts them
-  together, as constructing the unit already did, and gives the same error.
-  Only a custom symbol could reach this.
+  (#507).** It raises the error the unit's constructor raises when an inlet
+  and an outlet share a face that meets the box at a single point.
 
 ## [0.1.5] - 2026-08-26
 

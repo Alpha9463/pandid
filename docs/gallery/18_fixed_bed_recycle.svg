@@ -239,7 +239,7 @@
     <path d="M 920.5,604.0 L 1053.0,604.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1173.0,604.0 L 1268.0,604.0 L 1268.0,629.0 L 1293.0,629.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1373.0,654.0 L 1583.0,654.0 L 1583.0,624.0 L 1608.0,624.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1608.0,689.0 L 1573.25,689.0 L 1573.25,659 M 1573.25,649 L 1573.25,541.0 L 1143.0,541.0 L 1143.0,586.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1608.0,689.0 L 1188.0,689.0 L 1188.0,609 M 1188.0,599 L 1188.0,541.0 L 1143.0,541.0 L 1143.0,586.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1083.0,622.0 L 1083.0,693.5 M 1083.0,703.5 L 1083.0,1066.0 L 1108.0,1066.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1228.0,1066.0 L 1293.0,1066.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1318.0,1106.4 L 1318.0,1258.4 L 1608.0,1258.4" fill="none" stroke="black" stroke-width="2" />
@@ -248,12 +248,12 @@
     <path d="M 1620.0,1086.0 L 1958.0,1086.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1982.5,1086.0 L 2220.0,1086.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1614.0,1092.0 L 1614.0,1117.0 L 1933.0,1117.0 L 1933.0,1091 M 1933.0,1081 L 1933.0,839 M 1933.0,829 L 1933.0,620.5 L 1958.0,620.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 2028.0,600.5 L 2053.0,600.5 L 2053.0,90.0 L 1028.0,90.0 L 1028.0,497 M 1028.0,507 L 1028.0,599 M 1028.0,609 L 1028.0,635.0 L 914.5,635.0 L 914.5,610.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 2028.0,600.5 L 2053.0,600.5 L 2053.0,90.0 L 945.5,90.0 L 945.5,319.5 M 945.5,329.5 L 945.5,497 M 945.5,507 L 945.5,599 M 945.5,609 L 945.5,635.0 L 914.5,635.0 L 914.5,610.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 354.0,324.5 L 504.0,324.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 516.5,324.5 L 718.5,324.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 743.0,324.5 L 908.5,324.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 933.0,324.5 L 958.0,324.5 L 958.0,497 M 958.0,507 L 958.0,599 M 958.0,609 L 958.0,630 M 958.0,640 L 958.0,698.5 L 1333.0,698.5 L 1333.0,664.1" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1118.0,304.5 L 1198.0,304.5 L 1198.0,497 M 1198.0,507 L 1198.0,536 M 1198.0,546 L 1198.0,599 M 1198.0,609 L 1198.0,693.5 M 1198.0,703.5 L 1198.0,1048.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 933.0,324.5 L 1028.0,324.5 L 1028.0,497 M 1028.0,507 L 1028.0,599 M 1028.0,609 L 1028.0,698.5 L 1333.0,698.5 L 1333.0,694 M 1333.0,684 L 1333.0,664.1" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1118.0,304.5 L 1198.0,304.5 L 1198.0,497 M 1198.0,507 L 1198.0,599 M 1198.0,609 L 1198.0,684 M 1198.0,694 L 1198.0,693.5 M 1198.0,703.5 L 1198.0,1048.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1138.0,1084.0 L 1138.0,1195.9 L 1083.0,1195.9 L 1083.0,1235.9 L 1108.0,1235.9" fill="none" stroke="black" stroke-width="2" />
     <path d="M 310.25,511.5 L 310.25,473.5" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 332.25,451.5 L 516.2,451.5 L 516.2,611.6" fill="none" stroke="black" stroke-width="1" />
@@ -271,7 +271,7 @@
     <line x1="511.2" y1="530.0" x2="521.2" y2="536.0" stroke="black" stroke-width="1" />
     <line x1="511.2" y1="566.1" x2="521.2" y2="572.1" stroke="black" stroke-width="1" />
     <line x1="511.2" y1="570.1" x2="521.2" y2="576.1" stroke="black" stroke-width="1" />
-    <path d="M 1505.5,572.0 L 1505.5,546 M 1505.5,536 L 1505.5,524.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 1505.5,572.0 L 1505.5,524.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 510.25,212.0 L 510.25,174.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1483.5,502.0 L 557.25,502.0 L 557.25,329.5 M 557.25,319.5 L 557.25,152.0 L 532.25,152.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
     <path d="M 510.25,130.0 L 510.25,105.0 L 920.7,105.0 L 920.7,312.1" fill="none" stroke="black" stroke-width="1" />
@@ -347,8 +347,8 @@
     <text x="1244.5" y="580.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-314-CS</text>
     <rect x="1416.7" y="647.5" width="86.6" height="13.0" fill="white" />
     <text x="1460.0" y="654.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-LT</text>
-    <rect x="1314.8" y="534.5" width="86.6" height="13.0" fill="white" />
-    <text x="1358.1" y="541.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-LT</text>
+    <rect x="1354.7" y="682.5" width="86.6" height="13.0" fill="white" />
+    <text x="1398.0" y="689.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-LT</text>
     <rect x="1076.5" y="800.7" width="13.0" height="86.6" fill="white" />
     <text x="1083.0" y="844.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1083.0, 844.0)">350-LG-306-CS</text>
     <rect x="1199.2" y="1096.0" width="86.6" height="13.0" fill="white" />
@@ -359,8 +359,8 @@
     <text x="1408.5" y="986.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-308-CS</text>
     <rect x="1926.5" y="837.5" width="13.0" height="86.6" fill="white" />
     <text x="1933.0" y="880.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1933.0, 880.8)">350-LG-316-CS</text>
-    <rect x="1497.2" y="83.5" width="86.6" height="13.0" fill="white" />
-    <text x="1540.5" y="90.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-310-CS</text>
+    <rect x="1456.0" y="83.5" width="86.6" height="13.0" fill="white" />
+    <text x="1499.2" y="90.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-310-CS</text>
     <rect x="388.8" y="318.0" width="80.4" height="13.0" fill="white" />
     <text x="429.0" y="324.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-FG-311-CS</text>
     <rect x="1191.5" y="701.9" width="13.0" height="92.8" fill="white" />
@@ -450,8 +450,8 @@
     <text x="730.75" y="346.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">XV-307</text>
     <rect x="720.1" y="358.3" width="21.2" height="15.0" fill="white" />
     <text x="730.75" y="365.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
-    <rect x="897.0" y="339.4" width="47.6" height="15.0" fill="white" />
-    <text x="920.75" y="346.90000000000003" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-303</text>
+    <rect x="891.0" y="339.4" width="47.6" height="15.0" fill="white" />
+    <text x="914.75" y="346.90000000000003" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-303</text>
     <rect x="910.1" y="358.4" width="21.2" height="15.0" fill="white" />
     <text x="920.75" y="365.90000000000003" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
     <rect x="1946.5" y="1100.9" width="47.6" height="15.0" fill="white" />

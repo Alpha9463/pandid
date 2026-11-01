@@ -251,7 +251,7 @@
     <line x1="477.2" y1="396.2" x2="487.2" y2="402.2" stroke="black" stroke-width="1" />
     <path d="M 872.0,432.0 L 872.0,445.768 M 872.0,455.768 L 872.0,540.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1265.5,357.76752993717025 L 1197.5,357.76752993717025" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 894.0,562.0 L 1115.0,562.0 L 1115.0,455.768 M 1115.0,445.768 L 1115.0,357.76752993717025 L 1153.5,357.76752993717025" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
+    <path d="M 894.0,562.0 L 1110.5,562.0 L 1110.5,455.768 M 1110.5,445.768 L 1110.5,357.76752993717025 L 1153.5,357.76752993717025" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
     <path d="M 1175.5,379.76752993717025 L 1175.5,413.3675299371703 L 1137.8,413.3675299371703 L 1137.8,438.3675299371703" fill="none" stroke="black" stroke-width="1" />
     <line x1="1170.5" y1="391.1" x2="1180.5" y2="397.1" stroke="black" stroke-width="1" />
     <line x1="1170.5" y1="395.1" x2="1180.5" y2="401.1" stroke="black" stroke-width="1" />
@@ -426,8 +426,8 @@
     <text x="892.25" y="761.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
     <rect x="1384.0" y="421.3" width="47.6" height="15.0" fill="white" />
     <text x="1407.75" y="433.26752993717025" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-205</text>
-    <rect x="1120.0" y="465.7" width="47.6" height="15.0" fill="white" />
-    <text x="1143.75" y="473.1675299371703" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-205</text>
+    <rect x="1114.0" y="465.7" width="47.6" height="15.0" fill="white" />
+    <text x="1137.75" y="473.1675299371703" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-205</text>
     <rect x="1127.2" y="484.7" width="21.2" height="15.0" fill="white" />
     <text x="1137.75" y="492.1675299371703" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FO</text>
     <rect x="1155.0" y="644.8" width="47.6" height="15.0" fill="white" />

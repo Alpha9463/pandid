@@ -2,7 +2,8 @@
 
 Runs of different streams that lie on nearly the same track and overlap
 along their length are moved onto distinct tracks at least ``spacing``
-apart. Runs that end at a nozzle keep their tracks.
+apart. Runs that end at a nozzle keep their tracks, as does every run of a
+route the author drew with ``via()``, which is never rewritten.
 """
 
 from typing import Any, Sequence, TYPE_CHECKING
@@ -49,13 +50,16 @@ def _compute_offsets(
 
         pts = s.route.waypoints
         n_segs = len(pts) - 1
+        # The author placed every point of a via() route, so none moves;
+        # the other streams separate from it instead.
+        manual = s.route.manual
         # The run the previous segment extended, and which axis it lies on.
         open_run: dict[str, Any] | None = None
         open_axis: str | None = None
 
         for i in range(n_segs):
             p1, p2 = pts[i], pts[i+1]
-            is_fixed = (i == 0) or (i == n_segs - 1)
+            is_fixed = manual or (i == 0) or (i == n_segs - 1)
             flat_x = abs(p1[0] - p2[0]) < 0.1
             flat_y = abs(p1[1] - p2[1]) < 0.1
 
@@ -294,7 +298,8 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
     h_offsets, v_offsets = _compute_offsets(fs.streams, spacing)
     new_waypoints = _apply_offsets(fs.streams, h_offsets, v_offsets)
     for s in fs.streams:
-        if id(s) in new_waypoints:
+        # A via() route keeps the author's own list.
+        if id(s) in new_waypoints and not s.route.manual:  # type: ignore[union-attr]
             s.route.waypoints = new_waypoints[id(s)]  # type: ignore[union-attr]
 
 

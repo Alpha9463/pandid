@@ -707,7 +707,7 @@ def _improve_westward_hosts(fs: Flowsheet) -> bool:
     incumbent_pairs = measure_final(fs).crossing_pairs
     if not measure_final(directed).crossing_pairs <= incumbent_pairs:
         directed = _repair_signal_crossings(directed, fs)
-    if not _acceptable(fs, directed, preserve_crossing_pairs=True):
+    if not _acceptable(fs, directed, preserve_crossing_pairs=True, preserve_size=False):
         return False
     if not _warning_details(directed) <= _warning_details(fs):
         return False
@@ -735,22 +735,6 @@ def _frame_size(fs: Flowsheet) -> tuple[float, float]:
             max(frame.y_max for frame in frames) - min(frame.y for frame in frames))
 
 
-def _warning_counts(fs: Flowsheet) -> Counter[str]:
-    """Count completed-drawing warnings by code.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Routed drawing to inspect.
-
-    Returns
-    -------
-    Counter[str]
-        Number of each warning reported by validation.
-    """
-    return Counter(issue.code for issue in fs.validate() if issue.severity == "warning")
-
-
 def _warning_details(fs: Flowsheet) -> Counter[tuple[str, str]]:
     """Identify each warning on a completed drawing.
 
@@ -769,39 +753,33 @@ def _warning_details(fs: Flowsheet) -> Counter[tuple[str, str]]:
 
 
 def _acceptable(reference: Flowsheet, candidate: Flowsheet, *,
-                preserve_size: bool = False,
-                preserve_crossing_pairs: bool = False) -> bool:
-    """Require a routed proposal to improve without a measured regression.
+                preserve_crossing_pairs: bool, preserve_size: bool) -> bool:
+    """Measure two completed drawings and apply the acceptance gate.
+
+    The gate is :func:`pandid.layout.quality.accepts` in strict mode, with
+    warnings compared by code.
 
     Parameters
     ----------
     reference, candidate : Flowsheet
         Completed drawings with the same authored model.
-    preserve_size : bool, optional
-        Keep both dimensions within the established drawing's extent.
-    preserve_crossing_pairs : bool, optional
+    preserve_crossing_pairs : bool
         Require every candidate crossing pair to exist in the reference.
+    preserve_size : bool
+        Keep both dimensions within the established drawing's extent.
 
     Returns
     -------
     bool
         Whether the proposal is safe and materially better.
     """
-    from pandid.layout.quality import admissible, improves, measure_final
+    from pandid.layout.quality import accepts, measure_final, warning_counts
 
-    before, after = measure_final(reference), measure_final(candidate)
-    old_warnings, new_warnings = _warning_counts(reference), _warning_counts(candidate)
-    old_size, new_size = _frame_size(reference), _frame_size(candidate)
-    return (
-        admissible(before, after, preserve_crossing_pairs=preserve_crossing_pairs)
-        and after.bends <= before.bends
-        and after.excess_bends <= before.excess_bends
-        and after.length <= before.length + 1e-6
-        and after.area <= before.area + 1e-6
-        and all(count <= old_warnings[code] for code, count in new_warnings.items())
-        and (not preserve_size or all(new <= old + 1e-6
-                                      for old, new in zip(old_size, new_size)))
-        and improves(before, after)
+    return accepts(
+        measure_final(reference), measure_final(candidate),
+        preserve_crossing_pairs=preserve_crossing_pairs, strict=True,
+        warnings=(warning_counts(reference), warning_counts(candidate)),
+        extents=(_frame_size(reference), _frame_size(candidate)) if preserve_size else None,
     )
 
 
@@ -818,11 +796,11 @@ def _rank(fs: Flowsheet) -> tuple:
     tuple
         Lexicographic defect, warning, crossing, bend, length, and size costs.
     """
-    from pandid.layout.quality import measure_final
+    from pandid.layout.quality import measure_final, warning_counts
 
     quality = measure_final(fs)
     return (quality.hard, len(quality.hard_conflicts),
-            sum(_warning_counts(fs).values()), quality.crossings, quality.bends,
+            sum(warning_counts(fs).values()), quality.crossings, quality.bends,
             quality.excess_bends, quality.length, quality.area, *_frame_size(fs))
 
 
@@ -855,18 +833,21 @@ def keep_if_better(fs: Flowsheet) -> bool:
                        and (unit.pin_.x is not None or unit.pin_.y is not None)
                        for unit in process_units(fs))
     if absolute_pin:
-        accepted = _acceptable(baseline, fs)
+        accepted = _acceptable(baseline, fs, preserve_crossing_pairs=False,
+                               preserve_size=False)
         if not accepted:
             _publish_candidate(fs, baseline)
         fs._coarse_layout_candidate = False
         return accepted
     conservative = _routed_reservation(fs, "conservative")
     old = (conservative if conservative is not None
-           and _acceptable(baseline, conservative) else baseline)
+           and _acceptable(baseline, conservative, preserve_crossing_pairs=False,
+                           preserve_size=False) else baseline)
     compact = _routed_reservation(fs, "compact")
     winner = old
     for trial in (compact, fs):
-        if (trial is not None and _acceptable(old, trial, preserve_size=True)
+        if (trial is not None
+                and _acceptable(old, trial, preserve_crossing_pairs=False, preserve_size=True)
                 and _rank(trial) < _rank(winner)):
             winner = trial
     if winner is not fs:

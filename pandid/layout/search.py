@@ -563,7 +563,6 @@ def search_layout(fs: Flowsheet, budget: SearchBudget) -> SearchResult:
                 working,
                 move.apply,
                 face_choices=choices,
-                canonical=True,
                 before=incumbent_quality,
             )
             exact += 1
