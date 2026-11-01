@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Devices and valve stations go in a line with `on=` (#564).** Type
+  `fs.add(Valve("HV-101"), on=line)` or `fs.add_valve_station("CV-101",
+  on=line)`, with `at=` for a rough position along the line.
+
 ### Changed
 
 - **Number starts must be integers (#533).** `stream_number_start`,

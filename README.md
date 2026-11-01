@@ -43,10 +43,10 @@ No coordinates are needed for this drawing. Render to SVG, editable draw.io,
 or PDF/PNG with the optional export backend. You can also pin equipment or add
 stream waypoints when a drawing needs manual control.
 
-A stream returned by `connect()` can carry a valve with `place_on()` or a
-control-valve station with `place_valve_station_on()`. Both default to the
-stream midpoint; use `at=` to choose another position. See
-[stream-relative placement](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#stream-relative-attachments).
+A line returned by `connect()` can carry a valve,
+`fs.add(Valve("HV-101"), on=line)`, or a control-valve station,
+`fs.add_valve_station("CV-101", on=line)`; `at=` gives a rough position. See
+[devices on a line](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#devices-on-a-line).
 
 ## Capabilities
 

@@ -38,10 +38,8 @@ text.
 
 | Method | Purpose |
 |---|---|
-| `add(unit)` | Register and return a `Unit`. Tags must be unique, apart from repeatable logic symbols and utility headers. |
+| `add(unit, *, on=None, at=None)` | Register and return a `Unit`. Tags must be unique, apart from repeatable logic symbols and utility headers. `on=` puts a valve, reducer or fitting in a line. |
 | `connect(source, dest, **options)` | Join ports and return a `Stream`. Process connections go from outlet to inlet. |
-| `place_on(stream, device, *, at=0.5)` | Put an inline device on an existing material stream. |
-| `place_valve_station_on(stream, tag, *, at=0.5, **options)` | Put a complete `ValveStation` on a stream. |
 | `layout()` / `route()` | Resolve equipment coordinates and stream paths. `render()` calls both. |
 | `render(path, **options)` | Write SVG, draw.io, PDF or PNG according to the extension. |
 | `to_svg(**options)` / `show(**options)` | Return SVG text or open a browser preview. |
@@ -142,25 +140,28 @@ or nozzles that need manual control.
 | `unit.nozzle("feed", "W")` | Require a port on a compass face. |
 | `stream.via([(x1, y1), (x2, y2)])` | Route through explicit pixel waypoints. |
 
-### Stream-relative attachments
+### Devices on a line
 
 ```python
-from pandid import Feed, Flowsheet, Product, Pump, Valve
+from pandid import Feed, Flowsheet, Product, Pump, Reducer, Valve
 
 fs = Flowsheet("Inline devices")
 feed = fs.add(Feed("Feed"))
 pump = fs.add(Pump("P-101"))
 product = fs.add(Product("Product"))
-run = fs.connect(feed.outlet, pump.suction)
+line = fs.connect(feed.outlet, pump.suction)
 fs.connect(pump.discharge, product.inlet)
-fs.place_on(run, Valve("HV-101"))
-fs.place_valve_station_on(run, "CV-101", at=0.25)
+fs.add(Valve("HV-101"), on=line)
+fs.add_valve_station("CV-101", on=line)
+fs.add(Reducer("RD-101"), on=line, at=0.9)
 ```
 
-`at` is a fraction strictly between 0 and 1, and defaults to 0.5.
-Inline devices and valve stations do not make independent
-placement claims; the stream's resolved path determines their location. Keep
-the original stream handle to attach more than one device at distinct fractions.
+`on=` puts a valve, reducer or fitting, or a valve station, in a line returned
+by `connect()`. The handle still names the whole line. Devices sit in the
+order they are added; `at=`, a fraction strictly between 0 and 1, gives a
+rough position, and a device with `at=` goes before any with a larger `at`.
+The line's resolved path determines where they are drawn. Pin a device with
+`pin()`, and a station with `x=` and `y=`.
 
 ### Automatic face selection
 
@@ -232,9 +233,9 @@ Signal streams connect instrument terminals to a valve's `actuator`.
 
 `fs.add_valve_station("CV-101", isolation=True, reducers=True, bypass=True,
 drains=2)` builds a station and returns a `ValveStation` with `inlet`, `outlet`,
-`control` and `members`. Use `place_valve_station_on()` to attach one to an
-existing stream; it defaults to the stream midpoint. The station's tag scheme
-can be set on the flowsheet or for one station.
+`control` and `members`. Pass `on=` to put one in an existing line, as for a
+device. The station's tag scheme can be set on the flowsheet or for one
+station.
 
 ## Sheet furniture
 
