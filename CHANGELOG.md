@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `drain_drop`, so a station with no `x`/`y` refuses it by name whatever its
   value. A pinned station draws `mirrored=False` as before, and
   `place_valve_station_on()` still accepts it.
+- **A `via()` route keeps the points it was given (#574).** Line
+  separation moved the interior runs of a hand-routed line that shared a
+  track with another line and wrote them back, so every `route()` moved it
+  another 3 px. Every run of a `via()` route is now fixed and is never
+  rewritten; other lines separate from it.
 - **YAML reads a leading zero or a colon as the text written (#574).**
   PyYAML follows YAML 1.1, which read loop number `0101` as octal, drawing
   `FT-65`, and size `1:30` as base 60, 90. The YAML reader now takes only

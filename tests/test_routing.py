@@ -7,6 +7,8 @@ from typing import cast
 import pytest
 
 from pandid.flowsheet import Flowsheet
+from pandid.geometry import Route
+from pandid.streams import Stream
 from pandid.units import Feed, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.routing import DefaultRouter, get_outward_dir, _fallback_path
 from pandid.routing import astar
@@ -929,6 +931,33 @@ def _obstacle_bypass_tie(fs):
     return fs.connect(f.outlet, p.inlet)
 
 
+def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
+    """Never move a ``via()`` route to separate it from another line.
+
+    Both runs lie on y=200 and overlap. Separation used to offset the
+    interior run of each and write it back, so every ``route()`` moved them
+    another 3 px (#574).
+
+    Returns
+    -------
+    None
+        Both routes keep their exact points over three routes.
+    """
+    fs = Flowsheet("via-shared-track")
+    f1 = fs.add(Feed("F1")).pin(x=40, y=90)
+    p1 = fs.add(Product("P1")).pin(x=560, y=90)
+    f2 = fs.add(Feed("F2")).pin(x=40, y=290)
+    p2 = fs.add(Product("P2")).pin(x=560, y=290)
+    upper = [(100.0, 100.0), (150.0, 100.0), (150.0, 200.0), (450.0, 200.0), (450.0, 100.0)]
+    lower = [(100.0, 300.0), (200.0, 300.0), (200.0, 200.0), (400.0, 200.0), (400.0, 300.0)]
+    s1 = fs.connect(f1.outlet, p1.inlet).via(list(upper))
+    s2 = fs.connect(f2.outlet, p2.inlet).via(list(lower))
+    for _ in range(3):
+        fs.route()
+        assert s1.route is not None and s1.route.waypoints == upper
+        assert s2.route is not None and s2.route.waypoints == lower
+
+
 def test_a_manual_routes_geometry_is_recorded_for_later_streams():
     """Record a manual route so a later stream avoids crossing it.
 
@@ -1138,6 +1167,9 @@ def test_a_manual_route_off_lane_still_breaks_the_tie():
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
     """Preview separation without changing routes, and match the real pass.
 
+    The routes are automatic ones, set directly: a ``via()`` route is
+    never separated (#574).
+
     Returns
     -------
     None
@@ -1149,15 +1181,12 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
     fs = Flowsheet("preview-vs-real")
     f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
     p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
-    s1 = fs.connect(f1.outlet, p1.inlet).via(
-        [(0.0, 50.0), (0.0, 100.0), (300.0, 100.0), (300.0, 150.0)]
-    )
+    s1 = fs.connect(f1.outlet, p1.inlet)
+    s1.route = Route([(0.0, 50.0), (0.0, 100.0), (300.0, 100.0), (300.0, 150.0)])
     f2 = fs.add(Feed("F2")).pin(x=2000, y=1000)
     p2 = fs.add(Product("P2")).pin(x=2000, y=1000)
-    s2 = fs.connect(f2.outlet, p2.inlet).via(
-        [(100.0, 50.0), (100.0, 100.0), (400.0, 100.0), (400.0, 150.0)]
-    )
-    assert s1.route is not None and s2.route is not None  # ``via()`` sets both routes.
+    s2 = fs.connect(f2.outlet, p2.inlet)
+    s2.route = Route([(100.0, 50.0), (100.0, 100.0), (400.0, 100.0), (400.0, 150.0)])
 
     raw_s1, raw_s2 = list(s1.route.waypoints), list(s2.route.waypoints)
     preview = preview_separated_waypoints(fs.streams)
@@ -1175,14 +1204,49 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
     assert s1.route.waypoints != raw_s1 or s2.route.waypoints != raw_s2
 
 
-def test_a_later_streams_recording_uses_separated_not_raw_geometry():
+def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     """Record the separated route so later streams price its drawn path.
+
+    The crossing index is rebuilt from the separation preview (#509). A
+    ``via()`` route is never separated (#574), so the preview is replaced by
+    one that lowers every route 6 px, and the recording must follow it.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces the separation preview.
 
     Returns
     -------
     None
-        The second manual route is recorded at its separated y coordinate.
+        The second manual route is recorded at its previewed y coordinate.
     """
+    from pandid.routing import separation
+
+    def lowered(
+        streams: list[Stream], spacing: float = 6.0
+    ) -> dict[int, list[tuple[float, float]]]:
+        """Return every route 6 px lower, as a separation preview.
+
+        Parameters
+        ----------
+        streams : list[Stream]
+            Streams routed so far.
+        spacing : float, default=6.0
+            Unused.
+
+        Returns
+        -------
+        dict[int, list[tuple[float, float]]]
+            Lowered waypoints keyed by ``id(stream)``.
+        """
+        return {
+            id(s): [(x, y + 6.0) for x, y in s.route.waypoints]
+            for s in streams
+            if s.route is not None
+        }
+
+    monkeypatch.setattr(separation, "preview_separated_waypoints", lowered)
     recorded: list[list[tuple[float, float]]] = []
     original_record = CrossingIndex.record
 
@@ -1223,9 +1287,7 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry():
         CrossingIndex.record = original_record
 
     assert s2.route is not None
-    assert s2.route.waypoints[1][1] == 106.0, (
-        f"expected separate_streams to move s2's shared run to y=106: {s2.route.waypoints}"
-    )
+    assert s2.route.waypoints[1][1] == 100.0, f"the via() route moved: {s2.route.waypoints}"
     s2_recordings = [p for p in recorded if p and p[0][0] == 100.0]
     assert s2_recordings, f"s2's geometry was never recorded: {recorded}"
     assert s2_recordings[-1][1][1] == 106.0, (
