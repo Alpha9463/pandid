@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `drain_drop`, so a station with no `x`/`y` refuses it by name whatever its
   value. A pinned station draws `mirrored=False` as before, and
   `place_valve_station_on()` still accepts it.
+- **`vessel_symbol()` refuses an inlet and an outlet on one point face
+  (#507).** A face whose artwork meets the box at a single point, such as a
+  cone apex, takes one connection. The drawing counted inlets and outlets
+  separately, so one of each was drawn on the same point; it now counts them
+  together, as constructing the unit already did, and gives the same error.
+  Only a custom symbol could reach this.
 
 ## [0.1.5] - 2026-08-26
 

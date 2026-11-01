@@ -1913,6 +1913,37 @@ def test_a_face_with_no_wall_is_refused_by_the_drawing_too():
         vessel_symbol("tank", "default", (("in_1", "N"), ("in_2", "N")))
 
 
+def test_an_inlet_and_an_outlet_on_a_face_with_no_wall_are_refused_by_the_drawing():
+    """Verify the drawing counts both families on a wall-less face (#507).
+
+    No shipped body offers both roles a point face, so the symbol is
+    registered here: an inlet and an outlet may both sit on a cone apex.
+    The symbol itself warns that the two roles share that point.
+    """
+    from pandid.render.symbols import vessel_symbol
+
+    variant = "cross_role_test"
+    with pytest.warns(UserWarning, match="'inlet' and 'outlet' both have a placement"):
+        apex = Symbol(
+            svg='<g id="sym_tank_cross_role_test"><path d="M 0 20 L 0 90 L 100 90 '
+            'L 100 20 L 50 0 Z" fill="none" stroke="black" stroke-width="2"/></g>',
+            width=100.0,
+            height=90.0,
+            ports={"inlet": (50.0, 0.0), "outlet": (0.0, 80.0)},
+            port_faces={
+                "inlet": {"N": (50.0, 0.0)},
+                "outlet": {"W": (0.0, 80.0), "N": (50.0, 0.0)},
+            },
+            bands={"N": (50.0, 50.0), "W": (30.0, 80.0)},
+        )
+    default_registry.register("tank", apex, variant)
+    try:
+        with pytest.raises(ValueError, match="in_1 and out_1 are both on the N face"):
+            vessel_symbol("tank", variant, (("in_1", "N"), ("out_1", "N")))
+    finally:
+        default_registry._symbols.pop(("tank", variant), None)
+
+
 def test_moving_a_second_connection_onto_a_wall_less_face_is_refused():
     """Verify moving a series port onto a wall-less face is rejected."""
     tank = units.Tank("T-1", inputs=["N", "W"])
