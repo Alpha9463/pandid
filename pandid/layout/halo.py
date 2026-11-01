@@ -4,7 +4,8 @@ Stage 1 places equipment before stage 2 places instruments, so each
 unit's footprint is widened by the balloon chains that hang on it: the
 balloon, the transmitter beside it, the controller beside that. A chain's
 reach is known before drawing because it depends only on its host, face
-or fraction, offsets and angle.
+or fraction, offsets and angle. An axis a balloon is pinned on reserves
+nothing, because the pin, not the host, places it there.
 
 A balloon on a stream is charged to both units the stream joins, because
 where it lands along the run is not known yet.
@@ -117,8 +118,8 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     -------
     tuple[float, float, str, list[Unit]] or None
         Reach, girth and face of the chain, and the units that reserve the
-        room; ``None`` for a chain that closes on itself or hangs on a
-        stream with an unowned end.
+        room; ``None`` for a chain that closes on itself, hangs on a
+        stream with an unowned end, or is pinned on both axes.
     """
     from pandid.layout.attach import _rotate_ccw
     from pandid.layout.stages import is_control
@@ -130,6 +131,9 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     # only one measured from the host. ``seen`` stops a chain that closes
     # on itself; place_attached reports such balloons unplaced.
     seen: set[int] = set()
+    # A pin anywhere along the chain replaces the standoff on its axis
+    # (place_attached), so the chain is not beside the host on that axis.
+    pinned: set[str] = set()
     while is_control(node) and getattr(node, "host", None) is not None:
         if id(node) in seen:
             return None
@@ -137,8 +141,13 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
         w, h = resolve_size(node)
         reach += float(getattr(node, "offset", 0.0)) + max(w, h) / 2.0
         girth = max(girth, max(w, h) / 2.0)
+        pin = node.pin_
+        if pin is not None:
+            pinned.update(axis for axis in ("x", "y") if getattr(pin, axis) is not None)
         # The host may be a balloon, a unit or a stream, so read it with getattr.
         root, node = node, getattr(node, "host")
+    if pinned == {"x", "y"}:
+        return None
     reach += CLEARANCE
     girth += CLEARANCE
 
@@ -157,6 +166,12 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
 
     ux, uy = _rotate_ccw(flow[0], flow[1], float(getattr(root, "angle", 90.0)))
     face = "E" if ux >= abs(uy) else ("W" if -ux >= abs(uy) else ("N" if uy < 0 else "S"))
+    # Reach runs along the face's normal, girth across it.
+    along = "x" if face in ("E", "W") else "y"
+    if along in pinned:
+        reach = 0.0
+    elif pinned:
+        girth = 0.0
     return reach, girth, face, hosts
 
 

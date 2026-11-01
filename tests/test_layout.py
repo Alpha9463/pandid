@@ -771,6 +771,31 @@ def test_a_chain_of_balloons_is_reserved_paper_before_anything_is_placed():
     )
 
 
+def test_a_pinned_balloon_reserves_no_paper_on_the_axis_it_is_pinned_on():
+    """Issue #517: a pin replaces the standoff, so its host owes no room there.
+
+    The balloon hangs east of the drum, so its reach is east and its girth
+    north and south. Pinning x frees the east side; pinning y as well frees
+    the rest, for the balloon and for the controller hung on it.
+    """
+    from pandid.layout.halo import balloon_pads
+
+    fs = Flowsheet("pinned halo")
+    drum = fs.add(U.Vessel("V-101"))
+    lt = fs.add_instrument("LT", 101, near=drum, at="E", offset=60)
+    fs.add_instrument("LIC", 101, near=lt, at="E", offset=60)
+    free = balloon_pads(fs)[drum]
+    assert free.east > 0 and free.north > 0 and free.south > 0
+
+    lt.pin(x=900.0)
+    pad = balloon_pads(fs)[drum]
+    assert pad.east == 0.0
+    assert (pad.north, pad.south) == (free.north, free.south)
+
+    lt.pin(y=900.0)
+    assert drum not in balloon_pads(fs)
+
+
 # --- bands (#429) --------------------------------------------------------------
 
 

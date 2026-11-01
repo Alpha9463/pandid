@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `drain_drop`, so a station with no `x`/`y` refuses it by name whatever its
   value. A pinned station draws `mirrored=False` as before, and
   `place_valve_station_on()` still accepts it.
+- **A pinned balloon no longer reserves room beside its host (#517).**
+  Layout widens each unit by the room its balloons will need before placing
+  anything. A balloon pinned with `pin(x=)` or `pin(y=)` is placed by the pin
+  on that axis, not beside its host, so the host now reserves nothing on that
+  axis, and nothing at all for a balloon pinned on both. Equipment on a sheet
+  that pins balloons can sit closer together; other sheets do not move.
 
 ## [0.1.5] - 2026-08-26
 
