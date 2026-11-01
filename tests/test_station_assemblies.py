@@ -127,12 +127,12 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
 
 
 def test_station_does_not_force_an_outward_facing_elbow() -> None:
-    """Keep a station off a leg that reverses its source nozzle.
+    """Set a station on the routed pipe after it leaves an east nozzle westward.
 
     Returns
     -------
     None
-        A westbound host does not form a westbound leg from an east nozzle.
+        The pipe turns clear of the nozzle and the station sits on one leg.
     """
     fs = Flowsheet("Reverse outlet station")
     feed = fs.add(Feed("Feed")).pin(x=1300, y=300)
@@ -140,7 +140,7 @@ def test_station_does_not_force_an_outward_facing_elbow() -> None:
     run = fs.connect(feed.outlet, reactor.feed)
     station = fs.add_valve_station("CV-101", on=run)
 
-    fs.layout()
+    fs.route()
     assert feed.frame is not None and reactor.frame is not None
     assert port_point(feed, feed.frame, "outlet") == (1300, 300)
     assert (reactor.frame.x, reactor.frame.y, reactor.frame.orientation) == (100, 100, 90)
@@ -149,7 +149,9 @@ def test_station_does_not_force_an_outward_facing_elbow() -> None:
         for unit in station.members
         if unit not in (station.bypass, station.upstream_drain, station.downstream_drain)
     ]
-    assert len({round(port_point(unit, unit.frame, "inlet")[1]) for unit in main}) > 1
+    assert len({round(port_point(unit, unit.frame, "inlet")[1]) for unit in main}) == 1
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
 
 
 def test_station_compacts_an_equipment_train_from_a_pinned_origin() -> None:

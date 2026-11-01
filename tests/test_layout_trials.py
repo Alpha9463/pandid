@@ -344,9 +344,7 @@ def test_every_layout_caller_judges_through_the_one_gate_in_its_own_mode(monkeyp
             The gate's verdict.
         """
         caller = sys._getframe(1).f_code.co_name
-        asked.add(
-            (caller, preserve_crossing_pairs, strict, warnings is not None)
-        )
+        asked.add((caller, preserve_crossing_pairs, strict, warnings is not None))
         return real(
             before,
             after,

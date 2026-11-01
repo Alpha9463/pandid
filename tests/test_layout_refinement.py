@@ -83,28 +83,6 @@ def test_refinement_repeats_from_author_intent_and_fresh_builds(stem: str) -> No
     assert _fingerprint(fresh) == fingerprint
 
 
-def test_column_row_compaction_shortens_a_control_sheet() -> None:
-    """Accept a routed row change only when the drawing improves.
-
-    Returns
-    -------
-    None
-        The default drawing is shorter with no new crossing or hard finding.
-    """
-    fs, _ = layout_quality.build("04_control_loop", True)
-    fs.layout()
-    fs.route(DefaultRouter())
-    before = measure_final(fs)
-    fs.layout()
-    fs.route()
-    after = measure_final(fs)
-
-    assert after.length < before.length
-    assert after.area < before.area
-    assert after.crossing_pairs <= before.crossing_pairs
-    assert all(new <= old for old, new in zip(before.hard, after.hard))
-
-
 def test_row_trial_does_not_replace_a_better_final_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

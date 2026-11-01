@@ -1,4 +1,4 @@
-"""Check stream-mounted furniture: kept out of placement and set on its pipe."""
+"""Check pipe furniture: kept out of the grid and set on its routed pipe."""
 
 from __future__ import annotations
 
@@ -35,8 +35,8 @@ def test_a_pinned_hand_wired_valve_splits_two_mounted_runs() -> None:
     product = fs.add(Product("Product"))
     upstream = fs.connect(feed.outlet, middle.inlet)
     downstream = fs.connect(middle.outlet, product.inlet)
-    first = fs.place_on(upstream, Valve("HV-A"))
-    second = fs.place_on(downstream, Valve("HV-B"))
+    first = fs.add(Valve("HV-A"), on=upstream)
+    second = fs.add(Valve("HV-B"), on=downstream)
 
     fs.route()
     assert fs._mounted_layout is True
@@ -48,18 +48,18 @@ def test_a_pinned_hand_wired_valve_splits_two_mounted_runs() -> None:
 
 
 def test_a_chain_without_room_is_drawn_and_named() -> None:
-    """Check that furniture too long for its pinned run is set and reported."""
+    """Check that furniture too long for its pinned run is drawn and reported as overlap."""
     fs = Flowsheet("No room")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100)
     product = fs.add(Product("Product")).pin(port="inlet", x=160, y=100)
     run = fs.connect(feed.outlet, product.inlet)
     for index, at in enumerate((0.25, 0.5, 0.75)):
-        fs.place_on(run, Valve(f"HV-{index}"), at=at)
+        fs.add(Valve(f"HV-{index}"), on=run, at=at)
 
     fs.route()
     assert all(unit.frame is not None for unit in fs.units)
-    findings = [issue for issue in fs.validate() if issue.code == "inline-no-room"]
-    assert findings and all(issue.severity == "warning" for issue in findings)
+    findings = [issue for issue in fs.validate() if issue.code == "unit-overlap"]
+    assert findings and all(issue.severity == "error" for issue in findings)
     assert any("HV-" in issue.message for issue in findings)
 
 
@@ -74,7 +74,7 @@ def test_a_device_on_a_return_run_is_mounted() -> None:
     fs.connect(reactor.outlet, separator.feed)
     fs.connect(separator.overflow, product.inlet)
     back = fs.connect(separator.underflow, reactor.feed_2)
-    valve = fs.place_on(back, Valve("HV-R"))
+    valve = fs.add(Valve("HV-R"), on=back)
 
     fs.route()
     assert fs._mounted_layout is True
@@ -84,7 +84,7 @@ def test_a_device_on_a_return_run_is_mounted() -> None:
 
 
 def test_a_free_hand_wired_station_beside_mounted_devices() -> None:
-    """Check that an unplaced add_valve_station() station stays a placed group."""
+    """Check that a hand-wired station beside a mounted valve is set as one assembly."""
     fs = Flowsheet("Mixed furniture")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -94,7 +94,7 @@ def test_a_free_hand_wired_station_beside_mounted_devices() -> None:
     other_feed = fs.add(Feed("Water"))
     other_product = fs.add(Product("Drain"))
     run = fs.connect(other_feed.outlet, other_product.inlet)
-    fs.place_on(run, Valve("HV-1"))
+    fs.add(Valve("HV-1"), on=run)
 
     fs.route()
     assert fs._mounted_layout is True
@@ -116,13 +116,13 @@ def test_a_free_hand_wired_station_beside_mounted_devices() -> None:
     assert _clean(fs)
 
 
-def test_a_position_pinned_mounted_device_keeps_the_full_placement() -> None:
-    """Check that a pinned place_on() device keeps today's placement and its pin."""
+def test_a_device_pinned_on_a_line_stays_in_the_grid() -> None:
+    """Check that a device pinned on a line is drawn at its pin and stays in the grid."""
     fs = Flowsheet("Pinned mounted device")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
     run = fs.connect(feed.outlet, product.inlet)
-    valve = fs.place_on(run, Valve("HV-1").pin(x=300, y=200))
+    valve = fs.add(Valve("HV-1").pin(x=300, y=200), on=run)
 
     fs.route()
     assert fs._mounted_layout is False
@@ -137,8 +137,8 @@ def test_routing_a_mounted_sheet_again_draws_the_same_sheet() -> None:
     product = fs.add(Product("Product"))
     fs.connect(feed.outlet, reactor.feed)
     run = fs.connect(reactor.outlet, product.inlet)
-    fs.place_on(run, Valve("HV-1"), at=0.3)
-    fs.place_valve_station_on(run, "CV-101", at=0.7)
+    fs.add(Valve("HV-1"), on=run, at=0.3)
+    fs.add_valve_station("CV-101", on=run, at=0.7)
 
     fs.route()
     first = _fingerprint(fs)
@@ -150,22 +150,28 @@ def test_routing_a_mounted_sheet_again_draws_the_same_sheet() -> None:
     assert fs.to_svg() == fs.to_svg()
 
 
-@pytest.mark.parametrize("pin", [{}, {"orientation": 0}, {"mirrored": "y"}])
-def test_a_control_valve_sits_on_its_pipe_without_a_jog(pin: dict[str, object]) -> None:
+@pytest.mark.parametrize(("orientation", "mirrored"), [(None, None), (0, None), (None, "y")])
+def test_a_control_valve_sits_on_its_pipe_without_a_jog(
+    orientation: int | None, mirrored: str | None
+) -> None:
     """Check that a turned or mirrored valve keeps both nozzles on the pipe.
 
     Parameters
     ----------
-    pin : dict[str, object]
-        Orientation or mirroring the author pinned, if any.
+    orientation : int or None
+        Turn the author pinned, if any.
+    mirrored : str or None
+        Mirroring the author pinned, if any.
     """
     fs = Flowsheet("No jog")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
     line = fs.connect(feed.outlet, product.inlet)
     valve = ControlValve("FV-101")
-    if pin:
-        valve.pin(**pin)
+    if orientation is not None:
+        valve.pin(orientation=orientation)
+    if mirrored is not None:
+        valve.pin(mirrored=mirrored)
     fs.add(valve, on=line)
 
     fs.route()

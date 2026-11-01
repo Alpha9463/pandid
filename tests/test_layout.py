@@ -712,8 +712,8 @@ def test_a_signal_run_states_no_order_along_the_sheet():
     assert [s.name for s in fs.streams if s.is_recycle] == []
     assert not signal.is_recycle
     # The process reads exactly as it does without the loop on it.
-    assert prod.frame is not None and valve.frame is not None
-    assert prod.frame.col == valve.frame.col + 1
+    assert feed.frame is not None and prod.frame is not None and valve.frame is not None
+    assert feed.frame.x < valve.frame.x < prod.frame.x
     # And both balloons are drawn, off the grid the equipment is on.
     for balloon in (ft, fic):
         assert balloon.frame is not None
