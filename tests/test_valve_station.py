@@ -542,17 +542,19 @@ def test_a_word_left_unsaid_is_the_default_it_always_was():
         assert _box(after).x - _box(before).x_max == pytest.approx(DEFAULT_GAP)
 
 
-def test_a_station_placed_on_a_stream_still_takes_mirrored_false():
-    """Check that ``place_valve_station_on`` accepts ``mirrored=False``.
-
-    A stream-relative station has a drawn run, so the option is kept.
-    """
-    fs = Flowsheet("on a stream")
+def test_a_station_on_a_line_takes_run_words_only_with_x_and_y():
+    """Check that ``on=`` keeps the rule that ``mirrored=`` needs ``x`` and ``y``."""
+    fs = Flowsheet("on a line")
     feed = fs.add(units.Feed("IN"))
     product = fs.add(units.Product("OUT"))
     run = fs.connect(feed.outlet, product.inlet)
-    station = fs.place_valve_station_on(run, "CV-1", mirrored=False)
-    assert station.control in fs.units
+    before = fs.to_dict()
+    with pytest.raises(ValueError, match="mirrored="):
+        fs.add_valve_station("CV-1", on=run, mirrored=False)
+    assert fs.to_dict() == before
+    station = fs.add_valve_station("CV-1", on=run, x=300, y=RUN_Y, mirrored=False)
+    assert run.dest is station.inlet
+    assert station.control.pin_ is not None and station.control.pin_.x is not None
 
 
 @pytest.mark.parametrize(

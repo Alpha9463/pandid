@@ -421,10 +421,8 @@ def _inline_groups(fs: Flowsheet) -> list[tuple[Stream, list[Unit]]] | None:
         members = [segment.dest.owner for segment in segments[:-1]]
         if not members or any(unit is None or unit not in inline for unit in members):
             return None
-        if any(segment._inline_at is None for segment in segments[:-1]) or any(
-            segment.is_recycle or (segment.route is not None and segment.route.manual)
-            for segment in segments
-        ):
+        if any(segment.is_recycle or (segment.route is not None and segment.route.manual)
+               for segment in segments):
             return None
         destination = root._logical_to
         assert destination is not None

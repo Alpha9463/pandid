@@ -1,8 +1,7 @@
-"""Insert simple inline devices while retaining a logical stream handle."""
+"""Put devices and valve stations on a line while keeping the line's handle."""
 
 from __future__ import annotations
 
-from bisect import bisect_left
 from dataclasses import replace
 from math import isfinite
 from typing import TYPE_CHECKING, TypeVar
@@ -13,93 +12,217 @@ from pandid.units import Unit
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.ports import Port
-    from pandid.units import Unit
+    from pandid.stations import ValveStation
 
 _UnitT = TypeVar("_UnitT", bound="Unit")
 _INLINE_KINDS = frozenset({"valve", "reducer", "fitting"})
 
 
-def insert_device(fs: Flowsheet, run: Stream, device: _UnitT, *, at: float) -> _UnitT:
-    """Split a material run around one fresh inline device.
+def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Stream], int]:
+    """Return a line's segments and the index of the one a new item splits.
+
+    An item without ``at`` goes last. One with ``at`` goes before the
+    first item with a larger ``at``.
 
     Parameters
     ----------
     fs : Flowsheet
-        Sheet that owns the run.
-    run : Stream
-        Original stream handle, including after earlier insertions.
-    device : Unit
-        Unconnected two-port inline unit to insert.
-    at : float
-        Strictly interior fraction of the complete run.
+        Sheet that owns the line.
+    line : Stream
+        Line handle returned by ``connect()``, including after earlier
+        insertions.
+    at : float or None
+        Fraction of the line strictly between 0 and 1, or ``None``.
 
     Returns
     -------
-    Unit
-        The inserted device.
+    tuple[list[Stream], int]
+        The line's physical segments in flow order, and the index of the
+        segment whose destination the new item takes.
 
     Raises
     ------
     ValueError
-        If any author-owned connection intent would be changed.
+        If the line cannot be split without changing what the author typed.
     """
-    if not isinstance(run, Stream):
-        raise ValueError("place_on requires a stream handle")
-    fs._refuse_foreign("run", run)
-    if run._logical_root is not None:
-        raise ValueError("place_on requires the original run handle")
-    if isinstance(at, bool) or not isinstance(at, (int, float)) or not isfinite(at) or not 0 < at < 1:
-        raise ValueError("at must be a finite number between 0 and 1")
-    if run.kind != "material":
-        raise ValueError("place_on requires a material run")
-    if not run._logical_segments and run._inline_at is not None:
-        raise ValueError("place_on cannot replace an existing inline position")
-    segments = run._logical_segments or [run]
+    if not isinstance(line, Stream):
+        raise ValueError(f"on= takes a line returned by connect(), got {line!r}")
+    fs._refuse_foreign("on", line)
+    if line._logical_root is not None:
+        raise ValueError("on= takes the line connect() returned, not one of its segments")
+    if at is not None and (isinstance(at, bool) or not isinstance(at, (int, float))
+                           or not isfinite(at) or not 0 < at < 1):
+        raise ValueError(f"at= is a fraction of the line strictly between 0 and 1, got {at!r}")
+    if line.kind != "material":
+        raise ValueError(f"on= takes a material line; {line.name!r} is {line.kind}")
+    if not line._logical_segments and line._inline_at is not None:
+        raise ValueError("on= cannot replace an existing inline position")
+    segments = line._logical_segments or [line]
     if any(s.draw_as_recycle or s.is_recycle for s in segments):
-        raise ValueError("place_on cannot split a recycle run")
+        raise ValueError("on= cannot split a recycle line")
     if any(s.route is not None and s.route.manual for s in segments):
-        raise ValueError("place_on cannot split a manual route")
+        raise ValueError("on= cannot split a manual route")
     if any(s.ends is not None for s in segments):
-        raise ValueError("place_on cannot split explicit end-joint styles")
+        raise ValueError("on= cannot split a line with explicit end-joint styles")
+    stated = [segment._inline_at for segment in segments[:-1]]
+    if at is None:
+        return segments, len(stated)
+    if at in stated:
+        raise ValueError("inline positions must be distinct")
+    return segments, next((i for i, value in enumerate(stated)
+                           if value is not None and value > at), len(stated))
+
+
+def position(segment: Stream) -> float | None:
+    """Return where on its line the item a segment enters sits.
+
+    An item added without ``at`` is spread evenly between its stated
+    neighbours, or the line's ends.
+
+    Parameters
+    ----------
+    segment : Stream
+        Physical segment entering a device or station.
+
+    Returns
+    -------
+    float or None
+        Fraction of the whole line, or ``None`` for a segment that is not
+        on a line built with ``on=`` and states no position.
+    """
+    if segment._inline_at is not None:
+        return segment._inline_at
+    line = segment._logical_root or segment
+    entering = line._logical_segments[:-1]
+    k = next((i for i, s in enumerate(entering) if s is segment), None)
+    if k is None:
+        return None
+    known = {i: s._inline_at for i, s in enumerate(entering) if s._inline_at is not None}
+    low = max((i for i in known if i < k), default=-1)
+    high = min((i for i in known if i > k), default=len(entering))
+    start, end = known.get(low, 0.0), known.get(high, 1.0)
+    return start + (end - start) * (k - low) / (high - low)
+
+
+def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
+            inlet: Port, outlet: Port, at: float | None) -> None:
+    """Route one segment of a line into ``inlet`` and a new one out of ``outlet``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet that owns the line.
+    line : Stream
+        Line handle.
+    segments : list[Stream]
+        The line's physical segments.
+    index : int
+        Segment to split, from :func:`split_point`.
+    inlet, outlet : Port
+        Where the line enters and leaves the new item.
+    at : float or None
+        The item's stated fraction.
+
+    Returns
+    -------
+    None
+        The line, its ports and ``fs.streams`` are updated in place.
+    """
+    selected = segments[index]
+    old_dest = selected.dest
+    successor = Stream(name="", source=outlet, dest=old_dest, kind="material",
+                       color=selected.color, dasharray=selected.dasharray)
+    successor._inline_at = selected._inline_at
+    successor._logical_root = line
+    selected.dest = inlet
+    inlet.stream = selected
+    outlet.stream = successor
+    old_dest.stream = successor
+    selected._inline_at = None if at is None else float(at)
+    if line._logical_to is None:
+        line._logical_to = old_dest
+    line._logical_segments = [*segments[:index + 1], successor, *segments[index + 1:]]
+    place = next(i for i, stream in enumerate(fs.streams) if stream is selected)
+    fs.streams.insert(place + 1, successor)
+
+
+def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
+                  at: float | None) -> _UnitT:
+    """Add a fresh two-port device to a sheet, in a line.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet that owns the line.
+    line : Stream
+        Line handle returned by ``connect()``.
+    device : Unit
+        Unconnected valve, reducer or fitting.
+    at : float or None
+        Fraction of the line, or ``None`` to go after the items already on it.
+
+    Returns
+    -------
+    Unit
+        The added device.
+
+    Raises
+    ------
+    ValueError
+        If the line, device or fraction cannot be used.
+    """
+    segments, index = split_point(fs, line, at)
     if not isinstance(device, Unit) or device.kind not in _INLINE_KINDS:
-        raise ValueError("place_on requires a valve, reducer, or fitting")
+        raise ValueError("on= puts a valve, reducer or fitting in a line")
     ports = device.ports
     if ({p.name for p in ports.values() if p.role == "process"} != {"inlet", "outlet"}
             or any(p.stream is not None for p in ports.values())):
-        raise ValueError("place_on requires an unconnected two-port device")
+        raise ValueError("on= takes an unconnected device with one inlet and one outlet")
     fs._refuse_unaddable(device)
-
-    fractions = [segment._inline_at for segment in segments[:-1]]
-    if any(value is None for value in fractions):
-        raise ValueError("place_on requires an intact logical run")
-    ordered = [value for value in fractions if value is not None]
-    if at in ordered or ordered != sorted(ordered):
-        raise ValueError("inline positions must be distinct and in flow order")
-    position = bisect_left(ordered, at)
-    selected = segments[position]
-    inlet, outlet = ports["inlet"], ports["outlet"]
-    old_dest = selected.dest
-    successor = Stream(
-        name="", source=outlet, dest=old_dest, kind="material",
-        color=selected.color, dasharray=selected.dasharray,
-    )
-    successor._inline_at = selected._inline_at
-    successor._logical_root = run
+    old_dest = segments[index].dest
     with fs._unchanged_if_it_raises((fs, *fs.streams, old_dest, device, *ports.values())):
         fs.add(device)
-        selected.dest = inlet
-        inlet.stream = selected
-        outlet.stream = successor
-        old_dest.stream = successor
-        selected._inline_at = float(at)
-        if run._logical_to is None:
-            run._logical_to = old_dest
-        run._logical_segments = [*segments[:position + 1], successor, *segments[position + 1:]]
-        stream_index = next(i for i, stream in enumerate(fs.streams) if stream is selected)
-        fs.streams.insert(stream_index + 1, successor)
+        _splice(fs, line, segments, index, ports["inlet"], ports["outlet"], at)
         fs.renumber_streams()
         fs._invalidate_layout()
     return device
+
+
+def insert_station(fs: Flowsheet, line: Stream, station: ValveStation, *,
+                   at: float | None) -> None:
+    """Put a freshly built valve station in a line.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet owning the line and the station members.
+    line : Stream
+        Line handle returned by ``connect()``.
+    station : ValveStation
+        Station whose inlet and outlet are still free.
+    at : float or None
+        Fraction of the line, or ``None`` to go after the items already on it.
+
+    Returns
+    -------
+    None
+        The line runs through the station and its assembly records the line.
+
+    Raises
+    ------
+    ValueError
+        If the line or fraction cannot be used.
+    """
+    segments, index = split_point(fs, line, at)
+    record = next(i for i, item in enumerate(fs._station_assemblies) if item.station is station)
+    old_dest = segments[index].dest
+    with fs._unchanged_if_it_raises((fs, *fs.streams, old_dest, station.inlet, station.outlet)):
+        _splice(fs, line, segments, index, station.inlet, station.outlet, at)
+        fs._station_assemblies[record] = replace(
+            fs._station_assemblies[record], run=line, at=None if at is None else float(at),
+        )
+        fs.renumber_streams()
+        fs._invalidate_layout()
 
 
 def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
@@ -133,8 +256,7 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
         unit = incoming.dest.owner
         station = next((assembly.station for assembly in fs._station_assemblies
                         if assembly.run is root and assembly.station.inlet is incoming.dest), None)
-        if incoming._inline_at is None or (station is None and (
-                unit is None or unit.kind not in _INLINE_KINDS)):
+        if station is None and (unit is None or unit.kind not in _INLINE_KINDS):
             raise ValueError("logical run does not reach its destination through inline devices")
         outlet = station.outlet if station is not None else unit.ports.get("outlet")
         following = outlet.stream if outlet is not None else None
@@ -146,83 +268,10 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
         segments.append(following)
     if len(segments) < 2:
         raise ValueError("logical run must contain an inline device")
-    fractions = [segment._inline_at for segment in segments[:-1]]
-    ordered = [value for value in fractions if value is not None]
-    if len(ordered) != len(fractions) or ordered != sorted(ordered) or len(set(ordered)) != len(ordered):
+    stated = [s._inline_at for s in segments[:-1] if s._inline_at is not None]
+    if stated != sorted(stated) or len(set(stated)) != len(stated):
         raise ValueError("logical run positions must be distinct and in flow order")
     root._logical_to = endpoint
     root._logical_segments = segments
     for segment in segments[1:]:
         segment._logical_root = root
-
-
-def insert_station(fs: Flowsheet, run: Stream, station, *, at: float) -> None:
-    """Split one material run around a newly built valve station.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet owning the original run and station members.
-    run : Stream
-        Original material run handle.
-    station : ValveStation
-        Fresh station with free external ports.
-    at : float
-        Preferred fraction of the complete run.
-
-    Returns
-    -------
-    None
-        A downstream physical segment and station attachment are recorded.
-
-    Raises
-    ------
-    ValueError
-        If the station or run cannot be inserted without changing authored intent.
-    """
-    if not isinstance(run, Stream):
-        raise ValueError("station insertion requires a material run")
-    fs._refuse_foreign("run", run)
-    if run._logical_root is not None or run.kind != "material":
-        raise ValueError("station insertion requires the original material run")
-    if isinstance(at, bool) or not isinstance(at, (int, float)) or not isfinite(at) or not 0 < at < 1:
-        raise ValueError("station fraction must be a finite number between 0 and 1")
-    segments = run._logical_segments or [run]
-    if (any(s.draw_as_recycle or s.is_recycle or s.ends is not None
-            or (s.route is not None and s.route.manual) for s in segments)
-            or (not run._logical_segments and run._inline_at is not None)):
-        raise ValueError("station insertion cannot split a manual, recycle, or styled run")
-    fractions = [segment._inline_at for segment in segments[:-1]]
-    if any(value is None for value in fractions):
-        raise ValueError("station insertion requires an intact logical run")
-    ordered = [value for value in fractions if value is not None]
-    if at in ordered or ordered != sorted(ordered):
-        raise ValueError("station fractions must be distinct and in flow order")
-    assembly_index = next((i for i, item in enumerate(fs._station_assemblies)
-                           if item.station is station), None)
-    if assembly_index is None or station.inlet.stream is not None or station.outlet.stream is not None:
-        raise ValueError("station insertion requires an unconnected station")
-    position = bisect_left(ordered, at)
-    selected = segments[position]
-    old_dest = selected.dest
-    successor = Stream(name="", source=station.outlet, dest=old_dest, kind="material",
-                       color=selected.color, dasharray=selected.dasharray)
-    successor._inline_at = selected._inline_at
-    successor._logical_root = run
-    with fs._unchanged_if_it_raises((fs, *fs.streams, old_dest, station.inlet,
-                                    station.outlet)):
-        selected.dest = station.inlet
-        station.inlet.stream = selected
-        station.outlet.stream = successor
-        old_dest.stream = successor
-        selected._inline_at = float(at)
-        if run._logical_to is None:
-            run._logical_to = old_dest
-        run._logical_segments = [*segments[:position + 1], successor, *segments[position + 1:]]
-        stream_index = next(i for i, stream in enumerate(fs.streams) if stream is selected)
-        fs.streams.insert(stream_index + 1, successor)
-        fs._station_assemblies[assembly_index] = replace(
-            fs._station_assemblies[assembly_index], run=run, at=float(at),
-        )
-        fs.renumber_streams()
-        fs._invalidate_layout()

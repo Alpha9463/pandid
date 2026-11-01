@@ -782,8 +782,9 @@ class Flowsheet:
         self.annotations.append(annotation)
         return annotation
 
-    def add(self, unit: _UnitT) -> _UnitT:
-        """Add a unit to the sheet.
+    def add(self, unit: _UnitT, *, on: Stream | None = None,
+            at: float | None = None) -> _UnitT:
+        """Add a unit to the sheet, optionally in a line.
 
         Tags must be unique, except for symbols that show one thing in
         several places: an interlock or logic square, and a utility header
@@ -792,10 +793,20 @@ class Flowsheet:
         repeat keeps its drawn tag but is given a unique name such as
         ``I-1 (2)``. A refused unit leaves the sheet unchanged.
 
+        With ``on``, a valve, reducer or fitting is put in that line, which
+        keeps its handle. Devices sit in flow order: in the order they are
+        added, except that one given ``at`` goes before any with a larger
+        ``at``.
+
         Parameters
         ----------
         unit : Unit
             Unit to add.
+        on : Stream or None, optional
+            Material line returned by :meth:`connect` to put the unit in.
+        at : float or None, optional
+            Rough position on that line, as a fraction strictly between 0
+            and 1 in the direction of flow.
 
         Returns
         -------
@@ -805,9 +816,16 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the unit is already on this or another sheet, or its name is
-            taken by a unit it may not repeat.
+            If the unit is already on this or another sheet, its name is
+            taken by a unit it may not repeat, ``at`` is given without
+            ``on``, or the unit cannot go in that line.
         """
+        if on is not None:
+            from pandid.inline import insert_device
+
+            return insert_device(self, on, unit, at=at)
+        if at is not None:
+            raise ValueError(f"{unit.name}: at= is a position on the line given by on=")
         clash = self._refuse_unaddable(unit)
         if clash is not None:
             # Derive the new name from the tag; a tee has none, so use its name.
@@ -1229,91 +1247,6 @@ class Flowsheet:
         stream._inline_at = float(at)
         self._invalidate_layout()
 
-    def place_on(self, run: Stream, device: _UnitT, *, at: float = 0.5) -> _UnitT:
-        """Insert a simple inline device on a material run.
-
-        The original stream remains the run's stable handle. Its physical
-        segments and the device are added to this flowsheet in flow order.
-
-        Parameters
-        ----------
-        run : Stream
-            Existing material run or handle returned by an earlier insertion.
-        device : Unit
-            Fresh two-port valve, reducer, or fitting.
-        at : float, default=0.5
-            Preferred fraction of the complete run.
-
-        Returns
-        -------
-        Unit
-            The inserted device.
-
-        Raises
-        ------
-        ValueError
-            If the run, device, or fraction cannot be inserted safely.
-        """
-        from pandid.inline import insert_device
-
-        return insert_device(self, run, device, at=at)
-
-    def place_valve_station_on(self, run: Stream, tag: str, *, at: float = 0.5,
-                               **station_options) -> "ValveStation":
-        """Build and place a valve station on a material run.
-
-        Parameters
-        ----------
-        run : Stream
-            Original material run handle.
-        tag : str
-            Control valve tag used to name the station members.
-        at : float, default=0.5
-            Preferred fraction of the complete run.
-        **station_options : Any
-            Options accepted by ``add_valve_station`` other than coordinates.
-
-        Returns
-        -------
-        ValveStation
-            The station handle with its members wired into the run.
-
-        Raises
-        ------
-        ValueError
-            If the run, fraction, or station options are invalid.
-        """
-        from dataclasses import replace
-
-        from pandid.inline import insert_station
-
-        if (isinstance(at, bool) or not isinstance(at, (int, float))
-                or not isfinite(at) or not 0 < at < 1):
-            raise ValueError("station fraction must be a finite number between 0 and 1")
-        if "x" in station_options or "y" in station_options:
-            raise ValueError("stream-relative stations do not accept x or y")
-        local = {}
-        for key, default in (("gap", DEFAULT_GAP),
-                             ("bypass_rise", DEFAULT_BYPASS_RISE),
-                             ("drain_drop", DEFAULT_DRAIN_DROP)):
-            value = station_options.pop(key, default)
-            if (isinstance(value, bool) or not isinstance(value, (int, float))
-                    or not isfinite(value) or value <= 0):
-                raise ValueError(f"{key} must be a positive finite number")
-            local[key] = float(value)
-        mirrored = station_options.pop("mirrored", False)
-        if not isinstance(mirrored, bool):
-            raise ValueError("mirrored must be a boolean")
-        with self._unchanged_if_it_raises():
-            station = self.add_valve_station(tag, **station_options)
-            index = next(i for i, assembly in enumerate(self._station_assemblies)
-                         if assembly.station is station)
-            self._station_assemblies[index] = replace(
-                self._station_assemblies[index], mirrored=mirrored, **local,
-            )
-            insert_station(self, run, station, at=at)
-        return station
-
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """Return the one anchor an :meth:`add_instrument` call named.
 
@@ -1576,6 +1509,7 @@ class Flowsheet:
         service: str | float | None = None,
         sequence: str | float | None = None, spec: str | float | None = None,
         insulation: str | float | None = None,
+        on: Stream | None = None, at: float | None = None,
     ) -> "ValveStation":
         """Build a wired control valve station.
 
@@ -1584,6 +1518,8 @@ class Flowsheet:
         the station as one assembly when its run has a clear straight
         corridor. ``mirrored``, ``gap``, ``bypass_rise`` and ``drain_drop``
         describe a drawn run, so they are refused without ``x`` and ``y``.
+        With ``on`` the station is put in that line, as
+        :meth:`add` puts a device there.
 
         Parameters
         ----------
@@ -1616,6 +1552,10 @@ class Flowsheet:
             :mod:`pandid.stations`.
         size, schedule, service, sequence, spec, insulation : str, float or None, optional
             Line-number components for the bypass and drain legs.
+        on : Stream or None, optional
+            Material line returned by :meth:`connect` to put the station in.
+        at : float or None, optional
+            Rough position on that line, as for :meth:`add`.
 
         Returns
         -------
@@ -1627,246 +1567,256 @@ class Flowsheet:
         ValueError
             If ``drains`` is out of range, a bypass lacks isolation, only one
             of ``x`` and ``y`` is given, run options are given without them,
-            or ``bypass_over`` names an unknown or omitted member.
+            ``bypass_over`` names an unknown or omitted member, ``at`` is
+            given without ``on``, or the station cannot go in that line.
         """
-        from pandid.portgeom import port_offset, resolve_size
-        from pandid.stations import (
-            BYPASS_ANCHORS, ROLE_WORDS, ValveStation, member_tag, member_mirror,
-            station_number,
-        )
-        from pandid.units import Reducer, Tee, Valve
-
-        if drains not in (0, 1, 2):
-            raise ValueError(
-                f"{tag}: drains= is how many drain valves the station carries, 0, 1 "
-                f"or 2, one either side of the control valve, got {drains!r}"
+        # Nothing is left half-built if a member or the line refuses.
+        with self._unchanged_if_it_raises():
+            from pandid.inline import insert_station, split_point
+            from pandid.portgeom import port_offset, resolve_size
+            from pandid.stations import (
+                BYPASS_ANCHORS, ROLE_WORDS, ValveStation, member_tag, member_mirror,
+                station_number,
             )
-        if bypass and not isolation:
-            raise ValueError(
-                f"{tag}: a bypass is tapped outside the isolation valves so the unit "
-                f"keeps running while the control valve is isolated, and this station "
-                f"has no isolation valves to tap outside of. Ask for isolation=True, "
-                f"or drop the bypass"
-            )
-        if (x is None) != (y is None):
-            raise ValueError(
-                f"{tag}: a station is a run of devices on one line, so it is placed by "
-                f"an x and the run's centreline y together; got "
-                f"x={x!r}, y={y!r}"
-            )
-        # These describe a drawn run, which an unpinned station does not have;
-        # the engine lays out its members. Each defaults to None, so any value
-        # given, mirrored=False included, is named in the refusal.
-        stated = [
-            f"{name}=" for name, given in (("mirrored", mirrored is not None),
-                                           ("gap", gap is not None),
-                                           ("bypass_rise", bypass_rise is not None),
-                                           ("drain_drop", drain_drop is not None))
-            if given
-        ]
-        if x is None and stated:
-            named = ", ".join(stated)
-            raise ValueError(
-                f"{tag}: {named} {'is' if len(stated) == 1 else 'are'} about the run a "
-                f"station is drawn along, and this station has no x/y to draw one: "
-                f"without them its members are laid out with every other unit on the "
-                f"sheet, ranked and faced by the layout engine. Give x= and y=, or "
-                f"drop {named}"
-            )
-        if bypass_over is not None and bypass_over not in BYPASS_ANCHORS:
-            raise ValueError(
-                f"{tag}: bypass_over names the member the bypass valve stands over, "
-                f"one of {', '.join(BYPASS_ANCHORS)}, got {bypass_over!r}"
-            )
-        # Check bypass_over against the flags before any member is added.
-        _bypass_anchor_kept = {
-            "upstream_isolation": isolation, "downstream_isolation": isolation,
-            "reduction": reducers, "expansion": reducers, "control": True,
-        }
-        if bypass_over is not None and not _bypass_anchor_kept[bypass_over]:
-            raise ValueError(
-                f"{tag}: bypass_over={bypass_over!r} names a member this station was "
-                f"told to leave out"
-            )
+            from pandid.units import Reducer, Tee, Valve
 
-        scheme = tag_scheme if tag_scheme is not None else self.valve_station_tag_scheme
-        num = str(number) if number is not None else station_number(tag)
+            if on is not None:
+                split_point(self, on, at)  # refuse before any member is added
+            elif at is not None:
+                raise ValueError(f"{tag}: at= is a position on the line given by on=")
+            if drains not in (0, 1, 2):
+                raise ValueError(
+                    f"{tag}: drains= is how many drain valves the station carries, 0, 1 "
+                    f"or 2, one either side of the control valve, got {drains!r}"
+                )
+            if bypass and not isolation:
+                raise ValueError(
+                    f"{tag}: a bypass is tapped outside the isolation valves so the unit "
+                    f"keeps running while the control valve is isolated, and this station "
+                    f"has no isolation valves to tap outside of. Ask for isolation=True, "
+                    f"or drop the bypass"
+                )
+            if (x is None) != (y is None):
+                raise ValueError(
+                    f"{tag}: a station is a run of devices on one line, so it is placed by "
+                    f"an x and the run's centreline y together; got "
+                    f"x={x!r}, y={y!r}"
+                )
+            # These describe a drawn run, which an unpinned station does not have;
+            # the engine lays out its members. Each defaults to None, so any value
+            # given, mirrored=False included, is named in the refusal.
+            stated = [
+                f"{name}=" for name, given in (("mirrored", mirrored is not None),
+                                               ("gap", gap is not None),
+                                               ("bypass_rise", bypass_rise is not None),
+                                               ("drain_drop", drain_drop is not None))
+                if given
+            ]
+            if x is None and stated:
+                named = ", ".join(stated)
+                raise ValueError(
+                    f"{tag}: {named} {'is' if len(stated) == 1 else 'are'} about the run a "
+                    f"station is drawn along, and this station has no x/y to draw one: "
+                    f"without them its members are laid out with every other unit on the "
+                    f"sheet, ranked and faced by the layout engine. Give x= and y=, or "
+                    f"drop {named}"
+                )
+            if bypass_over is not None and bypass_over not in BYPASS_ANCHORS:
+                raise ValueError(
+                    f"{tag}: bypass_over names the member the bypass valve stands over, "
+                    f"one of {', '.join(BYPASS_ANCHORS)}, got {bypass_over!r}"
+                )
+            # Check bypass_over against the flags before any member is added.
+            _bypass_anchor_kept = {
+                "upstream_isolation": isolation, "downstream_isolation": isolation,
+                "reduction": reducers, "expansion": reducers, "control": True,
+            }
+            if bypass_over is not None and not _bypass_anchor_kept[bypass_over]:
+                raise ValueError(
+                    f"{tag}: bypass_over={bypass_over!r} names a member this station was "
+                    f"told to leave out"
+                )
 
-        def described(role: str) -> str:
-            """Return a member's description.
+            scheme = tag_scheme if tag_scheme is not None else self.valve_station_tag_scheme
+            num = str(number) if number is not None else station_number(tag)
 
-            Parameters
-            ----------
-            role : str
-                Member role.
+            def described(role: str) -> str:
+                """Return a member's description.
 
-            Returns
-            -------
-            str
-                Station description followed by the role words.
-            """
-            return f"{description} {ROLE_WORDS[role]}".strip()
+                Parameters
+                ----------
+                role : str
+                    Member role.
 
-        def valve(role: str, closed: bool = False) -> "Valve":
-            """Add a member valve.
+                Returns
+                -------
+                str
+                    Station description followed by the role words.
+                """
+                return f"{description} {ROLE_WORDS[role]}".strip()
 
-            Parameters
-            ----------
-            role : str
-                Member role.
-            closed : bool, default=False
-                Whether it is normally closed.
+            def valve(role: str, closed: bool = False) -> "Valve":
+                """Add a member valve.
 
-            Returns
-            -------
-            Valve
-                The added valve.
-            """
-            unit = Valve(member_tag(scheme, role, tag, num),
-                         description=described(role),
-                         normal_position="closed" if closed else "open")
-            self.add(unit)
-            return unit
+                Parameters
+                ----------
+                role : str
+                    Member role.
+                closed : bool, default=False
+                    Whether it is normally closed.
 
-        def size_change(role: str) -> "Reducer":
-            """Add the reducer into or the expander out of the control valve.
+                Returns
+                -------
+                Valve
+                    The added valve.
+                """
+                unit = Valve(member_tag(scheme, role, tag, num),
+                             description=described(role),
+                             normal_position="closed" if closed else "open")
+                self.add(unit)
+                return unit
 
-            Parameters
-            ----------
-            role : str
-                ``"reduction"`` or ``"expansion"``.
+            def size_change(role: str) -> "Reducer":
+                """Add the reducer into or the expander out of the control valve.
 
-            Returns
-            -------
-            Reducer
-                The added reducer.
-            """
-            unit = Reducer(member_tag(scheme, role, tag, num),
-                           description=described(role),
-                           large_end="inlet" if role == "reduction" else "outlet")
-            self.add(unit)
-            return unit
+                Parameters
+                ----------
+                role : str
+                    ``"reduction"`` or ``"expansion"``.
 
-        def tee(returns: bool = False) -> "Tee":
-            """Add a station tee.
+                Returns
+                -------
+                Reducer
+                    The added reducer.
+                """
+                unit = Reducer(member_tag(scheme, role, tag, num),
+                               description=described(role),
+                               large_end="inlet" if role == "reduction" else "outlet")
+                self.add(unit)
+                return unit
 
-            Parameters
-            ----------
-            returns : bool, default=False
-                Whether the branch returns flow to the run.
+            def tee(returns: bool = False) -> "Tee":
+                """Add a station tee.
 
-            Returns
-            -------
-            Tee
-                The added tee.
-            """
-            unit = Tee(branch="inlet" if returns else "outlet")
-            self.add(unit)
-            return unit
+                Parameters
+                ----------
+                returns : bool, default=False
+                    Whether the branch returns flow to the run.
 
-        control = Valve(tag, variant=variant,
-                        description=f"{description} Control Valve".strip())
-        self.add(control)
-        iso_a = valve("upstream_isolation") if isolation else None
-        iso_b = valve("downstream_isolation") if isolation else None
-        byp = valve("bypass", closed=True) if bypass else None
-        dr_a = valve("upstream_drain", closed=True) if drains >= 1 else None
-        dr_b = valve("downstream_drain", closed=True) if drains >= 2 else None
-        red = size_change("reduction") if reducers else None
-        exp = size_change("expansion") if reducers else None
-        t_bya = tee() if bypass else None
-        t_byb = tee(returns=True) if bypass else None
-        t_dra = tee() if dr_a is not None else None
-        t_drb = tee() if dr_b is not None else None
+                Returns
+                -------
+                Tee
+                    The added tee.
+                """
+                unit = Tee(branch="inlet" if returns else "outlet")
+                self.add(unit)
+                return unit
 
-        # Members in flow order; a mirrored station draws this order reversed.
-        run = [u for u in (t_bya, iso_a, t_dra, red, control, exp, t_drb, iso_b, t_byb)
-               if u is not None]
-        anchors = {"upstream_isolation": iso_a, "downstream_isolation": iso_b,
-                   "reduction": red, "expansion": exp, "control": control}
+            control = Valve(tag, variant=variant,
+                            description=f"{description} Control Valve".strip())
+            self.add(control)
+            iso_a = valve("upstream_isolation") if isolation else None
+            iso_b = valve("downstream_isolation") if isolation else None
+            byp = valve("bypass", closed=True) if bypass else None
+            dr_a = valve("upstream_drain", closed=True) if drains >= 1 else None
+            dr_b = valve("downstream_drain", closed=True) if drains >= 2 else None
+            red = size_change("reduction") if reducers else None
+            exp = size_change("expansion") if reducers else None
+            t_bya = tee() if bypass else None
+            t_byb = tee(returns=True) if bypass else None
+            t_dra = tee() if dr_a is not None else None
+            t_drb = tee() if dr_b is not None else None
 
-        if x is not None and y is not None:
-            # Apply the run defaults now that the run is drawn.
-            mirrored = bool(mirrored)
-            gap = DEFAULT_GAP if gap is None else gap
-            bypass_rise = DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise
-            drain_drop = DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop
-            left: dict[int, float] = {}   # pinned left edge per member
-            cursor = x
-            for unit in (reversed(run) if mirrored else run):
-                unit.pin(x=cursor, mirrored=member_mirror(mirrored, unit in (t_bya, t_byb)))
-                unit.pin(port="inlet", y=y)
-                left[id(unit)] = cursor
-                cursor += resolve_size(unit)[0] + gap
-            for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
-                if junction is None or drain is None:
-                    continue
-                # The drain leg ends at the valve.
-                drain.pin(orientation=90)
-                drain.pin(port="inlet",
-                          x=left[id(junction)] + port_offset(junction, "branch")[0],
-                          y=y + drain_drop)
+            # Members in flow order; a mirrored station draws this order reversed.
+            run = [u for u in (t_bya, iso_a, t_dra, red, control, exp, t_drb, iso_b, t_byb)
+                   if u is not None]
+            anchors = {"upstream_isolation": iso_a, "downstream_isolation": iso_b,
+                       "reduction": red, "expansion": exp, "control": control}
+
+            if x is not None and y is not None:
+                # Apply the run defaults now that the run is drawn.
+                mirrored = bool(mirrored)
+                gap = DEFAULT_GAP if gap is None else gap
+                bypass_rise = DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise
+                drain_drop = DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop
+                left: dict[int, float] = {}   # pinned left edge per member
+                cursor = x
+                for unit in (reversed(run) if mirrored else run):
+                    unit.pin(x=cursor, mirrored=member_mirror(mirrored, unit in (t_bya, t_byb)))
+                    unit.pin(port="inlet", y=y)
+                    left[id(unit)] = cursor
+                    cursor += resolve_size(unit)[0] + gap
+                for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
+                    if junction is None or drain is None:
+                        continue
+                    # The drain leg ends at the valve.
+                    drain.pin(orientation=90)
+                    drain.pin(port="inlet",
+                              x=left[id(junction)] + port_offset(junction, "branch")[0],
+                              y=y + drain_drop)
+                if byp is not None and t_bya is not None and t_byb is not None:
+                    target = anchors[bypass_over] if bypass_over is not None else None
+                    if target is not None:
+                        centre = left[id(target)] + resolve_size(target)[0] / 2
+                    else:
+                        # Centre it on its own leg.
+                        centre = sum(left[id(t)] + port_offset(t, "branch")[0]
+                                     for t in (t_bya, t_byb)) / 2
+                    byp.pin(mirrored="x" if mirrored else False)
+                    byp.pin(x=centre - resolve_size(byp)[0] / 2)
+                    byp.pin(port="inlet", y=y - bypass_rise)
+
+            def branch_line(src: "Port", dst: "Port") -> Stream:
+                """Connect a bypass or drain leg with the station's line number.
+
+                Parameters
+                ----------
+                src, dst : Port
+                    Ends of the leg.
+
+                Returns
+                -------
+                Stream
+                    The new stream.
+                """
+                return self.connect(src, dst, size=size, schedule=schedule, service=service,
+                                    sequence=sequence, spec=spec, insulation=insulation)
+
+            for upstream, downstream in zip(run, run[1:]):
+                self.connect(upstream.outlet, downstream.inlet)
             if byp is not None and t_bya is not None and t_byb is not None:
-                target = anchors[bypass_over] if bypass_over is not None else None
-                if target is not None:
-                    centre = left[id(target)] + resolve_size(target)[0] / 2
-                else:
-                    # Centre it on its own leg.
-                    centre = sum(left[id(t)] + port_offset(t, "branch")[0]
-                                 for t in (t_bya, t_byb)) / 2
-                byp.pin(mirrored="x" if mirrored else False)
-                byp.pin(x=centre - resolve_size(byp)[0] / 2)
-                byp.pin(port="inlet", y=y - bypass_rise)
+                branch_line(t_bya.branch, byp.inlet)
+                self.connect(byp.outlet, t_byb.branch)
+            for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
+                if junction is not None and drain is not None:
+                    branch_line(junction.branch, drain.inlet)
 
-        def branch_line(src: "Port", dst: "Port") -> Stream:
-            """Connect a bypass or drain leg with the station's line number.
+            hanging = {id(t_bya): byp, id(t_dra): dr_a, id(t_drb): dr_b}
+            members: list["Unit"] = []
+            for unit in run:
+                members.append(unit)
+                branch = hanging.get(id(unit))
+                if branch is not None:
+                    members.append(branch)
+            station = ValveStation(
+                control=control, upstream_isolation=iso_a, downstream_isolation=iso_b,
+                reduction=red, expansion=exp, bypass=byp,
+                upstream_drain=dr_a, downstream_drain=dr_b,
+                tees=tuple(t for t in (t_bya, t_dra, t_drb, t_byb) if t is not None),
+                members=tuple(members), inlet=run[0].inlet, outlet=run[-1].outlet,
+            )
+            from pandid.stations import StationAssembly
 
-            Parameters
-            ----------
-            src, dst : Port
-                Ends of the leg.
-
-            Returns
-            -------
-            Stream
-                The new stream.
-            """
-            return self.connect(src, dst, size=size, schedule=schedule, service=service,
-                                sequence=sequence, spec=spec, insulation=insulation)
-
-        for upstream, downstream in zip(run, run[1:]):
-            self.connect(upstream.outlet, downstream.inlet)
-        if byp is not None and t_bya is not None and t_byb is not None:
-            branch_line(t_bya.branch, byp.inlet)
-            self.connect(byp.outlet, t_byb.branch)
-        for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
-            if junction is not None and drain is not None:
-                branch_line(junction.branch, drain.inlet)
-
-        hanging = {id(t_bya): byp, id(t_dra): dr_a, id(t_drb): dr_b}
-        members: list["Unit"] = []
-        for unit in run:
-            members.append(unit)
-            branch = hanging.get(id(unit))
-            if branch is not None:
-                members.append(branch)
-        station = ValveStation(
-            control=control, upstream_isolation=iso_a, downstream_isolation=iso_b,
-            reduction=red, expansion=exp, bypass=byp,
-            upstream_drain=dr_a, downstream_drain=dr_b,
-            tees=tuple(t for t in (t_bya, t_dra, t_drb, t_byb) if t is not None),
-            members=tuple(members), inlet=run[0].inlet, outlet=run[-1].outlet,
-        )
-        from pandid.stations import StationAssembly
-
-        self._station_assemblies.append(StationAssembly(
-            station=station, mirrored=bool(mirrored),
-            gap=DEFAULT_GAP if gap is None else gap,
-            bypass_rise=DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise,
-            drain_drop=DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop,
-            bypass_over=bypass_over,
-        ))
-        return station
+            self._station_assemblies.append(StationAssembly(
+                station=station, mirrored=bool(mirrored),
+                gap=DEFAULT_GAP if gap is None else gap,
+                bypass_rise=DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise,
+                drain_drop=DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop,
+                bypass_over=bypass_over,
+            ))
+            if on is not None:
+                insert_station(self, on, station, at=at)
+            return station
 
     def add_component(self, component: "Component") -> "Component":
         """Register a chemical component.

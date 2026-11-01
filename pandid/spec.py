@@ -1102,8 +1102,8 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
             raise SpecError(f"{where}.run: stream index is out of range")
         run = fs.streams[index]
     at = _number(data["at"], f"{where}.at") if "at" in data else None
-    if (run is None) != (at is None) or (at is not None and not 0 < at < 1):
-        raise SpecError(f"{where}: run and an interior at fraction must occur together")
+    if at is not None and (run is None or not 0 < at < 1):
+        raise SpecError(f"{where}: an at fraction needs a run and lies strictly between 0 and 1")
     options = {key: _number(data[key], f"{where}.{key}") if key in data else default
                for key, default in (("gap", DEFAULT_GAP),
                                     ("bypass_rise", DEFAULT_BYPASS_RISE),
@@ -2675,7 +2675,8 @@ def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
     if assembly.run is not None:
         entry["run"] = next(i for i, stream in enumerate(fs.streams)
                             if stream is assembly.run)
-        entry["at"] = assembly.at
+        if assembly.at is not None:
+            entry["at"] = assembly.at
     return entry
 
 

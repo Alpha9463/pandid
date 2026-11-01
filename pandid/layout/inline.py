@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
+from pandid.inline import position
 from pandid.layout.backbone import infer_backbone
 from pandid.layout.corridor import horizontal_centerline
 from pandid.layout.stages import process_streams, process_units, slot
@@ -146,7 +147,7 @@ def place_inline(fs: Flowsheet, *, allow_elbows: bool = False) -> set[Unit]:
     set[Unit]
         Devices placed on their host runs.
     """
-    if not any(stream._inline_at is not None for stream in fs.streams):
+    if not any(position(stream) is not None for stream in fs.streams):
         return set()
     units = process_units(fs)
     streams = process_streams(fs)

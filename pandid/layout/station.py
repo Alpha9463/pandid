@@ -267,6 +267,26 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
     return max(lower, min(preferred, upper))
 
 
+def _fraction(assembly: StationAssembly) -> float:
+    """Return where on its line a station sits.
+
+    Parameters
+    ----------
+    assembly : StationAssembly
+        Station to locate.
+
+    Returns
+    -------
+    float
+        Fraction of its line, or the midpoint for a station not put in one.
+    """
+    from pandid.inline import position
+
+    incoming = assembly.station.inlet.stream
+    value = position(incoming) if incoming is not None else None
+    return 0.5 if value is None else value
+
+
 def place_stations(fs: Flowsheet) -> int:
     """Move feasible stations together around their member pins.
 
@@ -289,7 +309,7 @@ def place_stations(fs: Flowsheet) -> int:
         key = id(assembly.run) if assembly.run is not None else id(assembly)
         groups.setdefault(key, []).append(assembly)
     for group in groups.values():
-        group.sort(key=lambda assembly: assembly.at if assembly.at is not None else 0.5)
+        group.sort(key=_fraction)
         root = group[0].run
         if root is not None:
             source_port, dest_port = root.source, root._logical_to
@@ -331,7 +351,7 @@ def place_stations(fs: Flowsheet) -> int:
             width += assembly.gap * (len(main) - 1)
             if high - low < width + 16:
                 break
-            fraction = assembly.at if assembly.at is not None else 0.5
+            fraction = _fraction(assembly)
             target = start[0] + fraction * (end[0] - start[0])
             left = min(max(target - width / 2, low + 8), high - width - 8)
             origin = _anchored_origin(assembly, left, centerline, mirrored)
