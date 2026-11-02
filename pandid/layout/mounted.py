@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Iterator, Union
+from typing import TYPE_CHECKING, Callable, Iterator, Union
 
 from pandid.geometry import Frame
 from pandid.layout.stages import process_streams, process_units, slot
@@ -69,13 +69,15 @@ class MountedRun:
         Physical segments in flow order.
     elements : tuple[Unit or StationAssembly, ...]
         Devices and station assemblies in flow order.
-    fractions : tuple[float, ...]
-        Position of each element as a fraction of the pipe.
+    places : tuple[tuple[Port, Port, float] or None, ...]
+        Where each element sits on the author's line: the line's two end
+        nozzles and the fraction between them, or ``None`` for one wired in
+        with ``connect()``, which states no position.
     """
 
     segments: tuple[Stream, ...]
     elements: tuple[Element, ...]
-    fractions: tuple[float, ...]
+    places: tuple[tuple[Port, Port, float] | None, ...]
 
     @property
     def source(self) -> Port:
@@ -149,31 +151,6 @@ def _members(element: Element) -> list[Unit]:
     return [element]
 
 
-def _spread(values: list[float | None]) -> tuple[float, ...]:
-    """Fill unknown fractions evenly between their known neighbours.
-
-    Parameters
-    ----------
-    values : list[float or None]
-        Fractions in flow order, ``None`` where unknown.
-
-    Returns
-    -------
-    tuple[float, ...]
-        Every fraction, the pipe's ends standing for 0 and 1.
-    """
-    known = {i: v for i, v in enumerate(values) if v is not None}
-    out = []
-    for k, value in enumerate(values):
-        if value is None:
-            low = max((i for i in known if i < k), default=-1)
-            high = min((i for i in known if i > k), default=len(values))
-            start, end = known.get(low, 0.0), known.get(high, 1.0)
-            value = start + (end - start) * (k - low) / (high - low)
-        out.append(value)
-    return tuple(out)
-
-
 def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
     """Collect the pipes that carry furniture.
 
@@ -221,10 +198,12 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
         if (not elements or start is segments[-1].dest.owner
                 or any(s.route is not None and s.route.manual for s in segments)):
             continue
-        # shortcut: positions are fractions of the author's line; a pinned device that
-        # splits it shortens the pipe, so they are only approximate there.
-        fractions = _spread([position(s) for s in segments[:-1]])
-        runs.append(MountedRun(tuple(segments), tuple(elements), fractions))
+        places = []
+        for segment in segments[:-1]:
+            line, at = segment._logical_root or segment, position(segment)
+            end = line._logical_to
+            places.append(None if end is None or at is None else (line.source, end, at))
+        runs.append(MountedRun(tuple(segments), tuple(elements), tuple(places)))
     return runs
 
 
@@ -240,9 +219,10 @@ def _chain_width(run: MountedRun) -> float:
     -------
     float
         Station room as :func:`pandid.layout.coarse._station_width` gives
-        it, plus each device's width with :data:`GAP` around each.
+        it, plus each device's width with :data:`GAP` around each, or more
+        where the stated positions need a longer pipe (:func:`_room`).
     """
-    from pandid.layout.coarse import _station_width
+    from pandid.layout.coarse import END_ROOM, _station_width
     from pandid.stations import StationAssembly
 
     stations = [element for element in run.elements if isinstance(element, StationAssembly)]
@@ -250,7 +230,7 @@ def _chain_width(run: MountedRun) -> float:
     width = _station_width(stations) if stations else 0.0
     if devices:
         width += sum(resolve_size(unit)[0] for unit in devices) + GAP * (len(devices) + 1)
-    return width
+    return max(width, _room(run) - END_ROOM)
 
 
 @contextmanager
@@ -534,6 +514,26 @@ def _length(element: Element, leg: Leg) -> float:
     return frame.w if _level(leg) else frame.h
 
 
+def _level_length(element: Element) -> float:
+    """Return the room an element takes along a level pipe, before it is set.
+
+    Parameters
+    ----------
+    element : Unit or StationAssembly
+        Device or station.
+
+    Returns
+    -------
+    float
+        Station run length, or the device's width.
+    """
+    from pandid.stations import StationAssembly
+
+    if isinstance(element, StationAssembly):
+        return _main_width(element)
+    return resolve_size(element)[0]
+
+
 def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
     """Return the frames that set an element centred a distance along a leg.
 
@@ -638,7 +638,132 @@ def _margins(index: int, count: int) -> tuple[float, float]:
             NOZZLE_END if index == count - 1 else END)
 
 
-def _assign(run: MountedRun, legs: list[Leg]) -> list[int]:
+def _along(legs: list[Leg], point: Point) -> float:
+    """Return how far along a pipe a point lies, measured past either end.
+
+    Parameters
+    ----------
+    legs : list[Leg]
+        Legs of the pipe.
+    point : Point
+        Point on or near it.
+
+    Returns
+    -------
+    float
+        Distance from the pipe's start to the point's nearest projection;
+        negative before the start, beyond the length after the end.
+    """
+    best: tuple[float, float] | None = None
+    travelled = 0.0
+    for index, leg in enumerate(legs):
+        (ax, ay), (bx, by) = leg
+        size = _size(leg)
+        level = _level(leg)
+        ahead = (point[0] - ax) * (1 if bx >= ax else -1) if level else             (point[1] - ay) * (1 if by >= ay else -1)
+        across = abs(point[1] - ay) if level else abs(point[0] - ax)
+        lo = -float("inf") if index == 0 else 0.0
+        hi = float("inf") if index == len(legs) - 1 else size
+        reach = min(max(ahead, lo), hi)
+        miss = across + abs(ahead - reach)
+        if best is None or miss < best[0]:
+            best = (miss, travelled + reach)
+        travelled += size
+    assert best is not None
+    return best[1]
+
+
+def _wanted(run: MountedRun, total: float,
+            along: Callable[[Port], float] | None = None) -> list[float]:
+    """Return where along the pipe each element's centre is wanted.
+
+    An element with a place is put at its fraction of the author's line,
+    measured between that line's two end nozzles. An element wired in with
+    ``connect()``, or whose line ends off the pipe where ``along`` cannot
+    say how far, is spread evenly along the pipe.
+
+    Parameters
+    ----------
+    run : MountedRun
+        Pipe whose elements are placed.
+    total : float
+        Length of the pipe.
+    along : callable or None, optional
+        Distance along the pipe of a nozzle that is not on it.
+
+    Returns
+    -------
+    list[float]
+        Wanted distance from the pipe's start for each element.
+    """
+    count = len(run.elements)
+    even = [(k + 1) / (count + 1) * total for k in range(count)]
+
+    def anchor(port: Port, side: float) -> float | None:
+        """Return how far along the pipe a line's end nozzle is.
+
+        Parameters
+        ----------
+        port : Port
+            End nozzle of an author's line.
+        side : float
+            +1 for the outlet a line leaves, -1 for the inlet it reaches.
+
+        Returns
+        -------
+        float or None
+            Distance along the pipe, or ``None`` where it is not known.
+        """
+        if port is run.source:
+            return 0.0
+        if port is run.dest:
+            return total
+        for k, element in enumerate(run.elements):
+            if port.owner in _members(element):
+                return even[k] + side * _level_length(element) / 2
+        return None if along is None else along(port)
+
+    out = []
+    for k, place in enumerate(run.places):
+        low = high = None
+        if place is not None:
+            low, high = anchor(place[0], 1.0), anchor(place[1], -1.0)
+        if place is None or low is None or high is None:
+            out.append(even[k])
+        else:
+            out.append(low + place[2] * (high - low))
+    return out
+
+
+def _room(run: MountedRun) -> float:
+    """Return the shortest straight pipe that holds every element where wanted.
+
+    Wanted distances grow linearly with the pipe's length, so each spacing
+    rule gives a least length; the longest of them is returned.
+
+    Parameters
+    ----------
+    run : MountedRun
+        Pipe to measure.
+
+    Returns
+    -------
+    float
+        Pipe length, nozzle to nozzle.
+    """
+    start, unit = _wanted(run, 0.0), _wanted(run, 1.0)
+    slope = [b - a for a, b in zip(start, unit)]
+    lengths = [_level_length(element) for element in run.elements]
+    rules = [(slope[0], start[0] - lengths[0] / 2, NOZZLE_END),
+             (1 - slope[-1], -start[-1] - lengths[-1] / 2, NOZZLE_END)]
+    rules += [(slope[k] - slope[k - 1], start[k] - start[k - 1],
+               (lengths[k - 1] + lengths[k]) / 2 + GAP) for k in range(1, len(lengths))]
+    # Each rule reads slope * length + offset >= floor.
+    return max([(floor - offset) / rate for rate, offset, floor in rules if rate > 1e-9],
+               default=0.0)
+
+
+def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[int]:
     """Choose a leg for each element, keeping flow order.
 
     The whole chain goes on one leg when one holds it: the leg nearest the
@@ -651,6 +776,8 @@ def _assign(run: MountedRun, legs: list[Leg]) -> list[int]:
         Pipe whose elements are placed.
     legs : list[Leg]
         Legs of its routed pipe.
+    wanted : list[float]
+        Wanted distance along the pipe of each element, from :func:`_wanted`.
 
     Returns
     -------
@@ -660,12 +787,11 @@ def _assign(run: MountedRun, legs: list[Leg]) -> list[int]:
     room = [_size(leg) - sum(_margins(index, len(legs))) + GAP
             for index, leg in enumerate(legs)]
     need = [[_length(element, leg) + GAP for leg in legs] for element in run.elements]
-    total = sum(_size(leg) for leg in legs)
     starts, travelled = [], 0.0
     for leg in legs:
         starts.append(travelled)
         travelled += _size(leg)
-    wanted = sum(run.fractions) / len(run.fractions) * total
+    middle = sum(wanted) / len(wanted)
 
     def distance(index: int) -> float:
         """Return how far a leg's middle is from the chain's wanted spot.
@@ -680,7 +806,7 @@ def _assign(run: MountedRun, legs: list[Leg]) -> list[int]:
         float
             Distance along the pipe, in pixels.
         """
-        return abs(starts[index] + _size(legs[index]) / 2 - wanted)
+        return abs(starts[index] + _size(legs[index]) / 2 - middle)
 
     whole = [index for index in range(len(legs))
              if sum(row[index] for row in need) <= room[index]]
@@ -767,8 +893,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit]) -> boo
         a = port_point(source, source.frame, run.source.name)
         b = port_point(dest, dest.frame, run.dest.name)
         legs = [(a, (b[0], a[1])) if abs(b[0] - a[0]) >= abs(b[1] - a[1]) else (a, (a[0], b[1]))]
-    assigned = _assign(run, legs)
-    total = sum(_size(leg) for leg in legs)
+    want = _wanted(run, sum(_size(leg) for leg in legs),
+                   lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)))
+    assigned = _assign(run, legs, want)
     starts, travelled = [], 0.0
     for leg in legs:
         starts.append(travelled)
@@ -781,7 +908,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit]) -> boo
         head, tail = _margins(index, len(legs))
         group = [i for i, a in enumerate(assigned) if a == index]
         lengths = [min(_length(run.elements[i], leg), size) for i in group]
-        wanted = [run.fractions[i] * total - starts[index] for i in group]
+        wanted = [want[i] - starts[index] for i in group]
         centres = _centres(wanted, lengths, size, head, tail)
         if sum(lengths) + GAP * (len(group) - 1) + head + tail > size:
             roomy = False

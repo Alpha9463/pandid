@@ -71,7 +71,7 @@ def test_add_on_orders_insertions_by_fraction() -> None:
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-2", "Product"]
     assert [s._inline_at for s in fs.streams] == [0.25, 0.75, None]
-    assert mounted_runs(fs)[0].fractions == (0.25, 0.75)
+    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == (0.25, 0.75)
     fs.to_svg()
     assert earlier.frame is not None and later.frame is not None
     assert earlier.frame.x < later.frame.x
@@ -433,7 +433,7 @@ def test_devices_without_at_go_in_the_order_added() -> None:
     valves = [fs.add(Valve(f"HV-{n}"), on=line) for n in (1, 2, 3)]
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-2", "HV-3", "Product"]
-    assert mounted_runs(fs)[0].fractions == (0.25, 0.5, 0.75)
+    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == (0.25, 0.5, 0.75)
     fs.layout()
     centres = [valve.frame.cx for valve in valves if valve.frame is not None]
     assert centres == pytest.approx([400, 700, 1000], abs=1)
@@ -460,7 +460,7 @@ def test_a_device_with_at_goes_before_any_with_a_larger_at() -> None:
     fs.add(Valve("HV-4"), on=line, at=0.3)
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-4", "HV-2", "HV-3", "Product"]
-    assert mounted_runs(fs)[0].fractions == pytest.approx((0.15, 0.3, 0.6, 0.8))
+    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == pytest.approx((0.15, 0.3, 0.6, 0.8))
 
 
 def test_at_without_on_is_refused() -> None:

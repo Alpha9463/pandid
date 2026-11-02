@@ -19,6 +19,11 @@ if TYPE_CHECKING:
     from pandid.units import Unit
 
 
+#: Pipe kept clear between a chain and its two end nozzles together: one
+#: 25 px nozzle exit and 8 px body clearance at each end.
+END_ROOM = 41.0
+
+
 class Host(NamedTuple):
     """External nozzles and physical ends of a contracted material run.
 
@@ -139,7 +144,7 @@ def _end_clearance(source: Unit, source_port: str, dest: Unit,
     dest_x = port_offset(dest, dest_port, dest_slot)[0]
     body = ((source_slot.w - source_x) + dest_x if forward
             else source_x + (dest_slot.w - dest_x))
-    return body + 41.0  # one 25px nozzle exit and 8px body clearance at each end
+    return body + END_ROOM
 
 
 def _nominal_nozzle_span(host: Host, bodies: dict[int, float]) -> float:
@@ -229,7 +234,7 @@ def _equipment_frames(fs: Flowsheet, widths: list[tuple[Host, float]],
         else:
             boundary = (min(source_col, dest_col), max(source_col, dest_col))
             shared = boundaries[boundary] - 1
-            clearance = 41.0 + shared * bodies[column]
+            clearance = END_ROOM + shared * bodies[column]
             need = max(0.0, width + clearance - _nominal_nozzle_span(root, bodies))
         gap[column] = max(gap.get(column, 0.0), need)
     links = []
