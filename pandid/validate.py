@@ -105,23 +105,6 @@ class Issue:
         return f"[{self.severity}] {self.code}: {self.message}"
 
 
-def _overlap(a: tuple[float, float, float, float],
-             b: tuple[float, float, float, float]) -> bool:
-    """Check overlap with the shared drawing-box predicate.
-
-    Parameters
-    ----------
-    a, b : tuple[float, float, float, float]
-        Unit box coordinates.
-
-    Returns
-    -------
-    bool
-        Whether the unit interiors overlap.
-    """
-    return boxes_overlap(a, b)
-
-
 def _overlap_cure(a, b) -> str:
     """Return how to clear a ``unit-overlap`` between two units.
 
@@ -390,24 +373,6 @@ def _pierced_end(path, ends):
             if k not in clear and segment_crosses_box(path[k], path[k + 1], end[2]):
                 return end
     return None
-
-
-def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
-    """Check whether an orthogonal segment passes through a unit box.
-
-    Parameters
-    ----------
-    x1, y1, x2, y2 : float
-        Segment coordinates.
-    box : tuple[float, float, float, float]
-        Unit box coordinates.
-
-    Returns
-    -------
-    bool
-        Whether the segment crosses the box interior.
-    """
-    return segment_crosses_box((x1, y1), (x2, y2), box)
 
 
 def _pinned_y(unit) -> bool:
@@ -840,7 +805,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     # --- an ingoing or outgoing material with nothing to report ---
     # ISO 10628-1:2014 4.3.2 d) requires a PFD to state each ingoing and
     # outgoing material's flow rate. The stream table keeps a boundary
-    # column even when empty (:func:`pandid.render.furniture._table_streams`);
+    # column even when empty (:func:`pandid.render.furniture._table_runs`);
     # this says what a column of dashes means. Only on a sheet that
     # tabulates other streams: a sheet with no properties at all is
     # handled below.
@@ -1067,7 +1032,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # Hard: overlapping unit bodies, with the call that moves one.
         for i in range(len(boxes)):
             for j in range(i + 1, len(boxes)):
-                if _overlap(boxes[i][1], boxes[j][1]):
+                if boxes_overlap(boxes[i][1], boxes[j][1]):
                     a, b = boxes[i][0], boxes[j][0]
                     errors.append(Issue("error", "unit-overlap",
                                         f"{a.name} and {b.name} overlap. {_overlap_cure(a, b)}"))
@@ -1166,11 +1131,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             pts = [sp] + list(s.route.waypoints) + [dp]
 
             for k in range(len(pts) - 1):
-                (x1, y1), (x2, y2) = pts[k], pts[k + 1]
                 for u, box, host in hosted:
                     if u is src_u or u is dst_u or host is s:
                         continue  # in-line elements own their line
-                    if _seg_crosses_box(x1, y1, x2, y2, box):
+                    if segment_crosses_box(pts[k], pts[k + 1], box):
                         warnings.append(Issue("warning", "route-crosses-unit",
                                               f"stream {s.name} crosses {u.name}"))
                         break

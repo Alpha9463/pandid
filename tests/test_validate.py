@@ -1323,10 +1323,10 @@ def test_the_reused_name_costs_a_stream_table_column():
     """The finding's whole content: the table is keyed by name, so two
     runs sharing one are tabulated as one and a column of properties is
     absent from the sheet."""
-    from pandid.render.furniture import _table_streams
+    from pandid.render.furniture import _table_runs
 
     fs = _collided()
-    assert len(_table_streams(fs)) == len(fs.streams) - 1
+    assert len(_table_runs(fs)) == len(fs.streams) - 1
     assert _reused(fs)
 
 
@@ -1418,10 +1418,10 @@ def test_the_reported_line_is_the_column_the_table_keeps_empty():
     """The finding's whole content. Neither half is any use alone: the
     column is what the reader sees and the finding is what says why it is
     blank, so the two have to be about the same lines."""
-    from pandid.render.furniture import _table_streams
+    from pandid.render.furniture import _table_runs
 
     fs = _partly_tabulated()
-    kept = [s.name for s in _table_streams(fs) if not s.properties]
+    kept = [run[0].name for run in _table_runs(fs) if not run[0].properties]
     assert kept == [i.message.split()[0] for i in _missing(fs)] == ["S2"]
 
 
@@ -1852,10 +1852,10 @@ def test_the_corner_it_names_is_the_cure():
 
 def test_neither_route_finding_beside_it_can_see_a_diagonal():
     """`route-detour` measures Manhattan length, which a diagonal and the elbow
-    replacing it share exactly, and `_seg_crosses_box` answers `False` for a
+    replacing it share exactly, and `segment_crosses_box` answers `False` for a
     sloping segment whatever it runs over. So the finding could not be left to
     either of them."""
-    from pandid.validate import _seg_crosses_box
+    from pandid.layout.conflicts import segment_crosses_box
 
     def detour(fs):
         return next(i for i in fs.validate() if i.code == "route-detour").message
@@ -1863,8 +1863,8 @@ def test_neither_route_finding_beside_it_can_see_a_diagonal():
     assert detour(_hand_routed((320.0, 200.0))[0]) == detour(
         _hand_routed((320.0, 200.0), (440.0, 200.0))[0]
     )
-    assert not _seg_crosses_box(0, 0, 100, 100, (10, 10, 90, 90))
-    assert _seg_crosses_box(50, 0, 50, 100, (10, 10, 90, 90))
+    assert not segment_crosses_box((0, 0), (100, 100), (10, 10, 90, 90))
+    assert segment_crosses_box((50, 0), (50, 100), (10, 10, 90, 90))
 
 
 # --- what the sheet drew but nothing said -------------------------------------

@@ -112,7 +112,7 @@ def measure(name: str, build, repeat: int) -> dict:
     from pandid.routing.visibility import VisibilityGraph
 
     tracemalloc.start()
-    graph = VisibilityGraph(fs, margin=15.0)
+    graph = VisibilityGraph(fs)
     peak = tracemalloc.get_traced_memory()[1]
     tracemalloc.stop()
     return {

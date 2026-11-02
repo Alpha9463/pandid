@@ -955,15 +955,13 @@ def _cutting(leader, occupied, limit: int) -> int:
     return n
 
 
-def _near_segment(p, a, b, tol: float = 0.5) -> bool:
-    """Return whether ``p`` lies on segment ``a``-``b`` within ``tol``.
+def _near_segment(p, a, b) -> bool:
+    """Return whether ``p`` lies on segment ``a``-``b`` within 0.5.
 
     Parameters
     ----------
     p, a, b : tuple[float, float]
         Point and segment end points.
-    tol : float, default=0.5
-        Distance tolerance.
 
     Returns
     -------
@@ -973,9 +971,9 @@ def _near_segment(p, a, b, tol: float = 0.5) -> bool:
     dx, dy = b[0] - a[0], b[1] - a[1]
     span = dx * dx + dy * dy
     if not span:
-        return math.hypot(p[0] - a[0], p[1] - a[1]) <= tol
+        return math.hypot(p[0] - a[0], p[1] - a[1]) <= 0.5
     t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / span))
-    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= tol
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= 0.5
 
 
 def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
@@ -3656,10 +3654,9 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
 def reject_unknown_options(where: str, opts: dict) -> None:
     """Raise if a backend was given keywords it does not take.
 
-    Backends accept ``**opts`` to satisfy the
-    :class:`~pandid.render.Renderer` protocol, but silently dropping an
-    argument (such as ``debug=True`` on a draw.io render) would mislead
-    the caller. All unknown names are reported at once.
+    Backends accept ``**opts``, but silently dropping an argument (such
+    as ``debug=True`` on a draw.io render) would mislead the caller. All
+    unknown names are reported at once.
 
     Parameters
     ----------
@@ -3901,7 +3898,7 @@ class SvgRenderer:
             (frame_x, frame_y, canvas_width, canvas_height), free = self._place_furniture(
                 fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border, report)
         elif sheet is not None:
-            free = self._place_plain(st_layout, sheet, margin, furniture)
+            free = self._place_plain(sheet, margin)
             frame_x, frame_y = 0.0, 0.0
             canvas_width, canvas_height = sheet.width, sheet.height
         else:
@@ -4135,19 +4132,15 @@ class SvgRenderer:
             ["    " + item for item in furniture],
             title=_table_sheet_title(fs, F._options(fs)))
 
-    def _place_plain(self, st_layout, sheet, margin, furniture):
-        """Lay out a fixed page with no furniture except a stream table.
+    def _place_plain(self, sheet, margin):
+        """Lay out a fixed page with no furniture.
 
         Parameters
         ----------
-        st_layout : StreamTable or None
-            Measured stream table, docked at the foot.
         sheet : _Sheet
             Fixed page.
         margin : float
             Page margin.
-        furniture : list[str]
-            SVG lines, appended to in place.
 
         Returns
         -------
@@ -4161,16 +4154,9 @@ class SvgRenderer:
         """
         free_w = sheet.width - 2 * margin
         free_h = sheet.height - 2 * margin
-        table_h = (st_layout.h + 24) if st_layout else 0.0
-        if free_w <= 0 or free_h - table_h <= 0 or (st_layout and st_layout.w > free_w):
-            raise _too_small(sheet,
-                             2 * margin + (st_layout.w if st_layout else 0.0),
-                             2 * margin + table_h,
-                             "the stream table" if st_layout else "")
-        if st_layout:
-            furniture.extend(F.draw_stream_table(
-                st_layout, margin, sheet.height - margin - st_layout.h))
-        return (margin, margin, free_w, free_h - table_h)
+        if free_w <= 0 or free_h <= 0:
+            raise _too_small(sheet, 2 * margin, 2 * margin)
+        return (margin, margin, free_w, free_h)
 
     # --- defs ---------------------------------------------------------
 

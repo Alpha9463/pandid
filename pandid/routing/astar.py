@@ -410,12 +410,7 @@ def find_path(
             elif cur_dir and crossing_index is not None:
                 cost += CROSSING_PENALTY * crossing_index.crosses(current, _AXIS[cur_dir])
 
-            if (
-                neighbor == goal
-                and goal_dir
-                and crossing_index is not None
-                and CROSSING_PENALTY > 0
-            ):
+            if neighbor == goal and goal_dir and crossing_index is not None:
                 if ndir is not None and ndir == OPPOSITE[goal_dir]:
                     cost += CROSSING_PENALTY * crossing_index.crosses(goal, _AXIS[ndir])
                 elif crossing_index.crosses(goal, _AXIS[OPPOSITE[goal_dir]]):

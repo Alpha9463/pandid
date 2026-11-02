@@ -2839,46 +2839,23 @@ class Flowsheet:
         path : str or Path
             Output file.
         show_stream_table : bool or {"sheet"}, default=False
-            ``True`` docks the stream property table at the foot of the
-            drawing. ``"sheet"`` draws the table as its own sheet, with a
-            border, title strip and drawing number, instead of the diagram;
-            render the two to separate files. ``fs.stream_table`` sets its
-            sizing and title.
+            As for :meth:`to_svg`.
         border : str or None, optional
-            ``"none"`` (the default) or ``"zone"`` for the zone-ruled frame
-            of ISO 5457 4.4 (letters top to bottom, numerals left to right,
-            A1 at top left).
+            As for :meth:`to_svg`.
         diagram : str or None, optional
-            ``"pfd"`` (the default), ``"p&id"`` (also ``"pid"``) or
-            ``"bfd"``. A P&ID draws process lines without arrowheads.
+            As for :meth:`to_svg`.
         page_size : str or None, optional
-            ``"A4"`` to ``"A0"`` for a sheet of exactly that size, with the
-            drawing fitted to it; ``None`` sizes the sheet to the drawing.
+            As for :meth:`to_svg`.
         connections : str or None, optional
-            Joint marks: ``"none"`` (the default), ``"flanged"`` (every
-            equipment nozzle and both sides of every valve and inline
-            fitting) or ``"flanged-at-nozzles"`` (nozzles only). Reducers
-            and tees are welded and never marked. Drawn on a P&ID only (ISO
-            15519-2 Table 5); ``connect(..., ends=...)`` overrides one line.
-            See :func:`~pandid.render.svg.flanged_joint`.
+            As for :meth:`to_svg`.
         jump_direction : str, default="vertical"
-            Which of two crossing lines carries the mark: ``"vertical"`` or
-            ``"horizontal"``.
+            As for :meth:`to_svg`.
         crossing_style : str, default="gap"
-            Crossing mark for the whole sheet. ``"gap"`` interrupts the
-            marking line (ISO 10628-1 5.3.4), which removes a short length
-            of run either side. ``"arc"`` bridges it with a semicircle.
-            ``"plain"`` draws both lines straight through (ISO 15519-1
-            12.5). A crossing too near a corner for its mark is drawn
-            unmarked and reported as ``crossing-unmarked``.
+            As for :meth:`to_svg`.
         debug : bool or float, default=False
-            Draw the coordinate overlay (not for ``.drawio``) under the diagram: a ruled grid, a
-            marker at every pinned point and a marker on every port.
-            ``True`` uses 50-unit spacing; a number sets it.
+            As for :meth:`to_svg`; not for ``.drawio``.
         check : bool, default=True
-            Validate: model checks before layout and routing, geometric
-            checks after. Errors raise; warnings are stored on
-            ``warnings``. See :meth:`_prepare_to_draw`.
+            As for :meth:`to_svg`.
 
         Raises
         ------
@@ -2967,46 +2944,23 @@ class Flowsheet:
         Parameters
         ----------
         show_stream_table : bool or {"sheet"}, default=False
-            ``True`` docks the stream property table at the foot of the
-            drawing. ``"sheet"`` draws the table as its own sheet, with a
-            border, title strip and drawing number, instead of the diagram;
-            render the two to separate files. ``fs.stream_table`` sets its
-            sizing and title.
+            As for :meth:`to_svg`.
         border : str or None, optional
-            ``"none"`` (the default) or ``"zone"`` for the zone-ruled frame
-            of ISO 5457 4.4 (letters top to bottom, numerals left to right,
-            A1 at top left).
+            As for :meth:`to_svg`.
         diagram : str or None, optional
-            ``"pfd"`` (the default), ``"p&id"`` (also ``"pid"``) or
-            ``"bfd"``. A P&ID draws process lines without arrowheads.
+            As for :meth:`to_svg`.
         page_size : str or None, optional
-            ``"A4"`` to ``"A0"`` for a sheet of exactly that size, with the
-            drawing fitted to it; ``None`` sizes the sheet to the drawing.
+            As for :meth:`to_svg`.
         connections : str or None, optional
-            Joint marks: ``"none"`` (the default), ``"flanged"`` (every
-            equipment nozzle and both sides of every valve and inline
-            fitting) or ``"flanged-at-nozzles"`` (nozzles only). Reducers
-            and tees are welded and never marked. Drawn on a P&ID only (ISO
-            15519-2 Table 5); ``connect(..., ends=...)`` overrides one line.
-            See :func:`~pandid.render.svg.flanged_joint`.
+            As for :meth:`to_svg`.
         jump_direction : str, default="vertical"
-            Which of two crossing lines carries the mark: ``"vertical"`` or
-            ``"horizontal"``.
+            As for :meth:`to_svg`.
         crossing_style : str, default="gap"
-            Crossing mark for the whole sheet. ``"gap"`` interrupts the
-            marking line (ISO 10628-1 5.3.4), which removes a short length
-            of run either side. ``"arc"`` bridges it with a semicircle.
-            ``"plain"`` draws both lines straight through (ISO 15519-1
-            12.5). A crossing too near a corner for its mark is drawn
-            unmarked and reported as ``crossing-unmarked``.
+            As for :meth:`to_svg`.
         debug : bool or float, default=False
-            Draw the coordinate overlay under the diagram: a ruled grid, a
-            marker at every pinned point and a marker on every port.
-            ``True`` uses 50-unit spacing; a number sets it.
+            As for :meth:`to_svg`.
         check : bool, default=True
-            Validate: model checks before layout and routing, geometric
-            checks after. Errors raise; warnings are stored on
-            ``warnings``. See :meth:`_prepare_to_draw`.
+            As for :meth:`to_svg`.
         """
         # Guard the whole call: the preview can fail after to_svg() returns.
         with self._unchanged_if_it_raises():

@@ -692,7 +692,7 @@ _MOTOR_WIDTH, _MOTOR_GAP = 1 / 3, 1 / 9
 _AGITATOR_X, _AGITATOR_W, _AGITATOR_FOOT = 0.26, 0.48, 0.76
 
 
-def agitator_overlays(name: str, kind: str, variant: str, registry=None) -> tuple:
+def agitator_overlays(name: str, kind: str, variant: str) -> tuple:
     """Return an agitator and its motor placed on a vertical body.
 
     ISO item 1.27 X8006 is the only tabulated stirred vessel and draws the
@@ -711,8 +711,6 @@ def agitator_overlays(name: str, kind: str, variant: str, registry=None) -> tupl
         Group-28 agitator name.
     kind, variant : str
         Body symbol.
-    registry : SymbolRegistry, optional
-        Registry; the default registry when omitted.
 
     Returns
     -------
@@ -724,12 +722,10 @@ def agitator_overlays(name: str, kind: str, variant: str, registry=None) -> tupl
     ValueError
         If the agitator is not registered.
     """
-    from pandid.render.symbols import Overlay
-    if registry is None:
-        from pandid.render.symbols import default_registry as registry
-    _part(28, name, registry)
-    _part(20, "motor", registry)
-    body = registry.get(kind, variant)
+    from pandid.render.symbols import Overlay, default_registry
+    _part(28, name)
+    _part(20, "motor")
+    body = default_registry.get(kind, variant)
     # Keep the motor round: height is the width converted to this body.
     height = _MOTOR_WIDTH * body.width / body.height
     return (
@@ -753,7 +749,7 @@ _DECK_BAND = 2.0 / 18.0
 _DECK_INSET = 0.0
 
 
-def internals_overlays(name: str, count: int = 1, registry=None) -> tuple:
+def internals_overlays(name: str, count: int = 1) -> tuple:
     """Return ``count`` group-27 internals stacked down a vertical body.
 
     Decks are spaced evenly down the internals band, one overlay each.
@@ -766,8 +762,6 @@ def internals_overlays(name: str, count: int = 1, registry=None) -> tuple:
         Group-27 part name.
     count : int, default=1
         Number of decks or beds.
-    registry : SymbolRegistry, optional
-        Registry; the default registry when omitted.
 
     Returns
     -------
@@ -780,7 +774,7 @@ def internals_overlays(name: str, count: int = 1, registry=None) -> tuple:
         If the part is unknown or ``count`` is less than 1.
     """
     from pandid.render.symbols import Overlay
-    part = _part(27, name, registry)
+    part = _part(27, name)
     if count < 1:
         raise ValueError(
             f"a body with {count} of an internal has none of it; pass "
@@ -802,7 +796,7 @@ def internals_overlays(name: str, count: int = 1, registry=None) -> tuple:
         for i in range(count))
 
 
-def stage_fraction(name: str, stage: int, count: int, registry=None) -> float:
+def stage_fraction(name: str, stage: int, count: int) -> float:
     """Return a stage's height as a fraction of the body's box.
 
     Uses the same band as :func:`internals_overlays`. Stages count from 1
@@ -817,8 +811,6 @@ def stage_fraction(name: str, stage: int, count: int, registry=None) -> float:
         Stage number.
     count : int
         Drawn number of decks or beds.
-    registry : SymbolRegistry, optional
-        Registry; the default registry when omitted.
 
     Returns
     -------
@@ -835,7 +827,7 @@ def stage_fraction(name: str, stage: int, count: int, registry=None) -> float:
             f"stage {stage} is not on a column of {count}; a stage counts from 1 "
             f"at the top to {count} at the bottom, the same count trays= gives"
         )
-    part = _part(27, name, registry)
+    part = _part(27, name)
     top, span = _INTERNALS_TOP, _INTERNALS_BOTTOM - _INTERNALS_TOP
     step = span / count
     if part.height <= DECK_H:
@@ -849,7 +841,7 @@ def stage_fraction(name: str, stage: int, count: int, registry=None) -> float:
 _SUPPORT_TOP, _SUPPORT_DROP = 0.97, 0.28
 
 
-def support_overlays(name: str, registry=None) -> tuple:
+def support_overlays(name: str) -> tuple:
     """Return a support placed under or beside a vertical body.
 
     ISO group 1 items 1.16 to 1.19 are these compositions. A leg (26.1) is
@@ -861,8 +853,6 @@ def support_overlays(name: str, registry=None) -> tuple:
     ----------
     name : str
         ``"leg"``, ``"skirt"``, ``"bracket"`` or ``"ring"``.
-    registry : SymbolRegistry, optional
-        Registry; the default registry when omitted.
 
     Returns
     -------
@@ -875,7 +865,7 @@ def support_overlays(name: str, registry=None) -> tuple:
         If the support is not registered.
     """
     from pandid.render.symbols import Overlay
-    _part(26, name, registry)
+    _part(26, name)
     if name == "skirt":
         return (Overlay(26, name, 0.20, _SUPPORT_TOP, 0.60, _SUPPORT_DROP),)
     if name in ("bracket", "ring"):
@@ -895,7 +885,7 @@ def support_overlays(name: str, registry=None) -> tuple:
 _RAKE_X, _RAKE_W, _RAKE_FOOT = 0.20, 0.60, 0.775
 
 
-def rake_overlays(name: str, registry=None) -> tuple:
+def rake_overlays(name: str) -> tuple:
     """Return a group-28 stirrer hung down the centre of a thickener.
 
     No motor is drawn: ISO composes a motor inside an apparatus only for
@@ -907,8 +897,6 @@ def rake_overlays(name: str, registry=None) -> tuple:
     ----------
     name : str
         Group-28 part name.
-    registry : SymbolRegistry, optional
-        Registry; the default registry when omitted.
 
     Returns
     -------
@@ -921,7 +909,7 @@ def rake_overlays(name: str, registry=None) -> tuple:
         If the part is not registered.
     """
     from pandid.render.symbols import Overlay
-    _part(28, name, registry)
+    _part(28, name)
     return (Overlay(28, name, _RAKE_X, 0.0, _RAKE_W, _RAKE_FOOT),)
 
 

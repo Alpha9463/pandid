@@ -838,10 +838,6 @@ def conveyor_min_length(diameter: float = CONVEYOR_DIAMETER) -> float:
     return 2 * diameter
 
 
-#: Shortest belt run at the default roller.
-CONVEYOR_MIN_LENGTH = conveyor_min_length()
-
-
 def conveyor_too_short(length: float, owner: str = "",
                        diameter: float = CONVEYOR_DIAMETER) -> ValueError:
     """Return the error for a belt run too short for its rollers.
@@ -986,7 +982,7 @@ SCREW_SWEEP = 2 * SCREW_REACH / SCREW_HEIGHT
 SCREW_PITCH, SCREW_MARGIN = 7 * SCREW_MODULE, 2 * SCREW_MODULE
 
 #: Shortest drawable screw: clear casing, one turn, clear casing. It
-#: happens to equal :data:`CONVEYOR_MIN_LENGTH`.
+#: happens to equal the belt's :func:`conveyor_min_length`.
 SCREW_MIN_LENGTH = 2 * SCREW_MARGIN + SCREW_TURN
 
 
@@ -3893,11 +3889,10 @@ class SymbolRegistry:
         return Symbol(svg=svg, width=60, height=60)
 
     def _register_defaults(self):
-        """Register the hand-drawn fallbacks, the vendored set and ISO families.
+        """Register the hand-drawn symbols, the vendored set and ISO families.
 
-        The vendored draw.io symbols are registered after the fallbacks and
-        replace them for shared kinds; the ISO parts and generated families
-        follow.
+        The hand-drawn symbols cover kinds with no stencil; the vendored
+        draw.io symbols, the ISO parts and generated families follow.
         """
         # Feed and Product are drawn by the renderer; these are fallbacks.
         self.register("feed", Symbol(
@@ -3911,173 +3906,14 @@ class SymbolRegistry:
             ports={"inlet": (0.0, 25.0)}
         ))
 
-        # The equipment symbols below are fallbacks that the vendored
-        # registry replaces, except the Mixer, Splitter and pipe tee, which
-        # have no stencil.
-
-        # Centrifugal Pump: circle with discharge nozzle at top, suction
-        # on left, baseplate line
-        self.register("pump", Symbol(
-            svg=(
-                '<g id="sym_pump">'
-                '<circle cx="30" cy="30" r="22" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
-                '<line x1="30" y1="8" x2="30" y2="0" stroke="black" stroke-width="2"/>'
-                '<line x1="0" y1="30" x2="8" y2="30" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=60.0, height=55.0,
-            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)}
-        ))
-
-        # Compressor: circle with triangle indicator
-        self.register("compressor", Symbol(
-            svg=(
-                '<g id="sym_compressor">'
-                '<circle cx="40" cy="40" r="30" fill="none" stroke="black" stroke-width="2"/>'
-                '<polygon points="25,55 55,55 40,25" fill="none" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=80.0, height=80.0,
-            ports={'suction': (10.0, 40.0), 'discharge': (40.0, 10.0)}
-        ))
-
-        # Separator: vertical vessel with elliptical heads
-        self.register("separator", Symbol(
-            svg=(
-                '<g id="sym_separator">'
-                '<rect x="10" y="25" width="60" height="130" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="25" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="155" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=80.0, height=170.0,
-            ports={'liquid': (40.0, 167.0), 'feed': (10.0, 90.0), 'vapor': (40.0, 13.0)}
-        ))
-
-        # Reactor: vertical vessel with internal coil indicator
-        self.register("reactor", Symbol(
-            svg=(
-                '<g id="sym_reactor">'
-                '<rect x="10" y="25" width="60" height="130" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="25" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="155" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
-                '<path d="M25,70 Q40,55 55,70 Q40,85 25,70" fill="none" stroke="black" stroke-width="1.5"/>'
-                '</g>'
-            ),
-            width=80.0, height=170.0,
-            ports={'duty': (70.0, 90.0), 'outlet': (40.0, 167.0), 'feed': (40.0, 13.0)}
-        ))
-
-        # Shell & Tube Heat Exchanger Horizontal cylinder with two
-        # tube-side nozzles on ends and two shell-side nozzles on
-        # top/bottom
-        self.register("hex", Symbol(
-            svg=(
-                '<g id="sym_hex">'
-                '<rect x="15" y="10" width="70" height="40" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="15" cy="30" rx="8" ry="20" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="85" cy="30" rx="8" ry="20" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="15" y1="30" x2="85" y2="30" stroke="black" stroke-width="1" stroke-dasharray="4,3"/>'
-                '</g>'
-            ),
-            width=100.0, height=60.0,
-            ports={
-                'tube_in': (0.0, 30.0),
-                'tube_out': (100.0, 30.0),
-                'shell_in': (50.0, 10.0),
-                'shell_out': (50.0, 50.0),
-            }
-        ))
-        
-
-        # Mixer: triangle pointing right; inlets on the left face, outlet
-        # at the right vertex.
+        # Mixer: no stencil, so drawn here as a triangle pointing right;
+        # inlets on the left face, outlet at the right vertex.
         self.register("mixer", Symbol(
             svg='<g id="sym_mixer"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></g>',
             width=50.0, height=50.0,
             ports={'outlet': (50.0, 25.0)},
             port_series=(PortSeries("in_", "W"),),
         ))
-
-        # Valve: a bowtie, two opposing triangles, with a stem bar
-        self.register("valve", Symbol(
-            svg=(
-                '<g id="sym_valve">'
-                '<polygon points="0,0 20,15 0,30" fill="none" stroke="black" stroke-width="2"/>'
-                '<polygon points="40,0 20,15 40,30" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="20" y1="0" x2="20" y2="15" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=40.0, height=30.0,
-            ports={'inlet': (0.0, 15.0), 'outlet': (40.0, 15.0)},
-            # Matches the vendored valve this fallback stands in for.
-            trim=True,
-        ))
-
-        # Vessel: vertical drum with dished heads
-        self.register("vessel", Symbol(
-            svg=(
-                '<g id="sym_vessel">'
-                '<rect x="10" y="20" width="60" height="80" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="20" rx="30" ry="10" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="100" rx="30" ry="10" fill="none" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=80.0, height=115.0,
-            ports={'inlet': (10.0, 55.0), 'outlet': (70.0, 55.0)}
-        ))
-
-        # Heater: circle with an internal zigzag (electric heater
-        # symbol)
-        self.register("heater", Symbol(
-            svg=(
-                '<g id="sym_heater">'
-                '<circle cx="30" cy="30" r="25" fill="none" stroke="black" stroke-width="2"/>'
-                '<path d="M15,30 L20,20 L25,40 L30,20 L35,40 L40,20 L45,30" fill="none" stroke="black" stroke-width="1.5"/>'
-                '</g>'
-            ),
-            width=60.0, height=60.0,
-            ports={'outlet': (55.0, 30.0), 'utility_in': (30.0, 55.0), 'inlet': (5.0, 30.0)}
-        ))
-
-        # Cooler: circle with internal zigzag plus cooling arrow
-        self.register("cooler", Symbol(
-            svg=(
-                '<g id="sym_cooler">'
-                '<circle cx="30" cy="30" r="25" fill="none" stroke="black" stroke-width="2"/>'
-                '<path d="M15,30 L20,20 L25,40 L30,20 L35,40 L40,20 L45,30" fill="none" stroke="black" stroke-width="1.5"/>'
-                '<path d="M48,12 L55,5" stroke="black" stroke-width="1.5"/>'
-                '<path d="M52,8 L55,5 L51,5" fill="none" stroke="black" stroke-width="1.5"/>'
-                '</g>'
-            ),
-            width=60.0, height=60.0,
-            ports={'outlet': (55.0, 30.0), 'inlet': (5.0, 30.0), 'utility_out': (30.0, 5.0)}
-        ))
-
-        # Distillation Column: tall vertical vessel with internal trays
-        self.register("column", Symbol(
-            svg=(
-                '<g id="sym_column">'
-                '<rect x="10" y="20" width="60" height="170" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="20" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="190" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
-                # Internal tray lines
-                '<line x1="15" y1="65" x2="65" y2="65" stroke="black" stroke-width="1"/>'
-                '<line x1="15" y1="100" x2="65" y2="100" stroke="black" stroke-width="1"/>'
-                '<line x1="15" y1="135" x2="65" y2="135" stroke="black" stroke-width="1"/>'
-                '<line x1="15" y1="170" x2="65" y2="170" stroke="black" stroke-width="1"/>'
-                '</g>'
-            ),
-            width=80.0, height=205.0,
-            ports={
-                'reboiler_duty': (70.0, 105.0),
-                'bottoms': (40.0, 202.0),
-                'feed': (10.0, 105.0),
-                'distillate': (40.0, 8.0),
-            }
-        ))
-        
 
         # Belt conveyor at its default length; other lengths are built by
         # for_unit() (conveyor_symbol).
@@ -4279,8 +4115,7 @@ class SymbolRegistry:
             iso_reg="2591",
         ), "default")
 
-        # Vendored draw.io symbols (Apache-2.0), registered after the
-        # fallbacks so they replace them and add variants.
+        # Vendored draw.io symbols (Apache-2.0).
         from pandid.render._vendored_symbols import register_vendored
         register_vendored(self)
 

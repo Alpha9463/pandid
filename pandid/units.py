@@ -2061,11 +2061,11 @@ class _MultiPortVessel(Unit):
         out_faces = _block_faces(outputs, self.default_output_face(), self.name, "outputs")
         self._faces = {}
         self.inlets = tuple(
-            self._connect(f"in_{i}", "inlet", "inlet", face)
+            self._connect(f"in_{i}", "inlet", face)
             for i, face in enumerate(in_faces, start=1)
         )
         self.outlets = tuple(
-            self._connect(f"out_{i}", "outlet", "outlet", face)
+            self._connect(f"out_{i}", "outlet", face)
             for i, face in enumerate(out_faces, start=1)
         )
         if len(self.inlets) == 1:
@@ -2074,7 +2074,7 @@ class _MultiPortVessel(Unit):
         if len(self.outlets) == 1:
             self.outlet = self.outlets[0]
 
-    def _connect(self, name: str, direction: str, role: str, face: str) -> Port:
+    def _connect(self, name: str, direction: str, face: str) -> Port:
         """Check a family port's face, then create the port.
 
         Parameters
@@ -2082,9 +2082,8 @@ class _MultiPortVessel(Unit):
         name : str
             Port name.
         direction : str
-            ``"inlet"`` or ``"outlet"``.
-        role : str
-            Symbol role used for the face check.
+            ``"inlet"`` or ``"outlet"``, also the symbol role for the face
+            check.
         face : str
             Face.
 
@@ -2093,7 +2092,7 @@ class _MultiPortVessel(Unit):
         Port
             The new port.
         """
-        self._validate_face(role, name, face)
+        self._validate_face(direction, name, face)
         port = self._add_port(name, direction, "process")
         self._faces[name] = face
         return port
@@ -6254,7 +6253,6 @@ class DistillationColumn(Column):
     :class:`Absorber` and :class:`Stripper` lack them.
     """
 
-    kind = "column"
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
@@ -6410,12 +6408,6 @@ class Absorber(Column):
     :class:`Column`'s.
     """
 
-    kind = "column"
-    PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
-    ]
-
     overhead: Port
     bottoms: Port
 
@@ -6558,7 +6550,6 @@ class Stripper(Column):
     :class:`Column`'s, including its ``internals`` default.
     """
 
-    kind = "column"
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),

@@ -59,11 +59,34 @@ from pandid.routing.metrics import (  # noqa: E402
     Point,
     crossing_point,
     min_bends,
-    overlap_length,
     path_length,
     real_bends,
     waypoint_segments,
 )
+
+
+def overlap_length(a: tuple[Point, Point], b: tuple[Point, Point], axis: str) -> float:
+    """Measure the shared length of two segments on one axis.
+
+    Parameters
+    ----------
+    a, b : tuple[Point, Point]
+        Segment endpoint pairs.
+    axis : str
+        ``"h"`` for horizontal segments or ``"v"`` for vertical segments.
+
+    Returns
+    -------
+    float
+        Length of their shared track, or zero when they do not overlap.
+    """
+    i = 1 if axis == "h" else 0
+    if abs(a[0][i] - b[0][i]) > 1e-6:
+        return 0.0
+    j = 1 - i
+    alo, ahi = sorted((a[0][j], a[1][j]))
+    blo, bhi = sorted((b[0][j], b[1][j]))
+    return max(0.0, min(ahi, bhi) - max(alo, blo))
 
 
 @dataclass
@@ -731,7 +754,7 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
     owner = next((call.sheet for call in reversed(rec.calls)
                   if _same_drawing(call.sheet, fs)), fs)
     final_pass = rec.final_pass(owner)
-    graph = final_pass[-1].graph if final_pass else VisibilityGraph(fs, margin=15.0)
+    graph = final_pass[-1].graph if final_pass else VisibilityGraph(fs)
     eligible = eligible_streams(fs, graph)
     stream_call = pair_calls(eligible, final_pass, name)
 
