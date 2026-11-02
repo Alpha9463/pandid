@@ -76,7 +76,8 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
 from decimal import Decimal
 from difflib import get_close_matches
@@ -557,6 +558,23 @@ def _fail_from(error: Exception, where: str) -> SpecError:
     return SpecError(f"{where}: {message}")
 
 
+@contextmanager
+def _blame(where: str, errors: tuple[type[Exception], ...] = (ValueError,)) -> Iterator[None]:
+    """Re-raise a library error from the block as a SpecError naming the spec entry.
+
+    Parameters
+    ----------
+    where : str
+        Spec path.
+    errors : tuple of type, optional
+        Library error types to convert.
+    """
+    try:
+        yield
+    except errors as e:
+        raise _fail_from(e, where) from None
+
+
 # --------------------------------------------------------------
 # The equipment registry
 # --------------------------------------------------------------
@@ -812,18 +830,14 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         _read_station_assembly(fs, entry, f"stations[{i}]")
 
     for stream, value, where_i in pending_inline:
-        try:
+        with _blame(where_i):
             fs._set_inline_at(stream, _number(value, where_i))
-        except ValueError as e:
-            raise _fail_from(e, where_i) from None
 
     from pandid.inline import restore_logical_run
     for stream, value, where_i in pending_logical:
         endpoint = _read_endpoint(fs, value, where_i)
-        try:
+        with _blame(where_i):
             restore_logical_run(fs, stream, endpoint)
-        except ValueError as e:
-            raise _fail_from(e, where_i) from None
 
     for i, assembly in enumerate(fs._station_assemblies):
         root = assembly.run
@@ -985,10 +999,8 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key, default in cls.COMPOSITION.items():
         if key in data:
             kwargs[key] = _composed(data[key], default, f"{where}.{key}")
-    try:
+    with _blame(where):
         unit = cls(name, **kwargs)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
     _read_common(fs, unit, data, where)
     # Order faces after _read_common has moved ports onto them. The key
@@ -1166,10 +1178,8 @@ def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
     number = data.get("number")
     if number is not None and not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
-    try:
+    with _blame(where):
         return fs.add_loop(_text(data["variable"], f"{where}.variable"), number)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
@@ -1216,10 +1226,8 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     for key in ("width", "height"):
         if key in data:
             kwargs[key] = _number(data[key], f"{where}.{key}")
-    try:
+    with _blame(where):
         inst = Instrument(type_, number, **kwargs)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
     if "quadrants" in data:
         _annotate_instrument(inst, data["quadrants"], f"{where}.quadrants")
     _read_common(fs, inst, data, f"{where} {inst.name!r}")
@@ -1251,10 +1259,8 @@ def _annotate_instrument(inst: Instrument, entry: Any, where: str) -> None:
         codes[key] = ([_text(v, f"{where}.{key}[{i}]") for i, v in enumerate(value)]
                       if isinstance(value, (list, tuple))
                       else _text(value, f"{where}.{key}"))
-    try:
+    with _blame(where):
         inst.annotate(**codes)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str) -> None:
@@ -1280,10 +1286,8 @@ def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str)
         unit.label_pos = _text(data["label_pos"], f"{where}.label_pos")
     if "new_line_number" in data:
         unit.new_line_number = _flag(data["new_line_number"], f"{where}.new_line_number")
-    try:
+    with _blame(where):
         fs.add(unit)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
     if "pin" in data:
         _read_pin(unit, data["pin"], f"{where}.pin")
     if "port_faces" in data:
@@ -1338,10 +1342,8 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
     for key in ("description", "reference"):
         if key in entry:
             kwargs[key] = _drawn(entry[key], f"{where}.{key}")
-    try:
+    with _blame(where, (TypeError, ValueError)):
         inst = fs.add_balloon(element, **kwargs)
-    except (TypeError, ValueError) as e:
-        raise _fail_from(e, where) from None
     # add_balloon already added the balloon, so set the remaining fields
     # here instead of through _read_common.
     if "new_line_number" in entry:
@@ -1390,7 +1392,7 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
                             {a for a in ("x", "y") if a in kwargs},
                             {r for r in ("col", "row") if r in kwargs},
                             f"{where}.port")
-    try:
+    with _blame(where):
         # One pin() call for the corner axes and one per named port.
         # port=None is explicit so an unported coordinate stays a corner,
         # even on a flag whose default anchor is its port. Orientation,
@@ -1400,8 +1402,6 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
         for nozzle in dict.fromkeys(ports.values()):
             unit.pin(port=nozzle,
                      **{axis: kwargs[axis] for axis, p in ports.items() if p == nozzle})
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
@@ -1504,10 +1504,8 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
     """
     for port_name, face in _mapping(entry, where).items():
         _find_port(unit, port_name, where)
-        try:
+        with _blame(f"{where}.{port_name}"):
             unit.nozzle(port_name, _text(face, f"{where}.{port_name}"))
-        except ValueError as e:
-            raise _fail_from(e, f"{where}.{port_name}") from None
 
 
 def _read_port_order(
@@ -1533,10 +1531,8 @@ def _read_port_order(
         at = f"{where}.{face}"
         ports = [_find_port(unit, name, at)
                  for name in _sequence(names, at)]
-        try:
+        with _blame(at):
             unit.order_on(_text(face, at), ports)
-        except ValueError as e:
-            raise _fail_from(e, at) from None
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
@@ -1712,10 +1708,8 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
     for key in LINE_NUMBER_FIELDS:
         if key in data:
             kwargs[key] = _component(data[key], f"{where}.{key}")
-    try:
+    with _blame(where):
         stream = fs.connect(src, dst, **kwargs)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
     for key in ("color", "dasharray"):
         if key in data:
@@ -1920,10 +1914,8 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
     for key in ("offset", "angle"):
         if key in data:
             kwargs[key] = _number(data[key], f"{where}.{key}")
-    try:
+    with _blame(where, (TypeError, ValueError)):
         inst.attach(host, **kwargs)
-    except (TypeError, ValueError) as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_section(entry: Any, where: str) -> tuple[str, str]:
