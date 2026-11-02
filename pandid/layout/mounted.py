@@ -511,9 +511,10 @@ def _on_corridor(
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame centred on a leg point, piped in flow order.
 
-    A pinned device keeps its pinned turn, mirrored along the pipe if the
-    flow runs the other way. Otherwise the first quarter turn and mirror
-    that put both nozzles on the leg, inlet upstream, are used. A pose that
+    A device whose author stated a quarter turn keeps it, mirrored along the
+    pipe if the flow runs the other way. Otherwise the first quarter turn
+    and mirror that put both nozzles on the leg, inlet upstream, are used,
+    so a device on an upright leg is turned to run along it. A pose that
     does is set with its nozzles on the leg, since they need not be at the
     box centre; one that cannot is centred on the point.
 
@@ -537,8 +538,10 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     direction = (forward, 0) if level else (0, forward)
     ordinate = ay if level else ax
     assert unit.frame is not None
-    if unit.pin_ is not None:
-        # A pinned pose is kept, mirrored along the pipe when the flow runs the other way.
+    # A pin with no turn (a mirror, or what is left of a position) states no turn.
+    turned = unit.pin_ is not None and bool(unit.pin_.orientation % 360)
+    if turned:
+        # A stated turn is kept, mirrored along the pipe when the flow runs the other way.
         turn, flip = int(unit.frame.orientation), bool(unit.frame.mirrored)
         poses = [(turn, flip), (turn, not flip)]
     else:
@@ -557,7 +560,7 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
             fits.append(candidate)
     if not fits:
         return _candidate(unit, point, *poses[0])
-    if unit.pin_ is not None or level or "actuator" not in unit.ports:
+    if turned or level or "actuator" not in unit.ports:
         return fits[0]
     # On an upright pipe the actuator goes to the left of the flow, where its
     # balloons hang by default, so its signals need not cross the pipe.
@@ -604,7 +607,11 @@ def _length(element: Element, leg: Leg) -> float:
     if isinstance(element, StationAssembly):
         return _main_width(element) if _level(leg) else float("inf")
     frame = _device_frame(element, (0.0, 0.0), leg)
-    return frame.w if _level(leg) else frame.h
+    level = _level(leg)
+    (ax, ay), (bx, by) = (port_point(element, frame, name) for name in ("inlet", "outlet"))
+    if abs((ay - by) if level else (ax - bx)) > 1.0:
+        return float("inf")  # a stated turn that runs across this leg
+    return frame.w if level else frame.h
 
 
 def _level_length(element: Element) -> float:
