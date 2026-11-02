@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from pandid.geometry import Frame
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.stages import slot
-from pandid.portgeom import port_faces, port_offset, unit_box
+from pandid.portgeom import port_faces, port_point, unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -81,6 +81,7 @@ class _Node:
     pad: Pad = Pad()
     layer: int = 0
     y: float = 0.0
+    faces: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass(eq=False)
@@ -114,12 +115,15 @@ def _shift(unit: Unit) -> float:
     return unit_box(unit, Frame(x=0.0, y=0.0, w=s.w, h=s.h, mirrored=s.mirrored))[0]
 
 
-def _nozzle(port: Port) -> tuple[float, float]:
-    """Return a nozzle's offset from its unit's drawn box."""
+def _nozzle(port: Port, face: str | None = None) -> tuple[float, float]:
+    """Return a nozzle's offset from its unit's drawn box, on ``face`` if given."""
     unit = port.owner
     assert unit is not None
-    px, py = port_offset(unit, port.name, slot(unit))
-    return (px - _shift(unit), py)
+    s = slot(unit)
+    probe = Frame(x=-_shift(unit), y=0.0, w=s.w, h=s.h, orientation=s.orientation,
+                  mirrored=s.mirrored, mirror_y=s.mirror_y,
+                  port_faces={port.name: face} if face else {})
+    return port_point(unit, probe, port.name)
 
 
 def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
@@ -127,7 +131,7 @@ def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
     if port is None:
         return (node.w / 2, 0.0)
     assert port.owner is not None
-    px, py = _nozzle(port)
+    px, py = _nozzle(port, node.faces.get(id(port)))
     return (node.dx[port.owner] + px, node.dy[port.owner] + py)
 
 
@@ -162,6 +166,11 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     layers, segs = _chains(nodes, edges, units)
     for seg in segs:
         seg.back = id(seg.link) not in kept
+        # A nozzle with a menu of faces is read on the face toward its peer.
+        for node, port, want in ((seg.left, seg.lport, "E"), (seg.right, seg.rport, "W")):
+            if (port is not None and _face(port) is None
+                    and want in port_faces(port.owner, port.name, slot(port.owner))):
+                node.faces[id(port)] = want
     for layer in layers.values():
         for rank, node in enumerate(layer):
             for unit in node.members:
@@ -452,11 +461,10 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             if n in pinned:
                 targets.append([(pinned[n], 1e9)])
                 continue
-            t = [(n.y, 1e-3)]
-            for other, mine, theirs, w in near.get(n, []):
-                t.append((other.y + _offset(other, theirs)[1] - _offset(n, mine)[1]
-                          + lead.get(_face(mine) or "", 0.0) - lead.get(_face(theirs) or "", 0.0), w))
-            targets.append(t)
+            t = [(other.y + _offset(other, theirs)[1] - _offset(n, mine)[1]
+                  + lead.get(_face(mine) or "", 0.0) - lead.get(_face(theirs) or "", 0.0), w)
+                 for other, mine, theirs, w in near.get(n, [])]
+            targets.append(t or [(n.y, 1e-3)])
         tops = _isotonic(targets, [n.h + _gap(n, b) for n, b in zip(layer, layer[1:])])
         for n, y in zip(layer, tops):
             n.y = y
