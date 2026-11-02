@@ -19,7 +19,7 @@ from scripts.layout_compare import _fingerprint
 
 
 @pytest.mark.parametrize(
-    "stem", ["10_ethanol_pfd", "16_demineralised_water", "17_stirred_reactor_train"]
+    "stem", ["10_ethanol_pfd", "16_demineralised_water", "19_absorber_stripper"]
 )
 def test_default_route_preserves_the_qualified_settled_drawing(stem: str) -> None:
     """Preserve the accepted trial and model identities through the final search.
