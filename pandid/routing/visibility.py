@@ -174,18 +174,18 @@ class VisibilityGraph:
         Connections between adjacent clear nodes.
     """
 
-    def __init__(self, fs: "Flowsheet", margin: float = 15.0):
+    def __init__(self, fs: "Flowsheet"):
         """Build routing lanes from resolved flowsheet geometry.
 
         Parameters
         ----------
         fs : Flowsheet
             Flowsheet with placed frames and resolved port faces.
-        margin : float, default=15.0
-            Clearance around unit and label obstacles.
         """
         from pandid.layout.attach import is_attached
         from pandid.portgeom import port_anchor, tag_width
+
+        margin = 15.0  # clearance around unit and label obstacles
 
         self.obstacles: List[Rect] = []
         self.body_obstacles: List[Tuple["Unit", Rect]] = []

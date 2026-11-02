@@ -1,7 +1,7 @@
 """Separate routed streams that share a track.
 
 Runs of different streams that lie on nearly the same track and overlap
-along their length are moved onto distinct tracks at least ``spacing``
+along their length are moved onto distinct tracks at least :data:`SPACING`
 apart. Runs that end at a nozzle keep their tracks, as does every run of a
 route the author drew with ``via()``, which is never rewritten.
 """
@@ -11,6 +11,10 @@ from typing import Any, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
+
+#: Minimum distance between separated tracks.
+SPACING = 6.0
+
 
 def _compute_offsets(
     streams: "Sequence[Stream]", spacing: float
@@ -283,7 +287,7 @@ def _apply_offsets(
     return result
 
 
-def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
+def separate_streams(fs: "Flowsheet") -> None:
     """Separate overlapping parallel runs and write the new waypoints.
 
     Called once per routing pass, on the complete set of streams.
@@ -292,10 +296,8 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
     ----------
     fs : Flowsheet
         Routed sheet; route waypoints are updated in place.
-    spacing : float, default=6.0
-        Minimum distance between separated tracks.
     """
-    h_offsets, v_offsets = _compute_offsets(fs.streams, spacing)
+    h_offsets, v_offsets = _compute_offsets(fs.streams, SPACING)
     new_waypoints = _apply_offsets(fs.streams, h_offsets, v_offsets)
     for s in fs.streams:
         # A via() route keeps the author's own list.
@@ -304,7 +306,7 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
 
 
 def preview_separated_waypoints(
-    streams: "Sequence[Stream]", spacing: float = 6.0
+    streams: "Sequence[Stream]",
 ) -> dict[int, list[tuple[float, float]]]:
     """Return where :func:`separate_streams` would put each stream's waypoints.
 
@@ -317,13 +319,11 @@ def preview_separated_waypoints(
     ----------
     streams : Sequence[Stream]
         Streams routed so far.
-    spacing : float, default=6.0
-        Minimum distance between separated tracks.
 
     Returns
     -------
     dict[int, list[tuple[float, float]]]
         Separated waypoints keyed by ``id(stream)``.
     """
-    h_offsets, v_offsets = _compute_offsets(streams, spacing)
+    h_offsets, v_offsets = _compute_offsets(streams, SPACING)
     return _apply_offsets(streams, h_offsets, v_offsets)

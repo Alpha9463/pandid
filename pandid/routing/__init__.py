@@ -268,7 +268,7 @@ class DefaultRouter:
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
-        graph = VisibilityGraph(fs, margin=15.0)
+        graph = VisibilityGraph(fs)
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
         # Index the streams drawn earlier in this pass. Rebuild it on every
         # call because each pass routes against new geometry.

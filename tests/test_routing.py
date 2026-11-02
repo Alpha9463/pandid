@@ -181,7 +181,7 @@ def test_the_obstacle_index_sees_what_an_exhaustive_scan_sees():
     fs.connect(valve.outlet, prod.inlet)
     fs.layout()
 
-    graph = VisibilityGraph(fs, margin=15.0)
+    graph = VisibilityGraph(fs)
     assert len(graph.obstacles) >= 8 and len(graph.nodes) >= 500  # Require a non-trivial graph.
 
     scanned_nodes = {
@@ -250,7 +250,7 @@ def test_router_integration():
     assert s.route is not None
     wp = s.route.waypoints
     # Check the endpoints, orthogonality, and that the route turns.
-    graph = VisibilityGraph(fs, margin=15.0)
+    graph = VisibilityGraph(fs)
     assert wp[0] == pytest.approx(graph.port_anchors[("F", "outlet")])
     assert wp[-1] == pytest.approx(graph.port_anchors[("P", "inlet")])
     for (x1, y1), (x2, y2) in zip(wp, wp[1:]):
@@ -495,7 +495,7 @@ def test_find_path_names_the_endpoint_it_cannot_search_from():
     """
     fs = _straight_run()
     fs.layout()
-    graph = VisibilityGraph(fs, margin=15.0)
+    graph = VisibilityGraph(fs)
     node = next(iter(graph.nodes))
     with pytest.raises(ValueError, match="non-finite start"):
         find_path(graph, (float("nan"), 0.0), node)
@@ -1275,17 +1275,13 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     """
     from pandid.routing import separation
 
-    def lowered(
-        streams: list[Stream], spacing: float = 6.0
-    ) -> dict[int, list[tuple[float, float]]]:
+    def lowered(streams: list[Stream]) -> dict[int, list[tuple[float, float]]]:
         """Return every route 6 px lower, as a separation preview.
 
         Parameters
         ----------
         streams : list[Stream]
             Streams routed so far.
-        spacing : float, default=6.0
-            Unused.
 
         Returns
         -------

@@ -754,7 +754,7 @@ def measure_sheet(fs: Flowsheet, name: str) -> SheetReport:
     owner = next((call.sheet for call in reversed(rec.calls)
                   if _same_drawing(call.sheet, fs)), fs)
     final_pass = rec.final_pass(owner)
-    graph = final_pass[-1].graph if final_pass else VisibilityGraph(fs, margin=15.0)
+    graph = final_pass[-1].graph if final_pass else VisibilityGraph(fs)
     eligible = eligible_streams(fs, graph)
     stream_call = pair_calls(eligible, final_pass, name)
 

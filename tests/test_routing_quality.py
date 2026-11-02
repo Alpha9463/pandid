@@ -61,7 +61,7 @@ def test_forward_streams_do_not_route_on_the_recycle_lane():
     fs = _ammonia_loop()
     fs.layout()
     fs.route()
-    graph = VisibilityGraph(fs, margin=15.0)
+    graph = VisibilityGraph(fs)
     lanes = {round(y, 1) for y in graph.recycle_y}
     assert lanes, "expected global recycle lanes to exist for this loop"
     for s in fs.streams:
