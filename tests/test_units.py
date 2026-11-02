@@ -62,10 +62,21 @@ def test_a_non_positive_or_non_finite_size_is_refused(bad):
     nozzle are drawn as if the symbol were still there. Zero is the same
     fault by a different route -- nothing is left to draw a nozzle onto.
     """
-    with pytest.raises(ValueError, match="not a usable size"):
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
         _Widget("W-1", width=bad)
-    with pytest.raises(ValueError, match="not a usable size"):
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
         _Widget("W-2", height=bad)
+
+
+@pytest.mark.parametrize("bad", [-5, 0, float("nan"), float("inf")])
+def test_a_bad_size_assigned_later_is_refused_and_the_old_one_kept(bad):
+    """The constructor's rule holds for ``p.width = ...`` too (#579)."""
+    w = _Widget("W-4", width=90, height=40)
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
+        w.width = bad
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
+        w.height = bad
+    assert (w.width, w.height) == (90, 40)
 
 
 def test_a_positive_size_and_none_are_both_still_accepted():

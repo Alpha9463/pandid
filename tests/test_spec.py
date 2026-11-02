@@ -256,6 +256,17 @@ def test_a_column_or_reactor_feed_count_round_trips():
     assert "n_feeds" not in written["R-1"]
 
 
+def test_a_two_feed_separator_round_trips():
+    """A stream on ``feed_2`` needs the count written and read back (#579)."""
+    fs = Flowsheet("T")
+    sep = fs.add(units.Separator("V-1", n_feeds=2))
+    wash = fs.add(units.Feed("F-2"))
+    fs.connect(wash.outlet, sep.port("feed_2"))
+    spec = fs.to_dict()
+    assert spec["units"][0]["n_feeds"] == 2
+    assert Flowsheet.from_dict(spec).to_dict() == spec
+
+
 def test_absorber_and_stripper_kind_round_trips():
     """``kind: Absorber``/``Stripper`` is a fact about which nozzles the
     drawing has, and it is the class name -- not ``Column`` plus a variant
@@ -637,7 +648,9 @@ def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
 def test_a_feed_count_on_a_kind_with_no_feed_family_is_rejected():
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_feeds": 2}]})
-    assert "only a Column or a Reactor takes 'n_feeds', not a Pump" in str(excinfo.value)
+    assert "only a Column or a Reactor or a Separator takes 'n_feeds', not a Pump" in str(
+        excinfo.value
+    )
 
 
 # --- composition: what a body carries -----------------------------------------

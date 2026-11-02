@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A size assigned after construction is checked (#579).** `unit.width = -5`
+  or `0` raises `ValueError`, as the constructor does, and leaves the size
+  unchanged.
+- **A multi-feed `Separator` round-trips through a spec (#579).**
+  `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
 - **A refused `add_valve_station()` leaves the sheet unchanged (#564).** A
   station refused part-way, such as on a member tag clash, used to leave
   the members already built.
