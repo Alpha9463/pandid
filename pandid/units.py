@@ -18,10 +18,9 @@ import math
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
-from pandid._checks import check_real, check_whole, is_whole
+from pandid._checks import check_real, check_whole, is_whole, suggest
 from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
@@ -396,8 +395,7 @@ class Unit:
         ValueError
             The error to raise.
         """
-        close = get_close_matches(variant, cls.VARIANTS, n=1, cutoff=0.6)
-        suggestion = f" (did you mean {close[0]!r}?)" if close else ""
+        suggestion = suggest(variant, cls.VARIANTS)
         generic = cls._generic_class()
         escape = (
             ""

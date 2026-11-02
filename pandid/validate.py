@@ -31,7 +31,9 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+from pandid._checks import suggest
+from pandid.layout.conflicts import _SQUARE_TOL, boxes_overlap, segment_crosses_box
+from pandid.portgeom import COMPASS
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -42,11 +44,6 @@ _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
 #: ``pin-not-honored``. A pinned axis is copied onto the frame, so only
 #: float rounding through a nozzle offset should remain.
 _PIN_TOL = 0.05
-
-#: Distance in px a segment may be off square and still count as
-#: orthogonal. A sloping segment is also invisible to
-#: ``route-crosses-unit``, which is why ``route-diagonal`` reports it.
-_SQUARE_TOL = 0.5
 
 #: ``(kind, variant)`` pairs a run is meant to change centreline through,
 #: so ``run-off-elevation`` ignores them. An eccentric reducer is flat on
@@ -300,10 +297,6 @@ def _square(x1, y1, x2, y2) -> bool:
     return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
-#: Outward direction of each face, in drawing coordinates (y down).
-_OUTWARD = {"N": (0.0, -1.0), "S": (0.0, 1.0), "E": (1.0, 0.0), "W": (-1.0, 0.0)}
-
-
 def _corners(pts):
     """Return a drawn path as its corners.
 
@@ -366,7 +359,7 @@ def _pierced_end(path, ends):
         for k, other, nozzle, far in tips:
             if other is None or other[0] is not end[0]:
                 continue
-            dx, dy = _OUTWARD[other[3]]
+            dx, dy = COMPASS[other[3]]
             if (far[0] - nozzle[0]) * dx + (far[1] - nozzle[1]) * dy >= -_SQUARE_TOL:
                 clear.add(k)
         for k in range(len(path) - 1):
@@ -482,8 +475,6 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     list[Issue]
         Errors, then warnings.
     """
-    from difflib import get_close_matches
-
     from pandid import units
     from pandid.deprecation import findings as deprecation_findings
     from pandid.portgeom import resolve_size
@@ -522,11 +513,10 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         # Empty means unset; readers use ``label_pos or "top"``.
         if not side or side in LABEL_POSITIONS:
             continue
-        close = get_close_matches(str(side).strip().lower(), LABEL_POSITIONS, n=1, cutoff=0.6)
         errors.append(Issue(
             "error", "label-pos-unknown",
             f"{u.name} asks for label_pos={side!r}, which no side answers to"
-            + (f" (did you mean {close[0]!r}?)" if close else "")
+            + suggest(str(side).strip().lower(), LABEL_POSITIONS)
             + f". Use one of {', '.join(LABEL_POSITIONS)}, or leave label_pos "
               f"unset and let the engine put the tag on the first face no "
               f"nozzle leaves from"))
@@ -545,11 +535,10 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         unknown.add(u.kind)
         # Describe the box the registry actually draws.
         blank = default_registry.get(u.kind)
-        close = get_close_matches(u.kind, catalogue, n=1, cutoff=0.6)
         warnings.append(Issue(
             "warning", "symbol-kind-unknown",
             f"{u.name} is a {u.kind!r}, which no symbol is registered for"
-            + (f" (did you mean {close[0]!r}?)" if close else "")
+            + suggest(u.kind, catalogue)
             + f"; it is drawn as a blank {blank.width:g}x{blank.height:g} box with "
               f"no ports. Register artwork for it with "
               f"default_registry.register({u.kind!r}, Symbol(...))"))

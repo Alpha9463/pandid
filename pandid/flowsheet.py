@@ -1893,62 +1893,38 @@ class Flowsheet:
         # Guard the sheet and both end units: numbering renames other streams
         # and another_port() may add a port to a unit.
         with self._unchanged_if_it_raises((self, *_port_bearers(src, dst))):
-            return self._connect(
-                src, dst, kind=kind, name=name,
-                draw_as_recycle=draw_as_recycle, size=size, schedule=schedule,
-                service=service, sequence=sequence, spec=spec,
-                insulation=insulation, ends=ends)
+            src, dst, kind = self._resolve_connection(src, dst, kind=kind, ends=ends)
+            # Writes start here; another_port() adds a member to a port pool.
+            if src.stream is not None:
+                src = src.owner.another_port(src)
+            if dst.stream is not None:
+                dst = dst.owner.another_port(dst)
 
-    def _connect(self, src: "Port | Unit", dst: "Port | Unit", *,
-                 kind: str | None, name: str | None, draw_as_recycle: bool,
-                 size: "str | float | None", schedule: "str | float | None",
-                 service: "str | float | None", sequence: "str | float | None",
-                 spec: "str | float | None", insulation: "str | float | None",
-                 ends: "str | tuple[str, str] | None") -> Stream:
-        """Create the stream for :meth:`connect`, inside its rollback guard.
-
-        Parameters
-        ----------
-        src, dst, kind, name, draw_as_recycle, size, schedule, service, sequence, spec, insulation, ends
-            As for :meth:`connect`.
-
-        Returns
-        -------
-        Stream
-            The new, numbered stream.
-        """
-        src, dst, kind = self._resolve_connection(src, dst, kind=kind, ends=ends)
-        # Writes start here; another_port() adds a member to a port pool.
-        if src.stream is not None:
-            src = src.owner.another_port(src)
-        if dst.stream is not None:
-            dst = dst.owner.another_port(dst)
-
-        stream = Stream(
-            name=name or "",  # numbered below when auto-named
-            source=src,
-            dest=dst,
-            kind=kind,
-            draw_as_recycle=draw_as_recycle,
-            auto_named=not name,
-            size=size,
-            schedule=schedule,
-            service=service,
-            sequence=sequence,
-            spec=spec,
-            insulation=insulation,
-            ends=ends,
-        )
-        src.stream = stream
-        dst.stream = stream
-        self.streams.append(stream)
-        self._invalidate_layout()
-        # Number now so the returned stream shows its drawn number. Number
-        # only this stream when possible; a full pass per connect() would
-        # make building a sheet quadratic.
-        if not self._number_appended(stream):
-            self.renumber_streams()
-        return stream
+            stream = Stream(
+                name=name or "",  # numbered below when auto-named
+                source=src,
+                dest=dst,
+                kind=kind,
+                draw_as_recycle=draw_as_recycle,
+                auto_named=not name,
+                size=size,
+                schedule=schedule,
+                service=service,
+                sequence=sequence,
+                spec=spec,
+                insulation=insulation,
+                ends=ends,
+            )
+            src.stream = stream
+            dst.stream = stream
+            self.streams.append(stream)
+            self._invalidate_layout()
+            # Number now so the returned stream shows its drawn number. Number
+            # only this stream when possible; a full pass per connect() would
+            # make building a sheet quadratic.
+            if not self._number_appended(stream):
+                self.renumber_streams()
+            return stream
 
     def _resolve_connection(
         self, src: "Port | Unit", dst: "Port | Unit", *, kind: str | None,
@@ -2443,21 +2419,17 @@ class Flowsheet:
             If a naming scheme cannot name a group.
         """
         with self._unchanged_if_it_raises():
-            self._renumber_streams()
-
-    def _renumber_streams(self) -> None:
-        """Number every stream and cache the groups for :meth:`connect`."""
-        groups = self._stream_groups()
-        names = []
-        for place, group in enumerate(groups, 1):
-            # Named groups still use their place, so counted numbers cannot
-            # repeat a name the counter has passed.
-            names.append(self._name_group(group, place))
-        self._tail = [s for s in self.streams if s.kind != "material"]
-        self._number_tail(len(groups))
-        # Cache for _number_appended().
-        self._groups, self._group_names = groups, names
-        self._group_of = {id(s): i for i, g in enumerate(groups) for s in g}
+            groups = self._stream_groups()
+            names = []
+            for place, group in enumerate(groups, 1):
+                # Named groups still use their place, so counted numbers cannot
+                # repeat a name the counter has passed.
+                names.append(self._name_group(group, place))
+            self._tail = [s for s in self.streams if s.kind != "material"]
+            self._number_tail(len(groups))
+            # Cache for _number_appended().
+            self._groups, self._group_names = groups, names
+            self._group_of = {id(s): i for i, g in enumerate(groups) for s in g}
 
     def _number_appended(self, stream: "Stream") -> bool:
         """Number the stream :meth:`connect` just added without a full pass.
@@ -2574,44 +2546,27 @@ class Flowsheet:
             The name given.
         """
         with self._unchanged_if_it_raises(group):
-            return self._name_group_now(group, place)
+            # The line sequence and stream number share the place but not the start.
+            sequence = str(self.line_number_start + place - 1)
+            number = self.stream_number_start + place - 1
+            for s in group:
+                # Keep a sequence the author set.
+                if s.sequence is None or s.sequence == s._auto_sequence:
+                    s.sequence = s._auto_sequence = sequence
+            # An explicit name on any segment names its whole group.
+            name = next((s.name for s in group if not s.auto_named), None)
+            if name is None:
+                carrier = next((s for s in group if s.has_line_number), None)
+                name = (_format_line_number(self.line_numbering_scheme, carrier)
+                        if carrier is not None else
+                        # A callable gets the same number a format string does.
+                        _format_stream_name(self.stream_naming_scheme, number))
+            for s in group:
+                if s.auto_named:
+                    s.name = name
+            return name
 
-    def _name_group_now(self, group: "list[Stream]", place: int) -> str:
-        """Name one group's segments, without the rollback guard.
-
-        Parameters
-        ----------
-        group : list[Stream]
-            Segments of one run.
-        place : int
-            1-based position in the sequence.
-
-        Returns
-        -------
-        str
-            The name given.
-        """
-        # The line sequence and stream number share the place but not the start.
-        sequence = str(self.line_number_start + place - 1)
-        number = self.stream_number_start + place - 1
-        for s in group:
-            # Keep a sequence the author set.
-            if s.sequence is None or s.sequence == s._auto_sequence:
-                s.sequence = s._auto_sequence = sequence
-        # An explicit name on any segment names its whole group.
-        name = next((s.name for s in group if not s.auto_named), None)
-        if name is None:
-            carrier = next((s for s in group if s.has_line_number), None)
-            name = (_format_line_number(self.line_numbering_scheme, carrier)
-                    if carrier is not None else
-                    # A callable gets the same number a format string does.
-                    _format_stream_name(self.stream_naming_scheme, number))
-        for s in group:
-            if s.auto_named:
-                s.name = name
-        return name
-
-    def _number_tail(self, used: int) -> int:
+    def _number_tail(self, used: int) -> None:
         """Number non-material lines after the places material runs used.
 
         Energy lines come before signal lines, each in creation order. Only
@@ -2622,18 +2577,12 @@ class Flowsheet:
         ----------
         used : int
             Places already used.
-
-        Returns
-        -------
-        int
-            Places used after numbering the tail.
         """
         with self._unchanged_if_it_raises(self._tail):
             for s in sorted(self._tail, key=lambda s: s.kind != "energy"):
                 if s.auto_named:
                     used += 1
                     self._name_group([s], used)
-        return used
 
     def validate(self, *, diagram: str | None = None) -> list:
         """Return validation findings, errors first, then warnings.
@@ -2880,17 +2829,12 @@ class Flowsheet:
             if ext == ".drawio":
                 # The debug overlay has no draw.io counterpart, so refuse it.
                 # Compare with the default: debug=0 is not a request.
-                sheet_only = [
-                    name for name, given, default in (
-                        ("debug", debug, False),
-                    ) if given != default
-                ]
-                if sheet_only:
+                if debug != 0:
                     raise ValueError(
-                        f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
-                        f"a .drawio file has no counterpart for: the coordinate "
-                        f"overlay is scaffolding rather than drawing. Render the "
-                        f"sheet to .svg/.pdf/.png, or drop these arguments"
+                        "debug describe(s) a drawing sheet that "
+                        "a .drawio file has no counterpart for: the coordinate "
+                        "overlay is scaffolding rather than drawing. Render the "
+                        "sheet to .svg/.pdf/.png, or drop these arguments"
                     )
                 Path(path).write_text(
                     self.to_drawio(diagram=diagram, page_size=page_size,

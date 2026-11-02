@@ -183,7 +183,7 @@ class VisibilityGraph:
             Flowsheet with placed frames and resolved port faces.
         """
         from pandid.layout.attach import is_attached
-        from pandid.portgeom import port_anchor, tag_width
+        from pandid.portgeom import port_anchor, tag_width, unit_box
 
         margin = 15.0  # clearance around unit and label obstacles
 
@@ -201,7 +201,6 @@ class VisibilityGraph:
             if f is None:
                 continue
             u_width, u_height = f.w, f.h
-            mirrored = f.mirrored
 
             tap = getattr(u, "tap", None)
             inline = (
@@ -212,10 +211,8 @@ class VisibilityGraph:
             )
 
             if not inline:
-                if u.kind == "feed" and not mirrored:
-                    body = Rect(f.x + 50.0 - u_width, f.x + 50.0, f.y, f.y + u_height)
-                else:
-                    body = Rect(f.x, f.x + u_width, f.y, f.y + u_height)
+                x0, y0, x1, y1 = unit_box(u, f)
+                body = Rect(x0, x1, y0, y1)
                 self.obstacles.append(body)
                 self.body_obstacles.append((u, body))
 

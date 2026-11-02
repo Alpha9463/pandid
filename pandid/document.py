@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field, fields, replace
 from typing import Any, Literal
 
-from pandid._checks import check_real
+from pandid._checks import check_real, suggest
 
 # --------------------------------------------------------------
 # Location references (ISO 15519-1:2010 Clause 9)
@@ -819,12 +819,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
         by_name = {u.name: u for u in fs.units}
         missing = [tag for tag in include if tag not in by_name]
         if missing:
-            from difflib import get_close_matches
-
-            hints = []
-            for tag in missing:
-                close = get_close_matches(tag, list(by_name), n=1, cutoff=0.6)
-                hints.append(f"{tag!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
+            hints = [f"{tag!r}{suggest(tag, by_name)}" for tag in missing]
             raise ValueError(
                 f"equipment_list(include=...) names {', '.join(hints)}, which "
                 f"{'is' if len(missing) == 1 else 'are'} not on this flowsheet. "
