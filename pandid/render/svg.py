@@ -15,7 +15,7 @@ from functools import lru_cache
 from pandid.portgeom import tag_width
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, ident
-from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
+from pandid.render.symbols import (ARROWHEAD, _STROKE, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.route_geometry import stream_polyline
@@ -2408,11 +2408,6 @@ def _size_tag(sym, u) -> str:
     return f"_s{_num(box[0])}x{_num(box[1])}"
 
 
-# Every symbol writes stroke-width as an attribute, never through CSS, so
-# a string rewrite suffices.
-_STROKE_WIDTH = re.compile(r'stroke-width="([\d.]+)"')
-
-
 def _at_pen_scale(svg: str, scale: float) -> str:
     """Return ``svg`` with every line weight divided by ``scale``.
 
@@ -2433,7 +2428,7 @@ def _at_pen_scale(svg: str, scale: float) -> str:
     """
     if scale == 1.0:
         return svg
-    return _STROKE_WIDTH.sub(
+    return _STROKE.sub(
         lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
 
 

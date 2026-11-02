@@ -150,9 +150,11 @@ functions.
 from __future__ import annotations
 
 import hashlib
+import html
 import math
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
+from xml.sax.saxutils import escape
 
 from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
 # ISO 10628-1 5.3.1 c) detail weight, shared so parts match the sheet.
@@ -1066,11 +1068,7 @@ def _attr(value) -> str:
     str
         Quoted attribute value.
     """
-    text = writable(value)
-    for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"),
-                         ('"', "&quot;"), ("'", "&apos;")):
-        text = text.replace(char, entity)
-    return f'"{text}"'
+    return '"' + escape(writable(value), {'"': "&quot;", "'": "&apos;"}) + '"'
 
 
 def _html_text(value) -> str:
@@ -1091,10 +1089,7 @@ def _html_text(value) -> str:
     str
         Escaped text.
     """
-    text = writable(value)
-    for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")):
-        text = text.replace(char, entity)
-    return text
+    return html.escape(writable(value), quote=False)
 
 
 def _num(v: float) -> str:
