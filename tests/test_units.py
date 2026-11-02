@@ -1,5 +1,4 @@
 import re
-import warnings
 
 import pytest
 from pandid.units import Unit
@@ -24,10 +23,9 @@ def test_unit_declares_ports_as_dict_and_attributes():
     assert w.inlet.owner is w
 
 
-def test_unit_starts_unattached_with_empty_params():
+def test_unit_starts_unattached():
     w = _Widget("W-1")
     assert w.flowsheet is None
-    assert w.params == {}
 
 
 def test_port_lookup_raises_helpful_error():
@@ -62,10 +60,21 @@ def test_a_non_positive_or_non_finite_size_is_refused(bad):
     nozzle are drawn as if the symbol were still there. Zero is the same
     fault by a different route -- nothing is left to draw a nozzle onto.
     """
-    with pytest.raises(ValueError, match="not a usable size"):
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
         _Widget("W-1", width=bad)
-    with pytest.raises(ValueError, match="not a usable size"):
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
         _Widget("W-2", height=bad)
+
+
+@pytest.mark.parametrize("bad", [-5, 0, float("nan"), float("inf")])
+def test_a_bad_size_assigned_later_is_refused_and_the_old_one_kept(bad):
+    """The constructor's rule holds for ``p.width = ...`` too (#579)."""
+    w = _Widget("W-4", width=90, height=40)
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
+        w.width = bad
+    with pytest.raises(ValueError, match="not a usable size|finite number"):
+        w.height = bad
+    assert (w.width, w.height) == (90, 40)
 
 
 def test_a_positive_size_and_none_are_both_still_accepted():
@@ -75,7 +84,7 @@ def test_a_positive_size_and_none_are_both_still_accepted():
 
 # --- Built-in unit types ---
 
-from pandid import units as U  # noqa: E402
+from pandid import devices as D, units as U  # noqa: E402
 
 
 def test_fixed_port_units_have_expected_ports():
@@ -183,6 +192,26 @@ def test_a_separator_takes_more_than_one_feed():
     assert sep.feed_2.role == "feed"
     assert [port.name for port in sep.feeds] == ["feed_1", "feed_2"]
     assert not hasattr(sep, "feed")
+
+
+@pytest.mark.parametrize("characteristic", ["gravity", "electrostatic", "electromagnetic"])
+def test_a_characteristic_typed_as_the_variant_is_refused(characteristic):
+    """The variant spelling was deprecated in 0.1.3 and is removed (#579)."""
+    with pytest.raises(ValueError, match=f"characteristic={characteristic!r}"):
+        U.Separator("V-1", variant=characteristic)
+
+
+@pytest.mark.parametrize(
+    ("cls", "resolved"),
+    [(D.GravitySeparator, "gravity"), (D.ElectrostaticPrecipitator, "electrostatic")],
+)
+def test_a_device_class_aliased_to_a_characteristic_still_builds(cls, resolved):
+    """Its ``VARIANT_ALIASES`` resolves ``default`` to the characteristic, which
+    the refusal must not mistake for one the author typed."""
+    unit = cls("V-1")
+    assert (unit.variant, unit.characteristic) == (resolved, resolved)
+    with pytest.raises(ValueError, match="characteristic"):
+        cls("V-1", variant=resolved)
 
 
 @pytest.mark.parametrize(
@@ -337,64 +366,21 @@ def test_distillation_column_has_all_four_return_nozzles():
     assert isinstance(col, U.Column)
 
 
-def test_a_plain_column_still_answers_to_the_four_retired_nozzles():
-    """#400: the type moved, and the runtime spelling still works for one
-    release, warning towards the class that now really has it.
-
-    Read through ``getattr``, not the literal attribute: a plain ``Column``
-    is typed without these four now, on purpose, so the literal spelling is
-    the pyright error #400 exists to make real -- see the acceptance check
-    in the issue itself. This test is about the run-time promise, which
-    ``getattr`` exercises exactly the same way.
-    """
+def test_a_plain_column_has_no_distillation_nozzles_and_no_distillate():
+    """The spellings 0.1.4 deprecated are removed (#579): the four nozzles are
+    DistillationColumn's, and ``distillate`` is ``overhead`` on every tower."""
     col = U.Column("T-101")
-    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
-        reflux = getattr(col, "reflux_in")
-    assert reflux.direction == "inlet" and reflux.role == "liquid"
-    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
-        boilup = getattr(col, "boilup_in")
-    assert boilup.direction == "inlet" and boilup.role == "vapor"
-    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
-        assert getattr(col, "reboiler_duty").role == "energy"
-    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
-        assert getattr(col, "condenser_duty").role == "energy"
-    # Minted once: a second read is the same object and warns no further.
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        assert getattr(col, "reflux_in") is reflux
-    assert {"reflux_in", "boilup_in", "reboiler_duty", "condenser_duty"} <= set(col.ports)
-
-
-def test_a_retired_nozzle_can_still_be_connected():
-    """Not just an attribute that resolves -- a real, connectable port, so
-    an existing sheet's reflux loop still draws."""
-    from pandid import Flowsheet
-
-    fs = Flowsheet("legacy")
-    col = fs.add(U.Column("T-101"))
-    drum = fs.add(U.Vessel("D-101"))
-    with pytest.warns(DeprecationWarning):
-        fs.connect(drum.outlet, getattr(col, "reflux_in"), draw_as_recycle=True)
-    assert col.port("reflux_in").stream is not None
-
-
-def test_distillate_still_works_everywhere_it_used_to():
-    """The rename applies uniformly: Column, Absorber, Stripper and
-    DistillationColumn all still answer to the retired name."""
-    for unit in (
-        U.Column("T-1"),
-        U.Absorber("V-1"),
-        U.Stripper("T-2"),
-        U.DistillationColumn("T-3"),
-    ):
-        with pytest.warns(DeprecationWarning, match="overhead"):
-            assert getattr(unit, "distillate") is unit.overhead
+    for name in ("reflux_in", "boilup_in", "reboiler_duty", "condenser_duty", "distillate"):
+        with pytest.raises(AttributeError, match=name):
+            getattr(col, name)
+    for unit in (U.Absorber("V-1"), U.Stripper("T-2"), U.DistillationColumn("T-3")):
+        with pytest.raises(AttributeError, match="distillate"):
+            getattr(unit, "distillate")
 
 
 def test_absorber_and_stripper_never_answer_to_the_nozzles_they_refused():
-    """Unlike Column, Absorber/Stripper never carried these honestly (#398),
-    so they get no deprecation grace period for them either -- accessing
-    one is still a hard, immediate error."""
+    """Absorber and Stripper never carried these (#398), so accessing one is an
+    error."""
     absorber = U.Absorber("V-501")
     for name in ("reflux_in", "boilup_in", "reboiler_duty", "condenser_duty"):
         with pytest.raises(AttributeError, match=name):
@@ -791,13 +777,19 @@ _COLLECTOR_NOZZLES = [
 _COLLECTORS = ["cyclone", "gravity", "electrostatic"]
 
 
+def _separator(name, drawing):
+    """A Separator drawing, asked for by ``characteristic=`` where it is one."""
+    how = "characteristic" if drawing in U.Separator._CHARACTERISTICS else "variant"
+    return U.Separator(name, **{how: drawing})
+
+
 @pytest.mark.parametrize("variant", _COLLECTORS)
 def test_a_separator_that_collects_dust_draws_an_overflow_and_an_underflow(variant):
     """A hopper full of dust is not a liquid, and a precipitator's stack gas is
     not the vapour of anything. Both draws take the ``process`` role for it: the
     role vocabulary has no word for tramp metal or a size fraction, and no
     drawing reads a role that is not ``signal``."""
-    assert _nozzles(U.Separator("V-101", variant=variant)) == _COLLECTOR_NOZZLES
+    assert _nozzles(_separator("V-101", variant)) == _COLLECTOR_NOZZLES
 
 
 @pytest.mark.parametrize("variant", _COLLECTORS)
@@ -809,7 +801,7 @@ def test_a_collectors_old_draw_name_no_longer_reaches_a_nozzle(variant, removed)
     liked, and each answers the way it answers any other name the unit has not
     got: the nozzle list, and nothing about a deprecation.
     """
-    sep = U.Separator("CY-401", variant=variant)
+    sep = _separator("CY-401", variant)
     with pytest.raises(AttributeError, match="overflow"):
         getattr(sep, removed)
     with pytest.raises(KeyError, match="overflow"):
@@ -840,7 +832,7 @@ def test_a_mechanical_separator_draws_an_overflow_and_an_underflow(variant):
     liquid, so neither borrows a phase it does not have. All four stencils are
     one body with a high draw and a low draw, which is what the pair names, and
     it is what classification calls them anyway."""
-    sep = U.Separator("S-1", variant=variant)
+    sep = _separator("S-1", variant)
     assert _nozzles(sep) == [
         ("feed_1", "inlet", "feed"),
         ("overflow", "outlet", "process"),
@@ -1225,8 +1217,7 @@ def test_a_multi_feed_towers_family_is_its_numbered_nozzles_top_to_bottom():
 
 def test_a_multi_draw_towers_family_is_its_numbered_nozzles_top_to_bottom():
     # DistillationColumn, not Column: n_draws=3 with the reflux/boilup
-    # nozzles for real, without the deprecated-nozzle path a plain Column
-    # would take below. DistillationColumn gets no typed n_draws overload
+    # nozzles a plain Column does not have. DistillationColumn gets no typed n_draws overload
     # family of its own (see Absorber/Stripper's own note on the same
     # trade), so draw_1 is read through port(), the untyped route.
     col = U.DistillationColumn("T-302", n_draws=3)

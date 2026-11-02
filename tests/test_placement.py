@@ -22,7 +22,6 @@ import os
 import random
 import subprocess
 import sys
-import warnings
 from pathlib import Path
 
 from pandid import Flowsheet, devices as D, units as U
@@ -402,13 +401,10 @@ def test_an_entry_that_restates_a_fixed_face_says_what_the_artwork_says() -> Non
     restated: set[str] = set()
     for cls in _classes_that_state_a_direction():
         for variant in default_registry.variants(cls.kind) or ["default"]:
-            # A few shipped variants are deprecated spellings. They are still
-            # registered artwork and still have to answer this, and the notice
-            # they raise is ``tests/test_variants``'s subject rather than
-            # this one's.
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                unit = cls("X-1", variant=variant)
+            # A Separator's characteristic drawings are asked for by
+            # characteristic=.
+            how = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
+            unit = cls("X-1", **{how: variant})
             for key, entry in cls.PLACES.items():
                 if entry is None:
                     continue

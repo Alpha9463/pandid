@@ -14,7 +14,7 @@ from functools import lru_cache
 
 from pandid.portgeom import tag_width
 from pandid.render import furniture as F
-from pandid.render.escape import escaped, ident
+from pandid.render.escape import escaped, fmt, ident
 from pandid.render.symbols import (ARROWHEAD, _STROKE, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.render.weights import LineWeight
@@ -800,6 +800,59 @@ _LEADER_HEAD = ARROWHEAD / 2
 CROSSING_UNMARKED = "crossing-unmarked"
 
 
+def crossings(polylines: dict, direction: str):
+    """Yield every crossing of two runs, in drawing order.
+
+    The one enumeration behind the SVG marks (:func:`stream_hops`), the
+    warnings for bare crossings (:func:`unmarked_crossings`) and draw.io's
+    line jumps (:func:`pandid.render.drawio._hops`). With
+    ``direction="vertical"`` a vertical segment carries the mark over a
+    horizontal one, and the reverse for ``"horizontal"``. A crossing lies
+    strictly inside both segments, since a run that ends on another is a
+    junction. A run crossing itself is a crossing like any other.
+
+    Parameters
+    ----------
+    polylines : dict
+        ``{key: points}`` for every run, in drawing order.
+    direction : str
+        ``"vertical"`` or ``"horizontal"``.
+
+    Yields
+    ------
+    tuple
+        ``(key, seg, other, x, y, room)``: the marked run and the index of
+        its segment, the crossed run, the crossing point, and whether the
+        marked segment has :data:`HOP_R` either side for the mark. Each
+        segment's crossings come in the order it is drawn.
+
+    Raises
+    ------
+    ValueError
+        If ``direction`` is not a known value.
+    """
+    check_jump_direction(direction)
+    vertical = direction == "vertical"
+    crossed = []  # (key, lo, hi, at) of each segment the marks go over
+    for key, points in polylines.items():
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if vertical and y1 == y2 and x1 != x2:
+                crossed.append((key, min(x1, x2), max(x1, x2), y1))
+            elif not vertical and x1 == x2 and y1 != y2:
+                crossed.append((key, min(y1, y2), max(y1, y2), x1))
+    for key, points in polylines.items():
+        for i, ((x1, y1), (x2, y2)) in enumerate(zip(points, points[1:])):
+            at, start, end = (x1, y1, y2) if vertical else (y1, x1, x2)
+            if (x1 != x2 if vertical else y1 != y2) or start == end:
+                continue
+            lo, hi = min(start, end), max(start, end)
+            cuts = sorted((c for c in crossed if c[1] < at < c[2] and lo < c[3] < hi),
+                          key=lambda c: c[3], reverse=start > end)
+            for other, _lo, _hi, c_at in cuts:
+                x, y = (at, c_at) if vertical else (c_at, at)
+                yield key, i, other, x, y, lo + HOP_R < c_at < hi - HOP_R
+
+
 def unmarked_crossings(fs, jump_direction: str = "vertical",
                        crossing_style: str = "gap") -> list:
     """Return every crossing the sheet draws without its mark.
@@ -827,28 +880,11 @@ def unmarked_crossings(fs, jump_direction: str = "vertical",
     """
     if crossing_style == "plain":
         return []
-    segments = []
-    for stream in fs.streams:
-        points = stream_polyline(stream)
-        for (x1, y1), (x2, y2) in zip(points, points[1:]):
-            if y1 == y2 and x1 != x2:
-                segments.append((stream, "h", min(x1, x2), max(x1, x2), y1))
-            elif x1 == x2 and y1 != y2:
-                segments.append((stream, "v", min(y1, y2), max(y1, y2), x1))
-
-    marks = "v" if jump_direction == "vertical" else "h"
-    out = []
-    for stream, axis, lo, hi, at in segments:
-        if axis != marks:
-            continue
-        for other, o_axis, o_lo, o_hi, o_at in segments:
-            if o_axis == axis or not (o_lo < at < o_hi) or not (lo < o_at < hi):
-                continue
-            if lo + HOP_R < o_at < hi - HOP_R:
-                continue  # room for the mark; the sheet draws it
-            x, y = (at, o_at) if axis == "v" else (o_at, at)
-            out.append((stream, other, x, y))
-    return out
+    streams = fs.streams
+    polylines = {n: stream_polyline(s) for n, s in enumerate(streams)}
+    return [(streams[n], streams[other], x, y)
+            for n, _seg, other, x, y, room in crossings(polylines, jump_direction)
+            if not room]
 
 
 def _crossing_issues(fs, jump_direction: str = "vertical",
@@ -1084,14 +1120,11 @@ def stream_hops(fs, direction: str) -> "list[_Hop]":
     """Return every crossing mark the sheet draws, in drawing order.
 
     Shared by :meth:`SvgRenderer._draw_streams` and :func:`_ink`, so labels
-    avoid the marks, which are not part of any route.
-
-    With ``direction="vertical"`` a vertical segment carries the mark over
-    a horizontal one, and the reverse for ``"horizontal"``. A run that
-    ends on another is a junction, not a crossing, and the mark needs
-    :data:`HOP_R` of the marked segment either side. Any other value
-    raises, as :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` would,
-    for callers that bypass a flowsheet.
+    avoid the marks, which are not part of any route. The crossings are
+    :func:`crossings`, kept where the mark has room. Any other
+    ``direction`` raises, as
+    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` would, for
+    callers that bypass a flowsheet.
 
     An arc bulges by SVG's clockwise sweep (y down): a run drawn downward
     bulges right, upward left, rightward up, leftward down.
@@ -1113,35 +1146,14 @@ def stream_hops(fs, direction: str) -> "list[_Hop]":
     ValueError
         If ``direction`` is not a known value.
     """
-    check_jump_direction(direction)
-    geoms = [(s, stream_polyline(s)) for s in fs.streams]
-    horizontals: list[tuple[float, float, float]] = []
-    verticals: list[tuple[float, float, float]] = []
-    for _s, points in geoms:
-        for (x1, y1), (x2, y2) in zip(points, points[1:]):
-            if y1 == y2:
-                horizontals.append((min(x1, x2), max(x1, x2), y1))
-            elif x1 == x2:
-                verticals.append((x1, min(y1, y2), max(y1, y2)))
-
+    polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
+    vertical = direction == "vertical"
     out: list[_Hop] = []
-    for n, (s, points) in enumerate(geoms):
-        name = s.name or ""
-        for i, ((x1, y1), (x2, y2)) in enumerate(zip(points, points[1:])):
-            if direction == "vertical" and x1 == x2:
-                cuts = sorted((hy for mnx, mxx, hy in horizontals
-                               if mnx < x1 < mxx
-                               and min(y1, y2) + HOP_R < hy < max(y1, y2) - HOP_R),
-                              reverse=y1 > y2)
-                side = 1.0 if y1 < y2 else -1.0
-                out += [_Hop(x1, hy, True, side, n, i, name) for hy in cuts]
-            elif direction == "horizontal" and y1 == y2:
-                cuts = sorted((vx for vx, my, my2 in verticals
-                               if my < y1 < my2
-                               and min(x1, x2) + HOP_R < vx < max(x1, x2) - HOP_R),
-                              reverse=x1 > x2)
-                side = -1.0 if x1 < x2 else 1.0
-                out += [_Hop(vx, y1, False, side, n, i, name) for vx in cuts]
+    for n, i, _other, x, y, room in crossings(polylines, direction):
+        if room:
+            (x1, y1), (x2, y2) = polylines[n][i:i + 2]
+            side = (1.0 if y1 < y2 else -1.0) if vertical else (-1.0 if x1 < x2 else 1.0)
+            out.append(_Hop(x, y, vertical, side, n, i, fs.streams[n].name or ""))
     return out
 
 
@@ -2151,11 +2163,6 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     return (rx, ry, rx + hw, ry + hh)
 
 
-def _num(v: float) -> str:
-    """Return a coordinate without trailing zeros (``100.0`` gives ``'100'``)."""
-    return f"{v:.2f}".rstrip("0").rstrip(".") or "0"
-
-
 def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
     """Return the id suffix naming a placement transform (``''`` for identity)."""
     if not (rot or mirror_x or mirror_y):
@@ -2405,7 +2412,7 @@ def _size_tag(sym, u) -> str:
         return ""
     box = _placed_box(u)
     assert box is not None  # a scale of anything but 1 came from a box
-    return f"_s{_num(box[0])}x{_num(box[1])}"
+    return f"_s{fmt(box[0], 2)}x{fmt(box[1], 2)}"
 
 
 def _at_pen_scale(svg: str, scale: float) -> str:
@@ -2467,6 +2474,9 @@ def _nominal(width: float, gx: float, gy: float) -> float:
     return width * math.sqrt(abs(gx * gy))
 
 
+# Symbol coordinates are written to six places (fmt), more than sheet
+# coordinates, so baking a weight fix does not change geometry.
+
 # How each attribute maps: a point takes scale and translation; a length
 # takes the unsigned scale only. rx/ry cover ellipse radii and rect corner
 # rounding; r is handled separately, since a circle scaled unevenly is not
@@ -2484,27 +2494,6 @@ _ATTR = re.compile(r'([\w:.-]+)="([^"]*)"')
 # commands and H/V are refused, since nothing in the library emits them.
 _PATH_ARITY = {"M": 2, "L": 2, "C": 6, "A": 7, "Z": 0, "z": 0}
 _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
-
-
-def _art(v: float) -> str:
-    """Return a number in a symbol's own coordinates.
-
-    Six decimals, more than sheet coordinates (:func:`_num`), so baking a
-    weight fix does not change geometry; fixed-point, so no exponent
-    notation appears.
-
-    Parameters
-    ----------
-    v : float
-        Value.
-
-    Returns
-    -------
-    str
-        Formatted number.
-    """
-    s = f"{v:.6f}".rstrip("0").rstrip(".")
-    return "0" if s in ("", "-0", "0") else s
 
 
 def _affine(transform: str) -> "tuple[float, float, float, float]":
@@ -2620,10 +2609,10 @@ def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
             # A mirror reverses the sweep flag. Write flags as integers,
             # since the arc grammar takes single digits.
             sweep = int(nums[4]) if ax * ay > 0 else 1 - int(nums[4])
-            out += [_art(rx), _art(ry), _art(rot), str(int(nums[3])), str(sweep),
-                    _art(nums[5] * ax + ex), _art(nums[6] * ay + ey)]
+            out += [fmt(rx, 6), fmt(ry, 6), fmt(rot, 6), str(int(nums[3])), str(sweep),
+                    fmt(nums[5] * ax + ex, 6), fmt(nums[6] * ay + ey, 6)]
         else:
-            out += [_art(n * ax + ex if k % 2 == 0 else n * ay + ey)
+            out += [fmt(n * ax + ex if k % 2 == 0 else n * ay + ey, 6)
                     for k, n in enumerate(nums)]
         i += 1 + arity
     return " ".join(out)
@@ -2647,7 +2636,7 @@ def _scaled_points(points: str, m: "tuple[float, float, float, float]") -> str:
     ax, ay, ex, ey = m
     v = [float(t) for t in points.replace(",", " ").split()]
     return " ".join(
-        f"{_art(v[i] * ax + ex)},{_art(v[i + 1] * ay + ey)}" for i in range(0, len(v), 2)
+        f"{fmt(v[i] * ax + ex, 6)},{fmt(v[i + 1] * ay + ey, 6)}" for i in range(0, len(v), 2)
     )
 
 
@@ -2690,7 +2679,7 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
     out: list[tuple[str, str]] = []
     for key, value in attrs:
         if key == "stroke-width":
-            out.append(("stroke-width", _art(_nominal(float(value), gx, gy))))
+            out.append(("stroke-width", fmt(_nominal(float(value), gx, gy), 6)))
         elif key == "d":
             out.append((key, _scaled_path(value, m)))
         elif key == "points":
@@ -2698,21 +2687,21 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
         elif key == "font-size":
             # Scale text by the geometric mean so it keeps a valid
             # character height (ISO 15519-1 11.4.1).
-            out.append((key, _art(math.sqrt(abs(ax * ay)) * float(value))))
+            out.append((key, fmt(math.sqrt(abs(ax * ay)) * float(value), 6)))
         elif key == "r":
-            out.append(("rx", _art(abs(float(value) * ax))))
-            out.append(("ry", _art(abs(float(value) * ay))))
+            out.append(("rx", fmt(abs(float(value) * ax), 6)))
+            out.append(("ry", fmt(abs(float(value) * ay), 6)))
             name = "ellipse"  # a circle stretched unevenly is not a circle
         elif key in corner:
-            out.append((key, _art(corner[key])))
+            out.append((key, fmt(corner[key], 6)))
         elif key in _X_LENGTHS:
-            out.append((key, _art(abs(float(value) * ax))))
+            out.append((key, fmt(abs(float(value) * ax), 6)))
         elif key in _Y_LENGTHS:
-            out.append((key, _art(abs(float(value) * ay))))
+            out.append((key, fmt(abs(float(value) * ay), 6)))
         elif key in _X_POINTS:
-            out.append((key, _art(float(value) * ax + ex)))
+            out.append((key, fmt(float(value) * ax + ex, 6)))
         elif key in _Y_POINTS:
-            out.append((key, _art(float(value) * ay + ey)))
+            out.append((key, fmt(float(value) * ay + ey, 6)))
         else:
             out.append((key, value))
     written = "".join(f' {k}="{v}"' for k, v in out)
@@ -2814,11 +2803,11 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
         # Undo in the reverse of the order the <use> applies them.
         ops = []
         if mirror_x:
-            ops.append(f"translate({_num(2 * tx)}, 0) scale(-1, 1)")
+            ops.append(f"translate({fmt(2 * tx, 2)}, 0) scale(-1, 1)")
         if mirror_y:
-            ops.append(f"translate(0, {_num(2 * cy)}) scale(1, -1)")
+            ops.append(f"translate(0, {fmt(2 * cy, 2)}) scale(1, -1)")
         if rot:
-            ops.append(f"rotate({-rot}, {_num(tx)}, {_num(cy)})")
+            ops.append(f"rotate({-rot}, {fmt(tx, 2)}, {fmt(cy, 2)})")
         return f'<g transform="{" ".join(ops)}">{match.group(0)}</g>'
 
     return _SYMBOL_TEXT.sub(wrap, svg)
@@ -2878,9 +2867,9 @@ def _upright_artwork(svg: str, w: float, h: float,
         return svg
     ops = []
     if mirror_x:
-        ops.append(f"translate({_num(w)}, 0) scale(-1, 1)")
+        ops.append(f"translate({fmt(w, 2)}, 0) scale(-1, 1)")
     if mirror_y:
-        ops.append(f"translate(0, {_num(h)}) scale(1, -1)")
+        ops.append(f"translate(0, {fmt(h, 2)}) scale(1, -1)")
     head, inner = svg[:svg.find(">") + 1], svg[svg.find(">") + 1:svg.rfind("</g>")]
     return f'{head}<g transform="{" ".join(ops)}">{inner}</g></g>'
 
@@ -3713,6 +3702,111 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
                           (sx, sy, sw, sh), frame, left, top, findings)
 
 
+# Margin round a sheet with no furniture: from the drawing, or from a
+# fixed page's edge.
+_PLAIN_MARGIN = 55.0
+
+
+class DiagramPlan(NamedTuple):
+    """Diagram sheet geometry, shared by both backends.
+
+    Attributes
+    ----------
+    placed : list[Docked]
+        Furniture in drawing order; the title strip is :data:`TITLE`.
+    block : TitleBlock
+        What the title strip says.
+    bounds : tuple[float, float, float, float]
+        Drawing bounds ``(x0, y0, x1, y1)``.
+    frame : tuple[float, float, float, float]
+        Drawing frame the border is ruled on; the sheet edge is
+        :func:`~pandid.render.furniture.sheet_rect` of it, plus
+        :data:`~pandid.render.furniture.OUTER_MARGIN`.
+    free : tuple[float, float, float, float] or None
+        Region a fixed page leaves for the drawing; ``None`` keeps the
+        drawing's own coordinates.
+    """
+    placed: list
+    block: "TitleBlock"
+    bounds: "tuple[float, float, float, float]"
+    frame: "tuple[float, float, float, float]"
+    free: "tuple[float, float, float, float] | None"
+
+
+def diagram_plan(fs, sheet: "_Sheet | None", border: str,
+                 show_stream_table: bool) -> DiagramPlan:
+    """Lay out the diagram's sheet.
+
+    Both backends draw from it, as from :func:`table_sheet_plan`. The
+    furniture is what was supplied: the annotation boxes, a title strip
+    for a title block or any zone border, and the docked stream table,
+    placed by :func:`~pandid.render.furniture.dock`. A sheet with none
+    keeps :data:`_PLAIN_MARGIN` round the drawing.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+    sheet : _Sheet or None
+        Fixed page, or ``None`` to fit.
+    border : str
+        ``"none"`` or ``"zone"``.
+    show_stream_table : bool
+        Whether to dock the stream table.
+
+    Returns
+    -------
+    DiagramPlan
+        Layout.
+
+    Raises
+    ------
+    ValueError
+        If a unit has no frame, or the page is too small.
+    """
+    from pandid.document import TableBox, TitleBlock
+
+    bounds = drawing_bounds(fs)
+    if not fs.units:  # empty flowsheet: fall back to the nominal page size
+        nominal = sheet or _page("A3")
+        assert nominal is not None
+        bounds = (0.0, 0.0, nominal.width, nominal.height)
+    block = fs.title_block or TitleBlock()
+    items = [(a, a.align, *(F.measure_table(a) if isinstance(a, TableBox)
+                            else F.measure_annotation(a)))
+             for a in fs.annotations]
+    if fs.title_block is not None or border == "zone":
+        items.append((TITLE, "bottom-right", *F.measure_title_strip(block)))
+    table = F.stream_table_layout(fs) if show_stream_table else None
+    if table is not None:
+        items.append((table, "bottom-left", table.w, table.h))
+    # The frame sits where a border would, so a plain sheet's edge is
+    # _PLAIN_MARGIN out.
+    inset = F.OUTER_MARGIN + F.ZONE_BAND
+    if items:
+        if sheet is None:
+            placed, frame, free = F.dock(items, bounds)
+        else:
+            page = sheet  # rebound so the closure closes over a _Sheet
+            placed, frame, free = F.dock(
+                items, bounds, sheet=page,
+                too_small=lambda need_w, need_h, culprit: _too_small(
+                    page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        return DiagramPlan(placed, block, bounds, frame, free)
+    if sheet is None:
+        x0, y0, x1, y1 = bounds
+        m = _PLAIN_MARGIN - inset
+        return DiagramPlan([], block, bounds,
+                           (x0 - m, y0 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m), None)
+    free_w = sheet.width - 2 * _PLAIN_MARGIN
+    free_h = sheet.height - 2 * _PLAIN_MARGIN
+    if free_w <= 0 or free_h <= 0:
+        raise _too_small(sheet, 2 * _PLAIN_MARGIN, 2 * _PLAIN_MARGIN)
+    return DiagramPlan([], block, bounds,
+                       (inset, inset, sheet.width - 2 * inset, sheet.height - 2 * inset),
+                       (_PLAIN_MARGIN, _PLAIN_MARGIN, free_w, free_h))
+
+
 def reject_unknown_options(where: str, opts: dict) -> None:
     """Raise if a backend was given keywords it does not take.
 
@@ -3910,23 +4004,11 @@ class SvgRenderer:
         if table_sheet:
             return self._table_sheet(fs, sheet, border)
 
-        # 1. Diagram bounding box: union of every unit's drawn box and
-        #    every route waypoint. Furniture goes *around* this region.
-        dx0, dy0, dx1, dy1 = drawing_bounds(fs)
-        if not fs.units:  # empty flowsheet: fall back to the nominal page size
-            nominal = sheet or _page("A3")
-            assert nominal is not None
-            dx0 = dy0 = 0.0
-            dx1, dy1 = nominal.width, nominal.height
-
-        # 2. The stream table, measured. Shared with the draw.io
-        #    exporter, which docks and rules the same one.
-        st_layout = F.stream_table_layout(fs) if show_stream_table else None
-
-        # 3. Place furniture around the diagram and size the sheet.
-        margin = 55.0
-        furniture: list[str] = []
-        free = None  # region a fixed sheet leaves for the drawing
+        # 1. The sheet: furniture docked round the drawing, shared with
+        #    the draw.io exporter (:func:`diagram_plan`).
+        plan = diagram_plan(fs, sheet, border, bool(show_stream_table))
+        dx0, dy0, dx1, dy1 = plan.bounds
+        free = plan.free  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
         # Findings from the label passes, which run after sizing.
         self._findings: list[Issue] = []
@@ -3936,25 +4018,7 @@ class SvgRenderer:
             """Record a title-block or annotation cell that overflowed."""
             fit_issues.append(fit_issue(field, text, drawn, room, need))
 
-        # Furniture comes from what was supplied: a title block,
-        # annotations or a stream table, plus a title strip on any zone
-        # border. Docking everything through furniture.dock keeps this in
-        # step with the draw.io exporter.
-        furnished = (border == "zone" or fs.title_block is not None
-                     or bool(getattr(fs, "annotations", None))
-                     or st_layout is not None)
-        if furnished:
-            (frame_x, frame_y, canvas_width, canvas_height), free = self._place_furniture(
-                fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border, report)
-        elif sheet is not None:
-            free = self._place_plain(sheet, margin)
-            frame_x, frame_y = 0.0, 0.0
-            canvas_width, canvas_height = sheet.width, sheet.height
-        else:
-            # Bare sheet: the frame is the drawing's bounds plus margin.
-            frame_x, frame_y = dx0 - margin, dy0 - margin
-            canvas_width = (dx1 - dx0) + 2 * margin
-            canvas_height = (dy1 - dy0) + 2 * margin
+        furniture, canvas = self._place_furniture(fs, plan, border, report)
 
         # Replace render findings from earlier renders. Unmarked crossings
         # depend on jump_direction, a render option, so only the render can
@@ -3965,7 +4029,7 @@ class SvgRenderer:
                        if getattr(w, "code", "") not in _RENDER_CODES
                        and getattr(w, "code", "") not in _LABEL_CODES] + render_issues
 
-        # 4. SVG document. Furniture (border + title strip + boxes) sits
+        # 2. SVG document. Furniture (border + title strip + boxes) sits
         #    behind the diagram.
         lines = ["    " + item for item in furniture]
         lines.extend(self._defs(fs, arrows))
@@ -4012,38 +4076,25 @@ class SvgRenderer:
             lines.extend(drawing)
         else:  # a fixed sheet: the drawing is fitted into what the furniture leaves
             s, ox, oy = _fitted((dx0, dy0, dx1, dy1), free)
-            lines.append(f'  <g id="drawing" transform="translate({_num(ox)}, {_num(oy)}) '
+            lines.append(f'  <g id="drawing" transform="translate({fmt(ox, 2)}, {fmt(oy, 2)}) '
                          f'scale({s:.6g})">')
             lines.extend(drawing)
             lines.append('  </g>')
-        return _document(fs, sheet,
-                         (frame_x, frame_y, canvas_width, canvas_height), lines)
+        return _document(fs, sheet, canvas, lines)
 
     # --- furniture ----------------------------------------------------
 
-    def _place_furniture(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet,
-                         border, report=None):
-        """Dock furniture to the sheet frame and draw it.
+    def _place_furniture(self, fs, plan, border, report=None):
+        """Draw the docked furniture and the border, and return the sheet.
 
-        Boxes are grouped into edge bands by ``align`` and placed flush to
-        the frame edge, inset by their ``margin``; a box with ``position``
-        is placed by hand. Without a fixed sheet the frame grows from the
-        drawing bounds to hold the bands; with one, the frame is the page
-        and the drawing fits the region left. The band arithmetic is
-        :func:`pandid.render.furniture.dock`, shared with draw.io.
+        Placement is :func:`diagram_plan`, shared with draw.io.
 
         Parameters
         ----------
         fs : Flowsheet
-            Flowsheet whose title block and annotations are drawn.
-        st_layout : StreamTable or None
-            Measured stream table.
-        dx0, dy0, dx1, dy1 : float
-            Drawing bounds.
-        furniture : list[str]
-            SVG lines, appended to in place.
-        sheet : _Sheet or None
-            Fixed page, or ``None``.
+            Flowsheet whose name the title strip falls back to.
+        plan : DiagramPlan
+            Sheet layout.
         border : str
             ``"none"`` or ``"zone"``.
         report : callable, optional
@@ -4051,64 +4102,38 @@ class SvgRenderer:
 
         Returns
         -------
-        tuple
-            Canvas ``(x, y, w, h)`` and the free region, or ``None`` when
-            the frame grew to the drawing.
+        tuple[list[str], tuple[float, float, float, float]]
+            SVG lines and the canvas ``(x, y, w, h)``.
         """
-        from pandid.document import TitleBlock, TableBox
+        from pandid.document import TableBox
 
-        OUT = F.OUTER_MARGIN
-
-        def measure(a):
-            """Return a box's ``(w, h)``."""
-            return F.measure_table(a) if isinstance(a, TableBox) else F.measure_annotation(a)
-
-        def draw_box(a, x, y):
-            """Draw a table or annotation box at ``(x, y)``."""
-            furniture.extend(F.draw_table(a, x, y) if isinstance(a, TableBox)
-                             else F.draw_annotation(a, x, y, report=report))
-
-        # The title strip (as the TITLE sentinel) and the stream table dock
-        # at the bottom-right and bottom-left.
-        strip = fs.title_block is not None or border == "zone"
-        tb = fs.title_block or TitleBlock()
-        ts_w, ts_h = F.measure_title_strip(tb)
-        date = datetime.now().strftime("%Y-%m-%d")
-        name = fs.name
-
-        items = [(a, a.align, *measure(a))
-                 for a in getattr(fs, "annotations", []) or []]
-        if strip:
-            items.append((TITLE, "bottom-right", ts_w, ts_h))
-        if st_layout:
-            items.append((st_layout, "bottom-left", st_layout.w, st_layout.h))
-
-        placed, (ix, iy, iw, ih), free = F.dock(
-            items, (dx0, dy0, dx1, dy1), sheet=sheet,
-            too_small=lambda need_w, need_h, culprit: _too_small(
-                sheet, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        furniture: list[str] = []
+        dx0, dy0, dx1, dy1 = plan.bounds
         # The scale cell states the fit scale; a grown frame has none.
-        fit = "" if free is None else _scale_text(
-            _fit_scale(dx1 - dx0, dy1 - dy0, free))
-
-        for obj, x, y, w, h in placed:
+        fit = "" if plan.free is None else _scale_text(
+            _fit_scale(dx1 - dx0, dy1 - dy0, plan.free))
+        date = datetime.now().strftime("%Y-%m-%d")
+        for obj, x, y, w, h in plan.placed:
             if obj is TITLE:
                 furniture.extend(
-                    F.draw_title_strip(tb, name, date, x + w, y + h, fit_scale=fit,
-                                       report=report))
+                    F.draw_title_strip(plan.block, fs.name, date, x + w, y + h,
+                                       fit_scale=fit, report=report))
             elif isinstance(obj, F.StreamTable):
                 furniture.extend(F.draw_stream_table(obj, x, y))
+            elif isinstance(obj, TableBox):
+                furniture.extend(F.draw_table(obj, x, y))
             else:
-                draw_box(obj, x, y)
+                furniture.extend(F.draw_annotation(obj, x, y, report=report))
 
         # --- border around the frame, then the sheet edge -------------
         if border == "zone":
-            frame_lines, outer = F.zone_frame(ix, iy, iw, ih)
+            frame_lines, outer = F.zone_frame(*plan.frame)
             furniture[:0] = frame_lines  # border sits behind the boxes
         else:
-            outer = F.sheet_rect(ix, iy, iw, ih)
+            outer = F.sheet_rect(*plan.frame)
         ox, oy, ow, oh = outer
-        return (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT), free
+        OUT = F.OUTER_MARGIN
+        return furniture, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT)
 
     def _table_sheet(self, fs, sheet, border) -> str:
         """Return the stream table drawn as a sheet of its own.
@@ -4161,32 +4186,6 @@ class SvgRenderer:
             fs, sheet, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT),
             ["    " + item for item in furniture],
             title=_table_sheet_title(fs, F._options(fs)))
-
-    def _place_plain(self, sheet, margin):
-        """Lay out a fixed page with no furniture.
-
-        Parameters
-        ----------
-        sheet : _Sheet
-            Fixed page.
-        margin : float
-            Page margin.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            Region ``(x, y, w, h)`` left for the drawing.
-
-        Raises
-        ------
-        ValueError
-            If the page is too small.
-        """
-        free_w = sheet.width - 2 * margin
-        free_h = sheet.height - 2 * margin
-        if free_w <= 0 or free_h <= 0:
-            raise _too_small(sheet, 2 * margin, 2 * margin)
-        return (margin, margin, free_w, free_h)
 
     # --- defs ---------------------------------------------------------
 
@@ -4324,7 +4323,7 @@ class SvgRenderer:
                 # overflow="visible" stops the viewport clipping strokes on
                 # the viewBox edge, which would thin a circle at four points.
                 box = (f"{sym.width} {sym.height}" if fold == (1.0, 1.0)
-                       else f"{_art(width)} {_art(height)}")
+                       else f"{fmt(width, 6)} {fmt(height, 6)}")
                 svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {box}"'
                            f'{fill} overflow="visible">{inner}</symbol>')
             else:
@@ -4396,13 +4395,13 @@ class SvgRenderer:
             # portgeom.symbol_to_box.
             ops = []
             if rot:
-                ops.append(f"rotate({rot}, {_num(cx)}, {_num(cy)})")
+                ops.append(f"rotate({rot}, {fmt(cx, 2)}, {fmt(cy, 2)})")
             if mirror_x:
-                ops.append(f"translate({_num(2 * cx)}, 0) scale(-1, 1)")
+                ops.append(f"translate({fmt(2 * cx, 2)}, 0) scale(-1, 1)")
             if mirror_y:
-                ops.append(f"translate(0, {_num(2 * cy)}) scale(1, -1)")
+                ops.append(f"translate(0, {fmt(2 * cy, 2)}) scale(1, -1)")
             transform = f' transform="{" ".join(ops)}"' if ops else ""
-            out.append(f'    <use href="#{sym_id}" x="{_num(ux)}" y="{_num(uy)}" '
+            out.append(f'    <use href="#{sym_id}" x="{fmt(ux, 2)}" y="{fmt(uy, 2)}" '
                        f'width="{bw}" height="{bh}"{transform} />')
 
             if u.kind == "instrument":
@@ -4452,8 +4451,8 @@ class SvgRenderer:
         out = []
         for u, (tx, ty), (cx, cy) in tap_lines(fs):
             dash = "" if impulse_tap(u) else f' stroke-dasharray="{_TAP_DASH}"'
-            out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
-                       f'y2="{_num(cy)}" stroke="black" '
+            out.append(f'    <line x1="{fmt(tx, 2)}" y1="{fmt(ty, 2)}" x2="{fmt(cx, 2)}" '
+                       f'y2="{fmt(cy, 2)}" stroke="black" '
                        f'stroke-width="{LineWeight.DETAIL.width:g}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 

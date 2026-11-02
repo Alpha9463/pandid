@@ -47,9 +47,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unused code (#579).** `pandid.routing.get_outward_dir` is deleted; use
   `pandid.portgeom.outward_dir`. The `pandid.render.Renderer` protocol, which
   nothing used, is deleted.
+- **The twelve spellings 0.1.3 and 0.1.4 deprecated (#579).** Use
+  `Vessel(supports="leg")` or `supports="skirt"` for `variant="legs"` or
+  `"skirted"`, `Reactor(internals="packing")` for `variant="plain"`,
+  `Reactor(agitator="disc")` for `variant="mixing"`, and
+  `Separator(characteristic=...)` for a `"gravity"`, `"electrostatic"` or
+  `"electromagnetic"` variant. Use `DistillationColumn` for a `Column`'s
+  `reflux_in`, `boilup_in`, `reboiler_duty` and `condenser_duty`, and
+  `overhead` for `distillate`.
+- **`pandid.document.location_reference` (#579).** It is deleted, with no
+  replacement.
+- **`Port.state` and `Unit.params` (#579).** Both are deleted. Stream
+  conditions stay on `Stream.state`.
+- **`ControlLoop.variable`, `.number`, `.name`, `.tag()`, `.element()` and
+  `.check()` (#579).** Use them on `ControlLoop.loop`. `add_instrument()`
+  still takes a `ControlLoop`.
+- **`DEFAULT_INPUT_FACE` and `DEFAULT_OUTPUT_FACE` on `Tank` and `Vessel`
+  (#579).** Use `default_input_face()` and `default_output_face()`.
 
 ### Fixed
 
+- **A size assigned after construction is checked (#579).** `unit.width = -5`
+  or `0` raises `ValueError`, as the constructor does, and leaves the size
+  unchanged.
+- **A multi-feed `Separator` round-trips through a spec (#579).**
+  `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
 - **A refused `add_valve_station()` leaves the sheet unchanged (#564).** A
   station refused part-way, such as on a member tag clash, used to leave
   the members already built.
@@ -123,6 +145,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`vessel_symbol()` refuses an inlet and an outlet on one point face
   (#507).** It raises the error the unit's constructor raises when an inlet
   and an outlet share a face that meets the box at a single point.
+- **draw.io writes numbers as the SVG does (#579).** A coordinate such as
+  1234567 is no longer written `1.23457e+06`, and no number is written `-0`.
+- **draw.io reports a line that crosses itself (#579).** The sheet marks the
+  crossing and draw.io cannot, so the export warns `drawio-hop-dropped`.
+- **draw.io docks furniture where the SVG does (#579).** A zone border gets a
+  title strip without a title block, the strip keeps the bottom-right corner
+  when a box shares it, and a sheet with no furniture has the SVG's margin.
+- **Annotation columns start where the sheet writes them (#579).** draw.io
+  takes its column widths from the sheet, and both backends measure a
+  box's bold first column bold, so a long first cell no longer runs into the
+  next.
 
 ## [0.1.5] - 2026-08-26
 

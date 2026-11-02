@@ -1210,14 +1210,14 @@ def test_the_widths_reach_the_drawio_export_too():
     None
         This test does not return a value.
     """
-    from pandid.render.drawio import _num
+    from pandid.render.escape import fmt
 
     fs = _with(_two_and_two(), label_width="auto", column_width="auto")
     label, name = _widths(fs)
     xml = fs.to_drawio(show_stream_table=True)
-    assert f'width="{_num(label)}"' in xml
-    assert f'width="{_num(name)}"' in xml
-    assert f'width="{_num(label + name * 3)}"' in xml  # three tabulated columns
+    assert f'width="{fmt(label, 2)}"' in xml
+    assert f'width="{fmt(name, 2)}"' in xml
+    assert f'width="{fmt(label + name * 3, 2)}"' in xml  # three tabulated columns
 
 
 def test_a_content_ruled_cell_still_clears_the_drawio_text_inset():

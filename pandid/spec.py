@@ -74,6 +74,7 @@ entries.
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -710,12 +711,15 @@ _STREAM_KEYS = {
 }
 _COMPONENT_KEYS = {"name", "formula"}
 # Keys only some classes take, mapped to those classes; any other class
-# refuses the key. Port counts:
+# refuses the key. Port counts, derived from the constructors that take
+# them so a class gaining one cannot be left out; _takes matches subclasses.
 _VARIABLE_PORTS = {
-    "n_inlets": ("Mixer",),
-    "n_outlets": ("Splitter",),
-    "n_feeds": ("Column", "Reactor"),
-    "n_draws": ("Column",),
+    key: tuple(sorted(
+        name for name, cls in _CLASSES.items()
+        if "__init__" in cls.__dict__
+        and key in inspect.signature(cls.__dict__["__init__"]).parameters
+    ))
+    for key in ("n_inlets", "n_outlets", "n_feeds", "n_draws")
 }
 # Conveyor dimensions, used instead of width and height.
 _KIND_SIZES = {
@@ -1497,12 +1501,11 @@ def _read_port_order(
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
-    """Return a unit's port by name, creating pooled or retired ports.
+    """Return a unit's port by name, creating pooled ports.
 
-    Pooled ports (``sig_out_2``, ``outlet_2``) are created on request, an
-    alias (``feed``) resolves to its port, and a retired port is created
-    through ``getattr`` with its deprecation warning, so
-    ``from_dict(to_dict(fs))`` rebuilds every port the sheet used.
+    Pooled ports (``sig_out_2``, ``outlet_2``) are created on request and
+    an alias (``feed``) resolves to its port, so ``from_dict(to_dict(fs))``
+    rebuilds every port the sheet used.
 
     Parameters
     ----------
@@ -1530,15 +1533,6 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
     # Resolve aliases first; they are attributes, not entries in ports.
     if isinstance(name, str):
         name = unit._canonical_port_name(name)
-    # Create a retired port by reading it, as the author's script did;
-    # to_dict writes streams on it under that name.
-    if isinstance(name, str) and name not in unit.ports:
-        try:
-            retired = getattr(unit, name)
-        except AttributeError:
-            retired = None
-        if isinstance(retired, Port):
-            return retired
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"
@@ -2340,7 +2334,7 @@ def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
         if value != default:
             entry[key] = value
     # Where a keyword is folded into the variant, write only the keyword;
-    # the variant spelling is deprecated.
+    # the variant spelling is refused.
     folded = cls.COMPOSITION_VARIANT
     if folded and entry.get(folded) is not None:
         entry.pop("variant", None)
@@ -2465,6 +2459,9 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
     _write_composition(unit, entry)
+    # One feed is the default.
+    if _takes(type(unit), _VARIABLE_PORTS["n_feeds"]) and len(getattr(unit, "feeds")) > 1:
+        entry["n_feeds"] = len(getattr(unit, "feeds"))
     if isinstance(unit, unit_types.Block):
         _write_connection_faces(unit, entry, unit.DEFAULT_INPUT_FACE, unit.DEFAULT_OUTPUT_FACE)
     elif isinstance(unit, (unit_types.Tank, unit_types.Vessel)):
@@ -2476,19 +2473,15 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         entry["n_inlets"] = len(unit.inlets)
     elif isinstance(unit, unit_types.Splitter):
         entry["n_outlets"] = len(unit.outlets)
-    elif isinstance(unit, (unit_types.Column, unit_types.Reactor)):
-        # One feed is the default.
-        if len(unit.feeds) > 1:
-            entry["n_feeds"] = len(unit.feeds)
+    elif isinstance(unit, unit_types.Column):
         # Stages only where given; omitted means the even spread.
-        if isinstance(unit, unit_types.Column) and unit.feed_stages is not None:
+        if unit.feed_stages is not None:
             entry["feed_stages"] = list(unit.feed_stages)
-        if isinstance(unit, unit_types.Column):
-            # Zero draws is the default.
-            if len(unit.draws) > 0:
-                entry["n_draws"] = len(unit.draws)
-            if unit.draw_stages is not None:
-                entry["draw_stages"] = list(unit.draw_stages)
+        # Zero draws is the default.
+        if len(unit.draws) > 0:
+            entry["n_draws"] = len(unit.draws)
+        if unit.draw_stages is not None:
+            entry["draw_stages"] = list(unit.draw_stages)
     elif isinstance(unit, unit_types.Tee):
         # Only a returning tee; a takeoff is the default.
         if unit.branch_direction != "outlet":

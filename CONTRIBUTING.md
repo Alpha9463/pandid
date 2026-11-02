@@ -441,7 +441,7 @@ from pandid.units import Unit
 RETIRED = Deprecation(
     what="Pump(cooled=True)",           # the call an author types today
     instead="Pump(jacket='cooling')",   # the call they type instead
-    removed_in="0.2.0",                 # the release after the announcing one
+    removed_in="0.1.3",                 # the release after the announcing one
 )
 
 

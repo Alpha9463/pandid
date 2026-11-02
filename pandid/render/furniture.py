@@ -370,6 +370,10 @@ SHEET_RULE = 1.0
 FRAME_RULE = 2.0
 ZONE_TICK = 0.75
 
+# A titled box's inset from its border to the text, and the gap between
+# its columns; drawio places its table cells by both.
+_ANN_PAD, _ANN_GAP = 9.0, 12.0
+
 
 def _ann_layout(ann):
     """Return an Annotation's font size, row height, title height and column widths.
@@ -392,7 +396,8 @@ def _ann_layout(ann):
     for r in ann.rows:
         if isinstance(r, (tuple, list)):
             for i, c in enumerate(r):
-                col_w[i] = max(col_w[i], text_width(c, size))
+                # Measured in the face drawn: a row's first cell is bold.
+                col_w[i] = max(col_w[i], text_width(c, size, bold=(i == 0 and len(r) > 1)))
         else:
             col_w[0] = max(col_w[0], text_width(r, size))
     return size, row_h, title_h, col_w
@@ -412,7 +417,7 @@ def measure_annotation(ann) -> tuple[float, float]:
         ``(width, height)``; ``ann.width`` wins where set.
     """
     size, row_h, title_h, col_w = _ann_layout(ann)
-    pad, gap = 9.0, 12.0
+    pad, gap = _ANN_PAD, _ANN_GAP
     body_w = _total(col_w) + gap * (len(col_w) - 1)
     inner = max(body_w, text_width(ann.title, size + 1, bold=True))
     w = ann.width if ann.width is not None else inner + 2 * pad
@@ -470,7 +475,7 @@ def draw_annotation(ann, x: float, y: float, *,
         SVG elements.
     """
     size, row_h, title_h, col_w = _ann_layout(ann)
-    pad, gap = 9.0, 12.0
+    pad, gap = _ANN_PAD, _ANN_GAP
     w, h = measure_annotation(ann)
     if report is not None and ann.width is not None:
         body_w = _total(col_w) + gap * (len(col_w) - 1)
@@ -1951,8 +1956,7 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 # Zone-ruled drawing border (A.. top→down, 1.. left→right)
 #
 # Lettering follows ISO 5457 4.4: letters top down, numerals left to
-# right, so ISO 15519-1 Clause 9 addresses
-# (:func:`pandid.document.location_reference`) start at the top left. The
+# right, so ISO 15519-1 Clause 9 addresses start at the top left. The
 # 50 mm pitch, ISO 5457 field counts and centring marks are not used: the
 # band is a constant and the field count suits the sheet; ISO 15519-1 5.1.2
 # asks for centring marks only for microfilming.

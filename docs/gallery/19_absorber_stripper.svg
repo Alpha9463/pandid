@@ -88,27 +88,27 @@
     <line x1="1884.0" y1="1090.9" x2="1900.0" y2="1090.9" stroke="black" stroke-width="0.75"/>
     <text x="-8.0" y="1184.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
     <text x="1892.0" y="1184.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
-    <rect x="818.8" y="-184.0" width="246.4" height="193.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <rect x="818.2" y="-184.0" width="247.6" height="193.0" fill="white" stroke="black" stroke-width="1.5"/>
     <text x="942.0" y="-167.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="818.8" y1="-161.0" x2="1065.2" y2="-161.0" stroke="black" stroke-width="1"/>
-    <text x="827.8" y="-147.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-401</text>
-    <text x="886.9" y="-147.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Amine Contactor</text>
-    <text x="827.8" y="-129.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-401</text>
-    <text x="886.9" y="-129.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Lean / Rich Exchanger</text>
-    <text x="827.8" y="-111.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-402</text>
-    <text x="886.9" y="-111.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Amine Regenerator</text>
-    <text x="827.8" y="-93.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-402</text>
-    <text x="886.9" y="-93.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Regenerator Overhead Condenser</text>
-    <text x="827.8" y="-75.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-401</text>
-    <text x="886.9" y="-75.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Reflux Drum</text>
-    <text x="827.8" y="-57.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-402A/B</text>
-    <text x="886.9" y="-57.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Reflux Pump</text>
-    <text x="827.8" y="-39.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-403</text>
-    <text x="886.9" y="-39.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Regenerator Reboiler</text>
-    <text x="827.8" y="-21.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-401A/B</text>
-    <text x="886.9" y="-21.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Lean Solvent Pump</text>
-    <text x="827.8" y="-3.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-404</text>
-    <text x="886.9" y="-3.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Lean Amine Cooler</text>
+    <line x1="818.2" y1="-161.0" x2="1065.8" y2="-161.0" stroke="black" stroke-width="1"/>
+    <text x="827.2" y="-147.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-401</text>
+    <text x="887.5" y="-147.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Amine Contactor</text>
+    <text x="827.2" y="-129.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-401</text>
+    <text x="887.5" y="-129.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Lean / Rich Exchanger</text>
+    <text x="827.2" y="-111.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-402</text>
+    <text x="887.5" y="-111.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Amine Regenerator</text>
+    <text x="827.2" y="-93.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-402</text>
+    <text x="887.5" y="-93.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Regenerator Overhead Condenser</text>
+    <text x="827.2" y="-75.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-401</text>
+    <text x="887.5" y="-75.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Reflux Drum</text>
+    <text x="827.2" y="-57.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-402A/B</text>
+    <text x="887.5" y="-57.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Reflux Pump</text>
+    <text x="827.2" y="-39.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-403</text>
+    <text x="887.5" y="-39.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Regenerator Reboiler</text>
+    <text x="827.2" y="-21.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-401A/B</text>
+    <text x="887.5" y="-21.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Lean Solvent Pump</text>
+    <text x="827.2" y="-3.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-404</text>
+    <text x="887.5" y="-3.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Lean Amine Cooler</text>
     <g id="stream_table">
       <rect x="0.0" y="1093.0" width="122.0" height="15.0" fill="#eee" stroke="black" stroke-width="0.75"/>
       <text x="5.0" y="1103.7" font-family="sans-serif" font-size="9.5" font-weight="bold" text-anchor="start">Stream Number</text>

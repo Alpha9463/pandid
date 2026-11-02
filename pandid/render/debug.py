@@ -31,7 +31,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, NamedTuple, Sequence
 
-from pandid.render.escape import escaped
+from pandid.render.escape import escaped, fmt
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -86,11 +86,6 @@ _REACH = 10.0
 _TETHER = 3.5
 
 
-def _n(value: float) -> str:
-    """Return a coordinate as an author writes it: ``200``, not ``200.0``."""
-    return f"{value:.1f}".rstrip("0").rstrip(".") or "0"
-
-
 def resolve_spacing(debug: "bool | float") -> "float | None":
     """Return the grid pitch ``debug`` asks for, or ``None`` for no overlay.
 
@@ -124,9 +119,9 @@ def resolve_spacing(debug: "bool | float") -> "float | None":
         ) from None
     if not math.isfinite(spacing) or spacing < _MIN_SPACING:
         raise ValueError(
-            f"debug={debug!r} asks for a grid at a spacing of {_n(spacing)} drawing units, "
-            f"finer than the {_n(_MIN_SPACING)} this can draw. Pass debug=True for the "
-            f"default {_n(DEFAULT_SPACING)}-unit grid, or a spacing of {_n(_MIN_SPACING)} "
+            f"debug={debug!r} asks for a grid at a spacing of {fmt(spacing, 1)} drawing units, "
+            f"finer than the {fmt(_MIN_SPACING, 1)} this can draw. Pass debug=True for the "
+            f"default {fmt(DEFAULT_SPACING, 1)}-unit grid, or a spacing of {fmt(_MIN_SPACING, 1)} "
             f"or more."
         )
     return spacing
@@ -187,7 +182,7 @@ def _text(x: float, y: float, body: str, size: float, fill: str,
     str
         SVG element.
     """
-    return (f'    <text x="{_n(x)}" y="{_n(y)}" font-family="{_FONT}" '
+    return (f'    <text x="{fmt(x, 1)}" y="{fmt(y, 1)}" font-family="{_FONT}" '
             f'font-size="{size:.2f}" text-anchor="{anchor}" fill="{fill}">'
             f'{escaped(body)}</text>')
 
@@ -195,7 +190,7 @@ def _text(x: float, y: float, body: str, size: float, fill: str,
 def _rule(x1: float, y1: float, x2: float, y2: float, colour: str,
           width: float) -> str:
     """Return one dashed grid rule as an SVG ``<line>``."""
-    return (f'    <line x1="{_n(x1)}" y1="{_n(y1)}" x2="{_n(x2)}" y2="{_n(y2)}" '
+    return (f'    <line x1="{fmt(x1, 1)}" y1="{fmt(y1, 1)}" x2="{fmt(x2, 1)}" y2="{fmt(y2, 1)}" '
             f'stroke="{colour}" stroke-width="{width:.3f}" stroke-dasharray="{_DASH}" />')
 
 
@@ -398,8 +393,8 @@ def _tether(lab: "_Label", box: "tuple[float, float, float, float]") -> "str | N
     near = (min(max(lab.px, box[0]), box[2]), min(max(lab.py, box[1]), box[3]))
     if math.hypot(near[0] - lab.px, near[1] - lab.py) <= _TETHER * lab.size:
         return None
-    return (f'    <line x1="{_n(lab.px)}" y1="{_n(lab.py)}" x2="{_n(near[0])}" '
-            f'y2="{_n(near[1])}" stroke="{lab.colour}" '
+    return (f'    <line x1="{fmt(lab.px, 1)}" y1="{fmt(lab.py, 1)}" x2="{fmt(near[0], 1)}" '
+            f'y2="{fmt(near[1], 1)}" stroke="{lab.colour}" '
             f'stroke-width="{0.4 * lab.size / _MARK_SIZE:.3f}" />')
 
 
@@ -490,11 +485,11 @@ def _grid(bounds: "tuple[float, float, float, float]", spacing: float,
     # values just above their line, so the two rows cannot collide.
     size = _AXIS_SIZE / scale
     for x in sorted(numbered_x):
-        out.append(_text(x + 0.15 * size, y0 + 1.1 * size, _n(x), size, _NUMBER))
-        taken.append(_box(x + 0.15 * size, y0 + 1.1 * size, _n(x), size, 1.0))
+        out.append(_text(x + 0.15 * size, y0 + 1.1 * size, fmt(x, 1), size, _NUMBER))
+        taken.append(_box(x + 0.15 * size, y0 + 1.1 * size, fmt(x, 1), size, 1.0))
     for y in sorted(numbered_y):
-        out.append(_text(x0 + 0.15 * size, y - 0.35 * size, _n(y), size, _NUMBER))
-        taken.append(_box(x0 + 0.15 * size, y - 0.35 * size, _n(y), size, 1.0))
+        out.append(_text(x0 + 0.15 * size, y - 0.35 * size, fmt(y, 1), size, _NUMBER))
+        taken.append(_box(x0 + 0.15 * size, y - 0.35 * size, fmt(y, 1), size, 1.0))
     return out
 
 
@@ -592,25 +587,25 @@ def _marks(fs: "Flowsheet", scale: float,
         bx0, by0, bx1, by1 = unit_box(u, f)
         ax, ay = _pin_point(u, f)
         geometry.append(
-            f'    <rect x="{_n(bx0)}" y="{_n(by0)}" width="{_n(bx1 - bx0)}" '
-            f'height="{_n(by1 - by0)}" fill="none" stroke="{_BOX}" '
+            f'    <rect x="{fmt(bx0, 1)}" y="{fmt(by0, 1)}" width="{fmt(bx1 - bx0, 1)}" '
+            f'height="{fmt(by1 - by0, 1)}" fill="none" stroke="{_BOX}" '
             f'stroke-width="{0.75 / scale:.3f}" />')
         geometry.append(
-            f'    <line x1="{_n(ax - arm)}" y1="{_n(ay)}" x2="{_n(ax + arm)}" '
-            f'y2="{_n(ay)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
+            f'    <line x1="{fmt(ax - arm, 1)}" y1="{fmt(ay, 1)}" x2="{fmt(ax + arm, 1)}" '
+            f'y2="{fmt(ay, 1)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
         geometry.append(
-            f'    <line x1="{_n(ax)}" y1="{_n(ay - arm)}" x2="{_n(ax)}" '
-            f'y2="{_n(ay + arm)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
+            f'    <line x1="{fmt(ax, 1)}" y1="{fmt(ay - arm, 1)}" x2="{fmt(ax, 1)}" '
+            f'y2="{fmt(ay + arm, 1)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
         # Include the tag, which is what the author searches the source for.
-        label = f"{u.tag} {_n(ax)},{_n(ay)}" if u.tag else f"{_n(ax)},{_n(ay)}"
+        label = f"{u.tag} {fmt(ax, 1)},{fmt(ay, 1)}" if u.tag else f"{fmt(ax, 1)},{fmt(ay, 1)}"
         job(label, ax, ay, _ANCHOR, anchor_spots)
 
     for u, f in frames:
         for name in u.ports:
             (px, py), _, facing = resolve_port(u, f, name)
-            geometry.append(f'    <circle cx="{_n(px)}" cy="{_n(py)}" r="{dot:.3f}" '
+            geometry.append(f'    <circle cx="{fmt(px, 1)}" cy="{fmt(py, 1)}" r="{dot:.3f}" '
                             f'fill="{_PORT}" />')
-            job(f"{name} {_n(px)},{_n(py)}", px, py, _PORT,
+            job(f"{name} {fmt(px, 1)},{fmt(py, 1)}", px, py, _PORT,
                 _spots(*_PORT_LABEL.get(facing, _PORT_LABEL["E"])))
 
     tethers, words = _settle(jobs, bounds)

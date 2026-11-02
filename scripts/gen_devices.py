@@ -794,11 +794,9 @@ STAYS_ON_BASE = {
     ("vent", "default"): "Vent's own drawing",
     ("vessel", "default"): "Vessel's own drawing",
     ("column", "default"): "Column's own drawing",
-    ("reactor", "plain"): "body style: the same charge vessel without the agitator",
     # Reactor type comes from agitator= and internals=, so these bodies are
     # styles.
     ("reactor", "jacketed"): "cladding: a heating/cooling jacket",
-    ("reactor", "mixing"): "body style: a conical-bottomed mixing vessel",
     ("reactor", "tubular"): "body style: a horizontal shell with a tube pass",
     # Refused by name; see REFUSED_KINDS.
     ("feed", "default"): "a boundary flag, not equipment",
@@ -814,8 +812,6 @@ STAYS_ON_BASE = {
     # Vessels: supports, head styles, cladding and attitude.
     ("vessel", "dished"): "head style, plus the brackets it stands on",
     ("vessel", "dome"): "head style: a raised manway dome",
-    ("vessel", "skirted"): "support: a skirt",
-    ("vessel", "legs"): "support: legs",
     ("vessel", "horizontal"): "attitude: the same vessel lying down",
     ("vessel", "swaged"): "shell style: one vessel in two diameters",
     ("vessel", "jacketed"): "cladding: a heating/cooling jacket",

@@ -162,15 +162,15 @@ from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
-from pandid.render.escape import writable
+from pandid.render.escape import fmt, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
-                               _fitted, _furniture_name, _LABEL_CODES, _RENDER_CODES,
-                               _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE, _too_small,
-                               _SIGNAL_DASH, _stream_rung, _TAP_DASH,
+                               _fitted, _LABEL_CODES, _RENDER_CODES,
+                               _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
+                               _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
-                               NUMBER_TYPE, boundary_flag, enclosure_shape,
+                               NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
                                label_findings,
-                               drawing_bounds, draws_arrowheads, flange_marks, impulse_tap,
+                               draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
@@ -260,11 +260,11 @@ def _hops(polylines: dict, direction: str,
           style: str = "arc") -> "tuple[list, set, set]":
     """Return the stream edge order, the edges that hop, and the hops lost.
 
-    The sheet's rule picks the hopping line: a vertical segment hops a
-    horizontal one (the reverse under ``jump_direction="horizontal"``),
-    for crossings strictly inside both segments and at least ``HOP_R``
-    from the hopper's segment ends, as
-    :meth:`SvgRenderer._draw_streams` draws them.
+    The crossings are the sheet's (:func:`~pandid.render.svg.crossings`):
+    a vertical segment hops a horizontal one (the reverse under
+    ``jump_direction="horizontal"``) where the hop has ``HOP_R`` either
+    side. A run that crosses itself is lost, since draw.io never hops an
+    edge over itself.
 
     ``mxGraphView.updateLineJumps`` hops an edge only over edges written
     before it, so each hopper must follow everything it crosses. Edges are
@@ -301,47 +301,35 @@ def _hops(polylines: dict, direction: str,
     keys = list(polylines)
     if style not in _JUMP_STYLES or direction not in ("vertical", "horizontal"):
         return keys, set(), set()
-    # Hopping and crossed segments by owner, as _draw_streams splits them.
-    hopping: list = []
-    crossed: list = []
-    for key, points in polylines.items():
-        for (x1, y1), (x2, y2) in zip(points, points[1:]):
-            if y1 == y2 and x1 != x2:
-                (crossed if direction == "vertical" else hopping).append(
-                    (key, min(x1, x2), max(x1, x2), y1))
-            elif x1 == x2 and y1 != y2:
-                (hopping if direction == "vertical" else crossed).append(
-                    (key, min(y1, y2), max(y1, y2), x1))
     # (crossed, hopper): the crossed edge must be written first.
     after: dict = {key: set() for key in keys}
     # Who may hop each edge, to tell a lost hop from a wrong one.
     hopped_by: dict = {key: set() for key in keys}
     hops: set = set()
     # Crossings keyed by position too: two runs may cross more than once.
-    crossings: set = set()
+    jumps: set = set()
     # Crossings the sheet draws flat (within HOP_R of a segment end) but
     # draw.io would hop, keyed by the edge that must then drop its style.
     marginal: dict = {key: set() for key in keys}
-    for hop_key, lo, hi, at in hopping:
-        for cross_key, c_lo, c_hi, c_at in crossed:
-            # Same test as _draw_streams: the arc needs HOP_R either side.
-            if not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
-                if c_lo < at < c_hi and lo < c_at < hi and hop_key != cross_key:
-                    # Drawn flat, so whichever edge is written second must
-                    # not carry the style.
-                    marginal[hop_key].add(cross_key)
-                    marginal[cross_key].add(hop_key)
-                continue
-            # A run never hops itself, in draw.io either.
-            if hop_key == cross_key:
-                continue
+    # A run hopping itself, which updateLineJumps never does: it intersects
+    # an edge only with the edges validated before it.
+    own: set = set()
+    for hop_key, _seg, cross_key, x, y, room in _svg.crossings(polylines, direction):
+        if hop_key == cross_key:
+            if room:
+                own.add((hop_key, cross_key, x, y))
+        elif not room:
+            # Drawn flat, so whichever edge is written second must not
+            # carry the style.
+            marginal[hop_key].add(cross_key)
+            marginal[cross_key].add(hop_key)
+        else:
             hops.add(hop_key)
             after[hop_key].add(cross_key)
             hopped_by[cross_key].add(hop_key)
-            point = (at, c_at) if direction == "vertical" else (c_at, at)
-            crossings.add((hop_key, cross_key, *point))
+            jumps.add((hop_key, cross_key, x, y))
     if not hops:
-        return keys, hops, set()
+        return keys, hops, own
     # Kahn's algorithm, lowest original index first, to stay near stream
     # order.
     order: list = []
@@ -365,9 +353,9 @@ def _hops(polylines: dict, direction: str,
     # Every crossing the sheet hops and the export draws flat, per crossing
     # rather than per edge, so the caller can report each one.
     lost = {(hop_key, cross_key, x, y)
-            for hop_key, cross_key, x, y in crossings
+            for hop_key, cross_key, x, y in jumps
             if hop_key not in kept or rank[cross_key] > rank[hop_key]}
-    return order, kept, lost
+    return order, kept, lost | own
 
 
 # Clockwise turn -> draw.io ``direction`` (mxShape.getShapeRotation adds
@@ -1086,22 +1074,6 @@ def _html_text(value) -> str:
     return html.escape(writable(value), quote=False)
 
 
-def _num(v: float) -> str:
-    """Return a coordinate rounded to two decimals, for stable diffs.
-
-    Parameters
-    ----------
-    v : float
-        Coordinate in drawing units (CSS pixels).
-
-    Returns
-    -------
-    str
-        Formatted number.
-    """
-    return f"{round(float(v), 2):g}"
-
-
 def _dash(pattern: str) -> list[str]:
     """Return draw.io dash style keys for an SVG dash pattern.
 
@@ -1125,25 +1097,6 @@ def _dash(pattern: str) -> list[str]:
         return []
     lengths = " ".join(pattern.replace(",", " ").split())
     return ["dashed=1", f"dashPattern={lengths}", "fixDash=1"]
-
-
-def _fraction(v: float) -> str:
-    """Return a connection-point fraction rounded to six places.
-
-    Six places, since it is multiplied by a box up to hundreds of units
-    across.
-
-    Parameters
-    ----------
-    v : float
-        Fraction of the cell box.
-
-    Returns
-    -------
-    str
-        Formatted number.
-    """
-    return f"{round(float(v), 6):g}"
 
 
 class DrawioRenderer:
@@ -1285,7 +1238,7 @@ class DrawioRenderer:
         # Cell order is z-order: border, then furniture, behind the
         # drawing. The table sheet has returned, so the stream-table
         # argument is now a plain bool.
-        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table))
+        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table), border)
         body.extend(self._border(frame, border))
         body.extend(furniture)
         # Then equipment, runs and balloons, in the SVG renderer's order, so
@@ -1387,7 +1340,7 @@ class DrawioRenderer:
         # math is off so export does not re-typeset before measuring.
         page_w, page_h = self._page_box(sheet, frame)
         paper = (f'page="{0 if sheet is None else 1}" pageScale="1" '
-                 f'pageWidth="{_num(page_w)}" pageHeight="{_num(page_h)}"')
+                 f'pageWidth="{fmt(page_w, 2)}" pageHeight="{fmt(page_h, 2)}"')
         # A stable page id, so re-exporting gives an identical file.
         page = hashlib.sha256(fs.name.encode("utf-8")).hexdigest()[:16]
         # Replace earlier export findings with this export's, as
@@ -1585,7 +1538,7 @@ class DrawioRenderer:
         (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
         width = x1 - x0
         size = (depth / width) if width else 0.375
-        return ["shape=offPageConnector", f"size={_fraction(min(1.0, size))}",
+        return ["shape=offPageConnector", f"size={fmt(min(1.0, size), 6)}",
                 f"direction={'north' if east else 'south'}",
                 "anchorPointDirection=0", "legacyAnchorPoints=1",
                 "rounded=0", "whiteSpace=wrap",
@@ -1720,10 +1673,10 @@ class DrawioRenderer:
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
         style = ";".join(["html=1", *self._shape(u, sym, fit), *label_keys, *placement]) + ";"
-        geometry = (f'          <mxGeometry x="{_num(x0)}" y="{_num(y0)}" '
-                    f'width="{_num(x1 - x0)}" height="{_num(y1 - y0)}" as="geometry"')
+        geometry = (f'          <mxGeometry x="{fmt(x0, 2)}" y="{fmt(y0, 2)}" '
+                    f'width="{fmt(x1 - x0, 2)}" height="{fmt(y1 - y0, 2)}" as="geometry"')
         body = ([geometry + ">",
-                 f'            <mxPoint x="{_num(dx)}" y="{_num(dy)}" as="offset" />',
+                 f'            <mxPoint x="{fmt(dx, 2)}" y="{fmt(dy, 2)}" as="offset" />',
                  '          </mxGeometry>']
                 if (round(dx, 2) or round(dy, 2)) else [geometry + " />"])
         cid = self._id(index)
@@ -2003,7 +1956,7 @@ class DrawioRenderer:
         for prefix, at in (("exit", exit_at), ("entry", entry_at)):
             if at is None:
                 continue
-            keys += [f"{prefix}X={_fraction(at[0])}", f"{prefix}Y={_fraction(at[1])}",
+            keys += [f"{prefix}X={fmt(at[0], 6)}", f"{prefix}Y={fmt(at[1], 6)}",
                      f"{prefix}Dx=0", f"{prefix}Dy=0", f"{prefix}Perimeter=0"]
         return keys
 
@@ -2055,9 +2008,13 @@ class DrawioRenderer:
             return fs.streams[key].name or f"stream {key + 1}"
 
         for hop_key, cross_key, x, y in sorted(lost):
+            at = f"({fmt(x, 2)}, {fmt(y, 2)})"
             self._findings.append(Issue(
                 "warning", HOP_DROPPED,
-                f"{_run(hop_key)} hops {_run(cross_key)} at ({_num(x)}, {_num(y)}) "
+                f"{_run(hop_key)} crosses itself at {at}, and draw.io hops a line "
+                f"only over the lines written before it, never over itself; the "
+                f"crossing is exported flat" if hop_key == cross_key else
+                f"{_run(hop_key)} hops {_run(cross_key)} at {at} "
                 f"on the sheet, and the two cross each other more than once, which "
                 f"draw.io cannot draw either way round; the crossing is exported "
                 f"flat"))
@@ -2129,17 +2086,17 @@ class DrawioRenderer:
             along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
                 *(['            <Array as="points">',
-                   *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
+                   *(f'              <mxPoint x="{fmt(fx, 2)}" y="{fmt(fy, 2)}" />'
                      for fx, fy in (fit.at(px, py) for px, py in waypoints)),
                    '            </Array>'] if waypoints else []),
-                *([f'            <mxPoint x="{_num(offset[0])}" y="{_num(offset[1])}" '
+                *([f'            <mxPoint x="{fmt(offset[0], 2)}" y="{fmt(offset[1], 2)}" '
                    'as="offset" />'] if offset is not None else []),
             ]
             # The geometry's x places the label along the run and its
             # offset across it, beside the waypoints, as draw.io itself
             # writes a dragged edge label (mxEdgeHandler.moveLabel).
             head = ('          <mxGeometry relative="1" as="geometry"'
-                    + ('' if along is None else f' x="{_fraction(along)}"'))
+                    + ('' if along is None else f' x="{fmt(along, 6)}"'))
             if body:
                 geometry = [head + ">", *body, '          </mxGeometry>']
             else:
@@ -2225,8 +2182,8 @@ class DrawioRenderer:
             style = ";".join(keys) + ";"
             terminals = f' source="{self._id(source)}"' if source is not None else ""
             geometry = ['          <mxGeometry relative="1" as="geometry">',
-                        f'            <mxPoint x="{_num(fit.at(*tap)[0])}" '
-                        f'y="{_num(fit.at(*tap)[1])}" as="sourcePoint" />',
+                        f'            <mxPoint x="{fmt(fit.at(*tap)[0], 2)}" '
+                        f'y="{fmt(fit.at(*tap)[1], 2)}" as="sourcePoint" />',
                         '          </mxGeometry>'] if source is None else [
                 '          <mxGeometry relative="1" as="geometry" />']
             out += [
@@ -2269,12 +2226,13 @@ class DrawioRenderer:
         _ox, _oy, ow, oh = F.sheet_rect(*frame)
         return (ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN)
 
-    def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False):
+    def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False,
+                   border: str = "none"):
         """Return the docked furniture cells, the frame and the drawing fit.
 
-        Placement is :func:`pandid.render.furniture.dock`, shared with the
-        SVG sheet. Without a page the frame grows around the drawing's own
-        bounds; with one, the drawing is fitted into what the furniture
+        Placement is :func:`~pandid.render.svg.diagram_plan`, shared with
+        the SVG sheet. Without a page the frame grows around the drawing's
+        own bounds; with one, the drawing is fitted into what the furniture
         leaves. Boxes with columnar rows export as editable ``shape=table``
         grids, ruled only where the sheet rules them: annotations have no
         inner rules (:data:`_ANNOTATION_KEYS`), table boxes rule every
@@ -2288,6 +2246,8 @@ class DrawioRenderer:
             Fixed page.
         show_stream_table : bool, default=False
             Whether to dock the stream table.
+        border : str, default="none"
+            ``"zone"`` docks a title strip even without a title block.
 
         Returns
         -------
@@ -2299,45 +2259,21 @@ class DrawioRenderer:
         ValueError
             If the page is too small for the furniture.
         """
-        from pandid.document import TableBox
-
-        items: list = []
-        if fs.title_block is not None:
-            items.append((fs.title_block, "bottom-right",
-                          *F.measure_title_strip(fs.title_block)))
-        for a in getattr(fs, "annotations", []) or []:
-            w, h = (F.measure_table(a) if isinstance(a, TableBox)
-                    else F.measure_annotation(a))
-            items.append((a, a.align, w, h))
-        # The stream table docks last at bottom-left, against the foot of
-        # the sheet, measured as on the SVG sheet.
-        table = F.stream_table_layout(fs) if show_stream_table else None
-        if table is not None:
-            items.append((table, "bottom-left", table.w, table.h))
-
-        inner = drawing_bounds(fs)
-        if sheet is None:
-            placed, frame, free = F.dock(items, inner)
-        else:
-            # Rebind so the closure's type is _Sheet, not _Sheet | None.
-            page = sheet
-            placed, frame, free = F.dock(
-                items, inner, sheet=page,
-                too_small=lambda need_w, need_h, culprit: _too_small(
-                    page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        plan = diagram_plan(fs, sheet, border, show_stream_table)
         # A fixed page fits the drawing into the free region; otherwise the
         # drawing keeps its coordinates.
-        fit = _Fit.identity() if free is None else _Fit(
-            *_fitted(inner, free))
+        fit = _Fit.identity() if plan.free is None else _Fit(
+            *_fitted(plan.bounds, plan.free))
         # Fallbacks for the strip's name, date and scale, passed unchosen so
         # the strip decides after treating blank fields as empty.
         name = fs.name
         date = datetime.now().strftime("%Y-%m-%d")
-        scale = "" if free is None else _scale_text(fit.scale)
+        scale = "" if plan.free is None else _scale_text(fit.scale)
         out: list[str] = []
-        for n, (obj, x, y, w, h) in enumerate(placed):
-            out += self._furniture_cell(f"f{n}", obj, x, y, w, h, name, date, scale)
-        return out, frame, fit
+        for n, (obj, x, y, w, h) in enumerate(plan.placed):
+            out += self._furniture_cell(f"f{n}", plan.block if obj is TITLE else obj,
+                                        x, y, w, h, name, date, scale)
+        return out, plan.frame, fit
 
     @staticmethod
     def _border(frame, border: str) -> list[str]:
@@ -2421,23 +2357,30 @@ class DrawioRenderer:
                           col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
-            # Columnar (equipment list, legend, notes): columns measured
-            # from their text (:func:`columns`).
-            size, _row_h, title_h, _col_w = F._ann_layout(obj)
+            # Columnar (equipment list, legend, notes): text starts where
+            # draw_annotation writes it, from the sheet's own column widths
+            # (F._ann_layout). The first cell starts at the border, the pad
+            # before its text; a later one starts _ANN_LEAD before its text,
+            # leaving most of the gap as slack for text_width's error, since
+            # a cell wraps and clips what overruns it.
+            size, _row_h, title_h, col_w = F._ann_layout(obj)
+            col_w = col_w or [0.0]  # rows of empty cells: one blank column
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
-            ncol = max(len(r) for r in grid)
-            # Left-aligned, first column bold, as draw_annotation sets it;
-            # columns are measured in the same weights.
-            heavy = [True] + [False] * (ncol - 1)
-            return _table(cid, title, [], grid, x, y, w, h,
-                          columns(grid, [size] * ncol, w, bold=heavy), title_h,
+            widths = [cw + F._ANN_GAP for cw in col_w]
+            widths[0] += F._ANN_PAD - _ANN_LEAD
+            widths[-1] += w - sum(widths)  # what is left, as on the sheet
+            insets = [F._ANN_PAD] + [_ANN_LEAD] * (len(col_w) - 1)
+            return _table(cid, title, [], grid, x, y, w, h, widths, title_h,
                           font=size,
                           # The border is this box's only rule.
                           keys=(_ANNOTATION_KEYS + f"fontSize={size + 1:g};"
                                 + f"strokeWidth={F._BOX_RULE:g};"),
-                          col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
-                                    for b in heavy])
+                          # A row's first cell is bold, as on the sheet.
+                          cell_keys=[[_TABLE_BODY + "align=left;"
+                                      f"spacingLeft={fmt(insets[c] - _TEXT_INSET, 2)};"
+                                      + ("fontStyle=1;" if c == 0 and len(r) > 1 else "")
+                                      for c in range(len(col_w))] for r in grid])
         # Free-form lines, or any other docked object with a title and
         # rows.
         size = getattr(obj, "font_size", 11.0)
@@ -2719,10 +2662,10 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
             out += [
                 f'        <mxCell id="{edge_id}h{n}{k}" value="" style={_attr(style)} '
                 f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{_fraction(rel)}" y="0" '
-                f'width="{_num(length)}" height="{_num(length)}" '
+                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
                 'relative="1" as="geometry">',
-                f'            <mxPoint x="{_num(dx - half)}" y="{_num(dy - half)}" '
+                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
                 'as="offset" />',
                 '          </mxGeometry>',
                 '        </mxCell>',
@@ -2783,10 +2726,10 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
             out += [
                 f'        <mxCell id="{edge_id}f{n}{k}" value="" style={_attr(style)} '
                 f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{_fraction(rel)}" y="0" '
-                f'width="{_num(length)}" height="{_num(length)}" '
+                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
                 'relative="1" as="geometry">',
-                f'            <mxPoint x="{_num(dx - half)}" y="{_num(dy - half)}" '
+                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
                 'as="offset" />',
                 '          </mxGeometry>',
                 '        </mxCell>',
@@ -2855,12 +2798,6 @@ def _distribute(weights, total: float) -> list[float]:
     return out
 
 
-# Clearance between a cell's rules and its text, both sides together.
-# draw.io adds mxText.spacing (2) to the style's spacingLeft/Right (3 or 4
-# here), using 7 to 8 of the 12; the rest absorbs the error of
-# furniture.text_width, which underestimates bold capitals by about 11%.
-_CELL_PAD = 12.0
-
 # Line box height as a multiple of font size. HTML labels get the
 # unitless CSS line-height 1.2 (mxConstants.LINE_HEIGHT). mxGraph never
 # shrinks text to fit, so a row shorter than its line box clips letters.
@@ -2920,50 +2857,6 @@ def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
             for c in range(ncol)]
 
 
-def columns(rows, sizes, total: float, bold=None) -> list[float]:
-    """Return column widths measured from the text.
-
-    Each column is as wide as its widest text
-    (:func:`pandid.render.furniture.text_width`, as the SVG measures) plus
-    :data:`_CELL_PAD`. Slack goes to the last column; a shortfall is shared
-    in proportion, as the SVG clips.
-
-    Parameters
-    ----------
-    rows : list[list[str]]
-        Cell text.
-    sizes : sequence of float
-        Font size per column; the last applies to any extra columns.
-    total : float
-        Table width.
-    bold : sequence of bool, optional
-        Whether each column is bold, which is about 11% wider.
-
-    Returns
-    -------
-    list[float]
-        Column widths summing to ``total``.
-    """
-    from pandid.render.furniture import text_width
-
-    ncol = max((len(r) for r in rows), default=1)
-    weights = list(bold) if bold is not None else []
-    need = []
-    for c in range(ncol):
-        size = sizes[c] if c < len(sizes) else (sizes[-1] if sizes else 11.0)
-        heavy = bool(weights[c]) if c < len(weights) else False
-        widest = max((text_width(r[c], size, heavy) for r in rows if c < len(r)),
-                     default=0.0)
-        need.append(widest + _CELL_PAD)
-    span = sum(need)
-    if span <= 0:
-        return _distribute([1.0] * ncol, total)
-    if span > total:  # cannot fit; clip in proportion, as the sheet does
-        return _distribute(need, total)
-    out = _distribute(need[:-1] + [need[-1] + (total - span)], total)
-    return out
-
-
 def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
            start: float = 0.0, *, header_last: bool = False,
            font: float = 11.0, col_keys=(), row_h: "float | None" = None,
@@ -2990,8 +2883,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     x, y, w, h : float
         Table rectangle.
     widths : list[float]
-        Column widths summing to ``w`` (from :func:`columns` or a fixed
-        ruling).
+        Column widths summing to ``w`` (measured, or a fixed ruling).
     start : float, default=0.0
         Title band height; 0 for no band.
     header_last : bool, default=False
@@ -3035,7 +2927,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     rows_h = _distribute(list(heights) if heights else [1.0] * len(body),
                          h - start) if body else []
 
-    shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};" + keys
+    shape = _TABLE_SHAPE + f"startSize={fmt(start, 2)};fontSize={font:g};" + keys
     cell = _TABLE_CELL + f"fontSize={font:g};"
     out = _rect(cid, x, y, w, h, shape, _html_text(title))
     ry = start
@@ -3047,8 +2939,8 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
         out += [
             f'        <mxCell id="{cid}-r{r}" value="" style={_attr(_TABLE_ROW)} '
             f'vertex="1" parent="{cid}">',
-            f'          <mxGeometry y="{_num(ry)}" width="{_num(w)}" '
-            f'height="{_num(rh)}" as="geometry" />',
+            f'          <mxGeometry y="{fmt(ry, 2)}" width="{fmt(w, 2)}" '
+            f'height="{fmt(rh, 2)}" as="geometry" />',
             '        </mxCell>',
         ]
         cx = 0.0
@@ -3060,10 +2952,10 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
                 f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(_html_text(value))} '
                 f'style={_attr(cell + head + extra)} vertex="1" '
                 f'parent="{cid}-r{r}">',
-                f'          <mxGeometry x="{_num(cx)}" width="{_num(cw[c])}" '
-                f'height="{_num(rh)}" as="geometry">',
-                f'            <mxRectangle width="{_num(cw[c])}" '
-                f'height="{_num(rh)}" as="alternateBounds" />',
+                f'          <mxGeometry x="{fmt(cx, 2)}" width="{fmt(cw[c], 2)}" '
+                f'height="{fmt(rh, 2)}" as="geometry">',
+                f'            <mxRectangle width="{fmt(cw[c], 2)}" '
+                f'height="{fmt(rh, 2)}" as="alternateBounds" />',
                 '          </mxGeometry>',
                 '        </mxCell>',
             ]
@@ -3110,7 +3002,7 @@ def _stream_cell(cell) -> str:
         Style fragment.
     """
     if cell.anchor == "start":
-        align = f"align=left;spacingLeft={_num(F._STREAM_PAD - _TEXT_INSET)};"
+        align = f"align=left;spacingLeft={fmt(F._STREAM_PAD - _TEXT_INSET, 2)};"
     else:
         align = "align=center;"
     return (f"fillColor={_fill(cell.fill)};" + align
@@ -3200,6 +3092,10 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
 # rows and cells remain for editing and stroke nothing.
 _ANNOTATION_KEYS = "rowLines=0;columnLines=0;"
 
+# How far an annotation cell after the first starts before its text: 3 of
+# the 12-unit column gap, so 7 are slack after the text before the next.
+_ANN_LEAD = 3.0
+
 
 def _rect(cid: str, x, y, w, h, style: str, value: str = "",
           parent: str = "1") -> list[str]:
@@ -3226,8 +3122,8 @@ def _rect(cid: str, x, y, w, h, style: str, value: str = "",
     return [
         f'        <mxCell id="{cid}" value={_attr(value)} style={_attr(style)} '
         f'vertex="1" parent="{parent}">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
-        f'height="{_num(h)}" as="geometry" />',
+        f'          <mxGeometry x="{fmt(x, 2)}" y="{fmt(y, 2)}" width="{fmt(w, 2)}" '
+        f'height="{fmt(h, 2)}" as="geometry" />',
         '        </mxCell>',
     ]
 
@@ -3265,8 +3161,8 @@ def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float,
         f'        <mxCell id="{cid}" value="" style={_attr(style)} '
         f'edge="1" parent="1">',
         '          <mxGeometry relative="1" as="geometry">',
-        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="sourcePoint" />',
-        f'            <mxPoint x="{_num(x2)}" y="{_num(y2)}" as="targetPoint" />',
+        f'            <mxPoint x="{fmt(x1, 2)}" y="{fmt(y1, 2)}" as="sourcePoint" />',
+        f'            <mxPoint x="{fmt(x2, 2)}" y="{fmt(y2, 2)}" as="targetPoint" />',
         '          </mxGeometry>',
         '        </mxCell>',
     ]

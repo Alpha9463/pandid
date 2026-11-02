@@ -32,6 +32,8 @@ import math
 import re
 import xml.etree.ElementTree as ET
 
+from pandid.render.escape import fmt
+
 _SVG_NS = "http://www.w3.org/2000/svg"
 _XLINK_NS = "http://www.w3.org/1999/xlink"
 
@@ -83,11 +85,6 @@ def _local(tag: object) -> str:
     return str(tag).rsplit("}", 1)[-1]
 
 
-def _num(value: float) -> str:
-    """Return a number with at most six decimals, trailing zeros removed."""
-    return f"{value:.6f}".rstrip("0").rstrip(".") or "0"
-
-
 # -------------------------------------------------------- flatten
 
 
@@ -134,9 +131,9 @@ def _placement(use: ET.Element, symbol: ET.Element) -> str:
     else:  # the xMidYMid meet default
         sx = sy = min(w / vw, h / vh)
         tx, ty = x + (w - vw * sx) / 2, y + (h - vh * sy) / 2
-    ops = f"translate({_num(tx)}, {_num(ty)}) scale({_num(sx)}, {_num(sy)})"
+    ops = f"translate({fmt(tx, 6)}, {fmt(ty, 6)}) scale({fmt(sx, 6)}, {fmt(sy, 6)})"
     if vx or vy:
-        ops += f" translate({_num(-vx)}, {_num(-vy)})"
+        ops += f" translate({fmt(-vx, 6)}, {fmt(-vy, 6)})"
     return ops
 
 
@@ -226,8 +223,8 @@ def _arrowhead(el: ET.Element, markers: dict[str, ET.Element]) -> ET.Element | N
         _tag("g"),
         {
             "transform": (
-                f"translate({_num(ex)}, {_num(ey)}) rotate({_num(angle)}) "
-                f"scale({_num(sx)}, {_num(sy)}) translate({_num(-rx)}, {_num(-ry)})"
+                f"translate({fmt(ex, 6)}, {fmt(ey, 6)}) rotate({fmt(angle, 6)}) "
+                f"scale({fmt(sx, 6)}, {fmt(sy, 6)}) translate({fmt(-rx, 6)}, {fmt(-ry, 6)})"
             )
         },
     )
@@ -339,7 +336,7 @@ def _set_baseline(text: ET.Element, size: float | None) -> None:
     ascent, descent = _ascent_descent((text.get("font-weight") or "").strip() == "bold")
     shift = (wa * ascent + wd * descent) * size
     if shift:
-        text.set("y", _num(float(text.get("y") or 0) + shift))
+        text.set("y", fmt(float(text.get("y") or 0) + shift, 6))
 
 
 def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
