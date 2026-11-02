@@ -99,6 +99,9 @@ def test_units_all_lists_every_public_unit_class():
     connection machinery (#342), never a device of its own -- there is no
     equipment that is a ``_MultiPortVessel`` and nothing else. ``_FaceFamilies``
     is the face-family API it shares with :class:`~pandid.units.Block`.
+    ``_FluidMover`` holds the suction and discharge a pump, compressor and
+    blower share, and ``_VariantPorted`` the constructor a filter and an
+    exchanger share.
 
     ``_CrushingMachine`` used to be a fourth, ISO 10628-2 group 11's two
     nozzles shared by a crusher and a mill. It is public now, as
@@ -121,6 +124,8 @@ def test_units_all_lists_every_public_unit_class():
         "_NormallyPositioned",
         "_MultiPortVessel",
         "_FaceFamilies",
+        "_FluidMover",
+        "_VariantPorted",
     }
 
 

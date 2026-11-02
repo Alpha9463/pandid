@@ -1310,28 +1310,27 @@ class Product(_Boundary):
     PORTS = [("inlet", "inlet", "product")]
 
 
-class Pump(Unit):
+class _FluidMover(Unit):
+    """Base class for :class:`Pump`, :class:`Compressor` and :class:`Blower`."""
+
+    suction: Port
+    discharge: Port
+
+    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    LAYOUT_CONFIDENCE = 2
+    PLACES = {"suction": "W", "discharge": "E"}
+
+
+class Pump(_FluidMover):
     """Centrifugal or positive-displacement pump."""
 
-    suction: Port
-    discharge: Port
-
     kind = "pump"
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
-    LAYOUT_CONFIDENCE = 2
-    PLACES = {"suction": "W", "discharge": "E"}
 
 
-class Compressor(Unit):
+class Compressor(_FluidMover):
     """Gas compressor."""
 
-    suction: Port
-    discharge: Port
-
     kind = "compressor"
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
-    LAYOUT_CONFIDENCE = 2
-    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class _NormallyPositioned(Unit):
@@ -2788,16 +2787,10 @@ if TYPE_CHECKING:
         in_8: Port
 
 
-class Blower(Unit):
+class Blower(_FluidMover):
     """Fan or blower."""
 
-    suction: Port
-    discharge: Port
-
     kind = "blower"
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
-    LAYOUT_CONFIDENCE = 2
-    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class Reducer(Unit):
@@ -3243,7 +3236,38 @@ class Turbine(Unit):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
-class Filter(Unit):
+class _VariantPorted(Unit):
+    """Base class for units whose ports all come from their variant.
+
+    :class:`Filter` and :class:`HeatExchanger` add :meth:`_variant_ports`
+    after :attr:`PORTS`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
+        # Use the resolved variant, not the argument.
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
+
+
+class Filter(_VariantPorted):
     """Liquid or gas filter, with one of three port sets.
 
     **Clarifying** (one in, one out) holds the solids in the medium, which
@@ -3319,29 +3343,6 @@ class Filter(Unit):
         "rotary_scraper": _CAKE_FORMING,
         "ion_exchange": _REGENERATED,
     }
-
-    def __init__(
-        self,
-        name: str,
-        variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
-    ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
-        # Use the resolved variant, not the argument.
-        for spec in self._variant_ports(self.variant):
-            self._add_port(*spec)
 
 
 class Centrifuge(Unit):
@@ -4417,7 +4418,7 @@ def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
     ]
 
 
-class HeatExchanger(Unit):
+class HeatExchanger(_VariantPorted):
     """Heat exchanger with an inlet and outlet on each of its two sides.
 
     Ports are named for the side of the equipment, not the duty: which
@@ -4458,29 +4459,6 @@ class HeatExchanger(Unit):
         "spiral": _side_ports("side_a", "side_b"),
         "thin_film": _side_ports("jacket", "product"),
     }
-
-    def __init__(
-        self,
-        name: str,
-        variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
-    ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
-        # Use the resolved variant, not the argument.
-        for spec in self._variant_ports(self.variant):
-            self._add_port(*spec)
 
 
 class Heater(Unit):
