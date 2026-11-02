@@ -97,7 +97,8 @@ def test_units_all_lists_every_public_unit_class():
     ``_MultiPortVessel`` is a third, for the same reason: it is
     :class:`~pandid.units.Tank`'s and :class:`~pandid.units.Vessel`'s shared
     connection machinery (#342), never a device of its own -- there is no
-    equipment that is a ``_MultiPortVessel`` and nothing else.
+    equipment that is a ``_MultiPortVessel`` and nothing else. ``_FaceFamilies``
+    is the face-family API it shares with :class:`~pandid.units.Block`.
 
     ``_CrushingMachine`` used to be a fourth, ISO 10628-2 group 11's two
     nozzles shared by a crusher and a mill. It is public now, as
@@ -115,7 +116,12 @@ def test_units_all_lists_every_public_unit_class():
     public = {name for name in declared if not name.startswith("_")}
 
     assert public == set(U.__all__)
-    assert declared - public == {"_Boundary", "_NormallyPositioned", "_MultiPortVessel"}
+    assert declared - public == {
+        "_Boundary",
+        "_NormallyPositioned",
+        "_MultiPortVessel",
+        "_FaceFamilies",
+    }
 
 
 def test_every_unit_class_is_on_the_package():

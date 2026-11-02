@@ -1789,12 +1789,195 @@ _VESSEL_SUPPORT_VARIANTS = {
 }
 
 
+# Self type for _FaceFamilies methods, so callers get their subclass back.
+_FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
+
+
+class _FaceFamilies(Unit):
+    """Base class for units whose inlets and outlets are families on faces.
+
+    Shared by :class:`Block` and :class:`_MultiPortVessel`. Each records
+    every family port's face in ``_faces``, in drawn order, and builds its
+    symbol from it.
+    """
+
+    if TYPE_CHECKING:
+        # Each subclass declares its own; tests/test_port_annotations.py
+        # lists the classes that declare families.
+        inlets: tuple[Port, ...]
+        outlets: tuple[Port, ...]
+
+    # Family port name -> face, in drawn order; the symbol is built from it.
+    _faces: dict[str, str]
+
+    # How errors name the unit, a variable holding one, and a family port.
+    _NOUN, _VAR, _MEMBER = "unit", "v", "inlet or outlet"
+
+    @property
+    def input_faces(self) -> tuple[str, ...]:
+        """Return each inlet's face, in port order, such as ``('W', 'W', 'N')``.
+
+        Use :meth:`nozzle` to move a connection.
+        """
+        return tuple(self._faces[port.name] for port in self.inlets)
+
+    @property
+    def output_faces(self) -> tuple[str, ...]:
+        """Return each outlet's face, in port order."""
+        return tuple(self._faces[port.name] for port in self.outlets)
+
+    def face(self, port_name: str) -> str:
+        """Return the face an inlet or outlet is on.
+
+        This is the declared face; a turned or mirrored unit draws it
+        elsewhere on the sheet (see :func:`pandid.portgeom.port_faces`).
+
+        Parameters
+        ----------
+        port_name : str
+            Inlet or outlet name or alias.
+
+        Returns
+        -------
+        str
+            Compass face.
+
+        Raises
+        ------
+        KeyError
+            If the port is not an inlet or outlet.
+        """
+        canonical = self._canonical_port_name(port_name)
+        try:
+            return self._faces[canonical]
+        except KeyError:
+            raise KeyError(
+                f"{type(self).__name__} {self.name!r} has no {self._MEMBER} "
+                f"named {port_name!r}; available: {sorted(self._faces)}"
+            ) from None
+
+    def ports_on(self, face: str) -> tuple[Port, ...]:
+        """Return the inlets and outlets on one face, in drawn order.
+
+        First is the west end of a north or south face and the north end of
+        a west or east face. Without :meth:`order_on`, this is declaration
+        order, inputs before outputs.
+
+        Parameters
+        ----------
+        face : str
+            Compass face or side name.
+
+        Returns
+        -------
+        tuple[Port, ...]
+            Family ports on that face; fixed ports are excluded.
+        """
+        wanted = _block_face(face, self.name)
+        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
+
+    def order_on(self: _FaceFamiliesT, face: str, ports: "Sequence[Port]") -> _FaceFamiliesT:
+        """Set the drawn order of the inlets and outlets on one face.
+
+        Without this, a face draws its connections in declaration order,
+        inputs before outputs. Pass every connection on the face, first to
+        last, so the call is idempotent; ports rather than names, so a typo
+        is caught. First is the west end of a north or south face and the
+        north end of a west or east face, on the unit's own axes.
+
+        .. code-block:: python
+
+            loop = fs.add(units.Block("Synthesis Loop",
+                                      inputs=["W", "S"],
+                                      outputs=["E", "S"]))
+            # purge west, recycle east
+            loop.order_on("S", [loop.out_2, loop.in_2])
+
+        A connection moved onto the face later takes its declaration-order
+        place, so order a face once it is complete.
+
+        Parameters
+        ----------
+        face : str
+            Compass face or side name.
+        ports : Sequence[Port]
+            Every connection on the face, first to last.
+
+        Returns
+        -------
+        _FaceFamilies
+            This unit.
+
+        Raises
+        ------
+        TypeError
+            If an item is not a Port.
+        ValueError
+            If a port belongs to another unit or face, is repeated, or a
+            connection on the face is missing; the unit is unchanged.
+        """
+        wanted = _block_face(face, self.name)
+        on_face = [name for name, on in self._faces.items() if on == wanted]
+        named: list[str] = []
+        v, noun = self._VAR, self._NOUN
+        for port in ports:
+            if not isinstance(port, Port):
+                raise TypeError(
+                    f"{self.name}: order_on() takes the connections themselves and "
+                    f"not their names, so a checker can see a typo -- "
+                    f"order_on({wanted!r}, [{v}.out_2, {v}.in_2]), or {v}.outlets[1] / "
+                    f"{v}.port('out_2') where the name is computed. "
+                    f"Got {port!r}."
+                )
+            if self.ports.get(port.name) is not port:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is a connection of "
+                    f"{port.owner.name!r}, not of this {noun}, so it is not on any "
+                    f"face of it. order_on() orders one {noun}'s own wall; "
+                    f"the {wanted} face carries "
+                    f"{', '.join(on_face) if on_face else 'nothing'}."
+                )
+            if self._faces.get(port.name) != wanted:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is on the "
+                    f"{self._faces.get(port.name)} face, not the {wanted}. "
+                    f"order_on() orders what is already on a side; move it first "
+                    f"with nozzle({port.name!r}, {wanted!r})."
+                )
+            if port.name in named:
+                raise ValueError(
+                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
+                    f"twice, so it asks for one connection in two places. Name "
+                    f"each of the {wanted} face's connections once: "
+                    f"{', '.join(on_face)}."
+                )
+            named.append(port.name)
+        missing = [name for name in on_face if name not in named]
+        if missing:
+            raise ValueError(
+                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
+                f"{len(on_face)} connections on the {wanted} face and leaves "
+                f"{', '.join(missing)} unplaced. Name every one, first to last "
+                f"along the face; it currently carries {', '.join(on_face)}."
+            )
+        # The dict order is the drawn order. Replace only this face's
+        # members, in place, so other faces keep their order. Counts are
+        # unchanged, so a block's box needs no re-check.
+        replacement = iter(named)
+        self._faces = {
+            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
+        }
+        # Ports on the face moved, so the layout is stale.
+        self._invalidate_layout()
+        return self
+
+
 # Self type for _MultiPortVessel methods, so their bodies see the vessel's
 # own attributes and callers get their subclass back.
 _MultiPortVesselT = TypeVar("_MultiPortVesselT", bound="_MultiPortVessel")
 
 
-class _MultiPortVessel(Unit):
+class _MultiPortVessel(_FaceFamilies):
     """Base class for the :class:`Tank` and :class:`Vessel` port families.
 
     Inlets and outlets are families spread over the vessel's faces, as on
@@ -1826,9 +2009,6 @@ class _MultiPortVessel(Unit):
     # Inlets come from upstream and outlets go downstream, whatever face
     # they use. Vent, relief and drain restate their faces at vessel weight.
     PLACES = {"in": "W", "out": "E", "vent": "N", "relief": "N", "drain": "S"}
-
-    # Family port name -> face, in port order; the symbol is built from it.
-    _faces: dict[str, str]
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the anchor name, resolving the ``inlet``/``outlet`` aliases.
@@ -2087,132 +2267,6 @@ class _MultiPortVessel(Unit):
         self._port_faces[canonical] = resolved
         self._invalidate_layout()
         return self
-
-    def face(self, port_name: str) -> str:
-        """Return the face an inlet or outlet is on.
-
-        Parameters
-        ----------
-        port_name : str
-            Inlet or outlet name or alias.
-
-        Returns
-        -------
-        str
-            Face.
-
-        Raises
-        ------
-        KeyError
-            If the port is not an inlet or outlet.
-        """
-        canonical = self._canonical_port_name(port_name)
-        try:
-            return self._faces[canonical]
-        except KeyError:
-            raise KeyError(
-                f"{type(self).__name__} {self.name!r} has no inlet or outlet "
-                f"named {port_name!r}; available: {sorted(self._faces)}"
-            ) from None
-
-    def ports_on(self, face: str) -> tuple[Port, ...]:
-        """Return the inlets and outlets on one face, in drawn order.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-
-        Returns
-        -------
-        tuple[Port, ...]
-            Family ports on that face; fixed ports are excluded.
-        """
-        wanted = _block_face(face, self.name)
-        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
-
-    def order_on(self: _MultiPortVesselT, face: str, ports: "Sequence[Port]") -> _MultiPortVesselT:
-        """Set the drawn order of the inlets and outlets on one face.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-        ports : Sequence[Port]
-            Every port :meth:`ports_on` reports for the face, first to last.
-
-        Returns
-        -------
-        _MultiPortVessel
-            This unit.
-
-        Raises
-        ------
-        TypeError
-            If an item is not a Port.
-        ValueError
-            If a port belongs to another unit or face, is repeated, or a
-            port on the face is missing.
-        """
-        wanted = _block_face(face, self.name)
-        on_face = [name for name, on in self._faces.items() if on == wanted]
-        named: list[str] = []
-        for port in ports:
-            if not isinstance(port, Port):
-                raise TypeError(
-                    f"{self.name}: order_on() takes the connections themselves and "
-                    f"not their names, so a checker can see a typo -- "
-                    f"order_on({wanted!r}, [v.out_2, v.in_2]), or v.outlets[1] / "
-                    f"v.port('out_2') where the name is computed. "
-                    f"Got {port!r}."
-                )
-            if self.ports.get(port.name) is not port:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is a connection of "
-                    f"{port.owner.name!r}, not of this unit, so it is not on any "
-                    f"face of it. order_on() orders one unit's own wall; "
-                    f"the {wanted} face carries "
-                    f"{', '.join(on_face) if on_face else 'nothing'}."
-                )
-            if self._faces.get(port.name) != wanted:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is on the "
-                    f"{self._faces.get(port.name)} face, not the {wanted}. "
-                    f"order_on() orders what is already on a side; move it first "
-                    f"with nozzle({port.name!r}, {wanted!r})."
-                )
-            if port.name in named:
-                raise ValueError(
-                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
-                    f"twice, so it asks for one connection in two places. Name "
-                    f"each of the {wanted} face's connections once: "
-                    f"{', '.join(on_face)}."
-                )
-            named.append(port.name)
-        missing = [name for name in on_face if name not in named]
-        if missing:
-            raise ValueError(
-                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
-                f"{len(on_face)} connections on the {wanted} face and leaves "
-                f"{', '.join(missing)} unplaced. Name every one, first to last "
-                f"along the face; it currently carries {', '.join(on_face)}."
-            )
-        replacement = iter(named)
-        self._faces = {
-            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
-        }
-        self._invalidate_layout()
-        return self
-
-    @property
-    def input_faces(self) -> tuple[str, ...]:
-        """Return each inlet's face, in port order."""
-        return tuple(self._faces[port.name] for port in self.inlets)
-
-    @property
-    def output_faces(self) -> tuple[str, ...]:
-        """Return each outlet's face, in port order."""
-        return tuple(self._faces[port.name] for port in self.outlets)
 
     def symbol(self) -> "Symbol":
         """Return this unit's symbol with its current port faces.
@@ -6912,7 +6966,7 @@ def _block_face(face: object, owner: str) -> str:
     return resolved
 
 
-class Block(Unit):
+class Block(_FaceFamilies):
     """Block flow diagram box: a plant section drawn as a labelled rectangle.
 
     A block has no equipment ports, only connections and the side each is
@@ -6982,6 +7036,7 @@ class Block(Unit):
         def __getattr__(self, name: str) -> Port: ...
 
     kind = "block"
+    _NOUN, _VAR, _MEMBER = "block", "b", "connection"
 
     DEFAULT_INPUT_FACE = "W"
     DEFAULT_OUTPUT_FACE = "E"
@@ -7020,8 +7075,7 @@ class Block(Unit):
             description=description,
             reference=reference,
         )
-        # Connection name -> face, in drawn order; the symbol is built from it.
-        self._faces: dict[str, str] = {}
+        self._faces = {}
         self.inlets = tuple(
             self._add_connection(f"in_{i}", "inlet", face)
             for i, face in enumerate(in_faces, start=1)
@@ -7174,48 +7228,6 @@ class Block(Unit):
             raise
         return self
 
-    @property
-    def input_faces(self) -> tuple[str, ...]:
-        """Return each input's face, in port order, such as ``('W', 'W', 'N')``.
-
-        Use :meth:`nozzle` to move a connection.
-        """
-        return tuple(self._faces[port.name] for port in self.inlets)
-
-    @property
-    def output_faces(self) -> tuple[str, ...]:
-        """Return each output's face, in port order."""
-        return tuple(self._faces[port.name] for port in self.outlets)
-
-    def face(self, port_name: str) -> str:
-        """Return the side of the box a connection is on.
-
-        This is the declared side; a turned or mirrored block draws it
-        elsewhere on the sheet (see :func:`pandid.portgeom.port_faces`).
-
-        Parameters
-        ----------
-        port_name : str
-            Connection name.
-
-        Returns
-        -------
-        str
-            Compass face of the box.
-
-        Raises
-        ------
-        KeyError
-            If there is no such connection.
-        """
-        try:
-            return self._faces[port_name]
-        except KeyError:
-            raise KeyError(
-                f"Block {self.name!r} has no connection named {port_name!r}; "
-                f"available: {sorted(self.ports)}"
-            ) from None
-
     def nozzle(self, port_name: str, face: str) -> "Block":
         """Move a connection to another side of the box.
 
@@ -7257,120 +7269,6 @@ class Block(Unit):
             self._faces[port_name] = was
             raise
         # The artwork and ports moved, so the layout is stale.
-        self._invalidate_layout()
-        return self
-
-    def ports_on(self, face: str) -> tuple[Port, ...]:
-        """Return the connections on one side of the box, in drawn order.
-
-        First is the west end of a north or south face and the north end of
-        a west or east face. Without :meth:`order_on`, this is declaration
-        order, inputs before outputs.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-
-        Returns
-        -------
-        tuple[Port, ...]
-            Ports on that face.
-        """
-        wanted = _block_face(face, self.name)
-        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
-
-    def order_on(self, face: str, ports: "Sequence[Port]") -> "Block":
-        """Set the drawn order of the connections on one side of the box.
-
-        Without this, a face draws its connections in declaration order,
-        inputs before outputs. Pass every connection on the face, first to
-        last, so the call is idempotent; ports rather than names, so a typo
-        is caught. First is the west end of a north or south face and the
-        north end of a west or east face, on the box's own axes.
-
-        .. code-block:: python
-
-            loop = fs.add(units.Block("Synthesis Loop",
-                                      inputs=["W", "S"],
-                                      outputs=["E", "S"]))
-            # purge west, recycle east
-            loop.order_on("S", [loop.out_2, loop.in_2])
-
-        A connection moved onto the face later takes its declaration-order
-        place, so order a face once it is complete.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-        ports : Sequence[Port]
-            Every connection on the face, first to last.
-
-        Returns
-        -------
-        Block
-            This block.
-
-        Raises
-        ------
-        TypeError
-            If an item is not a Port.
-        ValueError
-            If a port belongs to another unit or face, is repeated, or a
-            connection on the face is missing; the block is unchanged.
-        """
-        wanted = _block_face(face, self.name)
-        on_face = [name for name, on in self._faces.items() if on == wanted]
-        named: list[str] = []
-        for port in ports:
-            if not isinstance(port, Port):
-                raise TypeError(
-                    f"{self.name}: order_on() takes the connections themselves and "
-                    f"not their names, so a checker can see a typo -- "
-                    f"order_on({wanted!r}, [b.out_2, b.in_2]), or b.outlets[1] / "
-                    f"b.port('out_2') where the name is computed. "
-                    f"Got {port!r}."
-                )
-            if self.ports.get(port.name) is not port:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is a connection of "
-                    f"{port.owner.name!r}, not of this block, so it is not on any "
-                    f"face of it. order_on() orders one block's own wall; "
-                    f"the {wanted} face carries "
-                    f"{', '.join(on_face) if on_face else 'nothing'}."
-                )
-            if self._faces[port.name] != wanted:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is on the "
-                    f"{self._faces[port.name]} face, not the {wanted}. order_on() "
-                    f"orders what is already on a side; move it first with "
-                    f"nozzle({port.name!r}, {wanted!r})."
-                )
-            if port.name in named:
-                raise ValueError(
-                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
-                    f"twice, so it asks for one connection in two places. Name "
-                    f"each of the {wanted} face's connections once: "
-                    f"{', '.join(on_face)}."
-                )
-            named.append(port.name)
-        missing = [name for name in on_face if name not in named]
-        if missing:
-            raise ValueError(
-                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
-                f"{len(on_face)} connections on the {wanted} face and leaves "
-                f"{', '.join(missing)} unplaced. Name every one, first to last "
-                f"along the face; it currently carries {', '.join(on_face)}."
-            )
-        # The dict order is the drawn order. Replace only this face's
-        # members, in place, so other faces keep their order. Counts are
-        # unchanged, so the box needs no re-check.
-        replacement = iter(named)
-        self._faces = {
-            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
-        }
-        # Ports on the face moved, so the layout is stale.
         self._invalidate_layout()
         return self
 
