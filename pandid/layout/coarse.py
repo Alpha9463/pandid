@@ -38,6 +38,9 @@ class Host(NamedTuple):
     room : float
         Length of vertical pipe the run's furniture needs when its two ends
         share a grid column.
+    level : bool
+        Whether the run carries a valve station, which is set only on a
+        level leg, so its two ends must not share a grid column.
     """
 
     source: Port
@@ -46,6 +49,7 @@ class Host(NamedTuple):
     last: Stream
     recycle: bool = False
     room: float = 0.0
+    level: bool = False
 
 
 def _position_pinned(unit: Unit) -> bool:
@@ -94,7 +98,10 @@ def _claims(fs: Flowsheet, roots: list[Host], retained: list[Unit]) -> list[clai
         assert source_unit is not None and dest_unit is not None
         for stream, author, subject in ((first, source_unit, dest_unit),
                                         (last, dest_unit, source_unit)):
-            out.extend(claims_mod.Claim(author, subject, claim.eastward,
+            # A station's ends sit a column apart, in flow order.
+            step = ((1 if author is source_unit else -1) * (-1 if root.recycle else 1)
+                    if root.level else 0)
+            out.extend(claims_mod.Claim(author, subject, claim.eastward or step,
                                         claim.southward, claim.confidence)
                        for claim in claims_mod.read([stream]) if claim.author is author)
         if not root.recycle:  # a return line runs against the flow, so it claims no east

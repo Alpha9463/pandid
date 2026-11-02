@@ -46,9 +46,8 @@ GAP = 8.0
 #: Clearance kept along a pipe between an element and another unit.
 ALONG = 25.0
 
-#: Step and reach, in pixels, of the search for a clear spot on a leg.
+#: Step, in pixels, of the search along a leg for a clear spot.
 NUDGE_STEP = 5.0
-NUDGE_STEPS = 40
 
 #: Rounds of widening pipes whose furniture had no room.
 ROOM_ROUNDS = 3
@@ -57,6 +56,7 @@ _INLINE_KINDS = frozenset({"valve", "reducer", "fitting"})
 
 Point = tuple[float, float]
 Leg = tuple[Point, Point]
+Box = tuple[float, float, float, float]
 
 
 @dataclass(frozen=True)
@@ -622,7 +622,8 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
     return {element: _device_frame(element, point, leg)}
 
 
-def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool) -> bool:
+def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
+           zones: list[Box]) -> bool:
     """Return whether proposed frames keep clear of other units.
 
     Parameters
@@ -633,19 +634,21 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool) -> boo
         Units already drawn.
     level : bool
         Whether the leg is horizontal, which sets the along-pipe axis.
+    zones : list[Box]
+        Ground other pipes' stations cover, bypass and drain legs included.
 
     Returns
     -------
     bool
         Whether every frame keeps :data:`ALONG` along the pipe and
-        :data:`GAP` across it from every obstacle.
+        :data:`GAP` across it from every obstacle and zone.
     """
     dx, dy = (ALONG, GAP) if level else (GAP, ALONG)
+    boxes = [*(unit_box(other, other.frame) for other in obstacles if other.frame is not None),
+             *zones]
     for unit, frame in frames.items():
         left, top, right, bottom = unit_box(unit, frame)
-        for other in obstacles:
-            assert other.frame is not None
-            o_left, o_top, o_right, o_bottom = unit_box(other, other.frame)
+        for o_left, o_top, o_right, o_bottom in boxes:
             if (right + dx > o_left and o_right + dx > left
                     and bottom + dy > o_top and o_bottom + dy > top):
                 return False
@@ -926,7 +929,8 @@ def _centres(wanted: list[float], lengths: list[float], size: float,
     return centres
 
 
-def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit]) -> bool:
+def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
+             zones: list[Box]) -> bool:
     """Set a pipe's elements on its routed polyline.
 
     Parameters
@@ -937,6 +941,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit]) -> boo
         Routed polyline of its contracted pipe.
     obstacles : list[Unit]
         Units already drawn; extended with the elements set.
+    zones : list[Box]
+        Ground covered by stations already set; extended with this pipe's.
 
     Returns
     -------
@@ -961,6 +967,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit]) -> boo
     roomy = True
     # The pipe's own end units keep only the leg margin, not the ALONG clearance.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
+    foreign = list(zones)
     for index in sorted(set(assigned)):
         leg, size, level = legs[index], _size(legs[index]), _level(legs[index])
         head, tail = _margins(index, len(legs))
@@ -976,12 +983,13 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit]) -> boo
             low = max(length / 2 + head, floor + length / 2)
             high = size - length / 2 - tail
             chosen = None
-            for step in sorted(range(-NUDGE_STEPS, NUDGE_STEPS + 1), key=abs):
+            reach = int(size / NUDGE_STEP) + 1  # anywhere on the leg, nearest first
+            for step in sorted(range(-reach, reach + 1), key=abs):
                 at = centre + step * NUDGE_STEP
                 if not low - 1e-6 <= at <= high + 1e-6:
                     continue
                 frames = _frames_at(element, at, leg)
-                if _clear(frames, others, level):
+                if _clear(frames, others, level, foreign):
                     chosen = (at, frames)
                     break
             if chosen is None:
@@ -990,6 +998,10 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit]) -> boo
                 chosen = (at, _frames_at(element, at, leg))
             _commit(chosen[1], others)
             obstacles.extend(chosen[1])
+            if len(chosen[1]) > 1:
+                drawn = [unit_box(unit, frame) for unit, frame in chosen[1].items()]
+                zones.append((min(b[0] for b in drawn), min(b[1] for b in drawn),
+                              max(b[2] for b in drawn), max(b[3] for b in drawn)))
             floor = chosen[0] + length / 2 + GAP
     return roomy
 
@@ -1018,12 +1030,14 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun], *,
     from pandid.layout import _seed_slots
     from pandid.layout.coarse import Host, _equipment_frames
     from pandid.layout.station import place_stations
+    from pandid.stations import StationAssembly
 
     members = {unit for run in runs for element in run.elements for unit in _members(element)}
     retained = [unit for unit in process_units(fs) if unit not in members]
     loose = [a for a in fs._station_assemblies if not members.intersection(a.station.members)]
     hosts = [Host(run.source, run.dest, run.segments[0], run.segments[-1],
-                  any(s.is_recycle for s in run.segments), _column_room(run)) for run in runs]
+                  any(s.is_recycle for s in run.segments), _column_room(run),
+                  any(isinstance(e, StationAssembly) for e in run.elements)) for run in runs]
     extra = [0.0] * len(runs)
     for round_ in range(ROOM_ROUNDS):
         if round_:
@@ -1034,8 +1048,10 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun], *,
         place_stations(fs, loose)
         routes = _routed_pipes(fs, runs, retained)
         obstacles = list(retained)
-        order = sorted(range(len(runs)), key=lambda i: (-len(runs[i].elements), i))
-        short = [not _set_run(runs[i], routes[i], obstacles) for i in order]
+        zones: list[Box] = []
+        # The longest chains, stations first, are the hardest to fit.
+        order = sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i))
+        short = [not _set_run(runs[i], routes[i], obstacles, zones) for i in order]
         if not any(short):
             break
         for i, cramped in zip(order, short):

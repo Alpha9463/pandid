@@ -201,3 +201,32 @@ def test_an_angle_relief_valve_is_placed_like_equipment() -> None:
     fs.route()
     assert psv not in furniture(fs)
     assert _clean(fs)
+
+
+def test_a_station_and_a_neighbouring_valve_each_get_room() -> None:
+    """Check that a station and a valve on the next line into one exchanger stay apart."""
+    from pandid import ShellAndTubeExchanger
+
+    fs = Flowsheet("Two lines into one exchanger")
+    vapour = fs.add(Feed("Vapour"))
+    water = fs.add(Feed("CWSH", header=True))
+    condenser = fs.add(
+        ShellAndTubeExchanger("C-301", variant="straight_tubes", width=130, height=40)
+    )
+    condensate = fs.add(Product("Condensate"))
+    water_return = fs.add(Product("CWRH", header=True))
+    line = fs.connect(vapour.outlet, condenser.shell_in)
+    cooling = fs.connect(water.outlet, condenser.tube_in)
+    fs.connect(condenser.shell_out, condensate.inlet)
+    fs.connect(condenser.tube_out, water_return.inlet)
+    station = fs.add_valve_station("CV-301", on=line)
+    valve = fs.add(Valve("HV-311"), on=cooling)
+
+    fs.route()
+    assert _clean(fs)
+    assert valve.frame is not None
+    boxes = [unit.frame for unit in station.members if unit.frame is not None]
+    left, right = min(b.x for b in boxes), max(b.x_max for b in boxes)
+    top, bottom = min(b.y for b in boxes), max(b.y_max for b in boxes)
+    frame = valve.frame
+    assert frame.x_max < left or frame.x > right or frame.y_max < top or frame.y > bottom
