@@ -15,7 +15,7 @@ from pandid.portgeom import outward_dir
 from pandid.routing import DefaultRouter, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
-from pandid.routing.visibility import Rect, VisibilityGraph, clear_gaps
+from pandid.routing.visibility import TAG_CLEAR, Rect, VisibilityGraph, clear_gaps
 
 
 def test_router_uses_a_reachable_lane_before_a_blocked_projection() -> None:
@@ -434,17 +434,18 @@ def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
 
 
 def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
-    """Block exactly the halo drawn behind a tag, and nothing for no tag.
+    """Block the halo drawn behind a tag and a pen beside it, and nothing for no tag.
 
     The router measured the unit's name at 7.5 px a character, capped at
     150 px, where the renderer draws the tag at 6.6 px a character plus 8
     with no cap; and an element whose tag its balloon carries still blocked
-    a box (#574).
+    a box (#574). A line that grazed the halo had it drawn over the line
+    (#564).
 
     Returns
     -------
     None
-        The one label obstacle is as wide as the drum's drawn halo.
+        The one label obstacle is the drum's drawn halo plus the clearance.
     """
     fs = Flowsheet("tag-obstacle")
     name = "V-101-FEED-SURGE-DRUM-FIRST-STAGE"
@@ -458,7 +459,9 @@ def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
     svg = fs.to_svg(check=False)
     halo = re.search(rf'<rect [^>]*width="([\d.]+)"[^>]*/>\s*<text [^>]*>{name}</text>', svg)
     assert halo is not None
-    assert [round(rect.x_max - rect.x_min, 1) for rect in labels] == [float(halo.group(1))]
+    assert [round(rect.x_max - rect.x_min, 1) for rect in labels] == [
+        round(float(halo.group(1)) + 2 * TAG_CLEAR, 1)
+    ]
 
 
 def test_the_search_is_bounded_by_the_size_of_the_graph():

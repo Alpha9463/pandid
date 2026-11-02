@@ -906,9 +906,9 @@ def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
 
 # Label plates and crossing streams.
 
-#: Gallery sheet and label with no safe opaque plate.
+#: Gallery sheet and label with no safe opaque plate, as the sheet is laid out.
 PLATELESS_SHEET = "18_fixed_bed_recycle"
-PLATELESS = "350-LG-314-CS"
+PLATELESS = "300-SG-301-CS"
 
 
 def foreign(fs, name) -> list:

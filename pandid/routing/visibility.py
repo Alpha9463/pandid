@@ -8,6 +8,10 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
 
+#: Clearance a line keeps beside a tag's halo, a pen and a gap, so it does
+#: not graze the halo.
+TAG_CLEAR = 3.0
+
 
 @dataclass
 class Rect:
@@ -220,8 +224,7 @@ class VisibilityGraph:
             # The halo the renderer draws behind the tag; an untagged unit,
             # such as an element whose balloon carries its tag, draws none.
             if u.kind not in ("feed", "product") and lpos != "center" and u.tag:
-                # A line kept a pen and a gap off the halo, not grazing it.
-                label_w = tag_width(u.tag) + 6.0
+                label_w = tag_width(u.tag) + 2 * TAG_CLEAR
                 # A valve's fail letters sit past its tag, below it or beside it.
                 fail = 25.0 if getattr(u, "fail", "") else 0.0
                 if lpos == "top":
