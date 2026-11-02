@@ -1,13 +1,12 @@
-"""Measure completed drawing geometry for isolated layout trials."""
+"""Measure a laid-out and routed drawing: hard findings, crossings, bends and area."""
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pandid.layout.conflicts import Conflict, analyze_conflicts
-from pandid.portgeom import pin_intent, port_anchor, port_point
+from pandid.portgeom import port_anchor
 from pandid.route_geometry import stream_polyline
 from pandid.routing.metrics import crossing_count, min_bends, path_length, real_bends
 
@@ -23,7 +22,6 @@ _HARD_CODES = (
     "route-not-settled",
     "instrument-unplaced",
 )
-_NONCONVERGENCE_INDEX = 2 + _HARD_CODES.index("route-not-settled")
 
 
 @dataclass(frozen=True)
@@ -39,18 +37,10 @@ class Quality:
         Proper crossings and direction changes on final separated paths.
     length, area : float
         Total route length and frame bounding-box area in drawing pixels.
-    author_intent : tuple
-        Pins, explicit faces, and manual waypoints held by the model.
-    frame_transform : tuple
-        Resolved orientation and mirror choices for each unit.
-    pin_geometry : tuple
-        Drawn values of each pinned coordinate or rank, by unit and axis.
     hard_conflicts : frozenset[Conflict]
         Named automatic routing and placement defects.
     crossing_pairs : frozenset[tuple[int, int]]
         Crossing stream identities in global flowsheet order.
-    manual_endpoint_geometry : tuple
-        Drawn source and destination points of each hand-routed stream.
     """
 
     hard: tuple[int, ...]
@@ -59,37 +49,8 @@ class Quality:
     excess_bends: int
     length: float
     area: float
-    author_intent: tuple
-    frame_transform: tuple
-    pin_geometry: tuple
     hard_conflicts: frozenset[Conflict] = frozenset()
     crossing_pairs: frozenset[tuple[int, int]] = frozenset()
-    manual_endpoint_geometry: tuple = ()
-
-
-def _author_intent(fs: Flowsheet) -> tuple:
-    """Capture author-owned geometry choices without object identities.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Drawing model to inspect.
-
-    Returns
-    -------
-    tuple
-        Immutable pin, explicit-face, and manual-route values.
-    """
-    units = tuple(
-        (unit._pin, tuple(sorted(unit._pin_ports.items())), tuple(sorted(unit._port_faces.items())))
-        for unit in fs.units
-    )
-    manual = tuple(
-        (index, tuple(stream.route.waypoints))
-        for index, stream in enumerate(fs.streams)
-        if stream.route is not None and stream.route.manual
-    )
-    return units, manual
 
 
 def measure_final(fs: Flowsheet) -> Quality:
@@ -169,215 +130,6 @@ def measure_final(fs: Flowsheet) -> Quality:
         excess_bends=excess,
         length=sum(path_length(path) for path in paths),
         area=area,
-        author_intent=_author_intent(fs),
-        frame_transform=tuple(
-            None
-            if unit.frame is None
-            else (unit.frame.orientation, unit.frame.mirrored, unit.frame.mirror_y)
-            for unit in fs.units
-        ),
-        pin_geometry=tuple(
-            None
-            if unit.frame is None
-            else (
-                tuple(
-                    (
-                        axis,
-                        port_point(unit, unit.frame, port_name)[0 if axis == "x" else 1]
-                        if port_name is not None
-                        else getattr(unit.frame, axis),
-                    )
-                    for axis, (port_name, _) in sorted(pin_intent(unit).items())
-                ),
-                tuple(
-                    (axis, getattr(unit.frame, axis))
-                    for axis, absolute in (("col", "x"), ("row", "y"))
-                    if unit.pin_ is not None
-                    and getattr(unit.pin_, axis) is not None
-                    and getattr(unit.pin_, absolute) is None
-                ),
-            )
-            for unit in fs.units
-        ),
         hard_conflicts=hard_conflicts,
         crossing_pairs=pairs,
-        manual_endpoint_geometry=tuple(
-            (
-                index,
-                None if stream.source.owner.frame is None else port_point(
-                    stream.source.owner, stream.source.owner.frame, stream.source.name
-                ),
-                None if stream.dest.owner.frame is None else port_point(
-                    stream.dest.owner, stream.dest.owner.frame, stream.dest.name
-                ),
-            )
-            for index, stream in enumerate(fs.streams)
-            if stream.route is not None and stream.route.manual
-        ),
-    )
-
-
-def admissible(before: Quality, after: Quality, *, preserve_crossing_pairs: bool) -> bool:
-    """Check the per-sheet hard and soft regression limits.
-
-    Parameters
-    ----------
-    before, after : Quality
-        Measurements of the current and proposed completed drawing.
-    preserve_crossing_pairs : bool
-        Require every crossed stream pair to have existed before the move.
-
-    Returns
-    -------
-    bool
-        Whether the candidate preserves author intent and stays within
-        every measured per-sheet limit. Improvement is checked separately.
-    """
-    return (
-        before.author_intent == after.author_intent
-        and before.frame_transform == after.frame_transform
-        and before.pin_geometry == after.pin_geometry
-        and before.manual_endpoint_geometry == after.manual_endpoint_geometry
-        and all(new <= old for old, new in zip(before.hard, after.hard))
-        and after.hard_conflicts <= before.hard_conflicts
-        and (not preserve_crossing_pairs or after.crossing_pairs <= before.crossing_pairs)
-        and after.hard[_NONCONVERGENCE_INDEX] == 0
-        and after.crossings <= before.crossings
-        and after.bends <= min(before.bends + 1, before.bends * 1.03)
-        and after.length <= before.length * 1.02 + 0.1
-        and after.area <= before.area * 1.02 + 1.0
-    )
-
-
-def warning_counts(fs: Flowsheet) -> Counter[str]:
-    """Count a completed drawing's validation warnings by code.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Routed drawing to inspect.
-
-    Returns
-    -------
-    Counter[str]
-        Number of each warning reported by validation.
-    """
-    return Counter(issue.code for issue in fs.validate() if issue.severity == "warning")
-
-
-def accepts(
-    before: Quality,
-    after: Quality,
-    *,
-    preserve_crossing_pairs: bool,
-    strict: bool,
-    warnings: tuple[Counter[str], Counter[str]] | None = None,
-) -> bool:
-    """Decide whether a routed proposal may replace the current drawing.
-
-    The one acceptance gate for layout trials. Every caller states its mode,
-    so no two callers can differ by a default. A proposal must be
-    :func:`admissible`, must :func:`improve <improves>` the drawing, and
-    must pass every further check the caller asks for.
-
-    Parameters
-    ----------
-    before, after : Quality
-        Measurements of the current and proposed completed drawing.
-    preserve_crossing_pairs : bool
-        Require every crossed stream pair to have existed before.
-    strict : bool
-        Refuse any rise in bends, excess bends, route length or frame area,
-        rather than allowing :func:`admissible`'s per-sheet margin.
-    warnings : tuple[Counter[str], Counter[str]] or None, optional
-        Current and proposed :func:`warning_counts`; no code may rise.
-
-    Returns
-    -------
-    bool
-        Whether the proposal is safe and materially better.
-    """
-    if not admissible(before, after, preserve_crossing_pairs=preserve_crossing_pairs):
-        return False
-    if strict and not (
-        after.bends <= before.bends
-        and after.excess_bends <= before.excess_bends
-        and after.length <= before.length + 1e-6
-        and after.area <= before.area + 1e-6
-    ):
-        return False
-    if warnings is not None:
-        old, new = warnings
-        if any(count > old[code] for code, count in new.items()):
-            return False
-    return improves(before, after)
-
-
-def search_admissible(seed: Quality, incumbent: Quality, after: Quality) -> bool:
-    """Apply current-conflict and fixed-seed limits to a search trial.
-
-    Parameters
-    ----------
-    seed : Quality
-        Initial settled drawing for this search run.
-    incumbent : Quality
-        Current accepted drawing.
-    after : Quality
-        Completed detached trial.
-
-    Returns
-    -------
-    bool
-        Whether the trial preserves author intent, fixed-seed limits,
-        and current route costs when no defect is removed.
-    """
-    same_conflicts = (
-        after.hard_conflicts == incumbent.hard_conflicts
-        and after.crossing_pairs == incumbent.crossing_pairs
-    )
-    return (
-        seed.author_intent == after.author_intent
-        and seed.frame_transform == after.frame_transform
-        and seed.pin_geometry == after.pin_geometry
-        and seed.manual_endpoint_geometry == after.manual_endpoint_geometry
-        and all(new <= old for old, new in zip(incumbent.hard, after.hard))
-        and after.hard_conflicts <= incumbent.hard_conflicts
-        and after.crossing_pairs <= incumbent.crossing_pairs
-        and after.hard[_NONCONVERGENCE_INDEX] == 0
-        and after.crossings <= incumbent.crossings
-        and after.bends <= min(seed.bends + 1, seed.bends * 1.03)
-        and after.length <= seed.length * 1.02 + 0.1
-        and after.area <= seed.area * 1.02 + 1.0
-        and (
-            not same_conflicts
-            or (
-                after.bends <= incumbent.bends
-                and after.length <= incumbent.length + 1e-6
-                and after.area <= incumbent.area + 1e-6
-            )
-        )
-    )
-
-
-def improves(before: Quality, after: Quality) -> bool:
-    """Check for a measured gain large enough to justify a trial.
-
-    Parameters
-    ----------
-    before, after : Quality
-        Current and proposed final-drawing measurements.
-
-    Returns
-    -------
-    bool
-        True when at least one hard finding, crossing, excess bend, or
-        material length or area cost decreases.
-    """
-    return (
-        any(new < old for old, new in zip(before.hard, after.hard))
-        or after.hard_conflicts < before.hard_conflicts
-        or after.crossings < before.crossings
-        or after.excess_bends < before.excess_bends
-        or after.length < before.length * 0.98 - 0.1
-        or after.area < before.area * 0.98 - 1.0
     )

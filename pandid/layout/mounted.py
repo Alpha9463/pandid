@@ -27,7 +27,6 @@ from pandid.portgeom import port_point, resolve_size, unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
-    from pandid.layout.halo import Pad
     from pandid.ports import Port
     from pandid.stations import StationAssembly
     from pandid.streams import Stream
@@ -234,32 +233,6 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
         runs.append(MountedRun(tuple(segments), tuple(elements), tuple(places),
                                tuple(sorted(taps.values(), key=lambda tap: tap[2]))))
     return runs
-
-
-def furnished(fs: Flowsheet) -> set[Unit]:
-    """Return the units that hold furniture where the last layout set it.
-
-    Moving one would leave furniture off its pipe, so refinement and search
-    leave them where they are.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out sheet.
-
-    Returns
-    -------
-    set[Unit]
-        Every device and station member set on a pipe, and the units each
-        such pipe ends on; empty when the sheet has no furniture.
-    """
-    if not fs._mounted_layout:
-        return set()
-    out: set[Unit] = set()
-    for run in mounted_runs(fs):
-        out.update(unit for element in run.elements for unit in _members(element))
-        out.update(port.owner for port in (run.source, run.dest) if port.owner is not None)
-    return out
 
 
 def _station_width(assemblies: list[StationAssembly]) -> float:

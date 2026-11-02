@@ -47,7 +47,7 @@ BAND_WIDTH = 3200.0
 BAND_GAP = 160.0
 
 #: Faces each end of a stacking pipe must have: (source, dest) -> dest is above.
-_STACK = {("N", "S"): True, ("S", "N"): False}
+_STACK: dict[tuple[str | None, str | None], bool] = {("N", "S"): True, ("S", "N"): False}
 
 
 @dataclass(frozen=True)
@@ -181,8 +181,8 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     if not units:
         return
     nodes, node_of, stacked = _stacks(units, links)
-    edges = [(node_of[l.source.owner], node_of[l.dest.owner], l)
-             for l in links if node_of[l.source.owner] is not node_of[l.dest.owner]]
+    edges = [(node_of[link.source.owner], node_of[link.dest.owner], link) for link in links
+             if node_of[link.source.owner] is not node_of[link.dest.owner]]
     kept = {id(link) for _, _, link in _layers(nodes, edges)}
     layers, segs = _chains(nodes, edges, units)
     for seg in segs:
@@ -209,10 +209,9 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     lift = 0.0 if pinned_y else MARGIN - min(
         n.y - n.pad.north for layer in layers.values() for n in layer if n.members)
     # Free units move with the layers so that the first x pin lands on its own layer.
-    anchor = next(((node, u) for layer in layers.values() for node in layer for u in node.members
-                   if u.pin_ is not None and u.pin_.x is not None), None)
-    slide = 0.0 if anchor is None else (
-        anchor[1].pin_.x - xs[anchor[0]] - anchor[0].dx[anchor[1]] + _shift(anchor[1]))
+    slide = next((u.pin_.x - xs[node] - node.dx[u] + _shift(u)
+                  for layer in layers.values() for node in layer for u in node.members
+                  if u.pin_ is not None and u.pin_.x is not None), 0.0)
     for layer in layers.values():
         for rank, node in enumerate(layer):
             for unit in node.members:
@@ -256,7 +255,8 @@ def _stacks(units: list[Unit], links: list[Link]
     groups: dict[Unit, list[Unit]] = {}
     for u in units:
         groups.setdefault(find(u), []).append(u)
-    nodes, node_of = [], {}
+    nodes: list[_Node] = []
+    node_of: dict[Unit, _Node] = {}
     for members in groups.values():
         node = _Node(members=members)
         nodes.append(node)
@@ -267,11 +267,12 @@ def _stacks(units: list[Unit], links: list[Link]
 def _shape(node: _Node, stacked: list[tuple[Unit, Unit, Link]], pads: dict[Unit, Pad]) -> None:
     """Order a stack top to bottom and line up its stacking nozzles."""
     mine = set(node.members)
-    inside = [(a, b, l) for a, b, l in stacked if a in mine]
-    below = {u: [(b, l) for a, b, l in inside if a is u] for u in node.members}
+    inside = [(a, b, link) for a, b, link in stacked if a in mine]
+    below = {u: [(b, link) for a, b, link in inside if a is u] for u in node.members}
     has_upper = {b for _, b, _ in inside}
     # A depth-first walk from each top unit gives every unit its x and its turn.
-    order, dx = [], {}
+    order: list[Unit] = []
+    dx: dict[Unit, float] = {}
     for top in node.members:
         if top in has_upper or top in dx:
             continue
@@ -282,11 +283,11 @@ def _shape(node: _Node, stacked: list[tuple[Unit, Unit, Link]], pads: dict[Unit,
                 continue
             dx[u] = x
             order.append(u)
-            for b, l in reversed(below[u]):
-                upper_port = l.source if l.source.owner is u else l.dest
-                lower_port = l.dest if upper_port is l.source else l.source
+            for b, link in reversed(below[u]):
+                upper_port = link.source if link.source.owner is u else link.dest
+                lower_port = link.dest if upper_port is link.source else link.source
                 walk.append((b, x + _nozzle(upper_port)[0] - _nozzle(lower_port)[0]))
-    gap = {(a, b): max(ROW_GAP, l.rise) for a, b, l in inside}
+    gap = {(a, b): max(ROW_GAP, link.rise) for a, b, link in inside}
     left = min(dx.values())
     node.dx = {u: x - left for u, x in dx.items()}
     node.members, node.dy, y = order, {}, 0.0
@@ -345,7 +346,8 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
     pred: dict[_Node, list[_Node]] = {n: [] for n in nodes}
     for a, b, _ in kept:
         pred[b].append(a)
-    order, placed = [], set()
+    order: list[_Node] = []
+    placed: set[_Node] = set()
     while len(order) < len(nodes):  # topological order, flowsheet order among ties
         n = next(n for n in nodes if n not in placed and all(p in placed for p in pred[n]))
         order.append(n)
@@ -373,16 +375,16 @@ def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: l
             continue
         pa = link.source if link.source.owner in a.members else link.dest
         pb = link.dest if pa is link.source else link.source
-        (l, lp), (r, rp) = sorted(((a, pa), (b, pb)), key=lambda e: e[0].layer)
-        chain = [l]
-        for layer in range(l.layer + 1, r.layer):
+        (west, wp), (east, ep) = sorted(((a, pa), (b, pb)), key=lambda e: e[0].layer)
+        chain = [west]
+        for layer in range(west.layer + 1, east.layer):
             dummy = _Node(layer=layer)
             layers.setdefault(layer, []).append(dummy)
             chain.append(dummy)
-        chain.append(r)
+        chain.append(east)
         for k in range(len(chain) - 1):
-            segs.append(_Seg(chain[k], lp if k == 0 else None, chain[k + 1],
-                             rp if k == len(chain) - 2 else None, link))
+            segs.append(_Seg(chain[k], wp if k == 0 else None, chain[k + 1],
+                             ep if k == len(chain) - 2 else None, link))
     return dict(sorted(layers.items())), segs
 
 
@@ -434,19 +436,19 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             layer = layers[k]
             for i in range(len(layer) - 1):
                 before = crossings(k - 1) + crossings(k)
-                a, b = layer[i], layer[i + 1]
-                layer[i], layer[i + 1], pos[a], pos[b] = b, a, pos[b], pos[a]
+                one, two = layer[i], layer[i + 1]
+                layer[i], layer[i + 1], pos[one], pos[two] = two, one, pos[two], pos[one]
                 if crossings(k - 1) + crossings(k) < before:
                     swapped = True
                 else:
-                    layer[i], layer[i + 1], pos[a], pos[b] = a, b, pos[b], pos[a]
+                    layer[i], layer[i + 1], pos[one], pos[two] = one, two, pos[two], pos[one]
         if not swapped:
             break
     peer: dict[_Node, float] = {}
     for s, a, b in ends:  # a flag sits beside the nozzle it serves, whatever that crosses
-        if _flag(s.lport) and not s.left.dx.keys() - {s.lport.owner}:
+        if s.lport is not None and _flag(s.lport) and s.left.members == [s.lport.owner]:
             peer[s.left] = pos[s.right] + b
-        if _flag(s.rport) and not s.right.dx.keys() - {s.rport.owner}:
+        if s.rport is not None and _flag(s.rport) and s.right.members == [s.rport.owner]:
             peer[s.right] = pos[s.left] + a
     for k in keys:
         layers[k].sort(key=lambda n: peer.get(n, pos[n]))
