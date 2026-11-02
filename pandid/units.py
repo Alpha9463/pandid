@@ -6254,7 +6254,6 @@ class DistillationColumn(Column):
     :class:`Absorber` and :class:`Stripper` lack them.
     """
 
-    kind = "column"
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
@@ -6410,12 +6409,6 @@ class Absorber(Column):
     :class:`Column`'s.
     """
 
-    kind = "column"
-    PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
-    ]
-
     overhead: Port
     bottoms: Port
 
@@ -6558,7 +6551,6 @@ class Stripper(Column):
     :class:`Column`'s, including its ``internals`` default.
     """
 
-    kind = "column"
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
