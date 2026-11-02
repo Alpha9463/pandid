@@ -59,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replacement.
 - **`Port.state` and `Unit.params` (#579).** Both are deleted. Stream
   conditions stay on `Stream.state`.
+- **`ControlLoop.variable`, `.number`, `.name`, `.tag()`, `.element()` and
+  `.check()` (#579).** Use them on `ControlLoop.loop`. `add_instrument()`
+  still takes a `ControlLoop`.
 
 ### Fixed
 

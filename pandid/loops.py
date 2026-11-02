@@ -260,65 +260,7 @@ class ControlLoop:
         self.measurement = measurement
         self.output = output
 
-    @property
-    def variable(self) -> str:
-        """Return the loop's measured-variable letter."""
-        return self.loop.variable
-
-    @property
-    def number(self) -> str:
-        """Return the loop's number as text."""
-        return self.loop.number
-
-    @property
-    def name(self) -> str:
-        """Return the loop's identity, such as ``"F-101"``."""
-        return self.loop.name
-
-    def tag(self, letters: str) -> str:
-        """Return a final control element's tag; see :meth:`Loop.tag`.
-
-        Parameters
-        ----------
-        letters : str
-            The element's own letters.
-
-        Returns
-        -------
-        str
-            Letters and loop number.
-        """
-        return self.loop.tag(letters)
-
-    def element(self, letters: str) -> str:
-        """Return a primary element's tag; see :meth:`Loop.element`.
-
-        Parameters
-        ----------
-        letters : str
-            The element's letters.
-
-        Returns
-        -------
-        str
-            Letters and loop number.
-        """
-        return self.loop.element(letters)
-
-    def check(self, letters: str) -> None:
-        """Check instrument letters; see :meth:`Loop.check`.
-
-        This lets :meth:`~pandid.flowsheet.Flowsheet.add_instrument` accept
-        this handle wherever it accepts a loop.
-
-        Parameters
-        ----------
-        letters : str
-            Instrument function letters.
-        """
-        self.loop.check(letters)
-
     def __repr__(self) -> str:
         """Return a representation naming the loop and its members."""
-        return (f"ControlLoop({self.name!r}, {self.transmitter.name!r} -> "
+        return (f"ControlLoop({self.loop.name!r}, {self.transmitter.name!r} -> "
                 f"{self.controller.name!r} -> {self.final_element.name!r})")

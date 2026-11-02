@@ -686,7 +686,7 @@ def test_a_feedback_loop_is_one_statement():
 
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
 
-    assert loop.name == "L-101"
+    assert loop.loop.name == "L-101"
     assert loop.transmitter.name == "LT-101"
     assert loop.controller.name == "LIC-101"
     assert loop.final_element is lv
@@ -911,22 +911,23 @@ def test_it_declares_the_loop_when_given_a_letter():
 
     loop = fs.add_control_loop("L", measuring=drum, acting_on=lv)
 
-    assert loop.name == "L-101"
+    assert loop.loop.name == "L-101"
     assert [declared.name for declared in fs.loops] == ["L-101"]
     assert fs.add_loop("F").name == "F-102"
 
 
 def test_the_handle_answers_for_the_loop_it_names():
     """``loop`` is what the author called it, so a second member joins from it
-    without their having to know a ``ControlLoop`` is not a ``Loop``."""
+    without their having to know a ``ControlLoop`` is not a ``Loop``; the
+    loop's own members are on ``.loop``."""
     fs, drum, lv = _feedback_sheet()
 
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
     alarm = fs.add_instrument("LAH", loop, near=loop.controller, at="E")
 
-    assert (loop.variable, loop.number) == ("L", "101")
-    assert loop.tag("XV") == "XV-101"
-    assert loop.element("LG") == "LG-101"
+    assert (loop.loop.variable, loop.loop.number) == ("L", "101")
+    assert loop.loop.tag("XV") == "XV-101"
+    assert loop.loop.element("LG") == "LG-101"
     assert alarm.name == "LAH-101"
     with pytest.raises(ValueError, match="opens with 'T'"):
         fs.add_instrument("TT", loop)
@@ -1109,7 +1110,7 @@ def test_a_refused_control_loop_leaves_the_sheet_as_it_found_it(prepare, refused
     assert _snapshot(fs) == before
 
     loop = corrected(fs, drum, lv)
-    assert loop.name == "L-101"
+    assert loop.loop.name == "L-101"
     assert [declared.name for declared in fs.loops] == ["L-101"]
 
 
@@ -1128,7 +1129,7 @@ def test_a_refused_control_loop_burns_no_allocated_number():
     assert _snapshot(fs) == before
 
     loop = fs.add_control_loop("L", measuring=drum, acting_on=lv)
-    assert loop.name == "L-101"
+    assert loop.loop.name == "L-101"
 
 
 def test_a_loop_declared_on_another_sheet_is_refused():
@@ -1143,7 +1144,7 @@ def test_a_loop_declared_on_another_sheet_is_refused():
         fs.add_control_loop(theirs, measuring=drum, acting_on=lv)
 
     assert _snapshot(fs) == before
-    assert fs.add_control_loop("L", 101, measuring=drum, acting_on=lv).name == "L-101"
+    assert fs.add_control_loop("L", 101, measuring=drum, acting_on=lv).loop.name == "L-101"
 
 
 @pytest.mark.parametrize("role", ["measuring", "acting_on"])
