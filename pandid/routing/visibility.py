@@ -220,7 +220,8 @@ class VisibilityGraph:
             # The halo the renderer draws behind the tag; an untagged unit,
             # such as an element whose balloon carries its tag, draws none.
             if u.kind not in ("feed", "product") and lpos != "center" and u.tag:
-                label_w = tag_width(u.tag)
+                # A line kept a pen and a gap off the halo, not grazing it.
+                label_w = tag_width(u.tag) + 6.0
                 # A valve's fail letters sit past its tag, below it or beside it.
                 fail = 25.0 if getattr(u, "fail", "") else 0.0
                 if lpos == "top":
