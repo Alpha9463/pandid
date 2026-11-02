@@ -1206,8 +1206,7 @@ def test_a_multi_feed_towers_family_is_its_numbered_nozzles_top_to_bottom():
 
 def test_a_multi_draw_towers_family_is_its_numbered_nozzles_top_to_bottom():
     # DistillationColumn, not Column: n_draws=3 with the reflux/boilup
-    # nozzles for real, without the deprecated-nozzle path a plain Column
-    # would take below. DistillationColumn gets no typed n_draws overload
+    # nozzles a plain Column does not have. DistillationColumn gets no typed n_draws overload
     # family of its own (see Absorber/Stripper's own note on the same
     # trade), so draw_1 is read through port(), the untyped route.
     col = U.DistillationColumn("T-302", n_draws=3)

@@ -5523,9 +5523,7 @@ class Column(Unit):
     # - n_feeds=1 with a literal n_draws returns ColumnDraw1 to ColumnDraw8.
     #
     # Both counts above one, or a computed count, return Column; use
-    # ``col.feeds``, ``col.draws`` or ``col.port(...)``. Retired ports are
-    # served by Unit.__getattr__, which type checkers do not see, so
-    # ``col.reflux_in`` is still flagged on a plain Column.
+    # ``col.feeds``, ``col.draws`` or ``col.port(...)``.
     if TYPE_CHECKING:
         # Family A: any n_feeds, n_draws=0 (keyword-only, as at run time).
         @overload

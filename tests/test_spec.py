@@ -887,7 +887,7 @@ def test_no_constructor_argument_is_unreachable_from_a_spec():
     connection. The spec already writes that variant, so the argument is
     reachable, just not by that word. Contrast ``Separator(characteristic=)``,
     which folds the same way but *is* kept on the unit and whose variant
-    spelling is deprecated, so it has to be written as itself.
+    spelling is refused, so it has to be written as itself.
     """
     import inspect
 
