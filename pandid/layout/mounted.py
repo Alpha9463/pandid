@@ -218,8 +218,11 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
     return runs
 
 
-def furniture(fs: Flowsheet) -> set[Unit]:
-    """Return the units the last layout set on their pipes.
+def furnished(fs: Flowsheet) -> set[Unit]:
+    """Return the units that hold furniture where the last layout set it.
+
+    Moving one would leave furniture off its pipe, so refinement and search
+    leave them where they are.
 
     Parameters
     ----------
@@ -229,13 +232,16 @@ def furniture(fs: Flowsheet) -> set[Unit]:
     Returns
     -------
     set[Unit]
-        Every device and station member set on a pipe; empty when the
-        sheet was laid out without furniture.
+        Every device and station member set on a pipe, and the units each
+        such pipe ends on; empty when the sheet has no furniture.
     """
     if not fs._mounted_layout:
         return set()
-    return {unit for run in mounted_runs(fs) for element in run.elements
-            for unit in _members(element)}
+    out: set[Unit] = set()
+    for run in mounted_runs(fs):
+        out.update(unit for element in run.elements for unit in _members(element))
+        out.update(port.owner for port in (run.source, run.dest) if port.owner is not None)
+    return out
 
 
 def _chain_width(run: MountedRun) -> float:
@@ -326,7 +332,7 @@ def _pipe_view(fs: Flowsheet, units: list[Unit], pipes: list[Stream]) -> Iterato
 
 
 def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
-                  retained: list[Unit]) -> list[list[Point]]:
+                  retained: list[Unit]) -> tuple[list[list[Point]], list[list[Point]]]:
     """Route each furnished pipe as one line between placed equipment.
 
     Parameters
@@ -340,8 +346,9 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
 
     Returns
     -------
-    list[list[Point]]
-        Drawn polyline of each pipe, empty where routing failed.
+    tuple[list[list[Point]], list[list[Point]]]
+        Drawn polyline of each pipe, empty where routing failed, and of
+        every other process stream between retained units.
     """
     from pandid.layout.cycles import break_cycles
     from pandid.layout.faces import select_faces
@@ -360,7 +367,8 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
         break_cycles(fs)
         select_faces(fs)
         DefaultRouter().route(fs)
-        return [stream_polyline(pipe) if pipe.route is not None else [] for pipe in pipes]
+        return ([stream_polyline(pipe) if pipe.route is not None else [] for pipe in pipes],
+                [stream_polyline(other) for other in others if other.route is not None])
 
 
 def _legs(points: list[Point]) -> list[Leg]:
@@ -424,8 +432,9 @@ def _level(leg: Leg) -> bool:
     return abs(leg[0][1] - leg[1][1]) < 1e-6
 
 
-def _candidate(unit: Unit, point: tuple[float, float], orientation: int) -> Frame:
-    """Center a device at a point using its resolved orientation.
+def _candidate(unit: Unit, point: tuple[float, float], orientation: int,
+               mirrored: bool) -> Frame:
+    """Center a device at a point in a given turn and mirror.
 
     Parameters
     ----------
@@ -435,15 +444,17 @@ def _candidate(unit: Unit, point: tuple[float, float], orientation: int) -> Fram
         Preferred center of the device.
     orientation : int
         Clockwise quarter-turn angle.
+    mirrored : bool
+        Whether the symbol is mirrored left to right before it is turned.
 
     Returns
     -------
     Frame
-        Candidate frame with existing grid rank and mirror state.
+        Candidate frame with the existing top-to-bottom mirror.
     """
     original = unit.frame
     assert original is not None
-    probe = replace(original, orientation=orientation)
+    probe = replace(original, orientation=orientation, mirrored=mirrored)
     width, height = resolve_size(unit, probe)
     return replace(
         probe, x=point[0] - width / 2, y=point[1] - height / 2,
@@ -485,8 +496,9 @@ def _on_corridor(
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame centred on a leg point, piped in flow order.
 
-    A pinned device keeps its pinned turn. Otherwise the first quarter turn
-    that puts both nozzles on the leg, inlet upstream, is used. A turn that
+    A pinned device keeps its pinned turn, mirrored along the pipe if the
+    flow runs the other way. Otherwise the first quarter turn and mirror
+    that put both nozzles on the leg, inlet upstream, are used. A pose that
     does is set with its nozzles on the leg, since they need not be at the
     box centre; one that cannot is centred on the point.
 
@@ -509,21 +521,25 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     forward = 1 if (bx - ax if level else by - ay) > 0 else -1
     direction = (forward, 0) if level else (0, forward)
     ordinate = ay if level else ax
-    base = (0 if forward > 0 else 180) if level else (90 if forward > 0 else 270)
+    assert unit.frame is not None
     if unit.pin_ is not None:
-        assert unit.frame is not None
-        turns = [int(unit.frame.orientation)]
+        # A pinned pose is kept, mirrored along the pipe when the flow runs the other way.
+        turn, flip = int(unit.frame.orientation), bool(unit.frame.mirrored)
+        poses = [(turn, flip), (turn, not flip)]
     else:
-        turns = [base, (base + 180) % 360, (base + 90) % 360, (base + 270) % 360]
-    for turn in turns:
-        candidate = _candidate(unit, point, turn)
+        # A mirror before a half turn keeps an actuator on top of a pipe running west.
+        first = 0 if level else 90
+        poses = [(turn % 360, flip) for turn in (first, first + 180, first + 90, first + 270)
+                 for flip in (False, True)]
+    for turn, flip in poses:
+        candidate = _candidate(unit, point, turn, flip)
         inlet = port_point(unit, candidate, "inlet")
         shift = ordinate - inlet[1 if level else 0]
         candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
                             y=candidate.y + (shift if level else 0.0))
         if _on_corridor(unit, candidate, direction, ordinate):
             return candidate
-    return _candidate(unit, point, turns[0])
+    return _candidate(unit, point, *poses[0])
 
 
 def _main_width(assembly: StationAssembly) -> float:
@@ -623,7 +639,7 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
 
 
 def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
-           zones: list[Box]) -> bool:
+           zones: list[Box], pipes: list[list[Point]], ends: tuple[Unit, ...] = ()) -> bool:
     """Return whether proposed frames keep clear of other units.
 
     Parameters
@@ -636,12 +652,17 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
         Whether the leg is horizontal, which sets the along-pipe axis.
     zones : list[Box]
         Ground other pipes' stations cover, bypass and drain legs included.
+    pipes : list[list[Point]]
+        Routed pipes, whose lines an actuator's signal must not have to cross.
+    ends : tuple[Unit, ...], optional
+        The pipe's own end units, which an actuator's signal must clear too.
 
     Returns
     -------
     bool
         Whether every frame keeps :data:`ALONG` along the pipe and
-        :data:`GAP` across it from every obstacle and zone.
+        :data:`GAP` across it from every obstacle and zone, and each
+        connected signal port has a clear exit (:func:`_signal_exits`).
     """
     dx, dy = (ALONG, GAP) if level else (GAP, ALONG)
     boxes = [*(unit_box(other, other.frame) for other in obstacles if other.frame is not None),
@@ -652,7 +673,45 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
             if (right + dx > o_left and o_right + dx > left
                     and bottom + dy > o_top and o_bottom + dy > top):
                 return False
+    lines = [(a, b) for line in pipes for a, b in zip(line, line[1:])]
+    boxes += [unit_box(unit, unit.frame) for unit in ends if unit.frame is not None]
+    for left, top, right, bottom in _signal_exits(frames):
+        if any(right > o[0] and o[2] > left and bottom > o[1] and o[3] > top for o in boxes):
+            return False
+        if any(max(a[0], b[0]) >= left and right >= min(a[0], b[0])
+               and max(a[1], b[1]) >= top and bottom >= min(a[1], b[1]) for a, b in lines):
+            return False
     return True
+
+
+def _signal_exits(frames: dict[Unit, Frame]) -> list[Box]:
+    """Return the router stand-off beyond each connected signal port.
+
+    A control valve's actuator takes its signal from beyond its face, so
+    that stretch must stay free of other units and pipes.
+
+    Parameters
+    ----------
+    frames : dict[Unit, Frame]
+        Proposed frames.
+
+    Returns
+    -------
+    list[Box]
+        One thin box per connected signal port, :data:`END` long.
+    """
+    from pandid.portgeom import port_anchor
+
+    reach = {"N": (0.0, -END), "S": (0.0, END), "E": (END, 0.0), "W": (-END, 0.0)}
+    out = []
+    for unit, frame in frames.items():
+        for port in unit.ports.values():
+            if port.role != "signal" or port.stream is None:
+                continue
+            x, y, face = port_anchor(unit, frame, port.name)
+            ux, uy = reach.get(face, (0.0, 0.0))
+            out.append((min(x, x + ux), min(y, y + uy), max(x, x + ux), max(y, y + uy)))
+    return out
 
 
 def _commit(frames: dict[Unit, Frame], obstacles: list[Unit]) -> None:
@@ -824,12 +883,13 @@ def _room(run: MountedRun) -> float:
                default=0.0)
 
 
-def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[int]:
-    """Choose a leg for each element, keeping flow order.
+def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[int]]:
+    """Return ways to put the elements on legs, best first, keeping flow order.
 
-    The whole chain goes on one leg when one holds it: the leg nearest the
-    elements' positions, level legs first. Otherwise elements are dealt
-    onto legs in order, each on the first leg with room left.
+    The whole chain goes on one leg when one holds it: the legs nearest the
+    elements' positions come first, level legs before upright ones. Last,
+    elements are dealt onto legs in order, each on the first leg with room
+    left.
 
     Parameters
     ----------
@@ -842,8 +902,8 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[int]:
 
     Returns
     -------
-    list[int]
-        Leg index for each element.
+    list[list[int]]
+        For each way, the leg index of each element.
     """
     room = [_size(leg) - sum(_margins(index, len(legs))) + GAP
             for index, leg in enumerate(legs)]
@@ -869,11 +929,10 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[int]:
         """
         return abs(starts[index] + _size(legs[index]) / 2 - middle)
 
-    whole = [index for index in range(len(legs))
-             if sum(row[index] for row in need) <= room[index]]
-    if whole:
-        best = min(whole, key=lambda index: (not _level(legs[index]), distance(index), index))
-        return [best] * len(run.elements)
+    whole = sorted((index for index in range(len(legs))
+                    if sum(row[index] for row in need) <= room[index]),
+                   key=lambda index: (not _level(legs[index]), distance(index), index))
+    plans = [[index] * len(run.elements) for index in whole]
     assigned, used, cursor = [], [0.0] * len(legs), 0
     for row in need:
         choice = next((index for index in range(cursor, len(legs))
@@ -886,7 +945,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[int]:
             used[choice] += row[choice]
         assigned.append(choice)
         cursor = max(cursor, choice)
-    return assigned
+    return [*plans, assigned]
 
 
 def _centres(wanted: list[float], lengths: list[float], size: float,
@@ -930,7 +989,7 @@ def _centres(wanted: list[float], lengths: list[float], size: float,
 
 
 def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
-             zones: list[Box]) -> bool:
+             zones: list[Box], pipes: list[list[Point]]) -> bool:
     """Set a pipe's elements on its routed polyline.
 
     Parameters
@@ -943,6 +1002,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         Units already drawn; extended with the elements set.
     zones : list[Box]
         Ground covered by stations already set; extended with this pipe's.
+    pipes : list[list[Point]]
+        Every routed pipe, this one included.
 
     Returns
     -------
@@ -959,50 +1020,74 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         legs = [(a, (b[0], a[1])) if abs(b[0] - a[0]) >= abs(b[1] - a[1]) else (a, (a[0], b[1]))]
     want = _wanted(run, sum(_size(leg) for leg in legs),
                    lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)))
-    assigned = _assign(run, legs, want)
     starts, travelled = [], 0.0
     for leg in legs:
         starts.append(travelled)
         travelled += _size(leg)
-    roomy = True
     # The pipe's own end units keep only the leg margin, not the ALONG clearance.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
-    foreign = list(zones)
-    for index in sorted(set(assigned)):
-        leg, size, level = legs[index], _size(legs[index]), _level(legs[index])
-        head, tail = _margins(index, len(legs))
-        group = [i for i, a in enumerate(assigned) if a == index]
-        lengths = [min(_length(run.elements[i], leg), size) for i in group]
-        wanted = [want[i] - starts[index] for i in group]
-        centres = _centres(wanted, lengths, size, head, tail)
-        if sum(lengths) + GAP * (len(group) - 1) + head + tail > size:
-            roomy = False
-        floor = 0.0
-        for i, length, centre in zip(group, lengths, centres):
-            element = run.elements[i]
-            low = max(length / 2 + head, floor + length / 2)
-            high = size - length / 2 - tail
-            chosen = None
-            reach = int(size / NUDGE_STEP) + 1  # anywhere on the leg, nearest first
-            for step in sorted(range(-reach, reach + 1), key=abs):
-                at = centre + step * NUDGE_STEP
-                if not low - 1e-6 <= at <= high + 1e-6:
-                    continue
-                frames = _frames_at(element, at, leg)
-                if _clear(frames, others, level, foreign):
-                    chosen = (at, frames)
-                    break
-            if chosen is None:
-                roomy = False
-                at = min(max(centre, low), max(low, high)) if high >= low else size / 2
-                chosen = (at, _frames_at(element, at, leg))
-            _commit(chosen[1], others)
-            obstacles.extend(chosen[1])
-            if len(chosen[1]) > 1:
+
+    def attempt(assigned: list[int], strict: bool) -> list[dict[Unit, Frame]] | None:
+        """Return frames for each element on its leg, or ``None`` if one has no room.
+
+        Parameters
+        ----------
+        assigned : list[int]
+            Leg index of each element.
+        strict : bool
+            Give up when an element finds no clear spot, rather than set it
+            as near its wanted spot as the leg allows.
+
+        Returns
+        -------
+        list[dict[Unit, Frame]] or None
+            Frames for each element, in flow order.
+        """
+        placed: list[dict[Unit, Frame]] = []
+        mine = list(zones)
+        for index in sorted(set(assigned)):
+            leg, size, level = legs[index], _size(legs[index]), _level(legs[index])
+            head, tail = _margins(index, len(legs))
+            group = [i for i, a in enumerate(assigned) if a == index]
+            lengths = [min(_length(run.elements[i], leg), size) for i in group]
+            if strict and sum(lengths) + GAP * (len(group) - 1) + head + tail > size:
+                return None
+            centres = _centres([want[i] - starts[index] for i in group], lengths, size, head, tail)
+            floor = 0.0
+            for i, length, centre in zip(group, lengths, centres):
+                low = max(length / 2 + head, floor + length / 2)
+                high = size - length / 2 - tail
+                chosen = None
+                reach = int(size / NUDGE_STEP) + 1  # anywhere on the leg, nearest first
+                for step in sorted(range(-reach, reach + 1), key=abs):
+                    at = centre + step * NUDGE_STEP
+                    if not low - 1e-6 <= at <= high + 1e-6:
+                        continue
+                    frames = _frames_at(run.elements[i], at, leg)
+                    if _clear(frames, others, level, mine, pipes, (source, dest)):
+                        chosen = (at, frames)
+                        break
+                if chosen is None:
+                    if strict:
+                        return None
+                    at = min(max(centre, low), max(low, high)) if high >= low else size / 2
+                    chosen = (at, _frames_at(run.elements[i], at, leg))
                 drawn = [unit_box(unit, frame) for unit, frame in chosen[1].items()]
-                zones.append((min(b[0] for b in drawn), min(b[1] for b in drawn),
-                              max(b[2] for b in drawn), max(b[3] for b in drawn)))
-            floor = chosen[0] + length / 2 + GAP
+                mine.append((min(b[0] for b in drawn), min(b[1] for b in drawn),
+                             max(b[2] for b in drawn), max(b[3] for b in drawn)))
+                placed.append(chosen[1])
+                floor = chosen[0] + length / 2 + GAP
+        return placed
+
+    plans = _assign(run, legs, want)
+    placed = next((p for p in (attempt(plan, True) for plan in plans) if p is not None), None)
+    roomy = placed is not None
+    for frames in placed if placed is not None else attempt(plans[0], False) or []:
+        _commit(frames, obstacles)
+        if len(frames) > 1:
+            drawn = [unit_box(unit, frame) for unit, frame in frames.items()]
+            zones.append((min(b[0] for b in drawn), min(b[1] for b in drawn),
+                          max(b[2] for b in drawn), max(b[3] for b in drawn)))
     return roomy
 
 
@@ -1046,12 +1131,13 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun], *,
                                for host, run, more in zip(hosts, runs, extra)],
                           members, unaligned=unaligned)
         place_stations(fs, loose)
-        routes = _routed_pipes(fs, runs, retained)
+        routes, lines = _routed_pipes(fs, runs, retained)
         obstacles = list(retained)
         zones: list[Box] = []
         # The longest chains, stations first, are the hardest to fit.
         order = sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i))
-        short = [not _set_run(runs[i], routes[i], obstacles, zones) for i in order]
+        short = [not _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes])
+                 for i in order]
         if not any(short):
             break
         for i, cramped in zip(order, short):

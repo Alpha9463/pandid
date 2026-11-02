@@ -185,7 +185,7 @@ def test_a_control_valve_sits_on_its_pipe_without_a_jog(
 def test_an_angle_relief_valve_is_placed_like_equipment() -> None:
     """Check that a valve that turns the pipe stays in the grid, clear of its flag."""
     from pandid import ReliefValve, Vessel
-    from pandid.layout.mounted import furniture
+    from pandid.layout.mounted import mounted_runs
 
     fs = Flowsheet("Angle relief")
     feed = fs.add(Feed("Feed"))
@@ -199,7 +199,7 @@ def test_an_angle_relief_valve_is_placed_like_equipment() -> None:
     fs.connect(psv.outlet, flare.inlet)
 
     fs.route()
-    assert psv not in furniture(fs)
+    assert psv not in {u for run in mounted_runs(fs) for u in run.elements}
     assert _clean(fs)
 
 
@@ -230,3 +230,44 @@ def test_a_station_and_a_neighbouring_valve_each_get_room() -> None:
     top, bottom = min(b.y for b in boxes), max(b.y_max for b in boxes)
     frame = valve.frame
     assert frame.x_max < left or frame.x > right or frame.y_max < top or frame.y > bottom
+
+
+def test_a_pinned_valve_on_a_westward_line_follows_the_flow() -> None:
+    """Check that a turn-pinned valve is mirrored along the pipe, not drawn backwards."""
+    fs = Flowsheet("Westward")
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=600, y=100).pin(mirrored=True)
+    product = fs.add(Product("Product")).pin(port="inlet", x=100, y=100).pin(mirrored=True)
+    line = fs.connect(feed.outlet, product.inlet)
+    valve = fs.add(ControlValve("FV-101").pin(orientation=0), on=line)
+
+    fs.route()
+    assert valve.frame is not None
+    inlet = port_point(valve, valve.frame, "inlet")
+    outlet = port_point(valve, valve.frame, "outlet")
+    actuator = port_point(valve, valve.frame, "actuator")
+    assert outlet[0] < inlet[0]
+    assert inlet[1] == outlet[1] == pytest.approx(100)
+    assert actuator[1] < 100
+    assert measure_final(fs).bends == 0
+
+
+def test_an_actuator_needs_a_clear_exit() -> None:
+    """Check that a spot is refused when a unit sits in a connected actuator's exit."""
+    from pandid import Instrument
+    from pandid.geometry import Frame
+    from pandid.layout.mounted import _clear
+
+    fs = Flowsheet("Actuator exit")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    valve = fs.add(ControlValve("FV-101"), on=fs.connect(feed.outlet, product.inlet))
+    controller = fs.add(Instrument("FIC-101"))
+    fs.connect(controller.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+    assert valve.frame is not None
+    actuator = port_point(valve, valve.frame, "actuator")
+    blocker = fs.add(Product("Blocker"))
+    blocker.frame = Frame(x=actuator[0] - 5, y=actuator[1] - 15, w=10, h=5)
+
+    assert _clear({valve: valve.frame}, [], True, [], [])
+    assert not _clear({valve: valve.frame}, [blocker], True, [], [])
