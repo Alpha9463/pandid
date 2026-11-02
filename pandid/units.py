@@ -866,9 +866,9 @@ class Unit:
     def has_another_port(self, port: "Port") -> bool:
         """Return whether a connected port can take another stream.
 
-        ``False`` for equipment, where a second pipe needs a :class:`Tee`.
-        :class:`Instrument` signal pools and :class:`_Boundary` flags
-        override it. Asked separately from :meth:`another_port` so
+        True for a member of a port pool (:meth:`_pool_of`), so ``False``
+        for equipment, where a second pipe needs a :class:`Tee`. Asked
+        separately from :meth:`another_port` so
         :meth:`~pandid.flowsheet.Flowsheet.connect` can check both ends
         before adding a port to either.
 
@@ -882,12 +882,13 @@ class Unit:
         bool
             Whether :meth:`another_port` can supply a free equivalent.
         """
-        return False
+        return self._pool_of(port.name) is not None
 
     def another_port(self, port: "Port") -> "Port":
         """Return a free port equivalent to ``port``, adding one if needed.
 
-        Called only where :meth:`has_another_port` is true.
+        Called only where :meth:`has_another_port` is true. A new member
+        takes the pool's first member's direction and role.
 
         Parameters
         ----------
@@ -897,9 +898,14 @@ class Unit:
         Returns
         -------
         Port
-            ``port`` itself on this base class.
+            Free member of ``port``'s pool, or ``port`` itself when it is
+            not in a pool.
         """
-        return port
+        base = self._pool_of(port.name)
+        if base is None:
+            return port
+        first = self._pool_members(base)[0]
+        return self._next_member(base, first.direction, first.role)
 
     def _next_member(self, base: str, direction: str, role: str) -> "Port":
         """Return a free member of a port pool, adding one if all are used.
@@ -931,6 +937,24 @@ class Unit:
             n += 1
         return self._add_port(f"{base}_{n}", direction, role)
 
+    def _pool_of(self, port_name: str) -> str | None:
+        """Return the pool a port belongs to.
+
+        :class:`Instrument` signal ports and :class:`_Boundary` flags have
+        pools; the defaults here are written over this one hook.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        str or None
+            Pool name, or ``None`` for a port in no pool.
+        """
+        return None
+
     def _pool_members(self, base: str) -> list["Port"]:
         """Return the ports in a pool, in port order.
 
@@ -944,7 +968,7 @@ class Unit:
         list[Port]
             Members; empty on classes without pools.
         """
-        return []
+        return [p for name, p in self.ports.items() if self._pool_of(name) == base]
 
     def _mint_port(self, name: str) -> "Port | None":
         """Create a pool member by name, for the spec reader.
@@ -962,12 +986,17 @@ class Unit:
         Port or None
             The port, or ``None`` when this class has no such pool.
         """
-        return None
+        base = self._pool_of(name)
+        if base is None:
+            return None
+        first = self._pool_members(base)[0]
+        return self._add_port(name, first.direction, first.role)
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the name the symbol anchors a port under.
 
-        Uses :attr:`PORT_ANCHORS`; :class:`Instrument` overrides it. An
+        A pool member anchors under its pool, so it shares the pool's
+        point or menu of faces; other ports use :attr:`PORT_ANCHORS`. An
         unknown name falls back to the box centre in :mod:`pandid.portgeom`.
 
         Parameters
@@ -980,7 +1009,7 @@ class Unit:
         str
             Anchor name.
         """
-        return type(self).PORT_ANCHORS.get(port_name, port_name)
+        return self._pool_of(port_name) or type(self).PORT_ANCHORS.get(port_name, port_name)
 
     def _series_pin(self, port_name: str) -> float | None:
         """Return a fixed position for a port within its port series.
@@ -1209,7 +1238,7 @@ class _Boundary(Unit):
         """
         return next(iter(self.ports.values()))
 
-    def _pool_base(self, port_name: str) -> str | None:
+    def _pool_of(self, port_name: str) -> str | None:
         """Return the pool a port name belongs to.
 
         Parameters
@@ -1227,89 +1256,6 @@ class _Boundary(Unit):
             return base
         head, _, tail = port_name.rpartition("_")
         return base if head == base and tail.isdigit() else None
-
-    def _pool_members(self, base: str) -> list[Port]:
-        """Return the members of the flag's port pool.
-
-        Parameters
-        ----------
-        base : str
-            Pool name.
-
-        Returns
-        -------
-        list[Port]
-            Members in port order.
-        """
-        return [p for name, p in self.ports.items() if self._pool_base(name) == base]
-
-    def has_another_port(self, port: Port) -> bool:
-        """Return whether the port is the flag's port or a member of it.
-
-        Parameters
-        ----------
-        port : Port
-            Connected port.
-
-        Returns
-        -------
-        bool
-            ``True`` for the flag's own pool.
-        """
-        return self._pool_base(port.name) is not None
-
-    def another_port(self, port: Port) -> Port:
-        """Return a free member of the flag's port, adding one if needed.
-
-        Members share the first port's direction and role.
-
-        Parameters
-        ----------
-        port : Port
-            Connected port.
-
-        Returns
-        -------
-        Port
-            Free member.
-        """
-        base = self._pool_base(port.name)
-        if base is None:
-            return port
-        return self._next_member(base, port.direction, port.role)
-
-    def _mint_port(self, name: str) -> Port | None:
-        """Create a named member of the flag's port for the spec reader.
-
-        Parameters
-        ----------
-        name : str
-            Port name such as ``outlet_2``.
-
-        Returns
-        -------
-        Port or None
-            The new port, or ``None`` if the name is not in the pool.
-        """
-        if self._pool_base(name) is None:
-            return None
-        first = self.connection
-        return self._add_port(name, first.direction, first.role)
-
-    def _symbol_anchor(self, port_name: str) -> str:
-        """Return the anchor name, mapping every pool member to the flag's port.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str
-            Anchor name.
-        """
-        return self._pool_base(port_name) or super()._symbol_anchor(port_name)
 
     def repeats(self, other: "Unit") -> bool:
         """Return whether this flag is another tap of the same header.
@@ -4095,58 +4041,6 @@ class Instrument(Unit):
     # named high and low taps instead.
     # ------------------------------------------------------------------
 
-    def has_another_port(self, port: Port) -> bool:
-        """Return whether ``port`` is in a signal pool.
-
-        Parameters
-        ----------
-        port : Port
-            Port of this balloon.
-
-        Returns
-        -------
-        bool
-            True for ``sig_in``/``sig_out`` members, false for ``pv``.
-        """
-        return self._pool_of(port.name) is not None
-
-    def another_port(self, port: Port) -> Port:
-        """Return a free member of ``port``'s pool, creating one if needed.
-
-        Called by :meth:`pandid.flowsheet.Flowsheet.connect` when ``port``
-        is already connected.
-
-        Parameters
-        ----------
-        port : Port
-            Pool member already in use.
-
-        Returns
-        -------
-        Port
-            Free member, or ``port`` itself when it is not in a pool.
-        """
-        base = self._pool_of(port.name)
-        if base is None:
-            return port
-        # New members take the first member's direction.
-        return self._next_member(base, self._pool_members(base)[0].direction, "signal")
-
-    def _pool_members(self, base: str) -> list[Port]:
-        """Return the members of a pool, in creation order.
-
-        Parameters
-        ----------
-        base : str
-            Pool name.
-
-        Returns
-        -------
-        list[Port]
-            Members.
-        """
-        return [p for name, p in self.ports.items() if self._pool_of(name) == base]
-
     def signal_port(self, name: str) -> Port:
         """Return a port by name, creating a missing pool member.
 
@@ -4199,8 +4093,7 @@ class Instrument(Unit):
         except KeyError:
             return None
 
-    @classmethod
-    def _pool_of(cls, port_name: str) -> str | None:
+    def _pool_of(self, port_name: str) -> str | None:
         """Return the pool a port belongs to.
 
         Parameters
@@ -4213,29 +4106,10 @@ class Instrument(Unit):
         str or None
             ``"sig_in"`` or ``"sig_out"``, or ``None`` for ``pv``.
         """
-        if port_name in cls._SIGNAL_POOLS:
+        if port_name in self._SIGNAL_POOLS:
             return port_name
         member = _POOL_MEMBER.fullmatch(port_name)
         return member.group(1) if member else None
-
-    def _symbol_anchor(self, port_name: str) -> str:
-        """Return the anchor name, mapping pool members to their pool.
-
-        Signal ports share one menu of four faces
-        (:attr:`pandid.render.symbols.Symbol.faceless_ports`);
-        :mod:`pandid.layout.faces` picks a face per port.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str
-            Anchor name in the symbol.
-        """
-        return self._pool_of(port_name) or super()._symbol_anchor(port_name)
 
     @property
     def tag(self) -> str:
