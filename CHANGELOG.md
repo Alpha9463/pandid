@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pandid.layout.structure`, `_EVAP_CALANDRIA_PITCH`, and
   `scripts/ports_bench.py`, `renumber_bench.py` and `layout_bench.py` are
   deleted.
+- **Unused code (#579).** `pandid.routing.get_outward_dir` is deleted; use
+  `pandid.portgeom.outward_dir`.
 
 ### Fixed
 

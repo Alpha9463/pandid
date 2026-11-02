@@ -24,21 +24,6 @@ class Rect:
     y_min: float
     y_max: float
 
-    def contains(self, x: float, y: float) -> bool:
-        """Return whether a point lies strictly inside the rectangle.
-
-        Parameters
-        ----------
-        x, y : float
-            Point coordinates.
-
-        Returns
-        -------
-        bool
-            Whether the point is inside both pairs of boundaries.
-        """
-        return self.x_min < x < self.x_max and self.y_min < y < self.y_max
-
     def intersects_segment(self, x1: float, y1: float, x2: float, y2: float) -> bool:
         """Return whether an orthogonal segment crosses the rectangle interior.
 

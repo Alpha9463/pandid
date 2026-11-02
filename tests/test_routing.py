@@ -11,7 +11,8 @@ from pandid.flowsheet import Flowsheet
 from pandid.geometry import Route
 from pandid.streams import Stream
 from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
-from pandid.routing import DefaultRouter, get_outward_dir, _fallback_path
+from pandid.portgeom import outward_dir
+from pandid.routing import DefaultRouter, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
 from pandid.routing.visibility import Rect, VisibilityGraph, clear_gaps
@@ -112,19 +113,14 @@ def test_router_does_not_call_a_blocked_stub_successful() -> None:
 
 
 def test_rect_intersection():
-    """Distinguish strict containment from segment contact.
+    """Count segment contact with the rectangle's edge.
 
     Returns
     -------
     None
-        An edge point is not contained; an edge segment intersects.
+        An edge segment intersects.
     """
     r = Rect(10, 20, 10, 20)
-    # Contain a point strictly inside.
-    assert r.contains(15, 15)
-    # Exclude a point on the edge.
-    assert not r.contains(10, 15)
-
     # Intersect a segment that passes through.
     assert r.intersects_segment(5, 15, 25, 15)
     # Intersect a segment that lies on the edge.
@@ -192,7 +188,7 @@ def test_the_obstacle_index_sees_what_an_exhaustive_scan_sees():
         (x, y)
         for x in graph.xs
         for y in graph.ys
-        if not any(o.contains(x, y) for o in graph.obstacles)
+        if not any(o.x_min < x < o.x_max and o.y_min < y < o.y_max for o in graph.obstacles)
     }
     assert graph.nodes == scanned_nodes
 
@@ -222,10 +218,10 @@ def test_outward_dir():
     None
         Each edge midpoint maps to its own face.
     """
-    assert get_outward_dir(0, 50, 100, 100) == "W"
-    assert get_outward_dir(100, 50, 100, 100) == "E"
-    assert get_outward_dir(50, 0, 100, 100) == "N"
-    assert get_outward_dir(50, 100, 100, 100) == "S"
+    assert outward_dir(0, 50, 100, 100) == "W"
+    assert outward_dir(100, 50, 100, 100) == "E"
+    assert outward_dir(50, 0, 100, 100) == "N"
+    assert outward_dir(50, 100, 100, 100) == "S"
 
 
 def test_router_integration():

@@ -859,25 +859,6 @@ def _table_runs(fs) -> list:
             if any(s.properties for s in run) or any(s.at_boundary for s in run)]
 
 
-def _table_streams(fs) -> list:
-    """Return the stream each column is headed from, in sheet order.
-
-    The first segment of each run in :func:`_table_runs`; the values are
-    gathered over the run (:func:`_run_values`).
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet.
-
-    Returns
-    -------
-    list[Stream]
-        Heading streams.
-    """
-    return [run[0] for run in _table_runs(fs)]
-
-
 class _Measured(NamedTuple):
     """Stream table measurements shared by the docked and sheet layouts.
 

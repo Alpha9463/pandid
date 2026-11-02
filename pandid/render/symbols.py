@@ -838,10 +838,6 @@ def conveyor_min_length(diameter: float = CONVEYOR_DIAMETER) -> float:
     return 2 * diameter
 
 
-#: Shortest belt run at the default roller.
-CONVEYOR_MIN_LENGTH = conveyor_min_length()
-
-
 def conveyor_too_short(length: float, owner: str = "",
                        diameter: float = CONVEYOR_DIAMETER) -> ValueError:
     """Return the error for a belt run too short for its rollers.
@@ -986,7 +982,7 @@ SCREW_SWEEP = 2 * SCREW_REACH / SCREW_HEIGHT
 SCREW_PITCH, SCREW_MARGIN = 7 * SCREW_MODULE, 2 * SCREW_MODULE
 
 #: Shortest drawable screw: clear casing, one turn, clear casing. It
-#: happens to equal :data:`CONVEYOR_MIN_LENGTH`.
+#: happens to equal the belt's :func:`conveyor_min_length`.
 SCREW_MIN_LENGTH = 2 * SCREW_MARGIN + SCREW_TURN
 
 

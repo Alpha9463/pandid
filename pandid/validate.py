@@ -840,7 +840,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     # --- an ingoing or outgoing material with nothing to report ---
     # ISO 10628-1:2014 4.3.2 d) requires a PFD to state each ingoing and
     # outgoing material's flow rate. The stream table keeps a boundary
-    # column even when empty (:func:`pandid.render.furniture._table_streams`);
+    # column even when empty (:func:`pandid.render.furniture._table_runs`);
     # this says what a column of dashes means. Only on a sheet that
     # tabulates other streams: a sheet with no properties at all is
     # handled below.

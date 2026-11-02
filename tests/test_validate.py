@@ -1323,10 +1323,10 @@ def test_the_reused_name_costs_a_stream_table_column():
     """The finding's whole content: the table is keyed by name, so two
     runs sharing one are tabulated as one and a column of properties is
     absent from the sheet."""
-    from pandid.render.furniture import _table_streams
+    from pandid.render.furniture import _table_runs
 
     fs = _collided()
-    assert len(_table_streams(fs)) == len(fs.streams) - 1
+    assert len(_table_runs(fs)) == len(fs.streams) - 1
     assert _reused(fs)
 
 
@@ -1418,10 +1418,10 @@ def test_the_reported_line_is_the_column_the_table_keeps_empty():
     """The finding's whole content. Neither half is any use alone: the
     column is what the reader sees and the finding is what says why it is
     blank, so the two have to be about the same lines."""
-    from pandid.render.furniture import _table_streams
+    from pandid.render.furniture import _table_runs
 
     fs = _partly_tabulated()
-    kept = [s.name for s in _table_streams(fs) if not s.properties]
+    kept = [run[0].name for run in _table_runs(fs) if not run[0].properties]
     assert kept == [i.message.split()[0] for i in _missing(fs)] == ["S2"]
 
 

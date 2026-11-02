@@ -5,14 +5,13 @@ import warnings
 from typing import Protocol, TYPE_CHECKING
 
 from pandid.geometry import Route
-from pandid.portgeom import outward_dir as get_outward_dir  # Re-exported for callers.
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.routing.astar import CrossingIndex
     from pandid.streams import Stream
 
-__all__ = ["Router", "DefaultRouter", "get_outward_dir"]
+__all__ = ["Router", "DefaultRouter"]
 
 
 class Router(Protocol):
