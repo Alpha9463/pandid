@@ -27,6 +27,7 @@ from pandid.portgeom import port_point, resolve_size, unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.layout.halo import Pad
     from pandid.ports import Port
     from pandid.stations import StationAssembly
     from pandid.streams import Stream
@@ -40,10 +41,11 @@ END = 25.0
 #: Length kept clear at a leg end that is the pipe's own end nozzle.
 NOZZLE_END = 8.0
 
-#: Clearance between neighbouring elements on a leg, and across a pipe.
+#: Clearance kept across a pipe between an element and another unit.
 GAP = 8.0
 
-#: Clearance kept along a pipe between an element and another unit.
+#: Clearance kept along a pipe between an element and anything else, its
+#: neighbours on the pipe included, so each keeps room for its tag.
 ALONG = 25.0
 
 #: Reach of a balloon from the point where it taps a pipe.
@@ -51,9 +53,6 @@ TAP = 45.0
 
 #: Step, in pixels, of the search along a leg for a clear spot.
 NUDGE_STEP = 5.0
-
-#: Rounds of widening pipes whose furniture had no room.
-ROOM_ROUNDS = 3
 
 _INLINE_KINDS = frozenset({"valve", "reducer", "fitting"})
 
@@ -298,7 +297,7 @@ def _chain_width(run: MountedRun) -> float:
     -------
     float
         Station room as :func:`_station_width` gives
-        it, plus each device's width with :data:`GAP` around each, or more
+        it, plus each device's width with :data:`ALONG` around each, or more
         where the stated positions need a longer pipe (:func:`_room`).
     """
     from pandid.layout.layered import END_ROOM
@@ -308,7 +307,7 @@ def _chain_width(run: MountedRun) -> float:
     devices = [element for element in run.elements if not isinstance(element, StationAssembly)]
     width = _station_width(stations) if stations else 0.0
     if devices:
-        width += sum(resolve_size(unit)[0] for unit in devices) + GAP * (len(devices) + 1)
+        width += sum(resolve_size(unit)[0] for unit in devices) + ALONG * (len(devices) + 1)
     return max(width, _room(run) - END_ROOM)
 
 
@@ -323,7 +322,7 @@ def _column_room(run: MountedRun) -> float:
     Returns
     -------
     float
-        Devices end to end, :data:`GAP` apart, with the margin kept at the
+        Devices end to end, :data:`ALONG` apart, with the margin kept at the
         nozzle and at the corner; 0 for a pipe carrying a station, which is
         set only on a level leg.
     """
@@ -332,7 +331,7 @@ def _column_room(run: MountedRun) -> float:
     if any(isinstance(element, StationAssembly) for element in run.elements):
         return 0.0
     lengths = [_level_length(element) for element in run.elements]
-    return (sum(lengths) + GAP * (len(lengths) - 1) + NOZZLE_END + END
+    return (sum(lengths) + ALONG * (len(lengths) - 1) + NOZZLE_END + END
             + 2 * (TAP + ALONG) * len(run.taps))
 
 
@@ -956,7 +955,7 @@ def _room(run: MountedRun) -> float:
     rules = [(slope[0], start[0] - lengths[0] / 2, NOZZLE_END),
              (1 - slope[-1], -start[-1] - lengths[-1] / 2, NOZZLE_END)]
     rules += [(slope[k] - slope[k - 1], start[k] - start[k - 1],
-               (lengths[k - 1] + lengths[k]) / 2 + GAP) for k in range(1, len(lengths))]
+               (lengths[k - 1] + lengths[k]) / 2 + ALONG) for k in range(1, len(lengths))]
     # Each rule reads slope * length + offset >= floor.
     return max([(floor - offset) / rate for rate, offset, floor in rules if rate > 1e-9],
                default=0.0)
@@ -984,9 +983,9 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     list[list[int]]
         For each way, the leg index of each element.
     """
-    room = [_size(leg) - sum(_margins(index, len(legs))) + GAP
+    room = [_size(leg) - sum(_margins(index, len(legs))) + ALONG
             for index, leg in enumerate(legs)]
-    need = [[_length(element, leg) + GAP for leg in legs] for element in run.elements]
+    need = [[_length(element, leg) + ALONG for leg in legs] for element in run.elements]
     starts, travelled = [], 0.0
     for leg in legs:
         starts.append(travelled)
@@ -1047,7 +1046,7 @@ def _centres(wanted: list[float], lengths: list[float], size: float,
     list[float]
         Centre distances; spaced evenly when the elements do not fit.
     """
-    if sum(lengths) + GAP * (len(lengths) - 1) + head + tail > size:
+    if sum(lengths) + ALONG * (len(lengths) - 1) + head + tail > size:
         free = max(0.0, size - sum(lengths))
         step = free / (len(lengths) + 1)
         centres, cursor = [], 0.0
@@ -1058,11 +1057,11 @@ def _centres(wanted: list[float], lengths: list[float], size: float,
         return centres
     centres = [min(max(w, head + n / 2), size - tail - n / 2) for w, n in zip(wanted, lengths)]
     for k in range(1, len(centres)):
-        centres[k] = max(centres[k], centres[k - 1] + (lengths[k - 1] + lengths[k]) / 2 + GAP)
+        centres[k] = max(centres[k], centres[k - 1] + (lengths[k - 1] + lengths[k]) / 2 + ALONG)
     for k in range(len(centres) - 1, -1, -1):
         limit = size - tail - lengths[k] / 2
         if k + 1 < len(centres):
-            limit = min(limit, centres[k + 1] - (lengths[k] + lengths[k + 1]) / 2 - GAP)
+            limit = min(limit, centres[k + 1] - (lengths[k] + lengths[k + 1]) / 2 - ALONG)
         centres[k] = min(centres[k], limit)
     return centres
 
@@ -1139,7 +1138,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
             head, tail = _margins(index, len(legs))
             group = [i for i, a in enumerate(assigned) if a == index]
             lengths = [min(_length(run.elements[i], leg), size) for i in group]
-            if strict and sum(lengths) + GAP * (len(group) - 1) + head + tail > size:
+            if strict and sum(lengths) + ALONG * (len(group) - 1) + head + tail > size:
                 return None
             centres = _centres([want[i] - starts[index] for i in group], lengths, size, head, tail)
             floor = 0.0
@@ -1165,7 +1164,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                 mine.append((min(b[0] for b in drawn), min(b[1] for b in drawn),
                              max(b[2] for b in drawn), max(b[3] for b in drawn)))
                 placed.append(chosen[1])
-                floor = chosen[0] + length / 2 + GAP
+                floor = chosen[0] + length / 2 + ALONG
         return placed
 
     plans = _assign(run, legs, want)
@@ -1181,10 +1180,11 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
 
 
 def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
-    """Lay out a sheet, setting its furniture on its pipes.
+    """Lay out a sheet in two passes: equipment, then furniture on its routed pipes.
 
-    Pipes whose furniture has no room are widened and the sheet laid out
-    again, up to :data:`ROOM_ROUNDS` times.
+    Pass 1 places equipment and flags with each furnished pipe stating the
+    room its furniture needs (:class:`pandid.layout.layered.Link`), so pass
+    2 sets the furniture without moving equipment.
 
     Parameters
     ----------
@@ -1198,7 +1198,6 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     None
         Every process unit has a frame.
     """
-    from pandid.layout import _seed_slots
     from pandid.layout.layered import Link, place_equipment
     from pandid.layout.station import place_stations
 
@@ -1207,34 +1206,24 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     shown = set(retained)
     loose = [a for a in fs._station_assemblies if not members.intersection(a.station.members)]
     inside = {id(segment) for run in runs for segment in run.segments}
-    direct = [Link(s.source, s.dest, s.is_recycle) for s in process_streams(fs)
-              if id(s) not in inside and s.source.owner in shown and s.dest.owner in shown
-              and s.source.owner is not s.dest.owner]
-    extra = [0.0] * len(runs)
-    for round_ in range(ROOM_ROUNDS):
-        if round_:
-            _seed_slots(fs)
-        place_equipment(fs, retained, direct + [
-            Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
-                 _chain_width(run) + more, _column_room(run))
-            for run, more in zip(runs, extra)])
-        for unit in members:
-            placed = slot(unit)
-            unit.frame = Frame(x=0.0, y=0.0, w=placed.w, h=placed.h,
-                               orientation=placed.orientation, mirrored=placed.mirrored,
-                               mirror_y=placed.mirror_y)
-        place_stations(fs, loose)
-        if not runs:
-            return
-        routes, lines = _routed_pipes(fs, runs, retained)
-        obstacles = list(retained)
-        zones: list[Box] = []
-        # The longest chains, stations first, are the hardest to fit.
-        order = sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i))
-        short = [not _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes])
-                 for i in order]
-        if not any(short):
-            break
-        for i, cramped in zip(order, short):
-            if cramped:
-                extra[i] += _chain_width(runs[i])
+    place_equipment(fs, retained, [
+        *(Link(s.source, s.dest, s.is_recycle) for s in process_streams(fs)
+          if id(s) not in inside and s.source.owner in shown and s.dest.owner in shown
+          and s.source.owner is not s.dest.owner),
+        *(Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
+               _chain_width(run), _column_room(run))
+          for run in runs)])
+    for unit in members:
+        placed = slot(unit)
+        unit.frame = Frame(x=0.0, y=0.0, w=placed.w, h=placed.h,
+                           orientation=placed.orientation, mirrored=placed.mirrored,
+                           mirror_y=placed.mirror_y)
+    place_stations(fs, loose)
+    if not runs:
+        return
+    routes, lines = _routed_pipes(fs, runs, retained)
+    obstacles = list(retained)
+    zones: list[Box] = []
+    # The longest chains, stations first, are the hardest to fit.
+    for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
+        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes])
