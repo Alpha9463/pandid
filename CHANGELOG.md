@@ -45,7 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/ports_bench.py`, `renumber_bench.py` and `layout_bench.py` are
   deleted.
 - **Unused code (#579).** `pandid.routing.get_outward_dir` is deleted; use
-  `pandid.portgeom.outward_dir`.
+  `pandid.portgeom.outward_dir`. The `pandid.render.Renderer` protocol, which
+  nothing used, is deleted.
 
 ### Fixed
 

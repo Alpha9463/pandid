@@ -1166,8 +1166,7 @@ def _fraction(v: float) -> str:
 class DrawioRenderer:
     """Render a laid-out Flowsheet to a draw.io ``mxfile`` document.
 
-    A :class:`pandid.render.Renderer` beside
-    :class:`~pandid.render.svg.SvgRenderer`. It reads the same resolved
+    The backend beside :class:`~pandid.render.svg.SvgRenderer`. It reads the same resolved
     geometry (layout frames, routed waypoints, :mod:`pandid.portgeom` port
     points) without re-deriving any, so the two backends agree.
 
