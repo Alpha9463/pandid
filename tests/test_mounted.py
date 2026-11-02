@@ -287,3 +287,24 @@ def test_an_eccentric_reducer_is_set_on_its_pipe() -> None:
 
     fs.layout()
     assert [run.elements for run in mounted_runs(fs)] == [(reducer,)]
+
+
+def test_a_vent_control_valve_keeps_its_loop_clear() -> None:
+    """Check that a control loop on a vent valve draws no line through the valve."""
+    from pandid import Vessel
+
+    fs = Flowsheet("Vent control")
+    feed = fs.add(Feed("Feed"))
+    drum = fs.add(Vessel("V-101"))
+    product = fs.add(Product("Product"))
+    scrubber = fs.add(Product("To Vent Scrubber"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, product.inlet)
+    vent = fs.connect(drum.vent, scrubber.inlet)
+    valve = fs.add(ControlValve("PV-101"), on=vent)
+    fs.add_control_loop("P", 101, measuring=vent, acting_on=valve)
+
+    fs.route()
+    quality = measure_final(fs)
+    assert not quality.hard_conflicts
+    assert not any(issue.code in ("route-crosses-unit", "unit-overlap") for issue in fs.validate())

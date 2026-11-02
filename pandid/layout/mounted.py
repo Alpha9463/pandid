@@ -46,6 +46,9 @@ GAP = 8.0
 #: Clearance kept along a pipe between an element and another unit.
 ALONG = 25.0
 
+#: Reach of a balloon from the point where it taps a pipe.
+TAP = 45.0
+
 #: Step, in pixels, of the search along a leg for a clear spot.
 NUDGE_STEP = 5.0
 
@@ -73,11 +76,14 @@ class MountedRun:
         Where each element sits on the author's line: the line's two end
         nozzles and the fraction between them, or ``None`` for one wired in
         with ``connect()``, which states no position.
+    taps : tuple[tuple[Port, Port, float], ...]
+        Where each balloon that senses the pipe taps it, placed the same way.
     """
 
     segments: tuple[Stream, ...]
     elements: tuple[Element, ...]
     places: tuple[tuple[Port, Port, float] | None, ...]
+    taps: tuple[tuple[Port, Port, float], ...] = ()
 
     @property
     def source(self) -> Port:
@@ -180,7 +186,19 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
     """
     from pandid.inline import position
 
+    from pandid.streams import Stream
+
     members = {u for a in fs._station_assemblies for u in a.station.members}
+    # A balloon on a stream taps its whole line, at a fraction of it.
+    tapped: dict[int, list[tuple[Port, Port, float]]] = {}
+    for unit in fs.units:
+        host, at = vars(unit).get("host"), getattr(unit, "at", None)
+        if unit.kind != "instrument" or not isinstance(host, Stream) or isinstance(at, str):
+            continue
+        line = host._logical_root or host
+        tap = (line.source, line._logical_to or line.dest, 0.5 if at is None else float(at))
+        for segment in line._logical_segments or [line]:
+            tapped.setdefault(id(segment), []).append(tap)
     stations = {id(a.station.inlet): a for a in fs._station_assemblies
                 if not any(_position_pinned(u) for u in a.station.members)}
     runs = []
@@ -213,7 +231,9 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
             line, at = segment._logical_root or segment, position(segment)
             end = line._logical_to
             places.append(None if end is None or at is None else (line.source, end, at))
-        runs.append(MountedRun(tuple(segments), tuple(elements), tuple(places)))
+        taps = {id(tap): tap for segment in segments for tap in tapped.get(id(segment), [])}
+        runs.append(MountedRun(tuple(segments), tuple(elements), tuple(places),
+                               tuple(sorted(taps.values(), key=lambda tap: tap[2]))))
     return runs
 
 
@@ -289,7 +309,8 @@ def _column_room(run: MountedRun) -> float:
     if any(isinstance(element, StationAssembly) for element in run.elements):
         return 0.0
     lengths = [_level_length(element) for element in run.elements]
-    return sum(lengths) + GAP * (len(lengths) - 1) + NOZZLE_END + END
+    return (sum(lengths) + GAP * (len(lengths) - 1) + NOZZLE_END + END
+            + 2 * (TAP + ALONG) * len(run.taps))
 
 
 @contextmanager
@@ -530,6 +551,7 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         first = 0 if level else 90
         poses = [(turn % 360, flip) for turn in (first, first + 180, first + 90, first + 270)
                  for flip in (False, True)]
+    fits = []
     for turn, flip in poses:
         candidate = _candidate(unit, point, turn, flip)
         inlet = port_point(unit, candidate, "inlet")
@@ -537,8 +559,15 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
                             y=candidate.y + (shift if level else 0.0))
         if _on_corridor(unit, candidate, direction, ordinate):
-            return candidate
-    return _candidate(unit, point, *poses[0])
+            fits.append(candidate)
+    if not fits:
+        return _candidate(unit, point, *poses[0])
+    if unit.pin_ is not None or level or "actuator" not in unit.ports:
+        return fits[0]
+    # On an upright pipe the actuator goes to the left of the flow, where its
+    # balloons hang by default, so its signals need not cross the pipe.
+    left = -forward
+    return min(fits, key=lambda c: (port_point(unit, c, "actuator")[0] - ordinate) * left > 0)
 
 
 def _main_width(assembly: StationAssembly) -> float:
@@ -792,8 +821,33 @@ def _along(legs: list[Leg], point: Point) -> float:
     return best[1]
 
 
-def _wanted(run: MountedRun, total: float,
-            along: Callable[[Port], float] | None = None) -> list[float]:
+def _point_at(legs: list[Leg], distance: float) -> tuple[Point, bool]:
+    """Return the point a distance along a pipe, clamped to its ends.
+
+    Parameters
+    ----------
+    legs : list[Leg]
+        Legs of the pipe.
+    distance : float
+        Distance from the pipe's start.
+
+    Returns
+    -------
+    tuple[Point, bool]
+        Point on the pipe, and whether its leg is level.
+    """
+    for leg in legs:
+        (ax, ay), (bx, by) = leg
+        size = _size(leg)
+        if distance <= size:
+            t = max(distance, 0.0) / size if size else 0.0
+            return (ax + t * (bx - ax), ay + t * (by - ay)), _level(leg)
+        distance -= size
+    return legs[-1][1], _level(legs[-1])
+
+
+def _wanted(run: MountedRun, total: float, along: Callable[[Port], float] | None = None,
+            extra: tuple[tuple[Port, Port, float], ...] = ()) -> list[float]:
     """Return where along the pipe each element's centre is wanted.
 
     An element with a place is put at its fraction of the author's line,
@@ -809,11 +863,14 @@ def _wanted(run: MountedRun, total: float,
         Length of the pipe.
     along : callable or None, optional
         Distance along the pipe of a nozzle that is not on it.
+    extra : tuple[tuple[Port, Port, float], ...], optional
+        Further places to locate, such as balloon taps.
 
     Returns
     -------
     list[float]
-        Wanted distance from the pipe's start for each element.
+        Wanted distance from the pipe's start for each element, then for
+        each extra place.
     """
     count = len(run.elements)
     even = [(k + 1) / (count + 1) * total for k in range(count)]
@@ -843,12 +900,12 @@ def _wanted(run: MountedRun, total: float,
         return None if along is None else along(port)
 
     out = []
-    for k, place in enumerate(run.places):
+    for k, place in enumerate([*run.places, *extra]):
         low = high = None
         if place is not None:
             low, high = anchor(place[0], 1.0), anchor(place[1], -1.0)
         if place is None or low is None or high is None:
-            out.append(even[k])
+            out.append(even[k] if k < count else total / 2)
         else:
             out.append(low + place[2] * (high - low))
     return out
@@ -1017,8 +1074,18 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         a = port_point(source, source.frame, run.source.name)
         b = port_point(dest, dest.frame, run.dest.name)
         legs = [(a, (b[0], a[1])) if abs(b[0] - a[0]) >= abs(b[1] - a[1]) else (a, (a[0], b[1]))]
+    count = len(run.elements)
     want = _wanted(run, sum(_size(leg) for leg in legs),
-                   lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)))
+                   lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)),
+                   run.taps)
+    # On an upright pipe a balloon hangs level with the devices, so they keep
+    # its reach clear along the pipe from where it taps.
+    tap_zones = []
+    for distance in want[count:]:
+        (x, y), level = _point_at(legs, distance)
+        if not level:
+            tap_zones.append((x - 1.0, y - TAP, x + 1.0, y + TAP))
+    want = want[:count]
     starts, travelled = [], 0.0
     for leg in legs:
         starts.append(travelled)
@@ -1043,7 +1110,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
             Frames for each element, in flow order.
         """
         placed: list[dict[Unit, Frame]] = []
-        mine = list(zones)
+        mine = [*zones, *tap_zones]
         for index in sorted(set(assigned)):
             leg, size, level = legs[index], _size(legs[index]), _level(legs[index])
             head, tail = _margins(index, len(legs))
