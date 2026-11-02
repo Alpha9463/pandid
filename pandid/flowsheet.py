@@ -2193,7 +2193,12 @@ class Flowsheet:
             from pandid.layout.search import SearchBudget, search_layout
 
             budget = SearchBudget(4, 4, 16)
-            search_layout(self, budget)
+            seeded = self._search_seed_frames is not None
+            if not search_layout(self, budget).accepted_moves and seeded:
+                # The seeded search kept refinement's drawing without searching it, so a
+                # second route() would; search it now so routing again changes nothing.
+                self._search_seed_frames = None
+                search_layout(self, budget)
             if row_baseline is not None:
                 from pandid.layout.trials import _publish_candidate, row_final_better
 
