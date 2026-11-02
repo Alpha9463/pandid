@@ -2,7 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Set, Tuple
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -112,10 +112,10 @@ def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
 
 def share_escape_room(
     start: Tuple[float, float],
-    start_dir: Optional[str],
+    start_dir: str,
     start_proj: Tuple[float, float],
     goal: Tuple[float, float],
-    goal_dir: Optional[str],
+    goal_dir: str,
     goal_proj: Tuple[float, float],
     obstacles: List[Rect],
 ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
@@ -125,7 +125,7 @@ def share_escape_room(
     ----------
     start, goal : tuple[float, float]
         Port-anchor coordinates.
-    start_dir, goal_dir : str or None
+    start_dir, goal_dir : str
         Outward port directions.
     start_proj, goal_proj : tuple[float, float]
         Nominal escape-node coordinates.
@@ -138,8 +138,6 @@ def share_escape_room(
         Adjusted escape coordinates, or the original projections when a shared
         lane is unsuitable.
     """
-    if start_dir is None or goal_dir is None:
-        return start_proj, goal_proj
     axis, sign = TRAVEL[start_dir]
     goal_axis, goal_sign = TRAVEL[goal_dir]
     if goal_axis != axis or goal_sign == sign:
@@ -362,7 +360,7 @@ class VisibilityGraph:
         self,
         anchor: Tuple[float, float],
         projection: Tuple[float, float],
-        direction: str | None,
+        direction: str,
         owner: "Unit",
     ) -> Tuple[float, float] | None:
         """Return the furthest clear lane on a port's outward stub.
@@ -373,7 +371,7 @@ class VisibilityGraph:
             Port-anchor coordinate on the unit body.
         projection : tuple[float, float]
             Maximum escape-node coordinate.
-        direction : str or None
+        direction : str
             Outward port direction.
         owner : Unit
             Unit that owns the port.
@@ -383,10 +381,7 @@ class VisibilityGraph:
         tuple[float, float] or None
             Reachable graph node, or ``None`` when the stub is blocked.
         """
-        travel = TRAVEL.get(direction) if direction is not None else None
-        if travel is None:
-            return projection
-        axis, sign = travel
+        axis, sign = TRAVEL[direction]
         distance = sign * (projection[axis] - anchor[axis])
         if distance <= 0:
             return projection

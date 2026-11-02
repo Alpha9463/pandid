@@ -35,7 +35,7 @@ class Router(Protocol):
 def _clamp_projection(
     anchor: tuple[float, float],
     proj: tuple[float, float],
-    d: str | None,
+    d: str,
     target: tuple[float, float],
     nodes: set[tuple[float, float]],
 ) -> tuple[float, float]:
@@ -50,7 +50,7 @@ def _clamp_projection(
         Port anchor on the unit body.
     proj : tuple[float, float]
         Nominal escape node.
-    d : str or None
+    d : str
         Outward port direction.
     target : tuple[float, float]
         Escape node at the other end of the stream.
@@ -69,11 +69,9 @@ def _clamp_projection(
     if d in ("N", "S"):
         lo, hi = (py, ay) if d == "N" else (ay, py)
         cand = (ax, ty) if lo < ty < hi else proj
-    elif d in ("E", "W"):
+    else:
         lo, hi = (px, ax) if d == "W" else (ax, px)
         cand = (tx, ay) if lo < tx < hi else proj
-    else:
-        return proj
     # Keep the nominal projection when the graph has no node on that lane.
     return cand if cand in nodes else proj
 
@@ -342,8 +340,8 @@ class DefaultRouter:
                 )
                 continue
 
-            start_dir = graph.port_dirs.get((src_u.name, stream.source.name))
-            goal_dir = graph.port_dirs.get((dst_u.name, stream.dest.name))
+            start_dir = graph.port_dirs[(src_u.name, stream.source.name)]
+            goal_dir = graph.port_dirs[(dst_u.name, stream.dest.name)]
 
             # Read the escape nodes the graph placed at the stand-off distance.
             start_proj = graph.port_projs[(src_u.name, stream.source.name)]
