@@ -1015,13 +1015,7 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
     style = ("text;html=1;strokeColor=none;fillColor=none;"
              f"labelBackgroundColor=#ffffff;align={align};"
              f"verticalAlign=middle;fontSize={size:g};fontColor={_LINE_INK};")
-    return [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} style={_attr(style)} '
-        f'vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(left)}" y="{_num(y - box_h / 2)}" '
-        f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(cid, left, y - box_h / 2, box_w, box_h, style, _html_text(text))
 
 
 def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
@@ -1831,13 +1825,7 @@ class DrawioRenderer:
                 f"strokeColor={approx.stroke}", f"fillColor={approx.fill}",
                 f"strokeWidth={fit.length(approx.weight):g}",
                 "connectable=0", "movable=0"]) + ";"
-            out += [
-                f'        <mxCell id="{cid}-s{i}" value="" style={_attr(style)} '
-                f'vertex="1" parent="{cid}">',
-                f'          <mxGeometry x="{_num(px * w)}" y="{_num(py * h)}" '
-                f'width="{_num(pw * w)}" height="{_num(ph * h)}" as="geometry" />',
-                '        </mxCell>',
-            ]
+            out += _rect(f"{cid}-s{i}", px * w, py * h, pw * w, ph * h, style, parent=cid)
         return out
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
@@ -1902,13 +1890,7 @@ class DrawioRenderer:
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(_PART_STROKE):g}",
                 "connectable=0", "movable=0"]) + ";"
-            out += [
-                f'        <mxCell id="{cid}-p{i}" value="" style={_attr(style)} '
-                f'vertex="1" parent="{cid}">',
-                f'          <mxGeometry x="{_num(ox * w)}" y="{_num(oy * h)}" '
-                f'width="{_num(ow * w)}" height="{_num(oh * h)}" as="geometry" />',
-                '        </mxCell>',
-            ]
+            out += _rect(f"{cid}-p{i}", ox * w, oy * h, ow * w, oh * h, style, parent=cid)
         return out
 
     @staticmethod
@@ -1949,13 +1931,7 @@ class DrawioRenderer:
                           f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
                           f"strokeWidth={fit.length(approx.weight):g}",
                           "connectable=0", "movable=0"]) + ";"
-        return [
-            f'        <mxCell id="{cid}-in" value="" style={_attr(style)} '
-            f'vertex="1" parent="{cid}">',
-            f'          <mxGeometry x="0" y="0" width="{_num(w)}" '
-            f'height="{_num(h)}" as="geometry" />',
-            '        </mxCell>',
-        ]
+        return _rect(f"{cid}-in", 0, 0, w, h, style, parent=cid)
 
     # ---------------------------------------------------- streams
 
@@ -2627,21 +2603,8 @@ def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
         XML lines for the leader cell.
     """
     (ax, ay), (bx, by) = number.leader
-    style = (f"edgeStyle=none;rounded=0;html=1;startArrow=none;endArrow=block;"
-             f"endFill=1;endSize={fit.length(_LEADER_HEAD):g};"
-             f"strokeColor={ink};"
-             f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};movable=1;{_NO_HOP}")
-    x0, y0 = fit.at(ax, ay)
-    x1, y1 = fit.at(bx, by)
-    return [
-        f'        <mxCell id="{edge_id}-lead" value="" style={_attr(style)} '
-        f'edge="1" parent="1">',
-        '          <mxGeometry relative="1" as="geometry">',
-        f'            <mxPoint x="{_num(x0)}" y="{_num(y0)}" as="sourcePoint" />',
-        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="targetPoint" />',
-        '          </mxGeometry>',
-        '        </mxCell>',
-    ]
+    return _segment(f"{edge_id}-lead", *fit.at(ax, ay), *fit.at(bx, by), ink,
+                    fit.length(LineWeight.DETAIL.width), head=fit.length(_LEADER_HEAD))
 
 
 # draw.io built-in for each stream-label enclosure, drawn to fill
@@ -2685,14 +2648,8 @@ def _enclosure(edge_id: str, number, shape: str, ink: str, fit: "_Fit") -> list[
              f"strokeWidth={fit.length(_ENCLOSURE_STROKE):g};"
              f"{_drawn_type(NUMBER_TYPE, fit)};verticalAlign=middle;align=center;"
              + ("horizontal=0;" if number.vertical else ""))
-    return [
-        f'        <mxCell id="{edge_id}-box" value={_attr(_html_text(number.name))} '
-        f'style={_attr(style)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" '
-        f'width="{_num(fit.length(x1 - x0))}" height="{_num(fit.length(y1 - y0))}" '
-        f'as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(f"{edge_id}-box", x, y, fit.length(x1 - x0), fit.length(y1 - y0),
+                 style, _html_text(number.name))
 
 
 # Style keys for a label on each side of a cell. The position key moves
@@ -3091,13 +3048,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
 
     shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};" + keys
     cell = _TABLE_CELL + f"fontSize={font:g};"
-    out = [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(title))} '
-        f'style={_attr(shape)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
-        f'height="{_num(h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    out = _rect(cid, x, y, w, h, shape, _html_text(title))
     ry = start
     for r, cells in enumerate(body):
         rh = rows_h[r]
@@ -3252,14 +3203,8 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
     body = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
             f"align=left;verticalAlign=top;spacingLeft=7;fontSize={font:g};"
             f"fontColor={_LINE_INK};")
-    return out + [
-        f'        <mxCell id="{cid}-b" '
-        f'value={_attr("<br>".join(_html_text(r) for r in rows))} '
-        f'style={_attr(body)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y + title_h)}" '
-        f'width="{_num(w)}" height="{_num(h - title_h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return out + _rect(f"{cid}-b", x, y + title_h, w, h - title_h, body,
+                       "<br>".join(_html_text(r) for r in rows))
 
 
 # Annotation tables draw only the border and title band, as the SVG does;
@@ -3267,17 +3212,22 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
 _ANNOTATION_KEYS = "rowLines=0;columnLines=0;"
 
 
-def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
-    """Return a bare rectangle cell, used for the drawing frame.
+def _rect(cid: str, x, y, w, h, style: str, value: str = "",
+          parent: str = "1") -> list[str]:
+    """Return a vertex cell with a plain rectangular geometry.
 
     Parameters
     ----------
     cid : str
         Cell id.
     x, y, w, h : float
-        Rectangle.
+        Rectangle, relative to ``parent``.
     style : str
         Cell style.
+    value : str, default=""
+        Label, already escaped for HTML (:func:`_html_text`).
+    parent : str, default="1"
+        Parent cell id.
 
     Returns
     -------
@@ -3285,18 +3235,19 @@ def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
         XML lines.
     """
     return [
-        f'        <mxCell id="{cid}" value="" style={_attr(style)} '
-        f'vertex="1" parent="1">',
+        f'        <mxCell id="{cid}" value={_attr(value)} style={_attr(style)} '
+        f'vertex="1" parent="{parent}">',
         f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
         f'height="{_num(h)}" as="geometry" />',
         '        </mxCell>',
     ]
 
 
-def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
+def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float,
+             head: "float | None" = None) -> list[str]:
     """Return a ruled line between two points, as draw.io writes a free rule.
 
-    ``noJump=1``, since furniture rules are not connections
+    ``noJump=1``, since furniture rules and leaders are not connections
     (:data:`_NO_HOP`).
 
     Parameters
@@ -3309,13 +3260,17 @@ def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
         Stroke colour.
     weight : float
         Stroke width.
+    head : float, optional
+        Arrowhead size at the second point; no head when omitted.
 
     Returns
     -------
     list[str]
         XML lines.
     """
-    style = (f"edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;"
+    arrows = ("endArrow=none;startArrow=none;" if head is None
+              else f"startArrow=none;endArrow=block;endFill=1;endSize={head:g};")
+    style = (f"edgeStyle=none;rounded=0;html=1;{arrows}"
              f"strokeColor={ink};strokeWidth={weight:g};movable=1;{_NO_HOP}")
     return [
         f'        <mxCell id="{cid}" value="" style={_attr(style)} '
@@ -3354,14 +3309,8 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
     style = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
              f"align=center;verticalAlign=middle;fontStyle=1;fontSize={size:g};"
              f"fontColor={_LINE_INK};")
-    return [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} '
-        f'style={_attr(style)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(cx - _LABEL_HALF)}" '
-        f'y="{_num(cy - _LABEL_HALF)}" width="{_num(2 * _LABEL_HALF)}" '
-        f'height="{_num(2 * _LABEL_HALF)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(cid, cx - _LABEL_HALF, cy - _LABEL_HALF, 2 * _LABEL_HALF, 2 * _LABEL_HALF,
+                 style, _html_text(text))
 
 
 def _strip_rule(cid: str, part) -> list[str]:
@@ -3420,13 +3369,7 @@ def _strip_label(cid: str, part) -> list[str]:
              f"align={align};verticalAlign=middle;fontSize={size:g};"
              f"fontColor={_LINE_INK if ink == 'black' else ink};"
              + ("fontStyle=1;" if bold else ""))
-    return [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} '
-        f'style={_attr(style)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(left)}" y="{_num(top)}" '
-        f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(cid, left, top, box_w, box_h, style, _html_text(text))
 
 
 def _rev_table(cid: str, grid) -> list[str]:
