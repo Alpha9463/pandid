@@ -462,7 +462,7 @@ _SIGNAL_PORTS = {
         *(
             port
             for variant in default_registry.variants(cls.kind)
-            for port in (cls._variant_ports(variant) if hasattr(cls, "_variant_ports") else [])
+            for port in cls._variant_ports(variant)
         ),
     ]
     if role == "signal"

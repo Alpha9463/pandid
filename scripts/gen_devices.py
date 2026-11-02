@@ -982,7 +982,7 @@ def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
         ``(name, direction, role)`` port specs.
     """
     declared = base._declared_ports()
-    variant_ports = base._variant_ports(variant) if hasattr(base, "_variant_ports") else []
+    variant_ports = base._variant_ports(variant)
     return [*declared, *variant_ports]
 
 
