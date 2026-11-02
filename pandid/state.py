@@ -1,9 +1,8 @@
 """Define the stream conditions a balance engine may record.
 
 pandid calculates no properties. :class:`State` is the slot on
-:class:`~pandid.ports.Port` and :class:`~pandid.streams.Stream` where a
-future mass and energy balance engine can write results without changing
-the topology model.
+:class:`~pandid.streams.Stream` where a future mass and energy balance
+engine can write results without changing the topology model.
 """
 
 from __future__ import annotations

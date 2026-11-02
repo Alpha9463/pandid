@@ -1151,7 +1151,9 @@ class Flowsheet:
         from pandid.units import Instrument
 
         # Accept a ControlLoop handle as well as a Loop.
-        if isinstance(number, (Loop, ControlLoop)):
+        if isinstance(number, ControlLoop):
+            number = number.loop
+        if isinstance(number, Loop):
             number.check(type)
             number = number.number
         inst = Instrument(type, number, variant=variant, **kwargs)

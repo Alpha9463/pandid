@@ -47,6 +47,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unused code (#579).** `pandid.routing.get_outward_dir` is deleted; use
   `pandid.portgeom.outward_dir`. The `pandid.render.Renderer` protocol, which
   nothing used, is deleted.
+- **The twelve spellings 0.1.3 and 0.1.4 deprecated (#579).** Use
+  `Vessel(supports="leg")` or `supports="skirt"` for `variant="legs"` or
+  `"skirted"`, `Reactor(internals="packing")` for `variant="plain"`,
+  `Reactor(agitator="disc")` for `variant="mixing"`, and
+  `Separator(characteristic=...)` for a `"gravity"`, `"electrostatic"` or
+  `"electromagnetic"` variant. Use `DistillationColumn` for a `Column`'s
+  `reflux_in`, `boilup_in`, `reboiler_duty` and `condenser_duty`, and
+  `overhead` for `distillate`.
+- **`pandid.document.location_reference` (#579).** It is deleted, with no
+  replacement.
+- **`Port.state` and `Unit.params` (#579).** Both are deleted. Stream
+  conditions stay on `Stream.state`.
+- **`ControlLoop.variable`, `.number`, `.name`, `.tag()`, `.element()` and
+  `.check()` (#579).** Use them on `ControlLoop.loop`. `add_instrument()`
+  still takes a `ControlLoop`.
+- **`DEFAULT_INPUT_FACE` and `DEFAULT_OUTPUT_FACE` on `Tank` and `Vessel`
+  (#579).** Use `default_input_face()` and `default_output_face()`.
 
 ### Fixed
 

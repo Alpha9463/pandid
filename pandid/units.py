@@ -20,7 +20,6 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 from pandid._checks import check_real, check_whole, is_whole, suggest
-from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
 
@@ -228,7 +227,7 @@ class Unit:
         depends on the body; see :meth:`composition_defaults`.
     COMPOSITION_VARIANT : str
         Composition keyword this class folds into :attr:`variant`, so a
-        serializer writes the keyword rather than the deprecated variant.
+        serializer writes the keyword rather than the variant.
     name : str
         Tag.
     variant : str
@@ -267,18 +266,6 @@ class Unit:
     PLACES: dict[str, "str | tuple[str, float] | None"] = {}
 
     ONE_NOZZLE_MANY_RUNS = False
-
-    # Retired port name -> (direction, role, Deprecation). __getattr__ adds
-    # the port on first access and warns. Subclasses that never had it
-    # reset this to {}.
-    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {}
-
-    # Renamed port name -> (new name, Deprecation); resolves to the same Port.
-    _RETIRED_PORT_ALIASES: dict[str, tuple[str, Deprecation]] = {}
-
-    # Deprecated variant -> Deprecation, warned in __init__. An error never
-    # offers one as the alternative (_compose_onto).
-    _DEPRECATED_VARIANTS: Mapping[str, Deprecation] = {}
 
     # Attributes read once in __init__ to build ports and artwork (such as a
     # column's internals or a reactor's agitator); __setattr__ refuses a
@@ -442,7 +429,6 @@ class Unit:
         self.balloon: "Instrument | None" = None
         self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}
-        self.params: dict = {}
         self._new_line_number = False
         self._pin: Pin | None = None  # intent; set only via pin()
         # Axes pinned to a port rather than the corner: {"y": "inlet"}.
@@ -1112,7 +1098,7 @@ class Unit:
     if not TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any:
-            """Resolve retired port names and explain unknown attributes.
+            """Explain an unknown attribute.
 
             Called only when normal lookup fails.
 
@@ -1120,11 +1106,6 @@ class Unit:
             ----------
             name : str
                 Attribute name.
-
-            Returns
-            -------
-            Any
-                A renamed or retired port, after a deprecation warning.
 
             Raises
             ------
@@ -1134,16 +1115,6 @@ class Unit:
             ports = self.__dict__.get("ports")
             if ports is not None and not name.startswith("_"):
                 where = self.__dict__.get("name", "?")
-                alias = type(self)._RETIRED_PORT_ALIASES.get(name)
-                if alias is not None:
-                    target, dep = alias
-                    dep.warn(self, where=where)
-                    return getattr(self, target)
-                retired = type(self)._RETIRED_PORTS.get(name)
-                if retired is not None:
-                    direction, role, dep = retired
-                    dep.warn(self, where=where)
-                    return self._add_port(name, direction, role)
                 raise _NoSuchAttribute(type(self).__name__, where, name, ports)
             raise AttributeError(name)
 
@@ -1751,7 +1722,6 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
                     if not _carries(unit.kind, unit.variant, _placed([part], unit.variant))]
         able = [variant for variant in default_registry.variants(unit.kind)
                 if variant != unit.variant
-                and variant not in type(unit)._DEPRECATED_VARIANTS
                 and _carries(unit.kind, variant, _placed(stated, variant))]
         named = " and ".join(f"{keyword}={value!r}" for keyword, value, _ in culprits or stated)
         raise ValueError(
@@ -1759,32 +1729,6 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
             f"{named}; variants that can: {', '.join(able) or 'none'}"
         )
     unit.overlays = overlays
-
-
-#: Deprecated vessel variants that drew a support into the shell artwork.
-#: ``supports=`` draws the ISO group-26 support under the standard shell
-#: instead, which changes the drawing, so each declaration carries a note.
-#: Declared as module constants so :func:`pandid.deprecation.declarations`
-#: finds them.
-VESSEL_VARIANT_LEGS = Deprecation(
-    what="Vessel(variant='legs')",
-    instead="Vessel(supports='leg')",
-    removed_in="0.2.0",
-    note="the drawing changes -- a pair of ISO item 26.1 C2005 legs under the "
-    "standard vessel shell, where this one has its own drawn in",
-)
-VESSEL_VARIANT_SKIRTED = Deprecation(
-    what="Vessel(variant='skirted')",
-    instead="Vessel(supports='skirt')",
-    removed_in="0.2.0",
-    note="the drawing changes -- ISO item 26.3 C2007's skirt under the standard "
-    "vessel shell, where this one has its own drawn in",
-)
-
-_VESSEL_SUPPORT_VARIANTS = {
-    "legs": VESSEL_VARIANT_LEGS,
-    "skirted": VESSEL_VARIANT_SKIRTED,
-}
 
 
 # Self type for _FaceFamilies methods, so callers get their subclass back.
@@ -1985,23 +1929,14 @@ class _MultiPortVessel(_FaceFamilies):
     ``drain`` are single fixed ports moved only through
     :meth:`Unit.nozzle`.
 
-    When the caller names no face, a connection uses, in rising priority:
-
-    1. the face the artwork anchors (:meth:`_home_face`);
-    2. :attr:`DEFAULT_INPUT_FACE` or :attr:`DEFAULT_OUTPUT_FACE`, which a
-       subclass may set;
-    3. the ``inputs=`` or ``outputs=`` argument.
+    A connection uses the face the ``inputs=`` or ``outputs=`` argument
+    names, else the face the artwork anchors (:meth:`_home_face`).
 
     Attributes
     ----------
-    DEFAULT_INPUT_FACE, DEFAULT_OUTPUT_FACE : str or None
-        Class-wide default faces; ``None`` on Tank and Vessel.
     inlets, outlets : tuple[Port, ...]
         Port families in declaration order.
     """
-
-    DEFAULT_INPUT_FACE: str | None = None
-    DEFAULT_OUTPUT_FACE: str | None = None
 
     LAYOUT_CONFIDENCE = 4
     # Inlets come from upstream and outlets go downstream, whatever face
@@ -2156,9 +2091,9 @@ class _MultiPortVessel(_FaceFamilies):
         Returns
         -------
         str
-            :attr:`DEFAULT_INPUT_FACE`, else the artwork's inlet face.
+            The artwork's inlet face.
         """
-        return self.DEFAULT_INPUT_FACE or self._home_face("inlet")
+        return self._home_face("inlet")
 
     def default_output_face(self) -> str:
         """Return the face an outlet uses when none is named.
@@ -2166,9 +2101,9 @@ class _MultiPortVessel(_FaceFamilies):
         Returns
         -------
         str
-            :attr:`DEFAULT_OUTPUT_FACE`, else the artwork's outlet face.
+            The artwork's outlet face.
         """
-        return self.DEFAULT_OUTPUT_FACE or self._home_face("outlet")
+        return self._home_face("outlet")
 
     def _init_connections(
         self, inputs: "int | Sequence[str]", outputs: "int | Sequence[str]"
@@ -2329,8 +2264,7 @@ class Vessel(_MultiPortVessel):
     inputs, outputs : int or Sequence[str], default=1
         Number of inlets or outlets, or one face per port.
     variant : str, default="default"
-        Shell drawing. ``"legs"`` and ``"skirted"`` are deprecated in
-        favour of ``supports``.
+        Shell drawing.
     supports : str, optional
         ``"skirt"``, ``"leg"``, ``"bracket"`` or ``"ring"``. Fixed at
         construction.
@@ -2446,7 +2380,6 @@ class Vessel(_MultiPortVessel):
     COMPOSITION = {"supports": None}
     # The supports overlay is composed in __init__.
     _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
-    _DEPRECATED_VARIANTS = _VESSEL_SUPPORT_VARIANTS
 
     def __init__(
         self,
@@ -2471,9 +2404,6 @@ class Vessel(_MultiPortVessel):
             reference=reference,
         )
         self._init_connections(inputs, outputs)
-        # Check the variant the author typed, not the alias it resolved to.
-        if variant in self._DEPRECATED_VARIANTS:
-            self._DEPRECATED_VARIANTS[variant].warn(self, where=name)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
 
@@ -4858,34 +4788,6 @@ def _stage_fractions(
     return fractions
 
 
-#: Deprecation of ``Reactor(variant="plain")``. Its hatched bed is not an
-#: ISO mark; ``internals="packing"`` draws item 27.8 X8141 on the standard
-#: vessel shell, so the drawing and its size change.
-REACTOR_VARIANT_PLAIN = Deprecation(
-    what="Reactor(variant='plain')",
-    instead="Reactor(internals='packing')",
-    removed_in="0.2.0",
-    note="the drawing changes -- ISO item 27.8 X8141's crossed bed on the "
-    "standard vessel shell, in place of this one's diagonal hatch",
-)
-
-
-#: Deprecation of ``Reactor(variant="mixing")``, a cone-bottomed body with
-#: the stirrer and motor drawn in. ISO draws an agitated vessel only as item
-#: 1.27 X8006 (dished ends), and the drawn motor had no ``drive`` port.
-#: ``agitator="disc"`` (item 28.9 C2026, nearest to the drawn plates)
-#: replaces it.
-REACTOR_VARIANT_MIXING = Deprecation(
-    what="Reactor(variant='mixing')",
-    instead="Reactor(agitator='disc')",
-    removed_in="0.2.0",
-    note="the drawing changes -- ISO item 1.27 X8006's dished-end shell with a "
-    "group-28 stirrer and the motor that turns it, in place of this one's "
-    "cone-bottomed box and the capsule on top of it; the cone goes, and "
-    "the stirrer becomes one you can choose and route a drive to",
-)
-
-
 class Reactor(Unit):
     """Reactor: CSTR, PFR, packed bed or fluidised bed.
 
@@ -4900,8 +4802,7 @@ class Reactor(Unit):
         Reactor("R-301", variant="tubular")           # a PFR
 
     ``variant`` is ``"default"`` (dished-end stirred tank), ``"jacketed"``
-    or ``"tubular"`` (horizontal plug-flow shell). ``"plain"`` and
-    ``"mixing"`` are deprecated.
+    or ``"tubular"`` (horizontal plug-flow shell).
 
     ``agitator`` is one of the ten ISO group-28 stirrers: ``"agitator"``
     (general), ``"turbine"``, ``"propeller"``, ``"anchor"``,
@@ -5031,11 +4932,8 @@ class Reactor(Unit):
         ],
     }
 
-    # Bodies that get an agitator by default. "mixing" draws its own, and
-    # tubular and plain bodies are not stirred.
+    # Bodies that get an agitator by default; a tubular body is not stirred.
     _STIRRED = ("default", "jacketed")
-
-    _DEPRECATED_VARIANTS = {"plain": REACTOR_VARIANT_PLAIN, "mixing": REACTOR_VARIANT_MIXING}
 
     # The agitator default depends on body and internals.
     COMPOSITION = {"agitator": _UNSTATED, "internals": None}
@@ -5094,9 +4992,6 @@ class Reactor(Unit):
             description=description,
             reference=reference,
         )
-        # Check the variant the author typed, not the alias it resolved to.
-        if variant in self._DEPRECATED_VARIANTS:
-            self._DEPRECATED_VARIANTS[variant].warn(self, where=name)
         if agitator is _UNSTATED:
             agitator = self.composition_defaults(self.variant, {"internals": internals})["agitator"]
         self.agitator = agitator
@@ -5196,34 +5091,6 @@ if TYPE_CHECKING:
         feed_8: Port
 
 
-#: Deprecations of the Separator variants that are now ``characteristic``
-#: values, one constant each so :func:`pandid.deprecation.declarations`
-#: finds them. ``variant="cyclone"`` is not deprecated: ISO 14617-1 4.5
-#: registers X2618 as a symbol of its own, and the same holds for the
-#: sifter, impact separator, permanent magnet and scrubber.
-SEPARATOR_VARIANT_GRAVITY = Deprecation(
-    what="Separator(variant='gravity')",
-    instead="Separator(characteristic='gravity')",
-    removed_in="0.2.0",
-)
-SEPARATOR_VARIANT_ELECTROSTATIC = Deprecation(
-    what="Separator(variant='electrostatic')",
-    instead="Separator(characteristic='electrostatic')",
-    removed_in="0.2.0",
-)
-SEPARATOR_VARIANT_ELECTROMAGNETIC = Deprecation(
-    what="Separator(variant='electromagnetic')",
-    instead="Separator(characteristic='electromagnetic')",
-    removed_in="0.2.0",
-)
-
-_SEPARATOR_CHARACTERISTIC_VARIANTS = {
-    "gravity": SEPARATOR_VARIANT_GRAVITY,
-    "electrostatic": SEPARATOR_VARIANT_ELECTROSTATIC,
-    "electromagnetic": SEPARATOR_VARIANT_ELECTROMAGNETIC,
-}
-
-
 class Separator(Unit):
     """Flash drum or other separator.
 
@@ -5273,8 +5140,7 @@ class Separator(Unit):
     n_feeds : int, default=1
         Number of feed ports.
     variant : str, default="default"
-        Body. ``"gravity"``, ``"electrostatic"`` and ``"electromagnetic"``
-        are deprecated in favour of ``characteristic``.
+        Body.
     characteristic : str, optional
         Group-29 mark; replaces ``variant``.
     width, height, label_pos, description, reference
@@ -5284,8 +5150,8 @@ class Separator(Unit):
     ------
     ValueError
         If ``characteristic`` is unknown or given with a non-default
-        ``variant``, ``n_feeds`` is less than 1, or the variant takes one
-        feed only.
+        ``variant``, ``variant`` names a characteristic, ``n_feeds`` is
+        less than 1, or the variant takes one feed only.
     """
 
     # Only the phase draws, so ``sep.overflow`` does not type-check on a
@@ -5441,6 +5307,12 @@ class Separator(Unit):
         reference: str = "",
     ):
         names = _feed_names(n_feeds, "Separator")
+        # A characteristic is stored as the variant, so refuse one typed there.
+        if variant in self._CHARACTERISTICS:
+            raise ValueError(
+                f"{name}: {variant!r} is a characteristic, not a variant; "
+                f"use Separator(characteristic={variant!r})"
+            )
         if characteristic is not None:
             if variant != "default":
                 raise ValueError(
@@ -5468,10 +5340,6 @@ class Separator(Unit):
             description=description,
             reference=reference,
         )
-        # Check the variant the author typed: device classes such as
-        # GravitySeparator alias their default to a deprecated spelling.
-        if characteristic is None and variant in self._CHARACTERISTICS:
-            _SEPARATOR_CHARACTERISTIC_VARIANTS[variant].warn(self, where=name)
         self.characteristic = self.variant if self.variant in self._CHARACTERISTICS else None
         # Use the resolved variant: a device class may reach "horizontal"
         # through VARIANT_ALIASES.
@@ -5571,31 +5439,6 @@ if TYPE_CHECKING:
 #: draws. The drawn count need not match the real tray count.
 DEFAULT_TRAYS = 8
 
-# Deprecations of the distillation ports on Column, which now belong to
-# DistillationColumn. Port positions are unchanged, so no note is given.
-COLUMN_REFLUX_IN = Deprecation(
-    what="Column(...).reflux_in", instead="DistillationColumn(...).reflux_in", removed_in="0.2.0"
-)
-COLUMN_BOILUP_IN = Deprecation(
-    what="Column(...).boilup_in", instead="DistillationColumn(...).boilup_in", removed_in="0.2.0"
-)
-COLUMN_REBOILER_DUTY = Deprecation(
-    what="Column(...).reboiler_duty",
-    instead="DistillationColumn(...).reboiler_duty",
-    removed_in="0.2.0",
-)
-COLUMN_CONDENSER_DUTY = Deprecation(
-    what="Column(...).condenser_duty",
-    instead="DistillationColumn(...).condenser_duty",
-    removed_in="0.2.0",
-)
-#: Deprecation of ``distillate`` on every tower in favour of ``overhead``,
-#: a position name like Separator's ``overflow``; an absorber's overhead
-#: is not distillate.
-COLUMN_DISTILLATE = Deprecation(
-    what="Column(...).distillate", instead="Column(...).overhead", removed_in="0.2.0"
-)
-
 
 class Column(Unit):
     """General tower: a dished-end shell with feeds, overhead and bottoms.
@@ -5604,10 +5447,7 @@ class Column(Unit):
     the bottom. :class:`DistillationColumn` adds the reflux and reboiler
     ports, :class:`Stripper` the reboiler only, and :class:`Absorber`
     nothing, so ``t: Column`` accepts all four. Use a plain ``Column`` for
-    a scrubber, adsorber or molecular sieve. For one release,
-    ``col.reflux_in``, ``.boilup_in``, ``.reboiler_duty`` and
-    ``.condenser_duty`` still work on a plain Column with a warning to use
-    DistillationColumn, and ``col.distillate`` warns towards ``overhead``.
+    a scrubber, adsorber or molecular sieve.
 
     ``n_feeds`` adds ``feed_1`` to ``feed_n`` down the west side,
     ``feed_1`` highest, for a solvent or entrainer feed; with one, ``feed``
@@ -5684,9 +5524,7 @@ class Column(Unit):
     # - n_feeds=1 with a literal n_draws returns ColumnDraw1 to ColumnDraw8.
     #
     # Both counts above one, or a computed count, return Column; use
-    # ``col.feeds``, ``col.draws`` or ``col.port(...)``. Retired ports are
-    # served by Unit.__getattr__, which type checkers do not see, so
-    # ``col.reflux_in`` is still flagged on a plain Column.
+    # ``col.feeds``, ``col.draws`` or ``col.port(...)``.
     if TYPE_CHECKING:
         # Family A: any n_feeds, n_draws=0 (keyword-only, as at run time).
         @overload
@@ -5810,19 +5648,6 @@ class Column(Unit):
 
     # The artwork still anchors overhead under its old name.
     PORT_ANCHORS = {"overhead": "distillate"}
-
-    # Distillation ports served on a plain Column for one release, with a
-    # warning, built as DistillationColumn builds them.
-    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {
-        "reflux_in": ("inlet", "liquid", COLUMN_REFLUX_IN),
-        "boilup_in": ("inlet", "vapor", COLUMN_BOILUP_IN),
-        "reboiler_duty": ("inlet", "energy", COLUMN_REBOILER_DUTY),
-        "condenser_duty": ("outlet", "energy", COLUMN_CONDENSER_DUTY),
-    }
-    # Old port name -> current port, on every tower.
-    _RETIRED_PORT_ALIASES: dict[str, tuple[str, Deprecation]] = {
-        "distillate": ("overhead", COLUMN_DISTILLATE),
-    }
 
     # A bare shell by default (ISO item 2.1 X8100); a default deck would
     # assert trays the author never gave.
@@ -6205,18 +6030,13 @@ class Absorber(Column):
         Absorber("V-501", internals="packing",
                  n_feeds=2, feed_stages=[1, 8])
 
-    ``reflux_in``, ``boilup_in``, ``reboiler_duty`` and ``condenser_duty``
-    raise, with no deprecation period, because nothing in an absorber
-    boils. ``internals`` defaults to ``"packing"``; every other argument is
+    It has no ``reflux_in``, ``boilup_in``, ``reboiler_duty`` or
+    ``condenser_duty``, because nothing in an absorber boils. ``internals`` defaults to ``"packing"``; every other argument is
     :class:`Column`'s.
     """
 
     overhead: Port
     bottoms: Port
-
-    # No distillation ports, even with a warning. ``distillate`` still
-    # warns towards ``overhead``.
-    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {}
 
     # Packed by default.
     COMPOSITION = {"internals": "packing", "trays": DEFAULT_TRAYS}
@@ -6348,8 +6168,8 @@ class Stripper(Column):
 
     A :class:`Column` with a reboiler but no condenser or reflux, since the
     overhead is the stripped product. It has ``overhead``, ``bottoms``,
-    ``boilup_in`` and ``reboiler_duty``; ``reflux_in`` and
-    ``condenser_duty`` raise with no deprecation period. Every argument is
+    ``boilup_in`` and ``reboiler_duty``, and no ``reflux_in`` or
+    ``condenser_duty``. Every argument is
     :class:`Column`'s, including its ``internals`` default.
     """
 
@@ -6364,9 +6184,6 @@ class Stripper(Column):
     bottoms: Port
     boilup_in: Port
     reboiler_duty: Port
-
-    # No reflux or condenser ports, even with a warning.
-    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {}
 
     # Typed overloads for a literal n_feeds, as on Absorber.
     if TYPE_CHECKING:

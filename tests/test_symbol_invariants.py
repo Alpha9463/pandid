@@ -822,6 +822,17 @@ _UNIT_BY_KIND = {cls.kind: cls for cls in (getattr(units, n) for n in units.__al
 _RETIRED_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
 
 
+def _drawing(cls, variant: str) -> dict[str, str]:
+    """Return the keyword that asks ``cls`` for a registered drawing.
+
+    A Separator's characteristic drawings are asked for by
+    ``characteristic=``; ``variant=`` refuses them.
+    """
+    return {
+        "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant": variant
+    }
+
+
 # Dynamic-unit placement invariants
 
 
@@ -848,7 +859,7 @@ def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
         if display is not None:
             return cls("XX", index, display=display, width=w, height=h)
         return cls("XX", index, variant=variant, width=w, height=h)
-    return cls(f"{kind}-{variant}-{index}", variant=variant, width=w, height=h)
+    return cls(f"{kind}-{variant}-{index}", **_drawing(cls, variant), width=w, height=h)
 
 
 def _default_unit(kind: str, variant: str):
@@ -870,7 +881,7 @@ def _default_unit(kind: str, variant: str):
         if display is not None:
             return cls("XX", 1, display=display)
         return cls("XX", 1, variant=variant)
-    return cls(f"{kind}-{variant}-x", variant=variant)
+    return cls(f"{kind}-{variant}-x", **_drawing(cls, variant))
 
 
 _WIDEST_CLASS_FOR_KIND = {"column": units.DistillationColumn}
@@ -1117,11 +1128,6 @@ def test_signal_ports_stay_on_the_outline_at_any_box_shape(entry, odd_box_sheets
 
 _HOLDUP = [(units.Vessel, "vessel"), (units.Tank, "tank")]
 
-_DRAIN_FACES_SIDEWAYS = {
-    ("vessel", "legs", "drain"): "W",
-    ("vessel", "skirted", "drain"): "W",
-}
-
 _ROLE_FACE = {"vent": "N", "relief": "N", "drain": "S"}
 
 
@@ -1153,7 +1159,6 @@ def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, varian
 
     unit = cls("X-1", variant=variant)
     for name, want in _ROLE_FACE.items():
-        want = _DRAIN_FACES_SIDEWAYS.get((kind, variant, name), want)
         got = port_faces(unit, name)
         assert got == [want], (
             f"{kind}/{variant}.{name} is piped from {got} as drawn; the role puts it on {want}"
@@ -1444,7 +1449,6 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
         ("column", "feed_", "n_feeds", "W", "default"),
         ("column", "draw_", "n_draws", "E", "default"),
         ("reactor", "feed_", "n_feeds", "W", "default"),
-        ("reactor", "feed_", "n_feeds", "W", "plain"),
         ("separator", "feed_", "n_feeds", "W", "default"),
         ("separator", "feed_", "n_feeds", "W", "knockout"),
         ("separator", "feed_", "n_feeds", "W", "cyclone"),
@@ -1506,8 +1510,6 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
 
     for unit, want in (
         (U.Reactor("R"), (0.0, 50.0 + 62.0 / 3 + 100.0 / 9)),
-        (U.Reactor("R", variant="mixing"), (0.0, 48.2)),
-        (U.Reactor("R", variant="plain"), (0.0, 30.0)),
         (U.Separator("V"), (0.0, 50.0)),
         (U.Separator("V", variant="knockout"), (0.0, 55.0)),
         (U.Separator("V", variant="cyclone"), (0.0, 12.0)),
@@ -1566,7 +1568,7 @@ def test_a_feed_family_reaching_the_return_nozzles_is_caught():
 
 def test_the_shipped_feed_families_reach_nothing_else():
     """Verify shipped feed families avoid unrelated nozzles."""
-    for kind, variant in (("column", "default"), ("reactor", "default"), ("reactor", "plain")):
+    for kind, variant in (("column", "default"), ("reactor", "default")):
         sym = default_registry.get(kind, variant)
         assert sym.port_series, f"{kind}/{variant} has no feed family"
         assert sym.coincident_ports() == [], f"{kind}/{variant}"

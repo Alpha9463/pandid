@@ -9,7 +9,6 @@ feature. A bare ValueError is a bug report waiting to happen.
 
 import json
 import sys
-import warnings
 
 import pytest
 
@@ -331,33 +330,6 @@ def test_a_distillation_column_kind_round_trips():
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
 
-def test_a_plain_columns_retired_nozzle_round_trips():
-    """A plain ``Column`` still answers ``reflux_in``/``condenser_duty`` for
-    one release (#400), minted lazily through ``getattr`` rather than
-    declared in ``unit.ports`` -- so a stream connected to one of them is
-    real, and ``to_dict()`` writes it out under that name. ``from_dict()``
-    used to look the name up in ``unit.ports`` directly, never asking
-    ``getattr`` for it, so the very sheet the grace period was for could not
-    be read back: the deprecation broke its own round trip.
-    """
-    fs = Flowsheet("legacy")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        col = fs.add(units.Column("T-901"))
-        drum = fs.add(units.Vessel("D-101"))
-        prod = fs.add(units.Product("PR-1"))
-        fs.connect(drum.outlet, getattr(col, "reflux_in"), draw_as_recycle=True)
-        fs.connect(getattr(col, "condenser_duty"), prod.inlet)
-
-    written = fs.to_dict()
-    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
-        back = Flowsheet.from_dict(written)
-    reread = back.units[0]
-    assert type(reread).__name__ == "Column"
-    assert reread.port("reflux_in").stream is not None
-    assert back.to_dict() == written
-
-
 def test_an_absorbers_packing_default_round_trips_silently():
     """``internals="packing"`` is :class:`~pandid.units.Absorber`'s own
     default, not :class:`~pandid.units.Column`'s, so a bare
@@ -630,7 +602,7 @@ def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
         {
             "name": "T",
             "units": [
-                {"kind": kind, "name": "V-1", "variant": "sphere" if kind == "Tank" else "legs"},
+                {"kind": kind, "name": "V-1", "variant": "sphere" if kind == "Tank" else "dished"},
                 {"kind": "Product", "name": "Flare"},
                 {"kind": "Product", "name": "Sump"},
             ],
@@ -843,15 +815,12 @@ def test_a_separators_characteristic_is_written_as_itself_not_as_the_variant():
 
     ``characteristic=`` sets ``variant=`` because the mark inside a separating
     vessel *is* which drawing it is. Writing the fold back out hands the reader
-    a spelling deprecated with ``removed_in="0.2.0"``, so a sheet nobody had
-    edited warns today and is refused then. ``_write_instrument`` drops a folded
-    variant for the same reason.
+    a variant spelling it refuses. ``_write_instrument`` drops a folded variant
+    for the same reason.
     """
     entry, _ = _round_trip(units.Separator("V-201", characteristic="gravity"))
     assert entry == {"kind": "Separator", "name": "V-201", "characteristic": "gravity"}
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        rebuilt = Flowsheet.from_dict({"name": "T", "units": [entry]}).units[0]
+    rebuilt = Flowsheet.from_dict({"name": "T", "units": [entry]}).units[0]
     assert (rebuilt.characteristic, rebuilt.variant) == ("gravity", "gravity")
 
 
@@ -931,7 +900,7 @@ def test_no_constructor_argument_is_unreachable_from_a_spec():
     connection. The spec already writes that variant, so the argument is
     reachable, just not by that word. Contrast ``Separator(characteristic=)``,
     which folds the same way but *is* kept on the unit and whose variant
-    spelling is deprecated, so it has to be written as itself.
+    spelling is refused, so it has to be written as itself.
     """
     import inspect
 

@@ -208,16 +208,12 @@ GRAVITY_FIXED = {
     ("vessel", "horizontal"),
     ("vessel", "insulated"),
     ("vessel", "jacketed"),
-    ("vessel", "legs"),
-    ("vessel", "skirted"),
     ("vessel", "swaged"),
     # liquid running down over trays or packing, vapour rising through it
     ("column", "default"),
     ("column", "packed"),
     ("reactor", "default"),
     ("reactor", "jacketed"),
-    ("reactor", "mixing"),
-    ("reactor", "plain"),
     # open ends: what leaves rises, what would fall in must not
     ("vent", "default"),
     ("vent", "breather"),

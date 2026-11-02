@@ -351,17 +351,6 @@ def register_vendored(registry):
         port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=50.0, singular='feed'),),
     ), 'default')
 
-    # draw.io vessels:Mixing Reactor (aspect=variable) -> reactor/mixing
-    registry.register('reactor', Symbol(
-        svg='<g id="sym_reactor_mixing"><path d="M 31.0 2.4 L 31.0 27.4 A 6.0 2.4 0.0 0 1 25.0 29.8 A 6.0 2.4 0.0 0 1 19.0 27.4 L 19.0 2.4 A 6.0 2.4 0.0 0 1 25.0 0.0 A 6.0 2.4 0.0 0 1 31.0 2.4 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=50.0, height=96.4,
-        ports={'outlet': (25.0, 96.4), 'duty': (50.0, 48.2), 'vent': (40.0, 32.4)},
-        drawio_shape='mxgraph.pid.vessels.mixing_reactor',
-        # must not be turned: top-entering agitator over a conical bottom
-        gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=48.2, singular='feed'),),
-    ), 'mixing')
-
     # draw.io vessels:Vessel (Dished Ends, Heating-Cooling Jacket) (aspect=variable) -> reactor/jacketed
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
@@ -976,28 +965,6 @@ def register_vendored(registry):
         bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
     ), 'electrical_heating')
 
-    # draw.io vessels:Vessel (Dished Ends, Skirts) (aspect=variable) -> vessel/skirted
-    registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_skirted"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 87.69 L 0.0 122.69 L 8.0 122.69 M 40.0 87.69 L 40.0 122.69 L 32.0 122.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=40.0, height=122.7,
-        ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 47.7), 'vent': (20.0, 0.0), 'relief': (8.0, 1.5), 'drain': (20.0, 95.4)},
-        drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_skirts)',
-        # must not be turned: vent on the top head; stands on a skirt
-        gravity_fixed=True,
-        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
-    ), 'skirted')
-
-    # draw.io vessels:Vessel (Dished Ends, Legs) (aspect=variable) -> vessel/legs
-    registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_legs"><rect x="0.0" y="87.69" width="8.0" height="35.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="32.0" y="87.69" width="8.0" height="35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=40.0, height=122.7,
-        ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 47.7), 'vent': (20.0, 0.0), 'relief': (8.0, 1.5), 'drain': (20.0, 95.4)},
-        drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_legs)',
-        # must not be turned: vent on the top head; stands on legs
-        gravity_fixed=True,
-        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
-    ), 'legs')
-
     # draw.io vessels:Vessel (Different Diameters) (aspect=variable) -> vessel/swaged
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_swaged"><path d="M 10.0 15.0 A 15.0 15.0 0.0 0 1 25.0 0.0 A 15.0 15.0 0.0 0 1 40.0 15.0 L 40.0 40.0 L 50.0 50.0 L 50.0 85.0 A 25.0 12.5 0.0 0 1 25.0 97.5 A 25.0 12.5 0.0 0 1 0.0 85.0 L 0.0 50.25 L 10.0 40.0 Z" fill="white" stroke="#111" stroke-width="2.0"/></g>',
@@ -1089,18 +1056,6 @@ def register_vendored(registry):
         # must not be turned: open rim over a raked cone; the solids settle into it
         gravity_fixed=True,
     ), 'default')
-
-    # draw.io vessels:Reactor (aspect=variable) -> reactor/plain
-    registry.register('reactor', Symbol(
-        svg='<g id="sym_reactor_plain"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 67.69 L 40.0 67.69 M 0.0 27.69 L 40.0 27.69 M 8.0 27.69 L 0.0 35.69 M 24.0 27.69 L 0.0 51.69 M 32.0 27.69 L 0.0 59.69 M 40.0 27.69 L 0.0 67.69 M 40.0 35.69 L 8.0 67.69 M 40.0 51.69 L 24.0 67.69 M 40.0 59.69 L 32.0 67.69 M 16.0 27.69 L 0.0 43.69 M 40.0 43.69 L 16.0 67.69" fill="white" stroke="#111" stroke-width="2.0"/></g>',
-        width=40.0, height=95.4,
-        ports={'outlet': (20.0, 95.4), 'duty': (40.0, 47.0), 'vent': (30.0, 7.7)},
-        drawio_shape='mxgraph.pid.vessels.reactor',
-        # must not be turned: vent on the top head, outlet in the floor
-        gravity_fixed=True,
-        port_faces={'outlet': {'S': (20.0, 95.4), 'E': (40.0, 77.7), 'W': (0.0, 77.7)}},
-        port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.4, at=30.0, singular='feed'),),
-    ), 'plain')
 
     # draw.io vessels:Drum or Condenser (aspect=variable) -> vessel/horizontal
     registry.register('vessel', Symbol(

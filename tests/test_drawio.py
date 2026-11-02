@@ -362,7 +362,13 @@ def every_symbol_sheet() -> Flowsheet:
             if (cls.kind, variant) in _BY_DISPLAY:
                 unit = cls(tag, display=_BY_DISPLAY[cls.kind, variant])
             else:
-                unit = cls(tag, variant=variant)
+                # A Separator's characteristic drawings are asked for by characteristic=.
+                how = (
+                    "characteristic"
+                    if variant in getattr(cls, "_CHARACTERISTICS", ())
+                    else "variant"
+                )
+                unit = cls(tag, **{how: variant})
             fs.add(unit)
             unit.pin(x=(n % 12) * 300.0, y=(n // 12) * 300.0)
             n += 1

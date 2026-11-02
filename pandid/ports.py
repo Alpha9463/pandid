@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pandid.state import State
     from pandid.streams import Stream
     from pandid.units import Unit
 
@@ -36,8 +35,6 @@ class Port:
         ``"energy"`` or ``"signal"``.
     stream : Stream or None
         Connected stream, if any.
-    state : State or None
-        Stream conditions for a future balance engine.
     """
 
     name: str
@@ -45,4 +42,3 @@ class Port:
     direction: str
     role: str
     stream: Stream | None = field(default=None, repr=False)
-    state: State | None = field(default=None, repr=False)

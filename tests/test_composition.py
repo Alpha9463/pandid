@@ -1567,12 +1567,10 @@ _COMPOSING = [
     for cls in (units.Vessel, units.Evaporator, units.Thickener, units.Column, units.Reactor)
     for keyword in cls.COMPOSITION
     if keyword in _PART_KEYWORDS
-    # Deprecated variants included: they are still built and drawn.
     for variant in default_registry.variants(cls.kind)
 ]
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.parametrize(
     ("cls", "keyword", "variant"),
     _COMPOSING,
@@ -1613,8 +1611,8 @@ def test_a_body_and_part_either_draw_or_are_refused_when_built(cls, keyword, var
     ids=["ring-on-a-drum", "stirrer-in-a-tube"],
 )
 def test_a_part_the_body_cannot_carry_is_refused_by_name(build, message):
-    """The refusal names the part and the bodies that take it, leaving out
-    deprecated ones, rather than an internal symbol id."""
+    """The refusal names the part and the bodies that take it, rather than an
+    internal symbol id."""
     with pytest.raises(ValueError) as refused:
         build()
     assert str(refused.value) == message
