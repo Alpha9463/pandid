@@ -2004,8 +2004,8 @@ class OverlayPart:
         return (self.iso.group, self.name)
 
 
-# A copy of pandid.render.svg._at_pen_scale's pattern; that module imports
-# this one, so it cannot be imported here.
+# Every symbol writes stroke-width as an attribute, never through CSS, so
+# a string rewrite suffices. Also used by svg._at_pen_scale.
 _STROKE = re.compile(r'stroke-width="([\d.]+)"')
 
 

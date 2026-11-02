@@ -104,6 +104,7 @@ import pandid.portgeom as portgeom_mod  # noqa: E402
 import pandid.streams as streams_mod  # noqa: E402
 import pandid.units as units_mod  # noqa: E402
 from pandid.flowsheet import Flowsheet  # noqa: E402
+from pandid.render.svg import _PAGE_SIZES, _PX_PER_MM  # noqa: E402
 from pandid.validate import Issue  # noqa: E402
 
 Extent = tuple[float, float, float, float]  # x0, y0, x1, y1
@@ -176,23 +177,10 @@ def build(stem: str, auto: bool) -> tuple[Flowsheet, dict]:
 # Sheet extent and page fit
 # ---------------------------------------------------------------------------
 
-# ISO 216, landscape, in millimetres -- the same table
-# ``pandid.render.svg._PAGE_SIZES`` draws from, kept local rather than
-# reaching into a private renderer attribute for five well-known numbers.
-_ISO_MM = {
-    "A4": (297.0, 210.0),
-    "A3": (420.0, 297.0),
-    "A2": (594.0, 420.0),
-    "A1": (841.0, 594.0),
-    "A0": (1189.0, 841.0),
-}
-_PX_PER_MM = 96.0 / 25.4
-
-
 def page_px(page_size: Optional[str]) -> Optional[tuple[float, float]]:
     if page_size is None:
         return None
-    mm = _ISO_MM.get(page_size.upper())
+    mm = _PAGE_SIZES.get(page_size.upper())
     return None if mm is None else (mm[0] * _PX_PER_MM, mm[1] * _PX_PER_MM)
 
 
