@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ControlLoop.variable`, `.number`, `.name`, `.tag()`, `.element()` and
   `.check()` (#579).** Use them on `ControlLoop.loop`. `add_instrument()`
   still takes a `ControlLoop`.
+- **`DEFAULT_INPUT_FACE` and `DEFAULT_OUTPUT_FACE` on `Tank` and `Vessel`
+  (#579).** Use `default_input_face()` and `default_output_face()`.
 
 ### Fixed
 

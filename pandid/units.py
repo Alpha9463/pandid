@@ -1928,23 +1928,14 @@ class _MultiPortVessel(_FaceFamilies):
     ``drain`` are single fixed ports moved only through
     :meth:`Unit.nozzle`.
 
-    When the caller names no face, a connection uses, in rising priority:
-
-    1. the face the artwork anchors (:meth:`_home_face`);
-    2. :attr:`DEFAULT_INPUT_FACE` or :attr:`DEFAULT_OUTPUT_FACE`, which a
-       subclass may set;
-    3. the ``inputs=`` or ``outputs=`` argument.
+    A connection uses the face the ``inputs=`` or ``outputs=`` argument
+    names, else the face the artwork anchors (:meth:`_home_face`).
 
     Attributes
     ----------
-    DEFAULT_INPUT_FACE, DEFAULT_OUTPUT_FACE : str or None
-        Class-wide default faces; ``None`` on Tank and Vessel.
     inlets, outlets : tuple[Port, ...]
         Port families in declaration order.
     """
-
-    DEFAULT_INPUT_FACE: str | None = None
-    DEFAULT_OUTPUT_FACE: str | None = None
 
     LAYOUT_CONFIDENCE = 4
     # Inlets come from upstream and outlets go downstream, whatever face
@@ -2099,9 +2090,9 @@ class _MultiPortVessel(_FaceFamilies):
         Returns
         -------
         str
-            :attr:`DEFAULT_INPUT_FACE`, else the artwork's inlet face.
+            The artwork's inlet face.
         """
-        return self.DEFAULT_INPUT_FACE or self._home_face("inlet")
+        return self._home_face("inlet")
 
     def default_output_face(self) -> str:
         """Return the face an outlet uses when none is named.
@@ -2109,9 +2100,9 @@ class _MultiPortVessel(_FaceFamilies):
         Returns
         -------
         str
-            :attr:`DEFAULT_OUTPUT_FACE`, else the artwork's outlet face.
+            The artwork's outlet face.
         """
-        return self.DEFAULT_OUTPUT_FACE or self._home_face("outlet")
+        return self._home_face("outlet")
 
     def _init_connections(
         self, inputs: "int | Sequence[str]", outputs: "int | Sequence[str]"
