@@ -508,7 +508,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
 
 def _gap(upper: _Node, lower: _Node) -> float:
     """Return the clear height kept between two neighbours in a layer."""
-    gap = ROW_GAP if upper.members and lower.members else LANE
+    flags = all(u.kind in ("feed", "product") for u in (*upper.members, *lower.members))
+    gap = LANE if flags else ROW_GAP  # dummies and flags carry no balloons or labels
     return gap + upper.pad.south + lower.pad.north
 
 
