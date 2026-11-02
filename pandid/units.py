@@ -14,7 +14,6 @@ units``).
 
 from __future__ import annotations
 
-import math
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -429,14 +428,6 @@ class Unit:
             raise self._unknown_variant(name, variant)
         # Store the registry spelling; see VARIANT_ALIASES.
         self.variant = self.VARIANT_ALIASES.get(variant, variant)
-        # SVG draws nothing for a zero or negative size, so refuse it here.
-        for dim, value in (("width", width), ("height", height)):
-            if value is not None and not (math.isfinite(value) and value > 0):
-                raise ValueError(
-                    f"{name}: {dim}={value!r} is not a usable size; a symbol is "
-                    f"drawn into a box with a positive, finite {dim}, or "
-                    f"{dim}=None to size itself"
-                )
         self.width = width
         self.height = height
         self.label_pos = label_pos
@@ -492,9 +483,19 @@ class Unit:
             If the attribute is fixed at construction and already set.
         TypeError
             If ``width`` or ``height`` is not a number or ``None``.
+        ValueError
+            If ``width`` or ``height`` is not positive and finite.
         """
         if name in ("width", "height") and value is not None:
-            check_real(value, f"{self.__dict__.get('name', '?')}: {name}")
+            where = self.__dict__.get("name", "?")
+            check_real(value, f"{where}: {name}")
+            # SVG draws nothing for a zero or negative size, so refuse it here.
+            if value <= 0:
+                raise ValueError(
+                    f"{where}: {name}={value!r} is not a usable size; a symbol is "
+                    f"drawn into a box with a positive, finite {name}, or "
+                    f"{name}=None to size itself"
+                )
         if name in self._FIXED_AT_CONSTRUCTION and name in self.__dict__:
             raise AttributeError(
                 f"{self.name}: {name} is read-only. It is read once, in "
