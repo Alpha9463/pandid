@@ -668,6 +668,16 @@ _TOP_KEYS = {
     "instruments", "streams", "stations", "stream_table_sections", "stream_table",
     "stream_labels", "title_block", "annotations",
 }
+# Numbering settings: Flowsheet keyword (and spec key), default, reader.
+# Written only when not the default.
+_SHEET_SETTINGS: tuple[tuple[str, Any, Callable[[Any, str], Any]], ...] = (
+    ("stream_naming_scheme", "S{n}", _text),
+    ("stream_number_start", DEFAULT_STREAM_NUMBER_START, _integer),
+    ("line_numbering_scheme", DEFAULT_LINE_NUMBERING_SCHEME, _text),
+    ("line_number_start", DEFAULT_LINE_NUMBER_START, _integer),
+    ("loop_number_start", DEFAULT_LOOP_NUMBER_START, _integer),
+    ("valve_station_tag_scheme", DEFAULT_VALVE_STATION_TAG_SCHEME, _text),
+)
 # Removed top-level keys and why, reported by name rather than as unknown.
 _RETIRED_KEYS = {
     "direction": "the layout engine only draws left to right, so it never did anything",
@@ -778,20 +788,10 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     if "name" not in data:
         raise SpecError(f"{where} needs a 'name' (the flowsheet's title)")
 
-    scheme = data.get("stream_naming_scheme", "S{n}")
-    stream_start = data.get("stream_number_start", DEFAULT_STREAM_NUMBER_START)
-    line_scheme = data.get("line_numbering_scheme", DEFAULT_LINE_NUMBERING_SCHEME)
-    start = data.get("line_number_start", DEFAULT_LINE_NUMBER_START)
-    loop_start = data.get("loop_number_start", DEFAULT_LOOP_NUMBER_START)
-    tag_scheme = data.get("valve_station_tag_scheme", DEFAULT_VALVE_STATION_TAG_SCHEME)
     fs = Flowsheet(
         _drawn(data["name"], f"{where}: 'name'"),
-        stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
-        stream_number_start=_integer(stream_start, f"{where}: 'stream_number_start'"),
-        line_numbering_scheme=_text(line_scheme, f"{where}: 'line_numbering_scheme'"),
-        line_number_start=_integer(start, f"{where}: 'line_number_start'"),
-        loop_number_start=_integer(loop_start, f"{where}: 'loop_number_start'"),
-        valve_station_tag_scheme=_text(tag_scheme, f"{where}: 'valve_station_tag_scheme'"),
+        **{key: read(data.get(key, default), f"{where}: {key!r}")
+           for key, default, read in _SHEET_SETTINGS},
         auto_faces=_flag(data.get("auto_faces", True), f"{where}: 'auto_faces'"),
     )
 
@@ -2239,20 +2239,11 @@ def to_dict(fs: Flowsheet) -> dict:
             f"string such as {DEFAULT_VALVE_STATION_TAG_SCHEME!r}"
         )
     spec: dict[str, Any] = {"name": fs.name}
-    if fs.stream_naming_scheme != "S{n}":
-        spec["stream_naming_scheme"] = fs.stream_naming_scheme
-    if fs.stream_number_start != DEFAULT_STREAM_NUMBER_START:
-        spec["stream_number_start"] = fs.stream_number_start
-    if fs.line_numbering_scheme != DEFAULT_LINE_NUMBERING_SCHEME:
-        spec["line_numbering_scheme"] = fs.line_numbering_scheme
-    if fs.line_number_start != DEFAULT_LINE_NUMBER_START:
-        spec["line_number_start"] = fs.line_number_start
-    # Loops below carry literal numbers; this keeps a loop added by hand
-    # later in the sheet's series.
-    if fs.loop_number_start != DEFAULT_LOOP_NUMBER_START:
-        spec["loop_number_start"] = fs.loop_number_start
-    if fs.valve_station_tag_scheme != DEFAULT_VALVE_STATION_TAG_SCHEME:
-        spec["valve_station_tag_scheme"] = fs.valve_station_tag_scheme
+    # Loops below carry literal numbers; loop_number_start keeps a loop
+    # added by hand later in the sheet's series.
+    for key, default, _ in _SHEET_SETTINGS:
+        if getattr(fs, key) != default:
+            spec[key] = getattr(fs, key)
     if not fs.auto_faces:
         spec["auto_faces"] = False
     if fs.components:
