@@ -248,14 +248,7 @@ def _station_width(assemblies: list[StationAssembly]) -> float:
     float
         Required horizontal room for the station members.
     """
-    width = 16.0
-    for assembly in assemblies:
-        station = assembly.station
-        branch = {station.bypass, station.upstream_drain, station.downstream_drain}
-        main = [unit for unit in station.members if unit not in branch]
-        width += sum(resolve_size(unit)[0] for unit in main)
-        width += assembly.gap * (len(main) - 1) + 16.0
-    return width
+    return 16.0 + sum(_main_width(assembly) + 16.0 for assembly in assemblies)
 
 
 def _chain_width(run: MountedRun) -> float:
