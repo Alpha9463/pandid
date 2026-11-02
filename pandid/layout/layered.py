@@ -192,14 +192,13 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
             if (port is not None and _face(port) is None
                     and want in port_faces(port.owner, port.name, slot(port.owner))):
                 node.faces[id(port)] = want
-    for layer in layers.values():
-        for rank, node in enumerate(layer):
-            for unit in node.members:
-                slot(unit).col, slot(unit).row = node.layer, rank
+    _rank(layers)
     pads = balloon_pads(fs)
     for node in nodes:
         _shape(node, stacked, pads)
     _order(layers, segs)
+    _row_pins(layers)
+    _rank(layers)
     xs = _columns(layers, segs)
     _straighten(layers, segs)
     if not any(u.pin_ is not None and (u.pin_.x is not None or u.pin_.y is not None)
@@ -213,17 +212,65 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
                   for layer in layers.values() for node in layer for u in node.members
                   if u.pin_ is not None and u.pin_.x is not None), 0.0)
     for layer in layers.values():
-        for rank, node in enumerate(layer):
+        for node in layer:
             for unit in node.members:
                 s, pin = slot(unit), unit.pin_
                 s.x = (pin.x if pin is not None and pin.x is not None
                        else xs[node] + node.dx[unit] - _shift(unit) + slide)
                 s.y = pin.y if pin is not None and pin.y is not None else node.y + node.dy[unit] + lift
-                s.col = pin.col if pin is not None and pin.col is not None else node.layer
-                s.row = pin.row if pin is not None and pin.row is not None else rank
-                unit.frame = Frame(x=s.x, y=s.y, w=s.w, h=s.h, col=s.col, row=s.row,
-                                   orientation=s.orientation, mirrored=s.mirrored,
-                                   mirror_y=s.mirror_y)
+                if pin is not None and pin.col is not None:
+                    s.col = pin.col
+                if pin is not None and pin.row is not None:
+                    s.row = pin.row
+    _clear_pins(units)
+    for unit in units:
+        s = slot(unit)
+        unit.frame = Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, col=s.col, row=s.row,
+                           orientation=s.orientation, mirrored=s.mirrored, mirror_y=s.mirror_y)
+
+
+def _rank(layers: dict[int, list[_Node]]) -> None:
+    """Record each unit's layer and its row: its place down the layer, pipes not counted."""
+    for layer in layers.values():
+        row = 0
+        for node in layer:
+            for unit in node.members:
+                slot(unit).col, slot(unit).row = node.layer, row
+                row += 1
+
+
+def _clear_pins(units: list[Unit]) -> None:
+    """Move a unit off a pinned unit it landed on, along an axis its author left free.
+
+    The layers place free units without regard to where pins put the rest,
+    so a unit that lands on one moves down past it, or right if its height
+    is pinned. Units pinned on both axes stay put.
+    """
+    def free(u: Unit, axis: str) -> bool:
+        return u.pin_ is None or getattr(u.pin_, axis) is None
+
+    def box(u: Unit) -> tuple[float, float, float, float]:
+        s = slot(u)
+        return unit_box(u, Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, mirrored=s.mirrored))
+
+    if all(free(u, "x") and free(u, "y") for u in units):
+        return
+    placed = [u for u in units if not free(u, "x") and not free(u, "y")]
+    for u in sorted((u for u in units if u not in placed),
+                    key=lambda u: (slot(u).x or 0.0, slot(u).y or 0.0)):
+        axis = "y" if free(u, "y") else "x"
+        for _ in range(len(placed) + 1):
+            a = box(u)
+            hit = next((b for b in map(box, placed) if a[0] < b[2] + LANE and b[0] < a[2] + LANE
+                        and a[1] < b[3] + LANE and b[1] < a[3] + LANE), None)
+            if hit is None:
+                break
+            s = slot(u)
+            if axis == "y":
+                s.y = (s.y or 0.0) + hit[3] + LANE - a[1]
+            else:
+                s.x = (s.x or 0.0) + hit[2] + LANE - a[0]
+        placed.append(u)
 
 
 def _stacks(units: list[Unit], links: list[Link]
@@ -312,8 +359,9 @@ def _east(link: Link) -> tuple[int, int]:
     """
     if link.recycle:
         return (3, -1)
-    vote = ({"E": 1, "W": -1}.get(_face(link.source) or "", 0)
-            + {"W": 1, "E": -1}.get(_face(link.dest) or "", 0))
+    # A flag's face is artwork: its pennant points whichever way it is drawn.
+    vote = ({"E": 1, "W": -1}.get(_face(link.source) or "", 0) * (not _flag(link.source))
+            + {"W": 1, "E": -1}.get(_face(link.dest) or "", 0) * (not _flag(link.dest)))
     return (2 - abs(vote), -1 if vote < 0 else 1)
 
 
@@ -454,6 +502,17 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         layers[k].sort(key=lambda n: peer.get(n, pos[n]))
 
 
+def _row_pins(layers: dict[int, list[_Node]]) -> None:
+    """Put the stacks with a row pin in their pinned order, in the places they hold."""
+    for layer in layers.values():
+        rows = {n: min(u.pin_.row for u in n.members if u.pin_ is not None and u.pin_.row is not None)
+                for n in layer
+                if any(u.pin_ is not None and u.pin_.row is not None for u in n.members)}
+        places = [i for i, n in enumerate(layer) if n in rows]
+        for i, n in zip(places, sorted(rows, key=rows.__getitem__)):
+            layer[i] = n
+
+
 def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, float]:
     """Return each stack's left edge: layers side by side, a stack against its pipes."""
     lo, hi = min(layers), max(layers)
@@ -496,13 +555,27 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             # A unit ignores its flags and its return lines; they come to the unit.
             w = 0.1 if (_flag(theirs) and not _flag(mine)) or (mine and (s.back or s.link.recycle)) else weight
             near.setdefault(own, []).append((other, mine, theirs, w))
-    lead = {"N": LEAD, "S": -LEAD}
     pinned = {}
     for layer in layers.values():
         for n in layer:
             for u in n.members:
                 if u.pin_ is not None and u.pin_.y is not None:
                     pinned[n] = u.pin_.y - n.dy[u]
+    # A pin cannot move, so free units come to it: each pulls harder toward
+    # the neighbour nearer a pin, and a chain lines up with the pin.
+    hops = dict.fromkeys(pinned, 0)
+    walk = list(pinned)
+    while walk:
+        n = walk.pop(0)
+        for other, *_ in near.get(n, []):
+            if other not in hops:
+                hops[other] = hops[n] + 1
+                walk.append(other)
+    far = len(hops) + 1
+    for n, entries in near.items():
+        entries[:] = [(o, m, t, w * (1.5 if hops.get(o, far) < hops.get(n, far) else 1))
+                      for o, m, t, w in entries]
+    lead = {"N": LEAD, "S": -LEAD}
     for layer in layers.values():  # start each layer centred on one axis
         y = 0.0
         for k, n in enumerate(layer):
