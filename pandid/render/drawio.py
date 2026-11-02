@@ -162,13 +162,13 @@ from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
-                               _furniture_name, _LABEL_CODES, _RENDER_CODES,
+                               _fitted, _furniture_name, _LABEL_CODES, _RENDER_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _too_small,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH,
                                fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag, enclosure_shape,
                                label_findings,
-                               draws_arrowheads, flange_marks, impulse_tap,
+                               drawing_bounds, draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
@@ -2275,38 +2275,6 @@ class DrawioRenderer:
     # -------------------------------------------------- furniture
 
     @staticmethod
-    def _drawing_box(fs) -> "tuple[float, float, float, float]":
-        """Return the drawing's bounding box, which furniture docks around.
-
-        Unit boxes and route waypoints, as in :meth:`SvgRenderer.render`; an
-        empty flowsheet gives zeros.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Flowsheet.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            ``(x0, y0, x1, y1)``.
-        """
-        if not fs.units:
-            return (0.0, 0.0, 0.0, 0.0)
-        x0 = y0 = float("inf")
-        x1 = y1 = float("-inf")
-        for u in fs.units:
-            bx0, by0, bx1, by1 = unit_box(u, u.frame)
-            x0, y0 = min(x0, bx0), min(y0, by0)
-            x1, y1 = max(x1, bx1), max(y1, by1)
-        for s in fs.streams:
-            if s.route and s.route.waypoints:
-                for px, py in s.route.waypoints:
-                    x0, y0 = min(x0, px), min(y0, py)
-                    x1, y1 = max(x1, px), max(y1, py)
-        return (x0, y0, x1, y1)
-
-    @staticmethod
     def _page_box(sheet, frame) -> "tuple[float, float]":
         """Return the page the file states, in drawing units.
 
@@ -2371,7 +2339,7 @@ class DrawioRenderer:
         items: list = []
         if fs.title_block is not None:
             items.append((fs.title_block, "bottom-right",
-                          *_strip_size(fs.title_block)))
+                          *F.measure_title_strip(fs.title_block)))
         for a in getattr(fs, "annotations", []) or []:
             w, h = (F.measure_table(a) if isinstance(a, TableBox)
                     else F.measure_annotation(a))
@@ -2382,7 +2350,7 @@ class DrawioRenderer:
         if table is not None:
             items.append((table, "bottom-left", table.w, table.h))
 
-        inner = self._drawing_box(fs)
+        inner = drawing_bounds(fs)
         if sheet is None:
             placed, frame, free = F.dock(items, inner)
         else:
@@ -3299,33 +3267,6 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
 _ANNOTATION_KEYS = "rowLines=0;columnLines=0;"
 
 
-def _fitted(inner, free) -> "tuple[float, float, float]":
-    """Return the scale and offset that centre the drawing in ``free``.
-
-    Uses :func:`pandid.render.svg._fit_scale`, so the title strip's scale
-    cell matches.
-
-    Parameters
-    ----------
-    inner : tuple[float, float, float, float]
-        Drawing bounds ``(x0, y0, x1, y1)``.
-    free : tuple[float, float, float, float]
-        Region ``(x, y, w, h)`` left for the drawing.
-
-    Returns
-    -------
-    tuple[float, float, float]
-        ``(scale, offset_x, offset_y)``.
-    """
-    from pandid.render.svg import _fit_scale
-
-    dx0, dy0, dx1, dy1 = inner
-    fx, fy, fw, fh = free
-    dw, dh = dx1 - dx0, dy1 - dy0
-    s = _fit_scale(dw, dh, free)
-    return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
-
-
 def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
     """Return a bare rectangle cell, used for the drawing frame.
 
@@ -3529,19 +3470,3 @@ def _rev_table(cid: str, grid) -> list[str]:
     return out + _segment(f"{cid}-rule", grid.x, grid.header_y,
                           grid.x + grid.w, grid.header_y, _LINE_INK,
                           F._BOX_UNDERLINE)
-
-
-def _strip_size(block) -> "tuple[float, float]":
-    """Return the title strip size, as the SVG measures it.
-
-    Parameters
-    ----------
-    block : TitleBlock
-        Title block.
-
-    Returns
-    -------
-    tuple[float, float]
-        Width and height.
-    """
-    return F.measure_title_strip(block)

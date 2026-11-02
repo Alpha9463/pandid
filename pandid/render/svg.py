@@ -3274,6 +3274,71 @@ def _fit_scale(dw: float, dh: float, free) -> float:
     return min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
 
 
+def _fitted(inner, free) -> "tuple[float, float, float]":
+    """Return the scale and offset that centre the drawing in ``free``.
+
+    Shared with the draw.io exporter, so both backends fit a drawing alike.
+
+    Parameters
+    ----------
+    inner : tuple[float, float, float, float]
+        Drawing bounds ``(x0, y0, x1, y1)``.
+    free : tuple[float, float, float, float]
+        Region ``(x, y, w, h)`` left for the drawing.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        ``(scale, offset_x, offset_y)``.
+    """
+    dx0, dy0, dx1, dy1 = inner
+    fx, fy, fw, fh = free
+    dw, dh = dx1 - dx0, dy1 - dy0
+    s = _fit_scale(dw, dh, free)
+    return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
+
+
+def drawing_bounds(fs) -> "tuple[float, float, float, float]":
+    """Return the drawing's bounding box, which furniture docks around.
+
+    The union of every unit's drawn box and every route waypoint; an empty
+    flowsheet gives zeros. Shared with the draw.io exporter.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x0, y0, x1, y1)``.
+
+    Raises
+    ------
+    ValueError
+        If a unit has no frame.
+    """
+    from pandid.portgeom import unit_box
+
+    if not fs.units:
+        return (0.0, 0.0, 0.0, 0.0)
+    x0 = y0 = float("inf")
+    x1 = y1 = float("-inf")
+    for u in fs.units:
+        if u.frame is None:
+            raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
+        bx0, by0, bx1, by1 = unit_box(u, u.frame)
+        x0, y0 = min(x0, bx0), min(y0, by0)
+        x1, y1 = max(x1, bx1), max(y1, by1)
+    for s in fs.streams:
+        if s.route and s.route.waypoints:
+            for px, py in s.route.waypoints:
+                x0, y0 = min(x0, px), min(y0, py)
+                x1, y1 = max(x1, px), max(y1, py)
+    return (x0, y0, x1, y1)
+
+
 def _scale_text(s: float) -> str:
     """Return a fit scale as a title-block ratio, such as ``"1:2.5"``."""
     return "1:1" if s >= 1.0 else f"1:{1 / s:.3g}"
@@ -3828,7 +3893,6 @@ class SvgRenderer:
             If an argument is invalid, the page is too small, or a unit has
             no frame.
         """
-        from pandid.portgeom import unit_box
         from pandid.render import debug as _debug
         # Check options before building anything.
         reject_unknown_options("SvgRenderer.render()", opts)
@@ -3854,19 +3918,7 @@ class SvgRenderer:
 
         # 1. Diagram bounding box: union of every unit's drawn box and
         #    every route waypoint. Furniture goes *around* this region.
-        dx0 = dy0 = float("inf")
-        dx1 = dy1 = float("-inf")
-        for u in fs.units:
-            if u.frame is None:
-                raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-            bx0, by0, bx1, by1 = unit_box(u, u.frame)
-            dx0, dy0 = min(dx0, bx0), min(dy0, by0)
-            dx1, dy1 = max(dx1, bx1), max(dy1, by1)
-        for s in fs.streams:
-            if s.route and s.route.waypoints:
-                for px, py in s.route.waypoints:
-                    dx0, dy0 = min(dx0, px), min(dy0, py)
-                    dx1, dy1 = max(dx1, px), max(dy1, py)
+        dx0, dy0, dx1, dy1 = drawing_bounds(fs)
         if not fs.units:  # empty flowsheet: fall back to the nominal page size
             nominal = sheet or _page("A3")
             assert nominal is not None
@@ -3965,32 +4017,13 @@ class SvgRenderer:
         if free is None:
             lines.extend(drawing)
         else:  # a fixed sheet: the drawing is fitted into what the furniture leaves
-            lines.append(f'  <g id="drawing" transform="{self._fit(dx0, dy0, dx1, dy1, free)}">')
+            s, ox, oy = _fitted((dx0, dy0, dx1, dy1), free)
+            lines.append(f'  <g id="drawing" transform="translate({_num(ox)}, {_num(oy)}) '
+                         f'scale({s:.6g})">')
             lines.extend(drawing)
             lines.append('  </g>')
         return _document(fs, sheet,
                          (frame_x, frame_y, canvas_width, canvas_height), lines)
-
-    def _fit(self, dx0, dy0, dx1, dy1, free) -> str:
-        """Return the SVG transform that centres and scales the drawing in ``free``.
-
-        Parameters
-        ----------
-        dx0, dy0, dx1, dy1 : float
-            Drawing bounds.
-        free : tuple[float, float, float, float]
-            Region ``(x, y, w, h)`` left for the drawing.
-
-        Returns
-        -------
-        str
-            ``translate(...) scale(...)``.
-        """
-        fx, fy, fw, fh = free
-        dw, dh = dx1 - dx0, dy1 - dy0
-        s = _fit_scale(dw, dh, free)
-        return (f"translate({_num(fx + (fw - s * dw) / 2 - s * dx0)}, "
-                f"{_num(fy + (fh - s * dh) / 2 - s * dy0)}) scale({s:.6g})")
 
     # --- furniture ----------------------------------------------------
 

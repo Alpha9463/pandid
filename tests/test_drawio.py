@@ -38,6 +38,7 @@ from pandid.render.svg import (
     HATCH_ARM,
     _page,
     boundary_flag,
+    drawing_bounds,
     impulse_tap,
     pneumatic_marks,
     stream_polyline,
@@ -2430,21 +2431,6 @@ def test_the_title_block_rules_rows_deep_enough_to_draw_text_in():
         assert height >= 11.0, f"{row.get('id')} is {height} units tall"
 
 
-def test_the_title_strip_asks_the_dock_for_the_rectangle_the_sheet_rules():
-    """Match title-strip bounds to the docked SVG rectangle.
-
-    Returns
-    -------
-    None
-        No value is returned; pytest records assertion failures.
-    """
-    from pandid.render import furniture as F
-    from pandid.render.drawio import _strip_size
-
-    block = _titled().title_block
-    assert _strip_size(block) == F.measure_title_strip(block)
-
-
 def test_the_title_strip_is_one_rectangle_flush_to_the_frame():
     """Align the title strip with the bottom-right frame corner.
 
@@ -2604,7 +2590,7 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
     fs.annotations.extend([left, right])
     fs.layout()
 
-    box = DrawioRenderer()._drawing_box(fs)
+    box = drawing_bounds(fs)
     placed, _frame, _free = F.dock(
         [(a, a.align, *F.measure_annotation(a)) for a in fs.annotations], box
     )
@@ -2977,7 +2963,7 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
     assert (pw, ph) == pytest.approx((ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN), abs=0.01)
 
     # ...and that box really does hold the drawing and its frame.
-    dx0, dy0, dx1, dy1 = DrawioRenderer()._drawing_box(fs)
+    dx0, dy0, dx1, dy1 = drawing_bounds(fs)
     fx, fy, fw, fh = frame
     for x0, y0, x1, y1 in ((dx0, dy0, dx1, dy1), (fx, fy, fx + fw, fy + fh)):
         assert ox <= x0 and oy <= y0
@@ -3040,7 +3026,7 @@ def test_a_paged_drawing_is_fitted_onto_its_paper():
     fs.route()
 
     sheet = _page("A3")
-    inner = DrawioRenderer()._drawing_box(fs)
+    inner = drawing_bounds(fs)
     _placed, _frame, free = F.dock([], inner, sheet=sheet)
     scale = _fit_scale(inner[2] - inner[0], inner[3] - inner[1], free)
     assert scale < 1.0, "the fixture stopped needing to be shrunk"
@@ -3094,7 +3080,7 @@ def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
 
     _placed, frame, _free = F.dock(
         [],
-        DrawioRenderer()._drawing_box(fs),
+        drawing_bounds(fs),
         sheet=__import__("pandid.render.svg", fromlist=["x"])._page("A3"),
     )
     z = F.zone_layout(*frame)
