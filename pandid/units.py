@@ -254,6 +254,10 @@ class Unit:
 
     kind: str = "unit"
     PORTS: list[tuple[str, str, str]] = []
+    # Ports that depend on the variant, which a subclass's __init__ adds
+    # through _variant_ports: _VARIANT_PORTS by variant, else _DEFAULT_PORTS.
+    _DEFAULT_PORTS: list[tuple[str, str, str]] = []
+    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
 
     VARIANTS: tuple[str, ...] = ()
     VARIANT_ALIASES: dict[str, str] = {}
@@ -313,6 +317,25 @@ class Unit:
             if "PORTS" in klass.__dict__:
                 return list(klass.__dict__["PORTS"])
         return []
+
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """Return the ports a variant adds.
+
+        A subclass that declares :attr:`PORTS` gets none, so a per-variant
+        subclass does not add its ports twice.
+
+        Parameters
+        ----------
+        variant : str
+            Resolved variant.
+
+        Returns
+        -------
+        list[tuple[str, str, str]]
+            Port specs.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
 
     @classmethod
     def composition_defaults(
@@ -1515,29 +1538,13 @@ class Valve(_NormallyPositioned):
     # Ports depend on the variant, so __init__ adds them from _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     #: Ports of every variant except ``three_way``.
-    _BASE = [
+    _DEFAULT_PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
         ("actuator", "inlet", "signal"),
     ]
-    #: Ports by variant, defaulting to :data:`_BASE`.
-    _VARIANT_PORTS = {"three_way": [*_BASE, ("branch", "outlet", "process")]}
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._BASE)
+    #: Ports by variant, defaulting to :data:`_DEFAULT_PORTS`.
+    _VARIANT_PORTS = {"three_way": [*_DEFAULT_PORTS, ("branch", "outlet", "process")]}
 
     def __init__(
         self,
@@ -3284,7 +3291,7 @@ class Filter(Unit):
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # One in, one out; the default.
-    _CLARIFYING = [
+    _DEFAULT_PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
     ]
@@ -3312,22 +3319,6 @@ class Filter(Unit):
         "rotary_scraper": _CAKE_FORMING,
         "ion_exchange": _REGENERATED,
     }
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._CLARIFYING)
 
     def __init__(
         self,
@@ -3411,54 +3402,12 @@ class Dryer(Unit):
     kind = "dryer"
     # heating_in is a utility from a header; do not place the header below.
     PLACES = {"heating_in": None}
-    # Ports depend on the variant; all variants are gas swept today.
-    PORTS: list[tuple[str, str, str]] = []
-    _GAS_SWEPT = [
+    PORTS = [
         ("feed", "inlet", "feed"),
         ("product", "outlet", "process"),
         ("heating_in", "inlet", "utility"),
         ("vent", "outlet", "vapor"),
     ]
-    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._GAS_SWEPT)
-
-    def __init__(
-        self,
-        name: str,
-        variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
-    ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
-        # Use the resolved variant, not the argument.
-        for spec in self._variant_ports(self.variant):
-            self._add_port(*spec)
 
 
 class Kiln(Unit):
@@ -4572,34 +4521,15 @@ class HeatExchanger(Unit):
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default port set.
-    _SHELL_AND_TUBE = _side_ports("shell", "tube")
+    _DEFAULT_PORTS = _side_ports("shell", "tube")
     # Variant -> port set; absent variants are shell and tube.
     _VARIANT_PORTS = {
-        "kettle": [*_SHELL_AND_TUBE, ("bottoms", "outlet", "liquid")],
+        "kettle": [*_DEFAULT_PORTS, ("bottoms", "outlet", "liquid")],
         "air_cooled": _side_ports("tube", "air"),
         "plate": _side_ports("side_a", "side_b"),
         "spiral": _side_ports("side_a", "side_b"),
         "thin_film": _side_ports("jacket", "product"),
     }
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        A subclass that declares :attr:`~Unit.PORTS` gets none, so a
-        per-variant subclass does not add its ports twice.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._SHELL_AND_TUBE)
 
     def __init__(
         self,
@@ -5183,12 +5113,12 @@ class Reactor(Unit):
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default port set: product, off-gas and jacket or coil duty.
-    _VESSEL = [
+    _DEFAULT_PORTS = [
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("duty", "inlet", "energy"),
     ]
-    # Variant -> port set; absent variants use _VESSEL.
+    # Variant -> port set; absent variants use _DEFAULT_PORTS.
     _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {
         # No vapour space, so no vent.
         "tubular": [
@@ -5236,22 +5166,6 @@ class Reactor(Unit):
             if variant in cls._STIRRED and (stated or {}).get("internals") is None
             else None,
         }
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._VESSEL)
 
     def __init__(
         self,
@@ -5541,7 +5455,7 @@ class Separator(Unit):
     # Ports depend on the variant; __init__ adds feeds, then _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default draws. Feeds are a family added in __init__.
-    _PHASES = [
+    _DEFAULT_PORTS = [
         ("vapor", "outlet", "vapor"),
         ("liquid", "outlet", "liquid"),
     ]
@@ -5609,22 +5523,6 @@ class Separator(Unit):
         """
         renamed = self._VARIANT_ANCHORS.get(self.variant, {})
         return renamed.get(port_name) or super()._symbol_anchor(port_name)
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._PHASES)
 
     def __init__(
         self,
