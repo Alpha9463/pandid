@@ -15,6 +15,8 @@ Ids are the third case: a ``<marker>`` id pasted from a colour, such as
 ``arrow_rgb(1,2,3)``, is not an XML name, and a browser silently drops the
 arrowheads. :func:`ident` always returns a valid name; use it for both the
 definition and the ``url(#...)`` reference.
+
+Numbers go through :func:`fmt`, so both backends write them alike.
 """
 
 from __future__ import annotations
@@ -81,6 +83,30 @@ def escaped(value) -> str:
         characters removed.
     """
     return html.escape(writable(value))
+
+
+def fmt(value: float, places: int) -> str:
+    """Return a number for SVG or draw.io, to ``places`` decimals.
+
+    Fixed-point, since ``:g`` writes 1234567 as ``1.23457e+06``; trailing
+    zeros are dropped and ``-0`` is written ``0``.
+
+    Parameters
+    ----------
+    value : float
+        Number.
+    places : int
+        Decimal places.
+
+    Returns
+    -------
+    str
+        Formatted number.
+    """
+    s = f"{value:.{places}f}"
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return "0" if s == "-0" else s
 
 
 def ident(prefix: str, value) -> str:

@@ -14,7 +14,7 @@ from functools import lru_cache
 
 from pandid.portgeom import tag_width
 from pandid.render import furniture as F
-from pandid.render.escape import escaped, ident
+from pandid.render.escape import escaped, fmt, ident
 from pandid.render.symbols import (ARROWHEAD, _STROKE, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.render.weights import LineWeight
@@ -2151,11 +2151,6 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     return (rx, ry, rx + hw, ry + hh)
 
 
-def _num(v: float) -> str:
-    """Return a coordinate without trailing zeros (``100.0`` gives ``'100'``)."""
-    return f"{v:.2f}".rstrip("0").rstrip(".") or "0"
-
-
 def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
     """Return the id suffix naming a placement transform (``''`` for identity)."""
     if not (rot or mirror_x or mirror_y):
@@ -2405,7 +2400,7 @@ def _size_tag(sym, u) -> str:
         return ""
     box = _placed_box(u)
     assert box is not None  # a scale of anything but 1 came from a box
-    return f"_s{_num(box[0])}x{_num(box[1])}"
+    return f"_s{fmt(box[0], 2)}x{fmt(box[1], 2)}"
 
 
 def _at_pen_scale(svg: str, scale: float) -> str:
@@ -2467,6 +2462,9 @@ def _nominal(width: float, gx: float, gy: float) -> float:
     return width * math.sqrt(abs(gx * gy))
 
 
+# Symbol coordinates are written to six places (fmt), more than sheet
+# coordinates, so baking a weight fix does not change geometry.
+
 # How each attribute maps: a point takes scale and translation; a length
 # takes the unsigned scale only. rx/ry cover ellipse radii and rect corner
 # rounding; r is handled separately, since a circle scaled unevenly is not
@@ -2484,27 +2482,6 @@ _ATTR = re.compile(r'([\w:.-]+)="([^"]*)"')
 # commands and H/V are refused, since nothing in the library emits them.
 _PATH_ARITY = {"M": 2, "L": 2, "C": 6, "A": 7, "Z": 0, "z": 0}
 _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
-
-
-def _art(v: float) -> str:
-    """Return a number in a symbol's own coordinates.
-
-    Six decimals, more than sheet coordinates (:func:`_num`), so baking a
-    weight fix does not change geometry; fixed-point, so no exponent
-    notation appears.
-
-    Parameters
-    ----------
-    v : float
-        Value.
-
-    Returns
-    -------
-    str
-        Formatted number.
-    """
-    s = f"{v:.6f}".rstrip("0").rstrip(".")
-    return "0" if s in ("", "-0", "0") else s
 
 
 def _affine(transform: str) -> "tuple[float, float, float, float]":
@@ -2620,10 +2597,10 @@ def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
             # A mirror reverses the sweep flag. Write flags as integers,
             # since the arc grammar takes single digits.
             sweep = int(nums[4]) if ax * ay > 0 else 1 - int(nums[4])
-            out += [_art(rx), _art(ry), _art(rot), str(int(nums[3])), str(sweep),
-                    _art(nums[5] * ax + ex), _art(nums[6] * ay + ey)]
+            out += [fmt(rx, 6), fmt(ry, 6), fmt(rot, 6), str(int(nums[3])), str(sweep),
+                    fmt(nums[5] * ax + ex, 6), fmt(nums[6] * ay + ey, 6)]
         else:
-            out += [_art(n * ax + ex if k % 2 == 0 else n * ay + ey)
+            out += [fmt(n * ax + ex if k % 2 == 0 else n * ay + ey, 6)
                     for k, n in enumerate(nums)]
         i += 1 + arity
     return " ".join(out)
@@ -2647,7 +2624,7 @@ def _scaled_points(points: str, m: "tuple[float, float, float, float]") -> str:
     ax, ay, ex, ey = m
     v = [float(t) for t in points.replace(",", " ").split()]
     return " ".join(
-        f"{_art(v[i] * ax + ex)},{_art(v[i + 1] * ay + ey)}" for i in range(0, len(v), 2)
+        f"{fmt(v[i] * ax + ex, 6)},{fmt(v[i + 1] * ay + ey, 6)}" for i in range(0, len(v), 2)
     )
 
 
@@ -2690,7 +2667,7 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
     out: list[tuple[str, str]] = []
     for key, value in attrs:
         if key == "stroke-width":
-            out.append(("stroke-width", _art(_nominal(float(value), gx, gy))))
+            out.append(("stroke-width", fmt(_nominal(float(value), gx, gy), 6)))
         elif key == "d":
             out.append((key, _scaled_path(value, m)))
         elif key == "points":
@@ -2698,21 +2675,21 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
         elif key == "font-size":
             # Scale text by the geometric mean so it keeps a valid
             # character height (ISO 15519-1 11.4.1).
-            out.append((key, _art(math.sqrt(abs(ax * ay)) * float(value))))
+            out.append((key, fmt(math.sqrt(abs(ax * ay)) * float(value), 6)))
         elif key == "r":
-            out.append(("rx", _art(abs(float(value) * ax))))
-            out.append(("ry", _art(abs(float(value) * ay))))
+            out.append(("rx", fmt(abs(float(value) * ax), 6)))
+            out.append(("ry", fmt(abs(float(value) * ay), 6)))
             name = "ellipse"  # a circle stretched unevenly is not a circle
         elif key in corner:
-            out.append((key, _art(corner[key])))
+            out.append((key, fmt(corner[key], 6)))
         elif key in _X_LENGTHS:
-            out.append((key, _art(abs(float(value) * ax))))
+            out.append((key, fmt(abs(float(value) * ax), 6)))
         elif key in _Y_LENGTHS:
-            out.append((key, _art(abs(float(value) * ay))))
+            out.append((key, fmt(abs(float(value) * ay), 6)))
         elif key in _X_POINTS:
-            out.append((key, _art(float(value) * ax + ex)))
+            out.append((key, fmt(float(value) * ax + ex, 6)))
         elif key in _Y_POINTS:
-            out.append((key, _art(float(value) * ay + ey)))
+            out.append((key, fmt(float(value) * ay + ey, 6)))
         else:
             out.append((key, value))
     written = "".join(f' {k}="{v}"' for k, v in out)
@@ -2814,11 +2791,11 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
         # Undo in the reverse of the order the <use> applies them.
         ops = []
         if mirror_x:
-            ops.append(f"translate({_num(2 * tx)}, 0) scale(-1, 1)")
+            ops.append(f"translate({fmt(2 * tx, 2)}, 0) scale(-1, 1)")
         if mirror_y:
-            ops.append(f"translate(0, {_num(2 * cy)}) scale(1, -1)")
+            ops.append(f"translate(0, {fmt(2 * cy, 2)}) scale(1, -1)")
         if rot:
-            ops.append(f"rotate({-rot}, {_num(tx)}, {_num(cy)})")
+            ops.append(f"rotate({-rot}, {fmt(tx, 2)}, {fmt(cy, 2)})")
         return f'<g transform="{" ".join(ops)}">{match.group(0)}</g>'
 
     return _SYMBOL_TEXT.sub(wrap, svg)
@@ -2878,9 +2855,9 @@ def _upright_artwork(svg: str, w: float, h: float,
         return svg
     ops = []
     if mirror_x:
-        ops.append(f"translate({_num(w)}, 0) scale(-1, 1)")
+        ops.append(f"translate({fmt(w, 2)}, 0) scale(-1, 1)")
     if mirror_y:
-        ops.append(f"translate(0, {_num(h)}) scale(1, -1)")
+        ops.append(f"translate(0, {fmt(h, 2)}) scale(1, -1)")
     head, inner = svg[:svg.find(">") + 1], svg[svg.find(">") + 1:svg.rfind("</g>")]
     return f'{head}<g transform="{" ".join(ops)}">{inner}</g></g>'
 
@@ -4012,7 +3989,7 @@ class SvgRenderer:
             lines.extend(drawing)
         else:  # a fixed sheet: the drawing is fitted into what the furniture leaves
             s, ox, oy = _fitted((dx0, dy0, dx1, dy1), free)
-            lines.append(f'  <g id="drawing" transform="translate({_num(ox)}, {_num(oy)}) '
+            lines.append(f'  <g id="drawing" transform="translate({fmt(ox, 2)}, {fmt(oy, 2)}) '
                          f'scale({s:.6g})">')
             lines.extend(drawing)
             lines.append('  </g>')
@@ -4324,7 +4301,7 @@ class SvgRenderer:
                 # overflow="visible" stops the viewport clipping strokes on
                 # the viewBox edge, which would thin a circle at four points.
                 box = (f"{sym.width} {sym.height}" if fold == (1.0, 1.0)
-                       else f"{_art(width)} {_art(height)}")
+                       else f"{fmt(width, 6)} {fmt(height, 6)}")
                 svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {box}"'
                            f'{fill} overflow="visible">{inner}</symbol>')
             else:
@@ -4396,13 +4373,13 @@ class SvgRenderer:
             # portgeom.symbol_to_box.
             ops = []
             if rot:
-                ops.append(f"rotate({rot}, {_num(cx)}, {_num(cy)})")
+                ops.append(f"rotate({rot}, {fmt(cx, 2)}, {fmt(cy, 2)})")
             if mirror_x:
-                ops.append(f"translate({_num(2 * cx)}, 0) scale(-1, 1)")
+                ops.append(f"translate({fmt(2 * cx, 2)}, 0) scale(-1, 1)")
             if mirror_y:
-                ops.append(f"translate(0, {_num(2 * cy)}) scale(1, -1)")
+                ops.append(f"translate(0, {fmt(2 * cy, 2)}) scale(1, -1)")
             transform = f' transform="{" ".join(ops)}"' if ops else ""
-            out.append(f'    <use href="#{sym_id}" x="{_num(ux)}" y="{_num(uy)}" '
+            out.append(f'    <use href="#{sym_id}" x="{fmt(ux, 2)}" y="{fmt(uy, 2)}" '
                        f'width="{bw}" height="{bh}"{transform} />')
 
             if u.kind == "instrument":
@@ -4452,8 +4429,8 @@ class SvgRenderer:
         out = []
         for u, (tx, ty), (cx, cy) in tap_lines(fs):
             dash = "" if impulse_tap(u) else f' stroke-dasharray="{_TAP_DASH}"'
-            out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
-                       f'y2="{_num(cy)}" stroke="black" '
+            out.append(f'    <line x1="{fmt(tx, 2)}" y1="{fmt(ty, 2)}" x2="{fmt(cx, 2)}" '
+                       f'y2="{fmt(cy, 2)}" stroke="black" '
                        f'stroke-width="{LineWeight.DETAIL.width:g}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 

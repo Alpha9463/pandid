@@ -123,6 +123,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`vessel_symbol()` refuses an inlet and an outlet on one point face
   (#507).** It raises the error the unit's constructor raises when an inlet
   and an outlet share a face that meets the box at a single point.
+- **draw.io writes numbers as the SVG does (#579).** A coordinate such as
+  1234567 is no longer written `1.23457e+06`, and no number is written `-0`.
 
 ## [0.1.5] - 2026-08-26
 

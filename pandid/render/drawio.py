@@ -162,7 +162,7 @@ from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
-from pandid.render.escape import writable
+from pandid.render.escape import fmt, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _fitted, _furniture_name, _LABEL_CODES, _RENDER_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE, _too_small,
@@ -1086,22 +1086,6 @@ def _html_text(value) -> str:
     return html.escape(writable(value), quote=False)
 
 
-def _num(v: float) -> str:
-    """Return a coordinate rounded to two decimals, for stable diffs.
-
-    Parameters
-    ----------
-    v : float
-        Coordinate in drawing units (CSS pixels).
-
-    Returns
-    -------
-    str
-        Formatted number.
-    """
-    return f"{round(float(v), 2):g}"
-
-
 def _dash(pattern: str) -> list[str]:
     """Return draw.io dash style keys for an SVG dash pattern.
 
@@ -1125,25 +1109,6 @@ def _dash(pattern: str) -> list[str]:
         return []
     lengths = " ".join(pattern.replace(",", " ").split())
     return ["dashed=1", f"dashPattern={lengths}", "fixDash=1"]
-
-
-def _fraction(v: float) -> str:
-    """Return a connection-point fraction rounded to six places.
-
-    Six places, since it is multiplied by a box up to hundreds of units
-    across.
-
-    Parameters
-    ----------
-    v : float
-        Fraction of the cell box.
-
-    Returns
-    -------
-    str
-        Formatted number.
-    """
-    return f"{round(float(v), 6):g}"
 
 
 class DrawioRenderer:
@@ -1387,7 +1352,7 @@ class DrawioRenderer:
         # math is off so export does not re-typeset before measuring.
         page_w, page_h = self._page_box(sheet, frame)
         paper = (f'page="{0 if sheet is None else 1}" pageScale="1" '
-                 f'pageWidth="{_num(page_w)}" pageHeight="{_num(page_h)}"')
+                 f'pageWidth="{fmt(page_w, 2)}" pageHeight="{fmt(page_h, 2)}"')
         # A stable page id, so re-exporting gives an identical file.
         page = hashlib.sha256(fs.name.encode("utf-8")).hexdigest()[:16]
         # Replace earlier export findings with this export's, as
@@ -1585,7 +1550,7 @@ class DrawioRenderer:
         (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
         width = x1 - x0
         size = (depth / width) if width else 0.375
-        return ["shape=offPageConnector", f"size={_fraction(min(1.0, size))}",
+        return ["shape=offPageConnector", f"size={fmt(min(1.0, size), 6)}",
                 f"direction={'north' if east else 'south'}",
                 "anchorPointDirection=0", "legacyAnchorPoints=1",
                 "rounded=0", "whiteSpace=wrap",
@@ -1720,10 +1685,10 @@ class DrawioRenderer:
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
         style = ";".join(["html=1", *self._shape(u, sym, fit), *label_keys, *placement]) + ";"
-        geometry = (f'          <mxGeometry x="{_num(x0)}" y="{_num(y0)}" '
-                    f'width="{_num(x1 - x0)}" height="{_num(y1 - y0)}" as="geometry"')
+        geometry = (f'          <mxGeometry x="{fmt(x0, 2)}" y="{fmt(y0, 2)}" '
+                    f'width="{fmt(x1 - x0, 2)}" height="{fmt(y1 - y0, 2)}" as="geometry"')
         body = ([geometry + ">",
-                 f'            <mxPoint x="{_num(dx)}" y="{_num(dy)}" as="offset" />',
+                 f'            <mxPoint x="{fmt(dx, 2)}" y="{fmt(dy, 2)}" as="offset" />',
                  '          </mxGeometry>']
                 if (round(dx, 2) or round(dy, 2)) else [geometry + " />"])
         cid = self._id(index)
@@ -2003,7 +1968,7 @@ class DrawioRenderer:
         for prefix, at in (("exit", exit_at), ("entry", entry_at)):
             if at is None:
                 continue
-            keys += [f"{prefix}X={_fraction(at[0])}", f"{prefix}Y={_fraction(at[1])}",
+            keys += [f"{prefix}X={fmt(at[0], 6)}", f"{prefix}Y={fmt(at[1], 6)}",
                      f"{prefix}Dx=0", f"{prefix}Dy=0", f"{prefix}Perimeter=0"]
         return keys
 
@@ -2057,7 +2022,7 @@ class DrawioRenderer:
         for hop_key, cross_key, x, y in sorted(lost):
             self._findings.append(Issue(
                 "warning", HOP_DROPPED,
-                f"{_run(hop_key)} hops {_run(cross_key)} at ({_num(x)}, {_num(y)}) "
+                f"{_run(hop_key)} hops {_run(cross_key)} at ({fmt(x, 2)}, {fmt(y, 2)}) "
                 f"on the sheet, and the two cross each other more than once, which "
                 f"draw.io cannot draw either way round; the crossing is exported "
                 f"flat"))
@@ -2129,17 +2094,17 @@ class DrawioRenderer:
             along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
                 *(['            <Array as="points">',
-                   *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
+                   *(f'              <mxPoint x="{fmt(fx, 2)}" y="{fmt(fy, 2)}" />'
                      for fx, fy in (fit.at(px, py) for px, py in waypoints)),
                    '            </Array>'] if waypoints else []),
-                *([f'            <mxPoint x="{_num(offset[0])}" y="{_num(offset[1])}" '
+                *([f'            <mxPoint x="{fmt(offset[0], 2)}" y="{fmt(offset[1], 2)}" '
                    'as="offset" />'] if offset is not None else []),
             ]
             # The geometry's x places the label along the run and its
             # offset across it, beside the waypoints, as draw.io itself
             # writes a dragged edge label (mxEdgeHandler.moveLabel).
             head = ('          <mxGeometry relative="1" as="geometry"'
-                    + ('' if along is None else f' x="{_fraction(along)}"'))
+                    + ('' if along is None else f' x="{fmt(along, 6)}"'))
             if body:
                 geometry = [head + ">", *body, '          </mxGeometry>']
             else:
@@ -2225,8 +2190,8 @@ class DrawioRenderer:
             style = ";".join(keys) + ";"
             terminals = f' source="{self._id(source)}"' if source is not None else ""
             geometry = ['          <mxGeometry relative="1" as="geometry">',
-                        f'            <mxPoint x="{_num(fit.at(*tap)[0])}" '
-                        f'y="{_num(fit.at(*tap)[1])}" as="sourcePoint" />',
+                        f'            <mxPoint x="{fmt(fit.at(*tap)[0], 2)}" '
+                        f'y="{fmt(fit.at(*tap)[1], 2)}" as="sourcePoint" />',
                         '          </mxGeometry>'] if source is None else [
                 '          <mxGeometry relative="1" as="geometry" />']
             out += [
@@ -2719,10 +2684,10 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
             out += [
                 f'        <mxCell id="{edge_id}h{n}{k}" value="" style={_attr(style)} '
                 f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{_fraction(rel)}" y="0" '
-                f'width="{_num(length)}" height="{_num(length)}" '
+                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
                 'relative="1" as="geometry">',
-                f'            <mxPoint x="{_num(dx - half)}" y="{_num(dy - half)}" '
+                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
                 'as="offset" />',
                 '          </mxGeometry>',
                 '        </mxCell>',
@@ -2783,10 +2748,10 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
             out += [
                 f'        <mxCell id="{edge_id}f{n}{k}" value="" style={_attr(style)} '
                 f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{_fraction(rel)}" y="0" '
-                f'width="{_num(length)}" height="{_num(length)}" '
+                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
                 'relative="1" as="geometry">',
-                f'            <mxPoint x="{_num(dx - half)}" y="{_num(dy - half)}" '
+                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
                 'as="offset" />',
                 '          </mxGeometry>',
                 '        </mxCell>',
@@ -3035,7 +3000,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     rows_h = _distribute(list(heights) if heights else [1.0] * len(body),
                          h - start) if body else []
 
-    shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};" + keys
+    shape = _TABLE_SHAPE + f"startSize={fmt(start, 2)};fontSize={font:g};" + keys
     cell = _TABLE_CELL + f"fontSize={font:g};"
     out = _rect(cid, x, y, w, h, shape, _html_text(title))
     ry = start
@@ -3047,8 +3012,8 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
         out += [
             f'        <mxCell id="{cid}-r{r}" value="" style={_attr(_TABLE_ROW)} '
             f'vertex="1" parent="{cid}">',
-            f'          <mxGeometry y="{_num(ry)}" width="{_num(w)}" '
-            f'height="{_num(rh)}" as="geometry" />',
+            f'          <mxGeometry y="{fmt(ry, 2)}" width="{fmt(w, 2)}" '
+            f'height="{fmt(rh, 2)}" as="geometry" />',
             '        </mxCell>',
         ]
         cx = 0.0
@@ -3060,10 +3025,10 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
                 f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(_html_text(value))} '
                 f'style={_attr(cell + head + extra)} vertex="1" '
                 f'parent="{cid}-r{r}">',
-                f'          <mxGeometry x="{_num(cx)}" width="{_num(cw[c])}" '
-                f'height="{_num(rh)}" as="geometry">',
-                f'            <mxRectangle width="{_num(cw[c])}" '
-                f'height="{_num(rh)}" as="alternateBounds" />',
+                f'          <mxGeometry x="{fmt(cx, 2)}" width="{fmt(cw[c], 2)}" '
+                f'height="{fmt(rh, 2)}" as="geometry">',
+                f'            <mxRectangle width="{fmt(cw[c], 2)}" '
+                f'height="{fmt(rh, 2)}" as="alternateBounds" />',
                 '          </mxGeometry>',
                 '        </mxCell>',
             ]
@@ -3110,7 +3075,7 @@ def _stream_cell(cell) -> str:
         Style fragment.
     """
     if cell.anchor == "start":
-        align = f"align=left;spacingLeft={_num(F._STREAM_PAD - _TEXT_INSET)};"
+        align = f"align=left;spacingLeft={fmt(F._STREAM_PAD - _TEXT_INSET, 2)};"
     else:
         align = "align=center;"
     return (f"fillColor={_fill(cell.fill)};" + align
@@ -3226,8 +3191,8 @@ def _rect(cid: str, x, y, w, h, style: str, value: str = "",
     return [
         f'        <mxCell id="{cid}" value={_attr(value)} style={_attr(style)} '
         f'vertex="1" parent="{parent}">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
-        f'height="{_num(h)}" as="geometry" />',
+        f'          <mxGeometry x="{fmt(x, 2)}" y="{fmt(y, 2)}" width="{fmt(w, 2)}" '
+        f'height="{fmt(h, 2)}" as="geometry" />',
         '        </mxCell>',
     ]
 
@@ -3265,8 +3230,8 @@ def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float,
         f'        <mxCell id="{cid}" value="" style={_attr(style)} '
         f'edge="1" parent="1">',
         '          <mxGeometry relative="1" as="geometry">',
-        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="sourcePoint" />',
-        f'            <mxPoint x="{_num(x2)}" y="{_num(y2)}" as="targetPoint" />',
+        f'            <mxPoint x="{fmt(x1, 2)}" y="{fmt(y1, 2)}" as="sourcePoint" />',
+        f'            <mxPoint x="{fmt(x2, 2)}" y="{fmt(y2, 2)}" as="targetPoint" />',
         '          </mxGeometry>',
         '        </mxCell>',
     ]

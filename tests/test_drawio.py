@@ -1067,6 +1067,25 @@ def test_the_backend_is_a_renderer_in_its_own_right(sample):
     assert DrawioRenderer().render(sample) == sample.to_drawio(check=False)
 
 
+def test_a_far_coordinate_is_written_in_full():
+    """Write a coordinate past a million fixed-point, as the SVG does.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = Flowsheet("far")
+    a = fs.add(units.Feed("F-1")).pin(x=1234567, y=100)
+    b = fs.add(units.Product("P-1")).pin(x=1234867, y=100)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+    document = fs.to_drawio(check=False)
+    assert not re.search(r'"-?[\d.]+e[+-]\d+"', document), "a number in exponent notation"
+    xs = [float(g.get("x", "0")) for g in _drawio_root(document).iter("mxGeometry")]
+    assert max(xs) > 1_234_000, "the pinned coordinates did not reach the file"
+
+
 # ---------------------------------------------------------------------------
 # The geometry, against the renderer's.
 # ---------------------------------------------------------------------------
