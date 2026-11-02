@@ -207,6 +207,26 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
     return runs
 
 
+def furniture(fs: Flowsheet) -> set[Unit]:
+    """Return the units the last layout set on their pipes.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    set[Unit]
+        Every device and station member set on a pipe; empty when the
+        sheet was laid out without furniture.
+    """
+    if not fs._mounted_layout:
+        return set()
+    return {unit for run in mounted_runs(fs) for element in run.elements
+            for unit in _members(element)}
+
+
 def _chain_width(run: MountedRun) -> float:
     """Return the level room a pipe's furniture takes, for the equipment solve.
 

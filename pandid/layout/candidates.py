@@ -327,13 +327,16 @@ def _groups(fs: Flowsheet, structure: Structure,
         Smallest safe move group for each process unit. Interiors of
         partial branch regions are withheld from local translation.
     """
+    from pandid.layout.mounted import furniture
+
     roots = stacks(fs, units)
     order = {unit: index for index, unit in enumerate(units)}
     members: dict[Unit, set[Unit]] = {}
     for unit, root in roots.items():
         members.setdefault(root, set()).add(unit)
     groups = {unit: set(members[roots[unit]]) for unit in units}
-    blocked: set[Unit] = set()
+    # Furniture stays where it was set on its pipe.
+    blocked: set[Unit] = furniture(fs)
     for region in structure.branch_regions:
         blocked.update((units[region.split], units[region.merge]))
         for arm in region.arms:
