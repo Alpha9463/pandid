@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+from pandid.portgeom import COMPASS
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -317,10 +318,6 @@ def _square(x1, y1, x2, y2) -> bool:
     return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
-#: Outward direction of each face, in drawing coordinates (y down).
-_OUTWARD = {"N": (0.0, -1.0), "S": (0.0, 1.0), "E": (1.0, 0.0), "W": (-1.0, 0.0)}
-
-
 def _corners(pts):
     """Return a drawn path as its corners.
 
@@ -383,7 +380,7 @@ def _pierced_end(path, ends):
         for k, other, nozzle, far in tips:
             if other is None or other[0] is not end[0]:
                 continue
-            dx, dy = _OUTWARD[other[3]]
+            dx, dy = COMPASS[other[3]]
             if (far[0] - nozzle[0]) * dx + (far[1] - nozzle[1]) * dy >= -_SQUARE_TOL:
                 clear.add(k)
         for k in range(len(path) - 1):
