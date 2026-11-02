@@ -74,6 +74,7 @@ entries.
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -710,12 +711,15 @@ _STREAM_KEYS = {
 }
 _COMPONENT_KEYS = {"name", "formula"}
 # Keys only some classes take, mapped to those classes; any other class
-# refuses the key. Port counts:
+# refuses the key. Port counts, derived from the constructors that take
+# them so a class gaining one cannot be left out; _takes matches subclasses.
 _VARIABLE_PORTS = {
-    "n_inlets": ("Mixer",),
-    "n_outlets": ("Splitter",),
-    "n_feeds": ("Column", "Reactor"),
-    "n_draws": ("Column",),
+    key: tuple(sorted(
+        name for name, cls in _CLASSES.items()
+        if "__init__" in cls.__dict__
+        and key in inspect.signature(cls.__dict__["__init__"]).parameters
+    ))
+    for key in ("n_inlets", "n_outlets", "n_feeds", "n_draws")
 }
 # Conveyor dimensions, used instead of width and height.
 _KIND_SIZES = {
@@ -2465,6 +2469,9 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
     _write_composition(unit, entry)
+    # One feed is the default.
+    if _takes(type(unit), _VARIABLE_PORTS["n_feeds"]) and len(getattr(unit, "feeds")) > 1:
+        entry["n_feeds"] = len(getattr(unit, "feeds"))
     if isinstance(unit, unit_types.Block):
         _write_connection_faces(unit, entry, unit.DEFAULT_INPUT_FACE, unit.DEFAULT_OUTPUT_FACE)
     elif isinstance(unit, (unit_types.Tank, unit_types.Vessel)):
@@ -2476,19 +2483,15 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         entry["n_inlets"] = len(unit.inlets)
     elif isinstance(unit, unit_types.Splitter):
         entry["n_outlets"] = len(unit.outlets)
-    elif isinstance(unit, (unit_types.Column, unit_types.Reactor)):
-        # One feed is the default.
-        if len(unit.feeds) > 1:
-            entry["n_feeds"] = len(unit.feeds)
+    elif isinstance(unit, unit_types.Column):
         # Stages only where given; omitted means the even spread.
-        if isinstance(unit, unit_types.Column) and unit.feed_stages is not None:
+        if unit.feed_stages is not None:
             entry["feed_stages"] = list(unit.feed_stages)
-        if isinstance(unit, unit_types.Column):
-            # Zero draws is the default.
-            if len(unit.draws) > 0:
-                entry["n_draws"] = len(unit.draws)
-            if unit.draw_stages is not None:
-                entry["draw_stages"] = list(unit.draw_stages)
+        # Zero draws is the default.
+        if len(unit.draws) > 0:
+            entry["n_draws"] = len(unit.draws)
+        if unit.draw_stages is not None:
+            entry["draw_stages"] = list(unit.draw_stages)
     elif isinstance(unit, unit_types.Tee):
         # Only a returning tee; a takeoff is the default.
         if unit.branch_direction != "outlet":
