@@ -322,7 +322,7 @@ def fit_size(s, room: float, size: float, floor: float,
     return max(floor, math.floor(size * room / need * 10) / 10)
 
 
-def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=None):
+def _text(x, y, s, size, *, anchor="start", bold=False, fill="black"):
     """Return an SVG ``<text>`` element with escaped content.
 
     Parameters
@@ -339,8 +339,6 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=N
         Set bold.
     fill : str, default="black"
         Text colour.
-    baseline : str, optional
-        ``dominant-baseline``.
 
     Returns
     -------
@@ -348,9 +346,8 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=N
         SVG element.
     """
     wt = ' font-weight="bold"' if bold else ""
-    bl = f' dominant-baseline="{baseline}"' if baseline else ""
     return (f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{size:.1f}"'
-            f' text-anchor="{anchor}"{wt}{bl} fill="{fill}">{escaped(s)}</text>')
+            f' text-anchor="{anchor}"{wt} fill="{fill}">{escaped(s)}</text>')
 
 
 # ----------------------------------------------------------------

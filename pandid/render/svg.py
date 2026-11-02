@@ -955,15 +955,13 @@ def _cutting(leader, occupied, limit: int) -> int:
     return n
 
 
-def _near_segment(p, a, b, tol: float = 0.5) -> bool:
-    """Return whether ``p`` lies on segment ``a``-``b`` within ``tol``.
+def _near_segment(p, a, b) -> bool:
+    """Return whether ``p`` lies on segment ``a``-``b`` within 0.5.
 
     Parameters
     ----------
     p, a, b : tuple[float, float]
         Point and segment end points.
-    tol : float, default=0.5
-        Distance tolerance.
 
     Returns
     -------
@@ -973,9 +971,9 @@ def _near_segment(p, a, b, tol: float = 0.5) -> bool:
     dx, dy = b[0] - a[0], b[1] - a[1]
     span = dx * dx + dy * dy
     if not span:
-        return math.hypot(p[0] - a[0], p[1] - a[1]) <= tol
+        return math.hypot(p[0] - a[0], p[1] - a[1]) <= 0.5
     t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / span))
-    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= tol
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= 0.5
 
 
 def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
