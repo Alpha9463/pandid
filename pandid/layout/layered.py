@@ -201,11 +201,17 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     pinned_y = any(u.pin_ is not None and u.pin_.y is not None for u in units)
     lift = 0.0 if pinned_y else MARGIN - min(
         n.y - n.pad.north for layer in layers.values() for n in layer if n.members)
+    # Free units move with the layers so that the first x pin lands on its own layer.
+    anchor = next(((node, u) for layer in layers.values() for node in layer for u in node.members
+                   if u.pin_ is not None and u.pin_.x is not None), None)
+    slide = 0.0 if anchor is None else (
+        anchor[1].pin_.x - xs[anchor[0]] - anchor[0].dx[anchor[1]] + _shift(anchor[1]))
     for layer in layers.values():
         for rank, node in enumerate(layer):
             for unit in node.members:
                 s, pin = slot(unit), unit.pin_
-                s.x = pin.x if pin is not None and pin.x is not None else xs[node] + node.dx[unit] - _shift(unit)
+                s.x = (pin.x if pin is not None and pin.x is not None
+                       else xs[node] + node.dx[unit] - _shift(unit) + slide)
                 s.y = pin.y if pin is not None and pin.y is not None else node.y + node.dy[unit] + lift
                 s.col = pin.col if pin is not None and pin.col is not None else node.layer
                 s.row = pin.row if pin is not None and pin.row is not None else rank
