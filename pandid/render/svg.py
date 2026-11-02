@@ -1176,6 +1176,8 @@ def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
 #: Font size of a line number. The halo under it is the estimated string
 #: width plus a gutter, by a fixed depth; the export uses the same sizes.
 NUMBER_TYPE = 10
+# Font size of tags, instrument letters and flag names, in both backends.
+_TAG_TYPE = 12.0
 _HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
 
 # Gap a box enclosure leaves outside the halo on each side. A diamond or
@@ -4509,10 +4511,10 @@ class SvgRenderer:
         out = [f'    <polygon points="{points}" fill="transparent" '
                f'stroke="black" stroke-width="{LineWeight.EQUIPMENT.width:g}" />']
         if ref:
-            out.append(f'    <text x="{tx}" y="{mid - 4}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
+            out.append(f'    <text x="{tx}" y="{mid - 4}" font-family="sans-serif" font-size="{_TAG_TYPE:g}" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
             out.append(f'    <text x="{tx}" y="{mid + 8}" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">{escaped(ref)}</text>')
         else:
-            out.append(f'    <text x="{tx}" y="{mid}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
+            out.append(f'    <text x="{tx}" y="{mid}" font-family="sans-serif" font-size="{_TAG_TYPE:g}" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
         return out
 
     def _draw_instrument_tag(self, u, x, y, u_width, u_height):
@@ -4548,13 +4550,13 @@ class SvgRenderer:
                     f'dominant-baseline="middle">{escaped(bot or top.upper())}</text>']
         if not top:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
-                    f'font-size="12" text-anchor="middle" '
+                    f'font-size="{_TAG_TYPE:g}" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top)}</text>']
         # A location bar crosses the middle, so push letters above it and
         # the number below (ISA-5.1).
         letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
         out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
-               f'font-size="12" font-weight="bold" text-anchor="middle" '
+               f'font-size="{_TAG_TYPE:g}" font-weight="bold" text-anchor="middle" '
                f'dominant-baseline="middle">{escaped(top.upper())}</text>']
         if bot:
             out.append(f'    <text x="{cx}" y="{cy + number_dy}" font-family="sans-serif" '
@@ -4811,7 +4813,7 @@ class SvgRenderer:
                 out.append(f'    <rect x="{rx:.1f}" y="{ry:.1f}" width="{rx1 - rx:.1f}" '
                            f'height="{ry1 - ry:.1f}" fill="white" />')
             out.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
-                       f'font-size="12" text-anchor="{anchor}" '
+                       f'font-size="{_TAG_TYPE:g}" text-anchor="{anchor}" '
                        f'dominant-baseline="{baseline}">{escaped(text)}</text>')
         out.append('  </g>')
         return out

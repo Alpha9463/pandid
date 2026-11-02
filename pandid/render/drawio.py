@@ -165,7 +165,7 @@ from pandid.render import svg as _svg
 from pandid.render.escape import writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                _fitted, _furniture_name, _LABEL_CODES, _RENDER_CODES,
-                               _LEADER_HEAD, _scale_text, _Sheet, _too_small,
+                               _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE, _too_small,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH,
                                fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag, enclosure_shape,
@@ -173,7 +173,7 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                drawing_bounds, draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
-from pandid.render.symbols import (ARROWHEAD, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
+from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -183,9 +183,8 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
 
-# Stencil ink, as scripts/mxgraph_to_svg.py converts it and as
-# symbols._BODY_INK; repeated because scripts/ is not installed.
-_INK = "#111"
+# Stencil ink, as scripts/mxgraph_to_svg.py converts it.
+_INK = _BODY_INK
 
 # Fill for everything this file draws itself: the paper shows through.
 _NO_FILL = "none"
@@ -894,11 +893,6 @@ _PART_APPROXIMATIONS = {
     (29, "vibration"): _Approximation(
         None, "the two arrows and the opposite ways they point"),
 }
-
-# Type size for drawing lettering (tags, instrument letters, flag names),
-# matching the SVG renderer's 12. Line numbers use svg.NUMBER_TYPE.
-_TAG_TYPE = 12.0
-
 
 class _Tags(NamedTuple):
     """Result of the sheet's equipment-tag placement pass.
