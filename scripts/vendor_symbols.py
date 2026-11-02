@@ -266,7 +266,7 @@ KIND_MAP = {
     # rather than on a head, where the ink curves away from the box edge.
     #
     # ``relief`` and ``drain`` are the two nozzles issue #222 added to Vessel
-    # and Tank, and every one of the eighteen stencils in those two families
+    # and Tank, and every one of the sixteen stencils in those two families
     # places them by the same two rules, which are the roles' own meanings and
     # not a layout convention:
     #
@@ -277,21 +277,10 @@ KIND_MAP = {
     #       top edge, for the reason the roofs below are: a head rises inside
     #       its bounding box, so a nozzle on the edge floats above the ink.
     #   drain -- on the vessel's LOWEST DRAWN POINT, because that is what a
-    #       drain is. Where the stencil draws a support -- legs, a skirt, the
-    #       sphere's frame -- the low point is INBOARD of the box's bottom, and
+    #       drain is. Where the stencil draws a support, such as the sphere's
+    #       frame, the low point is INBOARD of the box's bottom, and
     #       the nozzle goes on the vessel rather than on the steel: a drain out
     #       of the bottom of a leg is worse than a drain that leaves sideways.
-    #
-    # That second case has a consequence worth stating rather than discovering.
-    # ``portgeom.outward_dir`` reads a nozzle's face off the nearest box edge,
-    # so on ``vessel/legs`` and ``vessel/skirted``, whose 40 x 122.69 box is a
-    # third leg by height, the bottom head's centre is nearer a side wall (20)
-    # than the box's floor (27.3) and the drain comes out WEST at the symbol's
-    # own aspect. Give the unit a box less than about 2.2 times as tall as it is
-    # wide -- 60 x 120, which is what ``examples/14`` draws V-604 at -- and it
-    # comes out south. Supports pushing a nozzle's face around is #225's
-    # territory, and papering over it here with a second placement rule would
-    # put the drain somewhere that is not the low point in order to get a face.
     ("vessel", "default"): ("vessels", "Pressurized Vessel",
                             {"inlet": ("W", 100.0), "outlet": ("E", 100.0),
                              "vent": ("N", 50.0),
@@ -378,7 +367,7 @@ KIND_MAP = {
     # That is ISO item 1.27 X8006's construction -- a dished-end vessel, an
     # agitator on a shaft through the top head, a drive above it -- rather than
     # the "Mixing Reactor" stencil's rectangle with a V bottom and its motor box
-    # perched outside the shell. The stencil is kept, under ``mixing`` below.
+    # perched outside the shell.
     #
     # The nozzles are the drum's, in the drum's places: the product out of the
     # bottom head, the duty on the straight east wall (which spans y 7.5..92.5)
@@ -402,18 +391,6 @@ KIND_MAP = {
                               "outlet": [("S", 50.0), ("E", 165.0), ("W", 165.0)],
                               "duty": ("E", 100.0),
                               "vent": ("AT", 100.0, 20.0)}),
-    # The drawing ``default`` used to be, kept under a name that says what it is
-    # rather than deleted: a box with a stirrer perched on top of it is still
-    # what some plants draw, and a reader with an old sheet has to be able to
-    # reproduce it.
-    #
-    # vent sits on the vessel's top edge, clear of the agitator shaft at x 24..26.
-    # The charge nozzles spread along the straight west wall, which spans
-    # y 32.4..77.4: the vessel is dished below that and open above it.
-    ("reactor", "mixing"): ("vessels", "Mixing Reactor",
-                            {"feed": ("SERIES", "W", 48.2, 14, 0.32),
-                             "outlet": "S", "duty": "E",
-                             "vent": ("AT", 40.0, 32.4)}),
     # The jacketed stirred tank -- ISO item 1.27 X8006 itself, which is the
     # jacketed one: the same shell with a heating/cooling jacket wrapped round
     # it. Shares its stencil with ``vessel/jacketed``, because a jacketed
@@ -967,8 +944,7 @@ KIND_MAP = {
                               {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
                                "vent": ("N", 26.0),
                                "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
-    # Electrically heated: the 40-wide shell "skirted" and "legs" are drawn
-    # from, at x 0..40 between heads that reach y = 0 and y = 95.38, with the
+    # Electrically heated: a 40-wide shell at x 0..40 between heads that reach y = 0 and y = 95.38, with the
     # resistor element hung on the OUTSIDE of the east wall at x 44..50. That
     # element is the only thing widening the box to 50, and it is why this is
     # the one vessel in the family whose nozzles are not its siblings' to the
@@ -992,36 +968,6 @@ KIND_MAP = {
          # drain is below all of it, so unlike the outlet above it needs no
          # dodging: it is the family's bottom crown, unmoved.
          "relief": ("AT", 8.0, 1.5), "drain": ("S", 20.0)}),
-    # Skirted: the same 40-wide shell as "dished", standing on a skirt instead
-    # of brackets. Nothing widens the box here, so the shell walls ARE the box's
-    # west and east faces and the two process nozzles take them directly.
-    #
-    # The drain is the one nozzle here that cannot take the box's south face.
-    # ``skirted`` and ``legs`` are 122.69 tall over a vessel that ends at 95.38,
-    # and there is no ink at all across the bottom of the box -- the skirt is
-    # two lines with a foot turned off each, the legs two rects, and between
-    # them 24 units of nothing. So the drain goes on the bottom head's crown at
-    # (20, 95.38), which is the vessel's low point and is what the pipe would
-    # actually leave from, and comes out of the west face at this box's own
-    # aspect. The block at ``vessel/default`` argues why that is the right way
-    # round to be wrong.
-    ("vessel", "skirted"): ("vessels", "Vessel (Dished Ends, Skirts)",
-                            {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
-                             "vent": ("N", 20.0),
-                             "relief": ("AT", 8.0, 1.5),
-                             "drain": ("AT", 20.0, 95.4)}),
-    # Legs: "skirted"'s vessel on a pair of legs. The two stencils draw the same
-    # shell and the same heads from the same path -- x 0..40, straight between
-    # y 7.69 and 87.69, heads out to y = 0 and 95.38 -- in the same 40 x 122.69
-    # box, and differ only in what stands under y = 87.69: two rects at x 0..8
-    # and 32..40 here, a pair of skirt lines there. Nothing a nozzle sits on
-    # moves, so this takes ``skirted``'s port map verbatim, which is what a
-    # change of variant is supposed to cost.
-    ("vessel", "legs"): ("vessels", "Vessel (Dished Ends, Legs)",
-                         {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
-                          "vent": ("N", 20.0),
-                          "relief": ("AT", 8.0, 1.5),
-                          "drain": ("AT", 20.0, 95.4)}),
     # Swaged: one vessel in two diameters, the narrow section on top of the wide
     # one with a cone between them at y 40..50. It comes out at 50 x 97.5, in
     # among ``jacketed``'s 52 x 95.38 and ``dished``'s 60 x 95.38 rather than
@@ -1344,14 +1290,6 @@ KIND_MAP = {
     ("thickener", "default"): ("vessels", "Settling Tank",
                                {"feed": ("W", 8.0), "overflow": ("E", 8.0),
                                 "underflow": ("S", 50.0)}),
-    # Reactor / separator styles. The straight wall spans y 7.69..87.69. The
-    # outlet also has east and west placements at y 77.7, below the duty and
-    # the feed family.
-    ("reactor", "plain"):     ("vessels", "Reactor",
-                               {"feed": ("SERIES", "W", 30, 14, 0.4),
-                                "outlet": [("S", 20), ("E", 77.7), ("W", 77.7)],
-                                "duty": ("E", 47),
-                                "vent": ("AT", 30.0, 7.69)}),
     # Horizontal vessel: reflux drum, accumulator, knock-out pot. A lying
     # cylinder with dished ends: the shape a vertical vessel does NOT become
     # when rotated, since its saddles and shell bands would turn with it.
@@ -1956,8 +1894,8 @@ GRAVITY_FIXED = {
     # Turned, the seal runs out and the holder holds nothing.
     ("tank", "gas_holder"):     "the bell floats on the water seal",
     # Holdup with a vapour space: every variant carries its vent on the top head
-    # and drains from the shell, and four of them draw the skirt, brackets, legs
-    # or saddles they stand on. ``Vessel``'s own docstring already says this in
+    # and drains from the shell, and two of them draw the brackets or saddles
+    # they stand on. ``Vessel``'s own docstring already says this in
     # prose, "the outlet still has to drain from the bottom whichever way the
     # artwork is spun", and ``horizontal`` is the variant that sentence points
     # at, which is ISO's recommended escape hatch: a new symbol drawn to the
@@ -1967,8 +1905,6 @@ GRAVITY_FIXED = {
     ("vessel", "dome"):       "the manway dome is on top",
     ("vessel", "horizontal"): "vent off the top, liquid out of the bottom",
     ("vessel", "jacketed"):   "vent on the top head, free surface below it",
-    ("vessel", "skirted"):    "vent on the top head; stands on a skirt",
-    ("vessel", "legs"):       "vent on the top head; stands on legs",
     ("vessel", "insulated"):  "vent on the top head, free surface below it",
     ("vessel", "electrical_heating"): "vent on the top head, low draw-off from the shell",
     # The swage is a second fact on top of the family's. A vessel drawn wide at
@@ -1984,9 +1920,7 @@ GRAVITY_FIXED = {
     # A charge vessel: the agitator hangs into it from above and the contents
     # drain out of the dished bottom, with the off-gas taken from the top.
     ("reactor", "default"):  "top-entering agitator over a dished bottom",
-    ("reactor", "mixing"):   "top-entering agitator over a conical bottom",
     ("reactor", "jacketed"): "top-entering agitator over a dished bottom, inside its jacket",
-    ("reactor", "plain"):    "vent on the top head, outlet in the floor",
     # Open ends. What leaves a vent rises, and what would otherwise fall into it
     # is what the weather cap and the exhaust head's V-bottom drain are for; a
     # funnel is charged by pouring into it. Turned, each of these is drawn as
@@ -2150,11 +2084,6 @@ BANDS = {
     # The jacket, for insulated's reason: the outer faces are the jacket boxes,
     # y 12,69..82,69.
     ("vessel", "jacketed"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
-    # The barrel only. The legs below it are structure, and a nozzle on a leg is
-    # not a nozzle.
-    ("vessel", "legs"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
-    # The barrel only, as legs: the skirt below it carries no connection.
-    ("vessel", "skirted"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
     # The lower, larger barrel, which is the only part of this body the W and E
     # faces of the box touch: y 50,25..85 on the west and 50..85 on the east.
     # The upper barrel is drawn inboard at x 10..40 and a face nozzle cannot

@@ -14,7 +14,7 @@ Both carry the same sentence::
     RETIRED = Deprecation(
         what="Pump(cooled=True)",
         instead="Pump(jacket='cooling')",
-        removed_in="0.2.0",
+        removed_in="0.1.3",
     )
 
     class Pump(Unit):

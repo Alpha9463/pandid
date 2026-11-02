@@ -102,7 +102,8 @@ def test_every_generated_class_names_its_variants():
 #: ``display=``: they say where the information is available, which is not a
 #: symbol type, and naming one as a ``variant`` was removed in 0.1.3. Both
 #: drawings still ship and both are still swept, asked for the way they are
-#: asked for.
+#: asked for. A Separator's characteristic drawings are asked for by
+#: ``characteristic=`` for the same reason (#579).
 _DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
 
 
@@ -111,7 +112,8 @@ def _shipped(cls, variant):
     display = _DISPLAY_VARIANTS.get(variant)
     if cls is units.Instrument and display is not None:
         return cls("X-1", display=display)
-    return cls("X-1", variant=variant)
+    how = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
+    return cls("X-1", **{how: variant})
 
 
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)

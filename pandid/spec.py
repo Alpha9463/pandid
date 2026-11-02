@@ -1497,12 +1497,11 @@ def _read_port_order(
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
-    """Return a unit's port by name, creating pooled or retired ports.
+    """Return a unit's port by name, creating pooled ports.
 
-    Pooled ports (``sig_out_2``, ``outlet_2``) are created on request, an
-    alias (``feed``) resolves to its port, and a retired port is created
-    through ``getattr`` with its deprecation warning, so
-    ``from_dict(to_dict(fs))`` rebuilds every port the sheet used.
+    Pooled ports (``sig_out_2``, ``outlet_2``) are created on request and
+    an alias (``feed``) resolves to its port, so ``from_dict(to_dict(fs))``
+    rebuilds every port the sheet used.
 
     Parameters
     ----------
@@ -1530,15 +1529,6 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
     # Resolve aliases first; they are attributes, not entries in ports.
     if isinstance(name, str):
         name = unit._canonical_port_name(name)
-    # Create a retired port by reading it, as the author's script did;
-    # to_dict writes streams on it under that name.
-    if isinstance(name, str) and name not in unit.ports:
-        try:
-            retired = getattr(unit, name)
-        except AttributeError:
-            retired = None
-        if isinstance(retired, Port):
-            return retired
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"
@@ -2340,7 +2330,7 @@ def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
         if value != default:
             entry[key] = value
     # Where a keyword is folded into the variant, write only the keyword;
-    # the variant spelling is deprecated.
+    # the variant spelling is refused.
     folded = cls.COMPOSITION_VARIANT
     if folded and entry.get(folded) is not None:
         entry.pop("variant", None)

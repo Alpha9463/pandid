@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unused code (#579).** `pandid.routing.get_outward_dir` is deleted; use
   `pandid.portgeom.outward_dir`. The `pandid.render.Renderer` protocol, which
   nothing used, is deleted.
+- **The twelve spellings 0.1.3 and 0.1.4 deprecated (#579).** Use
+  `Vessel(supports="leg")` or `supports="skirt"` for `variant="legs"` or
+  `"skirted"`, `Reactor(internals="packing")` for `variant="plain"`,
+  `Reactor(agitator="disc")` for `variant="mixing"`, and
+  `Separator(characteristic=...)` for a `"gravity"`, `"electrostatic"` or
+  `"electromagnetic"` variant. Use `DistillationColumn` for a `Column`'s
+  `reflux_in`, `boilup_in`, `reboiler_duty` and `condenser_duty`, and
+  `overhead` for `distillate`.
 
 ### Fixed
 
