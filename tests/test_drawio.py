@@ -41,6 +41,7 @@ from pandid.render.svg import (
     drawing_bounds,
     impulse_tap,
     pneumatic_marks,
+    stream_hops,
     stream_polyline,
     tap_lines,
 )
@@ -1071,6 +1072,25 @@ def test_the_backend_is_a_renderer_in_its_own_right(sample):
         No value is returned; pytest records assertion failures.
     """
     assert DrawioRenderer().render(sample) == sample.to_drawio(check=False)
+
+
+def test_a_far_coordinate_is_written_in_full():
+    """Write a coordinate past a million fixed-point, as the SVG does.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = Flowsheet("far")
+    a = fs.add(units.Feed("F-1")).pin(x=1234567, y=100)
+    b = fs.add(units.Product("P-1")).pin(x=1234867, y=100)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+    document = fs.to_drawio(check=False)
+    assert not re.search(r'"-?[\d.]+e[+-]\d+"', document), "a number in exponent notation"
+    xs = [float(g.get("x", "0")) for g in _drawio_root(document).iter("mxGeometry")]
+    assert max(xs) > 1_234_000, "the pinned coordinates did not reach the file"
 
 
 # ---------------------------------------------------------------------------
@@ -2397,6 +2417,81 @@ def test_a_column_is_measured_in_the_face_its_text_is_drawn_in(rendered_gallery)
             )
 
 
+def _legend_sheet() -> Flowsheet:
+    """Build a sheet whose box has a long first column, a plain row and a wide title.
+
+    Returns
+    -------
+    Flowsheet
+        Laid-out sheet.
+    """
+    from pandid.document import Annotation
+
+    fs = Flowsheet("legend")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.annotations.append(
+        Annotation(
+            title="A TITLE WIDER THAN EVERY ROW BENEATH IT, BY SOME WAY",
+            align="top-left",
+            rows=[("Cooling water supply header and return", "CWS"), "A plain note"],
+        )
+    )
+    fs.layout()
+    return fs
+
+
+def test_annotation_text_starts_in_drawio_where_the_sheet_writes_it():
+    """Start each annotation cell's text at the sheet's column stop.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.render.drawio import _TEXT_INSET
+
+    fs = _legend_sheet()
+    svg = fs.to_svg(check=False)
+    cells = _cells(fs, check=False)
+    seen = 0
+    for cell, row, table in _table_cells(cells):
+        geo, row_geo, table_geo = (e.find("mxGeometry") for e in (cell, row, table))
+        assert geo is not None and row_geo is not None and table_geo is not None
+        start = (
+            float(table_geo.get("x", "0"))
+            + float(row_geo.get("x", "0"))
+            + float(geo.get("x", "0"))
+            + float(_style(cell).get("spacingLeft", "0"))
+            + _TEXT_INSET
+        )
+        value = cell.get("value", "")
+        drawn = re.search(r'<text x="([-\d.]+)"[^>]*>' + re.escape(value) + "</text>", svg)
+        assert drawn is not None, value
+        assert start == pytest.approx(float(drawn.group(1)), abs=0.1), value
+        bold = re.search(r'font-weight="bold"[^>]*>' + re.escape(value) + "<", svg) is not None
+        assert (_style(cell).get("fontStyle") == "1") == bold, value
+        seen += 1
+    assert seen == 3
+
+
+def test_a_bold_first_column_is_measured_bold():
+    """Keep a long bold first cell clear of the column after it.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.render.furniture import text_width
+
+    svg = _legend_sheet().to_svg(check=False)
+    first = "Cooling water supply header and return"
+    x0 = re.search(r'<text x="([-\d.]+)"[^>]*font-weight="bold"[^>]*>' + first, svg)
+    x1 = re.search(r'<text x="([-\d.]+)"[^>]*>CWS</text>', svg)
+    assert x0 is not None and x1 is not None
+    assert float(x0.group(1)) + text_width(first, 11.0, bold=True) < float(x1.group(1))
+
+
 def test_a_table_states_the_size_its_columns_were_measured_at():
     """Export table text at the font size used to measure columns.
 
@@ -2954,7 +3049,7 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
     page, pw, ph = _page_states(fs, **kwargs)
 
     sheet = _page(page_size)
-    _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet)
+    _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet, border=border)
     if sheet is not None:
         # Paper: the page is the paper, and page="1" anchors draw.io's page grid
         # at the model origin, which is where the fitted drawing already sits.
@@ -2995,14 +3090,15 @@ def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border)
     from pandid.render import furniture as F
 
     _page_attr, pw, ph = _page_states(sample, border=border, check=False)
-    _furniture, frame, _fit = DrawioRenderer()._furniture(sample, None)
+    _furniture, frame, _fit = DrawioRenderer()._furniture(sample, None, border=border)
     ox, oy, _ow, _oh = F.sheet_rect(*frame)
     ox, oy = ox - F.OUTER_MARGIN, oy - F.OUTER_MARGIN
 
     seen = 0
     for cell in _cells(sample, border=border, check=False).values():
         geo = cell.find("mxGeometry")
-        if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
+        # A child cell (a table row or cell) is placed relative to its parent.
+        if geo is None or cell.get("edge") == "1" or cell.get("parent") != "1":
             continue
         x, y = float(geo.get("x")), float(geo.get("y"))
         w, h = float(geo.get("width") or 0), float(geo.get("height") or 0)
@@ -3012,16 +3108,95 @@ def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border)
     assert seen > 1, "the sheet stopped writing vertices"
 
 
-def test_a_paged_drawing_is_fitted_onto_its_paper():
-    """Fit paged drawing geometry into the available region.
+def _two_tanks(name: str) -> Flowsheet:
+    """Build two connected tanks with nothing else on the sheet.
+
+    Parameters
+    ----------
+    name : str
+        Flowsheet name.
+
+    Returns
+    -------
+    Flowsheet
+        Routed sheet.
+    """
+    fs = Flowsheet(name)
+    a = fs.add(units.Tank("T-1")).pin(x=0, y=0)
+    b = fs.add(units.Tank("T-2")).pin(x=400, y=0)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+    return fs
+
+
+@pytest.mark.parametrize("case", ["zone border", "box in the strip's corner"])
+def test_the_title_strip_is_docked_where_the_sheet_docks_it(case):
+    """Dock draw.io's title strip on the rectangle the SVG sheet gives it.
+
+    A zone border carries a strip without a title block, and the strip
+    keeps the corner when a box shares its band.
+
+    Parameters
+    ----------
+    case : str
+        What puts the strip on the sheet.
 
     Returns
     -------
     None
         No value is returned; pytest records assertion failures.
     """
-    from pandid.render import furniture as F
-    from pandid.render.svg import _fit_scale, _page
+    from pandid.document import Annotation, TitleBlock
+
+    fs = _two_tanks("docked")
+    border = "zone" if case == "zone border" else "none"
+    if case != "zone border":
+        fs.title_block = TitleBlock(drawing_number="PFD-1")
+        fs.annotations.append(Annotation(title="NOTES", align="bottom-right", rows=[("1", "One.")]))
+    svg = fs.to_svg(border=border, check=False)
+    drawn = re.findall(
+        r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" '
+        r'fill="white" stroke="black" stroke-width="2"/>',
+        svg,
+    )
+    assert len(drawn) == 1, "the sheet draws one title strip"
+    cells = _cells(fs, border=border, check=False)
+    strips = [
+        c
+        for cid, c in cells.items()
+        if re.fullmatch(r"f\d+", cid) and _style(c).get("strokeWidth") == "2"
+    ]
+    assert len(strips) == 1, "draw.io exports one title strip"
+    geo = strips[0].find("mxGeometry")
+    assert geo is not None
+    got = [float(geo.get(k, "nan")) for k in ("x", "y", "width", "height")]
+    assert got == pytest.approx([float(v) for v in drawn[0]], abs=0.1)
+
+
+def test_a_sheet_without_furniture_states_the_page_the_sheet_draws():
+    """State the page the SVG sheet draws, margin and all.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = _two_tanks("bare")
+    view = re.search(r'viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)"', fs.to_svg(check=False))
+    assert view is not None
+    _page_attr, pw, ph = _page_states(fs, check=False)
+    assert (pw, ph) == pytest.approx((float(view.group(1)), float(view.group(2))), abs=0.1)
+
+
+def test_a_paged_drawing_is_fitted_onto_its_paper():
+    """Fit paged drawing geometry into the region the SVG sheet fits it to.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.render.svg import _page
 
     fs = Flowsheet("fitted")
     a = fs.add(units.Tank("T-1"))
@@ -3032,9 +3207,12 @@ def test_a_paged_drawing_is_fitted_onto_its_paper():
     fs.route()
 
     sheet = _page("A3")
-    inner = drawing_bounds(fs)
-    _placed, _frame, free = F.dock([], inner, sheet=sheet)
-    scale = _fit_scale(inner[2] - inner[0], inner[3] - inner[1], free)
+    assert sheet is not None
+    fitted = re.search(
+        r'<g id="drawing" transform="[^"]*scale\(([\d.]+)\)"', fs.to_svg(page_size="A3")
+    )
+    assert fitted is not None
+    scale = float(fitted.group(1))
     assert scale < 1.0, "the fixture stopped needing to be shrunk"
 
     cells = _cells(fs, page_size="A3", check=False)
@@ -3812,7 +3990,7 @@ def _sheet_hops(fs, fit, direction="vertical", style="arc"):
     out = set()
     for hop, lo, hi, at in hopping:
         for cross, c_lo, c_hi, c_at in crossed:
-            if hop == cross or not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
+            if not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
                 continue
             point = (at, c_at) if direction == "vertical" else (c_at, at)
             x, y = fit.at(*point)
@@ -3894,6 +4072,30 @@ def test_jump_direction_picks_which_of_two_crossing_lines_hops(direction):
     assert {hop for hop, _crossed, _x, _y in hops} == (
         {"s1"} if direction == "vertical" else {"s0"}
     )
+
+
+def test_a_run_that_crosses_itself_is_marked_on_the_sheet_and_reported_by_drawio():
+    """Report the self-crossing draw.io cannot hop, which the sheet marks.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = Flowsheet("loop")
+    a = fs.add(units.Feed("F1")).pin(x=60, y=175)
+    b = fs.add(units.Product("P1")).pin(x=600, y=175)
+    fs.connect(a.outlet, b.inlet).via(
+        [(300, 175), (300, 100), (200, 100), (200, 300), (400, 300), (400, 175)]
+    )
+    fs.layout()
+    fs.route()
+    assert [(h.x, h.y) for h in stream_hops(fs, "vertical")] == [(200, 175)]
+    root = ET.fromstring(fs.to_drawio(check=False)).find("diagram/mxGraphModel/root")
+    edges, _fit = _edge_lines(fs, {}, root)
+    assert not _drawio_hops(edges), "draw.io never hops an edge over itself"
+    dropped = [w for w in fs.warnings if w.code == HOP_DROPPED]
+    assert len(dropped) == 1 and "crosses itself" in dropped[0].message
 
 
 def test_the_hop_is_the_radius_the_sheet_draws_it_at():
@@ -4288,3 +4490,13 @@ def test_the_part_table_names_only_parts_that_exist():
         f"_PART_APPROXIMATIONS names parts nobody registers: "
         f"{sorted(set(_PART_APPROXIMATIONS) - registered)}"
     )
+
+
+def test_an_annotation_of_empty_rows_exports() -> None:
+    """Rows with no cells have no columns, and the export must still draw the box."""
+    from pandid.document import Annotation
+
+    fs = Flowsheet("Empty notes")
+    fs.annotations.append(Annotation(title="NOTES", rows=[(), ()]))
+
+    ET.fromstring(fs.to_drawio(check=False))

@@ -99,14 +99,14 @@
     <text x="79.2" y="205.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Return Header</text>
     <text x="33.0" y="223.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">QWSH</text>
     <text x="79.2" y="223.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Quench Water Supply Header</text>
-    <rect x="1334.1" y="24.0" width="229.3" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="1448.7" y="41.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="1334.1" y1="47.0" x2="1563.4" y2="47.0" stroke="black" stroke-width="1"/>
-    <text x="1343.1" y="61.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">R-101</text>
+    <rect x="1332.9" y="24.0" width="230.5" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="1448.1" y="41.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
+    <line x1="1332.9" y1="47.0" x2="1563.4" y2="47.0" stroke="black" stroke-width="1"/>
+    <text x="1341.9" y="61.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">R-101</text>
     <text x="1402.2" y="61.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Propylene Glycol Reactor</text>
-    <text x="1343.1" y="79.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-201A/B</text>
+    <text x="1341.9" y="79.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-201A/B</text>
     <text x="1402.2" y="79.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Propylene Oxide Charge Pump</text>
-    <text x="1343.1" y="97.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-201</text>
+    <text x="1341.9" y="97.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-201</text>
     <text x="1402.2" y="97.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Cooler</text>
     <rect x="24.0" y="1013.5" width="496.7" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
     <text x="272.3" y="1030.5" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>

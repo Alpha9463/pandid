@@ -613,3 +613,29 @@ def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
     assert halo is not None and halo.group(1) == "27.8"
     plates = _tag_pass(fs, default_registry, None, "vertical").plates
     assert [round(x1 - x0, 1) for x0, _y0, x1, _y1 in plates] == [27.8]
+
+
+@pytest.mark.parametrize(
+    ("value", "places", "written"),
+    [(1234567.0, 2, "1234567"), (100.0, 2, "100"), (-0.001, 2, "0"), (4e-05, 6, "0.00004")],
+)
+def test_a_number_is_written_fixed_point_without_a_negative_zero(value, places, written):
+    """Write numbers the same way in both backends: no exponent, no ``-0``.
+
+    Parameters
+    ----------
+    value : float
+        Number to write.
+    places : int
+        Decimal places.
+    written : str
+        Expected text.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    from pandid.render.escape import fmt
+
+    assert fmt(value, places) == written

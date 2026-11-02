@@ -76,27 +76,27 @@
     <line x1="1563.4" y1="945.0" x2="1579.4" y2="945.0" stroke="black" stroke-width="0.75"/>
     <text x="16.0" y="1024.8" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
     <text x="1571.4" y="1024.8" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
-    <rect x="680.9" y="24.0" width="225.6" height="193.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <rect x="680.6" y="24.0" width="226.2" height="193.0" fill="white" stroke="black" stroke-width="1.5"/>
     <text x="793.7" y="41.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="680.9" y1="47.0" x2="906.5" y2="47.0" stroke="black" stroke-width="1"/>
-    <text x="689.9" y="61.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-301</text>
-    <text x="739.2" y="61.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Beer Column</text>
-    <text x="689.9" y="79.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-301</text>
-    <text x="739.2" y="79.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-301 Overhead Condenser</text>
-    <text x="689.9" y="97.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-301</text>
-    <text x="739.2" y="97.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-301 Reflux Drum</text>
-    <text x="689.9" y="115.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-302</text>
-    <text x="739.2" y="115.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-301 Kettle Reboiler</text>
-    <text x="689.9" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">HX-301</text>
-    <text x="739.2" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Beer Column Bottoms Cooling</text>
-    <text x="689.9" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">M-301</text>
-    <text x="739.2" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flocculant Activation Mixer Tank</text>
-    <text x="689.9" y="169.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">M-302</text>
-    <text x="739.2" y="169.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Beer Flocculant Mixer Tank</text>
-    <text x="689.9" y="187.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">F-301</text>
-    <text x="739.2" y="187.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Membrane Pressure Filter Press</text>
-    <text x="689.9" y="205.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">BC-301</text>
-    <text x="739.2" y="205.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Filter Cake Conveyor Belt</text>
+    <line x1="680.6" y1="47.0" x2="906.8" y2="47.0" stroke="black" stroke-width="1"/>
+    <text x="689.6" y="61.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">T-301</text>
+    <text x="739.5" y="61.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Beer Column</text>
+    <text x="689.6" y="79.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-301</text>
+    <text x="739.5" y="79.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-301 Overhead Condenser</text>
+    <text x="689.6" y="97.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-301</text>
+    <text x="739.5" y="97.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-301 Reflux Drum</text>
+    <text x="689.6" y="115.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-302</text>
+    <text x="739.5" y="115.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">T-301 Kettle Reboiler</text>
+    <text x="689.6" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">HX-301</text>
+    <text x="739.5" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Beer Column Bottoms Cooling</text>
+    <text x="689.6" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">M-301</text>
+    <text x="739.5" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Flocculant Activation Mixer Tank</text>
+    <text x="689.6" y="169.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">M-302</text>
+    <text x="739.5" y="169.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Beer Flocculant Mixer Tank</text>
+    <text x="689.6" y="187.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">F-301</text>
+    <text x="739.5" y="187.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Membrane Pressure Filter Press</text>
+    <text x="689.6" y="205.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">BC-301</text>
+    <text x="739.5" y="205.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Filter Cake Conveyor Belt</text>
     <g id="stream_table">
       <rect x="24.0" y="818.5" width="122.0" height="20.0" fill="#eee" stroke="black" stroke-width="0.75"/>
       <text x="29.0" y="832.0" font-family="sans-serif" font-size="10.5" font-weight="bold" text-anchor="start">Stream Number</text>
