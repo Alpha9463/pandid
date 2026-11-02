@@ -260,11 +260,11 @@ def _hops(polylines: dict, direction: str,
           style: str = "arc") -> "tuple[list, set, set]":
     """Return the stream edge order, the edges that hop, and the hops lost.
 
-    The sheet's rule picks the hopping line: a vertical segment hops a
-    horizontal one (the reverse under ``jump_direction="horizontal"``),
-    for crossings strictly inside both segments and at least ``HOP_R``
-    from the hopper's segment ends, as
-    :meth:`SvgRenderer._draw_streams` draws them.
+    The crossings are the sheet's (:func:`~pandid.render.svg.crossings`):
+    a vertical segment hops a horizontal one (the reverse under
+    ``jump_direction="horizontal"``) where the hop has ``HOP_R`` either
+    side. A run that crosses itself is lost, since draw.io never hops an
+    edge over itself.
 
     ``mxGraphView.updateLineJumps`` hops an edge only over edges written
     before it, so each hopper must follow everything it crosses. Edges are
@@ -301,47 +301,35 @@ def _hops(polylines: dict, direction: str,
     keys = list(polylines)
     if style not in _JUMP_STYLES or direction not in ("vertical", "horizontal"):
         return keys, set(), set()
-    # Hopping and crossed segments by owner, as _draw_streams splits them.
-    hopping: list = []
-    crossed: list = []
-    for key, points in polylines.items():
-        for (x1, y1), (x2, y2) in zip(points, points[1:]):
-            if y1 == y2 and x1 != x2:
-                (crossed if direction == "vertical" else hopping).append(
-                    (key, min(x1, x2), max(x1, x2), y1))
-            elif x1 == x2 and y1 != y2:
-                (hopping if direction == "vertical" else crossed).append(
-                    (key, min(y1, y2), max(y1, y2), x1))
     # (crossed, hopper): the crossed edge must be written first.
     after: dict = {key: set() for key in keys}
     # Who may hop each edge, to tell a lost hop from a wrong one.
     hopped_by: dict = {key: set() for key in keys}
     hops: set = set()
     # Crossings keyed by position too: two runs may cross more than once.
-    crossings: set = set()
+    jumps: set = set()
     # Crossings the sheet draws flat (within HOP_R of a segment end) but
     # draw.io would hop, keyed by the edge that must then drop its style.
     marginal: dict = {key: set() for key in keys}
-    for hop_key, lo, hi, at in hopping:
-        for cross_key, c_lo, c_hi, c_at in crossed:
-            # Same test as _draw_streams: the arc needs HOP_R either side.
-            if not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
-                if c_lo < at < c_hi and lo < c_at < hi and hop_key != cross_key:
-                    # Drawn flat, so whichever edge is written second must
-                    # not carry the style.
-                    marginal[hop_key].add(cross_key)
-                    marginal[cross_key].add(hop_key)
-                continue
-            # A run never hops itself, in draw.io either.
-            if hop_key == cross_key:
-                continue
+    # A run hopping itself, which updateLineJumps never does: it intersects
+    # an edge only with the edges validated before it.
+    own: set = set()
+    for hop_key, _seg, cross_key, x, y, room in _svg.crossings(polylines, direction):
+        if hop_key == cross_key:
+            if room:
+                own.add((hop_key, cross_key, x, y))
+        elif not room:
+            # Drawn flat, so whichever edge is written second must not
+            # carry the style.
+            marginal[hop_key].add(cross_key)
+            marginal[cross_key].add(hop_key)
+        else:
             hops.add(hop_key)
             after[hop_key].add(cross_key)
             hopped_by[cross_key].add(hop_key)
-            point = (at, c_at) if direction == "vertical" else (c_at, at)
-            crossings.add((hop_key, cross_key, *point))
+            jumps.add((hop_key, cross_key, x, y))
     if not hops:
-        return keys, hops, set()
+        return keys, hops, own
     # Kahn's algorithm, lowest original index first, to stay near stream
     # order.
     order: list = []
@@ -365,9 +353,9 @@ def _hops(polylines: dict, direction: str,
     # Every crossing the sheet hops and the export draws flat, per crossing
     # rather than per edge, so the caller can report each one.
     lost = {(hop_key, cross_key, x, y)
-            for hop_key, cross_key, x, y in crossings
+            for hop_key, cross_key, x, y in jumps
             if hop_key not in kept or rank[cross_key] > rank[hop_key]}
-    return order, kept, lost
+    return order, kept, lost | own
 
 
 # Clockwise turn -> draw.io ``direction`` (mxShape.getShapeRotation adds
@@ -2020,9 +2008,13 @@ class DrawioRenderer:
             return fs.streams[key].name or f"stream {key + 1}"
 
         for hop_key, cross_key, x, y in sorted(lost):
+            at = f"({fmt(x, 2)}, {fmt(y, 2)})"
             self._findings.append(Issue(
                 "warning", HOP_DROPPED,
-                f"{_run(hop_key)} hops {_run(cross_key)} at ({fmt(x, 2)}, {fmt(y, 2)}) "
+                f"{_run(hop_key)} crosses itself at {at}, and draw.io hops a line "
+                f"only over the lines written before it, never over itself; the "
+                f"crossing is exported flat" if hop_key == cross_key else
+                f"{_run(hop_key)} hops {_run(cross_key)} at {at} "
                 f"on the sheet, and the two cross each other more than once, which "
                 f"draw.io cannot draw either way round; the crossing is exported "
                 f"flat"))

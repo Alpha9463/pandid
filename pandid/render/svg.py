@@ -800,6 +800,59 @@ _LEADER_HEAD = ARROWHEAD / 2
 CROSSING_UNMARKED = "crossing-unmarked"
 
 
+def crossings(polylines: dict, direction: str):
+    """Yield every crossing of two runs, in drawing order.
+
+    The one enumeration behind the SVG marks (:func:`stream_hops`), the
+    warnings for bare crossings (:func:`unmarked_crossings`) and draw.io's
+    line jumps (:func:`pandid.render.drawio._hops`). With
+    ``direction="vertical"`` a vertical segment carries the mark over a
+    horizontal one, and the reverse for ``"horizontal"``. A crossing lies
+    strictly inside both segments, since a run that ends on another is a
+    junction. A run crossing itself is a crossing like any other.
+
+    Parameters
+    ----------
+    polylines : dict
+        ``{key: points}`` for every run, in drawing order.
+    direction : str
+        ``"vertical"`` or ``"horizontal"``.
+
+    Yields
+    ------
+    tuple
+        ``(key, seg, other, x, y, room)``: the marked run and the index of
+        its segment, the crossed run, the crossing point, and whether the
+        marked segment has :data:`HOP_R` either side for the mark. Each
+        segment's crossings come in the order it is drawn.
+
+    Raises
+    ------
+    ValueError
+        If ``direction`` is not a known value.
+    """
+    check_jump_direction(direction)
+    vertical = direction == "vertical"
+    crossed = []  # (key, lo, hi, at) of each segment the marks go over
+    for key, points in polylines.items():
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if vertical and y1 == y2 and x1 != x2:
+                crossed.append((key, min(x1, x2), max(x1, x2), y1))
+            elif not vertical and x1 == x2 and y1 != y2:
+                crossed.append((key, min(y1, y2), max(y1, y2), x1))
+    for key, points in polylines.items():
+        for i, ((x1, y1), (x2, y2)) in enumerate(zip(points, points[1:])):
+            at, start, end = (x1, y1, y2) if vertical else (y1, x1, x2)
+            if (x1 != x2 if vertical else y1 != y2) or start == end:
+                continue
+            lo, hi = min(start, end), max(start, end)
+            cuts = sorted((c for c in crossed if c[1] < at < c[2] and lo < c[3] < hi),
+                          key=lambda c: c[3], reverse=start > end)
+            for other, _lo, _hi, c_at in cuts:
+                x, y = (at, c_at) if vertical else (c_at, at)
+                yield key, i, other, x, y, lo + HOP_R < c_at < hi - HOP_R
+
+
 def unmarked_crossings(fs, jump_direction: str = "vertical",
                        crossing_style: str = "gap") -> list:
     """Return every crossing the sheet draws without its mark.
@@ -827,28 +880,11 @@ def unmarked_crossings(fs, jump_direction: str = "vertical",
     """
     if crossing_style == "plain":
         return []
-    segments = []
-    for stream in fs.streams:
-        points = stream_polyline(stream)
-        for (x1, y1), (x2, y2) in zip(points, points[1:]):
-            if y1 == y2 and x1 != x2:
-                segments.append((stream, "h", min(x1, x2), max(x1, x2), y1))
-            elif x1 == x2 and y1 != y2:
-                segments.append((stream, "v", min(y1, y2), max(y1, y2), x1))
-
-    marks = "v" if jump_direction == "vertical" else "h"
-    out = []
-    for stream, axis, lo, hi, at in segments:
-        if axis != marks:
-            continue
-        for other, o_axis, o_lo, o_hi, o_at in segments:
-            if o_axis == axis or not (o_lo < at < o_hi) or not (lo < o_at < hi):
-                continue
-            if lo + HOP_R < o_at < hi - HOP_R:
-                continue  # room for the mark; the sheet draws it
-            x, y = (at, o_at) if axis == "v" else (o_at, at)
-            out.append((stream, other, x, y))
-    return out
+    streams = fs.streams
+    polylines = {n: stream_polyline(s) for n, s in enumerate(streams)}
+    return [(streams[n], streams[other], x, y)
+            for n, _seg, other, x, y, room in crossings(polylines, jump_direction)
+            if not room]
 
 
 def _crossing_issues(fs, jump_direction: str = "vertical",
@@ -1084,14 +1120,11 @@ def stream_hops(fs, direction: str) -> "list[_Hop]":
     """Return every crossing mark the sheet draws, in drawing order.
 
     Shared by :meth:`SvgRenderer._draw_streams` and :func:`_ink`, so labels
-    avoid the marks, which are not part of any route.
-
-    With ``direction="vertical"`` a vertical segment carries the mark over
-    a horizontal one, and the reverse for ``"horizontal"``. A run that
-    ends on another is a junction, not a crossing, and the mark needs
-    :data:`HOP_R` of the marked segment either side. Any other value
-    raises, as :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` would,
-    for callers that bypass a flowsheet.
+    avoid the marks, which are not part of any route. The crossings are
+    :func:`crossings`, kept where the mark has room. Any other
+    ``direction`` raises, as
+    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` would, for
+    callers that bypass a flowsheet.
 
     An arc bulges by SVG's clockwise sweep (y down): a run drawn downward
     bulges right, upward left, rightward up, leftward down.
@@ -1113,35 +1146,14 @@ def stream_hops(fs, direction: str) -> "list[_Hop]":
     ValueError
         If ``direction`` is not a known value.
     """
-    check_jump_direction(direction)
-    geoms = [(s, stream_polyline(s)) for s in fs.streams]
-    horizontals: list[tuple[float, float, float]] = []
-    verticals: list[tuple[float, float, float]] = []
-    for _s, points in geoms:
-        for (x1, y1), (x2, y2) in zip(points, points[1:]):
-            if y1 == y2:
-                horizontals.append((min(x1, x2), max(x1, x2), y1))
-            elif x1 == x2:
-                verticals.append((x1, min(y1, y2), max(y1, y2)))
-
+    polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
+    vertical = direction == "vertical"
     out: list[_Hop] = []
-    for n, (s, points) in enumerate(geoms):
-        name = s.name or ""
-        for i, ((x1, y1), (x2, y2)) in enumerate(zip(points, points[1:])):
-            if direction == "vertical" and x1 == x2:
-                cuts = sorted((hy for mnx, mxx, hy in horizontals
-                               if mnx < x1 < mxx
-                               and min(y1, y2) + HOP_R < hy < max(y1, y2) - HOP_R),
-                              reverse=y1 > y2)
-                side = 1.0 if y1 < y2 else -1.0
-                out += [_Hop(x1, hy, True, side, n, i, name) for hy in cuts]
-            elif direction == "horizontal" and y1 == y2:
-                cuts = sorted((vx for vx, my, my2 in verticals
-                               if my < y1 < my2
-                               and min(x1, x2) + HOP_R < vx < max(x1, x2) - HOP_R),
-                              reverse=x1 > x2)
-                side = -1.0 if x1 < x2 else 1.0
-                out += [_Hop(vx, y1, False, side, n, i, name) for vx in cuts]
+    for n, i, _other, x, y, room in crossings(polylines, direction):
+        if room:
+            (x1, y1), (x2, y2) = polylines[n][i:i + 2]
+            side = (1.0 if y1 < y2 else -1.0) if vertical else (-1.0 if x1 < x2 else 1.0)
+            out.append(_Hop(x, y, vertical, side, n, i, fs.streams[n].name or ""))
     return out
 
 

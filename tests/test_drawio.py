@@ -41,6 +41,7 @@ from pandid.render.svg import (
     drawing_bounds,
     impulse_tap,
     pneumatic_marks,
+    stream_hops,
     stream_polyline,
     tap_lines,
 )
@@ -3825,7 +3826,7 @@ def _sheet_hops(fs, fit, direction="vertical", style="arc"):
     out = set()
     for hop, lo, hi, at in hopping:
         for cross, c_lo, c_hi, c_at in crossed:
-            if hop == cross or not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
+            if not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
                 continue
             point = (at, c_at) if direction == "vertical" else (c_at, at)
             x, y = fit.at(*point)
@@ -3907,6 +3908,30 @@ def test_jump_direction_picks_which_of_two_crossing_lines_hops(direction):
     assert {hop for hop, _crossed, _x, _y in hops} == (
         {"s1"} if direction == "vertical" else {"s0"}
     )
+
+
+def test_a_run_that_crosses_itself_is_marked_on_the_sheet_and_reported_by_drawio():
+    """Report the self-crossing draw.io cannot hop, which the sheet marks.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = Flowsheet("loop")
+    a = fs.add(units.Feed("F1")).pin(x=60, y=175)
+    b = fs.add(units.Product("P1")).pin(x=600, y=175)
+    fs.connect(a.outlet, b.inlet).via(
+        [(300, 175), (300, 100), (200, 100), (200, 300), (400, 300), (400, 175)]
+    )
+    fs.layout()
+    fs.route()
+    assert [(h.x, h.y) for h in stream_hops(fs, "vertical")] == [(200, 175)]
+    root = ET.fromstring(fs.to_drawio(check=False)).find("diagram/mxGraphModel/root")
+    edges, _fit = _edge_lines(fs, {}, root)
+    assert not _drawio_hops(edges), "draw.io never hops an edge over itself"
+    dropped = [w for w in fs.warnings if w.code == HOP_DROPPED]
+    assert len(dropped) == 1 and "crosses itself" in dropped[0].message
 
 
 def test_the_hop_is_the_radius_the_sheet_draws_it_at():
