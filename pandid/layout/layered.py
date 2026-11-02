@@ -471,7 +471,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
     for s in segs:
         both = (s.lport, s.rport)
         level = all(_face(p) in (None, "E", "W") for p in both)
-        weight = 4.0 if s.lport is None and s.rport is None else 2.0 if level else 1.0
+        # A furnished pipe wants a straight leg for its furniture.
+        weight = (4.0 if s.lport is None and s.rport is None else 2.0 if level else 1.0) + bool(s.link.room)
         for own, mine, other, theirs in ((s.left, s.lport, s.right, s.rport),
                                          (s.right, s.rport, s.left, s.lport)):
             # A unit ignores its flags and its return lines; they come to the unit.
