@@ -716,12 +716,6 @@ PORT_OVERRIDES = {
 }
 
 
-# class -> {port: artwork anchor name}, for a class whose artwork names a port
-# differently. Empty: the dust collectors inherit
-# pandid.units.Separator._VARIANT_ANCHORS.
-PORT_ANCHORS: dict[str, dict[str, str]] = {}
-
-
 # (kind, variant) -> why this drawing gets no class. :func:`claims` refuses to
 # generate while any registered key is unclaimed.
 STAYS_ON_BASE = {
@@ -918,7 +912,7 @@ def variant_map(class_name: str, home: str) -> dict[str, str]:
     """
     if class_name in OWNS:
         return dict(OWNS[class_name])
-    return {"default": home} if home != "default" else {"default": "default"}
+    return {"default": home}
 
 
 def declared_variants(mapping: dict[str, str]) -> tuple[str, ...]:
@@ -988,7 +982,7 @@ def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
         ``(name, direction, role)`` port specs.
     """
     declared = base._declared_ports()
-    variant_ports = base._variant_ports(variant) if hasattr(base, "_variant_ports") else []
+    variant_ports = base._variant_ports(variant)
     return [*declared, *variant_ports]
 
 
@@ -1171,7 +1165,7 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     Returns
     -------
     dict
-        Name, base, kind, doc, variants, aliases, anchors, ports and family.
+        Name, base, doc, variants, aliases, ports and family.
 
     Raises
     ------
@@ -1194,9 +1188,8 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
                 f"are two classes"
             )
     return {
-        "name": class_name, "base": base.__name__, "kind": kind, "doc": doc,
-        "variants": variants, "aliases": aliases,
-        "anchors": PORT_ANCHORS.get(class_name, {}), "ports": ports,
+        "name": class_name, "base": base.__name__, "doc": doc,
+        "variants": variants, "aliases": aliases, "ports": ports,
         "family": arity_family(base),
     }
 
@@ -1312,13 +1305,10 @@ def emit(spec: dict) -> str:
         f'    """{spec["doc"].rstrip()}\n\n'
         f'    Parameters are those of :class:`~pandid.units.{spec["base"]}`.\n    """',
         "",
-        f'    kind = "{spec["kind"]}"',
         f"    VARIANTS = {_variants_source(spec['variants'])}",
     ]
     if spec["aliases"]:
         body.append(f"    VARIANT_ALIASES = {_dict(spec['aliases'])}")
-    if spec["anchors"]:
-        body.append(f"    PORT_ANCHORS = {_dict(spec['anchors'])}")
     body.append(f"    PORTS = {_ports_source(spec['ports'])}")
     body.append("")
     body += [f"    {name}: Port" for name, _direction, _role in spec["ports"]]

@@ -322,7 +322,7 @@ def fit_size(s, room: float, size: float, floor: float,
     return max(floor, math.floor(size * room / need * 10) / 10)
 
 
-def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=None):
+def _text(x, y, s, size, *, anchor="start", bold=False, fill="black"):
     """Return an SVG ``<text>`` element with escaped content.
 
     Parameters
@@ -339,8 +339,6 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=N
         Set bold.
     fill : str, default="black"
         Text colour.
-    baseline : str, optional
-        ``dominant-baseline``.
 
     Returns
     -------
@@ -348,9 +346,8 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=N
         SVG element.
     """
     wt = ' font-weight="bold"' if bold else ""
-    bl = f' dominant-baseline="{baseline}"' if baseline else ""
     return (f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{size:.1f}"'
-            f' text-anchor="{anchor}"{wt}{bl} fill="{fill}">{escaped(s)}</text>')
+            f' text-anchor="{anchor}"{wt} fill="{fill}">{escaped(s)}</text>')
 
 
 # ----------------------------------------------------------------
@@ -857,25 +854,6 @@ def _table_runs(fs) -> list:
     """
     return [run for run in fs._named_runs().values()
             if any(s.properties for s in run) or any(s.at_boundary for s in run)]
-
-
-def _table_streams(fs) -> list:
-    """Return the stream each column is headed from, in sheet order.
-
-    The first segment of each run in :func:`_table_runs`; the values are
-    gathered over the run (:func:`_run_values`).
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet.
-
-    Returns
-    -------
-    list[Stream]
-        Heading streams.
-    """
-    return [run[0] for run in _table_runs(fs)]
 
 
 class _Measured(NamedTuple):

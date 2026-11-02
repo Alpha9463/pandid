@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field, fields, replace
 from typing import Any, Literal
 
-from pandid._checks import check_real
+from pandid._checks import check_real, suggest
 
 # --------------------------------------------------------------
 # Location references (ISO 15519-1:2010 Clause 9)
@@ -338,35 +338,43 @@ def _resolve_col_align(col_align):
     return col_align
 
 
-def _check_box_number(box: object, name: str, value: Any) -> None:
-    """Refuse a non-number for an annotation or table box's layout field.
+class _Box:
+    """Field checks shared by :class:`Annotation` and :class:`TableBox`."""
 
-    Parameters
-    ----------
-    box : Annotation or TableBox
-        Box being set.
-    name : str
-        Field name.
-    value : Any
-        New value.
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set a field, refusing a non-number for a layout field.
 
-    Raises
-    ------
-    TypeError
-        If ``margin``, ``width`` or ``font_size`` is not a number, or a
-        ``position`` coordinate is not one. ``None`` is allowed where the
-        field takes it.
-    """
-    where = f"{type(box).__name__}.{name}"
-    if name in ("margin", "width", "font_size") and value is not None:
-        check_real(value, where)
-    elif name == "position" and value is not None:
-        for i, coordinate in enumerate(value):
-            check_real(coordinate, f"{where}[{i}]")
+        Rows and headers are stored as the text drawn (:func:`_drawn_text`).
+
+        Parameters
+        ----------
+        name : str
+            Field name.
+        value : Any
+            New value.
+
+        Raises
+        ------
+        TypeError
+            If ``margin``, ``width`` or ``font_size`` is not a number, or a
+            ``position`` coordinate is not one. ``None`` is allowed where the
+            field takes it.
+        """
+        where = f"{type(self).__name__}.{name}"
+        if name == "rows":
+            value = _drawn_rows(value)
+        elif name == "headers":
+            value = [_drawn_text(c) for c in value]
+        elif name in ("margin", "width", "font_size") and value is not None:
+            check_real(value, where)
+        elif name == "position" and value is not None:
+            for i, coordinate in enumerate(value):
+                check_real(coordinate, f"{where}[{i}]")
+        super().__setattr__(name, value)
 
 
 @dataclass
-class Annotation:
+class Annotation(_Box):
     """Titled text box placed on the sheet.
 
     A row is a string (one left-aligned line) or a sequence of cells that
@@ -412,29 +420,9 @@ class Annotation:
         """Check the alignment."""
         self.align = _resolve_align(self.align, "top-right")
 
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Set a field, refusing a non-number for a layout field.
-
-        Parameters
-        ----------
-        name : str
-            Field name.
-        value : Any
-            New value.
-
-        Raises
-        ------
-        TypeError
-            If a layout field receives a non-number.
-        """
-        _check_box_number(self, name, value)
-        if name == "rows":
-            value = _drawn_rows(value)
-        super().__setattr__(name, value)
-
 
 @dataclass
-class TableBox:
+class TableBox(_Box):
     """Bordered table with a title, header row and body rows.
 
     Cells are stored as the text drawn (:func:`_drawn_text`), so ``None``
@@ -480,28 +468,6 @@ class TableBox:
         """Check the alignment and column alignments."""
         self.align = _resolve_align(self.align, "bottom-right")
         self.col_align = _resolve_col_align(self.col_align)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Set a field, refusing a non-number for a layout field.
-
-        Parameters
-        ----------
-        name : str
-            Field name.
-        value : Any
-            New value.
-
-        Raises
-        ------
-        TypeError
-            If a layout field receives a non-number.
-        """
-        _check_box_number(self, name, value)
-        if name == "rows":
-            value = _drawn_rows(value)
-        elif name == "headers":
-            value = [_drawn_text(c) for c in value]
-        super().__setattr__(name, value)
 
 
 @dataclass
@@ -853,12 +819,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
         by_name = {u.name: u for u in fs.units}
         missing = [tag for tag in include if tag not in by_name]
         if missing:
-            from difflib import get_close_matches
-
-            hints = []
-            for tag in missing:
-                close = get_close_matches(tag, list(by_name), n=1, cutoff=0.6)
-                hints.append(f"{tag!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
+            hints = [f"{tag!r}{suggest(tag, by_name)}" for tag in missing]
             raise ValueError(
                 f"equipment_list(include=...) names {', '.join(hints)}, which "
                 f"{'is' if len(missing) == 1 else 'are'} not on this flowsheet. "

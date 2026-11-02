@@ -2,7 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Set, Tuple
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -23,21 +23,6 @@ class Rect:
     x_max: float
     y_min: float
     y_max: float
-
-    def contains(self, x: float, y: float) -> bool:
-        """Return whether a point lies strictly inside the rectangle.
-
-        Parameters
-        ----------
-        x, y : float
-            Point coordinates.
-
-        Returns
-        -------
-        bool
-            Whether the point is inside both pairs of boundaries.
-        """
-        return self.x_min < x < self.x_max and self.y_min < y < self.y_max
 
     def intersects_segment(self, x1: float, y1: float, x2: float, y2: float) -> bool:
         """Return whether an orthogonal segment crosses the rectangle interior.
@@ -127,10 +112,10 @@ def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
 
 def share_escape_room(
     start: Tuple[float, float],
-    start_dir: Optional[str],
+    start_dir: str,
     start_proj: Tuple[float, float],
     goal: Tuple[float, float],
-    goal_dir: Optional[str],
+    goal_dir: str,
     goal_proj: Tuple[float, float],
     obstacles: List[Rect],
 ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
@@ -140,7 +125,7 @@ def share_escape_room(
     ----------
     start, goal : tuple[float, float]
         Port-anchor coordinates.
-    start_dir, goal_dir : str or None
+    start_dir, goal_dir : str
         Outward port directions.
     start_proj, goal_proj : tuple[float, float]
         Nominal escape-node coordinates.
@@ -153,8 +138,6 @@ def share_escape_room(
         Adjusted escape coordinates, or the original projections when a shared
         lane is unsuitable.
     """
-    if start_dir is None or goal_dir is None:
-        return start_proj, goal_proj
     axis, sign = TRAVEL[start_dir]
     goal_axis, goal_sign = TRAVEL[goal_dir]
     if goal_axis != axis or goal_sign == sign:
@@ -191,18 +174,18 @@ class VisibilityGraph:
         Connections between adjacent clear nodes.
     """
 
-    def __init__(self, fs: "Flowsheet", margin: float = 15.0):
+    def __init__(self, fs: "Flowsheet"):
         """Build routing lanes from resolved flowsheet geometry.
 
         Parameters
         ----------
         fs : Flowsheet
             Flowsheet with placed frames and resolved port faces.
-        margin : float, default=15.0
-            Clearance around unit and label obstacles.
         """
         from pandid.layout.attach import is_attached
-        from pandid.portgeom import port_anchor, tag_width
+        from pandid.portgeom import port_anchor, tag_width, unit_box
+
+        margin = 15.0  # clearance around unit and label obstacles
 
         self.obstacles: List[Rect] = []
         self.body_obstacles: List[Tuple["Unit", Rect]] = []
@@ -218,7 +201,6 @@ class VisibilityGraph:
             if f is None:
                 continue
             u_width, u_height = f.w, f.h
-            mirrored = f.mirrored
 
             tap = getattr(u, "tap", None)
             inline = (
@@ -229,10 +211,8 @@ class VisibilityGraph:
             )
 
             if not inline:
-                if u.kind == "feed" and not mirrored:
-                    body = Rect(f.x + 50.0 - u_width, f.x + 50.0, f.y, f.y + u_height)
-                else:
-                    body = Rect(f.x, f.x + u_width, f.y, f.y + u_height)
+                x0, y0, x1, y1 = unit_box(u, f)
+                body = Rect(x0, x1, y0, y1)
                 self.obstacles.append(body)
                 self.body_obstacles.append((u, body))
 
@@ -377,7 +357,7 @@ class VisibilityGraph:
         self,
         anchor: Tuple[float, float],
         projection: Tuple[float, float],
-        direction: str | None,
+        direction: str,
         owner: "Unit",
     ) -> Tuple[float, float] | None:
         """Return the furthest clear lane on a port's outward stub.
@@ -388,7 +368,7 @@ class VisibilityGraph:
             Port-anchor coordinate on the unit body.
         projection : tuple[float, float]
             Maximum escape-node coordinate.
-        direction : str or None
+        direction : str
             Outward port direction.
         owner : Unit
             Unit that owns the port.
@@ -398,10 +378,7 @@ class VisibilityGraph:
         tuple[float, float] or None
             Reachable graph node, or ``None`` when the stub is blocked.
         """
-        travel = TRAVEL.get(direction) if direction is not None else None
-        if travel is None:
-            return projection
-        axis, sign = travel
+        axis, sign = TRAVEL[direction]
         distance = sign * (projection[axis] - anchor[axis])
         if distance <= 0:
             return projection

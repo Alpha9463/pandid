@@ -29,7 +29,6 @@ from pandid import Flowsheet, units as U
 from pandid.portgeom import port_point, resolve_size, symbol_to_box
 from pandid.render.symbols import (
     CONVEYOR_LENGTH,
-    CONVEYOR_MIN_LENGTH,
     CONVEYOR_ROLLER,
     SCREW_HEIGHT,
     SCREW_MARGIN,
@@ -38,6 +37,7 @@ from pandid.render.symbols import (
     SCREW_PITCH,
     SCREW_REACH,
     SCREW_TURN,
+    conveyor_min_length,
     conveyor_symbol,
     default_registry,
     screw_conveyor_symbol,
@@ -45,6 +45,7 @@ from pandid.render.symbols import (
 
 SVG = "{http://www.w3.org/2000/svg}"
 R = CONVEYOR_ROLLER
+CONVEYOR_MIN_LENGTH = conveyor_min_length()
 
 
 def _sheet(lengths, diameters=None, **pin):

@@ -40,29 +40,6 @@ def _sym(unit: "Unit"):
     return default_registry.for_unit(unit)
 
 
-def _anchor(unit: "Unit", port_name: str) -> str:
-    """Return the name the unit's symbol anchors a port under.
-
-    Usually the port's own name. A class that renames a nozzle its artwork
-    already ships declares the old name in
-    :attr:`pandid.units.Unit.PORT_ANCHORS`; this applies the rename
-    through :meth:`pandid.units.Unit._symbol_anchor`.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit that owns the port.
-    port_name : str
-        Port name.
-
-    Returns
-    -------
-    str
-        Anchor name in the symbol.
-    """
-    return unit._symbol_anchor(port_name)
-
-
 def _xform(frame) -> tuple[int, bool, bool]:
     """Return a placement's transform.
 
@@ -281,7 +258,7 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
         preference order.
     """
     sym = _sym(unit)
-    anchor = _anchor(unit, port_name)
+    anchor = unit._symbol_anchor(port_name)
     menu = (getattr(sym, "port_faces", None) or {}).get(anchor)
     if menu:
         coords = list(menu.values())
@@ -366,7 +343,7 @@ def is_anchored(unit: "Unit", port_name: str) -> bool:
         Whether the port is anchored or placed by a port series.
     """
     sym = _sym(unit)
-    return (_anchor(unit, port_name) in sym.ports
+    return (unit._symbol_anchor(port_name) in sym.ports
             or _series_point(unit, sym, port_name) is not None)
 
 

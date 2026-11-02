@@ -150,9 +150,11 @@ functions.
 from __future__ import annotations
 
 import hashlib
+import html
 import math
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
+from xml.sax.saxutils import escape
 
 from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
 # ISO 10628-1 5.3.1 c) detail weight, shared so parts match the sheet.
@@ -162,16 +164,16 @@ from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
-                               _furniture_name, _LABEL_CODES, _RENDER_CODES,
-                               _LEADER_HEAD, _scale_text, _Sheet, _too_small,
+                               _fitted, _furniture_name, _LABEL_CODES, _RENDER_CODES,
+                               _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE, _too_small,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH,
                                fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag, enclosure_shape,
                                label_findings,
-                               draws_arrowheads, flange_marks, impulse_tap,
+                               drawing_bounds, draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
-from pandid.render.symbols import (ARROWHEAD, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
+from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -181,9 +183,8 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
 
-# Stencil ink, as scripts/mxgraph_to_svg.py converts it and as
-# symbols._BODY_INK; repeated because scripts/ is not installed.
-_INK = "#111"
+# Stencil ink, as scripts/mxgraph_to_svg.py converts it.
+_INK = _BODY_INK
 
 # Fill for everything this file draws itself: the paper shows through.
 _NO_FILL = "none"
@@ -893,11 +894,6 @@ _PART_APPROXIMATIONS = {
         None, "the two arrows and the opposite ways they point"),
 }
 
-# Type size for drawing lettering (tags, instrument letters, flag names),
-# matching the SVG renderer's 12. Line numbers use svg.NUMBER_TYPE.
-_TAG_TYPE = 12.0
-
-
 class _Tags(NamedTuple):
     """Result of the sheet's equipment-tag placement pass.
 
@@ -1015,13 +1011,7 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
     style = ("text;html=1;strokeColor=none;fillColor=none;"
              f"labelBackgroundColor=#ffffff;align={align};"
              f"verticalAlign=middle;fontSize={size:g};fontColor={_LINE_INK};")
-    return [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} style={_attr(style)} '
-        f'vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(left)}" y="{_num(y - box_h / 2)}" '
-        f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(cid, left, y - box_h / 2, box_w, box_h, style, _html_text(text))
 
 
 def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
@@ -1072,11 +1062,7 @@ def _attr(value) -> str:
     str
         Quoted attribute value.
     """
-    text = writable(value)
-    for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"),
-                         ('"', "&quot;"), ("'", "&apos;")):
-        text = text.replace(char, entity)
-    return f'"{text}"'
+    return '"' + escape(writable(value), {'"': "&quot;", "'": "&apos;"}) + '"'
 
 
 def _html_text(value) -> str:
@@ -1097,10 +1083,7 @@ def _html_text(value) -> str:
     str
         Escaped text.
     """
-    text = writable(value)
-    for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")):
-        text = text.replace(char, entity)
-    return text
+    return html.escape(writable(value), quote=False)
 
 
 def _num(v: float) -> str:
@@ -1166,10 +1149,10 @@ def _fraction(v: float) -> str:
 class DrawioRenderer:
     """Render a laid-out Flowsheet to a draw.io ``mxfile`` document.
 
-    A :class:`pandid.render.Renderer` beside
-    :class:`~pandid.render.svg.SvgRenderer`. It reads the same resolved
-    geometry (layout frames, routed waypoints, :mod:`pandid.portgeom` port
-    points) without re-deriving any, so the two backends agree.
+    The backend beside :class:`~pandid.render.svg.SvgRenderer`. It reads
+    the same resolved geometry (layout frames, routed waypoints,
+    :mod:`pandid.portgeom` port points) without re-deriving any, so the two
+    backends agree.
 
     Parameters
     ----------
@@ -1831,13 +1814,7 @@ class DrawioRenderer:
                 f"strokeColor={approx.stroke}", f"fillColor={approx.fill}",
                 f"strokeWidth={fit.length(approx.weight):g}",
                 "connectable=0", "movable=0"]) + ";"
-            out += [
-                f'        <mxCell id="{cid}-s{i}" value="" style={_attr(style)} '
-                f'vertex="1" parent="{cid}">',
-                f'          <mxGeometry x="{_num(px * w)}" y="{_num(py * h)}" '
-                f'width="{_num(pw * w)}" height="{_num(ph * h)}" as="geometry" />',
-                '        </mxCell>',
-            ]
+            out += _rect(f"{cid}-s{i}", px * w, py * h, pw * w, ph * h, style, parent=cid)
         return out
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
@@ -1902,13 +1879,7 @@ class DrawioRenderer:
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(_PART_STROKE):g}",
                 "connectable=0", "movable=0"]) + ";"
-            out += [
-                f'        <mxCell id="{cid}-p{i}" value="" style={_attr(style)} '
-                f'vertex="1" parent="{cid}">',
-                f'          <mxGeometry x="{_num(ox * w)}" y="{_num(oy * h)}" '
-                f'width="{_num(ow * w)}" height="{_num(oh * h)}" as="geometry" />',
-                '        </mxCell>',
-            ]
+            out += _rect(f"{cid}-p{i}", ox * w, oy * h, ow * w, oh * h, style, parent=cid)
         return out
 
     @staticmethod
@@ -1949,13 +1920,7 @@ class DrawioRenderer:
                           f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
                           f"strokeWidth={fit.length(approx.weight):g}",
                           "connectable=0", "movable=0"]) + ";"
-        return [
-            f'        <mxCell id="{cid}-in" value="" style={_attr(style)} '
-            f'vertex="1" parent="{cid}">',
-            f'          <mxGeometry x="0" y="0" width="{_num(w)}" '
-            f'height="{_num(h)}" as="geometry" />',
-            '        </mxCell>',
-        ]
+        return _rect(f"{cid}-in", 0, 0, w, h, style, parent=cid)
 
     # ---------------------------------------------------- streams
 
@@ -2275,38 +2240,6 @@ class DrawioRenderer:
     # -------------------------------------------------- furniture
 
     @staticmethod
-    def _drawing_box(fs) -> "tuple[float, float, float, float]":
-        """Return the drawing's bounding box, which furniture docks around.
-
-        Unit boxes and route waypoints, as in :meth:`SvgRenderer.render`; an
-        empty flowsheet gives zeros.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Flowsheet.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            ``(x0, y0, x1, y1)``.
-        """
-        if not fs.units:
-            return (0.0, 0.0, 0.0, 0.0)
-        x0 = y0 = float("inf")
-        x1 = y1 = float("-inf")
-        for u in fs.units:
-            bx0, by0, bx1, by1 = unit_box(u, u.frame)
-            x0, y0 = min(x0, bx0), min(y0, by0)
-            x1, y1 = max(x1, bx1), max(y1, by1)
-        for s in fs.streams:
-            if s.route and s.route.waypoints:
-                for px, py in s.route.waypoints:
-                    x0, y0 = min(x0, px), min(y0, py)
-                    x1, y1 = max(x1, px), max(y1, py)
-        return (x0, y0, x1, y1)
-
-    @staticmethod
     def _page_box(sheet, frame) -> "tuple[float, float]":
         """Return the page the file states, in drawing units.
 
@@ -2371,7 +2304,7 @@ class DrawioRenderer:
         items: list = []
         if fs.title_block is not None:
             items.append((fs.title_block, "bottom-right",
-                          *_strip_size(fs.title_block)))
+                          *F.measure_title_strip(fs.title_block)))
         for a in getattr(fs, "annotations", []) or []:
             w, h = (F.measure_table(a) if isinstance(a, TableBox)
                     else F.measure_annotation(a))
@@ -2382,7 +2315,7 @@ class DrawioRenderer:
         if table is not None:
             items.append((table, "bottom-left", table.w, table.h))
 
-        inner = self._drawing_box(fs)
+        inner = drawing_bounds(fs)
         if sheet is None:
             placed, frame, free = F.dock(items, inner)
         else:
@@ -2659,21 +2592,8 @@ def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
         XML lines for the leader cell.
     """
     (ax, ay), (bx, by) = number.leader
-    style = (f"edgeStyle=none;rounded=0;html=1;startArrow=none;endArrow=block;"
-             f"endFill=1;endSize={fit.length(_LEADER_HEAD):g};"
-             f"strokeColor={ink};"
-             f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};movable=1;{_NO_HOP}")
-    x0, y0 = fit.at(ax, ay)
-    x1, y1 = fit.at(bx, by)
-    return [
-        f'        <mxCell id="{edge_id}-lead" value="" style={_attr(style)} '
-        f'edge="1" parent="1">',
-        '          <mxGeometry relative="1" as="geometry">',
-        f'            <mxPoint x="{_num(x0)}" y="{_num(y0)}" as="sourcePoint" />',
-        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="targetPoint" />',
-        '          </mxGeometry>',
-        '        </mxCell>',
-    ]
+    return _segment(f"{edge_id}-lead", *fit.at(ax, ay), *fit.at(bx, by), ink,
+                    fit.length(LineWeight.DETAIL.width), head=fit.length(_LEADER_HEAD))
 
 
 # draw.io built-in for each stream-label enclosure, drawn to fill
@@ -2717,14 +2637,8 @@ def _enclosure(edge_id: str, number, shape: str, ink: str, fit: "_Fit") -> list[
              f"strokeWidth={fit.length(_ENCLOSURE_STROKE):g};"
              f"{_drawn_type(NUMBER_TYPE, fit)};verticalAlign=middle;align=center;"
              + ("horizontal=0;" if number.vertical else ""))
-    return [
-        f'        <mxCell id="{edge_id}-box" value={_attr(_html_text(number.name))} '
-        f'style={_attr(style)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" '
-        f'width="{_num(fit.length(x1 - x0))}" height="{_num(fit.length(y1 - y0))}" '
-        f'as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(f"{edge_id}-box", x, y, fit.length(x1 - x0), fit.length(y1 - y0),
+                 style, _html_text(number.name))
 
 
 # Style keys for a label on each side of a cell. The position key moves
@@ -3123,13 +3037,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
 
     shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};" + keys
     cell = _TABLE_CELL + f"fontSize={font:g};"
-    out = [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(title))} '
-        f'style={_attr(shape)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
-        f'height="{_num(h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    out = _rect(cid, x, y, w, h, shape, _html_text(title))
     ry = start
     for r, cells in enumerate(body):
         rh = rows_h[r]
@@ -3284,14 +3192,8 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
     body = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
             f"align=left;verticalAlign=top;spacingLeft=7;fontSize={font:g};"
             f"fontColor={_LINE_INK};")
-    return out + [
-        f'        <mxCell id="{cid}-b" '
-        f'value={_attr("<br>".join(_html_text(r) for r in rows))} '
-        f'style={_attr(body)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y + title_h)}" '
-        f'width="{_num(w)}" height="{_num(h - title_h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return out + _rect(f"{cid}-b", x, y + title_h, w, h - title_h, body,
+                       "<br>".join(_html_text(r) for r in rows))
 
 
 # Annotation tables draw only the border and title band, as the SVG does;
@@ -3299,44 +3201,22 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
 _ANNOTATION_KEYS = "rowLines=0;columnLines=0;"
 
 
-def _fitted(inner, free) -> "tuple[float, float, float]":
-    """Return the scale and offset that centre the drawing in ``free``.
-
-    Uses :func:`pandid.render.svg._fit_scale`, so the title strip's scale
-    cell matches.
-
-    Parameters
-    ----------
-    inner : tuple[float, float, float, float]
-        Drawing bounds ``(x0, y0, x1, y1)``.
-    free : tuple[float, float, float, float]
-        Region ``(x, y, w, h)`` left for the drawing.
-
-    Returns
-    -------
-    tuple[float, float, float]
-        ``(scale, offset_x, offset_y)``.
-    """
-    from pandid.render.svg import _fit_scale
-
-    dx0, dy0, dx1, dy1 = inner
-    fx, fy, fw, fh = free
-    dw, dh = dx1 - dx0, dy1 - dy0
-    s = _fit_scale(dw, dh, free)
-    return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
-
-
-def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
-    """Return a bare rectangle cell, used for the drawing frame.
+def _rect(cid: str, x, y, w, h, style: str, value: str = "",
+          parent: str = "1") -> list[str]:
+    """Return a vertex cell with a plain rectangular geometry.
 
     Parameters
     ----------
     cid : str
         Cell id.
     x, y, w, h : float
-        Rectangle.
+        Rectangle, relative to ``parent``.
     style : str
         Cell style.
+    value : str, default=""
+        Label, already escaped for HTML (:func:`_html_text`).
+    parent : str, default="1"
+        Parent cell id.
 
     Returns
     -------
@@ -3344,18 +3224,19 @@ def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
         XML lines.
     """
     return [
-        f'        <mxCell id="{cid}" value="" style={_attr(style)} '
-        f'vertex="1" parent="1">',
+        f'        <mxCell id="{cid}" value={_attr(value)} style={_attr(style)} '
+        f'vertex="1" parent="{parent}">',
         f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
         f'height="{_num(h)}" as="geometry" />',
         '        </mxCell>',
     ]
 
 
-def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
+def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float,
+             head: "float | None" = None) -> list[str]:
     """Return a ruled line between two points, as draw.io writes a free rule.
 
-    ``noJump=1``, since furniture rules are not connections
+    ``noJump=1``, since furniture rules and leaders are not connections
     (:data:`_NO_HOP`).
 
     Parameters
@@ -3368,13 +3249,17 @@ def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
         Stroke colour.
     weight : float
         Stroke width.
+    head : float, optional
+        Arrowhead size at the second point; no head when omitted.
 
     Returns
     -------
     list[str]
         XML lines.
     """
-    style = (f"edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;"
+    arrows = ("endArrow=none;startArrow=none;" if head is None
+              else f"startArrow=none;endArrow=block;endFill=1;endSize={head:g};")
+    style = (f"edgeStyle=none;rounded=0;html=1;{arrows}"
              f"strokeColor={ink};strokeWidth={weight:g};movable=1;{_NO_HOP}")
     return [
         f'        <mxCell id="{cid}" value="" style={_attr(style)} '
@@ -3413,14 +3298,8 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
     style = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
              f"align=center;verticalAlign=middle;fontStyle=1;fontSize={size:g};"
              f"fontColor={_LINE_INK};")
-    return [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} '
-        f'style={_attr(style)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(cx - _LABEL_HALF)}" '
-        f'y="{_num(cy - _LABEL_HALF)}" width="{_num(2 * _LABEL_HALF)}" '
-        f'height="{_num(2 * _LABEL_HALF)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(cid, cx - _LABEL_HALF, cy - _LABEL_HALF, 2 * _LABEL_HALF, 2 * _LABEL_HALF,
+                 style, _html_text(text))
 
 
 def _strip_rule(cid: str, part) -> list[str]:
@@ -3479,13 +3358,7 @@ def _strip_label(cid: str, part) -> list[str]:
              f"align={align};verticalAlign=middle;fontSize={size:g};"
              f"fontColor={_LINE_INK if ink == 'black' else ink};"
              + ("fontStyle=1;" if bold else ""))
-    return [
-        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} '
-        f'style={_attr(style)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(left)}" y="{_num(top)}" '
-        f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
-        '        </mxCell>',
-    ]
+    return _rect(cid, left, top, box_w, box_h, style, _html_text(text))
 
 
 def _rev_table(cid: str, grid) -> list[str]:
@@ -3529,19 +3402,3 @@ def _rev_table(cid: str, grid) -> list[str]:
     return out + _segment(f"{cid}-rule", grid.x, grid.header_y,
                           grid.x + grid.w, grid.header_y, _LINE_INK,
                           F._BOX_UNDERLINE)
-
-
-def _strip_size(block) -> "tuple[float, float]":
-    """Return the title strip size, as the SVG measures it.
-
-    Parameters
-    ----------
-    block : TitleBlock
-        Title block.
-
-    Returns
-    -------
-    tuple[float, float]
-        Width and height.
-    """
-    return F.measure_title_strip(block)

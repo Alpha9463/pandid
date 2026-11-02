@@ -146,7 +146,6 @@ class CentrifugalPump(Pump):
     Parameters are those of :class:`~pandid.units.Pump`.
     """
 
-    kind = "pump"
     VARIANTS = ("default",)
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
@@ -165,7 +164,6 @@ class GearPump(Pump):
     Parameters are those of :class:`~pandid.units.Pump`.
     """
 
-    kind = "pump"
     VARIANTS = ("default", "gear")
     VARIANT_ALIASES = {"default": "gear"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -184,7 +182,6 @@ class ScrewPump(Pump):
     Parameters are those of :class:`~pandid.units.Pump`.
     """
 
-    kind = "pump"
     VARIANTS = ("default", "screw")
     VARIANT_ALIASES = {"default": "screw"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -204,7 +201,6 @@ class PeristalticPump(Pump):
     Parameters are those of :class:`~pandid.units.Pump`.
     """
 
-    kind = "pump"
     VARIANTS = ("default", "peristaltic")
     VARIANT_ALIASES = {"default": "peristaltic"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -223,7 +219,6 @@ class SubmersiblePump(Pump):
     Parameters are those of :class:`~pandid.units.Pump`.
     """
 
-    kind = "pump"
     VARIANTS = ("default", "submersible")
     VARIANT_ALIASES = {"default": "submersible"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -242,7 +237,6 @@ class VacuumPump(Pump):
     Parameters are those of :class:`~pandid.units.Pump`.
     """
 
-    kind = "pump"
     VARIANTS = ("default", "vacuum")
     VARIANT_ALIASES = {"default": "vacuum"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -262,7 +256,6 @@ class CentrifugalCompressor(Compressor):
     Parameters are those of :class:`~pandid.units.Compressor`.
     """
 
-    kind = "compressor"
     VARIANTS = ("default",)
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
@@ -280,7 +273,6 @@ class ReciprocatingCompressor(Compressor):
     Parameters are those of :class:`~pandid.units.Compressor`.
     """
 
-    kind = "compressor"
     VARIANTS = ("default", "reciprocating")
     VARIANT_ALIASES = {"default": "reciprocating"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -298,7 +290,6 @@ class RotaryCompressor(Compressor):
     Parameters are those of :class:`~pandid.units.Compressor`.
     """
 
-    kind = "compressor"
     VARIANTS = ("default", "rotary")
     VARIANT_ALIASES = {"default": "rotary"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -318,7 +309,6 @@ class LiquidRingCompressor(Compressor):
     Parameters are those of :class:`~pandid.units.Compressor`.
     """
 
-    kind = "compressor"
     VARIANTS = ("default", "liquid_ring")
     VARIANT_ALIASES = {"default": "liquid_ring"}
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -346,7 +336,6 @@ class ShellAndTubeExchanger(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "shell_tube", "u_tube", "straight_tubes", "finned", "hairpin")
     PORTS = [
         ("shell_in", "inlet", "process"),
@@ -371,7 +360,6 @@ class DoublePipeExchanger(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "double_pipe")
     VARIANT_ALIASES = {"default": "double_pipe"}
     PORTS = [
@@ -403,7 +391,6 @@ class KettleReboiler(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "kettle")
     VARIANT_ALIASES = {"default": "kettle"}
     PORTS = [
@@ -433,7 +420,6 @@ class Condenser(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "condenser")
     VARIANT_ALIASES = {"default": "condenser"}
     PORTS = [
@@ -461,7 +447,6 @@ class AirCooledExchanger(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "air_cooled")
     VARIANT_ALIASES = {"default": "air_cooled"}
     PORTS = [
@@ -488,7 +473,6 @@ class PlateExchanger(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "plate")
     VARIANT_ALIASES = {"default": "plate"}
     PORTS = [
@@ -514,7 +498,6 @@ class SpiralExchanger(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "spiral")
     VARIANT_ALIASES = {"default": "spiral"}
     PORTS = [
@@ -542,7 +525,6 @@ class ThinFilmEvaporator(HeatExchanger):
     Parameters are those of :class:`~pandid.units.HeatExchanger`.
     """
 
-    kind = "hex"
     VARIANTS = ("default", "thin_film")
     VARIANT_ALIASES = {"default": "thin_film"}
     PORTS = [
@@ -569,7 +551,6 @@ class CalandriaEvaporator(Evaporator):
     Parameters are those of :class:`~pandid.units.Evaporator`.
     """
 
-    kind = "evaporator"
     VARIANTS = ("default", "calandria")
     VARIANT_ALIASES = {"default": "calandria"}
     PORTS = [
@@ -599,7 +580,6 @@ class FallingFilmEvaporator(Evaporator):
     Parameters are those of :class:`~pandid.units.Evaporator`.
     """
 
-    kind = "evaporator"
     VARIANTS = ("default", "falling_film")
     VARIANT_ALIASES = {"default": "falling_film"}
     PORTS = [
@@ -628,7 +608,6 @@ class ClimbingFilmEvaporator(Evaporator):
     Parameters are those of :class:`~pandid.units.Evaporator`.
     """
 
-    kind = "evaporator"
     VARIANTS = ("default", "climbing_film")
     VARIANT_ALIASES = {"default": "climbing_film"}
     PORTS = [
@@ -656,7 +635,6 @@ class PlateEvaporator(Evaporator):
     Parameters are those of :class:`~pandid.units.Evaporator`.
     """
 
-    kind = "evaporator"
     VARIANTS = ("default", "plate")
     VARIANT_ALIASES = {"default": "plate"}
     PORTS = [
@@ -685,7 +663,6 @@ class RotaryKiln(Kiln):
     Parameters are those of :class:`~pandid.units.Kiln`.
     """
 
-    kind = "kiln"
     VARIANTS = ("default",)
     PORTS = [
         ("feed", "inlet", "feed"),
@@ -714,7 +691,6 @@ class FluidizedBedCalciner(Kiln):
     Parameters are those of :class:`~pandid.units.Kiln`.
     """
 
-    kind = "kiln"
     VARIANTS = ("default", "fluidized_bed")
     VARIANT_ALIASES = {"default": "fluidized_bed"}
     PORTS = [
@@ -743,7 +719,6 @@ class ShaftKiln(Kiln):
     Parameters are those of :class:`~pandid.units.Kiln`.
     """
 
-    kind = "kiln"
     VARIANTS = ("default", "shaft")
     VARIANT_ALIASES = {"default": "shaft"}
     PORTS = [
@@ -777,7 +752,6 @@ class Cyclone(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "cyclone")
     VARIANT_ALIASES = {"default": "cyclone"}
     PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
@@ -907,7 +881,6 @@ class GravitySeparator(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "gravity")
     VARIANT_ALIASES = {"default": "gravity"}
     PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
@@ -1037,7 +1010,6 @@ class ElectrostaticPrecipitator(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "electrostatic")
     VARIANT_ALIASES = {"default": "electrostatic"}
     PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
@@ -1167,7 +1139,6 @@ class Screen(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "sifter")
     VARIANT_ALIASES = {"default": "sifter"}
     PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
@@ -1296,7 +1267,6 @@ class ImpactSeparator(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
     PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
@@ -1426,7 +1396,6 @@ class MagneticSeparator(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "electromagnetic", "permanent_magnet")
     VARIANT_ALIASES = {"default": "permanent_magnet"}
     PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
@@ -1556,7 +1525,6 @@ class Scrubber(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "scrubber")
     VARIANT_ALIASES = {"default": "scrubber"}
     PORTS = [("vapor", "outlet", "vapor"), ("liquid", "outlet", "liquid")]
@@ -1687,7 +1655,6 @@ class VenturiScrubber(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "venturi_scrubber")
     VARIANT_ALIASES = {"default": "venturi_scrubber"}
     PORTS = [("vapor", "outlet", "vapor"), ("liquid", "outlet", "liquid")]
@@ -1820,7 +1787,6 @@ class KnockoutDrum(Separator):
     Parameters are those of :class:`~pandid.units.Separator`.
     """
 
-    kind = "separator"
     VARIANTS = ("default", "knockout")
     VARIANT_ALIASES = {"default": "knockout"}
     PORTS = [("vapor", "outlet", "vapor"), ("liquid", "outlet", "liquid")]
@@ -1951,7 +1917,6 @@ class DustCollector(Filter):
     Parameters are those of :class:`~pandid.units.Filter`.
     """
 
-    kind = "filter"
     VARIANTS = ("default", "fixed_bed", "belt", "gas", "gas_fixed_bed", "gas_belt")
     VARIANT_ALIASES = {"default": "gas", "fixed_bed": "gas_fixed_bed", "belt": "gas_belt"}
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
@@ -1973,7 +1938,6 @@ class RotaryDrumFilter(Filter):
     Parameters are those of :class:`~pandid.units.Filter`.
     """
 
-    kind = "filter"
     VARIANTS = ("default", "scraper", "rotary", "rotary_scraper")
     VARIANT_ALIASES = {"default": "rotary", "scraper": "rotary_scraper"}
     PORTS = [
@@ -1999,7 +1963,6 @@ class FilterPress(Filter):
     Parameters are those of :class:`~pandid.units.Filter`.
     """
 
-    kind = "filter"
     VARIANTS = ("default", "press")
     VARIANT_ALIASES = {"default": "press"}
     PORTS = [
@@ -2026,7 +1989,6 @@ class IonExchanger(Filter):
     Parameters are those of :class:`~pandid.units.Filter`.
     """
 
-    kind = "filter"
     VARIANTS = ("default", "ion_exchange")
     VARIANT_ALIASES = {"default": "ion_exchange"}
     PORTS = [
@@ -2051,7 +2013,6 @@ class RotaryDryer(Dryer):
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
 
-    kind = "dryer"
     VARIANTS = ("default",)
     PORTS = [
         ("feed", "inlet", "feed"),
@@ -2076,7 +2037,6 @@ class FluidizedBedDryer(Dryer):
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
 
-    kind = "dryer"
     VARIANTS = ("default", "fluidized_bed")
     VARIANT_ALIASES = {"default": "fluidized_bed"}
     PORTS = [
@@ -2103,7 +2063,6 @@ class SprayDryer(Dryer):
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
 
-    kind = "dryer"
     VARIANTS = ("default", "spray")
     VARIANT_ALIASES = {"default": "spray"}
     PORTS = [
@@ -2130,7 +2089,6 @@ class ShelfDryer(Dryer):
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
 
-    kind = "dryer"
     VARIANTS = ("default", "shelf")
     VARIANT_ALIASES = {"default": "shelf"}
     PORTS = [
@@ -2157,7 +2115,6 @@ class TurboDryer(Dryer):
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
 
-    kind = "dryer"
     VARIANTS = ("default", "turbo")
     VARIANT_ALIASES = {"default": "turbo"}
     PORTS = [
@@ -2184,7 +2141,6 @@ class BeltDryer(Dryer):
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
 
-    kind = "dryer"
     VARIANTS = ("default", "belt")
     VARIANT_ALIASES = {"default": "belt"}
     PORTS = [
@@ -2210,7 +2166,6 @@ class JawCrusher(Crusher):
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
 
-    kind = "crusher"
     VARIANTS = ("default", "jaw")
     VARIANT_ALIASES = {"default": "jaw"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2229,7 +2184,6 @@ class ConeCrusher(Crusher):
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
 
-    kind = "crusher"
     VARIANTS = ("default", "cone")
     VARIANT_ALIASES = {"default": "cone"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2247,7 +2201,6 @@ class HammerCrusher(Crusher):
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
 
-    kind = "crusher"
     VARIANTS = ("default", "hammer")
     VARIANT_ALIASES = {"default": "hammer"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2266,7 +2219,6 @@ class ImpactCrusher(Crusher):
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
 
-    kind = "crusher"
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2285,7 +2237,6 @@ class RollerCrusher(Crusher):
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
 
-    kind = "crusher"
     VARIANTS = ("default", "roller")
     VARIANT_ALIASES = {"default": "roller"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2304,7 +2255,6 @@ class HammerMill(Mill):
     Parameters are those of :class:`~pandid.units.Mill`.
     """
 
-    kind = "mill"
     VARIANTS = ("default", "hammer")
     VARIANT_ALIASES = {"default": "hammer"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2322,7 +2272,6 @@ class ImpactMill(Mill):
     Parameters are those of :class:`~pandid.units.Mill`.
     """
 
-    kind = "mill"
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2341,7 +2290,6 @@ class RollerMill(Mill):
     Parameters are those of :class:`~pandid.units.Mill`.
     """
 
-    kind = "mill"
     VARIANTS = ("default", "roller")
     VARIANT_ALIASES = {"default": "roller"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2363,7 +2311,6 @@ class VibratingMill(Mill):
     Parameters are those of :class:`~pandid.units.Mill`.
     """
 
-    kind = "mill"
     VARIANTS = ("default", "vibration")
     VARIANT_ALIASES = {"default": "vibration"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2386,7 +2333,6 @@ class ScrewConveyor(Conveyor):
     Parameters are those of :class:`~pandid.units.Conveyor`.
     """
 
-    kind = "conveyor"
     VARIANTS = ("default", "screw")
     VARIANT_ALIASES = {"default": "screw"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2405,7 +2351,6 @@ class RotaryValveFeeder(Feeder):
     Parameters are those of :class:`~pandid.units.Feeder`.
     """
 
-    kind = "feeder"
     VARIANTS = ("default", "rotary_valve")
     VARIANT_ALIASES = {"default": "rotary_valve"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2424,7 +2369,6 @@ class RotaryTableFeeder(Feeder):
     Parameters are those of :class:`~pandid.units.Feeder`.
     """
 
-    kind = "feeder"
     VARIANTS = ("default", "rotary_table")
     VARIANT_ALIASES = {"default": "rotary_table"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2443,7 +2387,6 @@ class MeteringFeeder(Feeder):
     Parameters are those of :class:`~pandid.units.Feeder`.
     """
 
-    kind = "feeder"
     VARIANTS = ("default", "metering")
     VARIANT_ALIASES = {"default": "metering"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -2460,7 +2403,6 @@ class CoarseRakeScreen(ScreeningDevice):
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
 
-    kind = "screening_device"
     VARIANTS = ("default", "coarse_rake")
     VARIANT_ALIASES = {"default": "coarse_rake"}
     PORTS = [
@@ -2482,7 +2424,6 @@ class FineRakeScreen(ScreeningDevice):
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
 
-    kind = "screening_device"
     VARIANTS = ("default", "fine_rake")
     VARIANT_ALIASES = {"default": "fine_rake"}
     PORTS = [
@@ -2505,7 +2446,6 @@ class CoarseAndFineScreen(ScreeningDevice):
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
 
-    kind = "screening_device"
     VARIANTS = ("default", "coarse_and_fine")
     VARIANT_ALIASES = {"default": "coarse_and_fine"}
     PORTS = [
@@ -2529,7 +2469,6 @@ class VibratingScreen(ScreeningDevice):
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
 
-    kind = "screening_device"
     VARIANTS = ("default", "vibrating")
     VARIANT_ALIASES = {"default": "vibrating"}
     PORTS = [
@@ -2552,7 +2491,6 @@ class RotaryDrumScreen(ScreeningDevice):
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
 
-    kind = "screening_device"
     VARIANTS = ("default", "rotating_drum")
     VARIANT_ALIASES = {"default": "rotating_drum"}
     PORTS = [
@@ -2575,7 +2513,6 @@ class ReelScreen(ScreeningDevice):
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
 
-    kind = "screening_device"
     VARIANTS = ("default", "basket_reel")
     VARIANT_ALIASES = {"default": "basket_reel"}
     PORTS = [
@@ -2599,7 +2536,6 @@ class ThreeWayValve(Valve):
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    kind = "valve"
     VARIANTS = ("default", "three_way")
     VARIANT_ALIASES = {"default": "three_way"}
     PORTS = [
@@ -2633,7 +2569,6 @@ class ControlValve(Valve):
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    kind = "valve"
     VARIANTS = ("default", "butterfly_pneumatic", "control")
     VARIANT_ALIASES = {"default": "control"}
     PORTS = [
@@ -2658,7 +2593,6 @@ class SolenoidValve(Valve):
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    kind = "valve"
     VARIANTS = ("default", "solenoid")
     VARIANT_ALIASES = {"default": "solenoid"}
     PORTS = [
@@ -2685,7 +2619,6 @@ class ReliefValve(Valve):
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    kind = "valve"
     VARIANTS = ("default", "psv", "relief")
     VARIANT_ALIASES = {"default": "relief"}
     PORTS = [
@@ -2710,7 +2643,6 @@ class PressureRegulator(Valve):
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    kind = "valve"
     VARIANTS = ("default", "regulator")
     VARIANT_ALIASES = {"default": "regulator"}
     PORTS = [
@@ -2734,7 +2666,6 @@ class MotorOperatedValve(Valve):
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    kind = "valve"
     VARIANTS = ("default", "motor")
     VARIANT_ALIASES = {"default": "motor"}
     PORTS = [
@@ -2761,7 +2692,6 @@ class CheckValve(Valve):
     Parameters are those of :class:`~pandid.units.Valve`.
     """
 
-    kind = "valve"
     VARIANTS = ("default", "check")
     VARIANT_ALIASES = {"default": "check"}
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
@@ -2784,7 +2714,6 @@ class SpectacleBlind(Fitting):
     Parameters are those of :class:`~pandid.units.Fitting`.
     """
 
-    kind = "fitting"
     VARIANTS = ("default", "blind")
     VARIANT_ALIASES = {"default": "blind"}
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
@@ -2808,7 +2737,6 @@ class SteamTrap(Fitting):
     Parameters are those of :class:`~pandid.units.Fitting`.
     """
 
-    kind = "fitting"
     VARIANTS = ("default", "steam_trap")
     VARIANT_ALIASES = {"default": "steam_trap"}
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
@@ -2837,7 +2765,6 @@ class FlowElement(Fitting):
     Parameters are those of :class:`~pandid.units.Fitting`.
     """
 
-    kind = "fitting"
     VARIANTS = (
         "default",
         "venturi",
@@ -2871,7 +2798,6 @@ class StirredTankReactor(Reactor):
     Parameters are those of :class:`~pandid.units.Reactor`.
     """
 
-    kind = "reactor"
     VARIANTS = ("default",)
     PORTS = [
         ("outlet", "outlet", "process"),
@@ -3010,7 +2936,6 @@ class GasHolder(Tank):
     Parameters are those of :class:`~pandid.units.Tank`.
     """
 
-    kind = "tank"
     VARIANTS = ("default", "gas_holder")
     VARIANT_ALIASES = {"default": "gas_holder"}
     PORTS = [

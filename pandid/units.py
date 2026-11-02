@@ -18,10 +18,9 @@ import math
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
-from pandid._checks import check_real, check_whole, is_whole
+from pandid._checks import check_real, check_whole, is_whole, suggest
 from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
@@ -254,6 +253,10 @@ class Unit:
 
     kind: str = "unit"
     PORTS: list[tuple[str, str, str]] = []
+    # Ports that depend on the variant, which a subclass's __init__ adds
+    # through _variant_ports: _VARIANT_PORTS by variant, else _DEFAULT_PORTS.
+    _DEFAULT_PORTS: list[tuple[str, str, str]] = []
+    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
 
     VARIANTS: tuple[str, ...] = ()
     VARIANT_ALIASES: dict[str, str] = {}
@@ -315,6 +318,25 @@ class Unit:
         return []
 
     @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """Return the ports a variant adds.
+
+        A subclass that declares :attr:`PORTS` gets none, so a per-variant
+        subclass does not add its ports twice.
+
+        Parameters
+        ----------
+        variant : str
+            Resolved variant.
+
+        Returns
+        -------
+        list[tuple[str, str, str]]
+            Port specs.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
+
+    @classmethod
     def composition_defaults(
         cls, variant: str, stated: Mapping[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -373,8 +395,7 @@ class Unit:
         ValueError
             The error to raise.
         """
-        close = get_close_matches(variant, cls.VARIANTS, n=1, cutoff=0.6)
-        suggestion = f" (did you mean {close[0]!r}?)" if close else ""
+        suggestion = suggest(variant, cls.VARIANTS)
         generic = cls._generic_class()
         escape = (
             ""
@@ -843,9 +864,9 @@ class Unit:
     def has_another_port(self, port: "Port") -> bool:
         """Return whether a connected port can take another stream.
 
-        ``False`` for equipment, where a second pipe needs a :class:`Tee`.
-        :class:`Instrument` signal pools and :class:`_Boundary` flags
-        override it. Asked separately from :meth:`another_port` so
+        True for a member of a port pool (:meth:`_pool_of`), so ``False``
+        for equipment, where a second pipe needs a :class:`Tee`. Asked
+        separately from :meth:`another_port` so
         :meth:`~pandid.flowsheet.Flowsheet.connect` can check both ends
         before adding a port to either.
 
@@ -859,12 +880,13 @@ class Unit:
         bool
             Whether :meth:`another_port` can supply a free equivalent.
         """
-        return False
+        return self._pool_of(port.name) is not None
 
     def another_port(self, port: "Port") -> "Port":
         """Return a free port equivalent to ``port``, adding one if needed.
 
-        Called only where :meth:`has_another_port` is true.
+        Called only where :meth:`has_another_port` is true. A new member
+        takes the pool's first member's direction and role.
 
         Parameters
         ----------
@@ -874,9 +896,14 @@ class Unit:
         Returns
         -------
         Port
-            ``port`` itself on this base class.
+            Free member of ``port``'s pool, or ``port`` itself when it is
+            not in a pool.
         """
-        return port
+        base = self._pool_of(port.name)
+        if base is None:
+            return port
+        first = self._pool_members(base)[0]
+        return self._next_member(base, first.direction, first.role)
 
     def _next_member(self, base: str, direction: str, role: str) -> "Port":
         """Return a free member of a port pool, adding one if all are used.
@@ -908,6 +935,24 @@ class Unit:
             n += 1
         return self._add_port(f"{base}_{n}", direction, role)
 
+    def _pool_of(self, port_name: str) -> str | None:
+        """Return the pool a port belongs to.
+
+        :class:`Instrument` signal ports and :class:`_Boundary` flags have
+        pools; the defaults here are written over this one hook.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        str or None
+            Pool name, or ``None`` for a port in no pool.
+        """
+        return None
+
     def _pool_members(self, base: str) -> list["Port"]:
         """Return the ports in a pool, in port order.
 
@@ -921,7 +966,7 @@ class Unit:
         list[Port]
             Members; empty on classes without pools.
         """
-        return []
+        return [p for name, p in self.ports.items() if self._pool_of(name) == base]
 
     def _mint_port(self, name: str) -> "Port | None":
         """Create a pool member by name, for the spec reader.
@@ -939,12 +984,17 @@ class Unit:
         Port or None
             The port, or ``None`` when this class has no such pool.
         """
-        return None
+        base = self._pool_of(name)
+        if base is None:
+            return None
+        first = self._pool_members(base)[0]
+        return self._add_port(name, first.direction, first.role)
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the name the symbol anchors a port under.
 
-        Uses :attr:`PORT_ANCHORS`; :class:`Instrument` overrides it. An
+        A pool member anchors under its pool, so it shares the pool's
+        point or menu of faces; other ports use :attr:`PORT_ANCHORS`. An
         unknown name falls back to the box centre in :mod:`pandid.portgeom`.
 
         Parameters
@@ -957,7 +1007,7 @@ class Unit:
         str
             Anchor name.
         """
-        return type(self).PORT_ANCHORS.get(port_name, port_name)
+        return self._pool_of(port_name) or type(self).PORT_ANCHORS.get(port_name, port_name)
 
     def _series_pin(self, port_name: str) -> float | None:
         """Return a fixed position for a port within its port series.
@@ -1186,7 +1236,7 @@ class _Boundary(Unit):
         """
         return next(iter(self.ports.values()))
 
-    def _pool_base(self, port_name: str) -> str | None:
+    def _pool_of(self, port_name: str) -> str | None:
         """Return the pool a port name belongs to.
 
         Parameters
@@ -1204,89 +1254,6 @@ class _Boundary(Unit):
             return base
         head, _, tail = port_name.rpartition("_")
         return base if head == base and tail.isdigit() else None
-
-    def _pool_members(self, base: str) -> list[Port]:
-        """Return the members of the flag's port pool.
-
-        Parameters
-        ----------
-        base : str
-            Pool name.
-
-        Returns
-        -------
-        list[Port]
-            Members in port order.
-        """
-        return [p for name, p in self.ports.items() if self._pool_base(name) == base]
-
-    def has_another_port(self, port: Port) -> bool:
-        """Return whether the port is the flag's port or a member of it.
-
-        Parameters
-        ----------
-        port : Port
-            Connected port.
-
-        Returns
-        -------
-        bool
-            ``True`` for the flag's own pool.
-        """
-        return self._pool_base(port.name) is not None
-
-    def another_port(self, port: Port) -> Port:
-        """Return a free member of the flag's port, adding one if needed.
-
-        Members share the first port's direction and role.
-
-        Parameters
-        ----------
-        port : Port
-            Connected port.
-
-        Returns
-        -------
-        Port
-            Free member.
-        """
-        base = self._pool_base(port.name)
-        if base is None:
-            return port
-        return self._next_member(base, port.direction, port.role)
-
-    def _mint_port(self, name: str) -> Port | None:
-        """Create a named member of the flag's port for the spec reader.
-
-        Parameters
-        ----------
-        name : str
-            Port name such as ``outlet_2``.
-
-        Returns
-        -------
-        Port or None
-            The new port, or ``None`` if the name is not in the pool.
-        """
-        if self._pool_base(name) is None:
-            return None
-        first = self.connection
-        return self._add_port(name, first.direction, first.role)
-
-    def _symbol_anchor(self, port_name: str) -> str:
-        """Return the anchor name, mapping every pool member to the flag's port.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str
-            Anchor name.
-        """
-        return self._pool_base(port_name) or super()._symbol_anchor(port_name)
 
     def repeats(self, other: "Unit") -> bool:
         """Return whether this flag is another tap of the same header.
@@ -1341,28 +1308,27 @@ class Product(_Boundary):
     PORTS = [("inlet", "inlet", "product")]
 
 
-class Pump(Unit):
+class _FluidMover(Unit):
+    """Base class for :class:`Pump`, :class:`Compressor` and :class:`Blower`."""
+
+    suction: Port
+    discharge: Port
+
+    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    LAYOUT_CONFIDENCE = 2
+    PLACES = {"suction": "W", "discharge": "E"}
+
+
+class Pump(_FluidMover):
     """Centrifugal or positive-displacement pump."""
 
-    suction: Port
-    discharge: Port
-
     kind = "pump"
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
-    LAYOUT_CONFIDENCE = 2
-    PLACES = {"suction": "W", "discharge": "E"}
 
 
-class Compressor(Unit):
+class Compressor(_FluidMover):
     """Gas compressor."""
 
-    suction: Port
-    discharge: Port
-
     kind = "compressor"
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
-    LAYOUT_CONFIDENCE = 2
-    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class _NormallyPositioned(Unit):
@@ -1515,29 +1481,13 @@ class Valve(_NormallyPositioned):
     # Ports depend on the variant, so __init__ adds them from _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     #: Ports of every variant except ``three_way``.
-    _BASE = [
+    _DEFAULT_PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
         ("actuator", "inlet", "signal"),
     ]
-    #: Ports by variant, defaulting to :data:`_BASE`.
-    _VARIANT_PORTS = {"three_way": [*_BASE, ("branch", "outlet", "process")]}
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._BASE)
+    #: Ports by variant, defaulting to :data:`_DEFAULT_PORTS`.
+    _VARIANT_PORTS = {"three_way": [*_DEFAULT_PORTS, ("branch", "outlet", "process")]}
 
     def __init__(
         self,
@@ -1836,12 +1786,195 @@ _VESSEL_SUPPORT_VARIANTS = {
 }
 
 
+# Self type for _FaceFamilies methods, so callers get their subclass back.
+_FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
+
+
+class _FaceFamilies(Unit):
+    """Base class for units whose inlets and outlets are families on faces.
+
+    Shared by :class:`Block` and :class:`_MultiPortVessel`. Each records
+    every family port's face in ``_faces``, in drawn order, and builds its
+    symbol from it.
+    """
+
+    if TYPE_CHECKING:
+        # Each subclass declares its own; tests/test_port_annotations.py
+        # lists the classes that declare families.
+        inlets: tuple[Port, ...]
+        outlets: tuple[Port, ...]
+
+    # Family port name -> face, in drawn order; the symbol is built from it.
+    _faces: dict[str, str]
+
+    # How errors name the unit, a variable holding one, and a family port.
+    _NOUN, _VAR, _MEMBER = "unit", "v", "inlet or outlet"
+
+    @property
+    def input_faces(self) -> tuple[str, ...]:
+        """Return each inlet's face, in port order, such as ``('W', 'W', 'N')``.
+
+        Use :meth:`nozzle` to move a connection.
+        """
+        return tuple(self._faces[port.name] for port in self.inlets)
+
+    @property
+    def output_faces(self) -> tuple[str, ...]:
+        """Return each outlet's face, in port order."""
+        return tuple(self._faces[port.name] for port in self.outlets)
+
+    def face(self, port_name: str) -> str:
+        """Return the face an inlet or outlet is on.
+
+        This is the declared face; a turned or mirrored unit draws it
+        elsewhere on the sheet (see :func:`pandid.portgeom.port_faces`).
+
+        Parameters
+        ----------
+        port_name : str
+            Inlet or outlet name or alias.
+
+        Returns
+        -------
+        str
+            Compass face.
+
+        Raises
+        ------
+        KeyError
+            If the port is not an inlet or outlet.
+        """
+        canonical = self._canonical_port_name(port_name)
+        try:
+            return self._faces[canonical]
+        except KeyError:
+            raise KeyError(
+                f"{type(self).__name__} {self.name!r} has no {self._MEMBER} "
+                f"named {port_name!r}; available: {sorted(self._faces)}"
+            ) from None
+
+    def ports_on(self, face: str) -> tuple[Port, ...]:
+        """Return the inlets and outlets on one face, in drawn order.
+
+        First is the west end of a north or south face and the north end of
+        a west or east face. Without :meth:`order_on`, this is declaration
+        order, inputs before outputs.
+
+        Parameters
+        ----------
+        face : str
+            Compass face or side name.
+
+        Returns
+        -------
+        tuple[Port, ...]
+            Family ports on that face; fixed ports are excluded.
+        """
+        wanted = _block_face(face, self.name)
+        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
+
+    def order_on(self: _FaceFamiliesT, face: str, ports: "Sequence[Port]") -> _FaceFamiliesT:
+        """Set the drawn order of the inlets and outlets on one face.
+
+        Without this, a face draws its connections in declaration order,
+        inputs before outputs. Pass every connection on the face, first to
+        last, so the call is idempotent; ports rather than names, so a typo
+        is caught. First is the west end of a north or south face and the
+        north end of a west or east face, on the unit's own axes.
+
+        .. code-block:: python
+
+            loop = fs.add(units.Block("Synthesis Loop",
+                                      inputs=["W", "S"],
+                                      outputs=["E", "S"]))
+            # purge west, recycle east
+            loop.order_on("S", [loop.out_2, loop.in_2])
+
+        A connection moved onto the face later takes its declaration-order
+        place, so order a face once it is complete.
+
+        Parameters
+        ----------
+        face : str
+            Compass face or side name.
+        ports : Sequence[Port]
+            Every connection on the face, first to last.
+
+        Returns
+        -------
+        _FaceFamilies
+            This unit.
+
+        Raises
+        ------
+        TypeError
+            If an item is not a Port.
+        ValueError
+            If a port belongs to another unit or face, is repeated, or a
+            connection on the face is missing; the unit is unchanged.
+        """
+        wanted = _block_face(face, self.name)
+        on_face = [name for name, on in self._faces.items() if on == wanted]
+        named: list[str] = []
+        v, noun = self._VAR, self._NOUN
+        for port in ports:
+            if not isinstance(port, Port):
+                raise TypeError(
+                    f"{self.name}: order_on() takes the connections themselves and "
+                    f"not their names, so a checker can see a typo -- "
+                    f"order_on({wanted!r}, [{v}.out_2, {v}.in_2]), or {v}.outlets[1] / "
+                    f"{v}.port('out_2') where the name is computed. "
+                    f"Got {port!r}."
+                )
+            if self.ports.get(port.name) is not port:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is a connection of "
+                    f"{port.owner.name!r}, not of this {noun}, so it is not on any "
+                    f"face of it. order_on() orders one {noun}'s own wall; "
+                    f"the {wanted} face carries "
+                    f"{', '.join(on_face) if on_face else 'nothing'}."
+                )
+            if self._faces.get(port.name) != wanted:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is on the "
+                    f"{self._faces.get(port.name)} face, not the {wanted}. "
+                    f"order_on() orders what is already on a side; move it first "
+                    f"with nozzle({port.name!r}, {wanted!r})."
+                )
+            if port.name in named:
+                raise ValueError(
+                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
+                    f"twice, so it asks for one connection in two places. Name "
+                    f"each of the {wanted} face's connections once: "
+                    f"{', '.join(on_face)}."
+                )
+            named.append(port.name)
+        missing = [name for name in on_face if name not in named]
+        if missing:
+            raise ValueError(
+                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
+                f"{len(on_face)} connections on the {wanted} face and leaves "
+                f"{', '.join(missing)} unplaced. Name every one, first to last "
+                f"along the face; it currently carries {', '.join(on_face)}."
+            )
+        # The dict order is the drawn order. Replace only this face's
+        # members, in place, so other faces keep their order. Counts are
+        # unchanged, so a block's box needs no re-check.
+        replacement = iter(named)
+        self._faces = {
+            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
+        }
+        # Ports on the face moved, so the layout is stale.
+        self._invalidate_layout()
+        return self
+
+
 # Self type for _MultiPortVessel methods, so their bodies see the vessel's
 # own attributes and callers get their subclass back.
 _MultiPortVesselT = TypeVar("_MultiPortVesselT", bound="_MultiPortVessel")
 
 
-class _MultiPortVessel(Unit):
+class _MultiPortVessel(_FaceFamilies):
     """Base class for the :class:`Tank` and :class:`Vessel` port families.
 
     Inlets and outlets are families spread over the vessel's faces, as on
@@ -1873,9 +2006,6 @@ class _MultiPortVessel(Unit):
     # Inlets come from upstream and outlets go downstream, whatever face
     # they use. Vent, relief and drain restate their faces at vessel weight.
     PLACES = {"in": "W", "out": "E", "vent": "N", "relief": "N", "drain": "S"}
-
-    # Family port name -> face, in port order; the symbol is built from it.
-    _faces: dict[str, str]
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the anchor name, resolving the ``inlet``/``outlet`` aliases.
@@ -2061,11 +2191,11 @@ class _MultiPortVessel(Unit):
         out_faces = _block_faces(outputs, self.default_output_face(), self.name, "outputs")
         self._faces = {}
         self.inlets = tuple(
-            self._connect(f"in_{i}", "inlet", "inlet", face)
+            self._connect(f"in_{i}", "inlet", face)
             for i, face in enumerate(in_faces, start=1)
         )
         self.outlets = tuple(
-            self._connect(f"out_{i}", "outlet", "outlet", face)
+            self._connect(f"out_{i}", "outlet", face)
             for i, face in enumerate(out_faces, start=1)
         )
         if len(self.inlets) == 1:
@@ -2074,7 +2204,7 @@ class _MultiPortVessel(Unit):
         if len(self.outlets) == 1:
             self.outlet = self.outlets[0]
 
-    def _connect(self, name: str, direction: str, role: str, face: str) -> Port:
+    def _connect(self, name: str, direction: str, face: str) -> Port:
         """Check a family port's face, then create the port.
 
         Parameters
@@ -2082,9 +2212,8 @@ class _MultiPortVessel(Unit):
         name : str
             Port name.
         direction : str
-            ``"inlet"`` or ``"outlet"``.
-        role : str
-            Symbol role used for the face check.
+            ``"inlet"`` or ``"outlet"``, also the symbol role for the face
+            check.
         face : str
             Face.
 
@@ -2093,7 +2222,7 @@ class _MultiPortVessel(Unit):
         Port
             The new port.
         """
-        self._validate_face(role, name, face)
+        self._validate_face(direction, name, face)
         port = self._add_port(name, direction, "process")
         self._faces[name] = face
         return port
@@ -2134,132 +2263,6 @@ class _MultiPortVessel(Unit):
         self._port_faces[canonical] = resolved
         self._invalidate_layout()
         return self
-
-    def face(self, port_name: str) -> str:
-        """Return the face an inlet or outlet is on.
-
-        Parameters
-        ----------
-        port_name : str
-            Inlet or outlet name or alias.
-
-        Returns
-        -------
-        str
-            Face.
-
-        Raises
-        ------
-        KeyError
-            If the port is not an inlet or outlet.
-        """
-        canonical = self._canonical_port_name(port_name)
-        try:
-            return self._faces[canonical]
-        except KeyError:
-            raise KeyError(
-                f"{type(self).__name__} {self.name!r} has no inlet or outlet "
-                f"named {port_name!r}; available: {sorted(self._faces)}"
-            ) from None
-
-    def ports_on(self, face: str) -> tuple[Port, ...]:
-        """Return the inlets and outlets on one face, in drawn order.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-
-        Returns
-        -------
-        tuple[Port, ...]
-            Family ports on that face; fixed ports are excluded.
-        """
-        wanted = _block_face(face, self.name)
-        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
-
-    def order_on(self: _MultiPortVesselT, face: str, ports: "Sequence[Port]") -> _MultiPortVesselT:
-        """Set the drawn order of the inlets and outlets on one face.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-        ports : Sequence[Port]
-            Every port :meth:`ports_on` reports for the face, first to last.
-
-        Returns
-        -------
-        _MultiPortVessel
-            This unit.
-
-        Raises
-        ------
-        TypeError
-            If an item is not a Port.
-        ValueError
-            If a port belongs to another unit or face, is repeated, or a
-            port on the face is missing.
-        """
-        wanted = _block_face(face, self.name)
-        on_face = [name for name, on in self._faces.items() if on == wanted]
-        named: list[str] = []
-        for port in ports:
-            if not isinstance(port, Port):
-                raise TypeError(
-                    f"{self.name}: order_on() takes the connections themselves and "
-                    f"not their names, so a checker can see a typo -- "
-                    f"order_on({wanted!r}, [v.out_2, v.in_2]), or v.outlets[1] / "
-                    f"v.port('out_2') where the name is computed. "
-                    f"Got {port!r}."
-                )
-            if self.ports.get(port.name) is not port:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is a connection of "
-                    f"{port.owner.name!r}, not of this unit, so it is not on any "
-                    f"face of it. order_on() orders one unit's own wall; "
-                    f"the {wanted} face carries "
-                    f"{', '.join(on_face) if on_face else 'nothing'}."
-                )
-            if self._faces.get(port.name) != wanted:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is on the "
-                    f"{self._faces.get(port.name)} face, not the {wanted}. "
-                    f"order_on() orders what is already on a side; move it first "
-                    f"with nozzle({port.name!r}, {wanted!r})."
-                )
-            if port.name in named:
-                raise ValueError(
-                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
-                    f"twice, so it asks for one connection in two places. Name "
-                    f"each of the {wanted} face's connections once: "
-                    f"{', '.join(on_face)}."
-                )
-            named.append(port.name)
-        missing = [name for name in on_face if name not in named]
-        if missing:
-            raise ValueError(
-                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
-                f"{len(on_face)} connections on the {wanted} face and leaves "
-                f"{', '.join(missing)} unplaced. Name every one, first to last "
-                f"along the face; it currently carries {', '.join(on_face)}."
-            )
-        replacement = iter(named)
-        self._faces = {
-            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
-        }
-        self._invalidate_layout()
-        return self
-
-    @property
-    def input_faces(self) -> tuple[str, ...]:
-        """Return each inlet's face, in port order."""
-        return tuple(self._faces[port.name] for port in self.inlets)
-
-    @property
-    def output_faces(self) -> tuple[str, ...]:
-        """Return each outlet's face, in port order."""
-        return tuple(self._faces[port.name] for port in self.outlets)
 
     def symbol(self) -> "Symbol":
         """Return this unit's symbol with its current port faces.
@@ -2781,16 +2784,10 @@ if TYPE_CHECKING:
         in_8: Port
 
 
-class Blower(Unit):
+class Blower(_FluidMover):
     """Fan or blower."""
 
-    suction: Port
-    discharge: Port
-
     kind = "blower"
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
-    LAYOUT_CONFIDENCE = 2
-    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class Reducer(Unit):
@@ -3236,7 +3233,38 @@ class Turbine(Unit):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
-class Filter(Unit):
+class _VariantPorted(Unit):
+    """Base class for units whose ports all come from their variant.
+
+    :class:`Filter` and :class:`HeatExchanger` add :meth:`_variant_ports`
+    after :attr:`PORTS`.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
+        # Use the resolved variant, not the argument.
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
+
+
+class Filter(_VariantPorted):
     """Liquid or gas filter, with one of three port sets.
 
     **Clarifying** (one in, one out) holds the solids in the medium, which
@@ -3284,7 +3312,7 @@ class Filter(Unit):
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # One in, one out; the default.
-    _CLARIFYING = [
+    _DEFAULT_PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
     ]
@@ -3312,45 +3340,6 @@ class Filter(Unit):
         "rotary_scraper": _CAKE_FORMING,
         "ion_exchange": _REGENERATED,
     }
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._CLARIFYING)
-
-    def __init__(
-        self,
-        name: str,
-        variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
-    ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
-        # Use the resolved variant, not the argument.
-        for spec in self._variant_ports(self.variant):
-            self._add_port(*spec)
 
 
 class Centrifuge(Unit):
@@ -3411,54 +3400,12 @@ class Dryer(Unit):
     kind = "dryer"
     # heating_in is a utility from a header; do not place the header below.
     PLACES = {"heating_in": None}
-    # Ports depend on the variant; all variants are gas swept today.
-    PORTS: list[tuple[str, str, str]] = []
-    _GAS_SWEPT = [
+    PORTS = [
         ("feed", "inlet", "feed"),
         ("product", "outlet", "process"),
         ("heating_in", "inlet", "utility"),
         ("vent", "outlet", "vapor"),
     ]
-    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._GAS_SWEPT)
-
-    def __init__(
-        self,
-        name: str,
-        variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
-    ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
-        # Use the resolved variant, not the argument.
-        for spec in self._variant_ports(self.variant):
-            self._add_port(*spec)
 
 
 class Kiln(Unit):
@@ -4146,58 +4093,6 @@ class Instrument(Unit):
     # named high and low taps instead.
     # ------------------------------------------------------------------
 
-    def has_another_port(self, port: Port) -> bool:
-        """Return whether ``port`` is in a signal pool.
-
-        Parameters
-        ----------
-        port : Port
-            Port of this balloon.
-
-        Returns
-        -------
-        bool
-            True for ``sig_in``/``sig_out`` members, false for ``pv``.
-        """
-        return self._pool_of(port.name) is not None
-
-    def another_port(self, port: Port) -> Port:
-        """Return a free member of ``port``'s pool, creating one if needed.
-
-        Called by :meth:`pandid.flowsheet.Flowsheet.connect` when ``port``
-        is already connected.
-
-        Parameters
-        ----------
-        port : Port
-            Pool member already in use.
-
-        Returns
-        -------
-        Port
-            Free member, or ``port`` itself when it is not in a pool.
-        """
-        base = self._pool_of(port.name)
-        if base is None:
-            return port
-        # New members take the first member's direction.
-        return self._next_member(base, self._pool_members(base)[0].direction, "signal")
-
-    def _pool_members(self, base: str) -> list[Port]:
-        """Return the members of a pool, in creation order.
-
-        Parameters
-        ----------
-        base : str
-            Pool name.
-
-        Returns
-        -------
-        list[Port]
-            Members.
-        """
-        return [p for name, p in self.ports.items() if self._pool_of(name) == base]
-
     def signal_port(self, name: str) -> Port:
         """Return a port by name, creating a missing pool member.
 
@@ -4250,8 +4145,7 @@ class Instrument(Unit):
         except KeyError:
             return None
 
-    @classmethod
-    def _pool_of(cls, port_name: str) -> str | None:
+    def _pool_of(self, port_name: str) -> str | None:
         """Return the pool a port belongs to.
 
         Parameters
@@ -4264,29 +4158,10 @@ class Instrument(Unit):
         str or None
             ``"sig_in"`` or ``"sig_out"``, or ``None`` for ``pv``.
         """
-        if port_name in cls._SIGNAL_POOLS:
+        if port_name in self._SIGNAL_POOLS:
             return port_name
         member = _POOL_MEMBER.fullmatch(port_name)
         return member.group(1) if member else None
-
-    def _symbol_anchor(self, port_name: str) -> str:
-        """Return the anchor name, mapping pool members to their pool.
-
-        Signal ports share one menu of four faces
-        (:attr:`pandid.render.symbols.Symbol.faceless_ports`);
-        :mod:`pandid.layout.faces` picks a face per port.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str
-            Anchor name in the symbol.
-        """
-        return self._pool_of(port_name) or super()._symbol_anchor(port_name)
 
     @property
     def tag(self) -> str:
@@ -4540,7 +4415,7 @@ def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
     ]
 
 
-class HeatExchanger(Unit):
+class HeatExchanger(_VariantPorted):
     """Heat exchanger with an inlet and outlet on each of its two sides.
 
     Ports are named for the side of the equipment, not the duty: which
@@ -4572,57 +4447,15 @@ class HeatExchanger(Unit):
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default port set.
-    _SHELL_AND_TUBE = _side_ports("shell", "tube")
+    _DEFAULT_PORTS = _side_ports("shell", "tube")
     # Variant -> port set; absent variants are shell and tube.
     _VARIANT_PORTS = {
-        "kettle": [*_SHELL_AND_TUBE, ("bottoms", "outlet", "liquid")],
+        "kettle": [*_DEFAULT_PORTS, ("bottoms", "outlet", "liquid")],
         "air_cooled": _side_ports("tube", "air"),
         "plate": _side_ports("side_a", "side_b"),
         "spiral": _side_ports("side_a", "side_b"),
         "thin_film": _side_ports("jacket", "product"),
     }
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        A subclass that declares :attr:`~Unit.PORTS` gets none, so a
-        per-variant subclass does not add its ports twice.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._SHELL_AND_TUBE)
-
-    def __init__(
-        self,
-        name: str,
-        variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
-    ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
-        # Use the resolved variant, not the argument.
-        for spec in self._variant_ports(self.variant):
-            self._add_port(*spec)
 
 
 class Heater(Unit):
@@ -5183,12 +5016,12 @@ class Reactor(Unit):
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default port set: product, off-gas and jacket or coil duty.
-    _VESSEL = [
+    _DEFAULT_PORTS = [
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("duty", "inlet", "energy"),
     ]
-    # Variant -> port set; absent variants use _VESSEL.
+    # Variant -> port set; absent variants use _DEFAULT_PORTS.
     _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {
         # No vapour space, so no vent.
         "tubular": [
@@ -5236,22 +5069,6 @@ class Reactor(Unit):
             if variant in cls._STIRRED and (stated or {}).get("internals") is None
             else None,
         }
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._VESSEL)
 
     def __init__(
         self,
@@ -5541,7 +5358,7 @@ class Separator(Unit):
     # Ports depend on the variant; __init__ adds feeds, then _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default draws. Feeds are a family added in __init__.
-    _PHASES = [
+    _DEFAULT_PORTS = [
         ("vapor", "outlet", "vapor"),
         ("liquid", "outlet", "liquid"),
     ]
@@ -5609,22 +5426,6 @@ class Separator(Unit):
         """
         renamed = self._VARIANT_ANCHORS.get(self.variant, {})
         return renamed.get(port_name) or super()._symbol_anchor(port_name)
-
-    @classmethod
-    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs, or none when the class declares :attr:`PORTS`.
-        """
-        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._PHASES)
 
     def __init__(
         self,
@@ -6254,7 +6055,6 @@ class DistillationColumn(Column):
     :class:`Absorber` and :class:`Stripper` lack them.
     """
 
-    kind = "column"
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
@@ -6410,12 +6210,6 @@ class Absorber(Column):
     :class:`Column`'s.
     """
 
-    kind = "column"
-    PORTS = [
-        ("overhead", "outlet", "vapor"),
-        ("bottoms", "outlet", "liquid"),
-    ]
-
     overhead: Port
     bottoms: Port
 
@@ -6558,7 +6352,6 @@ class Stripper(Column):
     :class:`Column`'s, including its ``internals`` default.
     """
 
-    kind = "column"
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
@@ -7140,7 +6933,7 @@ def _block_face(face: object, owner: str) -> str:
     return resolved
 
 
-class Block(Unit):
+class Block(_FaceFamilies):
     """Block flow diagram box: a plant section drawn as a labelled rectangle.
 
     A block has no equipment ports, only connections and the side each is
@@ -7210,6 +7003,7 @@ class Block(Unit):
         def __getattr__(self, name: str) -> Port: ...
 
     kind = "block"
+    _NOUN, _VAR, _MEMBER = "block", "b", "connection"
 
     DEFAULT_INPUT_FACE = "W"
     DEFAULT_OUTPUT_FACE = "E"
@@ -7248,8 +7042,7 @@ class Block(Unit):
             description=description,
             reference=reference,
         )
-        # Connection name -> face, in drawn order; the symbol is built from it.
-        self._faces: dict[str, str] = {}
+        self._faces = {}
         self.inlets = tuple(
             self._add_connection(f"in_{i}", "inlet", face)
             for i, face in enumerate(in_faces, start=1)
@@ -7402,48 +7195,6 @@ class Block(Unit):
             raise
         return self
 
-    @property
-    def input_faces(self) -> tuple[str, ...]:
-        """Return each input's face, in port order, such as ``('W', 'W', 'N')``.
-
-        Use :meth:`nozzle` to move a connection.
-        """
-        return tuple(self._faces[port.name] for port in self.inlets)
-
-    @property
-    def output_faces(self) -> tuple[str, ...]:
-        """Return each output's face, in port order."""
-        return tuple(self._faces[port.name] for port in self.outlets)
-
-    def face(self, port_name: str) -> str:
-        """Return the side of the box a connection is on.
-
-        This is the declared side; a turned or mirrored block draws it
-        elsewhere on the sheet (see :func:`pandid.portgeom.port_faces`).
-
-        Parameters
-        ----------
-        port_name : str
-            Connection name.
-
-        Returns
-        -------
-        str
-            Compass face of the box.
-
-        Raises
-        ------
-        KeyError
-            If there is no such connection.
-        """
-        try:
-            return self._faces[port_name]
-        except KeyError:
-            raise KeyError(
-                f"Block {self.name!r} has no connection named {port_name!r}; "
-                f"available: {sorted(self.ports)}"
-            ) from None
-
     def nozzle(self, port_name: str, face: str) -> "Block":
         """Move a connection to another side of the box.
 
@@ -7485,120 +7236,6 @@ class Block(Unit):
             self._faces[port_name] = was
             raise
         # The artwork and ports moved, so the layout is stale.
-        self._invalidate_layout()
-        return self
-
-    def ports_on(self, face: str) -> tuple[Port, ...]:
-        """Return the connections on one side of the box, in drawn order.
-
-        First is the west end of a north or south face and the north end of
-        a west or east face. Without :meth:`order_on`, this is declaration
-        order, inputs before outputs.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-
-        Returns
-        -------
-        tuple[Port, ...]
-            Ports on that face.
-        """
-        wanted = _block_face(face, self.name)
-        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
-
-    def order_on(self, face: str, ports: "Sequence[Port]") -> "Block":
-        """Set the drawn order of the connections on one side of the box.
-
-        Without this, a face draws its connections in declaration order,
-        inputs before outputs. Pass every connection on the face, first to
-        last, so the call is idempotent; ports rather than names, so a typo
-        is caught. First is the west end of a north or south face and the
-        north end of a west or east face, on the box's own axes.
-
-        .. code-block:: python
-
-            loop = fs.add(units.Block("Synthesis Loop",
-                                      inputs=["W", "S"],
-                                      outputs=["E", "S"]))
-            # purge west, recycle east
-            loop.order_on("S", [loop.out_2, loop.in_2])
-
-        A connection moved onto the face later takes its declaration-order
-        place, so order a face once it is complete.
-
-        Parameters
-        ----------
-        face : str
-            Compass face or side name.
-        ports : Sequence[Port]
-            Every connection on the face, first to last.
-
-        Returns
-        -------
-        Block
-            This block.
-
-        Raises
-        ------
-        TypeError
-            If an item is not a Port.
-        ValueError
-            If a port belongs to another unit or face, is repeated, or a
-            connection on the face is missing; the block is unchanged.
-        """
-        wanted = _block_face(face, self.name)
-        on_face = [name for name, on in self._faces.items() if on == wanted]
-        named: list[str] = []
-        for port in ports:
-            if not isinstance(port, Port):
-                raise TypeError(
-                    f"{self.name}: order_on() takes the connections themselves and "
-                    f"not their names, so a checker can see a typo -- "
-                    f"order_on({wanted!r}, [b.out_2, b.in_2]), or b.outlets[1] / "
-                    f"b.port('out_2') where the name is computed. "
-                    f"Got {port!r}."
-                )
-            if self.ports.get(port.name) is not port:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is a connection of "
-                    f"{port.owner.name!r}, not of this block, so it is not on any "
-                    f"face of it. order_on() orders one block's own wall; "
-                    f"the {wanted} face carries "
-                    f"{', '.join(on_face) if on_face else 'nothing'}."
-                )
-            if self._faces[port.name] != wanted:
-                raise ValueError(
-                    f"{self.name}: {port.name!r} is on the "
-                    f"{self._faces[port.name]} face, not the {wanted}. order_on() "
-                    f"orders what is already on a side; move it first with "
-                    f"nozzle({port.name!r}, {wanted!r})."
-                )
-            if port.name in named:
-                raise ValueError(
-                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
-                    f"twice, so it asks for one connection in two places. Name "
-                    f"each of the {wanted} face's connections once: "
-                    f"{', '.join(on_face)}."
-                )
-            named.append(port.name)
-        missing = [name for name in on_face if name not in named]
-        if missing:
-            raise ValueError(
-                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
-                f"{len(on_face)} connections on the {wanted} face and leaves "
-                f"{', '.join(missing)} unplaced. Name every one, first to last "
-                f"along the face; it currently carries {', '.join(on_face)}."
-            )
-        # The dict order is the drawn order. Replace only this face's
-        # members, in place, so other faces keep their order. Counts are
-        # unchanged, so the box needs no re-check.
-        replacement = iter(named)
-        self._faces = {
-            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
-        }
-        # Ports on the face moved, so the layout is stale.
         self._invalidate_layout()
         return self
 

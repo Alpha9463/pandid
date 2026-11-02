@@ -15,7 +15,7 @@ from functools import lru_cache
 from pandid.portgeom import tag_width
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, ident
-from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
+from pandid.render.symbols import (ARROWHEAD, _STROKE, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.render.weights import LineWeight
 from pandid.route_geometry import stream_polyline
@@ -955,15 +955,13 @@ def _cutting(leader, occupied, limit: int) -> int:
     return n
 
 
-def _near_segment(p, a, b, tol: float = 0.5) -> bool:
-    """Return whether ``p`` lies on segment ``a``-``b`` within ``tol``.
+def _near_segment(p, a, b) -> bool:
+    """Return whether ``p`` lies on segment ``a``-``b`` within 0.5.
 
     Parameters
     ----------
     p, a, b : tuple[float, float]
         Point and segment end points.
-    tol : float, default=0.5
-        Distance tolerance.
 
     Returns
     -------
@@ -973,9 +971,9 @@ def _near_segment(p, a, b, tol: float = 0.5) -> bool:
     dx, dy = b[0] - a[0], b[1] - a[1]
     span = dx * dx + dy * dy
     if not span:
-        return math.hypot(p[0] - a[0], p[1] - a[1]) <= tol
+        return math.hypot(p[0] - a[0], p[1] - a[1]) <= 0.5
     t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / span))
-    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= tol
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= 0.5
 
 
 def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
@@ -1176,6 +1174,8 @@ def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
 #: Font size of a line number. The halo under it is the estimated string
 #: width plus a gutter, by a fixed depth; the export uses the same sizes.
 NUMBER_TYPE = 10
+# Font size of tags, instrument letters and flag names, in both backends.
+_TAG_TYPE = 12.0
 _HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
 
 # Gap a box enclosure leaves outside the halo on each side. A diamond or
@@ -2408,11 +2408,6 @@ def _size_tag(sym, u) -> str:
     return f"_s{_num(box[0])}x{_num(box[1])}"
 
 
-# Every symbol writes stroke-width as an attribute, never through CSS, so
-# a string rewrite suffices.
-_STROKE_WIDTH = re.compile(r'stroke-width="([\d.]+)"')
-
-
 def _at_pen_scale(svg: str, scale: float) -> str:
     """Return ``svg`` with every line weight divided by ``scale``.
 
@@ -2433,7 +2428,7 @@ def _at_pen_scale(svg: str, scale: float) -> str:
     """
     if scale == 1.0:
         return svg
-    return _STROKE_WIDTH.sub(
+    return _STROKE.sub(
         lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
 
 
@@ -3274,6 +3269,71 @@ def _fit_scale(dw: float, dh: float, free) -> float:
     return min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
 
 
+def _fitted(inner, free) -> "tuple[float, float, float]":
+    """Return the scale and offset that centre the drawing in ``free``.
+
+    Shared with the draw.io exporter, so both backends fit a drawing alike.
+
+    Parameters
+    ----------
+    inner : tuple[float, float, float, float]
+        Drawing bounds ``(x0, y0, x1, y1)``.
+    free : tuple[float, float, float, float]
+        Region ``(x, y, w, h)`` left for the drawing.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        ``(scale, offset_x, offset_y)``.
+    """
+    dx0, dy0, dx1, dy1 = inner
+    fx, fy, fw, fh = free
+    dw, dh = dx1 - dx0, dy1 - dy0
+    s = _fit_scale(dw, dh, free)
+    return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
+
+
+def drawing_bounds(fs) -> "tuple[float, float, float, float]":
+    """Return the drawing's bounding box, which furniture docks around.
+
+    The union of every unit's drawn box and every route waypoint; an empty
+    flowsheet gives zeros. Shared with the draw.io exporter.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x0, y0, x1, y1)``.
+
+    Raises
+    ------
+    ValueError
+        If a unit has no frame.
+    """
+    from pandid.portgeom import unit_box
+
+    if not fs.units:
+        return (0.0, 0.0, 0.0, 0.0)
+    x0 = y0 = float("inf")
+    x1 = y1 = float("-inf")
+    for u in fs.units:
+        if u.frame is None:
+            raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
+        bx0, by0, bx1, by1 = unit_box(u, u.frame)
+        x0, y0 = min(x0, bx0), min(y0, by0)
+        x1, y1 = max(x1, bx1), max(y1, by1)
+    for s in fs.streams:
+        if s.route and s.route.waypoints:
+            for px, py in s.route.waypoints:
+                x0, y0 = min(x0, px), min(y0, py)
+                x1, y1 = max(x1, px), max(y1, py)
+    return (x0, y0, x1, y1)
+
+
 def _scale_text(s: float) -> str:
     """Return a fit scale as a title-block ratio, such as ``"1:2.5"``."""
     return "1:1" if s >= 1.0 else f"1:{1 / s:.3g}"
@@ -3656,10 +3716,9 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
 def reject_unknown_options(where: str, opts: dict) -> None:
     """Raise if a backend was given keywords it does not take.
 
-    Backends accept ``**opts`` to satisfy the
-    :class:`~pandid.render.Renderer` protocol, but silently dropping an
-    argument (such as ``debug=True`` on a draw.io render) would mislead
-    the caller. All unknown names are reported at once.
+    Backends accept ``**opts``, but silently dropping an argument (such
+    as ``debug=True`` on a draw.io render) would mislead the caller. All
+    unknown names are reported at once.
 
     Parameters
     ----------
@@ -3828,7 +3887,6 @@ class SvgRenderer:
             If an argument is invalid, the page is too small, or a unit has
             no frame.
         """
-        from pandid.portgeom import unit_box
         from pandid.render import debug as _debug
         # Check options before building anything.
         reject_unknown_options("SvgRenderer.render()", opts)
@@ -3854,19 +3912,7 @@ class SvgRenderer:
 
         # 1. Diagram bounding box: union of every unit's drawn box and
         #    every route waypoint. Furniture goes *around* this region.
-        dx0 = dy0 = float("inf")
-        dx1 = dy1 = float("-inf")
-        for u in fs.units:
-            if u.frame is None:
-                raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-            bx0, by0, bx1, by1 = unit_box(u, u.frame)
-            dx0, dy0 = min(dx0, bx0), min(dy0, by0)
-            dx1, dy1 = max(dx1, bx1), max(dy1, by1)
-        for s in fs.streams:
-            if s.route and s.route.waypoints:
-                for px, py in s.route.waypoints:
-                    dx0, dy0 = min(dx0, px), min(dy0, py)
-                    dx1, dy1 = max(dx1, px), max(dy1, py)
+        dx0, dy0, dx1, dy1 = drawing_bounds(fs)
         if not fs.units:  # empty flowsheet: fall back to the nominal page size
             nominal = sheet or _page("A3")
             assert nominal is not None
@@ -3901,7 +3947,7 @@ class SvgRenderer:
             (frame_x, frame_y, canvas_width, canvas_height), free = self._place_furniture(
                 fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border, report)
         elif sheet is not None:
-            free = self._place_plain(st_layout, sheet, margin, furniture)
+            free = self._place_plain(sheet, margin)
             frame_x, frame_y = 0.0, 0.0
             canvas_width, canvas_height = sheet.width, sheet.height
         else:
@@ -3965,32 +4011,13 @@ class SvgRenderer:
         if free is None:
             lines.extend(drawing)
         else:  # a fixed sheet: the drawing is fitted into what the furniture leaves
-            lines.append(f'  <g id="drawing" transform="{self._fit(dx0, dy0, dx1, dy1, free)}">')
+            s, ox, oy = _fitted((dx0, dy0, dx1, dy1), free)
+            lines.append(f'  <g id="drawing" transform="translate({_num(ox)}, {_num(oy)}) '
+                         f'scale({s:.6g})">')
             lines.extend(drawing)
             lines.append('  </g>')
         return _document(fs, sheet,
                          (frame_x, frame_y, canvas_width, canvas_height), lines)
-
-    def _fit(self, dx0, dy0, dx1, dy1, free) -> str:
-        """Return the SVG transform that centres and scales the drawing in ``free``.
-
-        Parameters
-        ----------
-        dx0, dy0, dx1, dy1 : float
-            Drawing bounds.
-        free : tuple[float, float, float, float]
-            Region ``(x, y, w, h)`` left for the drawing.
-
-        Returns
-        -------
-        str
-            ``translate(...) scale(...)``.
-        """
-        fx, fy, fw, fh = free
-        dw, dh = dx1 - dx0, dy1 - dy0
-        s = _fit_scale(dw, dh, free)
-        return (f"translate({_num(fx + (fw - s * dw) / 2 - s * dx0)}, "
-                f"{_num(fy + (fh - s * dh) / 2 - s * dy0)}) scale({s:.6g})")
 
     # --- furniture ----------------------------------------------------
 
@@ -4135,19 +4162,15 @@ class SvgRenderer:
             ["    " + item for item in furniture],
             title=_table_sheet_title(fs, F._options(fs)))
 
-    def _place_plain(self, st_layout, sheet, margin, furniture):
-        """Lay out a fixed page with no furniture except a stream table.
+    def _place_plain(self, sheet, margin):
+        """Lay out a fixed page with no furniture.
 
         Parameters
         ----------
-        st_layout : StreamTable or None
-            Measured stream table, docked at the foot.
         sheet : _Sheet
             Fixed page.
         margin : float
             Page margin.
-        furniture : list[str]
-            SVG lines, appended to in place.
 
         Returns
         -------
@@ -4161,16 +4184,9 @@ class SvgRenderer:
         """
         free_w = sheet.width - 2 * margin
         free_h = sheet.height - 2 * margin
-        table_h = (st_layout.h + 24) if st_layout else 0.0
-        if free_w <= 0 or free_h - table_h <= 0 or (st_layout and st_layout.w > free_w):
-            raise _too_small(sheet,
-                             2 * margin + (st_layout.w if st_layout else 0.0),
-                             2 * margin + table_h,
-                             "the stream table" if st_layout else "")
-        if st_layout:
-            furniture.extend(F.draw_stream_table(
-                st_layout, margin, sheet.height - margin - st_layout.h))
-        return (margin, margin, free_w, free_h - table_h)
+        if free_w <= 0 or free_h <= 0:
+            raise _too_small(sheet, 2 * margin, 2 * margin)
+        return (margin, margin, free_w, free_h)
 
     # --- defs ---------------------------------------------------------
 
@@ -4481,10 +4497,10 @@ class SvgRenderer:
         out = [f'    <polygon points="{points}" fill="transparent" '
                f'stroke="black" stroke-width="{LineWeight.EQUIPMENT.width:g}" />']
         if ref:
-            out.append(f'    <text x="{tx}" y="{mid - 4}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
+            out.append(f'    <text x="{tx}" y="{mid - 4}" font-family="sans-serif" font-size="{_TAG_TYPE:g}" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
             out.append(f'    <text x="{tx}" y="{mid + 8}" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">{escaped(ref)}</text>')
         else:
-            out.append(f'    <text x="{tx}" y="{mid}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
+            out.append(f'    <text x="{tx}" y="{mid}" font-family="sans-serif" font-size="{_TAG_TYPE:g}" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
         return out
 
     def _draw_instrument_tag(self, u, x, y, u_width, u_height):
@@ -4520,13 +4536,13 @@ class SvgRenderer:
                     f'dominant-baseline="middle">{escaped(bot or top.upper())}</text>']
         if not top:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
-                    f'font-size="12" text-anchor="middle" '
+                    f'font-size="{_TAG_TYPE:g}" text-anchor="middle" '
                     f'dominant-baseline="middle">{escaped(bot or top)}</text>']
         # A location bar crosses the middle, so push letters above it and
         # the number below (ISA-5.1).
         letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
         out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
-               f'font-size="12" font-weight="bold" text-anchor="middle" '
+               f'font-size="{_TAG_TYPE:g}" font-weight="bold" text-anchor="middle" '
                f'dominant-baseline="middle">{escaped(top.upper())}</text>']
         if bot:
             out.append(f'    <text x="{cx}" y="{cy + number_dy}" font-family="sans-serif" '
@@ -4783,7 +4799,7 @@ class SvgRenderer:
                 out.append(f'    <rect x="{rx:.1f}" y="{ry:.1f}" width="{rx1 - rx:.1f}" '
                            f'height="{ry1 - ry:.1f}" fill="white" />')
             out.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
-                       f'font-size="12" text-anchor="{anchor}" '
+                       f'font-size="{_TAG_TYPE:g}" text-anchor="{anchor}" '
                        f'dominant-baseline="{baseline}">{escaped(text)}</text>')
         out.append('  </g>')
         return out

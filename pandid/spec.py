@@ -76,16 +76,16 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
 from decimal import Decimal
-from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Literal, cast
 from math import isfinite
 
 from pandid import devices as device_types
-from pandid._checks import is_real as _is_real, is_whole as _is_integral
+from pandid._checks import is_real as _is_real, is_whole as _is_integral, suggest
 from pandid import units as unit_types
 from pandid.components import Component
 from pandid.document import (
@@ -113,7 +113,9 @@ from pandid.flowsheet import (
 from pandid.loops import Loop
 from pandid.portgeom import pin_intent, port_refusal
 from pandid.ports import Port
-from pandid.stations import DEFAULT_VALVE_STATION_TAG_SCHEME
+from pandid.stations import (
+    DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP, DEFAULT_VALVE_STATION_TAG_SCHEME,
+)
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
 
@@ -131,25 +133,6 @@ class SpecError(ValueError):
 # Primitive validation. Each helper takes the path of the value it
 # checks, so the message points at the entry to fix.
 # ----------------------------------------------------------------
-
-
-def _suggest(value: Any, candidates) -> str:
-    """Return a ``" (did you mean 'variant'?)"`` hint for a near-miss.
-
-    Parameters
-    ----------
-    value : Any
-        Value given.
-    candidates : Iterable
-        Accepted values.
-
-    Returns
-    -------
-    str
-        Hint, or ``""`` when nothing is close.
-    """
-    close = get_close_matches(str(value), [str(c) for c in candidates], n=1, cutoff=0.6)
-    return f" (did you mean {close[0]!r}?)" if close else ""
 
 
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
@@ -228,7 +211,7 @@ def _check_keys(data: Mapping[str, Any], allowed, where: str) -> None:
     for key in data:
         if key not in allowed:
             raise SpecError(
-                f"{where}: unknown key {key!r}{_suggest(key, allowed)}; "
+                f"{where}: unknown key {key!r}{suggest(str(key), allowed)}; "
                 f"allowed keys: {sorted(allowed)}"
             )
 
@@ -557,6 +540,46 @@ def _fail_from(error: Exception, where: str) -> SpecError:
     return SpecError(f"{where}: {message}")
 
 
+@contextmanager
+def _blame(where: str, errors: tuple[type[Exception], ...] = (ValueError,)) -> Iterator[None]:
+    """Re-raise a library error from the block as a SpecError naming the spec entry.
+
+    Parameters
+    ----------
+    where : str
+        Spec path.
+    errors : tuple of type, optional
+        Library error types to convert.
+    """
+    try:
+        yield
+    except errors as e:
+        raise _fail_from(e, where) from None
+
+
+def _read_fields(data: Mapping[str, Any], where: str,
+                 readers: Sequence[tuple[Iterable[str], Callable[[Any, str], Any]]]
+                 ) -> dict[str, Any]:
+    """Read each key present in a mapping with its reader, in table order.
+
+    Parameters
+    ----------
+    data : Mapping
+        Spec mapping.
+    where : str
+        Spec path, for error messages.
+    readers : sequence of (keys, reader)
+        Keys, and the reader that checks their values.
+
+    Returns
+    -------
+    dict[str, Any]
+        Each present key's value, as read.
+    """
+    return {key: read(data[key], f"{where}.{key}")
+            for keys, read in readers for key in keys if key in data}
+
+
 # --------------------------------------------------------------
 # The equipment registry
 # --------------------------------------------------------------
@@ -624,7 +647,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     name = _ALIASES.get(_text(value, f"{where}.kind").strip().lower())
     if name is None:
         raise SpecError(
-            f"{where}: unknown equipment kind {value!r}{_suggest(value, _CLASSES)}; "
+            f"{where}: unknown equipment kind {value!r}{suggest(str(value), _CLASSES)}; "
             f"available kinds: {sorted(_CLASSES)}"
         )
     if name == "Instrument":
@@ -647,6 +670,16 @@ _TOP_KEYS = {
     "instruments", "streams", "stations", "stream_table_sections", "stream_table",
     "stream_labels", "title_block", "annotations",
 }
+# Numbering settings: Flowsheet keyword (and spec key), default, reader.
+# Written only when not the default.
+_SHEET_SETTINGS: tuple[tuple[str, Any, Callable[[Any, str], Any]], ...] = (
+    ("stream_naming_scheme", "S{n}", _text),
+    ("stream_number_start", DEFAULT_STREAM_NUMBER_START, _integer),
+    ("line_numbering_scheme", DEFAULT_LINE_NUMBERING_SCHEME, _text),
+    ("line_number_start", DEFAULT_LINE_NUMBER_START, _integer),
+    ("loop_number_start", DEFAULT_LOOP_NUMBER_START, _integer),
+    ("valve_station_tag_scheme", DEFAULT_VALVE_STATION_TAG_SCHEME, _text),
+)
 # Removed top-level keys and why, reported by name rather than as unknown.
 _RETIRED_KEYS = {
     "direction": "the layout engine only draws left to right, so it never did anything",
@@ -757,20 +790,10 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     if "name" not in data:
         raise SpecError(f"{where} needs a 'name' (the flowsheet's title)")
 
-    scheme = data.get("stream_naming_scheme", "S{n}")
-    stream_start = data.get("stream_number_start", DEFAULT_STREAM_NUMBER_START)
-    line_scheme = data.get("line_numbering_scheme", DEFAULT_LINE_NUMBERING_SCHEME)
-    start = data.get("line_number_start", DEFAULT_LINE_NUMBER_START)
-    loop_start = data.get("loop_number_start", DEFAULT_LOOP_NUMBER_START)
-    tag_scheme = data.get("valve_station_tag_scheme", DEFAULT_VALVE_STATION_TAG_SCHEME)
     fs = Flowsheet(
         _drawn(data["name"], f"{where}: 'name'"),
-        stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
-        stream_number_start=_integer(stream_start, f"{where}: 'stream_number_start'"),
-        line_numbering_scheme=_text(line_scheme, f"{where}: 'line_numbering_scheme'"),
-        line_number_start=_integer(start, f"{where}: 'line_number_start'"),
-        loop_number_start=_integer(loop_start, f"{where}: 'loop_number_start'"),
-        valve_station_tag_scheme=_text(tag_scheme, f"{where}: 'valve_station_tag_scheme'"),
+        **{key: read(data.get(key, default), f"{where}: {key!r}")
+           for key, default, read in _SHEET_SETTINGS},
         auto_faces=_flag(data.get("auto_faces", True), f"{where}: 'auto_faces'"),
     )
 
@@ -812,18 +835,14 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         _read_station_assembly(fs, entry, f"stations[{i}]")
 
     for stream, value, where_i in pending_inline:
-        try:
+        with _blame(where_i):
             fs._set_inline_at(stream, _number(value, where_i))
-        except ValueError as e:
-            raise _fail_from(e, where_i) from None
 
     from pandid.inline import restore_logical_run
     for stream, value, where_i in pending_logical:
         endpoint = _read_endpoint(fs, value, where_i)
-        try:
+        with _blame(where_i):
             restore_logical_run(fs, stream, endpoint)
-        except ValueError as e:
-            raise _fail_from(e, where_i) from None
 
     for i, assembly in enumerate(fs._station_assemblies):
         root = assembly.run
@@ -954,41 +973,23 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
             raise SpecError(f"{where}: only {takers} takes {key!r}, not a {cls.__name__}")
     _check_keys(data, allowed, where)
 
-    kwargs: dict[str, Any] = {}
-    if "variant" in data:
-        kwargs["variant"] = _text(data["variant"], f"{where}.variant")
-    for key in ("description", "reference"):
-        if key in data:
-            kwargs[key] = _drawn(data[key], f"{where}.{key}")
-    for key in ("width", "height"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    for key in _VARIABLE_PORTS:
-        if key in data:
-            kwargs[key] = _integer(data[key], f"{where}.{key}")
-    for key in _KIND_SIZES:
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    for key in _KIND_TEXT:
-        if key in data:
-            kwargs[key] = _text(data[key], f"{where}.{key}")
-    for key in _KIND_FLAGS:
-        if key in data:
-            kwargs[key] = _flag(data[key], f"{where}.{key}")
-    for key in _KIND_FACES:
-        if key in data:
-            kwargs[key] = _faces(data[key], f"{where}.{key}")
-    for key in _KIND_STAGES:
-        if key in data:
-            kwargs[key] = _stages(data[key], f"{where}.{key}")
+    kwargs = _read_fields(data, where, (
+        (("variant",), _text),
+        (("description", "reference"), _drawn),
+        (("width", "height"), _number),
+        (_VARIABLE_PORTS, _integer),
+        (_KIND_SIZES, _number),
+        (_KIND_TEXT, _text),
+        (_KIND_FLAGS, _flag),
+        (_KIND_FACES, _faces),
+        (_KIND_STAGES, _stages),
+    ))
     # Composition parts; the class default decides each value's type.
     for key, default in cls.COMPOSITION.items():
         if key in data:
             kwargs[key] = _composed(data[key], default, f"{where}.{key}")
-    try:
+    with _blame(where):
         unit = cls(name, **kwargs)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
     _read_common(fs, unit, data, where)
     # Order faces after _read_common has moved ports onto them. The key
@@ -999,6 +1000,10 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     return unit
 
 
+# Station spacing keys and their defaults, which the writer leaves out.
+_STATION_SPACING = (
+    ("gap", DEFAULT_GAP), ("bypass_rise", DEFAULT_BYPASS_RISE), ("drain_drop", DEFAULT_DRAIN_DROP),
+)
 _STATION_ROLES = (
     "control", "upstream_isolation", "downstream_isolation", "reduction", "expansion",
     "bypass", "upstream_drain", "downstream_drain",
@@ -1026,10 +1031,7 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     SpecError
         If a member, port, or placement option is invalid.
     """
-    from pandid.stations import (
-        BYPASS_ANCHORS, DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP,
-        StationAssembly, ValveStation,
-    )
+    from pandid.stations import BYPASS_ANCHORS, StationAssembly, ValveStation
     from pandid.units import Reducer, Tee, Valve
 
     data = _mapping(entry, where)
@@ -1058,18 +1060,10 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     outlet = _read_endpoint(fs, data["outlet"], f"{where}.outlet")
     if inlet.owner not in members or outlet.owner not in members:
         raise SpecError(f"{where}: station endpoints must belong to its members")
-    station = ValveStation(
-        control=cast(Valve, roles["control"]),
-        upstream_isolation=cast("Valve | None", roles["upstream_isolation"]),
-        downstream_isolation=cast("Valve | None", roles["downstream_isolation"]),
-        reduction=cast("Reducer | None", roles["reduction"]),
-        expansion=cast("Reducer | None", roles["expansion"]),
-        bypass=cast("Valve | None", roles["bypass"]),
-        upstream_drain=cast("Valve | None", roles["upstream_drain"]),
-        downstream_drain=cast("Valve | None", roles["downstream_drain"]),
-        tees=tuple(cast(Tee, tee) for tee in tees), members=members,
-        inlet=inlet, outlet=outlet,
-    )
+    # The checks above make each role the type its field declares.
+    station = ValveStation(**cast("dict[str, Any]", roles),
+                           tees=tuple(cast(Tee, tee) for tee in tees), members=members,
+                           inlet=inlet, outlet=outlet)
     branch_members = {station.bypass, station.upstream_drain, station.downstream_drain}
     main = [unit for unit in members if unit not in branch_members]
     if (not main or inlet is not main[0].ports.get("inlet")
@@ -1105,9 +1099,7 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     if at is not None and (run is None or not 0 < at < 1):
         raise SpecError(f"{where}: an at fraction needs a run and lies strictly between 0 and 1")
     options = {key: _number(data[key], f"{where}.{key}") if key in data else default
-               for key, default in (("gap", DEFAULT_GAP),
-                                    ("bypass_rise", DEFAULT_BYPASS_RISE),
-                                    ("drain_drop", DEFAULT_DRAIN_DROP))}
+               for key, default in _STATION_SPACING}
     if any(not isfinite(value) or value <= 0 for value in options.values()):
         raise SpecError(f"{where}: station spacing must be positive")
     bypass_over = (_text(data["bypass_over"], f"{where}.bypass_over")
@@ -1166,10 +1158,8 @@ def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
     number = data.get("number")
     if number is not None and not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
-    try:
+    with _blame(where):
         return fs.add_loop(_text(data["variable"], f"{where}.variable"), number)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
@@ -1206,20 +1196,11 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     if not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
-    kwargs: dict[str, Any] = {}
-    for key in ("variant", "display"):
-        if key in data:
-            kwargs[key] = _text(data[key], f"{where}.{key}")
-    for key in ("description", "reference"):
-        if key in data:
-            kwargs[key] = _drawn(data[key], f"{where}.{key}")
-    for key in ("width", "height"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    try:
+    kwargs = _read_fields(data, where, ((("variant", "display"), _text),
+                                        (("description", "reference"), _drawn),
+                                        (("width", "height"), _number)))
+    with _blame(where):
         inst = Instrument(type_, number, **kwargs)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
     if "quadrants" in data:
         _annotate_instrument(inst, data["quadrants"], f"{where}.quadrants")
     _read_common(fs, inst, data, f"{where} {inst.name!r}")
@@ -1251,10 +1232,8 @@ def _annotate_instrument(inst: Instrument, entry: Any, where: str) -> None:
         codes[key] = ([_text(v, f"{where}.{key}[{i}]") for i, v in enumerate(value)]
                       if isinstance(value, (list, tuple))
                       else _text(value, f"{where}.{key}"))
-    try:
+    with _blame(where):
         inst.annotate(**codes)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str) -> None:
@@ -1280,10 +1259,8 @@ def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str)
         unit.label_pos = _text(data["label_pos"], f"{where}.label_pos")
     if "new_line_number" in data:
         unit.new_line_number = _flag(data["new_line_number"], f"{where}.new_line_number")
-    try:
+    with _blame(where):
         fs.add(unit)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
     if "pin" in data:
         _read_pin(unit, data["pin"], f"{where}.pin")
     if "port_faces" in data:
@@ -1329,19 +1306,11 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
     if "at" in entry:
         at = entry["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
-    for key in ("offset", "angle", "width", "height"):
-        if key in entry:
-            kwargs[key] = _number(entry[key], f"{where}.{key}")
-    for key in ("variant", "display", "label_pos"):
-        if key in entry:
-            kwargs[key] = _text(entry[key], f"{where}.{key}")
-    for key in ("description", "reference"):
-        if key in entry:
-            kwargs[key] = _drawn(entry[key], f"{where}.{key}")
-    try:
+    kwargs.update(_read_fields(entry, where, ((("offset", "angle", "width", "height"), _number),
+                                              (("variant", "display", "label_pos"), _text),
+                                              (("description", "reference"), _drawn))))
+    with _blame(where, (TypeError, ValueError)):
         inst = fs.add_balloon(element, **kwargs)
-    except (TypeError, ValueError) as e:
-        raise _fail_from(e, where) from None
     # add_balloon already added the balloon, so set the remaining fields
     # here instead of through _read_common.
     if "new_line_number" in entry:
@@ -1375,13 +1344,7 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
     """
     data = _mapping(entry, where)
     _check_keys(data, _PIN_KEYS, where)
-    kwargs: dict[str, Any] = {}
-    for key in ("x", "y"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    for key in ("col", "row"):
-        if key in data:
-            kwargs[key] = _integer(data[key], f"{where}.{key}")
+    kwargs = _read_fields(data, where, ((("x", "y"), _number), (("col", "row"), _integer)))
     if "orientation" in data:
         kwargs["orientation"] = data["orientation"]
     if "mirrored" in data:
@@ -1390,7 +1353,7 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
                             {a for a in ("x", "y") if a in kwargs},
                             {r for r in ("col", "row") if r in kwargs},
                             f"{where}.port")
-    try:
+    with _blame(where):
         # One pin() call for the corner axes and one per named port.
         # port=None is explicit so an unported coordinate stays a corner,
         # even on a flag whose default anchor is its port. Orientation,
@@ -1400,8 +1363,6 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
         for nozzle in dict.fromkeys(ports.values()):
             unit.pin(port=nozzle,
                      **{axis: kwargs[axis] for axis, p in ports.items() if p == nozzle})
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
@@ -1504,10 +1465,8 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
     """
     for port_name, face in _mapping(entry, where).items():
         _find_port(unit, port_name, where)
-        try:
+        with _blame(f"{where}.{port_name}"):
             unit.nozzle(port_name, _text(face, f"{where}.{port_name}"))
-        except ValueError as e:
-            raise _fail_from(e, f"{where}.{port_name}") from None
 
 
 def _read_port_order(
@@ -1533,10 +1492,8 @@ def _read_port_order(
         at = f"{where}.{face}"
         ports = [_find_port(unit, name, at)
                  for name in _sequence(names, at)]
-        try:
+        with _blame(at):
             unit.order_on(_text(face, at), ports)
-        except ValueError as e:
-            raise _fail_from(e, at) from None
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
@@ -1585,7 +1542,7 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"
-            f"{_suggest(name, unit.ports)}; available ports: {sorted(unit.ports)}"
+            f"{suggest(str(name), unit.ports)}; available ports: {sorted(unit.ports)}"
         )
     return unit.ports[name]
 
@@ -1617,7 +1574,7 @@ def _find_unit(fs: Flowsheet, name: str, where: str) -> Unit:
             return unit
     names = [u.name for u in fs.units]
     raise SpecError(
-        f"{where}: no unit named {name!r} on this flowsheet{_suggest(name, names)}; "
+        f"{where}: no unit named {name!r} on this flowsheet{suggest(str(name), names)}; "
         f"declared units: {sorted(names)}"
     )
 
@@ -1709,13 +1666,9 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         kwargs["draw_as_recycle"] = _flag(data["draw_as_recycle"], f"{where}.draw_as_recycle")
     if "ends" in data:
         kwargs["ends"] = _read_ends(data["ends"], f"{where}.ends")
-    for key in LINE_NUMBER_FIELDS:
-        if key in data:
-            kwargs[key] = _component(data[key], f"{where}.{key}")
-    try:
+    kwargs.update(_read_fields(data, where, ((LINE_NUMBER_FIELDS, _component),)))
+    with _blame(where):
         stream = fs.connect(src, dst, **kwargs)
-    except ValueError as e:
-        raise _fail_from(e, where) from None
 
     for key in ("color", "dasharray"):
         if key in data:
@@ -1859,7 +1812,7 @@ def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
             return stream
         names = [u.name for u in fs.units] + [s.name for s in fs.streams if not s.auto_named]
         raise SpecError(
-            f"{where}: nothing named {entry!r} to attach to{_suggest(entry, names)}; "
+            f"{where}: nothing named {entry!r} to attach to{suggest(str(entry), names)}; "
             f"hosts available: {sorted(names)}"
         )
     port = _read_endpoint(fs, entry, where)
@@ -1917,13 +1870,9 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
     if "at" in data:
         at = data["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
-    for key in ("offset", "angle"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    try:
+    kwargs.update(_read_fields(data, where, ((("offset", "angle"), _number),)))
+    with _blame(where, (TypeError, ValueError)):
         inst.attach(host, **kwargs)
-    except (TypeError, ValueError) as e:
-        raise _fail_from(e, where) from None
 
 
 def _read_section(entry: Any, where: str) -> tuple[str, str]:
@@ -2113,9 +2062,7 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
             )
         out["position"] = (_number(pair[0], f"{where}.position[0]"),
                            _number(pair[1], f"{where}.position[1]"))
-    for key in ("margin", "width", "font_size"):
-        if key in data:
-            out[key] = _number(data[key], f"{where}.{key}")
+    out.update(_read_fields(data, where, ((("margin", "width", "font_size"), _number),)))
     return out
 
 
@@ -2178,7 +2125,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
     kind = data.get("type", "annotation")
     if kind not in _ANNOTATION_KEYS:
         raise SpecError(
-            f"{where}: unknown box type {kind!r}{_suggest(kind, _ANNOTATION_KEYS)}; "
+            f"{where}: unknown box type {kind!r}{suggest(str(kind), _ANNOTATION_KEYS)}; "
             f"available types: {sorted(_ANNOTATION_KEYS)}"
         )
     _check_keys(data, _ANNOTATION_KEYS[kind], where)
@@ -2285,20 +2232,11 @@ def to_dict(fs: Flowsheet) -> dict:
             f"string such as {DEFAULT_VALVE_STATION_TAG_SCHEME!r}"
         )
     spec: dict[str, Any] = {"name": fs.name}
-    if fs.stream_naming_scheme != "S{n}":
-        spec["stream_naming_scheme"] = fs.stream_naming_scheme
-    if fs.stream_number_start != DEFAULT_STREAM_NUMBER_START:
-        spec["stream_number_start"] = fs.stream_number_start
-    if fs.line_numbering_scheme != DEFAULT_LINE_NUMBERING_SCHEME:
-        spec["line_numbering_scheme"] = fs.line_numbering_scheme
-    if fs.line_number_start != DEFAULT_LINE_NUMBER_START:
-        spec["line_number_start"] = fs.line_number_start
-    # Loops below carry literal numbers; this keeps a loop added by hand
-    # later in the sheet's series.
-    if fs.loop_number_start != DEFAULT_LOOP_NUMBER_START:
-        spec["loop_number_start"] = fs.loop_number_start
-    if fs.valve_station_tag_scheme != DEFAULT_VALVE_STATION_TAG_SCHEME:
-        spec["valve_station_tag_scheme"] = fs.valve_station_tag_scheme
+    # Loops below carry literal numbers; loop_number_start keeps a loop
+    # added by hand later in the sheet's series.
+    for key, default, _ in _SHEET_SETTINGS:
+        if getattr(fs, key) != default:
+            spec[key] = getattr(fs, key)
     if not fs.auto_faces:
         spec["auto_faces"] = False
     if fs.components:
@@ -2649,8 +2587,6 @@ def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
     dict[str, Any]
         Declarative membership and local spacing.
     """
-    from pandid.stations import DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP
-
     station = assembly.station
     entry: dict[str, Any] = {
         "members": [unit.name for unit in station.members],
@@ -2664,9 +2600,7 @@ def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
             entry[role] = unit.name
     if assembly.mirrored:
         entry["mirrored"] = True
-    for key, default in (("gap", DEFAULT_GAP),
-                         ("bypass_rise", DEFAULT_BYPASS_RISE),
-                         ("drain_drop", DEFAULT_DRAIN_DROP)):
+    for key, default in _STATION_SPACING:
         value = getattr(assembly, key)
         if value != default:
             entry[key] = value

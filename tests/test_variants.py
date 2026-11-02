@@ -144,22 +144,22 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     """
     built = set(_shipped(cls, variant).ports)
     if cls is units.HeatExchanger:
-        table = cls._VARIANT_PORTS.get(variant, cls._SHELL_AND_TUBE)
+        table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}
     elif cls is units.Separator:
         # ``| {"feed_1"}`` for the reason ``Reactor``'s branch below has
         # it: the charge nozzle is a family sized by ``n_feeds``, so
         # ``__init__`` adds it rather than either port table.
-        table = cls._VARIANT_PORTS.get(variant, cls._PHASES)
+        table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table} | {"feed_1"}
     elif cls is units.Filter:
-        table = cls._VARIANT_PORTS.get(variant, cls._CLARIFYING)
+        table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}
     elif cls is units.Valve:
-        table = cls._VARIANT_PORTS.get(variant, cls._BASE)
+        table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}
     elif cls is units.Reactor:
-        table = cls._VARIANT_PORTS.get(variant, cls._VESSEL)
+        table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         want = {spec[0] for spec in table} | {"feed_1"}
         if variant in cls._STIRRED:
             want |= {"drive"}
