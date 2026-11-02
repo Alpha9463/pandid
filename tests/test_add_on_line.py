@@ -460,7 +460,9 @@ def test_a_device_with_at_goes_before_any_with_a_larger_at() -> None:
     fs.add(Valve("HV-4"), on=line, at=0.3)
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-4", "HV-2", "HV-3", "Product"]
-    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == pytest.approx((0.15, 0.3, 0.6, 0.8))
+    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == pytest.approx(
+        (0.15, 0.3, 0.6, 0.8)
+    )
 
 
 def test_at_without_on_is_refused() -> None:
