@@ -113,7 +113,9 @@ from pandid.flowsheet import (
 from pandid.loops import Loop
 from pandid.portgeom import pin_intent, port_refusal
 from pandid.ports import Port
-from pandid.stations import DEFAULT_VALVE_STATION_TAG_SCHEME
+from pandid.stations import (
+    DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP, DEFAULT_VALVE_STATION_TAG_SCHEME,
+)
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
 
@@ -998,6 +1000,10 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     return unit
 
 
+# Station spacing keys and their defaults, which the writer leaves out.
+_STATION_SPACING = (
+    ("gap", DEFAULT_GAP), ("bypass_rise", DEFAULT_BYPASS_RISE), ("drain_drop", DEFAULT_DRAIN_DROP),
+)
 _STATION_ROLES = (
     "control", "upstream_isolation", "downstream_isolation", "reduction", "expansion",
     "bypass", "upstream_drain", "downstream_drain",
@@ -1025,10 +1031,7 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     SpecError
         If a member, port, or placement option is invalid.
     """
-    from pandid.stations import (
-        BYPASS_ANCHORS, DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP,
-        StationAssembly, ValveStation,
-    )
+    from pandid.stations import BYPASS_ANCHORS, StationAssembly, ValveStation
     from pandid.units import Reducer, Tee, Valve
 
     data = _mapping(entry, where)
@@ -1057,18 +1060,10 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     outlet = _read_endpoint(fs, data["outlet"], f"{where}.outlet")
     if inlet.owner not in members or outlet.owner not in members:
         raise SpecError(f"{where}: station endpoints must belong to its members")
-    station = ValveStation(
-        control=cast(Valve, roles["control"]),
-        upstream_isolation=cast("Valve | None", roles["upstream_isolation"]),
-        downstream_isolation=cast("Valve | None", roles["downstream_isolation"]),
-        reduction=cast("Reducer | None", roles["reduction"]),
-        expansion=cast("Reducer | None", roles["expansion"]),
-        bypass=cast("Valve | None", roles["bypass"]),
-        upstream_drain=cast("Valve | None", roles["upstream_drain"]),
-        downstream_drain=cast("Valve | None", roles["downstream_drain"]),
-        tees=tuple(cast(Tee, tee) for tee in tees), members=members,
-        inlet=inlet, outlet=outlet,
-    )
+    # The checks above make each role the type its field declares.
+    station = ValveStation(**cast("dict[str, Any]", roles),
+                           tees=tuple(cast(Tee, tee) for tee in tees), members=members,
+                           inlet=inlet, outlet=outlet)
     branch_members = {station.bypass, station.upstream_drain, station.downstream_drain}
     main = [unit for unit in members if unit not in branch_members]
     if (not main or inlet is not main[0].ports.get("inlet")
@@ -1104,9 +1099,7 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     if at is not None and (run is None or not 0 < at < 1):
         raise SpecError(f"{where}: an at fraction needs a run and lies strictly between 0 and 1")
     options = {key: _number(data[key], f"{where}.{key}") if key in data else default
-               for key, default in (("gap", DEFAULT_GAP),
-                                    ("bypass_rise", DEFAULT_BYPASS_RISE),
-                                    ("drain_drop", DEFAULT_DRAIN_DROP))}
+               for key, default in _STATION_SPACING}
     if any(not isfinite(value) or value <= 0 for value in options.values()):
         raise SpecError(f"{where}: station spacing must be positive")
     bypass_over = (_text(data["bypass_over"], f"{where}.bypass_over")
@@ -2594,8 +2587,6 @@ def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
     dict[str, Any]
         Declarative membership and local spacing.
     """
-    from pandid.stations import DEFAULT_BYPASS_RISE, DEFAULT_DRAIN_DROP, DEFAULT_GAP
-
     station = assembly.station
     entry: dict[str, Any] = {
         "members": [unit.name for unit in station.members],
@@ -2609,9 +2600,7 @@ def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
             entry[role] = unit.name
     if assembly.mirrored:
         entry["mirrored"] = True
-    for key, default in (("gap", DEFAULT_GAP),
-                         ("bypass_rise", DEFAULT_BYPASS_RISE),
-                         ("drain_drop", DEFAULT_DRAIN_DROP)):
+    for key, default in _STATION_SPACING:
         value = getattr(assembly, key)
         if value != default:
             entry[key] = value
