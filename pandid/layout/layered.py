@@ -41,6 +41,10 @@ END_ROOM = 41.0
 LEAD = 40.0
 #: Ordering and straightening passes.
 SWEEPS = 12
+#: Widest band before the drawing folds: about an A1 sheet at 96 dpi.
+BAND_WIDTH = 3200.0
+#: Clear height between bands, wide enough for a folded run to turn in.
+BAND_GAP = 160.0
 
 #: Faces each end of a stacking pipe must have: (source, dest) -> dest is above.
 _STACK = {("N", "S"): True, ("S", "N"): False}
@@ -198,6 +202,9 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     _order(layers, segs)
     xs = _columns(layers, segs)
     _straighten(layers, segs)
+    if not any(u.pin_ is not None and (u.pin_.x is not None or u.pin_.y is not None)
+               for u in units):  # a fold could land on a pinned unit
+        _fold(layers, segs, xs)
     pinned_y = any(u.pin_ is not None and u.pin_.y is not None for u in units)
     lift = 0.0 if pinned_y else MARGIN - min(
         n.y - n.pad.north for layer in layers.values() for n in layer if n.members)
@@ -511,6 +518,38 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
     for sweep in range(SWEEPS):
         for k in (keys if sweep % 2 == 0 else keys[::-1]):
             solve(layers[k])
+
+
+def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, float]) -> None:
+    """Fold a drawing wider than :data:`BAND_WIDTH` into bands down the sheet.
+
+    Each band ends in its last third, after the layer fewest pipes leave.
+    """
+    keys = sorted(layers)
+    left = {k: min(xs[n] - n.pad.west for n in layers[k]) for k in keys}
+    right = {k: max(xs[n] + n.w + n.pad.east for n in layers[k]) for k in keys}
+    leaving = {k: sum(s.left.layer == k for s in segs) for k in keys}
+    bands, start = [], 0
+    while True:
+        last = max([i for i in range(start, len(keys))
+                    if right[keys[i]] - left[keys[start]] <= BAND_WIDTH], default=start)
+        if last == len(keys) - 1:
+            bands.append(keys[start:])
+            break
+        cut = min(range(start + (last - start) // 2, last + 1),
+                  key=lambda i: (leaving[keys[i]], -i))
+        bands.append(keys[start:cut + 1])
+        start = cut + 1
+    bottom = None
+    for band in bands:
+        nodes = [n for k in band for n in layers[k]]
+        top = min(n.y - n.pad.north for n in nodes)
+        dx = left[band[0]] - left[keys[0]]
+        dy = 0.0 if bottom is None else bottom + BAND_GAP - top
+        for n in nodes:
+            xs[n] -= dx
+            n.y += dy
+        bottom = max(n.y + n.h + n.pad.south for n in nodes)
 
 
 def _gap(upper: _Node, lower: _Node) -> float:
