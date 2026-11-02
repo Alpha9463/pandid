@@ -33,7 +33,6 @@ import gallery  # noqa: E402
 import layout_quality  # noqa: E402
 import route_quality  # noqa: E402
 
-from pandid.layout.claims import read as read_claims  # noqa: E402
 from pandid.layout.stages import process_streams, process_units  # noqa: E402
 from pandid.portgeom import resolve_port, unit_box  # noqa: E402
 
@@ -250,21 +249,6 @@ def _proxies(fs, extent, fit_scale: float | None, route_report) -> dict:
     dict
         Rule-keyed proxy records with explicit measurement statuses.
     """
-    claims = read_claims(process_streams(fs))
-    direction_violations = 0
-    wrong_direction = []
-    for claim in claims:
-        a, b = claim.author.frame, claim.subject.frame
-        if a is None or b is None:
-            continue
-        dx, dy = b.cx - a.cx, b.cy - a.cy
-        if claim.eastward and claim.eastward * dx <= 0:
-            direction_violations += 1
-            wrong_direction.append(f"{claim.author.name} -> {claim.subject.name}")
-        if claim.southward and claim.southward * dy <= 0:
-            direction_violations += 1
-            wrong_direction.append(f"{claim.author.name} -> {claim.subject.name}")
-
     backward_exits = []
     for stream in process_streams(fs):
         if stream.is_recycle:
@@ -286,12 +270,6 @@ def _proxies(fs, extent, fit_scale: float | None, route_report) -> dict:
     ]
     excess_bends = sum(excess for _, excess in excess_rows)
     return {
-        "S1.claim_direction_violations": _proxy(
-            direction_violations,
-            note="Diagnostic: conflicting claims can reward a visually worse layout",
-            status="diagnostic",
-            offenders=wrong_direction,
-        ),
         "S2.group_span": _proxy(None, note="Group inference begins in Batch 2"),
         "S3.branch_inversions": _proxy(None, note="Branch ordering begins in Batch 2"),
         "S4.corridor_intrusion": _proxy(None, note="Corridor inference begins in Batch 2"),

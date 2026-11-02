@@ -129,8 +129,8 @@ returns the declared face. An unpinned block sizes itself for its ports and name
 
 ## Placement
 
-Unpinned units follow topology and port-face claims. Pin only the coordinates
-or nozzles that need manual control.
+Unpinned units follow the flow and the faces their nozzles are drawn on. Pin
+only the coordinates or nozzles that need manual control.
 
 | Call | Effect |
 |---|---|

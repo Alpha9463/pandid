@@ -7,7 +7,24 @@ import pytest
 from pandid import ControlValve, Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
-from scripts.layout_compare import _fingerprint
+
+
+def _drawing(fs: Flowsheet) -> str:
+    """Return a snapshot of every frame and route on a routed sheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    str
+        Each unit's frame and each stream's waypoints, as text.
+    """
+    units = [(unit.name, unit.frame) for unit in fs.units]
+    routes = [(stream.name, stream.route) for stream in fs.streams]
+    return repr((units, routes))
 
 
 def _clean(fs: Flowsheet) -> bool:
@@ -141,12 +158,12 @@ def test_routing_a_mounted_sheet_again_draws_the_same_sheet() -> None:
     fs.add_valve_station("CV-101", on=run, at=0.7)
 
     fs.route()
-    first = _fingerprint(fs)
+    first = _drawing(fs)
     fs.route()
-    assert _fingerprint(fs) == first
+    assert _drawing(fs) == first
     fs.layout()
     fs.route()
-    assert _fingerprint(fs) == first
+    assert _drawing(fs) == first
     assert fs.to_svg() == fs.to_svg()
 
 
@@ -180,6 +197,53 @@ def test_a_control_valve_sits_on_its_pipe_without_a_jog(
     assert port_point(valve, valve.frame, "inlet")[1] == pytest.approx(pipe_y)
     assert port_point(valve, valve.frame, "outlet")[1] == pytest.approx(pipe_y)
     assert measure_final(fs).bends == 0
+
+
+@pytest.mark.parametrize("mirrored", [None, True])
+def test_valves_on_an_upright_pipe_turn_and_get_room(mirrored: bool | None) -> None:
+    """Check that valves between stacked units are turned onto the pipe and fit.
+
+    Parameters
+    ----------
+    mirrored : bool or None
+        Mirroring the author pinned, which states no turn.
+    """
+    from pandid import Cyclone, HeatExchanger
+    from pandid.layout.mounted import ALONG
+
+    fs = Flowsheet("Upright pipe")
+    feed = fs.add(Feed("Feed"))
+    cyclone = fs.add(Cyclone("CY-101"))
+    cooler = fs.add(HeatExchanger("E-101"))
+    gas = fs.add(Product("Gas"))
+    solids = fs.add(Product("Solids"))
+    fs.connect(feed.outlet, cyclone.feed)
+    fs.connect(cyclone.overflow, gas.inlet)
+    drop = fs.connect(cyclone.underflow, cooler.shell_in)
+    fs.connect(cooler.shell_out, solids.inlet)
+    valves = []
+    for index in range(3):
+        valve = Valve(f"HV-{index}")
+        if mirrored is not None:
+            valve.pin(mirrored=mirrored)
+        valves.append(fs.add(valve, on=drop))
+
+    fs.route()
+    assert cyclone.frame is not None and cooler.frame is not None
+    top = port_point(cyclone, cyclone.frame, "underflow")
+    bottom = port_point(cooler, cooler.frame, "shell_in")
+    assert top[0] == pytest.approx(bottom[0])
+    spans = []
+    for valve in valves:
+        assert valve.frame is not None
+        inlet = port_point(valve, valve.frame, "inlet")
+        outlet = port_point(valve, valve.frame, "outlet")
+        assert inlet[0] == outlet[0] == pytest.approx(top[0])
+        spans.append((inlet[1], outlet[1]))
+    assert top[1] < spans[0][0] and spans[-1][1] < bottom[1]
+    assert all(above[1] + ALONG <= below[0] + 1e-6 for above, below in zip(spans, spans[1:]))
+    assert all(inlet < outlet for inlet, outlet in spans)
+    assert _clean(fs)
 
 
 def test_an_angle_relief_valve_is_placed_like_equipment() -> None:

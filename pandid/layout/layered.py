@@ -461,13 +461,14 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
     east = {k: max((n.pad.east for n in layers.get(k, [])), default=0.0) for k in width}
     west = {k: max((n.pad.west for n in layers.get(k, [])), default=0.0) for k in width}
     room = dict.fromkeys(width, 0.0)
-    for s in segs:
-        if s.link.room:
+    for s in segs:  # a pipe's furniture needs room once, in the gap it leaves its west end by
+        if s.link.room and s.lport is not None:
             room[s.left.layer] = max(room[s.left.layer], s.link.room + END_ROOM)
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
         left[k] = x
-        x += width[k] + max(COL_GAP + east[k] + west.get(k + 1, 0.0), room[k])
+        if any(n.members for n in layers.get(k, [])):  # a layer of only pipes takes no room
+            x += width[k] + max(COL_GAP + east[k] + west.get(k + 1, 0.0), room[k])
     sides: dict[_Node, set[int]] = {}
     for s in segs:
         sides.setdefault(s.left, set()).add(1)

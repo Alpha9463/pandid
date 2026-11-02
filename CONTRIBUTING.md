@@ -110,16 +110,13 @@ rewriting shared branch history after review begins.
 1. **Topology** (`pandid/flowsheet.py`, `pandid/units.py`, `pandid/ports.py`,
    `pandid/streams.py`) holds units, ports and stream connectivity.
 2. **Geometry.** `pandid/layout/` places process units first and instruments
-   second. It breaks cycles, fits each axis by weighted least squares to the
-   placement claims each unit makes about its neighbours, turns the fit into
-   grid columns and rows with crossing-reduction sweeps, converts the grid to
-   pixel coordinates, and writes each unit's `Frame`. It then places
-   instruments against that geometry and selects port faces and label
-   positions. `pandid/routing/` builds a visibility graph and runs an A\*
-   search over it. After the first route, `Flowsheet.route()` runs a bounded
-   refinement and layout search that keeps a change only when the routed
-   drawing improves. `pandid/portgeom.py` is the single source of truth for
-   port geometry.
+   second. Equipment and boundary flags are drawn as a layered graph whose
+   ports are the nozzles (`pandid/layout/layered.py`); valves, fittings and
+   valve stations are then set on their routed pipes
+   (`pandid/layout/mounted.py`). It then places instruments against that
+   geometry and selects port faces and label positions. `pandid/routing/`
+   builds a visibility graph and runs an A\* search over it.
+   `pandid/portgeom.py` is the single source of truth for port geometry.
 3. **Render** (`pandid/render/`) produces the SVG output and the symbol
    registry, with `pandid/validate.py` and `pandid/document.py` beside it.
 

@@ -114,7 +114,10 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
 
 @pytest.mark.parametrize("pinned_origin", [False, True])
 def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> None:
-    """Place inline valves on the clear leg after a south discharge.
+    """Place inline valves on the leg that reaches the receiver.
+
+    The reactor's outlet may leave south or east; either way the valves sit
+    level with the receiver's inlet, with at most one bend in the line.
 
     Parameters
     ----------
@@ -124,7 +127,7 @@ def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> 
     Returns
     -------
     None
-        The reactor train uses contracted placement with a clear elbow.
+        The valves are on the receiver's leg and the line is clear.
     """
     fs = Flowsheet("South outlet inline train")
     feed = fs.add(Feed("Feed"))
@@ -148,7 +151,6 @@ def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> 
     if pinned_origin:
         assert (reactor.frame.x, reactor.frame.y) == (350, 250)
     receiver_y = port_point(product, product.frame, "inlet")[1]
-    assert receiver_y > port_point(reactor, reactor.frame, "outlet")[1]
     assert port_point(first, first.frame, "inlet")[1] == pytest.approx(receiver_y)
     assert port_point(second, second.frame, "inlet")[1] == pytest.approx(receiver_y)
 

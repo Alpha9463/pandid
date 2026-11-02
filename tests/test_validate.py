@@ -1818,11 +1818,11 @@ def test_warnings_from_both_halves_land_on_the_sheet_together():
 
 
 def _hand_routed(*waypoints):
-    """A pump discharge routed through hand-written points."""
+    """A pump discharge routed through hand-written points, its ends pinned."""
     fs = Flowsheet("via")
     f = fs.add(U.Feed("F"))
-    p = fs.add(U.Pump("P-1"))
-    q = fs.add(U.Product("Q"))
+    p = fs.add(U.Pump("P-1")).pin(port="discharge", x=320, y=60)
+    q = fs.add(U.Product("Q")).pin(port="inlet", x=440, y=60)
     fs.connect(f.outlet, p.suction)
     run = fs.connect(p.discharge, q.inlet).via(list(waypoints))
     fs.layout()

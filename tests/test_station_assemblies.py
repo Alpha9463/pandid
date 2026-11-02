@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-
 import pytest
 
 from pandid import Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
 from pandid.layout.attach import logical_stream_path
-from pandid.layout.coarse import _station_width
+from pandid.layout.layered import END_ROOM
+from pandid.layout.mounted import _station_width
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
 from pandid.spec import SpecError
@@ -110,7 +110,7 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
         port_point(product, product.frame, "inlet")[0]
         - port_point(reactor, reactor.frame, "outlet")[0]
     )
-    assert nozzle_span == pytest.approx(_station_width(fs._station_assemblies) + 41)
+    assert nozzle_span == pytest.approx(_station_width(fs._station_assemblies) + END_ROOM)
     receiver_y = port_point(product, product.frame, "inlet")[1]
     main = [
         unit
