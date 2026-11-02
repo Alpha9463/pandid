@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from pandid.geometry import Frame
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.stages import slot
-from pandid.portgeom import port_faces, port_point, unit_box
+from pandid.portgeom import port_faces, resolve_port, unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -115,15 +115,16 @@ def _shift(unit: Unit) -> float:
     return unit_box(unit, Frame(x=0.0, y=0.0, w=s.w, h=s.h, mirrored=s.mirrored))[0]
 
 
-def _nozzle(port: Port, face: str | None = None) -> tuple[float, float]:
-    """Return a nozzle's offset from its unit's drawn box, on ``face`` if given."""
+def _nozzle(port: Port, face: str | None = None) -> tuple[float, float, str]:
+    """Return a nozzle's offset from its unit's drawn box, and its face; on ``face`` if given."""
     unit = port.owner
     assert unit is not None
     s = slot(unit)
     probe = Frame(x=-_shift(unit), y=0.0, w=s.w, h=s.h, orientation=s.orientation,
                   mirrored=s.mirrored, mirror_y=s.mirror_y,
                   port_faces={port.name: face} if face else {})
-    return port_point(unit, probe, port.name)
+    (x, y), _, landed = resolve_port(unit, probe, port.name)
+    return x, y, landed
 
 
 def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
@@ -131,8 +132,24 @@ def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
     if port is None:
         return (node.w / 2, 0.0)
     assert port.owner is not None
-    px, py = _nozzle(port, node.faces.get(id(port)))
+    px, py, _ = _nozzle(port, node.faces.get(id(port)))
     return (node.dx[port.owner] + px, node.dy[port.owner] + py)
+
+
+def _around(node: _Node, port: Port | None, east: bool) -> float:
+    """Return a nozzle's height down its stack, 0 to 1, for ordering against one side.
+
+    Nozzles on a top or bottom face tie on height, so the one nearer the
+    peer's side sits inside: seen from the west, the east end of the top
+    face is highest.
+    """
+    if port is None or not node.h:
+        return 0.5
+    assert port.owner is not None
+    _, _, face = _nozzle(port, node.faces.get(id(port)))
+    x, y = _offset(node, port)
+    lean = {"N": -1, "S": 1}.get(face, 0) * (-1 if east else 1) * x / (100 * max(node.w, 1))
+    return y / node.h + lean
 
 
 def _flag(port: Port | None) -> bool:
@@ -368,11 +385,7 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         for layer in layers.values():
             pos.update((n, float(i)) for i, n in enumerate(layer))
 
-    def frac(node: _Node, port: Port | None) -> float:
-        # A nozzle's height down its stack, as a fraction of a rank.
-        return 0.5 if port is None or not node.h else _offset(node, port)[1] / node.h
-
-    ends = [(s, frac(s.left, s.lport), frac(s.right, s.rport)) for s in segs]
+    ends = [(s, _around(s.left, s.lport, True), _around(s.right, s.rport, False)) for s in segs]
     gaps: dict[int, list[tuple[_Seg, float, float]]] = {}
     for e in ends:
         gaps.setdefault(e[0].left.layer, []).append(e)
