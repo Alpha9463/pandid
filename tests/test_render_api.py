@@ -383,9 +383,9 @@ def test_zone_grid_runs_letters_down_and_numerals_right():
     """ISO 5457 4.4: the grid's origin is the top-left corner.
 
     The direction is the whole of a zone reference's meaning. ISO 15519-1
-    Clause 9 composes an address out of it (``location_reference``), so a grid
-    that runs the other way sends a reader who is told "B3" to the far corner
-    of the sheet from the one the drawing meant.
+    Clause 9 composes an address out of it, so a grid that runs the other way
+    sends a reader who is told "B3" to the far corner of the sheet from the one
+    the drawing meant.
     """
     from pandid.render import furniture as F
 

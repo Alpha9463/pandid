@@ -1951,8 +1951,7 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 # Zone-ruled drawing border (A.. top→down, 1.. left→right)
 #
 # Lettering follows ISO 5457 4.4: letters top down, numerals left to
-# right, so ISO 15519-1 Clause 9 addresses
-# (:func:`pandid.document.location_reference`) start at the top left. The
+# right, so ISO 15519-1 Clause 9 addresses start at the top left. The
 # 50 mm pitch, ISO 5457 field counts and centring marks are not used: the
 # band is a constant and the field count suits the sheet; ISO 15519-1 5.1.2
 # asks for centring marks only for microfilming.

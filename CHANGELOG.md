@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `"electromagnetic"` variant. Use `DistillationColumn` for a `Column`'s
   `reflux_in`, `boilup_in`, `reboiler_duty` and `condenser_duty`, and
   `overhead` for `distillate`.
+- **`pandid.document.location_reference` (#579).** It is deleted, with no
+  replacement.
 
 ### Fixed
 
