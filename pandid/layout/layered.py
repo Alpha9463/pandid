@@ -357,47 +357,65 @@ def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: l
 
 
 def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
-    """Reorder each layer by its neighbours' nozzle positions; keep the best."""
+    """Reorder each layer by its neighbours' nozzle positions, then swap neighbours.
+
+    Barycentre sweeps keep the order with the fewest crossings; adjacent
+    swaps that remove a crossing follow.
+    """
     pos: dict[_Node, float] = {}
 
     def index() -> None:
         for layer in layers.values():
             pos.update((n, float(i)) for i, n in enumerate(layer))
 
-    def at(node: _Node, port: Port | None) -> float:
-        # A nozzle's place in its layer: the stack's rank plus its height down the stack.
-        return pos[node] + (0.5 if port is None or not node.h else _offset(node, port)[1] / node.h)
+    def frac(node: _Node, port: Port | None) -> float:
+        # A nozzle's height down its stack, as a fraction of a rank.
+        return 0.5 if port is None or not node.h else _offset(node, port)[1] / node.h
 
-    def crossings() -> int:
-        count = 0
-        by_layer: dict[int, list[tuple[float, float]]] = {}
-        for s in segs:
-            by_layer.setdefault(s.left.layer, []).append((at(s.left, s.lport), at(s.right, s.rport)))
-        for pairs in by_layer.values():
-            count += sum(1 for i, (a, b) in enumerate(pairs) for c, d in pairs[i + 1:]
-                         if (a - c) * (b - d) < 0)
-        return count
+    ends = [(s, frac(s.left, s.lport), frac(s.right, s.rport)) for s in segs]
+    gaps: dict[int, list[tuple[_Seg, float, float]]] = {}
+    for e in ends:
+        gaps.setdefault(e[0].left.layer, []).append(e)
+
+    def crossings(k: int) -> int:
+        pairs = [(pos[s.left] + a, pos[s.right] + b) for s, a, b in gaps.get(k, [])]
+        return sum(1 for i, (a, b) in enumerate(pairs) for c, d in pairs[i + 1:]
+                   if (a - c) * (b - d) < 0)
 
     index()
-    best, kept = crossings(), {k: list(v) for k, v in layers.items()}
     keys = list(layers)
+    best, kept = sum(map(crossings, keys)), {k: list(v) for k, v in layers.items()}
     for sweep in range(SWEEPS):
         down = sweep % 2 == 0
         for k in (keys[1:] if down else keys[-2::-1]):
             near: dict[_Node, list[float]] = {}
-            for s in segs:
+            for s, a, b in ends:
                 # A unit is ordered by its peers, not by its flags.
                 if down and s.right.layer == k and (_flag(s.rport) or not _flag(s.lport)):
-                    near.setdefault(s.right, []).append(at(s.left, s.lport))
+                    near.setdefault(s.right, []).append(pos[s.left] + a)
                 elif not down and s.left.layer == k and (_flag(s.lport) or not _flag(s.rport)):
-                    near.setdefault(s.left, []).append(at(s.right, s.rport))
+                    near.setdefault(s.left, []).append(pos[s.right] + b)
             layers[k].sort(key=lambda n: sum(near[n]) / len(near[n]) if n in near else pos[n] + 0.5)
             pos.update((n, float(i)) for i, n in enumerate(layers[k]))
-        count = crossings()
+        count = sum(map(crossings, keys))
         if count < best:
             best, kept = count, {k: list(v) for k, v in layers.items()}
     layers.update(kept)
     index()
+    for _ in range(SWEEPS):
+        swapped = False
+        for k in keys:
+            layer = layers[k]
+            for i in range(len(layer) - 1):
+                before = crossings(k - 1) + crossings(k)
+                a, b = layer[i], layer[i + 1]
+                layer[i], layer[i + 1], pos[a], pos[b] = b, a, pos[b], pos[a]
+                if crossings(k - 1) + crossings(k) < before:
+                    swapped = True
+                else:
+                    layer[i], layer[i + 1], pos[a], pos[b] = a, b, pos[b], pos[a]
+        if not swapped:
+            break
 
 
 def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, float]:
