@@ -121,14 +121,25 @@ def _device(unit: Unit | None) -> bool:
     -------
     bool
         Whether it is an unpinned valve, reducer or fitting whose only
-        process ports, ``inlet`` and ``outlet``, both carry material.
+        process ports, ``inlet`` and ``outlet``, both carry material and sit
+        on opposite faces. An angle valve turns the pipe, so it is placed
+        like equipment.
     """
+    from pandid.geometry import Pin
+    from pandid.portgeom import port_offset
+
     if unit is None or unit.kind not in _INLINE_KINDS or _position_pinned(unit):
         return False
     ports = {p.name: p for p in unit.ports.values() if p.role == "process"}
-    return set(ports) == {"inlet", "outlet"} and all(
+    if set(ports) != {"inlet", "outlet"} or not all(
         p.stream is not None and p.stream.kind == "material" for p in ports.values()
-    )
+    ):
+        return False
+    upright = Pin()  # opposite faces stay opposite under any turn or mirror
+    width, height = resolve_size(unit, upright)
+    (ax, ay), (bx, by) = (port_offset(unit, name, upright) for name in ("inlet", "outlet"))
+    return ((abs(ay - by) < 1.0 and abs(abs(ax - bx) - width) < 1.0)
+            or (abs(ax - bx) < 1.0 and abs(abs(ay - by) - height) < 1.0))
 
 
 def _members(element: Element) -> list[Unit]:
@@ -251,6 +262,29 @@ def _chain_width(run: MountedRun) -> float:
     if devices:
         width += sum(resolve_size(unit)[0] for unit in devices) + GAP * (len(devices) + 1)
     return max(width, _room(run) - END_ROOM)
+
+
+def _column_room(run: MountedRun) -> float:
+    """Return the vertical pipe a run's devices need between two stacked units.
+
+    Parameters
+    ----------
+    run : MountedRun
+        Pipe to measure.
+
+    Returns
+    -------
+    float
+        Devices end to end, :data:`GAP` apart, with the margin kept at the
+        nozzle and at the corner; 0 for a pipe carrying a station, which is
+        set only on a level leg.
+    """
+    from pandid.stations import StationAssembly
+
+    if any(isinstance(element, StationAssembly) for element in run.elements):
+        return 0.0
+    lengths = [_level_length(element) for element in run.elements]
+    return sum(lengths) + GAP * (len(lengths) - 1) + NOZZLE_END + END
 
 
 @contextmanager
@@ -535,7 +569,7 @@ def _length(element: Element, leg: Leg) -> float:
 
 
 def _level_length(element: Element) -> float:
-    """Return the room an element takes along a level pipe, before it is set.
+    """Return the room an element takes along its pipe, before it is set.
 
     Parameters
     ----------
@@ -545,13 +579,17 @@ def _level_length(element: Element) -> float:
     Returns
     -------
     float
-        Station run length, or the device's width.
+        Station run length, or the device's extent from inlet to outlet
+        side, whichever way its symbol is drawn.
     """
+    from pandid.portgeom import port_offset
     from pandid.stations import StationAssembly
 
     if isinstance(element, StationAssembly):
         return _main_width(element)
-    return resolve_size(element)[0]
+    width, height = resolve_size(element)
+    (ax, ay), (bx, by) = (port_offset(element, name, slot(element)) for name in ("inlet", "outlet"))
+    return height if abs(by - ay) > abs(bx - ax) else width
 
 
 def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
@@ -985,7 +1023,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun], *,
     retained = [unit for unit in process_units(fs) if unit not in members]
     loose = [a for a in fs._station_assemblies if not members.intersection(a.station.members)]
     hosts = [Host(run.source, run.dest, run.segments[0], run.segments[-1],
-                  any(s.is_recycle for s in run.segments)) for run in runs]
+                  any(s.is_recycle for s in run.segments), _column_room(run)) for run in runs]
     extra = [0.0] * len(runs)
     for round_ in range(ROOM_ROUNDS):
         if round_:

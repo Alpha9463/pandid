@@ -665,7 +665,7 @@ def test_a_relief_valve_is_drawn_over_the_vessel_it_protects():
     fs.layout()
 
     assert psv.frame is not None and drum.frame is not None
-    assert psv.frame.col == drum.frame.col
+    assert drum.frame.x <= psv.frame.cx <= drum.frame.x_max
     assert psv.frame.y_max <= drum.frame.y
 
 

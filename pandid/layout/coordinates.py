@@ -86,6 +86,13 @@ def assign_coordinates(fs: "Flowsheet", *, units: list["Unit"] | None = None,
     if not units:
         return
     pads = balloon_pads(fs)
+    for host in hosts or []:
+        # A furnished run between two units in one column keeps its pipe clear.
+        src, dst = host.source.owner, host.dest.owner
+        assert src is not None and dst is not None
+        if host.room and slot(src).col == slot(dst).col:
+            face = "N" if (slot(src).row or 0) > (slot(dst).row or 0) else "S"
+            pads[src] = pads.get(src, Pad()).widened(face, host.room)
     columns = _columns(units, pads)
     bands = _bands(units, columns, pads, _wrappable(fs, units), extra_gap, hosts)
     band_of = {u: b for b, group in enumerate(bands) for c in group for u in columns[c].units}

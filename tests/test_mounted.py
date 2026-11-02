@@ -180,3 +180,24 @@ def test_a_control_valve_sits_on_its_pipe_without_a_jog(
     assert port_point(valve, valve.frame, "inlet")[1] == pytest.approx(pipe_y)
     assert port_point(valve, valve.frame, "outlet")[1] == pytest.approx(pipe_y)
     assert measure_final(fs).bends == 0
+
+
+def test_an_angle_relief_valve_is_placed_like_equipment() -> None:
+    """Check that a valve that turns the pipe stays in the grid, clear of its flag."""
+    from pandid import ReliefValve, Vessel
+    from pandid.layout.mounted import furniture
+
+    fs = Flowsheet("Angle relief")
+    feed = fs.add(Feed("Feed"))
+    drum = fs.add(Vessel("V-101"))
+    product = fs.add(Product("Product"))
+    psv = fs.add(ReliefValve("PSV-101", variant="psv"))
+    flare = fs.add(Product("To Flare"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, product.inlet)
+    fs.connect(drum.vent, psv.inlet)
+    fs.connect(psv.outlet, flare.inlet)
+
+    fs.route()
+    assert psv not in furniture(fs)
+    assert _clean(fs)

@@ -35,6 +35,9 @@ class Host(NamedTuple):
         Physical segments carrying each endpoint's placement claims.
     recycle : bool
         Whether cycle breaking marked any segment of the run as a return.
+    room : float
+        Length of vertical pipe the run's furniture needs when its two ends
+        share a grid column.
     """
 
     source: Port
@@ -42,6 +45,7 @@ class Host(NamedTuple):
     first: Stream
     last: Stream
     recycle: bool = False
+    room: float = 0.0
 
 
 def _position_pinned(unit: Unit) -> bool:
