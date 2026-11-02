@@ -138,8 +138,7 @@ def _device(unit: Unit | None) -> bool:
     upright = Pin()  # opposite faces stay opposite under any turn or mirror
     width, height = resolve_size(unit, upright)
     (ax, ay), (bx, by) = (port_offset(unit, name, upright) for name in ("inlet", "outlet"))
-    return ((abs(ay - by) < 1.0 and abs(abs(ax - bx) - width) < 1.0)
-            or (abs(ax - bx) < 1.0 and abs(abs(ay - by) - height) < 1.0))
+    return abs(abs(ax - bx) - width) < 1.0 or abs(abs(ay - by) - height) < 1.0
 
 
 def _members(element: Element) -> list[Unit]:

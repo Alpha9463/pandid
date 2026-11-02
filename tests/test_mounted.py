@@ -271,3 +271,19 @@ def test_an_actuator_needs_a_clear_exit() -> None:
 
     assert _clear({valve: valve.frame}, [], True, [], [])
     assert not _clear({valve: valve.frame}, [blocker], True, [], [])
+
+
+def test_an_eccentric_reducer_is_set_on_its_pipe() -> None:
+    """Check that a reducer with offset centrelines still runs straight through."""
+    from pandid import Reducer
+    from pandid.layout.mounted import mounted_runs
+
+    fs = Flowsheet("Eccentric reducer")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    reducer = fs.add(
+        Reducer("RD-401", variant="eccentric"), on=fs.connect(feed.outlet, product.inlet)
+    )
+
+    fs.layout()
+    assert [run.elements for run in mounted_runs(fs)] == [(reducer,)]
