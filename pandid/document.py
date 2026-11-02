@@ -361,15 +361,15 @@ class _Box:
             field takes it.
         """
         where = f"{type(self).__name__}.{name}"
-        if name in ("margin", "width", "font_size") and value is not None:
+        if name == "rows":
+            value = _drawn_rows(value)
+        elif name == "headers":
+            value = [_drawn_text(c) for c in value]
+        elif name in ("margin", "width", "font_size") and value is not None:
             check_real(value, where)
         elif name == "position" and value is not None:
             for i, coordinate in enumerate(value):
                 check_real(coordinate, f"{where}[{i}]")
-        elif name == "rows":
-            value = _drawn_rows(value)
-        elif name == "headers":
-            value = [_drawn_text(c) for c in value]
         super().__setattr__(name, value)
 
 
