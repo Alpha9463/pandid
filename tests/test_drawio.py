@@ -4484,3 +4484,13 @@ def test_the_part_table_names_only_parts_that_exist():
         f"_PART_APPROXIMATIONS names parts nobody registers: "
         f"{sorted(set(_PART_APPROXIMATIONS) - registered)}"
     )
+
+
+def test_an_annotation_of_empty_rows_exports() -> None:
+    """Rows with no cells have no columns, and the export must still draw the box."""
+    from pandid.document import Annotation
+
+    fs = Flowsheet("Empty notes")
+    fs.annotations.append(Annotation(title="NOTES", rows=[(), ()]))
+
+    ET.fromstring(fs.to_drawio(check=False))

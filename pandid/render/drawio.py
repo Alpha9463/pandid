@@ -2364,6 +2364,7 @@ class DrawioRenderer:
             # leaving most of the gap as slack for text_width's error, since
             # a cell wraps and clips what overruns it.
             size, _row_h, title_h, col_w = F._ann_layout(obj)
+            col_w = col_w or [0.0]  # rows of empty cells: one blank column
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
             widths = [cw + F._ANN_GAP for cw in col_w]
