@@ -438,7 +438,6 @@ class Unit:
         self.balloon: "Instrument | None" = None
         self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}
-        self.params: dict = {}
         self._new_line_number = False
         self._pin: Pin | None = None  # intent; set only via pin()
         # Axes pinned to a port rather than the corner: {"y": "inlet"}.

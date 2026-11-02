@@ -57,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `overhead` for `distillate`.
 - **`pandid.document.location_reference` (#579).** It is deleted, with no
   replacement.
+- **`Port.state` and `Unit.params` (#579).** Both are deleted. Stream
+  conditions stay on `Stream.state`.
 
 ### Fixed
 

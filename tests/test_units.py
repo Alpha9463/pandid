@@ -23,10 +23,9 @@ def test_unit_declares_ports_as_dict_and_attributes():
     assert w.inlet.owner is w
 
 
-def test_unit_starts_unattached_with_empty_params():
+def test_unit_starts_unattached():
     w = _Widget("W-1")
     assert w.flowsheet is None
-    assert w.params == {}
 
 
 def test_port_lookup_raises_helpful_error():
