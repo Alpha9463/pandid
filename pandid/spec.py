@@ -76,7 +76,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
 from decimal import Decimal
@@ -575,6 +575,29 @@ def _blame(where: str, errors: tuple[type[Exception], ...] = (ValueError,)) -> I
         raise _fail_from(e, where) from None
 
 
+def _read_fields(data: Mapping[str, Any], where: str,
+                 readers: Sequence[tuple[Iterable[str], Callable[[Any, str], Any]]]
+                 ) -> dict[str, Any]:
+    """Read each key present in a mapping with its reader, in table order.
+
+    Parameters
+    ----------
+    data : Mapping
+        Spec mapping.
+    where : str
+        Spec path, for error messages.
+    readers : sequence of (keys, reader)
+        Keys, and the reader that checks their values.
+
+    Returns
+    -------
+    dict[str, Any]
+        Each present key's value, as read.
+    """
+    return {key: read(data[key], f"{where}.{key}")
+            for keys, read in readers for key in keys if key in data}
+
+
 # --------------------------------------------------------------
 # The equipment registry
 # --------------------------------------------------------------
@@ -968,33 +991,17 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
             raise SpecError(f"{where}: only {takers} takes {key!r}, not a {cls.__name__}")
     _check_keys(data, allowed, where)
 
-    kwargs: dict[str, Any] = {}
-    if "variant" in data:
-        kwargs["variant"] = _text(data["variant"], f"{where}.variant")
-    for key in ("description", "reference"):
-        if key in data:
-            kwargs[key] = _drawn(data[key], f"{where}.{key}")
-    for key in ("width", "height"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    for key in _VARIABLE_PORTS:
-        if key in data:
-            kwargs[key] = _integer(data[key], f"{where}.{key}")
-    for key in _KIND_SIZES:
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    for key in _KIND_TEXT:
-        if key in data:
-            kwargs[key] = _text(data[key], f"{where}.{key}")
-    for key in _KIND_FLAGS:
-        if key in data:
-            kwargs[key] = _flag(data[key], f"{where}.{key}")
-    for key in _KIND_FACES:
-        if key in data:
-            kwargs[key] = _faces(data[key], f"{where}.{key}")
-    for key in _KIND_STAGES:
-        if key in data:
-            kwargs[key] = _stages(data[key], f"{where}.{key}")
+    kwargs = _read_fields(data, where, (
+        (("variant",), _text),
+        (("description", "reference"), _drawn),
+        (("width", "height"), _number),
+        (_VARIABLE_PORTS, _integer),
+        (_KIND_SIZES, _number),
+        (_KIND_TEXT, _text),
+        (_KIND_FLAGS, _flag),
+        (_KIND_FACES, _faces),
+        (_KIND_STAGES, _stages),
+    ))
     # Composition parts; the class default decides each value's type.
     for key, default in cls.COMPOSITION.items():
         if key in data:
@@ -1216,16 +1223,9 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     if not (isinstance(number, str) or _is_integral(number)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
-    kwargs: dict[str, Any] = {}
-    for key in ("variant", "display"):
-        if key in data:
-            kwargs[key] = _text(data[key], f"{where}.{key}")
-    for key in ("description", "reference"):
-        if key in data:
-            kwargs[key] = _drawn(data[key], f"{where}.{key}")
-    for key in ("width", "height"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
+    kwargs = _read_fields(data, where, ((("variant", "display"), _text),
+                                        (("description", "reference"), _drawn),
+                                        (("width", "height"), _number)))
     with _blame(where):
         inst = Instrument(type_, number, **kwargs)
     if "quadrants" in data:
@@ -1333,15 +1333,9 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
     if "at" in entry:
         at = entry["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
-    for key in ("offset", "angle", "width", "height"):
-        if key in entry:
-            kwargs[key] = _number(entry[key], f"{where}.{key}")
-    for key in ("variant", "display", "label_pos"):
-        if key in entry:
-            kwargs[key] = _text(entry[key], f"{where}.{key}")
-    for key in ("description", "reference"):
-        if key in entry:
-            kwargs[key] = _drawn(entry[key], f"{where}.{key}")
+    kwargs.update(_read_fields(entry, where, ((("offset", "angle", "width", "height"), _number),
+                                              (("variant", "display", "label_pos"), _text),
+                                              (("description", "reference"), _drawn))))
     with _blame(where, (TypeError, ValueError)):
         inst = fs.add_balloon(element, **kwargs)
     # add_balloon already added the balloon, so set the remaining fields
@@ -1377,13 +1371,7 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
     """
     data = _mapping(entry, where)
     _check_keys(data, _PIN_KEYS, where)
-    kwargs: dict[str, Any] = {}
-    for key in ("x", "y"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
-    for key in ("col", "row"):
-        if key in data:
-            kwargs[key] = _integer(data[key], f"{where}.{key}")
+    kwargs = _read_fields(data, where, ((("x", "y"), _number), (("col", "row"), _integer)))
     if "orientation" in data:
         kwargs["orientation"] = data["orientation"]
     if "mirrored" in data:
@@ -1705,9 +1693,7 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         kwargs["draw_as_recycle"] = _flag(data["draw_as_recycle"], f"{where}.draw_as_recycle")
     if "ends" in data:
         kwargs["ends"] = _read_ends(data["ends"], f"{where}.ends")
-    for key in LINE_NUMBER_FIELDS:
-        if key in data:
-            kwargs[key] = _component(data[key], f"{where}.{key}")
+    kwargs.update(_read_fields(data, where, ((LINE_NUMBER_FIELDS, _component),)))
     with _blame(where):
         stream = fs.connect(src, dst, **kwargs)
 
@@ -1911,9 +1897,7 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
     if "at" in data:
         at = data["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
-    for key in ("offset", "angle"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
+    kwargs.update(_read_fields(data, where, ((("offset", "angle"), _number),)))
     with _blame(where, (TypeError, ValueError)):
         inst.attach(host, **kwargs)
 
@@ -2105,9 +2089,7 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
             )
         out["position"] = (_number(pair[0], f"{where}.position[0]"),
                            _number(pair[1], f"{where}.position[1]"))
-    for key in ("margin", "width", "font_size"):
-        if key in data:
-            out[key] = _number(data[key], f"{where}.{key}")
+    out.update(_read_fields(data, where, ((("margin", "width", "font_size"), _number),)))
     return out
 
 
