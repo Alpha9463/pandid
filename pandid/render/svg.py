@@ -3655,7 +3655,8 @@ def reject_unknown_options(where: str, opts: dict) -> None:
     """Raise if a backend was given keywords it does not take.
 
     Backends accept ``**opts``, but silently dropping an argument (such
-    as ``debug=True`` on a draw.io render) would mislead the caller. All unknown names are reported at once.
+    as ``debug=True`` on a draw.io render) would mislead the caller. All
+    unknown names are reported at once.
 
     Parameters
     ----------
