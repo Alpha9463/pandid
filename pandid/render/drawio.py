@@ -164,13 +164,13 @@ from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import fmt, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
-                               _fitted, _furniture_name, _LABEL_CODES, _RENDER_CODES,
-                               _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE, _too_small,
-                               _SIGNAL_DASH, _stream_rung, _TAP_DASH,
+                               _fitted, _LABEL_CODES, _RENDER_CODES,
+                               _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
+                               _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
-                               NUMBER_TYPE, boundary_flag, enclosure_shape,
+                               NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
                                label_findings,
-                               drawing_bounds, draws_arrowheads, flange_marks, impulse_tap,
+                               draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
@@ -1238,7 +1238,7 @@ class DrawioRenderer:
         # Cell order is z-order: border, then furniture, behind the
         # drawing. The table sheet has returned, so the stream-table
         # argument is now a plain bool.
-        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table))
+        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table), border)
         body.extend(self._border(frame, border))
         body.extend(furniture)
         # Then equipment, runs and balloons, in the SVG renderer's order, so
@@ -2226,12 +2226,13 @@ class DrawioRenderer:
         _ox, _oy, ow, oh = F.sheet_rect(*frame)
         return (ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN)
 
-    def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False):
+    def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False,
+                   border: str = "none"):
         """Return the docked furniture cells, the frame and the drawing fit.
 
-        Placement is :func:`pandid.render.furniture.dock`, shared with the
-        SVG sheet. Without a page the frame grows around the drawing's own
-        bounds; with one, the drawing is fitted into what the furniture
+        Placement is :func:`~pandid.render.svg.diagram_plan`, shared with
+        the SVG sheet. Without a page the frame grows around the drawing's
+        own bounds; with one, the drawing is fitted into what the furniture
         leaves. Boxes with columnar rows export as editable ``shape=table``
         grids, ruled only where the sheet rules them: annotations have no
         inner rules (:data:`_ANNOTATION_KEYS`), table boxes rule every
@@ -2245,6 +2246,8 @@ class DrawioRenderer:
             Fixed page.
         show_stream_table : bool, default=False
             Whether to dock the stream table.
+        border : str, default="none"
+            ``"zone"`` docks a title strip even without a title block.
 
         Returns
         -------
@@ -2256,45 +2259,21 @@ class DrawioRenderer:
         ValueError
             If the page is too small for the furniture.
         """
-        from pandid.document import TableBox
-
-        items: list = []
-        if fs.title_block is not None:
-            items.append((fs.title_block, "bottom-right",
-                          *F.measure_title_strip(fs.title_block)))
-        for a in getattr(fs, "annotations", []) or []:
-            w, h = (F.measure_table(a) if isinstance(a, TableBox)
-                    else F.measure_annotation(a))
-            items.append((a, a.align, w, h))
-        # The stream table docks last at bottom-left, against the foot of
-        # the sheet, measured as on the SVG sheet.
-        table = F.stream_table_layout(fs) if show_stream_table else None
-        if table is not None:
-            items.append((table, "bottom-left", table.w, table.h))
-
-        inner = drawing_bounds(fs)
-        if sheet is None:
-            placed, frame, free = F.dock(items, inner)
-        else:
-            # Rebind so the closure's type is _Sheet, not _Sheet | None.
-            page = sheet
-            placed, frame, free = F.dock(
-                items, inner, sheet=page,
-                too_small=lambda need_w, need_h, culprit: _too_small(
-                    page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        plan = diagram_plan(fs, sheet, border, show_stream_table)
         # A fixed page fits the drawing into the free region; otherwise the
         # drawing keeps its coordinates.
-        fit = _Fit.identity() if free is None else _Fit(
-            *_fitted(inner, free))
+        fit = _Fit.identity() if plan.free is None else _Fit(
+            *_fitted(plan.bounds, plan.free))
         # Fallbacks for the strip's name, date and scale, passed unchosen so
         # the strip decides after treating blank fields as empty.
         name = fs.name
         date = datetime.now().strftime("%Y-%m-%d")
-        scale = "" if free is None else _scale_text(fit.scale)
+        scale = "" if plan.free is None else _scale_text(fit.scale)
         out: list[str] = []
-        for n, (obj, x, y, w, h) in enumerate(placed):
-            out += self._furniture_cell(f"f{n}", obj, x, y, w, h, name, date, scale)
-        return out, frame, fit
+        for n, (obj, x, y, w, h) in enumerate(plan.placed):
+            out += self._furniture_cell(f"f{n}", plan.block if obj is TITLE else obj,
+                                        x, y, w, h, name, date, scale)
+        return out, plan.frame, fit
 
     @staticmethod
     def _border(frame, border: str) -> list[str]:

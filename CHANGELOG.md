@@ -127,6 +127,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1234567 is no longer written `1.23457e+06`, and no number is written `-0`.
 - **draw.io reports a line that crosses itself (#579).** The sheet marks the
   crossing and draw.io cannot, so the export warns `drawio-hop-dropped`.
+- **draw.io docks furniture where the SVG does (#579).** A zone border gets a
+  title strip without a title block, the strip keeps the bottom-right corner
+  when a box shares it, and a sheet with no furniture has the SVG's margin.
 
 ## [0.1.5] - 2026-08-26
 

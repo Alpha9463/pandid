@@ -2968,7 +2968,7 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
     page, pw, ph = _page_states(fs, **kwargs)
 
     sheet = _page(page_size)
-    _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet)
+    _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet, border=border)
     if sheet is not None:
         # Paper: the page is the paper, and page="1" anchors draw.io's page grid
         # at the model origin, which is where the fitted drawing already sits.
@@ -3009,14 +3009,15 @@ def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border)
     from pandid.render import furniture as F
 
     _page_attr, pw, ph = _page_states(sample, border=border, check=False)
-    _furniture, frame, _fit = DrawioRenderer()._furniture(sample, None)
+    _furniture, frame, _fit = DrawioRenderer()._furniture(sample, None, border=border)
     ox, oy, _ow, _oh = F.sheet_rect(*frame)
     ox, oy = ox - F.OUTER_MARGIN, oy - F.OUTER_MARGIN
 
     seen = 0
     for cell in _cells(sample, border=border, check=False).values():
         geo = cell.find("mxGeometry")
-        if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
+        # A child cell (a table row or cell) is placed relative to its parent.
+        if geo is None or cell.get("edge") == "1" or cell.get("parent") != "1":
             continue
         x, y = float(geo.get("x")), float(geo.get("y"))
         w, h = float(geo.get("width") or 0), float(geo.get("height") or 0)
@@ -3026,16 +3027,95 @@ def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border)
     assert seen > 1, "the sheet stopped writing vertices"
 
 
-def test_a_paged_drawing_is_fitted_onto_its_paper():
-    """Fit paged drawing geometry into the available region.
+def _two_tanks(name: str) -> Flowsheet:
+    """Build two connected tanks with nothing else on the sheet.
+
+    Parameters
+    ----------
+    name : str
+        Flowsheet name.
+
+    Returns
+    -------
+    Flowsheet
+        Routed sheet.
+    """
+    fs = Flowsheet(name)
+    a = fs.add(units.Tank("T-1")).pin(x=0, y=0)
+    b = fs.add(units.Tank("T-2")).pin(x=400, y=0)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+    return fs
+
+
+@pytest.mark.parametrize("case", ["zone border", "box in the strip's corner"])
+def test_the_title_strip_is_docked_where_the_sheet_docks_it(case):
+    """Dock draw.io's title strip on the rectangle the SVG sheet gives it.
+
+    A zone border carries a strip without a title block, and the strip
+    keeps the corner when a box shares its band.
+
+    Parameters
+    ----------
+    case : str
+        What puts the strip on the sheet.
 
     Returns
     -------
     None
         No value is returned; pytest records assertion failures.
     """
-    from pandid.render import furniture as F
-    from pandid.render.svg import _fit_scale, _page
+    from pandid.document import Annotation, TitleBlock
+
+    fs = _two_tanks("docked")
+    border = "zone" if case == "zone border" else "none"
+    if case != "zone border":
+        fs.title_block = TitleBlock(drawing_number="PFD-1")
+        fs.annotations.append(Annotation(title="NOTES", align="bottom-right", rows=[("1", "One.")]))
+    svg = fs.to_svg(border=border, check=False)
+    drawn = re.findall(
+        r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" '
+        r'fill="white" stroke="black" stroke-width="2"/>',
+        svg,
+    )
+    assert len(drawn) == 1, "the sheet draws one title strip"
+    cells = _cells(fs, border=border, check=False)
+    strips = [
+        c
+        for cid, c in cells.items()
+        if re.fullmatch(r"f\d+", cid) and _style(c).get("strokeWidth") == "2"
+    ]
+    assert len(strips) == 1, "draw.io exports one title strip"
+    geo = strips[0].find("mxGeometry")
+    assert geo is not None
+    got = [float(geo.get(k, "nan")) for k in ("x", "y", "width", "height")]
+    assert got == pytest.approx([float(v) for v in drawn[0]], abs=0.1)
+
+
+def test_a_sheet_without_furniture_states_the_page_the_sheet_draws():
+    """State the page the SVG sheet draws, margin and all.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    fs = _two_tanks("bare")
+    view = re.search(r'viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)"', fs.to_svg(check=False))
+    assert view is not None
+    _page_attr, pw, ph = _page_states(fs, check=False)
+    assert (pw, ph) == pytest.approx((float(view.group(1)), float(view.group(2))), abs=0.1)
+
+
+def test_a_paged_drawing_is_fitted_onto_its_paper():
+    """Fit paged drawing geometry into the region the SVG sheet fits it to.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.render.svg import _page
 
     fs = Flowsheet("fitted")
     a = fs.add(units.Tank("T-1"))
@@ -3046,9 +3126,12 @@ def test_a_paged_drawing_is_fitted_onto_its_paper():
     fs.route()
 
     sheet = _page("A3")
-    inner = drawing_bounds(fs)
-    _placed, _frame, free = F.dock([], inner, sheet=sheet)
-    scale = _fit_scale(inner[2] - inner[0], inner[3] - inner[1], free)
+    assert sheet is not None
+    fitted = re.search(
+        r'<g id="drawing" transform="[^"]*scale\(([\d.]+)\)"', fs.to_svg(page_size="A3")
+    )
+    assert fitted is not None
+    scale = float(fitted.group(1))
     assert scale < 1.0, "the fixture stopped needing to be shrunk"
 
     cells = _cells(fs, page_size="A3", check=False)

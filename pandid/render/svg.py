@@ -3702,6 +3702,111 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
                           (sx, sy, sw, sh), frame, left, top, findings)
 
 
+# Margin round a sheet with no furniture: from the drawing, or from a
+# fixed page's edge.
+_PLAIN_MARGIN = 55.0
+
+
+class DiagramPlan(NamedTuple):
+    """Diagram sheet geometry, shared by both backends.
+
+    Attributes
+    ----------
+    placed : list[Docked]
+        Furniture in drawing order; the title strip is :data:`TITLE`.
+    block : TitleBlock
+        What the title strip says.
+    bounds : tuple[float, float, float, float]
+        Drawing bounds ``(x0, y0, x1, y1)``.
+    frame : tuple[float, float, float, float]
+        Drawing frame the border is ruled on; the sheet edge is
+        :func:`~pandid.render.furniture.sheet_rect` of it, plus
+        :data:`~pandid.render.furniture.OUTER_MARGIN`.
+    free : tuple[float, float, float, float] or None
+        Region a fixed page leaves for the drawing; ``None`` keeps the
+        drawing's own coordinates.
+    """
+    placed: list
+    block: "TitleBlock"
+    bounds: "tuple[float, float, float, float]"
+    frame: "tuple[float, float, float, float]"
+    free: "tuple[float, float, float, float] | None"
+
+
+def diagram_plan(fs, sheet: "_Sheet | None", border: str,
+                 show_stream_table: bool) -> DiagramPlan:
+    """Lay out the diagram's sheet.
+
+    Both backends draw from it, as from :func:`table_sheet_plan`. The
+    furniture is what was supplied: the annotation boxes, a title strip
+    for a title block or any zone border, and the docked stream table,
+    placed by :func:`~pandid.render.furniture.dock`. A sheet with none
+    keeps :data:`_PLAIN_MARGIN` round the drawing.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+    sheet : _Sheet or None
+        Fixed page, or ``None`` to fit.
+    border : str
+        ``"none"`` or ``"zone"``.
+    show_stream_table : bool
+        Whether to dock the stream table.
+
+    Returns
+    -------
+    DiagramPlan
+        Layout.
+
+    Raises
+    ------
+    ValueError
+        If a unit has no frame, or the page is too small.
+    """
+    from pandid.document import TableBox, TitleBlock
+
+    bounds = drawing_bounds(fs)
+    if not fs.units:  # empty flowsheet: fall back to the nominal page size
+        nominal = sheet or _page("A3")
+        assert nominal is not None
+        bounds = (0.0, 0.0, nominal.width, nominal.height)
+    block = fs.title_block or TitleBlock()
+    items = [(a, a.align, *(F.measure_table(a) if isinstance(a, TableBox)
+                            else F.measure_annotation(a)))
+             for a in fs.annotations]
+    if fs.title_block is not None or border == "zone":
+        items.append((TITLE, "bottom-right", *F.measure_title_strip(block)))
+    table = F.stream_table_layout(fs) if show_stream_table else None
+    if table is not None:
+        items.append((table, "bottom-left", table.w, table.h))
+    # The frame sits where a border would, so a plain sheet's edge is
+    # _PLAIN_MARGIN out.
+    inset = F.OUTER_MARGIN + F.ZONE_BAND
+    if items:
+        if sheet is None:
+            placed, frame, free = F.dock(items, bounds)
+        else:
+            page = sheet  # rebound so the closure closes over a _Sheet
+            placed, frame, free = F.dock(
+                items, bounds, sheet=page,
+                too_small=lambda need_w, need_h, culprit: _too_small(
+                    page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        return DiagramPlan(placed, block, bounds, frame, free)
+    if sheet is None:
+        x0, y0, x1, y1 = bounds
+        m = _PLAIN_MARGIN - inset
+        return DiagramPlan([], block, bounds,
+                           (x0 - m, y0 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m), None)
+    free_w = sheet.width - 2 * _PLAIN_MARGIN
+    free_h = sheet.height - 2 * _PLAIN_MARGIN
+    if free_w <= 0 or free_h <= 0:
+        raise _too_small(sheet, 2 * _PLAIN_MARGIN, 2 * _PLAIN_MARGIN)
+    return DiagramPlan([], block, bounds,
+                       (inset, inset, sheet.width - 2 * inset, sheet.height - 2 * inset),
+                       (_PLAIN_MARGIN, _PLAIN_MARGIN, free_w, free_h))
+
+
 def reject_unknown_options(where: str, opts: dict) -> None:
     """Raise if a backend was given keywords it does not take.
 
@@ -3899,23 +4004,11 @@ class SvgRenderer:
         if table_sheet:
             return self._table_sheet(fs, sheet, border)
 
-        # 1. Diagram bounding box: union of every unit's drawn box and
-        #    every route waypoint. Furniture goes *around* this region.
-        dx0, dy0, dx1, dy1 = drawing_bounds(fs)
-        if not fs.units:  # empty flowsheet: fall back to the nominal page size
-            nominal = sheet or _page("A3")
-            assert nominal is not None
-            dx0 = dy0 = 0.0
-            dx1, dy1 = nominal.width, nominal.height
-
-        # 2. The stream table, measured. Shared with the draw.io
-        #    exporter, which docks and rules the same one.
-        st_layout = F.stream_table_layout(fs) if show_stream_table else None
-
-        # 3. Place furniture around the diagram and size the sheet.
-        margin = 55.0
-        furniture: list[str] = []
-        free = None  # region a fixed sheet leaves for the drawing
+        # 1. The sheet: furniture docked round the drawing, shared with
+        #    the draw.io exporter (:func:`diagram_plan`).
+        plan = diagram_plan(fs, sheet, border, bool(show_stream_table))
+        dx0, dy0, dx1, dy1 = plan.bounds
+        free = plan.free  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
         # Findings from the label passes, which run after sizing.
         self._findings: list[Issue] = []
@@ -3925,25 +4018,7 @@ class SvgRenderer:
             """Record a title-block or annotation cell that overflowed."""
             fit_issues.append(fit_issue(field, text, drawn, room, need))
 
-        # Furniture comes from what was supplied: a title block,
-        # annotations or a stream table, plus a title strip on any zone
-        # border. Docking everything through furniture.dock keeps this in
-        # step with the draw.io exporter.
-        furnished = (border == "zone" or fs.title_block is not None
-                     or bool(getattr(fs, "annotations", None))
-                     or st_layout is not None)
-        if furnished:
-            (frame_x, frame_y, canvas_width, canvas_height), free = self._place_furniture(
-                fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border, report)
-        elif sheet is not None:
-            free = self._place_plain(sheet, margin)
-            frame_x, frame_y = 0.0, 0.0
-            canvas_width, canvas_height = sheet.width, sheet.height
-        else:
-            # Bare sheet: the frame is the drawing's bounds plus margin.
-            frame_x, frame_y = dx0 - margin, dy0 - margin
-            canvas_width = (dx1 - dx0) + 2 * margin
-            canvas_height = (dy1 - dy0) + 2 * margin
+        furniture, canvas = self._place_furniture(fs, plan, border, report)
 
         # Replace render findings from earlier renders. Unmarked crossings
         # depend on jump_direction, a render option, so only the render can
@@ -3954,7 +4029,7 @@ class SvgRenderer:
                        if getattr(w, "code", "") not in _RENDER_CODES
                        and getattr(w, "code", "") not in _LABEL_CODES] + render_issues
 
-        # 4. SVG document. Furniture (border + title strip + boxes) sits
+        # 2. SVG document. Furniture (border + title strip + boxes) sits
         #    behind the diagram.
         lines = ["    " + item for item in furniture]
         lines.extend(self._defs(fs, arrows))
@@ -4005,34 +4080,21 @@ class SvgRenderer:
                          f'scale({s:.6g})">')
             lines.extend(drawing)
             lines.append('  </g>')
-        return _document(fs, sheet,
-                         (frame_x, frame_y, canvas_width, canvas_height), lines)
+        return _document(fs, sheet, canvas, lines)
 
     # --- furniture ----------------------------------------------------
 
-    def _place_furniture(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet,
-                         border, report=None):
-        """Dock furniture to the sheet frame and draw it.
+    def _place_furniture(self, fs, plan, border, report=None):
+        """Draw the docked furniture and the border, and return the sheet.
 
-        Boxes are grouped into edge bands by ``align`` and placed flush to
-        the frame edge, inset by their ``margin``; a box with ``position``
-        is placed by hand. Without a fixed sheet the frame grows from the
-        drawing bounds to hold the bands; with one, the frame is the page
-        and the drawing fits the region left. The band arithmetic is
-        :func:`pandid.render.furniture.dock`, shared with draw.io.
+        Placement is :func:`diagram_plan`, shared with draw.io.
 
         Parameters
         ----------
         fs : Flowsheet
-            Flowsheet whose title block and annotations are drawn.
-        st_layout : StreamTable or None
-            Measured stream table.
-        dx0, dy0, dx1, dy1 : float
-            Drawing bounds.
-        furniture : list[str]
-            SVG lines, appended to in place.
-        sheet : _Sheet or None
-            Fixed page, or ``None``.
+            Flowsheet whose name the title strip falls back to.
+        plan : DiagramPlan
+            Sheet layout.
         border : str
             ``"none"`` or ``"zone"``.
         report : callable, optional
@@ -4040,64 +4102,38 @@ class SvgRenderer:
 
         Returns
         -------
-        tuple
-            Canvas ``(x, y, w, h)`` and the free region, or ``None`` when
-            the frame grew to the drawing.
+        tuple[list[str], tuple[float, float, float, float]]
+            SVG lines and the canvas ``(x, y, w, h)``.
         """
-        from pandid.document import TitleBlock, TableBox
+        from pandid.document import TableBox
 
-        OUT = F.OUTER_MARGIN
-
-        def measure(a):
-            """Return a box's ``(w, h)``."""
-            return F.measure_table(a) if isinstance(a, TableBox) else F.measure_annotation(a)
-
-        def draw_box(a, x, y):
-            """Draw a table or annotation box at ``(x, y)``."""
-            furniture.extend(F.draw_table(a, x, y) if isinstance(a, TableBox)
-                             else F.draw_annotation(a, x, y, report=report))
-
-        # The title strip (as the TITLE sentinel) and the stream table dock
-        # at the bottom-right and bottom-left.
-        strip = fs.title_block is not None or border == "zone"
-        tb = fs.title_block or TitleBlock()
-        ts_w, ts_h = F.measure_title_strip(tb)
-        date = datetime.now().strftime("%Y-%m-%d")
-        name = fs.name
-
-        items = [(a, a.align, *measure(a))
-                 for a in getattr(fs, "annotations", []) or []]
-        if strip:
-            items.append((TITLE, "bottom-right", ts_w, ts_h))
-        if st_layout:
-            items.append((st_layout, "bottom-left", st_layout.w, st_layout.h))
-
-        placed, (ix, iy, iw, ih), free = F.dock(
-            items, (dx0, dy0, dx1, dy1), sheet=sheet,
-            too_small=lambda need_w, need_h, culprit: _too_small(
-                sheet, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        furniture: list[str] = []
+        dx0, dy0, dx1, dy1 = plan.bounds
         # The scale cell states the fit scale; a grown frame has none.
-        fit = "" if free is None else _scale_text(
-            _fit_scale(dx1 - dx0, dy1 - dy0, free))
-
-        for obj, x, y, w, h in placed:
+        fit = "" if plan.free is None else _scale_text(
+            _fit_scale(dx1 - dx0, dy1 - dy0, plan.free))
+        date = datetime.now().strftime("%Y-%m-%d")
+        for obj, x, y, w, h in plan.placed:
             if obj is TITLE:
                 furniture.extend(
-                    F.draw_title_strip(tb, name, date, x + w, y + h, fit_scale=fit,
-                                       report=report))
+                    F.draw_title_strip(plan.block, fs.name, date, x + w, y + h,
+                                       fit_scale=fit, report=report))
             elif isinstance(obj, F.StreamTable):
                 furniture.extend(F.draw_stream_table(obj, x, y))
+            elif isinstance(obj, TableBox):
+                furniture.extend(F.draw_table(obj, x, y))
             else:
-                draw_box(obj, x, y)
+                furniture.extend(F.draw_annotation(obj, x, y, report=report))
 
         # --- border around the frame, then the sheet edge -------------
         if border == "zone":
-            frame_lines, outer = F.zone_frame(ix, iy, iw, ih)
+            frame_lines, outer = F.zone_frame(*plan.frame)
             furniture[:0] = frame_lines  # border sits behind the boxes
         else:
-            outer = F.sheet_rect(ix, iy, iw, ih)
+            outer = F.sheet_rect(*plan.frame)
         ox, oy, ow, oh = outer
-        return (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT), free
+        OUT = F.OUTER_MARGIN
+        return furniture, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT)
 
     def _table_sheet(self, fs, sheet, border) -> str:
         """Return the stream table drawn as a sheet of its own.
@@ -4150,32 +4186,6 @@ class SvgRenderer:
             fs, sheet, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT),
             ["    " + item for item in furniture],
             title=_table_sheet_title(fs, F._options(fs)))
-
-    def _place_plain(self, sheet, margin):
-        """Lay out a fixed page with no furniture.
-
-        Parameters
-        ----------
-        sheet : _Sheet
-            Fixed page.
-        margin : float
-            Page margin.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            Region ``(x, y, w, h)`` left for the drawing.
-
-        Raises
-        ------
-        ValueError
-            If the page is too small.
-        """
-        free_w = sheet.width - 2 * margin
-        free_h = sheet.height - 2 * margin
-        if free_w <= 0 or free_h <= 0:
-            raise _too_small(sheet, 2 * margin, 2 * margin)
-        return (margin, margin, free_w, free_h)
 
     # --- defs ---------------------------------------------------------
 
