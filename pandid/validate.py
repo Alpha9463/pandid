@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pandid._checks import suggest
-from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
+from pandid.layout.conflicts import _SQUARE_TOL, boxes_overlap, segment_crosses_box
 from pandid.portgeom import COMPASS
 
 if TYPE_CHECKING:
@@ -44,11 +44,6 @@ _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
 #: ``pin-not-honored``. A pinned axis is copied onto the frame, so only
 #: float rounding through a nozzle offset should remain.
 _PIN_TOL = 0.05
-
-#: Distance in px a segment may be off square and still count as
-#: orthogonal. A sloping segment is also invisible to
-#: ``route-crosses-unit``, which is why ``route-diagonal`` reports it.
-_SQUARE_TOL = 0.5
 
 #: ``(kind, variant)`` pairs a run is meant to change centreline through,
 #: so ``run-off-elevation`` ignores them. An eccentric reducer is flat on
