@@ -18,10 +18,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
-from pandid.layout.claims import fixed_face
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.stages import slot
-from pandid.portgeom import port_offset, unit_box
+from pandid.portgeom import port_faces, port_offset, unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -100,8 +99,13 @@ def _face(port: Port | None) -> str | None:
     """Return the face a nozzle is drawn on, or None when it has a menu."""
     if port is None:
         return None
-    assert port.owner is not None
-    return fixed_face(port.owner, port.name, slot(port.owner))
+    unit = port.owner
+    assert unit is not None
+    named = getattr(unit, "_port_faces", None) or {}
+    if port.name in named:
+        return str(named[port.name]).upper()
+    menu = port_faces(unit, port.name, slot(unit))
+    return menu[0] if len(menu) == 1 else None
 
 
 def _shift(unit: Unit) -> float:
@@ -198,7 +202,8 @@ def _stacks(units: list[Unit], links: list[Link]
 
     def find(u: Unit) -> Unit:
         while lead[u] is not u:
-            u = lead[u] = lead[lead[u]]
+            lead[u] = lead[lead[u]]
+            u = lead[u]
         return u
 
     stacked = []

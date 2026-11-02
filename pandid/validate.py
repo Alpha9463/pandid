@@ -891,20 +891,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             "routing passes; a balloon may sit slightly off the line it taps. "
             "Pin the balloon-carrying lines with via() to settle it"))
 
-    search_result = getattr(fs, "_layout_search_result", None)
-    if search_result is not None and search_result.status != "converged":
-        code = (
-            "layout-search-budget-exhausted"
-            if search_result.status == "budget_exhausted"
-            else "layout-search-unresolved"
-        )
-        warnings.append(Issue(
-            "warning", code,
-            f"layout search {search_result.status} with "
-            f"{len(search_result.conflicts)} named conflicts after "
-            f"{search_result.exact_trials} exact trials"
-        ))
-
     # --- a balloon nothing could place (recorded by layout) ---
     # An attached instrument is placed from its host, so a chain of them
     # must end on a placed unit. Read from place_attached's record,

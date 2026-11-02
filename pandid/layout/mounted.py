@@ -8,7 +8,7 @@ device is drawn where it is pinned, like equipment, and splits the line.
 :func:`place_mounted` lays out a sheet that has furniture:
 
 1. Equipment is placed with each furnished pipe contracted to one link
-   between its two end nozzles (:func:`pandid.layout.coarse._equipment_frames`).
+   between its two end nozzles (:mod:`pandid.layout.layered`).
 2. The contracted pipes are routed on a view of the sheet that holds only
    that equipment.
 3. Each pipe's devices and stations are set in flow order on straight legs
@@ -263,6 +263,29 @@ def furnished(fs: Flowsheet) -> set[Unit]:
     return out
 
 
+def _station_width(assemblies: list[StationAssembly]) -> float:
+    """Measure the main legs of stations sharing one host run.
+
+    Parameters
+    ----------
+    assemblies : list[StationAssembly]
+        Stations ordered along one logical run.
+
+    Returns
+    -------
+    float
+        Required horizontal room for the station members.
+    """
+    width = 16.0
+    for assembly in assemblies:
+        station = assembly.station
+        branch = {station.bypass, station.upstream_drain, station.downstream_drain}
+        main = [unit for unit in station.members if unit not in branch]
+        width += sum(resolve_size(unit)[0] for unit in main)
+        width += assembly.gap * (len(main) - 1) + 16.0
+    return width
+
+
 def _chain_width(run: MountedRun) -> float:
     """Return the level room a pipe's furniture takes, for the equipment solve.
 
@@ -274,11 +297,11 @@ def _chain_width(run: MountedRun) -> float:
     Returns
     -------
     float
-        Station room as :func:`pandid.layout.coarse._station_width` gives
+        Station room as :func:`_station_width` gives
         it, plus each device's width with :data:`GAP` around each, or more
         where the stated positions need a longer pipe (:func:`_room`).
     """
-    from pandid.layout.coarse import END_ROOM, _station_width
+    from pandid.layout.layered import END_ROOM
     from pandid.stations import StationAssembly
 
     stations = [element for element in run.elements if isinstance(element, StationAssembly)]

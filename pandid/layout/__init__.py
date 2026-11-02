@@ -4,15 +4,10 @@
 ``"material"``:
 
 - cycle breaking, which identifies return lines;
-- placement (:mod:`pandid.layout.place`): one weighted least-squares fit per
-  axis over the neighbour positions each unit claims
-  (:mod:`pandid.layout.claims`), solved by :mod:`pandid.layout.solver`, then
-  whole grid columns and rows with crossing-reduction sweeps;
-- coordinates (:mod:`pandid.layout.coordinates`): grid to pixels, folded
-  into bands, with instrumentation space reserved
-  (:mod:`pandid.layout.halo`);
+- placement (:mod:`pandid.layout.layered`): equipment and boundary flags
+  are drawn as a layered graph whose ports are the nozzles;
 - pipe furniture (:mod:`pandid.layout.mounted`): unpinned valves, reducers,
-  fittings and stations stay out of the grid and are set on their routed
+  fittings and stations stay out of the graph and are set on their routed
   pipe.
 
 **Stage 2, control.** Instruments and signal runs, placed against the
@@ -21,7 +16,7 @@ stage 1 geometry (:mod:`pandid.layout.control`).
 Port-face selection and control placement then repeat until neither moves
 the other, because an attached balloon sits on a drawn path that depends on
 the selected faces. Labels are placed last, on faces no connected nozzle
-uses.
+uses (:mod:`pandid.layout.labels`).
 """
 
 from typing import Protocol, TYPE_CHECKING
@@ -85,25 +80,17 @@ def _seed_slots(fs: "Flowsheet") -> None:
 class ConstraintLayoutEngine:
     """Place units with the default automatic layout.
 
-    On a sheet with pipe furniture the grid holds the equipment and the
-    furniture is set on its routed pipe (:mod:`pandid.layout.mounted`).
-    Other sheets place every process unit in the grid.
+    Equipment and flags are drawn as a layered graph; furniture is set on
+    its routed pipe (:mod:`pandid.layout.mounted`).
     """
 
-    def layout(self, fs: "Flowsheet", *, row_compaction: float = 0.0,
-               unaligned: frozenset[int] = frozenset()) -> None:
+    def layout(self, fs: "Flowsheet") -> None:
         """Resolve process and control geometry for a sheet.
 
         Parameters
         ----------
         fs : Flowsheet
             Sheet to lay out.
-        row_compaction : float, optional
-            Fraction of independent column-row compaction to apply. A sheet
-            with pipe furniture ignores it.
-        unaligned : frozenset[int], optional
-            Global indices of units a detached trial keeps on their row
-            axis.
 
         Returns
         -------
@@ -112,12 +99,10 @@ class ConstraintLayoutEngine:
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
-        from pandid.layout.coordinates import assign_coordinates, assign_labels
         from pandid.layout.cycles import break_cycles
         from pandid.layout.faces import select_faces
+        from pandid.layout.labels import assign_labels
         from pandid.layout.mounted import mounted_runs, place_mounted
-        from pandid.layout.place import assign_positions
-        from pandid.layout.station import place_stations
 
         _seed_slots(fs)
         break_cycles(fs)

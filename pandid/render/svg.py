@@ -4636,7 +4636,7 @@ class SvgRenderer:
         tuple
             Label item.
         """
-        from pandid.layout.coordinates import free_label_sides
+        from pandid.layout.labels import free_label_sides
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)

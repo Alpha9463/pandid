@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 # Grid gaps, used to place a pinned column or row the sheet does not use.
-from pandid.layout.coordinates import COL_GAP, ROW_GAP
+from pandid.layout.layered import COL_GAP, ROW_GAP
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
