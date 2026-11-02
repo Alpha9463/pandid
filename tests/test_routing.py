@@ -1216,6 +1216,55 @@ def test_a_manual_route_off_lane_still_breaks_the_tie():
     assert 265.0 in {y for _, y in wp}, f"F -> P did not take the clear (south) bypass: {wp}"
 
 
+def test_separation_keeps_a_run_out_of_the_unit_its_stream_joins() -> None:
+    """Move a run off a shared track without passing it through its own end unit (#468).
+
+    The run to the tee sits just above the tee's box and shares a track
+    with another stream's nozzle run. The nearer free slot lies across the
+    tee, so the run must take the other one.
+    """
+    from pandid.geometry import Frame
+    from pandid.routing.visibility import Rect
+    from pandid.routing.separation import separate_streams
+    from pandid.units import Tee
+
+    fs = Flowsheet("own unit")
+    feed = fs.add(Feed("F1"))
+    tee = fs.add(Tee())
+    other_feed = fs.add(Feed("F2"))
+    other_product = fs.add(Product("P2"))
+    for unit in (feed, other_feed, other_product):
+        unit.frame = Frame(x=2000.0, y=2000.0, w=10.0, h=10.0)
+    tee.frame = Frame(x=480.0, y=1039.0, w=12.0, h=12.0)
+    run = fs.connect(feed.outlet, tee.inlet)
+    run.route = Route(
+        [
+            (712.0, 828.0),
+            (712.0, 853.0),
+            (712.0, 1037.0),
+            (454.0, 1037.0),
+            (454.0, 1045.0),
+            (480.0, 1045.0),
+        ]
+    )
+    nearby = fs.connect(other_feed.outlet, other_product.inlet)
+    nearby.route = Route([(500.0, 1033.0), (700.0, 1033.0), (700.0, 900.0)])
+
+    separate_streams(fs)
+    assert run.route is not None
+    box = Rect(480.0, 492.0, 1039.0, 1051.0)
+    points = run.route.waypoints
+    assert not any(box.intersects_segment(*a, *b) for a, b in zip(points, points[1:]))
+    assert points != [
+        (712.0, 828.0),
+        (712.0, 853.0),
+        (712.0, 1037.0),
+        (454.0, 1037.0),
+        (454.0, 1045.0),
+        (480.0, 1045.0),
+    ]
+
+
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
     """Preview separation without changing routes, and match the real pass.
 

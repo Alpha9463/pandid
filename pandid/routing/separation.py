@@ -3,7 +3,8 @@
 Runs of different streams that lie on nearly the same track and overlap
 along their length are moved onto distinct tracks at least :data:`SPACING`
 apart. Runs that end at a nozzle keep their tracks, as does every run of a
-route the author drew with ``via()``, which is never rewritten.
+route the author drew with ``via()``, which is never rewritten. A run is
+never moved onto a track through either unit its own stream joins (#468).
 """
 
 from typing import Any, Sequence, TYPE_CHECKING
@@ -48,10 +49,14 @@ def _compute_offsets(
     h_offsets: dict[tuple[int, int], float] = {}
     v_offsets: dict[tuple[int, int], float] = {}
 
+    from pandid.portgeom import unit_box
+
     for s in streams:
         if not s.route or not s.route.waypoints:
             continue
 
+        ends = (s.source.owner, s.dest.owner)
+        boxes = [unit_box(u, u.frame) for u in ends if u is not None and u.frame is not None]
         pts = s.route.waypoints
         n_segs = len(pts) - 1
         # The author placed every point of a via() route, so none moves;
@@ -96,6 +101,8 @@ def _compute_offsets(
             else:
                 open_run = {
                     "stream": id(s),
+                    "axis": axis,
+                    "boxes": boxes,
                     "seg_idxs": [i],
                     "track": track,
                     "min_val": lo,
@@ -105,6 +112,29 @@ def _compute_offsets(
                 open_axis = axis
                 runs.append(open_run)
             offsets[(id(s), i)] = 0.0
+
+    def enters(run, track):
+        """Return whether a run moved onto a track would cross its own end units.
+
+        Parameters
+        ----------
+        run : dict
+            Run to move.
+        track : float
+            Proposed track.
+
+        Returns
+        -------
+        bool
+            Whether the moved run passes through a box of a unit its own
+            stream joins.
+        """
+        lo, hi = run["min_val"], run["max_val"]
+        for x0, y0, x1, y1 in run["boxes"]:
+            across, along = ((y0, y1), (x0, x1)) if run["axis"] == "h" else ((x0, x1), (y0, y1))
+            if across[0] <= track <= across[1] and hi > along[0] and lo < along[1]:
+                return True
+        return False
 
     def resolve_track(runs, offsets_dict):
         """Assign target tracks to one cluster of nearby runs.
@@ -167,7 +197,7 @@ def _compute_offsets(
             for run in comp:
                 if run["is_fixed"]:
                     continue
-                own = nozzles.get(run["stream"])
+                own = [t for t in nozzles.get(run["stream"], []) if not enters(run, t)]
                 if own:
                     # Join this stream's nearer nozzle track rather than
                     # taking a slot, which would add two bends.
@@ -178,7 +208,8 @@ def _compute_offsets(
                 while "target" not in run:
                     for cand in ((base,) if k == 0 else (base + k * spacing, base - k * spacing)):
                         # The epsilon absorbs float error in ``base + k * spacing``.
-                        if all(abs(cand - o) >= spacing - 1e-9 for o in occupied):
+                        if (all(abs(cand - o) >= spacing - 1e-9 for o in occupied)
+                                and not enters(run, cand)):
                             run["target"] = cand
                             occupied.append(cand)
                             break
