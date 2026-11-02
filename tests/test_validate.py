@@ -1852,10 +1852,10 @@ def test_the_corner_it_names_is_the_cure():
 
 def test_neither_route_finding_beside_it_can_see_a_diagonal():
     """`route-detour` measures Manhattan length, which a diagonal and the elbow
-    replacing it share exactly, and `_seg_crosses_box` answers `False` for a
+    replacing it share exactly, and `segment_crosses_box` answers `False` for a
     sloping segment whatever it runs over. So the finding could not be left to
     either of them."""
-    from pandid.validate import _seg_crosses_box
+    from pandid.layout.conflicts import segment_crosses_box
 
     def detour(fs):
         return next(i for i in fs.validate() if i.code == "route-detour").message
@@ -1863,8 +1863,8 @@ def test_neither_route_finding_beside_it_can_see_a_diagonal():
     assert detour(_hand_routed((320.0, 200.0))[0]) == detour(
         _hand_routed((320.0, 200.0), (440.0, 200.0))[0]
     )
-    assert not _seg_crosses_box(0, 0, 100, 100, (10, 10, 90, 90))
-    assert _seg_crosses_box(50, 0, 50, 100, (10, 10, 90, 90))
+    assert not segment_crosses_box((0, 0), (100, 100), (10, 10, 90, 90))
+    assert segment_crosses_box((50, 0), (50, 100), (10, 10, 90, 90))
 
 
 # --- what the sheet drew but nothing said -------------------------------------
