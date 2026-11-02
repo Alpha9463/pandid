@@ -49,10 +49,10 @@ import math
 import re
 import warnings
 from dataclasses import dataclass, field, replace
-from difflib import get_close_matches
 from functools import lru_cache
 from typing import Callable
 
+from pandid._checks import suggest
 from pandid.portgeom import outward_dir
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS
@@ -3641,8 +3641,7 @@ class SymbolRegistry:
         if (group, name) in self._parts:
             return self._parts[(group, name)]
         known = self.part_names(group)
-        close = get_close_matches(name, known, n=1, cutoff=0.6)
-        suggestion = f" (did you mean {close[0]!r}?)" if close else ""
+        suggestion = suggest(name, known)
         raise ValueError(
             f"ISO 10628-2 group {group} has no part {name!r}{suggestion}; registered "
             f"group {group} parts: {', '.join(known) or '(none)'}"
@@ -3876,8 +3875,7 @@ class SymbolRegistry:
             return self._generic_symbol()
         # An unknown variant is a typo; drawing the default instead would
         # hide it.
-        close = get_close_matches(variant, known, n=1, cutoff=0.6)
-        suggestion = f" (did you mean {close[0]!r}?)" if close else ""
+        suggestion = suggest(variant, known)
         raise ValueError(
             f"{kind} has no variant {variant!r}{suggestion}; "
             f"registered {kind} variants: {', '.join(known)}"

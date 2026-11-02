@@ -31,6 +31,7 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pandid._checks import suggest
 from pandid.layout.conflicts import boxes_overlap, segment_crosses_box
 from pandid.portgeom import COMPASS
 
@@ -514,8 +515,6 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     list[Issue]
         Errors, then warnings.
     """
-    from difflib import get_close_matches
-
     from pandid import units
     from pandid.deprecation import findings as deprecation_findings
     from pandid.portgeom import resolve_size
@@ -554,11 +553,10 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         # Empty means unset; readers use ``label_pos or "top"``.
         if not side or side in LABEL_POSITIONS:
             continue
-        close = get_close_matches(str(side).strip().lower(), LABEL_POSITIONS, n=1, cutoff=0.6)
         errors.append(Issue(
             "error", "label-pos-unknown",
             f"{u.name} asks for label_pos={side!r}, which no side answers to"
-            + (f" (did you mean {close[0]!r}?)" if close else "")
+            + suggest(str(side).strip().lower(), LABEL_POSITIONS)
             + f". Use one of {', '.join(LABEL_POSITIONS)}, or leave label_pos "
               f"unset and let the engine put the tag on the first face no "
               f"nozzle leaves from"))
@@ -577,11 +575,10 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         unknown.add(u.kind)
         # Describe the box the registry actually draws.
         blank = default_registry.get(u.kind)
-        close = get_close_matches(u.kind, catalogue, n=1, cutoff=0.6)
         warnings.append(Issue(
             "warning", "symbol-kind-unknown",
             f"{u.name} is a {u.kind!r}, which no symbol is registered for"
-            + (f" (did you mean {close[0]!r}?)" if close else "")
+            + suggest(u.kind, catalogue)
             + f"; it is drawn as a blank {blank.width:g}x{blank.height:g} box with "
               f"no ports. Register artwork for it with "
               f"default_registry.register({u.kind!r}, Symbol(...))"))

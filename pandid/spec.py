@@ -80,13 +80,12 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
 from decimal import Decimal
-from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Literal, cast
 from math import isfinite
 
 from pandid import devices as device_types
-from pandid._checks import is_real as _is_real, is_whole as _is_integral
+from pandid._checks import is_real as _is_real, is_whole as _is_integral, suggest
 from pandid import units as unit_types
 from pandid.components import Component
 from pandid.document import (
@@ -132,25 +131,6 @@ class SpecError(ValueError):
 # Primitive validation. Each helper takes the path of the value it
 # checks, so the message points at the entry to fix.
 # ----------------------------------------------------------------
-
-
-def _suggest(value: Any, candidates) -> str:
-    """Return a ``" (did you mean 'variant'?)"`` hint for a near-miss.
-
-    Parameters
-    ----------
-    value : Any
-        Value given.
-    candidates : Iterable
-        Accepted values.
-
-    Returns
-    -------
-    str
-        Hint, or ``""`` when nothing is close.
-    """
-    close = get_close_matches(str(value), [str(c) for c in candidates], n=1, cutoff=0.6)
-    return f" (did you mean {close[0]!r}?)" if close else ""
 
 
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
@@ -229,7 +209,7 @@ def _check_keys(data: Mapping[str, Any], allowed, where: str) -> None:
     for key in data:
         if key not in allowed:
             raise SpecError(
-                f"{where}: unknown key {key!r}{_suggest(key, allowed)}; "
+                f"{where}: unknown key {key!r}{suggest(str(key), allowed)}; "
                 f"allowed keys: {sorted(allowed)}"
             )
 
@@ -665,7 +645,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     name = _ALIASES.get(_text(value, f"{where}.kind").strip().lower())
     if name is None:
         raise SpecError(
-            f"{where}: unknown equipment kind {value!r}{_suggest(value, _CLASSES)}; "
+            f"{where}: unknown equipment kind {value!r}{suggest(str(value), _CLASSES)}; "
             f"available kinds: {sorted(_CLASSES)}"
         )
     if name == "Instrument":
@@ -1569,7 +1549,7 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"
-            f"{_suggest(name, unit.ports)}; available ports: {sorted(unit.ports)}"
+            f"{suggest(str(name), unit.ports)}; available ports: {sorted(unit.ports)}"
         )
     return unit.ports[name]
 
@@ -1601,7 +1581,7 @@ def _find_unit(fs: Flowsheet, name: str, where: str) -> Unit:
             return unit
     names = [u.name for u in fs.units]
     raise SpecError(
-        f"{where}: no unit named {name!r} on this flowsheet{_suggest(name, names)}; "
+        f"{where}: no unit named {name!r} on this flowsheet{suggest(str(name), names)}; "
         f"declared units: {sorted(names)}"
     )
 
@@ -1839,7 +1819,7 @@ def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
             return stream
         names = [u.name for u in fs.units] + [s.name for s in fs.streams if not s.auto_named]
         raise SpecError(
-            f"{where}: nothing named {entry!r} to attach to{_suggest(entry, names)}; "
+            f"{where}: nothing named {entry!r} to attach to{suggest(str(entry), names)}; "
             f"hosts available: {sorted(names)}"
         )
     port = _read_endpoint(fs, entry, where)
@@ -2152,7 +2132,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
     kind = data.get("type", "annotation")
     if kind not in _ANNOTATION_KEYS:
         raise SpecError(
-            f"{where}: unknown box type {kind!r}{_suggest(kind, _ANNOTATION_KEYS)}; "
+            f"{where}: unknown box type {kind!r}{suggest(str(kind), _ANNOTATION_KEYS)}; "
             f"available types: {sorted(_ANNOTATION_KEYS)}"
         )
     _check_keys(data, _ANNOTATION_KEYS[kind], where)

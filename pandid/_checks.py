@@ -6,13 +6,16 @@ a coordinate, size or rank must be a real number of a kind both accept:
 cannot be mixed with floats) or ``Fraction`` (which cannot be formatted
 with ``:g`` before Python 3.12). :mod:`pandid.spec` uses the same
 predicates, so a value the reader refuses is refused at the Python door too.
+:func:`suggest` is the "did you mean" hint those refusals share.
 """
 
 from __future__ import annotations
 
 import math
 import numbers
+from collections.abc import Iterable
 from decimal import Decimal
+from difflib import get_close_matches
 from typing import Any
 
 
@@ -50,6 +53,25 @@ def is_whole(value: Any) -> bool:
         ``numpy.int64``.
     """
     return isinstance(value, numbers.Integral) and not isinstance(value, bool)
+
+
+def suggest(value: str, candidates: Iterable[str]) -> str:
+    """Return a ``" (did you mean 'variant'?)"`` hint for a near-miss.
+
+    Parameters
+    ----------
+    value : str
+        Value given.
+    candidates : Iterable[str]
+        Accepted values.
+
+    Returns
+    -------
+    str
+        Hint, or ``""`` when nothing is close.
+    """
+    close = get_close_matches(value, candidates, n=1, cutoff=0.6)
+    return f" (did you mean {close[0]!r}?)" if close else ""
 
 
 def _hint(value: Any) -> str:
