@@ -2411,6 +2411,81 @@ def test_a_column_is_measured_in_the_face_its_text_is_drawn_in(rendered_gallery)
             )
 
 
+def _legend_sheet() -> Flowsheet:
+    """Build a sheet whose box has a long first column, a plain row and a wide title.
+
+    Returns
+    -------
+    Flowsheet
+        Laid-out sheet.
+    """
+    from pandid.document import Annotation
+
+    fs = Flowsheet("legend")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.annotations.append(
+        Annotation(
+            title="A TITLE WIDER THAN EVERY ROW BENEATH IT, BY SOME WAY",
+            align="top-left",
+            rows=[("Cooling water supply header and return", "CWS"), "A plain note"],
+        )
+    )
+    fs.layout()
+    return fs
+
+
+def test_annotation_text_starts_in_drawio_where_the_sheet_writes_it():
+    """Start each annotation cell's text at the sheet's column stop.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.render.drawio import _TEXT_INSET
+
+    fs = _legend_sheet()
+    svg = fs.to_svg(check=False)
+    cells = _cells(fs, check=False)
+    seen = 0
+    for cell, row, table in _table_cells(cells):
+        geo, row_geo, table_geo = (e.find("mxGeometry") for e in (cell, row, table))
+        assert geo is not None and row_geo is not None and table_geo is not None
+        start = (
+            float(table_geo.get("x", "0"))
+            + float(row_geo.get("x", "0"))
+            + float(geo.get("x", "0"))
+            + float(_style(cell).get("spacingLeft", "0"))
+            + _TEXT_INSET
+        )
+        value = cell.get("value", "")
+        drawn = re.search(r'<text x="([-\d.]+)"[^>]*>' + re.escape(value) + "</text>", svg)
+        assert drawn is not None, value
+        assert start == pytest.approx(float(drawn.group(1)), abs=0.1), value
+        bold = re.search(r'font-weight="bold"[^>]*>' + re.escape(value) + "<", svg) is not None
+        assert (_style(cell).get("fontStyle") == "1") == bold, value
+        seen += 1
+    assert seen == 3
+
+
+def test_a_bold_first_column_is_measured_bold():
+    """Keep a long bold first cell clear of the column after it.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.render.furniture import text_width
+
+    svg = _legend_sheet().to_svg(check=False)
+    first = "Cooling water supply header and return"
+    x0 = re.search(r'<text x="([-\d.]+)"[^>]*font-weight="bold"[^>]*>' + first, svg)
+    x1 = re.search(r'<text x="([-\d.]+)"[^>]*>CWS</text>', svg)
+    assert x0 is not None and x1 is not None
+    assert float(x0.group(1)) + text_width(first, 11.0, bold=True) < float(x1.group(1))
+
+
 def test_a_table_states_the_size_its_columns_were_measured_at():
     """Export table text at the font size used to measure columns.
 

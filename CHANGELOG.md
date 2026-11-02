@@ -130,6 +130,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **draw.io docks furniture where the SVG does (#579).** A zone border gets a
   title strip without a title block, the strip keeps the bottom-right corner
   when a box shares it, and a sheet with no furniture has the SVG's margin.
+- **Annotation columns start where the sheet writes them (#579).** draw.io
+  takes its column widths from the sheet, and both backends measure a
+  box's bold first column bold, so a long first cell no longer runs into the
+  next.
 
 ## [0.1.5] - 2026-08-26
 

@@ -2357,23 +2357,29 @@ class DrawioRenderer:
                           col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
-            # Columnar (equipment list, legend, notes): columns measured
-            # from their text (:func:`columns`).
-            size, _row_h, title_h, _col_w = F._ann_layout(obj)
+            # Columnar (equipment list, legend, notes): text starts where
+            # draw_annotation writes it, from the sheet's own column widths
+            # (F._ann_layout). The first cell starts at the border, the pad
+            # before its text; a later one starts _ANN_LEAD before its text,
+            # leaving most of the gap as slack for text_width's error, since
+            # a cell wraps and clips what overruns it.
+            size, _row_h, title_h, col_w = F._ann_layout(obj)
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
-            ncol = max(len(r) for r in grid)
-            # Left-aligned, first column bold, as draw_annotation sets it;
-            # columns are measured in the same weights.
-            heavy = [True] + [False] * (ncol - 1)
-            return _table(cid, title, [], grid, x, y, w, h,
-                          columns(grid, [size] * ncol, w, bold=heavy), title_h,
+            widths = [cw + F._ANN_GAP for cw in col_w]
+            widths[0] += F._ANN_PAD - _ANN_LEAD
+            widths[-1] += w - sum(widths)  # what is left, as on the sheet
+            insets = [F._ANN_PAD] + [_ANN_LEAD] * (len(col_w) - 1)
+            return _table(cid, title, [], grid, x, y, w, h, widths, title_h,
                           font=size,
                           # The border is this box's only rule.
                           keys=(_ANNOTATION_KEYS + f"fontSize={size + 1:g};"
                                 + f"strokeWidth={F._BOX_RULE:g};"),
-                          col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
-                                    for b in heavy])
+                          # A row's first cell is bold, as on the sheet.
+                          cell_keys=[[_TABLE_BODY + "align=left;"
+                                      f"spacingLeft={fmt(insets[c] - _TEXT_INSET, 2)};"
+                                      + ("fontStyle=1;" if c == 0 and len(r) > 1 else "")
+                                      for c in range(len(col_w))] for r in grid])
         # Free-form lines, or any other docked object with a title and
         # rows.
         size = getattr(obj, "font_size", 11.0)
@@ -2791,12 +2797,6 @@ def _distribute(weights, total: float) -> list[float]:
     return out
 
 
-# Clearance between a cell's rules and its text, both sides together.
-# draw.io adds mxText.spacing (2) to the style's spacingLeft/Right (3 or 4
-# here), using 7 to 8 of the 12; the rest absorbs the error of
-# furniture.text_width, which underestimates bold capitals by about 11%.
-_CELL_PAD = 12.0
-
 # Line box height as a multiple of font size. HTML labels get the
 # unitless CSS line-height 1.2 (mxConstants.LINE_HEIGHT). mxGraph never
 # shrinks text to fit, so a row shorter than its line box clips letters.
@@ -2856,50 +2856,6 @@ def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
             for c in range(ncol)]
 
 
-def columns(rows, sizes, total: float, bold=None) -> list[float]:
-    """Return column widths measured from the text.
-
-    Each column is as wide as its widest text
-    (:func:`pandid.render.furniture.text_width`, as the SVG measures) plus
-    :data:`_CELL_PAD`. Slack goes to the last column; a shortfall is shared
-    in proportion, as the SVG clips.
-
-    Parameters
-    ----------
-    rows : list[list[str]]
-        Cell text.
-    sizes : sequence of float
-        Font size per column; the last applies to any extra columns.
-    total : float
-        Table width.
-    bold : sequence of bool, optional
-        Whether each column is bold, which is about 11% wider.
-
-    Returns
-    -------
-    list[float]
-        Column widths summing to ``total``.
-    """
-    from pandid.render.furniture import text_width
-
-    ncol = max((len(r) for r in rows), default=1)
-    weights = list(bold) if bold is not None else []
-    need = []
-    for c in range(ncol):
-        size = sizes[c] if c < len(sizes) else (sizes[-1] if sizes else 11.0)
-        heavy = bool(weights[c]) if c < len(weights) else False
-        widest = max((text_width(r[c], size, heavy) for r in rows if c < len(r)),
-                     default=0.0)
-        need.append(widest + _CELL_PAD)
-    span = sum(need)
-    if span <= 0:
-        return _distribute([1.0] * ncol, total)
-    if span > total:  # cannot fit; clip in proportion, as the sheet does
-        return _distribute(need, total)
-    out = _distribute(need[:-1] + [need[-1] + (total - span)], total)
-    return out
-
-
 def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
            start: float = 0.0, *, header_last: bool = False,
            font: float = 11.0, col_keys=(), row_h: "float | None" = None,
@@ -2926,8 +2882,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     x, y, w, h : float
         Table rectangle.
     widths : list[float]
-        Column widths summing to ``w`` (from :func:`columns` or a fixed
-        ruling).
+        Column widths summing to ``w`` (measured, or a fixed ruling).
     start : float, default=0.0
         Title band height; 0 for no band.
     header_last : bool, default=False
@@ -3135,6 +3090,10 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
 # Annotation tables draw only the border and title band, as the SVG does;
 # rows and cells remain for editing and stroke nothing.
 _ANNOTATION_KEYS = "rowLines=0;columnLines=0;"
+
+# How far an annotation cell after the first starts before its text: 3 of
+# the 12-unit column gap, so 7 are slack after the text before the next.
+_ANN_LEAD = 3.0
 
 
 def _rect(cid: str, x, y, w, h, style: str, value: str = "",
