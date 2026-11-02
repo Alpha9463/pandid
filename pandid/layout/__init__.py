@@ -123,12 +123,7 @@ class ConstraintLayoutEngine:
         break_cycles(fs)
         runs = mounted_runs(fs)
         fs._mounted_layout = bool(runs)
-        if runs:
-            place_mounted(fs, runs, unaligned=unaligned)
-        else:
-            assign_positions(fs)
-            assign_coordinates(fs, row_compaction=row_compaction, unaligned=unaligned)
-            place_stations(fs)
+        place_mounted(fs, runs)
         # Repeat face selection and control placement until no balloon moves,
         # up to the pass limit.
         for _ in range(MAX_PLACEMENT_PASSES):

@@ -1157,9 +1157,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     return roomy
 
 
-def place_mounted(fs: Flowsheet, runs: list[MountedRun], *,
-                  unaligned: frozenset[int] = frozenset()) -> None:
-    """Lay out a sheet whose furniture is set on its pipes.
+def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
+    """Lay out a sheet, setting its furniture on its pipes.
 
     Pipes whose furniture has no room are widened and the sheet laid out
     again, up to :data:`ROOM_ROUNDS` times.
@@ -1169,9 +1168,7 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun], *,
     fs : Flowsheet
         Sheet with fresh solver slots and recycle marks.
     runs : list[MountedRun]
-        Its furnished pipes, from :func:`mounted_runs`.
-    unaligned : frozenset[int], optional
-        Global indices of units kept on their row axis.
+        Its furnished pipes, from :func:`mounted_runs`; may be empty.
 
     Returns
     -------
@@ -1179,24 +1176,33 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun], *,
         Every process unit has a frame.
     """
     from pandid.layout import _seed_slots
-    from pandid.layout.coarse import Host, _equipment_frames
+    from pandid.layout.layered import Link, place_equipment
     from pandid.layout.station import place_stations
-    from pandid.stations import StationAssembly
 
     members = {unit for run in runs for element in run.elements for unit in _members(element)}
     retained = [unit for unit in process_units(fs) if unit not in members]
+    shown = set(retained)
     loose = [a for a in fs._station_assemblies if not members.intersection(a.station.members)]
-    hosts = [Host(run.source, run.dest, run.segments[0], run.segments[-1],
-                  any(s.is_recycle for s in run.segments), _column_room(run),
-                  any(isinstance(e, StationAssembly) for e in run.elements)) for run in runs]
+    inside = {id(segment) for run in runs for segment in run.segments}
+    direct = [Link(s.source, s.dest, s.is_recycle) for s in process_streams(fs)
+              if id(s) not in inside and s.source.owner in shown and s.dest.owner in shown
+              and s.source.owner is not s.dest.owner]
     extra = [0.0] * len(runs)
     for round_ in range(ROOM_ROUNDS):
         if round_:
             _seed_slots(fs)
-        _equipment_frames(fs, [(host, _chain_width(run) + more)
-                               for host, run, more in zip(hosts, runs, extra)],
-                          members, unaligned=unaligned)
+        place_equipment(fs, retained, direct + [
+            Link(run.source, run.dest, any(s.is_recycle for s in run.segments),
+                 _chain_width(run) + more, _column_room(run))
+            for run, more in zip(runs, extra)])
+        for unit in members:
+            placed = slot(unit)
+            unit.frame = Frame(x=0.0, y=0.0, w=placed.w, h=placed.h,
+                               orientation=placed.orientation, mirrored=placed.mirrored,
+                               mirror_y=placed.mirror_y)
         place_stations(fs, loose)
+        if not runs:
+            return
         routes, lines = _routed_pipes(fs, runs, retained)
         obstacles = list(retained)
         zones: list[Box] = []
