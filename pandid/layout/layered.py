@@ -442,6 +442,14 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
                     layer[i], layer[i + 1], pos[a], pos[b] = a, b, pos[b], pos[a]
         if not swapped:
             break
+    peer: dict[_Node, float] = {}
+    for s, a, b in ends:  # a flag sits beside the nozzle it serves, whatever that crosses
+        if _flag(s.lport) and not s.left.dx.keys() - {s.lport.owner}:
+            peer[s.left] = pos[s.right] + b
+        if _flag(s.rport) and not s.right.dx.keys() - {s.rport.owner}:
+            peer[s.right] = pos[s.left] + a
+    for k in keys:
+        layers[k].sort(key=lambda n: peer.get(n, pos[n]))
 
 
 def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, float]:
