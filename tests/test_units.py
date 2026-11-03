@@ -667,7 +667,9 @@ def _nozzles(unit):
     return [(p.name, p.direction, p.role) for p in unit.ports.values()]
 
 
-@pytest.mark.parametrize("variant", ["default", "horizontal", "knockout", "scrubber"])
+@pytest.mark.parametrize(
+    "variant", ["default", "horizontal", "knockout", "scrubber", "not_a_variant"]
+)
 def test_a_separator_that_separates_phases_names_them(variant):
     """The four whose two draws really are a vapour and a liquid.
 
@@ -697,15 +699,6 @@ def _separator(name, drawing):
     """A Separator drawing, asked for by ``characteristic=`` where it is one."""
     how = "characteristic" if drawing in U.Separator._CHARACTERISTICS else "variant"
     return U.Separator(name, **{how: drawing})
-
-
-@pytest.mark.parametrize("variant", _COLLECTORS)
-def test_a_separator_that_collects_dust_draws_an_overflow_and_an_underflow(variant):
-    """A hopper full of dust is not a liquid, and a precipitator's stack gas is
-    not the vapour of anything. Both draws take the ``process`` role for it: the
-    role vocabulary has no word for tramp metal or a size fraction, and no
-    drawing reads a role that is not ``signal``."""
-    assert _nozzles(_separator("V-101", variant)) == _COLLECTOR_NOZZLES
 
 
 @pytest.mark.parametrize("variant", _COLLECTORS)
@@ -741,19 +734,16 @@ def test_a_phase_separator_keeps_the_draws_it_always_named(variant):
     assert sep.port("liquid") is sep.ports["liquid"]
 
 
-@pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet", "electromagnetic"])
-def test_a_mechanical_separator_draws_an_overflow_and_an_underflow(variant):
-    """A sifter's two products are size fractions and a magnet's are a bulk
-    stream and the tramp metal pulled out of it. Neither is a vapour or a
-    liquid, so neither borrows a phase it does not have. All four stencils are
-    one body with a high draw and a low draw, which is what the pair names, and
-    it is what classification calls them anyway."""
+@pytest.mark.parametrize(
+    "variant", _COLLECTORS + ["sifter", "impact", "permanent_magnet", "electromagnetic"]
+)
+def test_a_dust_collector_or_mechanical_separator_draws_an_overflow_and_an_underflow(variant):
+    """A hopper full of dust is not a liquid, and a precipitator's stack gas is
+    not the vapour of anything. A sifter's two products are size fractions and a
+    magnet's are a bulk stream and the tramp metal pulled out of it. Neither is a
+    vapour or a liquid, so neither borrows a phase it does not have."""
     sep = _separator("S-1", variant)
-    assert _nozzles(sep) == [
-        ("feed_1", "inlet", "feed"),
-        ("overflow", "outlet", "process"),
-        ("underflow", "outlet", "process"),
-    ]
+    assert _nozzles(sep) == _COLLECTOR_NOZZLES
     # And it does not also carry the drum's, which the symbol cannot place.
     with pytest.raises(AttributeError, match="available ports"):
         sep.vapor
@@ -791,13 +781,6 @@ def test_a_mechanical_separators_nozzles_land_where_the_stencil_anchors_are(vari
     assert symbol.ports[low][1] == symbol.height
 
 
-def test_a_separator_variant_nobody_declared_still_gets_the_flash_drums_nozzles():
-    """The port table falls back rather than guessing, exactly as the
-    exchanger's does. Whether the variant name is real at all is the symbol
-    registry's question, asked at render."""
-    assert _nozzles(U.Separator("V-9", variant="not_a_variant")) == _FLASH_DRUM_NOZZLES
-
-
 #: The four casings that take a cake off a medium and have to get rid of it.
 _CAKE_FILTERS = ["press", "belt", "rotary", "rotary_scraper"]
 
@@ -830,7 +813,7 @@ def test_a_filter_that_forms_a_cake_draws_the_cake_and_takes_a_wash(variant):
     ]
 
 
-@pytest.mark.parametrize("variant", _CLARIFYING_FILTERS)
+@pytest.mark.parametrize("variant", _CLARIFYING_FILTERS + ["not_a_variant"])
 def test_a_clarifying_filter_keeps_the_two_nozzles_it_always_had(variant):
     """The other half of the split, and the half that must not move.
 
@@ -866,16 +849,6 @@ def test_an_ion_exchanger_names_its_regenerant_rather_than_borrowing_a_wash():
     for borrowed in ("wash_in", "cake"):
         with pytest.raises(KeyError, match="regenerant_in"):
             ix.port(borrowed)
-
-
-def test_a_filter_variant_nobody_declared_still_gets_the_clarifying_pair():
-    """The port table falls back rather than guessing, as the exchanger's and
-    the separator's do. Whether the variant name is real at all is the symbol
-    registry's question, asked at render."""
-    assert _nozzles(U.Filter("F-9", variant="not_a_variant")) == [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-    ]
 
 
 @pytest.mark.parametrize("variant", _CAKE_FILTERS + ["ion_exchange"])
@@ -915,7 +888,7 @@ def test_every_new_filter_nozzle_lands_somewhere_the_artwork_anchors(variant):
 _DRYER_VARIANTS = ["default", "general", "belt", "fluidized_bed", "shelf", "spray", "turbo"]
 
 
-@pytest.mark.parametrize("variant", _DRYER_VARIANTS)
+@pytest.mark.parametrize("variant", _DRYER_VARIANTS + ["not_a_variant"])
 def test_a_drier_takes_a_heating_medium_in_and_sends_moisture_out(variant):
     """#345: two nozzles where the plant has four. A gas-suspension calciner
     tees its combustion chamber's hot gas into the solids feed line, and lets
@@ -946,17 +919,6 @@ def test_every_driers_gas_nozzles_land_somewhere_the_artwork_anchors(variant):
     dryer = U.Dryer("DR-1", variant=variant)
     for name in dryer.ports:
         assert is_anchored(dryer, name), f"dryer/{variant} does not anchor {name!r}"
-
-
-def test_a_drier_variant_nobody_declared_still_gets_all_four_nozzles():
-    """The port table falls back rather than guessing, as the exchanger's,
-    the separator's and the filter's do."""
-    assert _nozzles(U.Dryer("DR-9", variant="not_a_variant")) == [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
 
 def test_the_two_rotary_drums_are_piped_alike():
