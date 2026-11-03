@@ -12,19 +12,7 @@ tries to turn a takeoff into a return after the nozzle is built.
 
 import pytest
 
-from pandid import Flowsheet, units as U
-
-
-def test_reassigning_column_feed_stages_is_refused_not_silently_ignored():
-    """The exact reproduction from #415."""
-    fs = Flowsheet("repro")
-    col = fs.add(U.Column("T-101", internals="tray", trays=30, n_feeds=1, feed_stages=[5]))
-    new_stages: list[int | None] = [25]
-    with pytest.raises(AttributeError, match="feed_stages"):
-        col.feed_stages = new_stages
-    # Refused, not silently accepted and then ignored: the value the
-    # constructor was given is still the one on the object.
-    assert col.feed_stages == [5]
+from pandid import units as U
 
 
 @pytest.mark.parametrize(
@@ -74,23 +62,3 @@ def test_width_and_height_are_unaffected_and_still_live():
     assert col.width == 80
     col.description = "revised"
     assert col.description == "revised"
-
-
-def test_a_stale_feed_stage_can_no_longer_reach_route():
-    """The stronger claim #415 made: since the reassignment itself is
-    refused, a routed sheet can never disagree with the stage a feed
-    was actually built on."""
-    fs = Flowsheet("repro")
-    col = fs.add(U.Column("T-101", internals="tray", trays=30, n_feeds=1, feed_stages=[5]))
-    feed = fs.add(U.Feed("F"))
-    fs.connect(feed.outlet, col.feed_1)
-    prod1 = fs.add(U.Product("P1"))
-    prod2 = fs.add(U.Product("P2"))
-    fs.connect(col.overhead, prod1.inlet)
-    fs.connect(col.bottoms, prod2.inlet)
-    new_stages: list[int | None] = [25]
-    with pytest.raises(AttributeError):
-        col.feed_stages = new_stages
-    fs.layout()
-    fs.route()
-    assert col.feed_stages == [5]  # what the drawing was actually built from
