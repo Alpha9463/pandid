@@ -117,8 +117,9 @@ def logical_stream_path(stream: "Stream") -> list[Point]:
     Returns
     -------
     list[Point]
-        Points along the segments and each station's main line only,
-        or ``[]`` if a piece is unplaced or the chain breaks.
+        Points along the segments and each station's main line only.
+        ``[]`` if a run segment has no drawn path or a station's
+        member chain breaks; an unplaced member adds no points.
     """
     segments = stream._logical_segments or [stream]
     root = stream._logical_root or stream
