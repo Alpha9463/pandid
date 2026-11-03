@@ -852,7 +852,7 @@ def _tap_styles(fs) -> dict:
         return {}
     from pandid.render.svg import tap_lines
 
-    lines = re.findall(r"<line [^>]*/>", body[1].split("</g>", 1)[0])
+    lines = re.findall(r"<(?:line|path) [^>]*/>", body[1].split("</g>", 1)[0])
     assert len(lines) == len(tap_lines(fs))
     return {
         u.name: ("dashed" if "stroke-dasharray" in ln else "solid")
@@ -1495,6 +1495,83 @@ def test_a_placement_draws_nothing_where_a_reading_draws_a_line():
     # ...and the group is not merely empty, it is not opened at all.
     assert '<g id="instrument_taps">' in read.to_svg()
     assert '<g id="instrument_taps">' not in stood.to_svg()
+
+
+@pytest.mark.parametrize(
+    ("case", "corners"),
+    [("pipe", 1), ("face", 1), ("behind", 2), ("level", 3), ("near", 1), ("opposite", 3)],
+)
+def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) -> None:
+    """An off-axis balloon gets an L, or a Z behind a face, never a slope (#170).
+
+    A balloon behind the face and level with the unit is reached around
+    the unit's box, and one a fraction off the tap's axis still gets a
+    square turn.
+
+    The line leaves the tap square to its host, so a balloon at 45 degrees
+    or pinned anywhere is still drawn orthogonally (ISO 15519-1 12.4).
+    """
+    import xml.etree.ElementTree as ET
+
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines
+
+    fs = Flowsheet("dogleg")
+    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
+    prod = fs.add(U.Product("Product")).pin(x=600, y=170)
+    line = fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, prod.inlet)
+    if case == "pipe":
+        fs.add_instrument("PI", 101, at=0.5, offset=60, angle=45, sensing=line)
+    elif case == "face":
+        fs.add_instrument("LX", 101, at="S", offset=70, angle=45, sensing=drum)
+    elif case == "behind":
+        fs.add_instrument("LX", 101, at="S", sensing=drum).pin(x=420, y=150)
+    elif case == "level":
+        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=120, y=150)
+    elif case == "near":
+        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=420, y=168.25)
+    else:
+        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=120, y=168)
+    fs.route()
+    ((_, tap, centre),) = tap_lines(fs)
+    group = fs.to_svg().split('<g id="instrument_taps">', 1)[1].split("</g>", 1)[0]
+    drawn = ET.fromstring(group.strip())
+    d = drawn.get("d") or "M {x1},{y1} L {x2},{y2}".format(**drawn.attrib)
+    points = [tuple(float(v) for v in p.split(",")) for p in d[2:].split(" L ")]
+    assert len(points) == corners + 2, f"{case}: drawn {points}"
+    left, top, right, bottom = unit_box(drum, drum.frame)
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        assert x1 == x2 or y1 == y2, f"{case}: drawn {points}"
+        inside = min(x1, x2) < right and max(x1, x2) > left
+        assert not (inside and min(y1, y2) < bottom and max(y1, y2) > top), (
+            f"{case}: drawn {points}"
+        )
+    assert points[0] == pytest.approx(tap, abs=0.01)
+    assert points[-1] == pytest.approx(centre, abs=0.01)
+    # draw.io gets the same corners as waypoints.
+    edge = fs.to_drawio().split('id="t0"', 1)[1].split("</mxCell>", 1)[0]
+    assert edge.split('<Array as="points">', 1)[1].count("<mxPoint ") == corners
+
+
+def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
+    """A balloon on a manually slanted run is reached with one square turn."""
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("slant")
+    feed = fs.add(U.Feed("Feed")).pin(x=100, y=100)
+    prod = fs.add(U.Product("Product")).pin(x=500, y=500)
+    line = fs.connect(feed.outlet, prod.inlet)
+    line.via([(200, 200), (400, 400)])
+    fs.add_instrument("PI", 101, sensing=line, at=0.5).pin(x=578, y=578)
+    fs.to_svg()
+    fs.to_drawio()
+    ((inst, tap, centre),) = tap_lines(fs)
+    route = tap_route(inst, tap, centre)
+    assert len(route) == 3
+    for (x1, y1), (x2, y2) in zip(route, route[1:]):
+        assert x1 == x2 or y1 == y2, route
 
 
 def test_a_placement_is_still_a_placement():

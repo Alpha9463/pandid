@@ -94,6 +94,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An expander keeps every field of the reducer it is turned from (#508).**
+  `large_end="outlet"` now draws at the reducer's trim weight, and its bands
+  are mirrored with the artwork.
 - **`Feeder` and `ScreeningDevice` draw without a `variant=` (#604).** Both
   default to their `"general"` drawing instead of raising `ValueError` at
   render.
@@ -108,6 +111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exchanger, now meet the ISO 10628-1 5.3.1 c) floor.
 - **A multi-feed `Separator` round-trips through a spec (#579).**
   `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
+- **A tap line to a balloon off its tap's axis is drawn square (#170).** It
+  leaves the host at a right angle and turns once onto the balloon, or twice
+  when the balloon is behind the tapped face, instead of running diagonally.
 - **A refused `add_valve_station()` leaves the sheet unchanged (#564).** A
   station refused part-way, such as on a member tag clash, used to leave
   the members already built.
