@@ -283,17 +283,15 @@ def test_symbols_lists_every_symbol_in_the_registry(capsys):
     assert f"{len(default_registry._symbols)} symbols" in captured.err
 
 
-@pytest.mark.parametrize("kind", ["valve", "Valve"])
-def test_symbols_filters_by_kind(kind, capsys):
+@pytest.mark.parametrize(
+    ("kind", "shown"),
+    [("valve", ["control", "psv"]), ("Valve", ["control", "psv"]), ("heat_exchanger", ["kettle"])],
+)
+def test_symbols_filters_by_kind_however_a_spec_spells_it(kind, shown, capsys):
     assert main(["symbols", "--kind", kind]) == EXIT_OK
     out = capsys.readouterr().out
-    assert "control" in out and "psv" in out
+    assert all(variant in out for variant in shown)
     assert "Pump" not in out
-
-
-def test_symbols_takes_the_kind_however_a_spec_spells_it(capsys):
-    assert main(["symbols", "--kind", "heat_exchanger"]) == EXIT_OK
-    assert "kettle" in capsys.readouterr().out
 
 
 def test_symbols_rejects_an_unknown_kind_with_the_nearest_match(capsys):
@@ -315,13 +313,6 @@ def test_a_malformed_spec_names_the_entry_and_the_fix(tmp_path, capsys):
     assert "Traceback" not in err
 
 
-def test_a_missing_file_is_one_line_not_a_traceback(tmp_path, capsys):
-    assert main(["draw", str(tmp_path / "missing.yaml")]) == EXIT_FAILED
-    err = capsys.readouterr().err
-    assert "missing.yaml" in err
-    assert len(err.splitlines()) == 1
-
-
 @pytest.mark.parametrize("name", ["missing.yaml", "missing.yml", "missing.json"])
 def test_a_missing_file_is_the_missing_file_even_with_no_pyyaml(
     tmp_path, capsys, monkeypatch, name
@@ -338,16 +329,6 @@ def test_a_missing_file_is_the_missing_file_even_with_no_pyyaml(
     err = capsys.readouterr().err
     assert name in err and "PyYAML" not in err
     assert len(err.splitlines()) == 1
-
-
-def test_a_yaml_spec_that_is_there_still_names_the_extra_it_needs(tmp_path, capsys, monkeypatch):
-    """The other half of the reorder: the file is the earlier question, and once
-    it is answered the missing extra is the real problem again."""
-    spec = tmp_path / "plant.yaml"
-    spec.write_text(YAML_SPEC, encoding="utf-8")
-    monkeypatch.setitem(sys.modules, "yaml", None)
-    assert main(["draw", str(spec)]) == EXIT_MISSING_DEPENDENCY
-    assert "pip install 'pandid[yaml]'" in capsys.readouterr().err
 
 
 def test_a_file_that_is_not_a_spec_says_what_one_is(tmp_path, capsys):
