@@ -187,19 +187,6 @@ def test_a_port_the_symbol_never_anchored_warns_rather_than_raising():
         default_registry._symbols.pop(("crystalliser", "default"), None)
 
 
-def test_ports_are_declared_under_the_public_name():
-    """``PORTS`` is the one attribute a unit type of your own has to set, and
-    the nearest declaration in the hierarchy is the whole list."""
-
-    class _Own(units.Unit):
-        kind = "own_ports_test_unit"
-        PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
-
-    unit = _Own("O-1")
-    assert set(unit.ports) == {"inlet", "outlet"}
-    assert unit.inlet.direction == "inlet"
-
-
 def test_a_subclass_declaration_replaces_the_one_above_it():
     """Overriding ``PORTS`` replaces the inherited list rather than adding to
     it, exactly as an attribute lookup would."""

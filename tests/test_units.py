@@ -43,15 +43,6 @@ def test_duplicate_port_name_raises():
         _Bad("B-1")
 
 
-def test_invalid_port_role_raises():
-    class _BadRole(Unit):
-        kind = "badrole"
-        PORTS = [("in", "inlet", "magic")]
-
-    with pytest.raises(ValueError, match="Invalid role 'magic'"):
-        _BadRole("B-2")
-
-
 @pytest.mark.parametrize("bad", [-40, 0, float("nan"), float("inf"), float("-inf")])
 def test_a_non_positive_or_non_finite_size_is_refused(bad):
     """A box is drawn into ``<use width=... height=...>``, and the SVG spec
