@@ -71,7 +71,7 @@ def _load(path: Path) -> Flowsheet:
         named = repr(suffix) if suffix else "a file with no extension"
         raise _Failure(
             f"{path}: cannot read a spec from {named}; write it as .yaml, .yml or .json")
-    # Raise OSError for a missing file before any reader is imported.
+    # Raise OSError for a missing file before PyYAML is imported.
     with path.open("rb"):
         pass
     if suffix == ".json":

@@ -31,7 +31,7 @@ class Revision:
 
 @dataclass
 class TitleBlock:
-    """Title-block fields for a drawing sheet.
+    """Hold the title-block fields for a drawing sheet.
 
     Attributes
     ----------
@@ -46,7 +46,8 @@ class TitleBlock:
     sheet, of_sheets : str
         The ``SHEET n of m`` count; a blank one draws ``"1"``.
     scale : str
-        Scale, such as ``"1:100"``; blank shows the placed scale.
+        Scale, such as ``"1:100"``. A blank one shows the placed scale
+        when ``page_size`` fixes the page, and is blank otherwise.
     drawn_by, checked_by, approved_by, date : str
         Initials and date.
     revisions : list[Revision]
@@ -245,8 +246,9 @@ class StreamTableOptions:
     sheet_subtitle : str
         Subtitle of the table's own sheet.
     sheet_drawing_number : str
-        Drawing number of the table's own sheet; blank adds
-        :data:`TABLE_SHEET_SUFFIX` to the diagram's number.
+        Drawing number of the table's own sheet. A blank one adds
+        :data:`TABLE_SHEET_SUFFIX` to the diagram's number, and stays
+        blank if the diagram has none.
     """
 
     font_size: float | None = None

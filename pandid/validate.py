@@ -326,8 +326,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
               f"no ports. Register artwork for it with "
               f"default_registry.register({u.kind!r}, Symbol(...))"))
 
-    # --- a turned symbol whose function is gravity ---
-    # ISO 15519-1 11.4.2. Read from the frame when placed, else the pin.
+    # --- a turned gravity-fixed symbol (ISO 15519-1 11.4.2) ---
     for u in fs.units:
         placed = u.frame if u.frame is not None else u.pin_
         turn = int(getattr(placed, "orientation", 0) or 0)

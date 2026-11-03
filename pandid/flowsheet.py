@@ -334,14 +334,16 @@ class Flowsheet:
             names.
         stream_number_start : int, default=1
             First ``n`` in ``stream_naming_scheme``.
-        line_numbering_scheme : str or callable, default="{size}-{service}-{sequence}-{spec}"
-            Format, or callable of the stream, for line numbers.
+        line_numbering_scheme : str or callable, optional
+            Format, or callable of the stream, for line numbers; default
+            ``"{size}-{service}-{sequence}-{spec}"``.
         line_number_start : int, default=1001
             First generated ``sequence`` component of a line number.
         loop_number_start : int, default=101
             First number :meth:`add_loop` allocates.
-        valve_station_tag_scheme : str or callable, default="{letters}-{number}{suffix}"
-            Format for valve station member tags.
+        valve_station_tag_scheme : str or callable, optional
+            Format for valve station member tags; default
+            ``"{letters}-{number}{suffix}"``.
         auto_faces : bool, default=True
             Whether movable port faces are chosen automatically.
 
@@ -415,7 +417,18 @@ class Flowsheet:
 
     @stream_naming_scheme.setter
     def stream_naming_scheme(self, value: "str | Callable[[int], str]") -> None:
-        """Set the stream naming scheme, checking its fields."""
+        """Set the stream naming scheme, checking its fields.
+
+        Parameters
+        ----------
+        value : str or Callable[[int], str]
+            Format string over ``n``, or a callable of the number.
+
+        Raises
+        ------
+        ValueError
+            If the format string cannot format a stream number.
+        """
         if not callable(value):
             _format_stream_name(value, DEFAULT_STREAM_NUMBER_START)
         self._stream_naming_scheme = value
@@ -427,7 +440,18 @@ class Flowsheet:
 
     @stream_number_start.setter
     def stream_number_start(self, value: int) -> None:
-        """Set the first generated stream number."""
+        """Set the first generated stream number.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not an integer.
+        """
         self._stream_number_start = _whole_number(value, "stream_number_start")
 
     @property
@@ -437,7 +461,18 @@ class Flowsheet:
 
     @line_number_start.setter
     def line_number_start(self, value: int) -> None:
-        """Set the first generated line sequence number."""
+        """Set the first generated line sequence number.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not an integer.
+        """
         self._line_number_start = _whole_number(value, "line_number_start")
 
     @property
@@ -447,7 +482,18 @@ class Flowsheet:
 
     @loop_number_start.setter
     def loop_number_start(self, value: int) -> None:
-        """Set the first number :meth:`add_loop` allocates."""
+        """Set the first number :meth:`add_loop` allocates.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is not an integer.
+        """
         self._loop_number_start = _whole_number(value, "loop_number_start")
 
     def add_annotation(self, annotation):
@@ -598,7 +644,7 @@ class Flowsheet:
 
         # One allocation series per sheet across all variables.
         allocated = number is None
-        if number is None:  # narrows number for the type checker
+        if number is None:
             number = self.loop_number_start + self._loops_allocated
         loop = Loop(variable, number)
         clash = next((existing for existing in self.loops
@@ -714,7 +760,7 @@ class Flowsheet:
                           at: float | str | None = None,
                           offset: float = 45.0, angle: float = 90.0,
                           variant: str = "default", **kwargs) -> "Instrument":
-        """Build and anchor a balloon without adding it."""
+        """Build and anchor a balloon."""
         from pandid.loops import ControlLoop, Loop
         from pandid.units import Instrument
 
@@ -1038,8 +1084,9 @@ class Flowsheet:
             Member tag format; defaults to ``valve_station_tag_scheme``.
         gap, bypass_rise, drain_drop : float or None, optional
             Spacing for a pinned station.
-        size, schedule, service, sequence, spec, insulation : str, float or None, optional
-            Line-number components for the bypass and drain legs.
+        size, schedule, service, sequence, spec, insulation : optional
+            Line-number components for the bypass and drain legs, each a
+            str, float or None.
         on : Stream or None, optional
             Material line from :meth:`connect` to put the station in.
         at : float or None, optional
@@ -1297,9 +1344,10 @@ class Flowsheet:
             Fixed stream name; ``None`` numbers it automatically.
         draw_as_recycle : bool, default=False
             Prefer this stream as a cycle's return line.
-        size, schedule, service, sequence, spec, insulation : str, float or None, optional
-            Line-number components (``spec`` is the piping class); any
-            but ``sequence`` makes the stream show a line number.
+        size, schedule, service, sequence, spec, insulation : optional
+            Line-number components, each a str, float or None
+            (``spec`` is the piping class); any but ``sequence`` makes
+            the stream show a line number.
         ends : str, tuple[str, str] or None, optional
             Joint style for both ends or ``(source, dest)``, from
             :data:`~pandid.render.svg.CONNECTIONS`; overrides
@@ -1803,7 +1851,8 @@ class Flowsheet:
             ``None`` sizes the sheet to the drawing.
         connections : str or None, optional
             Joint marks on a P&ID: ``"none"`` (default), ``"flanged"``
-            (nozzles and inline devices) or ``"flanged-at-nozzles"``.
+            (nozzles, valves and inline fittings) or
+            ``"flanged-at-nozzles"``. Reducers and tees stay unmarked.
         jump_direction : str, default="vertical"
             Which crossing line carries the mark: ``"vertical"`` or
             ``"horizontal"``.
