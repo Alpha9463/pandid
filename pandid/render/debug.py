@@ -1,29 +1,9 @@
-"""Draw the debugging overlay: the coordinate system on the sheet.
+"""Debug overlay: the coordinate grid, unit anchors and ports.
 
-``pin(x=270, y=180)`` places a unit's top-left corner; ``pin(port="inlet",
-y=195)`` places a nozzle. Neither point is drawn, and confusing them is a
-common authoring mistake, so the overlay draws:
-
-1. **the grid**, dashed red at the requested spacing, numbered along the
-   top and left edges;
-2. **each unit's anchor**, a red crosshair on the point ``pin(x, y)``
-   sets, labelled with its tag and coordinates. On a boundary flag this
-   is its nozzle, which is what ``pin`` takes there;
-3. **each port**, a blue dot labelled with the name ``connect()`` and
-   ``pin(port=...)`` take and its coordinates;
-4. **each unit's drawn box**, as a faint outline.
-
-Anchors and ports differ by colour (red and blue, a safe pair for
-colour-blind readers).
-
-The overlay is emitted under the drawing, so sheet ink and label halos
-paint over it; labels are therefore placed last, against the finished
-sheet (:func:`_settle`), and drawn first. It is drawn inside
-``<g id="drawing">`` in drawing coordinates, so its numbers are ``pin()``
-values; on a fixed page the fit scale is divided out of type and marker
-sizes but not grid positions. Only ``<line>``, ``<rect>``, ``<circle>``
-and ``<text>`` are used, so it exports to PDF and PNG
-(:mod:`pandid.render.export`).
+The overlay draws a dashed red grid numbered along the top and left
+edges, a red crosshair on the point ``pin(x, y)`` sets for each unit, a
+blue dot on each port, and each unit's box as a faint outline. Anchors
+and ports are labelled with their name and coordinates.
 """
 
 from __future__ import annotations
@@ -36,24 +16,22 @@ from pandid.render.escape import escaped, fmt
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
-#: Grid pitch in drawing units for ``debug=True``: two or three lines
-#: across a typical 60-130 unit symbol.
+#: Grid pitch in drawing units for ``debug=True``.
 DEFAULT_SPACING = 50.0
 
-# Smallest accepted pitch, so ``debug=1`` meant as "on" is refused rather
-# than ruling thousands of lines.
+# Smallest accepted pitch.
 _MIN_SPACING = 5.0
 
 # Target pitch of numbered grid lines, in drawing units (_label_step).
 _LABEL_PITCH = 100.0
 
 # Type and marker sizes in page units; divided by the fit scale.
-_AXIS_SIZE = 8.0      # the coordinates written along the top and left edges
-_MARK_SIZE = 7.5      # an anchor's or a port's own label
-_CROSS = 5.0          # half-length of an anchor crosshair arm
+_AXIS_SIZE = 8.0      # axis numbers
+_MARK_SIZE = 7.5      # anchor and port labels
+_CROSS = 5.0          # half-length of a crosshair arm
 _DOT = 2.2            # radius of a port dot
 
-# Colours: minor rules, numbered rules and numbers in deepening red.
+# Colours. Minor rules, numbered rules and numbers deepen in red.
 _MINOR = "#f1b8b8"
 _MAJOR = "#dd8b8b"
 _NUMBER = "#c23b3b"
@@ -63,48 +41,31 @@ _PORT = "#1550c8"
 
 _FONT = "sans-serif"
 
-# Grid rules are dashed; box outlines are solid.
+# Dash pattern of the grid rules.
 _DASH = "4,4"
 
-# where a label goes ---------------------------------------------
-# Approximate advance width, ascent and descent as fractions of type size;
-# an overestimate only moves a debug label somewhere emptier.
+# Label placement: advance width, ascent and descent as fractions of
+# type size.
 _ADV = 0.56
 _ASC, _DESC = 0.75, 0.2
 
-# Search steps in type sizes: a line pitch across the text, a wider shift
-# along it.
+# Search steps in type sizes: across the text and along it.
 _LINE, _SHIFT = 1.4, 2.4
 
-# Search distance limit in type sizes (|out| + |across|). Crowded pipe
-# racks need several bands, but every extra band moves labels further from
-# their markers (see _tether).
+# Search distance limit in type sizes (|out| + |across|).
 _REACH = 10.0
 
-# Distance in type sizes beyond which a label gets a tether line to its
-# marker.
+# Label distance, in type sizes, beyond which a tether is drawn.
 _TETHER = 3.5
 
 
 def resolve_spacing(debug: "bool | float") -> "float | None":
-    """Return the grid pitch ``debug`` asks for, or ``None`` for no overlay.
-
-    Identity checks keep ``0`` from meaning "off", since ``0 == False``.
+    """Return the grid pitch for ``debug``, or ``None`` for no overlay.
 
     Parameters
     ----------
     debug : bool or float
         ``False`` (off), ``True`` (:data:`DEFAULT_SPACING`) or a pitch.
-
-    Returns
-    -------
-    float or None
-        Grid pitch in drawing units.
-
-    Raises
-    ------
-    ValueError
-        If ``debug`` is not a number or is finer than the minimum pitch.
     """
     if debug is False or debug is None:
         return None
@@ -128,30 +89,15 @@ def resolve_spacing(debug: "bool | float") -> "float | None":
 
 
 def _label_step(spacing: float) -> float:
-    """Return the numbered-line pitch: a whole multiple of ``spacing``."""
+    """Return the numbered-line pitch, a multiple of ``spacing``."""
     return spacing * max(1, math.ceil(_LABEL_PITCH / spacing - 1e-9))
 
 
 def _ticks(lo: float, hi: float, step: float) -> list[float]:
-    """Return every multiple of ``step`` from ``lo`` to ``hi`` inclusive.
-
-    Multiples are absolute, so numbered lines fall on 100, 200, 300.
-
-    Parameters
-    ----------
-    lo, hi : float
-        Range.
-    step : float
-        Pitch.
-
-    Returns
-    -------
-    list[float]
-        Multiples in order; empty for a non-positive step.
-    """
+    """Return each multiple of ``step`` in ``[lo, hi]``."""
     if step <= 0:
         return []
-    # Tolerance so a bound exactly on a multiple is included.
+    # Include a bound that lies exactly on a multiple.
     eps = step * 1e-9
     first = math.ceil((lo - eps) / step)
     last = math.floor((hi + eps) / step)
@@ -160,28 +106,7 @@ def _ticks(lo: float, hi: float, step: float) -> list[float]:
 
 def _text(x: float, y: float, body: str, size: float, fill: str,
           anchor: str = "start") -> str:
-    """Return one ``<text>`` placed by its baseline.
-
-    No ``dominant-baseline`` is used, since every ``y`` is a baseline.
-
-    Parameters
-    ----------
-    x, y : float
-        Baseline position.
-    body : str
-        Text.
-    size : float
-        Font size.
-    fill : str
-        Colour.
-    anchor : str, default="start"
-        ``text-anchor``.
-
-    Returns
-    -------
-    str
-        SVG element.
-    """
+    """Return one ``<text>`` placed by its baseline."""
     return (f'    <text x="{fmt(x, 1)}" y="{fmt(y, 1)}" font-family="{_FONT}" '
             f'font-size="{size:.2f}" text-anchor="{anchor}" fill="{fill}">'
             f'{escaped(body)}</text>')
@@ -203,23 +128,8 @@ def _spots(out: "tuple[float, float]", across: "tuple[float, float]",
            reach: float, side: float) -> "list[tuple[float, float]]":
     """Return candidate label offsets in type sizes, nearest first.
 
-    ``out`` points away from the marked object and is walked one way;
-    ``across`` is perpendicular and walked both ways, preferred side
-    first. Candidates are ordered by walked distance, then by less
-    outward travel, since a label slid far along a run starts to read as
-    the next nozzle's.
-
-    Parameters
-    ----------
-    out, across : tuple[float, float]
-        Unit vectors.
-    reach, side : float
-        Starting offsets along ``out`` and ``across``.
-
-    Returns
-    -------
-    list[tuple[float, float]]
-        Offsets within :data:`_REACH`.
+    ``out`` is walked one way from ``reach``; ``across`` is walked both
+    ways from ``side``, the preferred side first.
     """
     so, sa = _step(out), _step(across)
     span = int(_REACH / min(so, sa)) + 1
@@ -233,26 +143,9 @@ def _spots(out: "tuple[float, float]", across: "tuple[float, float]",
 
 def _box(x: float, y: float, text: str, size: float, lead: float
          ) -> "tuple[float, float, float, float]":
-    """Return the box a line of text covers when written from ``(x, y)``.
+    """Return the box a line of text covers written from ``(x, y)``.
 
-    Text runs right for a non-negative ``lead`` and left otherwise, so it
-    always runs away from its marker.
-
-    Parameters
-    ----------
-    x, y : float
-        Baseline start.
-    text : str
-        Text.
-    size : float
-        Font size.
-    lead : float
-        Horizontal offset sign.
-
-    Returns
-    -------
-    tuple[float, float, float, float]
-        ``(x0, y0, x1, y1)``.
+    The text runs right for a non-negative ``lead`` and left otherwise.
     """
     w = _ADV * size * len(text)
     x0 = x if lead >= 0 else x - w
@@ -262,20 +155,8 @@ def _box(x: float, y: float, text: str, size: float, lead: float
 class _Label(NamedTuple):
     """A label to place, with its candidate offsets.
 
-    Attributes
-    ----------
-    text : str
-        Label text.
-    px, py : float
-        Marker position.
-    size : float
-        Font size.
-    colour : str
-        Text colour.
-    spots : list[tuple[float, float]]
-        Candidate offsets from :func:`_spots`.
-    near : tuple[list, list]
-        Nearby plates and ink, windowed once for speed.
+    ``spots`` holds offsets from :func:`_spots`; ``near`` holds the
+    plate and ink boxes near the marker.
     """
     text: str
     px: float
@@ -297,31 +178,12 @@ def _cost(lab: "_Label", dx: float, dy: float,
           placed: "Sequence[tuple[float, float, float, float]]",
           bounds: "tuple[float, float, float, float]",
           limit: "tuple[int, int, int] | None"):
-    """Return the cost, placement and box of writing a label at an offset.
+    """Return the cost, placement and box of a label at an offset.
 
-    Cost is compared as a tuple, worst loss first: overlap with another
-    overlay label, then what would be painted over the words (via
-    :func:`pandid.render.svg._covering`: halos and symbol boxes, then
-    lines), then whether the label leaves the drawing's bounds. The
-    overlay sits under the sheet, so the tiers count what covers it.
-
-    Parameters
-    ----------
-    lab : _Label
-        Label.
-    dx, dy : float
-        Offset in type sizes.
-    placed : sequence of tuple
-        Boxes of overlay labels already placed.
-    bounds : tuple[float, float, float, float]
-        Drawing bounds.
-    limit : tuple[int, int, int] or None
-        Best cost so far; counting stops once this spot is worse.
-
-    Returns
-    -------
-    tuple
-        ``(cost, (x, y, anchor), box)``.
+    ``(dx, dy)`` is in type sizes. The cost counts, worst first:
+    overlaps with ``placed`` labels, then with plates and ink
+    (:func:`pandid.render.svg._covering`), then 1 if the label leaves
+    ``bounds``. Counting stops once the cost is worse than ``limit``.
     """
     from pandid.render.svg import _covering, _meets
 
@@ -340,56 +202,22 @@ def _cost(lab: "_Label", dx: float, dy: float,
     hits = _covering(box, ink, plates, cap)
     outside = 0 if (box[0] >= bounds[0] and box[1] >= bounds[1]
                     and box[2] <= bounds[2] and box[3] <= bounds[3]) else 1
-    # Worst loss first, so tuples compare in priority order.
     return (mine, *hits, outside), (x, y, "start" if dx >= 0 else "end"), box
 
 
-# Cost of a completely clear spot, which ends the search.
+# Cost of a clear spot, which ends the search.
 _CLEAR = (0, 0, 0, 0)
 
 
 def _options(lab: "_Label", bounds: "tuple[float, float, float, float]") -> int:
-    """Return how many of a label's spots are clear of the sheet's ink.
-
-    Computed before any overlay label is placed; it sets placement order.
-
-    Parameters
-    ----------
-    lab : _Label
-        Label.
-    bounds : tuple[float, float, float, float]
-        Drawing bounds.
-
-    Returns
-    -------
-    int
-        Number of clear spots.
-    """
+    """Return how many of a label's spots are clear of the sheet."""
     clear = (_CLEAR[0], _CLEAR[1], _CLEAR[2])
     return sum(_cost(lab, dx, dy, (), bounds, clear)[0] == _CLEAR
                for dx, dy in lab.spots)
 
 
 def _tether(lab: "_Label", box: "tuple[float, float, float, float]") -> "str | None":
-    """Return a hairline from marker to label when the label is far away.
-
-    A displaced coordinate read against the wrong dot would be typed into
-    ``pin()`` and believed, so a distant label is tethered. The overlay is
-    not part of an issued drawing, so ISO 15519-1 6.4 leader terminators
-    are not used.
-
-    Parameters
-    ----------
-    lab : _Label
-        Label.
-    box : tuple[float, float, float, float]
-        Where it was placed.
-
-    Returns
-    -------
-    str or None
-        SVG ``<line>``, or ``None`` within :data:`_TETHER`.
-    """
+    """Return a tether from marker to label, or ``None`` when close."""
     near = (min(max(lab.px, box[0]), box[2]), min(max(lab.py, box[1]), box[3]))
     if math.hypot(near[0] - lab.px, near[1] - lab.py) <= _TETHER * lab.size:
         return None
@@ -402,23 +230,8 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
             ) -> "tuple[list[str], list[str]]":
     """Place every label clear of the sheet and of earlier labels.
 
-    Labels with the fewest clear spots go first, so constrained labels are
-    not crowded out by declaration order; anchors win ties over ports.
-    Each placed label becomes an obstacle for the rest.
-    ``tests/test_debug_overlay.py`` bounds how many end up covered.
-
-    Parameters
-    ----------
-    labels : list[_Label]
-        Labels in flowsheet order.
-    bounds : tuple[float, float, float, float]
-        Drawing bounds.
-
-    Returns
-    -------
-    tuple[list[str], list[str]]
-        Tether lines and text elements, each in input order for stable
-        diffs.
+    Labels with the fewest clear spots go first, anchors winning ties.
+    Returns the tether lines and the text elements, each in input order.
     """
     placed: "list[tuple[float, float, float, float]]" = []
     words: "list[str]" = [""] * len(labels)
@@ -442,27 +255,10 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
 
 def _grid(bounds: "tuple[float, float, float, float]", spacing: float,
           scale: float, taken: "list[tuple[float, float, float, float]]") -> list[str]:
-    """Return the grid rules and the numbers along its top and left edges.
+    """Return the grid rules and its numbers along the top and left.
 
-    Ruled only within the drawing bounds, so the overlay never changes
-    the fit on a fixed page or reaches the border. The axis numbers are
-    fixed in place and appended to ``taken`` for other labels to avoid.
-
-    Parameters
-    ----------
-    bounds : tuple[float, float, float, float]
-        Drawing bounds.
-    spacing : float
-        Grid pitch.
-    scale : float
-        Fit scale.
-    taken : list[tuple[float, float, float, float]]
-        Obstacle boxes, appended to in place.
-
-    Returns
-    -------
-    list[str]
-        SVG elements.
+    The grid is ruled within ``bounds``. Each number's box is appended
+    to ``taken``.
     """
     x0, y0, x1, y1 = bounds
     step = _label_step(spacing)
@@ -481,8 +277,8 @@ def _grid(bounds: "tuple[float, float, float, float]", spacing: float,
         out.append(_rule(x0, y, x1, y, _MAJOR if strong else _MINOR,
                          major_w if strong else minor_w))
 
-    # Numbers sit inside the grid: x values a line below the top edge, y
-    # values just above their line, so the two rows cannot collide.
+    # x numbers sit a line below the top edge, y numbers just above
+    # their line.
     size = _AXIS_SIZE / scale
     for x in sorted(numbered_x):
         out.append(_text(x + 0.15 * size, y0 + 1.1 * size, fmt(x, 1), size, _NUMBER))
@@ -493,14 +289,12 @@ def _grid(bounds: "tuple[float, float, float, float]", spacing: float,
     return out
 
 
-# Anchor label: up from the corner and running left, away from the tag
-# the renderer centres over the box.
+# Anchor label start (out, across, reach, side): up from the corner,
+# running left.
 _ANCHOR_LABEL = ((0.0, -1.0), (-1.0, 0.0), 1.2, 0.6)
 
-# Port label start by facing: (out, across, reach, side), with the
-# preferred side folded into ``across``. East labels go above the line and
-# west below, so facing outlet and inlet labels on one run do not collide;
-# north and south start to the right of the tag position.
+# Port label start by facing, as (out, across, reach, side). East labels
+# go above the line, west below, and north and south to the right.
 _PORT_LABEL = {
     "E": ((1.0, 0.0), (0.0, -1.0), 0.5, 0.6),
     "W": ((-1.0, 0.0), (0.0, 1.0), 0.5, 1.35),
@@ -512,20 +306,8 @@ _PORT_LABEL = {
 def _pin_point(unit, frame) -> "tuple[float, float]":
     """Return the point ``pin(x, y)`` sets on a unit.
 
-    The frame corner for equipment; the nozzle for a boundary flag, which
-    is pinned by it (:meth:`pandid.units.Unit.pin`).
-
-    Parameters
-    ----------
-    unit : Unit
-        Placed unit.
-    frame : Frame
-        Its frame.
-
-    Returns
-    -------
-    tuple[float, float]
-        Anchor point.
+    This is the frame corner for equipment and the nozzle for a boundary
+    flag.
     """
     from pandid.portgeom import resolve_port
     from pandid.units import _Boundary
@@ -540,30 +322,11 @@ def _marks(fs: "Flowsheet", scale: float,
            plates: "list[tuple[float, float, float, float]]",
            ink: "list[tuple[float, float, float, float]]"
            ) -> "tuple[list[str], list[str]]":
-    """Return the box, anchor and port markers, and their labels.
+    """Return the marker geometry, with tethers, and the label text.
 
-    Anchors are red crosshairs at ``Frame.x``/``Frame.y`` (or the flag
-    nozzle), which turns and mirrors do not move. Ports are blue dots on
-    every declared port, signal ports included, labelled with name and
-    coordinates. Labels are built before any is placed (:func:`_settle`),
-    anchors first.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out flowsheet.
-    scale : float
-        Fit scale.
-    bounds : tuple[float, float, float, float]
-        Drawing bounds.
-    plates, ink : list[tuple[float, float, float, float]]
-        Opaque boxes and drawn lines for labels to avoid.
-
-    Returns
-    -------
-    tuple[list[str], list[str]]
-        Marker geometry (with tethers) and label text, drawn in that order
-        so markers never cover text.
+    Markers are each unit's box, a crosshair on its anchor and a dot on
+    each port. Labels avoid ``plates`` (opaque boxes) and ``ink`` (line
+    boxes).
     """
     from pandid.portgeom import resolve_port, unit_box
     from pandid.render.svg import _meets
@@ -596,7 +359,6 @@ def _marks(fs: "Flowsheet", scale: float,
         geometry.append(
             f'    <line x1="{fmt(ax, 1)}" y1="{fmt(ay - arm, 1)}" x2="{fmt(ax, 1)}" '
             f'y2="{fmt(ay + arm, 1)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
-        # Include the tag, which is what the author searches the source for.
         label = f"{u.tag} {fmt(ax, 1)},{fmt(ay, 1)}" if u.tag else f"{fmt(ax, 1)},{fmt(ay, 1)}"
         job(label, ax, ay, _ANCHOR, anchor_spots)
 
@@ -619,10 +381,6 @@ def overlay(fs: "Flowsheet", bounds: "tuple[float, float, float, float]",
             ) -> list[str]:
     """Return the debug overlay as SVG elements in drawing coordinates.
 
-    The caller puts these at the head of the drawing so everything else
-    paints over them. Symbol boxes (:func:`~pandid.portgeom.unit_box`,
-    not grown to ink) join the plates as obstacles.
-
     Parameters
     ----------
     fs : Flowsheet
@@ -634,14 +392,9 @@ def overlay(fs: "Flowsheet", bounds: "tuple[float, float, float, float]",
     scale : float, default=1.0
         Fit scale of a fixed page.
     plates : list[tuple[float, float, float, float]], optional
-        Opaque boxes the sheet draws over the overlay (halos, leaders).
+        Opaque boxes the sheet draws over the overlay.
     ink : list[tuple[float, float, float, float]], optional
-        Line boxes the sheet draws. Neither list is modified.
-
-    Returns
-    -------
-    list[str]
-        SVG lines in a ``<g id="debug">`` group.
+        Line boxes the sheet draws.
     """
     from pandid.portgeom import unit_box
 
