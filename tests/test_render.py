@@ -17,19 +17,12 @@ _LABEL = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
     r'(<text [^>]*font-size="10"[^>]*>)([^<]*)</text>'
 )
-# An equipment tag, the NC marking and the fail letters: the same halo, drawn at
-# the size a symbol's own lettering is drawn at.
+# An equipment tag, the NC marking or the fail letters: a halo at symbol lettering size.
 _TAG = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
     r'<text [^>]*font-size="12"[^>]*>([^<]*)</text>'
 )
-#: A material run: ISO 10628-1 5.3.1 a), the ladder's main-flow rung. Written
-#: out rather than interpolated, so moving a rung shows up here as a failure
-#: rather than being absorbed by the regex that reads the sheet back.
-#: A drawn material run. The width comes off the ladder rather than being typed
-#: as a literal: written ``stroke-width="4"``, this quietly matched *nothing*
-#: once the main-flow rung moved, and every test built on it went on passing by
-#: finding no runs at all to contradict it.
+#: A drawn material run, at the main-flow rung's width.
 _PROCESS_LINE = re.compile(
     r'<path d="([^"]+)" fill="none" stroke="[^"]*" '
     rf'stroke-width="{LineWeight.MAIN_FLOW.width:g}"'
@@ -40,7 +33,7 @@ _TAP_LINE = re.compile(
 
 
 def _stream_labels(svg):
-    """``(halo box, text tag, name)`` for every stream number drawn on the sheet."""
+    """Return ``(halo box, text tag, name)`` for every stream number drawn on the sheet."""
     out = []
     for x, y, w, h, tag, name in _LABEL.findall(svg):
         x, y, w, h = float(x), float(y), float(w), float(h)
@@ -49,7 +42,7 @@ def _stream_labels(svg):
 
 
 def _stream_runs(svg):
-    """Straight runs of every drawn process line, as ``((x1, y1), (x2, y2))``."""
+    """Return straight runs of every drawn process line, as ``((x1, y1), (x2, y2))``."""
     runs = []
     for d in _PROCESS_LINE.findall(svg):
         pts = [tuple(map(float, p.split(","))) for p in re.findall(r"-?[\d.]+,-?[\d.]+", d)]
@@ -58,7 +51,7 @@ def _stream_runs(svg):
 
 
 def _overlaps(box, run):
-    """Whether *box* touches any part of an axis-aligned *run*."""
+    """Return whether *box* touches any part of an axis-aligned *run*."""
     x0, y0, x1, y1 = box
     (rx0, ry0), (rx1, ry1) = run
     return (
@@ -111,8 +104,7 @@ def test_render_svg_escapes_xml(tmp_path):
 
 
 def test_unit_labels_drawn_over_streams_with_a_halo():
-    # Equipment tags are emitted after the stream group and backed by a white
-    # halo, so a passing line can never strike through the text.
+    # Equipment tags are drawn after the streams, on a white halo.
     fs = Flowsheet("Labels")
     feed = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-601"))
@@ -128,8 +120,7 @@ def test_unit_labels_drawn_over_streams_with_a_halo():
 
 
 def test_stream_number_labels_do_not_overprint():
-    # Streams sharing a corridor sit a few px apart; their numbers must be slid
-    # along the line rather than stacked on the same point.
+    # Numbers of streams sharing a corridor slide along their lines rather than stack.
     fs = Flowsheet("Crossing")
     f1, f2 = fs.add(U.Feed("Feed A")), fs.add(U.Feed("Feed B"))
     s1 = fs.add(U.Splitter("SP-501", n_outlets=2))
@@ -160,7 +151,7 @@ def test_stream_number_labels_do_not_overprint():
 
 
 def _transfer_sheet():
-    """Two short runs carrying line numbers far wider than the runs themselves."""
+    """Build two short runs carrying line numbers far wider than the runs themselves."""
     fs = Flowsheet("Line Numbers")
     feed = fs.add(U.Feed("Raw Feed")).pin(x=60, y=100)
     valve = fs.add(U.Valve("FV-101", variant="control")).pin(x=180, y=110)
@@ -172,8 +163,7 @@ def _transfer_sheet():
 
 
 def test_a_label_too_wide_for_its_run_is_written_beside_it():
-    # No amount of sliding rescues a label wider than its run, so it steps off
-    # the line entirely and leaves the pipe untouched.
+    # A label wider than its run steps off the line.
     svg = _transfer_sheet().to_svg()
 
     runs = _stream_runs(svg)
@@ -184,8 +174,7 @@ def test_a_label_too_wide_for_its_run_is_written_beside_it():
 
 
 def test_a_label_with_room_to_spare_stays_on_its_run():
-    # The line number is the exception, not the rule: a stream number on an
-    # ordinary run still reads as a break in the line, the way a sheet draws it.
+    # A stream number on an ordinary run is written in a break in the line.
     fs = Flowsheet("Plain")
     feed = fs.add(U.Feed("F")).pin(x=60, y=100)
     prod = fs.add(U.Product("P")).pin(x=400, y=100)
@@ -198,11 +187,7 @@ def test_a_label_with_room_to_spare_stays_on_its_run():
 
 
 def test_stream_label_on_a_vertical_run_reads_bottom_to_top():
-    # A label follows its line, and a vertical one is turned so the sheet is
-    # read from the right, never upside down. That is one of the two reading
-    # directions ISO 15519-1 §5.1.5 allows, and §7.2.5 asks for a connection's
-    # designation to be oriented along its line. Its halo turns with it, so the
-    # box is taller than it is wide.
+    # A vertical label reads bottom to top and its halo turns with it (ISO 15519-1 §5.1.5).
     fs = Flowsheet("Riser")
     feed = fs.add(U.Feed("F")).pin(x=60, y=300)
     prod = fs.add(U.Product("P")).pin(x=400, y=60)
@@ -236,28 +221,14 @@ def test_render_svg_generic_symbol_duplicate_ids(tmp_path):
 
 
 # --- no halo deletes a line that is not its own, over the whole corpus ---------
-# Every label on a sheet is written on an opaque rect and every one of them is
-# drawn after the lines, so a halo in the wrong place does not sit *over* a line,
-# it deletes a length of it and the drawing then says the run stops there. The
-# topology is untouched by that, so ``validate()`` has nothing to report and the
-# picture is the only witness -- which is why this is checked over every sheet
-# the repo ships rather than on a specimen built to fail.
-#
-# The one line a halo may cover is the run whose number is written in it. A break
-# in the line with the number in the break is the convention (ISO 15519-1
-# §7.2.5), and the halo is what opens the break. Anything else -- a second line,
-# a branch off its own line, the impulse line to a balloon -- is ink the label
-# had no business erasing, and an equipment tag, which names a *symbol* and no
-# run at all, may cover none of it.
+# A halo may cover only the run whose number is written in it (ISO 15519-1 §7.2.5).
 
-# Half the weight of each line, being how far its ink reaches either side of the
-# path it is drawn along. The renderer keeps a whole width clear (see
-# ``pandid.render.svg._ink``); this asks only that no ink was actually deleted.
+# Half a line's weight: how far its ink reaches either side of its path.
 _INK_REACH = {"process": 1.0, "signal": 0.5}
 
 
 def _tag_labels(svg):
-    """``(halo box, text)`` for every equipment tag and marking on the sheet."""
+    """Return ``(halo box, text)`` for every equipment tag and marking on the sheet."""
     tags = svg[svg.index('id="unit_labels"') :]
     out = []
     for x, y, w, h, text in _TAG.findall(tags):
@@ -267,11 +238,7 @@ def _tag_labels(svg):
 
 
 def _tap_runs(svg):
-    """Every impulse line drawn, as ``((x1, y1), (x2, y2))``.
-
-    Read back out of the SVG rather than recomputed from the model, so what is
-    checked is the line the sheet actually carries.
-    """
+    """Return every impulse line drawn, as ``((x1, y1), (x2, y2))``."""
     if 'id="instrument_taps"' not in svg:
         return []
     taps = svg[svg.index('id="instrument_taps"') : svg.index('id="unit_labels"')]
@@ -279,12 +246,7 @@ def _tap_runs(svg):
 
 
 def _lines_drawn(fs, svg):
-    """``(name, run, reach)`` for every line on the sheet.
-
-    The streams come from :func:`~pandid.layout.attach.stream_path`, which is
-    the polyline the renderer draws and so the only place a name is attached to
-    a run; the impulse lines come from the SVG, and belong to no run.
-    """
+    """Return ``(name, run, reach)`` for every line on the sheet."""
     out = []
     for s in fs.streams:
         reach = _INK_REACH["signal" if s.kind in SIGNAL_KINDS else "process"]
@@ -295,7 +257,7 @@ def _lines_drawn(fs, svg):
 
 
 def _deletes(box, run, reach):
-    """Whether a halo at *box* would erase ink from *run*, drawn *reach* wide."""
+    """Return whether a halo at *box* would erase ink from *run*, drawn *reach* wide."""
     (rx0, ry0), (rx1, ry1) = run
     return (
         box[2] > min(rx0, rx1) - reach
@@ -306,14 +268,7 @@ def _deletes(box, run, reach):
 
 
 def _is_own_run(box, upright, label, name, run):
-    """Whether *run* is the very line this label's number is written in.
-
-    Its own name, and lying along the halo's centreline: a label is turned to
-    follow the run it names, so the run it is written *in* passes lengthwise
-    through the middle of the halo. A branch off that same line crosses the halo
-    instead of running through it, and is somebody else's ink even when the two
-    share a line number, which on a P&ID a whole valve station does.
-    """
+    """Return whether *run* is the very line this label's number is written in."""
     if name != label:
         return False
     (x1, y1), (x2, y2) = run
@@ -370,26 +325,9 @@ def test_no_label_halo_deletes_a_line_that_is_not_its_own(drawn, name):
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_a_hop_has_room_for_its_own_arc(drawn, name):
-    """A hop is drawn on a crossing, never on the corner beside one.
-
-    ``_draw_streams`` replaces a span of ``2 * HOP_R`` centred on the crossing
-    with a semicircle. A crossing nearer than ``HOP_R`` to the end of the
-    segment it sits on therefore has an arc that reaches past the end -- and
-    where the run turns there, the bump is drawn on the elbow, which reads as a
-    kink in the pipe rather than as one line passing over another.
-    ``18_fixed_bed_recycle`` shipped one: a zero-length ``L`` at the corner
-    followed immediately by the arc.
-
-    Checked by counting, because the two halves are computed independently.
-    Every arc in a stream's path is one hop, so the arcs in the drawing must
-    number exactly the crossings that have the room -- which is the rule
-    restated, and would fail if the renderer kept the old bound.
-    """
+    """Check that a hop has room for its own arc."""
     fs, _ = drawn[name]
-    # Drawn as arcs on purpose: the rule is about the arc, and the arc is no
-    # longer what a sheet gets by default. The room it needs is the room the
-    # interruption needs -- both take 2 * HOP_R of run -- so holding it here
-    # holds it for either mark, but only the arc can be counted by shape.
+    # Drawn as arcs, which this counts by shape; an interruption needs the same 2 * HOP_R.
     svg = fs.to_svg(crossing_style="arc")
 
     horizontals, verticals = [], []
@@ -425,30 +363,11 @@ def test_a_hop_has_room_for_its_own_arc(drawn, name):
     )
 
 
-# ---------------------------------------------------------------------------
-# A stream number is measured along its **own** run
-# ---------------------------------------------------------------------------
-#
-# ``stream_numbers`` writes a number along the line it names and sends it
-# away with a leader only where there is no room beside it, so how long
-# the line *is* decides which of those two happens. A run is longer than
-# the segment being labelled -- an in-line valve cuts a straight length
-# of pipe into three drawn pieces and a reader sees one line -- so the
-# length is gathered from every piece of ink collinear with it.
-#
-# Collinear is not the same as *the same run*. Two different streams
-# drawn at one height are two lines, and a number that gathers both
-# reads as written along one it has nothing to do with. ``_Ink.line``
-# is what tells them apart; what follows is that it does.
-#
-# The consequence on a real drawing is measured in
-# ``tests/test_label_invariants.py``, over the shipped corpus, which is
-# where a leader drawn back across somebody else's run shows up. These
-# two are about the seam itself.
+# --- a stream number is measured along its own run ----------------------------
 
 
 def _collinear_pair():
-    """Two unrelated runs drawn end to end at one height."""
+    """Build two unrelated runs drawn end to end at one height."""
     fs = Flowsheet("collinear")
     long_feed = fs.add(U.Feed("Long Feed")).pin(x=60, y=100)
     long_end = fs.add(U.Product("Long Product")).pin(x=700, y=100)
@@ -462,13 +381,7 @@ def _collinear_pair():
 
 
 def test_every_piece_of_pipe_ink_says_whose_run_it_is():
-    """``_Ink.line`` is the stream's number, and a tap has none.
-
-    A tap is the stub from a line to the balloon reading it and is not
-    part of anybody's run, so it is left empty rather than given the
-    instrument's name: an empty string matches no stream and so gathers
-    into no run, which is the answer wanted.
-    """
+    """Check that every piece of pipe ink says whose run it is."""
     fs = _collinear_pair()
     ink = _ink(fs, "vertical")
     pipes = [piece for piece in ink if piece.kind == "pipe"]
@@ -478,13 +391,7 @@ def test_every_piece_of_pipe_ink_says_whose_run_it_is():
 
 
 def test_two_runs_at_one_height_are_two_runs():
-    """The short run's ink and the long one's do not pool.
-
-    Both are horizontal and both are at ``y=100``, which is every test
-    ``stream_numbers`` applied before ``line`` existed -- so measured
-    that way the short run is 840 px long instead of 80 and has room to
-    write anything anywhere. Measured by name the two do not touch.
-    """
+    """Check that two runs at one height are two runs."""
     fs = _collinear_pair()
     short = next(
         s for s in fs.streams if s.source.owner is not None and s.source.owner.name == "Short Feed"
@@ -512,26 +419,7 @@ def test_two_runs_at_one_height_are_two_runs():
 
 
 def test_a_crossing_with_no_room_for_its_mark_is_reported():
-    """The silent half of the hop, and #490 is what made it worth saying.
-
-    ``_draw_streams`` marks a crossing with an arc, and only where the run
-    carrying it has ``HOP_R`` of itself either side to sit on. Where it has
-    less the arc is dropped and the two runs are laid straight through each
-    other -- and on a sheet where every *other* crossing carries an arc, a bare
-    one does not read as "no information", it reads as a junction. That was
-    drawn and not said; it is said now.
-
-    Held against a fixture rather than the shipped corpus. It used to be
-    ``19_absorber_stripper``, the last sheet with a crossing too near a corner
-    to carry its mark -- but ``HOP_R`` is the hop's clearance plus a pen, so
-    restoring the main-flow rung to the weight of the equipment shrank the
-    radius and that crossing now fits one. The corpus is clean, which is the
-    right outcome for the drawing and leaves this case nothing to hold.
-
-    ``test_crossing_style._pair`` builds the condition directly: its waypoints
-    are set on the route rather than through ``via()`` precisely so a corner
-    can sit closer to a crossing than the router would ever place one.
-    """
+    """Check that a crossing with no room for its mark is reported."""
     from pandid.render.svg import unmarked_crossings
 
     from test_crossing_style import TIGHT, _pair
@@ -548,8 +436,7 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported():
 
 
 def test_a_sheet_whose_crossings_all_have_room_says_nothing():
-    """The other side of it: the finding is about the crossings that lost their
-    mark, not about having crossings at all."""
+    """Check that a sheet whose crossings all have room says nothing."""
     from pandid.render.svg import unmarked_crossings
 
     from test_golden import SCENARIOS
@@ -562,13 +449,7 @@ def test_a_sheet_whose_crossings_all_have_room_says_nothing():
 
 
 def test_a_redrawn_sheet_drops_the_crossing_it_used_to_report():
-    """A render's own findings describe *that* render, the rule ``_FIT_CODES``
-    already follows: a sheet redrawn with the crossing moved clear must stop
-    warning about it, rather than accumulating both answers.
-
-    On the fixture rather than a shipped sheet -- see the sibling test above
-    for why the corpus no longer carries one.
-    """
+    """Check that a redrawn sheet drops the crossing it used to report."""
     from test_crossing_style import ROOMY, TIGHT, _pair
 
     fs = _pair(TIGHT)

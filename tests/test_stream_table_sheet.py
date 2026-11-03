@@ -779,7 +779,7 @@ def test_a_backend_refuses_the_keywords_it_does_not_take():
 
 
 def test_the_drawio_backend_refuses_the_overlay_when_called_directly():
-    """Verify that the drawio backend refuses the overlay when called directly."""
+    """Verify that the draw.io backend refuses the overlay when called directly."""
     fs = _sheet(streams=3)
     fs.route()
     with pytest.raises(ValueError, match="debug"):
@@ -921,10 +921,6 @@ def table_sheet_noop_baselines() -> dict[str, str]:
     -------
     dict[str, str]
         SVG and Draw.io output keyed by ``Flowsheet`` export method.
-
-    Notes
-    -----
-    Each output uses a separate flowsheet because rendering writes derived state.
     """
     options = {"show_stream_table": "sheet", "page_size": "A4", "diagram": "p&id"}
     return {
@@ -1043,7 +1039,7 @@ def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
     ],
 )
 def test_a_refused_drawio_export_leaves_the_whole_flowsheet_alone(kwargs):
-    """Verify that a refused drawio export leaves the whole flowsheet alone.
+    """Verify that a refused draw.io export leaves the whole flowsheet alone.
 
     Parameters
     ----------
@@ -1088,7 +1084,7 @@ def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
 def test_a_model_error_leaves_the_whole_flowsheet_alone():
     """Verify that a model error leaves the whole flowsheet alone."""
     fs = _sheet(streams=3)
-    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses one (#574)
+    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses a NaN
     before = pickle.dumps(fs)
     with pytest.raises(ValueError, match="Flowsheet validation failed"):
         fs.to_svg(page_size="A3")
@@ -1104,7 +1100,7 @@ def test_a_model_error_erases_no_finding_from_the_last_render():
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     kept = [w.code for w in fs.warnings]
     assert "stream-table-section-unused" in kept
-    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses one (#574)
+    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses a NaN
     with pytest.raises(ValueError, match="Flowsheet validation failed"):
         fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert [w.code for w in fs.warnings] == kept

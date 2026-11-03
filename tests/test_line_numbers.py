@@ -1,13 +1,4 @@
-"""Line numbers: the identifier that ties a line on the sheet to the line list.
-
-A line number is a stream number with the rest of the identity filled in, so it
-is assigned by the same machinery and obeys the same rules: one number through
-an inline fitting, a break at a unit that sets ``new_line_number`` to mark the
-spec break, and
-never a word about a stream the caller named itself. A stream with no components
-set is numbered exactly as it always was, which is what protects every sheet
-drawn before line numbers existed.
-"""
+"""Test how line numbers are formed, sequenced, drawn and written to a spec."""
 
 from typing import Any
 
@@ -17,7 +8,7 @@ from pandid import Flowsheet, units as U
 
 
 def _skid(**line):
-    """Feed -> hand valve -> control valve -> product, line-numbered at the feed."""
+    """Build a feed -> hand valve -> control valve -> product, line-numbered at the feed."""
     fs = Flowsheet("skid")
     feed = fs.add(U.Feed("F"))
     hv = fs.add(U.Valve("HV-101"))
@@ -47,15 +38,13 @@ def test_a_stream_with_no_components_is_numbered_as_before():
 
 
 def test_an_unset_component_drops_out_with_its_separator():
-    """A line drawn before its spec is issued reads 6"-P-1001, not 6"-P-1001-."""
+    """Check that an unset component drops out with its separator."""
     _, _, (s1, _, _) = _skid(size='6"', service="P")
     assert s1.name == '6"-P-1001'
 
 
 def test_an_unset_first_component_drops_its_separator_too():
-    """A line with no declared bore -- entirely ordinary at PFD stage -- reads
-    P-1001-SS, not -P-1001-SS. Size is the first field in the default scheme,
-    so this is a leading separator rather than the trailing one above."""
+    """Check that an unset first component drops its separator too."""
     _, _, (s1, _, _) = _skid(service="AE", spec="SS")
     assert s1.name == "AE-1001-SS"
 
@@ -141,8 +130,7 @@ def test_a_scheme_writes_the_components_it_names(
 
 
 def test_the_default_scheme_does_not_name_the_schedule():
-    """Most sheets leave the wall to the piping class, so adding the component
-    must not move the number on a sheet that never set one."""
+    """Check that the default scheme does not name the schedule."""
     from pandid.flowsheet import DEFAULT_LINE_NUMBERING_SCHEME
 
     assert DEFAULT_LINE_NUMBERING_SCHEME == "{size}-{service}-{sequence}-{spec}"
@@ -188,7 +176,7 @@ def test_one_line_number_runs_through_an_inline_valve():
 
 
 def test_a_new_line_number_valve_breaks_the_line_number():
-    """A spec break is exactly what `new_line_number` marks, so it breaks the number."""
+    """Check that a ``new_line_number`` valve breaks the line number."""
     fs, fv, (s1, s2, s3) = _skid(size='6"', service="P", spec="A1A")
     fv.new_line_number = True
     s3.size, s3.service, s3.spec = '6"', "P", "D1B"
@@ -198,8 +186,7 @@ def test_a_new_line_number_valve_breaks_the_line_number():
 
 
 def test_components_on_one_segment_name_the_whole_group():
-    """Same rule as an explicit name: the group takes it from whichever segment
-    carries it, so a downstream segment need not repeat the identity."""
+    """Check that components on one segment name the whole group."""
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("F"))
     hv = fs.add(U.Valve("HV-101"))
@@ -219,8 +206,7 @@ def test_an_explicit_name_is_never_reformatted():
 
 
 def test_a_line_number_does_not_consume_a_stream_number():
-    """One sequence covers both, so a line number and a stream number on the
-    same sheet can never collide."""
+    """Check that a line number does not consume a stream number."""
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-101"))
@@ -256,7 +242,7 @@ def test_the_stream_table_heads_its_columns_with_the_line_number():
 
 
 def test_a_mixed_sheet_keeps_the_stream_number_heading():
-    """The corner cell has to be true of every column under it."""
+    """Check that a mixed sheet keeps the stream number heading."""
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-101"))
@@ -279,8 +265,7 @@ def test_a_scheme_naming_something_that_is_not_a_component_says_so():
     prod = fs.add(U.Product("P"))
     with pytest.raises(ValueError, match="'fluid'.*not a line-number component") as raised:
         fs.connect(feed.outlet, prod.inlet, size='6"')
-    # The message lists what would have worked, so the fixed set is discoverable
-    # from the error rather than only from the docs.
+    # The message lists the components that would have worked.
     assert "'schedule'" in str(raised.value)
 
 
@@ -329,8 +314,7 @@ def test_line_numbers_round_trip_through_a_spec():
 
 
 def test_a_schedule_round_trips_through_a_spec():
-    """Both ways: the reader takes the component off the file and the writer
-    puts it back, so a sheet quoting its schedules survives to_dict()."""
+    """Check that a schedule round trips through a spec."""
     spec = {
         "name": "t",
         "line_numbering_scheme": "{service}-{sequence}-{size}-{schedule}-{spec}",
@@ -357,8 +341,7 @@ def test_a_schedule_round_trips_through_a_spec():
 
 
 def test_a_spec_omits_the_sequence_auto_numbering_assigned():
-    """A computed number is a result, not intent: writing it would pin a number
-    the engine re-derives from the topology."""
+    """Check that a spec omits the sequence auto-numbering assigned."""
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))

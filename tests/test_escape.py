@@ -483,11 +483,7 @@ def test_an_inch_mark_is_escaped_and_stays_escaped():
 
 
 def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
-    """Measure ``R&D`` as the three characters drawn, in both backends.
-
-    The halo is the drawn text's width plus 8, so 33.3 wide; measured
-    on ``R&amp;D`` it would be wider by the escape's four characters.
-    """
+    """Measure ``R&D`` as the three characters drawn, in both backends."""
     from pandid.render.drawio import _tag_pass
     from pandid.render.symbols import default_registry
 

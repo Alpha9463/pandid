@@ -1,8 +1,4 @@
-"""Test stream-label enclosure geometry, findings, and exports.
-
-Small flowsheets test isolated geometry. Selected gallery sheets test dense
-label layouts; representative golden fixtures own default-render integration.
-"""
+"""Test stream-label enclosure geometry, findings, and exports."""
 
 import math
 import re
@@ -785,7 +781,7 @@ def test_a_bare_label_still_leaves_the_line_where_it_always_did(settled_gallery)
 
 
 def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
-    """Test that the sheet draws a bare label s leader over its halo.
+    """Test that the sheet draws a bare label's leader over its halo.
 
     Parameters
     ----------
