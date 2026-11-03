@@ -98,6 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged.
 - **A multi-feed `Separator` round-trips through a spec (#579).**
   `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
+- **A tap line to a balloon off its tap's axis is drawn square (#170).** It
+  leaves the host at a right angle and turns once onto the balloon, or twice
+  when the balloon is behind the tapped face, instead of running diagonally.
 - **A refused `add_valve_station()` leaves the sheet unchanged (#564).** A
   station refused part-way, such as on a member tag clash, used to leave
   the members already built.

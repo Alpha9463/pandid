@@ -15,7 +15,7 @@ from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
 from pandid.render.symbols import (ARROWHEAD, _STROKE, closed_marking, fail_marking,
                                    wears_arrowhead)
-from pandid.render.weights import LineWeight
+from pandid.render.weights import LineWeight, M
 from pandid.route_geometry import stream_polyline
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
@@ -266,6 +266,48 @@ def tap_lines(fs):
     return out
 
 
+def tap_route(inst, tap, centre):
+    """Return the orthogonal path of one tap line.
+
+    An aligned balloon is reached in one straight run. Otherwise the
+    line leaves the tap square to its host, out of a unit's face or
+    across a pipe toward the balloon, and turns once onto the balloon
+    centre (ISO 15519-1 12.4). A balloon behind a unit's face is reached
+    with a second turn, one module out from the face.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+    tap, centre : tuple[float, float]
+        Tap point and balloon centre, from :func:`tap_lines`.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Points from the tap to the balloon centre.
+    """
+    from pandid.layout.attach import _anchor
+    from pandid.streams import Stream
+
+    (tx, ty), (cx, cy) = tap, centre
+    anchor = _anchor(inst)
+    if anchor is None or abs(cx - tx) < 0.5 or abs(cy - ty) < 0.5:
+        return [tap, centre]
+    # A unit's reference runs along its face; turned, it is the outward normal.
+    rx, ry = anchor[1]
+    nx, ny = ry, -rx
+    ahead = (cx - tx) * nx + (cy - ty) * ny
+    if isinstance(inst.host, Stream) and ahead < 0:
+        # A pipe has no outside, so leave toward the balloon.
+        nx, ny, ahead = -nx, -ny, -ahead
+    across = abs(nx) > abs(ny)
+    if ahead > 0:
+        return [tap, (cx, ty) if across else (tx, cy), centre]
+    sx, sy = tx + nx * M, ty + ny * M
+    return [tap, (sx, sy), (sx, cy) if across else (cx, sy), centre]
+
+
 def impulse_tap(inst) -> bool:
     """Return whether a balloon's tap line is solid impulse tubing.
 
@@ -495,8 +537,10 @@ def _ink(fs, direction: str) -> "list[_Ink]":
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe", s.name or "")
-    for _u, tap, centre in tap_lines(fs):
-        add(tap, centre, _ink_pad(LineWeight.DETAIL), "tap")
+    for u, tap, centre in tap_lines(fs):
+        route = tap_route(u, tap, centre)
+        for a, b in zip(route, route[1:]):
+            add(a, b, _ink_pad(LineWeight.DETAIL), "tap")
     # A hop belongs to the run that draws it.
     for hop in stream_hops(fs, direction):
         run = fs.streams[hop.stream]
@@ -3971,7 +4015,8 @@ class SvgRenderer:
     def _draw_taps(self, fs):
         """Return the lines from tap points to their balloons.
 
-        Draw impulse lines solid and signal lines dashed.
+        Draw impulse lines solid and signal lines dashed, along
+        :func:`tap_route`.
 
         Parameters
         ----------
@@ -3984,11 +4029,17 @@ class SvgRenderer:
             SVG lines, empty when there are no taps.
         """
         out = []
-        for u, (tx, ty), (cx, cy) in tap_lines(fs):
+        for u, tap, centre in tap_lines(fs):
             dash = "" if impulse_tap(u) else f' stroke-dasharray="{_TAP_DASH}"'
-            out.append(f'    <line x1="{fmt(tx, 2)}" y1="{fmt(ty, 2)}" x2="{fmt(cx, 2)}" '
-                       f'y2="{fmt(cy, 2)}" stroke="black" '
-                       f'stroke-width="{LineWeight.DETAIL.width:g}"{dash} />')
+            pen = f'stroke="black" stroke-width="{LineWeight.DETAIL.width:g}"{dash} />'
+            route = tap_route(u, tap, centre)
+            if len(route) == 2:
+                (tx, ty), (cx, cy) = route
+                out.append(f'    <line x1="{fmt(tx, 2)}" y1="{fmt(ty, 2)}" '
+                           f'x2="{fmt(cx, 2)}" y2="{fmt(cy, 2)}" {pen}')
+            else:
+                d = " L ".join(f"{fmt(x, 2)},{fmt(y, 2)}" for x, y in route)
+                out.append(f'    <path d="M {d}" fill="none" {pen}')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 
     def _draw_boundary(self, u, f, safe_name):

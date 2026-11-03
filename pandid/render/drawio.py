@@ -28,7 +28,7 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                label_findings,
                                draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
-                               stream_numbers, stream_polyline, tap_lines)
+                               stream_numbers, stream_polyline, tap_lines, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
                                    closed_marking, fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight
@@ -1661,6 +1661,7 @@ class DrawioRenderer:
 
         The balloon end is pinned to the balloon's centre. The other end
         is pinned to the host unit, or is a free point on a host stream.
+        The corners of the tap's route are waypoints.
 
         Parameters
         ----------
@@ -1696,10 +1697,16 @@ class DrawioRenderer:
             keys += ["endArrow=none", "startArrow=none", _NO_HOP.rstrip(";")]
             style = ";".join(keys) + ";"
             terminals = f' source="{self._id(source)}"' if source is not None else ""
-            geometry = ['          <mxGeometry relative="1" as="geometry">',
-                        f'            <mxPoint x="{fmt(fit.at(*tap)[0], 2)}" '
-                        f'y="{fmt(fit.at(*tap)[1], 2)}" as="sourcePoint" />',
-                        '          </mxGeometry>'] if source is None else [
+            body = [f'            <mxPoint x="{fmt(fit.at(*tap)[0], 2)}" '
+                    f'y="{fmt(fit.at(*tap)[1], 2)}" as="sourcePoint" />'] if source is None else []
+            bends = [fit.at(*p) for p in tap_route(inst, tap, centre)[1:-1]]
+            if bends:
+                body += ['            <Array as="points">',
+                         *(f'              <mxPoint x="{fmt(x, 2)}" y="{fmt(y, 2)}" />'
+                           for x, y in bends),
+                         '            </Array>']
+            geometry = ['          <mxGeometry relative="1" as="geometry">', *body,
+                        '          </mxGeometry>'] if body else [
                 '          <mxGeometry relative="1" as="geometry" />']
             out += [
                 f'        <mxCell id="t{n}" value="" style={_attr(style)} '
