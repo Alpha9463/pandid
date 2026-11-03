@@ -707,33 +707,17 @@ class Unit:
 
 
 class _Boundary(Unit):
-    """Base class for the off-page flags :class:`Feed` and :class:`Product`.
+    """Base for the off-page flags :class:`Feed` and :class:`Product`.
 
-    A flag marks a line crossing the sheet edge; its label names the
-    service and ``reference`` the drawing the line continues on.
-    ``pin(x=..., y=...)`` places the flag's port, not its corner (see
-    :meth:`Unit.pin`).
-
-    A flag's port takes any number of streams, all drawn from the flag's
-    tip, so one header can serve several users from one flag. Each stream
-    keeps its own number, route and stream-table column. The port works as
-    a pool, like :class:`Instrument`'s signal ports, but its members share
-    one point (see :attr:`Unit.ONE_NOZZLE_MANY_RUNS`). Real equipment keeps
-    one stream per port; a branch needs a :class:`Tee`.
+    The flag's port takes any number of streams, all drawn from its tip.
+    ``pin(x=..., y=...)`` places the port, not the corner.
 
     Parameters
     ----------
     name, variant, width, height, label_pos, description, reference
         As for :class:`Unit`.
     header : bool, default=False
-        Mark the flag as a utility header (cooling water, steam, flare,
-        plant air) that may be drawn at several taps with one label; see
-        :meth:`repeats`.
-
-    Attributes
-    ----------
-    header : bool
-        Whether the flag is a repeatable utility header.
+        Whether the flag is a utility header drawn at several taps.
     """
 
 
@@ -760,47 +744,21 @@ class _Boundary(Unit):
             reference=reference,
         )
         self.header = bool(header)
-        # Drawn label; a repeated header gets a distinct name but keeps this.
+        # Drawn label, kept when a repeated header is renamed.
         self._tag = name
 
     @property
     def tag(self) -> str:
-        """Return the service label drawn on the flag, such as ``"CWSH"``.
-
-        A repeated header keeps this label while each tap has its own name
-        (``CWSH``, ``CWSH (2)``).
-
-        Returns
-        -------
-        str
-            Label.
-        """
+        """Return the label drawn on the flag, such as ``"CWSH"``."""
         return self._tag
 
     @property
     def connection(self) -> Port:
-        """Return the flag's declared port.
-
-        Returns
-        -------
-        Port
-            ``outlet`` on a feed, ``inlet`` on a product.
-        """
+        """Return the flag's port: ``outlet`` or ``inlet``."""
         return next(iter(self.ports.values()))
 
     def _pool_of(self, port_name: str) -> str | None:
-        """Return the pool a port name belongs to.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str or None
-            The flag's port name for it or a numbered member, else ``None``.
-        """
+        """Return the pool a port name is in, or ``None``."""
         base = self.connection.name
         if port_name == base:
             return base
@@ -810,8 +768,8 @@ class _Boundary(Unit):
     def repeats(self, other: "Unit") -> bool:
         """Return whether this flag is another tap of the same header.
 
-        Both flags must be headers of the same class, label, variant and
-        reference, so a supply and a return with one label still clash.
+        Both must be headers of the same class, label, variant and
+        reference.
 
         Parameters
         ----------
@@ -837,8 +795,7 @@ class _Boundary(Unit):
 class Feed(_Boundary):
     """Off-page flag where material enters the sheet.
 
-    With ``header=True`` it is a utility supply header that may be drawn at
-    several taps; see :class:`_Boundary`.
+    With ``header=True`` it is a utility supply header.
     """
 
     outlet: Port
@@ -850,8 +807,7 @@ class Feed(_Boundary):
 class Product(_Boundary):
     """Off-page flag where material leaves the sheet.
 
-    With ``header=True`` it is a return or collection header that may be
-    drawn at several taps; see :class:`_Boundary`.
+    With ``header=True`` it is a return or collection header.
     """
 
     inlet: Port
@@ -861,7 +817,7 @@ class Product(_Boundary):
 
 
 class _FluidMover(Unit):
-    """Base class for :class:`Pump`, :class:`Compressor` and :class:`Blower`."""
+    """Base class for pumps, compressors and blowers."""
 
     suction: Port
     discharge: Port
@@ -884,18 +840,12 @@ class Compressor(_FluidMover):
 class _NormallyPositioned(Unit):
     """Base class for units with a normal position: Valve and Fitting.
 
-    How a closed position is drawn differs: a valve body is darkened, a
-    blind uses its closed shape. Each subclass refuses variants that cannot
-    be shown closed by overriding :meth:`_refuse_closed`;
-    :func:`pandid.render.symbols.closed_marking` draws the mark.
-
     Parameters
     ----------
     name, variant, width, height, label_pos, description, reference
         As for :class:`Unit`.
     normal_position : str, default="open"
-        One of :data:`NORMAL_POSITIONS`: where the device sits in normal
-        operation.
+        ``"open"`` or ``"closed"`` in normal operation.
     """
 
 
@@ -927,29 +877,12 @@ class _NormallyPositioned(Unit):
 
     @property
     def normal_position(self) -> str:
-        """Return where the device sits in normal operation.
-
-        Returns
-        -------
-        str
-            ``"open"`` or ``"closed"``.
-        """
+        """Return the normal position: ``"open"`` or ``"closed"``."""
         return self._normal_position
 
     @normal_position.setter
     def normal_position(self, value: str) -> None:
-        """Set the normal position.
-
-        Parameters
-        ----------
-        value : str
-            ``"open"`` or ``"closed"``.
-
-        Raises
-        ------
-        ValueError
-            If the value is unknown or this variant cannot be shown closed.
-        """
+        """Set the normal position, checking it can be drawn."""
         if value not in self.NORMAL_POSITIONS:
             raise ValueError(
                 f"{self.name}: normal_position is "
@@ -960,56 +893,29 @@ class _NormallyPositioned(Unit):
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
-        """Raise if this variant cannot be shown normally closed.
-
-        Raises
-        ------
-        ValueError
-            In subclasses, for a variant that cannot be shown closed.
-        """
+        """Raise ValueError if this variant cannot be shown closed."""
 
 
 class Valve(_NormallyPositioned):
     """Valve: a body, optionally stroked by an actuator.
 
-    ``variant`` is the body (``"globe"``, ``"ball"``, ``"butterfly"``,
-    ``"gate"`` and others); ``actuator`` is what strokes it.
-    ``variant="control"`` is a general body with a diaphragm actuator::
-
-        units.Valve("HV-101", variant="globe")       # plain globe valve
-        units.Valve("CV-303", variant="control")     # control valve
-        units.Valve("CV-303", variant="gate", actuator="diaphragm")
-        units.Valve("XV-201", variant="butterfly", actuator="diaphragm")
-        units.Valve("SV-401", variant="solenoid")
-
-    The stencils draw fused body-and-actuator shapes, so only the pairings
-    in :data:`pandid.render.symbols.ACTUATED` exist; the resolved variant
-    is stored. An actuator that contradicts a variant's own raises.
-
-    A closed valve's body is darkened (PIP PIC001 4.2.2.7); variants whose
-    fill would hide the symbol write ``NC`` instead (4.2.2.8; see
-    :data:`pandid.render.symbols.NC_DARKENS`). Control, regulator and
-    relief valves may not be shown closed (4.2.2.10). ISA-5.1 requires a
-    legend entry for this extension (clauses 2.8.1(b)(1), 2.8.2, 5.2.5);
-    :func:`pandid.document.legend` builds the box but does not add it.
-
-    ``variant="three_way"`` adds a ``branch`` outlet. It is not annotated
-    on the class, since other variants lack it; reach it through
-    :class:`~pandid.devices.ThreeWayValve` or ``port("branch")``.
+    Only the pairings in :data:`pandid.render.symbols.ACTUATED` are
+    drawn, and the resolved variant is stored. ``variant="three_way"``
+    adds a ``branch`` outlet, reached with ``port("branch")``.
 
     Parameters
     ----------
     name : str
         Tag.
     variant : str, default="default"
-        Body or body-and-actuator variant.
+        Body or body-and-actuator variant, such as ``"globe"``.
     actuator : str, default=""
-        ``"diaphragm"``, ``"motor"``, ``"solenoid"``, ``"hydraulic"`` or
-        ``"handwheel"``; empty when not stated.
+        ``"diaphragm"``, ``"motor"``, ``"solenoid"``, ``"hydraulic"``,
+        ``"handwheel"`` or empty.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
     normal_position : str, default="open"
-        ``"open"`` or ``"closed"``; see above.
+        ``"open"`` or ``"closed"``.
     fail : str, default=""
         Position on loss of actuating energy; see :attr:`fail`.
 
@@ -1017,8 +923,7 @@ class Valve(_NormallyPositioned):
     ------
     ValueError
         If the actuator is unknown or contradicts the variant, the pairing
-        is not drawn, the variant cannot be shown closed, or ``fail`` is
-        invalid for it.
+        is not drawn, or ``normal_position`` or ``fail`` is invalid.
     """
 
     inlet: Port
@@ -1026,7 +931,7 @@ class Valve(_NormallyPositioned):
     actuator: Port
 
     kind = "valve"
-    # Ports depend on the variant, so __init__ adds them from _VARIANT_PORTS.
+    # __init__ adds the ports from _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     #: Ports of every variant except ``three_way``.
     _DEFAULT_PORTS = [
@@ -1069,30 +974,7 @@ class Valve(_NormallyPositioned):
         self.fail = fail
 
     def _resolve(self, name: str, variant: str, actuator: str) -> str:
-        """Return the variant that draws a body with an actuator.
-
-        Only the resolved variant is stored, so renderers and the spec read
-        one value.
-
-        Parameters
-        ----------
-        name : str
-            Tag, for messages.
-        variant : str
-            Body or pairing variant.
-        actuator : str
-            Actuator, or empty.
-
-        Returns
-        -------
-        str
-            Resolved variant.
-
-        Raises
-        ------
-        ValueError
-            If the actuator is unknown or contradicts the variant.
-        """
+        """Return the variant that draws a body with an actuator."""
         from pandid.render.symbols import ACTUATED, ACTUATORS, actuated_variant
 
         if not actuator:
@@ -1104,7 +986,7 @@ class Valve(_NormallyPositioned):
                 f"what strokes the valve; what the valve *is* -- the body -- is "
                 f"variant."
             )
-        # A variant that already includes an actuator accepts only that one.
+        # A variant with a built-in actuator accepts only that one.
         fitted = {a for (_, a), drawn in ACTUATED.items() if drawn == variant}
         if fitted:
             if actuator in fitted:
@@ -1123,46 +1005,16 @@ class Valve(_NormallyPositioned):
     def fail(self) -> str:
         """Return where the valve goes on loss of actuating energy.
 
-        Independent of :attr:`~_NormallyPositioned.normal_position`, which
-        is where it sits in normal operation. Drawn as ISA-5.1 letters
-        beside the valve (PIP PIC001 4.5.3.2):
-
-        ===================  =========  =============================
-        ``fail``             drawn      ANSI/ISA-5.1-2009 Table 5.4.4
-        ===================  =========  =============================
-        ``"open"``           ``FO``     fail open
-        ``"closed"``         ``FC``     fail closed
-        ``"last"``           ``FL``     fail last, holding position
-        ``"drift_open"``     ``FL/DO``  fail last, then drifting open
-        ``"drift_closed"``   ``FL/DC``  fail last, then drifting shut
-        ``"indeterminate"``  ``FI``     fail indeterminate
-        ===================  =========  =============================
-
-        Only actuated variants (:data:`pandid.render.symbols.FAIL_ACTUATED`)
-        may declare one. Where signal and motive-power failure differ, set
-        the motive-power position and add a note (PIP PIC001 4.5.3.2(3)).
-
-        Returns
-        -------
-        str
-            Fail position, or ``""`` when unset.
+        One of ``"open"`` (FO), ``"closed"`` (FC), ``"last"`` (FL),
+        ``"drift_open"`` (FL/DO), ``"drift_closed"`` (FL/DC) and
+        ``"indeterminate"`` (FI), or ``""`` when unset. Only actuated
+        variants take one.
         """
         return self._fail
 
     @fail.setter
     def fail(self, value: str) -> None:
-        """Set the fail position.
-
-        Parameters
-        ----------
-        value : str
-            Fail position, or ``""`` to clear it.
-
-        Raises
-        ------
-        ValueError
-            If the value is unknown or the variant has no actuator.
-        """
+        """Set the fail position, or clear it with ``""``."""
         from pandid.render.symbols import FAIL_ACTUATED, FAIL_POSITIONS
 
         if not value:
@@ -1188,13 +1040,7 @@ class Valve(_NormallyPositioned):
         self._fail = value
 
     def _refuse_closed(self) -> None:
-        """Refuse a closed control, regulator or relief valve.
-
-        Raises
-        ------
-        ValueError
-            If the variant is in :data:`pandid.render.symbols.NC_FORBIDDEN`.
-        """
+        """Refuse a closed control, regulator or relief valve."""
         from pandid.render.symbols import NC_FORBIDDEN
 
         if self.variant in NC_FORBIDDEN:
@@ -1208,50 +1054,19 @@ class Valve(_NormallyPositioned):
             )
 
 
-#: One composition keyword as :func:`_compose_onto` takes it:
-#: ``(keyword, value, place)``, where ``place(value, variant)`` returns the
-#: overlays that draw the part on that body.
+#: One composition part, ``(keyword, value, place)``; ``place(value,
+#: variant)`` returns the overlays that draw it on that body.
 _Part = tuple[str, "str | None", "Callable[[str, str], tuple]"]
 
 
 def _placed(parts: "Sequence[tuple[str, str, Callable[[str, str], tuple]]]",
             variant: str) -> tuple:
-    """Return the overlays that draw the stated parts on one body.
-
-    Parameters
-    ----------
-    parts : Sequence[tuple[str, str, Callable[[str, str], tuple]]]
-        Stated parts, each ``(keyword, value, place)``.
-    variant : str
-        Body variant.
-
-    Returns
-    -------
-    tuple[Overlay, ...]
-        Overlays in drawing order.
-    """
+    """Return the overlays that draw the stated parts on one body."""
     return tuple(overlay for _, value, place in parts for overlay in place(value, variant))
 
 
 def _carries(kind: str, variant: str, overlays: tuple) -> bool:
-    """Return whether a body can be drawn with these parts on it.
-
-    Asks the registry the renderer draws with
-    (:meth:`~pandid.render.symbols.SymbolRegistry.composed`), so the rule is
-    :func:`~pandid.render.symbols.compose`'s and is not restated here.
-
-    Parameters
-    ----------
-    kind, variant : str
-        Body.
-    overlays : tuple[Overlay, ...]
-        Parts placed on it.
-
-    Returns
-    -------
-    bool
-        Whether the composition can be drawn.
-    """
+    """Return whether a body can be drawn with these overlays."""
     from pandid.render.symbols import default_registry
 
     try:
@@ -1262,26 +1077,12 @@ def _carries(kind: str, variant: str, overlays: tuple) -> bool:
 
 
 def _compose_onto(unit: "Unit", *parts: _Part) -> None:
-    """Set a unit's overlays from its composition keywords.
-
-    Nothing is set when no part was asked for, so the unit draws exactly as
-    one that cannot compose. A part the body cannot carry is refused here,
-    by the check the renderer makes, rather than when the sheet is drawn.
+    """Set a unit's overlays from its composition parts.
 
     Parameters
     ----------
-    unit : Unit
-        Unit to compose onto, with its variant resolved.
-    *parts : tuple[str, str or None, Callable[[str, str], tuple]]
-        ``(keyword, value, place)`` in drawing order, where
-        ``place(value, variant)`` returns the overlays that draw the part on
-        that body. A ``None`` value draws nothing.
-
-    Raises
-    ------
-    ValueError
-        If the body cannot carry the stated parts. The message names the
-        parts and the current variants that can.
+    *parts : _Part
+        Parts in drawing order; a ``None`` value draws nothing.
     """
     from pandid.render.symbols import default_registry
 
@@ -1289,11 +1090,10 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     overlays = _placed(stated, unit.variant)
     if not overlays:
         return
-    # An unregistered variant keeps the registry's own message.
+    # Raise the registry's own error for an unregistered variant.
     default_registry.get(unit.kind, unit.variant)
     if not _carries(unit.kind, unit.variant, overlays):
-        # Name the part that fails alone, or all of them if only the
-        # combination does.
+        # Name the parts that fail alone, else all of them.
         culprits = [part for part in stated
                     if not _carries(unit.kind, unit.variant, _placed([part], unit.variant))]
         able = [variant for variant in default_registry.variants(unit.kind)
@@ -1307,36 +1107,27 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     unit.overlays = overlays
 
 
-# Self type for _FaceFamilies methods, so callers get their subclass back.
+# Self type for _FaceFamilies methods.
 _FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
 
 
 class _FaceFamilies(Unit):
-    """Base class for units whose inlets and outlets are families on faces.
-
-    Shared by :class:`Block` and :class:`_MultiPortVessel`. Each records
-    every family port's face in ``_faces``, in drawn order, and builds its
-    symbol from it.
-    """
+    """Base class for units with inlet and outlet families on faces."""
 
     if TYPE_CHECKING:
-        # Each subclass declares its own; tests/test_port_annotations.py
-        # lists the classes that declare families.
+        # Each subclass sets these.
         inlets: tuple[Port, ...]
         outlets: tuple[Port, ...]
 
-    # Family port name -> face, in drawn order; the symbol is built from it.
+    # Family port name -> face, in drawn order.
     _faces: dict[str, str]
 
-    # How errors name the unit, a variable holding one, and a family port.
+    # Error wording: the unit noun, a variable name and a family port.
     _NOUN, _VAR, _MEMBER = "unit", "v", "inlet or outlet"
 
     @property
     def input_faces(self) -> tuple[str, ...]:
-        """Return each inlet's face, in port order, such as ``('W', 'W', 'N')``.
-
-        Use :meth:`nozzle` to move a connection.
-        """
+        """Return each inlet's face, in port order."""
         return tuple(self._faces[port.name] for port in self.inlets)
 
     @property
@@ -1345,10 +1136,7 @@ class _FaceFamilies(Unit):
         return tuple(self._faces[port.name] for port in self.outlets)
 
     def face(self, port_name: str) -> str:
-        """Return the face an inlet or outlet is on.
-
-        This is the declared face; a turned or mirrored unit draws it
-        elsewhere on the sheet (see :func:`pandid.portgeom.port_faces`).
+        """Return the declared face of an inlet or outlet.
 
         Parameters
         ----------
@@ -1377,10 +1165,6 @@ class _FaceFamilies(Unit):
     def ports_on(self, face: str) -> tuple[Port, ...]:
         """Return the inlets and outlets on one face, in drawn order.
 
-        First is the west end of a north or south face and the north end of
-        a west or east face. Without :meth:`order_on`, this is declaration
-        order, inputs before outputs.
-
         Parameters
         ----------
         face : str
@@ -1389,7 +1173,7 @@ class _FaceFamilies(Unit):
         Returns
         -------
         tuple[Port, ...]
-            Family ports on that face; fixed ports are excluded.
+            Family ports on that face, ordered as in :meth:`order_on`.
         """
         wanted = _block_face(face, self.name)
         return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
@@ -1397,22 +1181,9 @@ class _FaceFamilies(Unit):
     def order_on(self: _FaceFamiliesT, face: str, ports: "Sequence[Port]") -> _FaceFamiliesT:
         """Set the drawn order of the inlets and outlets on one face.
 
-        Without this, a face draws its connections in declaration order,
-        inputs before outputs. Pass every connection on the face, first to
-        last, so the call is idempotent; ports rather than names, so a typo
-        is caught. First is the west end of a north or south face and the
-        north end of a west or east face, on the unit's own axes.
-
-        .. code-block:: python
-
-            loop = fs.add(units.Block("Synthesis Loop",
-                                      inputs=["W", "S"],
-                                      outputs=["E", "S"]))
-            # purge west, recycle east
-            loop.order_on("S", [loop.out_2, loop.in_2])
-
-        A connection moved onto the face later takes its declaration-order
-        place, so order a face once it is complete.
+        First is the west end of a north or south face and the north end
+        of a west or east face, on the unit's own axes. An unordered
+        face draws in declaration order, inputs before outputs.
 
         Parameters
         ----------
@@ -1431,8 +1202,8 @@ class _FaceFamilies(Unit):
         TypeError
             If an item is not a Port.
         ValueError
-            If a port belongs to another unit or face, is repeated, or a
-            connection on the face is missing; the unit is unchanged.
+            If a port is on another unit or face, is repeated, or a
+            connection on the face is missing.
         """
         wanted = _block_face(face, self.name)
         on_face = [name for name, on in self._faces.items() if on == wanted]
@@ -1478,35 +1249,24 @@ class _FaceFamilies(Unit):
                 f"{', '.join(missing)} unplaced. Name every one, first to last "
                 f"along the face; it currently carries {', '.join(on_face)}."
             )
-        # The dict order is the drawn order. Replace only this face's
-        # members, in place, so other faces keep their order. Counts are
-        # unchanged, so a block's box needs no re-check.
+        # Reorder this face in place; dict order is the drawn order.
         replacement = iter(named)
         self._faces = {
             (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
         }
-        # Ports on the face moved, so the layout is stale.
         self._invalidate_layout()
         return self
 
 
-# Self type for _MultiPortVessel methods, so their bodies see the vessel's
-# own attributes and callers get their subclass back.
+# Self type for _MultiPortVessel methods.
 _MultiPortVesselT = TypeVar("_MultiPortVesselT", bound="_MultiPortVessel")
 
 
 class _MultiPortVessel(_FaceFamilies):
-    """Base class for the :class:`Tank` and :class:`Vessel` port families.
+    """Base class for :class:`Tank` and :class:`Vessel`.
 
-    Inlets and outlets are families spread over the vessel's faces, as on
-    :class:`Block`, but drawn on the vendored artwork: a crowded face
-    squeezes its ports rather than growing the box, and only faces the
-    artwork anchors for a role are allowed. ``vent``, ``relief`` and
-    ``drain`` are single fixed ports moved only through
-    :meth:`Unit.nozzle`.
-
-    A connection uses the face the ``inputs=`` or ``outputs=`` argument
-    names, else the face the artwork anchors (:meth:`_home_face`).
+    Inlets and outlets are families on the faces the artwork anchors for
+    each role. ``vent``, ``relief`` and ``drain`` are fixed ports.
 
     Attributes
     ----------
@@ -1516,31 +1276,11 @@ class _MultiPortVessel(_FaceFamilies):
 
 
     def _symbol_anchor(self, port_name: str) -> str:
-        """Return the anchor name, resolving the ``inlet``/``outlet`` aliases.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name or alias.
-
-        Returns
-        -------
-        str
-            Anchor name in the symbol.
-        """
+        """Return the symbol anchor, resolving ``inlet``/``outlet``."""
         return super()._symbol_anchor(self._canonical_port_name(port_name))
 
     def _registry_symbol(self):
-        """Return the registered symbol for this unit's variant.
-
-        An unknown variant returns ``None`` so that, as for every other
-        class, the error is raised at render time.
-
-        Returns
-        -------
-        Symbol or None
-            Vendored symbol.
-        """
+        """Return the variant's registered symbol, or None."""
         from pandid.render.symbols import default_registry
 
         try:
@@ -1549,19 +1289,7 @@ class _MultiPortVessel(_FaceFamilies):
             return None
 
     def _home_face(self, role: str) -> str:
-        """Return the face the artwork draws a role's port on.
-
-        Parameters
-        ----------
-        role : str
-            ``"inlet"`` or ``"outlet"``.
-
-        Returns
-        -------
-        str
-            Face; a placeholder for an unknown variant, which fails at
-            render.
-        """
+        """Return the face the artwork draws a role's port on."""
         sym = self._registry_symbol()
         if sym is None:
             return "W" if role == "inlet" else "E"
@@ -1571,42 +1299,14 @@ class _MultiPortVessel(_FaceFamilies):
         return outward_dir(x, y, sym.width, sym.height)
 
     def _legal_faces(self, role: str) -> "dict[str, tuple[float, float]] | None":
-        """Return the faces the artwork allows for a role.
-
-        Parameters
-        ----------
-        role : str
-            ``"inlet"`` or ``"outlet"``.
-
-        Returns
-        -------
-        dict[str, tuple[float, float]] or None
-            Face to symbol point, always including the home face; ``None``
-            for an unknown variant.
-        """
+        """Return a role's allowed faces and their symbol points."""
         sym = self._registry_symbol()
         if sym is None:
             return None
         return dict(sym.port_faces.get(role, {}))
 
     def _validate_face(self, role: str, port_name: str, face: str) -> None:
-        """Check that a family port may be drawn on a face.
-
-        Parameters
-        ----------
-        role : str
-            ``"inlet"`` or ``"outlet"``.
-        port_name : str
-            Port name.
-        face : str
-            Requested face.
-
-        Raises
-        ------
-        ValueError
-            If the artwork has no anchor for the role on that face, or the
-            face has no room for another port.
-        """
+        """Check that a family port may be drawn on a face."""
         options = self._legal_faces(role)
         if options is None:
             # Unknown variant: leave the error to render time.
@@ -1618,28 +1318,7 @@ class _MultiPortVessel(_FaceFamilies):
         self._check_face_room(role, port_name, face)
 
     def _check_face_room(self, role: str, port_name: str, face: str) -> None:
-        """Refuse a second port on a face that meets the box at one point.
-
-        A dished roof, cone apex or dished head has a band of zero length,
-        so two ports there would coincide. Inlets and outlets count
-        together. Checking here names the author's call in the error;
-        :func:`~pandid.render.symbols.vessel_symbol` checks again when
-        drawing.
-
-        Parameters
-        ----------
-        role : str
-            ``"inlet"`` or ``"outlet"``.
-        port_name : str
-            Port being placed.
-        face : str
-            Its face.
-
-        Raises
-        ------
-        ValueError
-            If another port already uses the zero-length face.
-        """
+        """Refuse a second port on a zero-length face."""
         from pandid.render.symbols import bandless_face, walled_faces
 
         sym = self._registry_symbol()
@@ -1657,8 +1336,6 @@ class _MultiPortVessel(_FaceFamilies):
 
     def default_input_face(self) -> str:
         """Return the face an inlet uses when none is named.
-
-        :func:`~pandid.spec.to_dict` uses it to omit default faces.
 
         Returns
         -------
@@ -1682,18 +1359,10 @@ class _MultiPortVessel(_FaceFamilies):
     ) -> None:
         """Create the inlet and outlet families.
 
-        With one inlet or outlet, ``inlet`` or ``outlet`` is an attribute
-        alias for ``in_1`` or ``out_1``.
-
         Parameters
         ----------
         inputs, outputs : int or Sequence[str]
             Count, or one face per port.
-
-        Raises
-        ------
-        ValueError
-            If a face is invalid or not offered by the artwork.
         """
         in_faces = _block_faces(inputs, self.default_input_face(), self.name, "inputs")
         out_faces = _block_faces(outputs, self.default_output_face(), self.name, "outputs")
@@ -1707,29 +1376,13 @@ class _MultiPortVessel(_FaceFamilies):
             for i, face in enumerate(out_faces, start=1)
         )
         if len(self.inlets) == 1:
-            # An alias, not a second port; larger families have no bare name.
+            # A single inlet or outlet is also ``inlet`` or ``outlet``.
             self.inlet = self.inlets[0]
         if len(self.outlets) == 1:
             self.outlet = self.outlets[0]
 
     def _connect(self, name: str, direction: str, face: str) -> Port:
-        """Check a family port's face, then create the port.
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-        direction : str
-            ``"inlet"`` or ``"outlet"``, also the symbol role for the face
-            check.
-        face : str
-            Face.
-
-        Returns
-        -------
-        Port
-            The new port.
-        """
+        """Check a family port's face, then create the port."""
         self._validate_face(direction, name, face)
         port = self._add_port(name, direction, "process")
         self._faces[name] = face
@@ -1739,9 +1392,8 @@ class _MultiPortVessel(_FaceFamilies):
         """Move a port to a named face.
 
         An inlet or outlet moves to any face the artwork offers for its
-        role, and the symbol is rebuilt. The choice is also stored in
-        ``_port_faces`` so automatic face selection does not override it.
-        ``vent``, ``relief`` and ``drain`` use :meth:`Unit.nozzle`.
+        role. ``vent``, ``relief`` and ``drain`` use
+        :meth:`Unit.nozzle`.
 
         Parameters
         ----------
@@ -1765,7 +1417,6 @@ class _MultiPortVessel(_FaceFamilies):
             return super().nozzle(port_name, face)
         role = "inlet" if canonical.startswith("in_") else "outlet"
         resolved = _block_face(face, self.name)
-        # Validate before recording, so a refusal leaves the unit unchanged.
         self._validate_face(role, canonical, resolved)
         self._faces[canonical] = resolved
         self._port_faces[canonical] = resolved
@@ -1773,16 +1424,12 @@ class _MultiPortVessel(_FaceFamilies):
         return self
 
     def symbol(self) -> "Symbol":
-        """Return this unit's symbol with its current port faces.
-
-        Called by :meth:`~pandid.render.symbols.SymbolRegistry.for_unit` on
-        every port resolution. Overlays such as a vessel's supports are
-        included.
+        """Return the symbol with the current port faces and overlays.
 
         Returns
         -------
         Symbol
-            Vendored artwork with the inlet and outlet families placed.
+            Vendored artwork with the families placed.
         """
         from pandid.render.symbols import vessel_symbol
 
