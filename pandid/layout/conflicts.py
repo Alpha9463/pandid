@@ -88,7 +88,9 @@ def segment_crosses_box(
     Returns
     -------
     bool
-        True if the segment enters the box; False for a diagonal.
+        True if the segment enters the box. A segment within
+        ``_SQUARE_TOL`` of an axis is read as on it; any other is
+        False.
     """
     bx0, by0, bx1, by1 = box
     if abs(a[0] - b[0]) < _SQUARE_TOL:
