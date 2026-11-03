@@ -8,20 +8,13 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
 
-#: Clearance a line keeps beside a tag's halo, a pen and a gap, so it does
-#: not graze the halo.
+#: Clearance a line keeps beside a tag's halo.
 TAG_CLEAR = 3.0
 
 
 @dataclass
 class Rect:
-    """Represent an axis-aligned routing obstacle.
-
-    Parameters
-    ----------
-    x_min, x_max, y_min, y_max : float
-        Rectangle boundaries in drawing coordinates.
-    """
+    """An axis-aligned routing obstacle."""
 
     x_min: float
     x_max: float
@@ -29,18 +22,7 @@ class Rect:
     y_max: float
 
     def intersects_segment(self, x1: float, y1: float, x2: float, y2: float) -> bool:
-        """Return whether an orthogonal segment crosses the rectangle interior.
-
-        Parameters
-        ----------
-        x1, y1, x2, y2 : float
-            Segment endpoint coordinates.
-
-        Returns
-        -------
-        bool
-            Whether the segment intersects or lies on a rectangle boundary.
-        """
+        """Return whether an orthogonal segment enters the rectangle."""
         if x1 == x2:
             return (
                 self.x_min <= x1 <= self.x_max
@@ -57,20 +39,7 @@ class Rect:
 
 
 def clear_gaps(lane: List[float], spans: List[Tuple[float, float]]) -> List[bool]:
-    """Return the clear gaps between consecutive lane coordinates.
-
-    Parameters
-    ----------
-    lane : list[float]
-        Ordered coordinates on one routing lane.
-    spans : list[tuple[float, float]]
-        Obstacle spans that touch the lane.
-
-    Returns
-    -------
-    list[bool]
-        One value per gap; ``False`` marks a gap blocked by an obstacle span.
-    """
+    """Return whether each gap between lane coordinates is clear."""
     clear = [True] * max(len(lane) - 1, 0)
     for lo, hi in spans:
         first = max(bisect_right(lane, lo) - 1, 0)
@@ -89,22 +58,7 @@ TRAVEL: Dict[str, Tuple[int, float]] = {
 
 
 def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
-    """Return the maximum outward distance for a port escape node.
-
-    Parameters
-    ----------
-    kind : str
-        Owner unit kind.
-    label_pos : str or None
-        Resolved label side.
-    face : str
-        Outward port face.
-
-    Returns
-    -------
-    float
-        Escape distance in drawing pixels.
-    """
+    """Return the maximum outward distance of a port's escape node."""
     if kind in ("feed", "product"):
         return 25.0
     if (face, label_pos) in (("N", "top"), ("S", "bottom")):
@@ -123,24 +77,10 @@ def share_escape_room(
     goal_proj: Tuple[float, float],
     obstacles: List[Rect],
 ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-    """Return shared escape points for nearby facing ports.
+    """Move two close facing ports' escape nodes onto their midline.
 
-    Parameters
-    ----------
-    start, goal : tuple[float, float]
-        Port-anchor coordinates.
-    start_dir, goal_dir : str
-        Outward port directions.
-    start_proj, goal_proj : tuple[float, float]
-        Nominal escape-node coordinates.
-    obstacles : list[Rect]
-        Obstacles that can block a shared escape lane.
-
-    Returns
-    -------
-    tuple[tuple[float, float], tuple[float, float]]
-        Adjusted escape coordinates, or the original projections when a shared
-        lane is unsuitable.
+    Return the nominal escape nodes if the ports do not face each other,
+    have room for both, or the midline is blocked.
     """
     axis, sign = TRAVEL[start_dir]
     goal_axis, goal_sign = TRAVEL[goal_dir]
@@ -164,28 +104,10 @@ def share_escape_room(
 
 
 class VisibilityGraph:
-    """Represent clear orthogonal lanes around resolved flowsheet geometry.
-
-    Attributes
-    ----------
-    obstacles : list[Rect]
-        Unit and label rectangles excluded from graph edges.
-    body_obstacles : list[tuple[Unit, Rect]]
-        Unit bodies used to validate outward port stubs.
-    nodes : set[tuple[float, float]]
-        Clear lane intersections.
-    edges : dict[tuple[float, float], list[tuple[float, float]]]
-        Connections between adjacent clear nodes.
-    """
+    """Graph of clear orthogonal lanes around units and tags."""
 
     def __init__(self, fs: "Flowsheet"):
-        """Build routing lanes from resolved flowsheet geometry.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Flowsheet with placed frames and resolved port faces.
-        """
+        """Build the lanes from the sheet's frames and port faces."""
         from pandid.layout.attach import is_attached
         from pandid.portgeom import port_anchor, tag_width, unit_box
 
@@ -221,11 +143,10 @@ class VisibilityGraph:
                 self.body_obstacles.append((u, body))
 
             lpos = f.label_pos or "top"
-            # The halo the renderer draws behind the tag; an untagged unit,
-            # such as an element whose balloon carries its tag, draws none.
+            # Block the halo drawn behind the tag.
             if u.kind not in ("feed", "product") and lpos != "center" and u.tag:
                 label_w = tag_width(u.tag) + 2 * TAG_CLEAR
-                # A valve's fail letters sit past its tag, below it or beside it.
+                # Room for a valve's fail letters past its tag.
                 fail = 25.0 if getattr(u, "fail", "") else 0.0
                 if lpos == "top":
                     cx = f.x + u_width / 2
@@ -367,23 +288,12 @@ class VisibilityGraph:
         direction: str,
         owner: "Unit",
     ) -> Tuple[float, float] | None:
-        """Return the furthest clear lane on a port's outward stub.
+        """Return the furthest reachable node on a port's stub, or None.
 
         Parameters
         ----------
-        anchor : tuple[float, float]
-            Port-anchor coordinate on the unit body.
         projection : tuple[float, float]
-            Maximum escape-node coordinate.
-        direction : str
-            Outward port direction.
-        owner : Unit
-            Unit that owns the port.
-
-        Returns
-        -------
-        tuple[float, float] or None
-            Reachable graph node, or ``None`` when the stub is blocked.
+            Furthest escape node.
         """
         axis, sign = TRAVEL[direction]
         distance = sign * (projection[axis] - anchor[axis])

@@ -1,4 +1,4 @@
-"""Pure measurements of orthogonal route geometry."""
+"""Measurements of orthogonal route geometry."""
 
 from __future__ import annotations
 
@@ -11,19 +11,9 @@ Point = tuple[float, float]
 
 
 def min_bends(a: Point, dir_a: Optional[str], b: Point, dir_b: Optional[str]) -> Optional[int]:
-    """Return the unobstructed bend minimum between directed ports.
+    """Return the fewest bends between two directed ports.
 
-    Parameters
-    ----------
-    a, b : Point
-        Source and destination port anchors in drawing coordinates.
-    dir_a, dir_b : str or None
-        Outward compass faces of the source and destination ports.
-
-    Returns
-    -------
-    int or None
-        Minimum orthogonal direction changes, or ``None`` if a face is unknown.
+    Ignore obstacles. Return ``None`` if either direction is unknown.
     """
     if dir_a is None or dir_b is None:
         return None
@@ -44,25 +34,14 @@ def min_bends(a: Point, dir_a: Optional[str], b: Point, dir_b: Optional[str]) ->
         else:
             return 2 if abs(perp) > eps else 4
 
-    # Perpendicular ports need one bend when both directed legs can advance.
+    # Perpendicular ports need one bend if both legs can advance.
     ahead_on_s = s_sign * (b[s_axis] - a[s_axis]) > eps
     ahead_on_t = t_sign * (b[t_axis] - a[t_axis]) > eps
     return 1 if (ahead_on_s and ahead_on_t) else 3
 
 
 def waypoint_segments(waypoints: list[Point]) -> list[tuple[Point, Point, str]]:
-    """Return the nonzero orthogonal segments in a waypoint path.
-
-    Parameters
-    ----------
-    waypoints : list[Point]
-        Ordered route coordinates.
-
-    Returns
-    -------
-    list[tuple[Point, Point, str]]
-        Segment endpoints and ``"h"`` or ``"v"`` axis. Diagonal legs are omitted.
-    """
+    """Return each nonzero orthogonal segment as ``(p1, p2, axis)``."""
     segs = []
     for p1, p2 in zip(waypoints, waypoints[1:]):
         if p1 == p2:
@@ -75,18 +54,7 @@ def waypoint_segments(waypoints: list[Point]) -> list[tuple[Point, Point, str]]:
 
 
 def real_bends(waypoints: list[Point]) -> int:
-    """Count direction changes between drawn route segments.
-
-    Parameters
-    ----------
-    waypoints : list[Point]
-        Ordered route coordinates, including any collinear waypoints.
-
-    Returns
-    -------
-    int
-        Number of changes between consecutive orthogonal travel directions.
-    """
+    """Count direction changes between consecutive route segments."""
     segs = waypoint_segments(waypoints)
     dirs = []
     for p1, p2, axis in segs:
@@ -97,36 +65,12 @@ def real_bends(waypoints: list[Point]) -> int:
 
 
 def path_length(points: list[Point]) -> float:
-    """Measure the Manhattan length of a waypoint path.
-
-    Parameters
-    ----------
-    points : list[Point]
-        Ordered route coordinates.
-
-    Returns
-    -------
-    float
-        Sum of the absolute coordinate changes between consecutive points.
-    """
+    """Return the Manhattan length of a waypoint path."""
     return sum(abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(points, points[1:]))
 
 
 def crossing_point(h: tuple[Point, Point], v: tuple[Point, Point]) -> Optional[Point]:
-    """Find a proper crossing between horizontal and vertical segments.
-
-    Parameters
-    ----------
-    h : tuple[Point, Point]
-        Endpoints of a horizontal segment.
-    v : tuple[Point, Point]
-        Endpoints of a vertical segment.
-
-    Returns
-    -------
-    Point or None
-        Interior crossing coordinate, or ``None`` for a touch or no crossing.
-    """
+    """Return where segments h and v cross inside both, or None."""
     y = h[0][1]
     x = v[0][0]
     xlo, xhi = sorted((h[0][0], h[1][0]))
@@ -138,19 +82,7 @@ def crossing_point(h: tuple[Point, Point], v: tuple[Point, Point]) -> Optional[P
 
 
 def crossing_count(paths: list[list[Point]]) -> int:
-    """Count proper crossings between different final stream paths.
-
-    Parameters
-    ----------
-    paths : list[list[Point]]
-        One ordered waypoint path per stream, after route separation.
-
-    Returns
-    -------
-    int
-        Number of orthogonal interior intersections. Endpoint touches
-        and crossings within a single stream are excluded.
-    """
+    """Count interior crossings between different paths."""
     segments = [
         (index, *segment)
         for index, points in enumerate(paths)
@@ -167,19 +99,7 @@ def crossing_count(paths: list[list[Point]]) -> int:
 
 
 def crossing_pairs(paths: list[list[Point] | None]) -> frozenset[tuple[int, int]]:
-    """Identify crossing stream pairs using global stream positions.
-
-    Parameters
-    ----------
-    paths : list[list[Point] or None]
-        Final paths in flowsheet stream order; missing routes remain in
-        the sequence as ``None``.
-
-    Returns
-    -------
-    frozenset[tuple[int, int]]
-        Sorted index pairs with at least one proper path crossing.
-    """
+    """Return sorted index pairs of crossing paths, skipping None."""
     horizontal: list[tuple[int, tuple[Point, Point]]] = []
     vertical: list[tuple[int, tuple[Point, Point]]] = []
     for index, points in enumerate(paths):

@@ -18,17 +18,12 @@ class Router(Protocol):
     """Define the interface ``Flowsheet.route`` requires of a router."""
 
     def route(self, fs: "Flowsheet") -> None:
-        """Route all streams in the flowsheet.
+        """Route every stream and store the route on the stream.
 
         Parameters
         ----------
         fs : Flowsheet
             Sheet with resolved unit frames.
-
-        Returns
-        -------
-        None
-            Routes are stored on the streams.
         """
 
 
@@ -39,10 +34,7 @@ def _clamp_projection(
     target: tuple[float, float],
     nodes: set[tuple[float, float]],
 ) -> tuple[float, float]:
-    """Shorten an escape projection onto the lane its peer occupies.
-
-    The stand-off is a maximum. Turning onto the peer's lane on the way out
-    avoids an overshoot and return.
+    """Clamp an escape node to the peer's lane if the stub crosses it.
 
     Parameters
     ----------
@@ -54,14 +46,6 @@ def _clamp_projection(
         Outward port direction.
     target : tuple[float, float]
         Escape node at the other end of the stream.
-    nodes : set[tuple[float, float]]
-        Visibility-graph nodes.
-
-    Returns
-    -------
-    tuple[float, float]
-        The shortened escape node, or ``proj`` when the peer's lane is not
-        strictly inside the stub or is not a graph node.
     """
     ax, ay = anchor
     px, py = proj
@@ -72,7 +56,7 @@ def _clamp_projection(
     else:
         lo, hi = (px, ax) if d == "W" else (ax, px)
         cand = (tx, ay) if lo < tx < hi else proj
-    # Keep the nominal projection when the graph has no node on that lane.
+    # Keep the nominal node if the graph has no node on that lane.
     return cand if cand in nodes else proj
 
 
@@ -86,11 +70,8 @@ def _fallback_path(
 ) -> list[tuple[float, float]]:
     """Return the L-shaped route drawn when no path is found.
 
-    Both corner orders are candidates. The one crossing fewer obstacles
-    wins, then the one crossing fewer recorded lines, then the across-first
-    order. A route through equipment is a defect; a line crossing is a drawn
-    convention. ``validate()`` reports a blocked result as
-    ``route-crosses-unit``.
+    Of the two corner orders, pick the one crossing fewer obstacles,
+    then fewer recorded lines, then the across-first one.
 
     Parameters
     ----------
@@ -98,29 +79,11 @@ def _fallback_path(
         Port anchors.
     start_proj, goal_proj : tuple[float, float]
         Escape nodes of the two ports.
-    obstacles : list
-        Rectangles the route should avoid.
     crossing_index : CrossingIndex or None, optional
         Routes already drawn in this pass.
-
-    Returns
-    -------
-    list[tuple[float, float]]
-        Waypoints from ``start`` to ``goal`` without repeated points.
     """
     def through(corner: tuple[float, float]) -> list[tuple[float, float]]:
-        """Build the route that turns at one corner.
-
-        Parameters
-        ----------
-        corner : tuple[float, float]
-            Point where the route changes direction.
-
-        Returns
-        -------
-        list[tuple[float, float]]
-            Waypoints with consecutive duplicates removed.
-        """
+        """Return the route that turns at ``corner``."""
         pts = [start]
         for point in (start_proj, corner, goal_proj, goal):
             if point != pts[-1]:
@@ -128,18 +91,7 @@ def _fallback_path(
         return pts
 
     def score(pts: list[tuple[float, float]]) -> tuple[int, int]:
-        """Count the obstacles and recorded lines a route crosses.
-
-        Parameters
-        ----------
-        pts : list[tuple[float, float]]
-            Candidate route waypoints.
-
-        Returns
-        -------
-        tuple[int, int]
-            Segments that hit an obstacle, then crossings of recorded lines.
-        """
+        """Count obstacle hits, then recorded-line crossings."""
         obstacle_hits = sum(
             any(o.intersects_segment(a[0], a[1], b[0], b[1]) for o in obstacles)
             for a, b in zip(pts, pts[1:])
@@ -157,24 +109,10 @@ def _fallback_path(
 
 
 def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, float]], manual: bool) -> None:
-    """Record one committed route in the crossing index.
+    """Record one route in the crossing index.
 
-    A manual route is recorded one orthogonal run at a time. Its diagonal
-    legs are left out, so later searches do not price crossing them.
-
-    Parameters
-    ----------
-    crossing_index : CrossingIndex
-        Index of routes drawn so far in this pass.
-    waypoints : list[tuple[float, float]]
-        Route waypoints.
-    manual : bool
-        Whether the author supplied the waypoints with ``via()``.
-
-    Returns
-    -------
-    None
-        The index is updated in place.
+    A manual route is recorded one orthogonal run at a time, skipping
+    its diagonal legs.
     """
     if not manual:
         crossing_index.record(waypoints)
@@ -191,25 +129,7 @@ def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, 
 
 
 def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
-    """Reject a sheet whose frames hold a NaN or an infinity.
-
-    A non-finite coordinate stops the path search from terminating.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet about to be routed.
-
-    Returns
-    -------
-    None
-        Every placed frame is finite.
-
-    Raises
-    ------
-    ValueError
-        If a frame has a non-finite position or size.
-    """
+    """Raise ValueError if a placed frame holds a NaN or an infinity."""
     for unit in fs.units:
         frame = unit.frame
         if frame is None:
@@ -231,32 +151,20 @@ class DefaultRouter:
     Parameters
     ----------
     recover_exits : bool, optional
-        Try connected lanes before a blocked nominal nozzle projection.
-        ``False`` searches from the nominal projection only.
+        Replace a blocked escape node with a reachable one on the stub.
     """
 
     def __init__(self, *, recover_exits: bool = True) -> None:
-        """Set the outward-stub recovery policy.
-
-        Parameters
-        ----------
-        recover_exits : bool, optional
-            Enable clearance checks and shorter reachable escape nodes.
-        """
+        """Set the escape-node recovery option."""
         self.recover_exits = recover_exits
 
     def route(self, fs: "Flowsheet") -> None:
-        """Compute and separate all automatic stream paths.
+        """Route and separate every automatic stream on the sheet.
 
         Parameters
         ----------
         fs : Flowsheet
-            Sheet with resolved unit frames and selected nozzle faces.
-
-        Returns
-        -------
-        None
-            Final route waypoints and fallback status are stored on streams.
+            Sheet with resolved unit frames and nozzle faces.
 
         Raises
         ------
@@ -270,27 +178,14 @@ class DefaultRouter:
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
-        # Index the streams drawn earlier in this pass. Rebuild it on every
-        # call because each pass routes against new geometry.
         crossing_index = CrossingIndex()
         routed: list["Stream"] = []
 
         def settle(stream: "Stream") -> None:
-            """Add a routed stream to the crossing index.
+            """Add a routed stream and rebuild the crossing index.
 
-            The index is rebuilt from a preview of the separated waypoints,
-            so later searches price crossings against the drawn geometry.
-            A stream routed later can still move an earlier track (#509).
-
-            Parameters
-            ----------
-            stream : Stream
-                Stream carrying its waypoints for this pass.
-
-            Returns
-            -------
-            None
-                ``crossing_index`` is replaced.
+            The index holds a preview of every routed stream's separated
+            waypoints.
             """
             nonlocal crossing_index
             routed.append(stream)
@@ -303,13 +198,11 @@ class DefaultRouter:
 
         for stream in fs.streams:
             if stream.route and stream.route.manual:
-                # Record a manual route so later streams price crossing it.
                 settle(stream)
                 continue
 
             src_u = stream.source.owner
             dst_u = stream.dest.owner
-            # Raise explicitly because ``python -O`` removes assertions.
             if src_u is None or dst_u is None:
                 orphan = stream.source if src_u is None else stream.dest
                 raise ValueError(
@@ -317,7 +210,6 @@ class DefaultRouter:
                     f"{orphan.name!r} belongs to no unit."
                 )
 
-            # Warn when a stream is left unrouted; its route stays ``None``.
             if src_u.frame is None or dst_u.frame is None:
                 unplaced = src_u if src_u.frame is None else dst_u
                 warnings.warn(
@@ -343,12 +235,11 @@ class DefaultRouter:
             start_dir = graph.port_dirs[(src_u.name, stream.source.name)]
             goal_dir = graph.port_dirs[(dst_u.name, stream.dest.name)]
 
-            # Read the escape nodes the graph placed at the stand-off distance.
             start_proj = graph.port_projs[(src_u.name, stream.source.name)]
             goal_proj = graph.port_projs[(dst_u.name, stream.dest.name)]
 
-            # Shorten each stand-off onto the peer's lane, then share the room
-            # between two facing ports.
+            # Clamp each stand-off to the peer's lane, then share the
+            # room between two facing ports.
             start_proj = _clamp_projection(start, start_proj, start_dir, goal_proj, graph.nodes)
             goal_proj = _clamp_projection(goal, goal_proj, goal_dir, start_proj, graph.nodes)
             start_proj, goal_proj = share_escape_room(
@@ -375,7 +266,7 @@ class DefaultRouter:
 
             if path:
                 path = [start] + path + [goal]
-                # Penalise used segments so later streams avoid overlapping them.
+                # Penalise used segments for later streams.
                 for i in range(len(path) - 1):
                     u_node, v_node = path[i], path[i+1]
                     edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + 2000.0
@@ -402,7 +293,6 @@ class DefaultRouter:
 
             stream.route = Route(waypoints=simplified, used_fallback=not path_found)
 
-            # Record every drawn route, including a fallback, for later streams.
             settle(stream)
 
         # Separate parallel segments that share a lane.
