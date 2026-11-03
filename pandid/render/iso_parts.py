@@ -35,28 +35,106 @@ _AG = "mxgraph.pid.agitators."
 
 
 def _g(name: str, *body: str) -> str:
-    """Return one part's artwork wrapped in a ``<g>``."""
+    """Return one part's artwork wrapped in a ``<g>``.
+
+    Parameters
+    ----------
+    name : str
+        Suffix of the group id.
+    *body : str
+        SVG elements to wrap.
+
+    Returns
+    -------
+    str
+        The ``<g>`` group.
+    """
     return f'<g id="part_{name}">{"".join(body)}</g>'
 
 
 def _run(x0: float, x1: float, y: float = _DECK_Y, dash: str = "") -> str:
-    """Return a horizontal stroke at ``y``, dashed by ``dash``."""
+    """Return a horizontal stroke at ``y``, dashed by ``dash``.
+
+    Parameters
+    ----------
+    x0 : float
+        Start x.
+    x1 : float
+        End x.
+    y : float, default=_DECK_Y
+        Height of the stroke.
+    dash : str, default=""
+        ``stroke-dasharray`` attribute, or empty for a solid stroke.
+
+    Returns
+    -------
+    str
+        SVG ``<line>``.
+    """
     return (f'<line x1="{x0:g}" y1="{y:g}" x2="{x1:g}" y2="{y:g}" {_INK}'
             + (f" {dash}" if dash else "") + "/>")
 
 
 def _build() -> tuple:
-    """Return every part, in Table 2 order."""
+    """Return every part, in Table 2 order.
+
+    Returns
+    -------
+    tuple[OverlayPart, ...]
+        The parts.
+    """
     from pandid.render.symbols import IsoPart, OverlayPart
 
     def deck(name, item, reg, descriptor, *ink):
-        """Return a group-27 internal in the shared deck frame."""
+        """Return a group-27 internal in the shared deck frame.
+
+        Parameters
+        ----------
+        name : str
+            Part name.
+        item : str
+            ISO item number.
+        reg : str
+            ISO registration number.
+        descriptor : str
+            ISO descriptor.
+        *ink : str
+            SVG elements of the part.
+
+        Returns
+        -------
+        OverlayPart
+            The part.
+        """
         return OverlayPart(
             name=name, iso=IsoPart(27, item, reg, descriptor),
             svg=_g(f"27_{name}", *ink), width=DECK_W, height=DECK_H)
 
     def agitator(name, item, reg, descriptor, stencil, shaft_to, *blade):
-        """Return a group-28 agitator with a shaft to ``shaft_to``."""
+        """Return a group-28 agitator with a shaft to ``shaft_to``.
+
+        Parameters
+        ----------
+        name : str
+            Part name.
+        item : str
+            ISO item number.
+        reg : str
+            ISO registration number.
+        descriptor : str
+            ISO descriptor.
+        stencil : str
+            draw.io stencil name.
+        shaft_to : float
+            Depth the shaft reaches.
+        *blade : str
+            SVG elements of the blade.
+
+        Returns
+        -------
+        OverlayPart
+            The part.
+        """
         return OverlayPart(
             name=name, iso=IsoPart(28, item, reg, descriptor),
             svg=_g(f"28_{name}",
@@ -111,7 +189,7 @@ def _build() -> tuple:
         "bubble_cap_tray", "27.3", "C2010", "Tray, bubble-cap type",
         # The deck opens 2 M for the cap.
         _run(0, 4 * M), _run(6 * M, DECK_W),
-        # The cap: an arc 4 M across rising 0.5 M, so r = 4.25 M.
+        # The cap: an arc 4 M across, radius 4.25 M.
         f'<path d="M {3 * M:g} {_DECK_Y / 2:g} '
         f'A {4.25 * M:g} {4.25 * M:g} 0 0 1 {7 * M:g} {_DECK_Y / 2:g}" {_INK}/>')
 
@@ -406,7 +484,13 @@ _PARTS: "tuple | None" = None
 
 
 def parts() -> tuple:
-    """Return every part in Table 2 order, built once."""
+    """Return every part in Table 2 order, built once.
+
+    Returns
+    -------
+    tuple[OverlayPart, ...]
+        The parts.
+    """
     global _PARTS
     if _PARTS is None:
         _PARTS = _build()
@@ -414,17 +498,38 @@ def parts() -> tuple:
 
 
 def register_parts(registry) -> None:
-    """Register every part on ``registry``."""
+    """Register every part on ``registry``.
+
+    Parameters
+    ----------
+    registry : SymbolRegistry
+        Registry to add the parts to.
+    """
     for part in parts():
         registry.register_part(part)
 
 
 # Placement helpers: each returns overlays placed as fractions of the
-# body's box, measured off the ISO item it names.
+# body's box.
 
 
 def _part(group: int, name: str, registry=None):
-    """Return a part from ``registry`` or the default registry."""
+    """Return a part from ``registry`` or the default registry.
+
+    Parameters
+    ----------
+    group : int
+        ISO subject group.
+    name : str
+        Part name.
+    registry : SymbolRegistry, optional
+        Registry to read; the default registry when omitted.
+
+    Returns
+    -------
+    OverlayPart
+        The registered part.
+    """
     if registry is None:
         from pandid.render.symbols import default_registry as registry
     return registry.part(group, name)
@@ -439,7 +544,22 @@ _AGITATOR_X, _AGITATOR_W, _AGITATOR_FOOT = 0.26, 0.48, 0.76
 
 
 def agitator_overlays(name: str, kind: str, variant: str) -> tuple:
-    """Return an agitator and its motor placed on a vertical body."""
+    """Return an agitator and its motor placed on a vertical body.
+
+    Parameters
+    ----------
+    name : str
+        Group-28 agitator name.
+    kind : str
+        Body kind.
+    variant : str
+        Body variant.
+
+    Returns
+    -------
+    tuple[Overlay, Overlay]
+        The agitator, then the motor.
+    """
     from pandid.render.symbols import Overlay, default_registry
     _part(28, name)
     _part(20, "motor")
@@ -469,8 +589,22 @@ _DECK_INSET = 0.0
 def internals_overlays(name: str, count: int = 1) -> tuple:
     """Return ``count`` group-27 internals stacked down a vertical body.
 
-    Decks are spaced evenly down the internals band. Beds (parts taller
-    than :data:`DECK_H`) share it, with gaps between them.
+    Parameters
+    ----------
+    name : str
+        Group-27 part name.
+    count : int, default=1
+        Number of internals.
+
+    Returns
+    -------
+    tuple[Overlay, ...]
+        One overlay per internal, top first.
+
+    Raises
+    ------
+    ValueError
+        If ``count`` is less than 1.
     """
     from pandid.render.symbols import Overlay
     part = _part(27, name)
@@ -498,8 +632,24 @@ def internals_overlays(name: str, count: int = 1) -> tuple:
 def stage_fraction(name: str, stage: int, count: int) -> float:
     """Return stage ``stage`` of ``count`` as a fraction of body height.
 
-    Stages count from 1 at the top. A deck stage is the centre of its
-    deck; a bed stage is the top of its bed.
+    Parameters
+    ----------
+    name : str
+        Group-27 part name.
+    stage : int
+        Stage number, from 1 at the top.
+    count : int
+        Number of stages.
+
+    Returns
+    -------
+    float
+        Centre of a deck, or top of a bed.
+
+    Raises
+    ------
+    ValueError
+        If ``stage`` is not between 1 and ``count``.
     """
     if stage < 1 or stage > count:
         raise ValueError(
@@ -521,8 +671,15 @@ _SUPPORT_TOP, _SUPPORT_DROP = 0.97, 0.28
 def support_overlays(name: str) -> tuple:
     """Return a support placed under or beside a vertical body.
 
-    Legs are a pair under the walls and a skirt spans the body. A
-    bracket or ring is a mirrored pair outside the shell.
+    Parameters
+    ----------
+    name : str
+        Group-26 support name.
+
+    Returns
+    -------
+    tuple[Overlay, ...]
+        A skirt, or a pair of legs, brackets or rings.
     """
     from pandid.render.symbols import Overlay
     _part(26, name)
@@ -542,7 +699,18 @@ _RAKE_X, _RAKE_W, _RAKE_FOOT = 0.20, 0.60, 0.775
 
 
 def rake_overlays(name: str) -> tuple:
-    """Return a group-28 stirrer hung down the centre of a thickener."""
+    """Return a group-28 stirrer hung down the centre of a thickener.
+
+    Parameters
+    ----------
+    name : str
+        Group-28 agitator name.
+
+    Returns
+    -------
+    tuple[Overlay]
+        The stirrer.
+    """
     from pandid.render.symbols import Overlay
     _part(28, name)
     return (Overlay(28, name, _RAKE_X, 0.0, _RAKE_W, _RAKE_FOOT),)
@@ -556,7 +724,20 @@ _VIBRATION_IN_MILL = 2 * M
 
 
 def crushing_overlays(name: str, registry=None) -> tuple:
-    """Return a group-29 characteristic centred in a group-11 body."""
+    """Return a group-29 characteristic centred in a group-11 body.
+
+    Parameters
+    ----------
+    name : str
+        Group-29 part name.
+    registry : SymbolRegistry, optional
+        Registry to read; the default registry when omitted.
+
+    Returns
+    -------
+    tuple[Overlay]
+        The characteristic.
+    """
     from pandid.render.symbols import Overlay
     part = _part(29, name, registry)
     width = _VIBRATION_IN_MILL if name == "vibration" else part.width
@@ -565,7 +746,20 @@ def crushing_overlays(name: str, registry=None) -> tuple:
 
 
 def characteristic_overlays(name: str, registry=None) -> tuple:
-    """Return a group-29 characteristic in a separating vessel."""
+    """Return a group-29 characteristic in a separating vessel.
+
+    Parameters
+    ----------
+    name : str
+        Group-29 part name.
+    registry : SymbolRegistry, optional
+        Registry to read; the default registry when omitted.
+
+    Returns
+    -------
+    tuple[Overlay]
+        The characteristic.
+    """
     from pandid.render.symbols import Overlay
     _part(29, name, registry)
     if name == "gravity":
