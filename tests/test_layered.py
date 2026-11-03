@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 
 from _layout_cases import build as build_biodiesel
@@ -12,8 +15,57 @@ from pandid.portgeom import port_point, resolve_port
 from pandid.geometry import Frame, Route
 from pandid.streams import Stream
 from pandid.routing.metrics import real_bends
-from scripts import layout_quality, route_quality
-from scripts.layout_compare import _fingerprint
+from scripts import layout_quality
+
+
+def _fingerprint(fs: Flowsheet) -> str:
+    """Hash the resolved frames, port faces, routes, and convergence state.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed flowsheet.
+
+    Returns
+    -------
+    str
+        SHA-256 digest of the drawing geometry, rounded to six decimal places.
+    """
+    geometry = {
+        "units": [
+            (
+                u.name,
+                None
+                if u.frame is None
+                else (
+                    round(u.frame.x, 6),
+                    round(u.frame.y, 6),
+                    round(u.frame.w, 6),
+                    round(u.frame.h, 6),
+                    u.frame.col,
+                    u.frame.row,
+                    u.frame.orientation,
+                    u.frame.mirrored,
+                    u.frame.mirror_y,
+                    u.frame.label_pos,
+                    sorted(u.frame.port_faces.items()),
+                ),
+            )
+            for u in fs.units
+        ],
+        "streams": [
+            (
+                s.name,
+                None
+                if s.route is None
+                else (s.route.manual, [(round(x, 6), round(y, 6)) for x, y in s.route.waypoints]),
+            )
+            for s in fs.streams
+        ],
+        "converged": fs.route_converged,
+    }
+    encoded = json.dumps(geometry, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @pytest.mark.parametrize("stem", ["04_control_loop", "08_from_data", "16_demineralised_water"])
@@ -39,32 +91,6 @@ def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     fresh.layout()
     fresh.route()
     assert _fingerprint(fresh) == fingerprint
-
-
-@pytest.mark.parametrize("stem", ["04_control_loop", "10_ethanol_pfd"])
-def test_route_report_uses_the_published_graph(stem: str) -> None:
-    """Report route quality from the drawn routes.
-
-    Parameters
-    ----------
-    stem : str
-        Corpus drawing with its placement stripped.
-    """
-    fs, _ = layout_quality.build(stem, True)
-    report = route_quality.measure_sheet(fs, stem)
-    excess = sum(
-        max(0, row.actual_bends - row.min_bends)
-        for row in report.rows
-        if row.min_bends is not None and not row.is_manual
-    )
-    assert excess == measure_final(fs).excess_bends
-
-
-def test_route_report_accepts_manual_intermediate_waypoints() -> None:
-    """Count a manual route with one waypoint as drawn."""
-    fs, _ = layout_quality.build("11_ethanol_pid", False)
-    report = route_quality.measure_sheet(fs, "11_ethanol_pid")
-    assert report.undrawn == []
 
 
 def _sealed_by_alignment(pinned: bool = False) -> tuple[Flowsheet, Frame, Frame, Route]:

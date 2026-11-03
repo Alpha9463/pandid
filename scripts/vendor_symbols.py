@@ -7,21 +7,11 @@ scripts/mxgraph_to_svg.py, and its ports are resolved either from the stencil's
 named <constraint> anchors ("W"/"E"/"N"/"S"/...) or placed explicitly on a
 bounding-box edge as ``(edge, along)`` for shapes that lack a needed anchor.
 
-The shape's ``aspect`` comes across with it, as ``Symbol.stretchable``: the
-stencil author already answered whether the drawing may be reshaped to fill a
-box of another shape (``variable``) or has to keep its proportions (``fixed``),
-and that is the same question a unit given an explicit width and height asks.
-It is named in each emitted symbol's comment, and only a ``fixed`` shape carries
-the keyword, since stretchable is the default on both sides.
+The shape's ``aspect`` becomes ``Symbol.stretchable``; only a ``fixed`` shape
+carries the keyword.
 
-``ADAPTED_ELSEWHERE`` records the stencil-derived symbols this generator cannot
-emit (the parametric ones) and where they are written instead.
-
-``STENCIL_PATCHES`` records the corrections applied to the vendored stencils on
-the way through, for the shapes draw.io draws wrongly. The vendored XML stays
-exactly as vendored; the correction is written in the stencil's own language
-here, so the deviation from upstream is in this file rather than hidden in a
-mirrored data file.
+``STENCIL_PATCHES`` corrects the shapes draw.io draws wrongly; the vendored XML
+stays as vendored.
 
 Run:  python scripts/vendor_symbols.py
 """
@@ -37,10 +27,7 @@ from mxgraph_to_svg import shapes_in, convert_shape, stencil_namespace  # noqa: 
 from pandid.portgeom import outward_dir  # noqa: E402  (the one place a face is derived)
 from pandid.render.symbols import CENTRED, FROM_START  # noqa: E402
 
-#: How each alignment is *spelled* in the file this script writes. The
-#: emitted line has to name the constant rather than repeat its value, or
-#: the generated registry would carry a bare ``'start'`` with nothing
-#: saying what it means -- and the two spellings could then drift.
+#: How each alignment is spelled in the generated file.
 _ALIGN_NAMES = {CENTRED: "CENTRED", FROM_START: "FROM_START"}
 
 STENCILS = HERE / "vendor_data" / "drawio"
@@ -48,18 +35,8 @@ OUT = HERE.parent / "pandid" / "render" / "_vendored_symbols.py"
 
 # (kind, variant) -> (stencil, shape_name, {port_name: "constraint" | (edge, along)})
 KIND_MAP = {
-    # Valves: inline family (inlet W / outlet E).
-    #
-    # ``actuator`` is where a controller's output lands. It is a signal terminal
-    # and not a nozzle: nothing flows through it, so the line stops at the valve
-    # rather than reaching into it, and the port belongs on the edge of the
-    # symbol's own extent, at the point the operator would be mounted on. A
-    # coordinate inboard of that edge draws the signal ending inside the body,
-    # since the router steers to the edge and the renderer draws to the
-    # coordinate. Coordinates are in the stencil's own space, which SCALE then
-    # reduces: by the kind's own 0.25 for everything drawn on valves.xml's
-    # ~98-unit module, and by a factor of its own for the three shapes that are
-    # not on it (``psv``, ``relief``, ``butterfly_pneumatic``); see SCALE.
+    # Valves: inline family (inlet W / outlet E). ``actuator`` is a signal terminal on
+    # the symbol's edge where the operator mounts, in stencil units before SCALE.
     ("valve", "default"):   ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
     ("valve", "gate"):      ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
@@ -72,88 +49,44 @@ KIND_MAP = {
                              "actuator": ("N", 49.0)}),
     ("valve", "check"):     ("valves", "Check Valve 1",     {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.25)}),
-    # Saunders / weir diaphragm valve: a *body*, not an operator. The stencil
-    # draws the weir as an arc inside the bowtie and puts nothing on top of it,
-    # so what is bolted to its stem is not stated -- the same silence a gate or
-    # a ball body keeps. Up to 0.1.1 this drawing was filed under ``control``,
-    # which is what issue #136 is about: the variant an engineer types for a
-    # control valve drew a hand valve with a weir in it and no actuator at all.
+    # Saunders (weir diaphragm) body: no operator drawn.
     ("valve", "saunders"):  ("valves", "Diaphragm",         {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
     ("valve", "needle"):    ("valves", "Needle",            {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
-    # The third leg: the stencil's own "S" constraint, (0.5, 1) of the box --
-    # bottom centre, where the two bowties' crossing point hangs its branch
-    # (see _OFF_THE_RUN_BY_DESIGN["three_way"] in test_symbol_invariants.py).
+    # The branch is the stencil's own "S" constraint, bottom centre.
     ("valve", "three_way"): ("valves", "Three-Way Valve",   {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0), "branch": "S"}),
     # A PSV's centreline is taken by its own inlet and outlet; the pilot/solenoid
     # connection goes on the side of the spring bonnet instead.
     ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N",
                              "actuator": ("AT", 40.0, 24.0)}),
-    # Angle body: the seat turns the flow a quarter, so this one is piped from
-    # below and out to the side. The stem rises from the vertex where the two
-    # halves meet, so the actuator sits above it on that vertex's centreline
-    # rather than on the middle of the top edge.
+    # Angle body: piped from below and out to the side; the stem rises at x = 30.
     ("valve", "angle"):     ("valves", "Angle",             {"inlet": "S", "outlet": "E",
                              "actuator": ("N", 30.0)}),
     # Spring-loaded angle safety valve: the PSV a real sheet draws, with the
     # spring bonnet on top of the inlet leg. The stem runs to y = 0.
     ("valve", "psv"):       ("valves", "Safety PSV 1",      {"inlet": "S", "outlet": "E",
                              "actuator": ("AT", 21.0, 0.0)}),
-    # Bleeder: the small drain valve tapped off a header. The stencil draws it
-    # vertical: the tap runs down from (12.5, 0) into a bowtie whose open
-    # bottom bar at y = 75 discharges, so it is piped from above and down, not
-    # across. ("Bleeder Valve 2" draws the same valve hanging off a length of
-    # header, which is what settles that top line as the tap and not a stem.)
-    #
-    # The actuator stays on the top face, as on every other valve, but the tap
-    # already owns the centreline, so it is set over to x = 24 rather than
-    # stacked on the inlet.
+    # Bleeder: drawn vertical and tapped from above; the actuator is set over to
+    # x = 24, off the tap's centreline.
     ("valve", "bleed"):     ("valves", "Bleeder Valve 1",   {"inlet": "N", "outlet": "S",
                              "actuator": ("N", 24.0)}),
-    # These two stencils name an "N" constraint, but draw.io puts it on the
-    # inboard ink (the plug's upper seat line, the pinch sleeve's crown) rather
-    # than on the top of the shape, so both are placed on the edge instead.
+    # Their "N" constraint sits on inboard ink, so the actuator goes on the edge.
     ("valve", "plug"):      ("valves", "Plug",              {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
     ("valve", "pinch"):     ("valves", "Pinch Valve",       {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
 
-    # --- Valves that draw their operator ---
-    #
-    # Unlike the bare bodies above, these stencils draw the operator on top of
-    # the valve, so ``actuator`` lands on its crown (the top of the motor/
-    # solenoid/hydraulic box, or the apex of a diaphragm dome), which is where a
-    # controller output or interlock signal physically terminates.
-    #
-    # The three letter-box operators share one body and differ only in the
-    # letter, so they must stay three separate variants.
-    #
-    # "Solenoid Valve Closed" is draw.io's name for the mechanism's rest state,
-    # not something its drawing says. The three shapes are identical but for the
-    # letter (same background body path, same operator box, no <fillcolor>
-    # anywhere), and the library ships no open counterpart to differ from. So
-    # the symbol does not depict a closed valve, and the darkened body of
-    # ``Valve(normal_position="closed")`` is the only thing on it that states a
-    # position. Contrast the genuine state pairs elsewhere in the library (the
-    # Figure 8 blinds, the open/blind discs), where the two shapes differ by a
-    # <fillcolor> and the fill is the convention.
+    # --- Valves that draw their operator: ``actuator`` on its crown ---
+    # "Solenoid Valve Closed" is draw.io's name; the drawing states no position.
     ("valve", "motor"):     ("valves", "Motor Operated Valve",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
     ("valve", "solenoid"):  ("valves", "Solenoid Valve Closed",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
     ("valve", "hydraulic"): ("valves", "Hydraulic Valve",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
-    # The control valve. A diaphragm actuator -- a dome on a short stem -- drawn
-    # *above* the body, which is what ISO 15519-2 Table 5 means by listing
-    # "valves incl. actuators" as basic information for a P&ID, and what
-    # ``professional_examples/P&ID_301.pdf`` draws on all six of its CVs.
-    #
-    # Filed under ``control`` because that is what an engineer types. Up to
-    # 0.1.1 this drawing answered to ``pneumatic`` -- the signal medium, which
-    # is not a kind of valve -- while ``control`` drew the Saunders body now
-    # registered above. Issue #136.
+    # Control valve: a diaphragm actuator drawn above the body.
     ("valve", "control"):   ("valves", "Pneumatic Operated",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
     ("valve", "manual"):    ("valves", "Manual Operated Valve",
@@ -163,19 +96,11 @@ KIND_MAP = {
                              {"inlet": "W", "outlet": "E", "actuator": "N"}),
     ("valve", "butterfly_pneumatic"): ("valves", "Pneumatic Operated Butterfly Valve",
                                        {"inlet": "W", "outlet": "E", "actuator": "N"}),
-    # Self-acting pressure regulator: the dome is its own diaphragm, so the
-    # "actuator" is the external pilot connection rather than a signal terminus.
-    # The stencil draws that pilot line running up from the dome crown to the
-    # top of the shape, which is where the port goes.
+    # Self-acting regulator: ``actuator`` is the external pilot connection at the top.
     ("valve", "regulator"): ("valves", "Back Pressure Regulator 1",
                              {"inlet": "W", "outlet": "E", "actuator": ("N", 49.0)}),
-    # Rotating equipment.
-    #
-    # draw.io's <constraint> anchors are generic compass points on the bounding
-    # box, not process nozzles: on a centrifugal pump "N" lands on the *corner*
-    # of the discharge stub and "E" in the middle of the volute. Where the
-    # stencil draws a real nozzle, place the port on its mouth explicitly so
-    # the line leaves the flange rather than the casing.
+    # Rotating equipment. Where the stencil draws a nozzle, the port goes on its
+    # mouth rather than on draw.io's compass anchor.
     ("pump", "default"):       ("pumps", "Centrifugal Pump 1",
                                 {"suction": ("W", 30.0), "discharge": ("E", 10.0)}),
     ("pump", "gear"):          ("pumps", "Gear Pump",
@@ -186,172 +111,48 @@ KIND_MAP = {
     ("compressor", "reciprocating"): ("compressors", "Reciprocating Compressor",
                                       {"suction": "W", "discharge": ("E", 25.0)}),
     ("blower", "default"):     ("compressors", "Compressor", {"suction": "W", "discharge": "N"}),
-    # Heat exchangers.
-    #
-    # A nozzle is named for the SIDE OF THE EQUIPMENT it is on (shell or tube)
-    # and never for the duty the stream happens to carry. Which fluid goes in
-    # the shell and which in the tubes is a design decision an engineer makes
-    # deliberately (fouling service goes tube side, since tubes can be cleaned;
-    # condensing vapour goes shell side), so it is a fact about the exchanger and
-    # belongs on the drawing. Hot and cold invert between operating cases while
-    # the nozzle stays where it is, and they did not even land on the same face
-    # from one variant to the next.
-    #
-    # The ISO circle-and-zigzag: the zigzag is the tube, entering at W and
-    # leaving at E, and the circle around it is the shell, so the shell nozzles
-    # take N and S.
+    # Heat exchangers: nozzles are named for the side (shell or tube), not the duty.
+    # The ISO circle-and-zigzag: the tube runs W to E, the shell takes N and S.
     ("hex", "default"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
                          {"tube_in": "W", "tube_out": "E", "shell_in": "N", "shell_out": "S"}),
-    # Kettle reboiler. The stencil draws a channel head at x 0..16.5 separated
-    # from the shell by a tubesheet (the rect at x 16.5..19.5), so the left stub
-    # is the TUBE side (the heating medium), not a process connection. The
-    # process boils in the shell: liquid in at the bottom, vapour off the top.
-    # Piping the column bottoms to that left stub would run it straight into the
-    # steam side, which is what the plain W anchor does.
-    #
-    # Only one channel-head opening is drawn, so ``tube_out`` has to take the
-    # shell's far dished head. It is the heating-medium return and the one nozzle
-    # here whose name is truer than its position; a second opening on the head
-    # would have to be invented, and a nozzle is drawn where the stencil draws
-    # one.
-    #
-    # ``bottoms`` is the draw at the weir end: what does not boil overflows the
-    # plate at x = 86.5 and leaves the bottom of the shell, which is how a
-    # tower's bottoms product actually gets off the sheet.
+    # Kettle reboiler: the left stub is the channel head (tube side), and the process
+    # boils in the shell. ``tube_out`` takes the far head; ``bottoms`` is the weir-end draw.
     ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
                          {"shell_in": ("AT", 45.8, 30.0), "shell_out": ("N", 64.0),
                           "tube_in": ("W", 22.5), "tube_out": ("E", 15.0),
                           "bottoms": ("AT", 85.0, 30.0)}),
-    # Heater and cooler are one stencil pair: the same circle and zigzag, with
-    # the diagonal arrow pointing in (heat added) or out (heat removed). Taking
-    # the cooler from anywhere else breaks the pairing: "Heat Exchanger
-    # (Spiral)" is a different piece of equipment entirely and, at 100x100,
-    # draws a utility cooler larger than the reactor upstream of it. draw.io
-    # files the heat-removed one under "Condenser".
-    #
-    # The third connection is the utility one: steam into the heater, cooling
-    # medium out of the cooler. It is named for what lands on it rather than for
-    # the duty, on the same principle as the exchanger nozzles above.
+    # Heater and cooler are one stencil pair, the arrow in or out; draw.io files the
+    # cooler as "Condenser". The third connection is the utility one.
     ("heater", "default"): ("heat_exchangers", "Heater",
                             {"inlet": "W", "outlet": "E", "utility_in": "S"}),
     ("cooler", "default"): ("heat_exchangers", "Condenser",
                             {"inlet": "W", "outlet": "E", "utility_out": "N"}),
-    # A real exchanger style in its own right, just not what a Cooler is drawn as.
-    #
-    # Two spiral channels, neither of them a shell or a tube, so the sides are
-    # lettered. Only side A's pair is drawn as stubs, on the outer coil at
-    # (10, 50) and (90, 50); the second channel's connections are axial and a
-    # plan view cannot draw them, so side B takes the casing's own N and S faces.
+    # Spiral: the sides are lettered; side B's axial connections take the casing's N and S.
     ("hex", "spiral"):     ("heat_exchangers", "Heat Exchanger (Spiral)",
                             {"side_a_in": "W", "side_a_out": "E",
                              "side_b_in": "N", "side_b_out": "S"}),
     # Vessels / columns / reactors / separators / tanks.
     #
-    # The generic ISO 10628 vessel: a vertical cylinder with dished heads, the
-    # same stencil the column is drawn from. "Barrel, Drum" is a 44-gallon
-    # shipping barrel (hoop bands and all), which is a container rather than a
-    # piece of process equipment.
-    #
-    # Sharing the stencil with the column is why SCALE reproportions this one:
-    # a tower is slender because it is full of trays, and a drum drawn to the
-    # same proportions reads as a small tower on a sheet carrying both. See
-    # SCALE for the box it comes out at.
-    #
-    # Ports are the barrel's, and the dished variant's: in one shell wall and
-    # out the other at mid-height, with the vapour connection on the crown of
-    # the top head at (50, 0). Switching a vessel between variants is a change
-    # of artwork, not of piping, so the two must offer the same nozzles in the
-    # same places. Both process nozzles are at mid-height, which is on the
-    # straight shell (it spans y 15..185) at any box the unit is drawn at,
-    # rather than on a head, where the ink curves away from the box edge.
-    #
-    # ``relief`` and ``drain`` are the two nozzles issue #222 added to Vessel
-    # and Tank, and every one of the sixteen stencils in those two families
-    # places them by the same two rules, which are the roles' own meanings and
-    # not a layout convention:
-    #
-    #   relief -- on the CROWN, beside the vent. CHEE4001 p.7 puts the PSV,
-    #       wherever it can be, on the protected system itself, upright,
-    #       discharging upward, at the top of the container.
-    #       Measured onto the head's own arc or slope rather than onto the box's
-    #       top edge, for the reason the roofs below are: a head rises inside
-    #       its bounding box, so a nozzle on the edge floats above the ink.
-    #   drain -- on the vessel's LOWEST DRAWN POINT, because that is what a
-    #       drain is. Where the stencil draws a support, such as the sphere's
-    #       frame, the low point is INBOARD of the box's bottom, and
-    #       the nozzle goes on the vessel rather than on the steel: a drain out
-    #       of the bottom of a leg is worse than a drain that leaves sideways.
+    # The vessel shares the column's stencil, which SCALE reproportions. Process
+    # nozzles sit at mid-height on the straight shell. ``relief`` goes on the crown
+    # beside the vent, on the head's ink; ``drain`` on the vessel's lowest drawn point.
     ("vessel", "default"): ("vessels", "Pressurized Vessel",
                             {"inlet": ("W", 100.0), "outlet": ("E", 100.0),
                              "vent": ("N", 50.0),
-                             # Unscaled: SCALE reproportions this one by
-                             # (0.62, 0.5), so the relief's (25, 2) lands at
-                             # (15.5, 1.0) and the drain's apex at (31, 100).
-                             # The top head is an ellipse rx 50 ry 15 about
-                             # (50, 15); x = 25 is half a radius off the crown,
-                             # putting it at y = 15 - 15*sin(120 deg) = 2.
+                             # Unscaled; (25, 2) is on the top head's ellipse,
+                             # half a radius off the crown.
                              "relief": ("AT", 25.0, 2.0),
                              "drain": ("S", 50.0)}),
-    # Feed enters on the left; the returns come back on the RIGHT, which is the
-    # side the overhead and reboiler systems are drawn on. reflux_in sits high
-    # and boilup_in low on the straight shell wall (which spans y 15..185), with
-    # the two duty arrows spaced between them.
-    #
-    # The feeds are a family: an extractive tower takes its solvent above the
-    # feed tray. They stay on the west wall, and every member of it, at every
-    # count, lands strictly between the two duty arrows' heights. Those two are
-    # the INNERMOST fixed nozzles on the wall opposite (65 and 145, against
-    # reflux_in's 35 and boilup_in's 175), so a band bounded by them is bounded
-    # by all four: no feed is drawn at the elevation of a return or of a duty
-    # arrow, however many feeds there are.
-    #
-    # The arithmetic. The band is 65..145, which is 80 units of the 200-unit
-    # shell centred on 105, so ``at`` is 105. (It was 130, the height the
-    # single-feed nozzle was drawn at before the family existed, and a family
-    # centred 25 below its own band runs off the bottom of it at the second
-    # feed.) The band's *width* is the widest whole number of pitches that fits
-    # inside it: 2 x 35 = 70, since 3 x 35 = 105 is more than the 80 there is.
-    # So extent = 70 / 200 = 0.35, and the outermost members land on
-    # 105 -+ 35 = 70 and 140. The (80 - 70) / 2 = 5 units left under each arrow
-    # are the point of not spending the whole band rather than a margin picked
-    # by eye: at extent 0.4 the outermost feeds land exactly ON 65 and 145,
-    # level with a duty arrow on the wall opposite, so the two leave the vessel
-    # at one elevation and read as one line drawn across it.
-    #
-    # For a reader: one, two or three feeds sit at the declared 35 pitch, and
-    # the fourth is where PortSeries begins squeezing the run into ``extent``
-    # rather than running it off the ends.
-    # ``draw`` is the feed family read the other way: the same band, the
-    # same arithmetic, the opposite wall. A draw leaves over the east
-    # face a feed enters the west one on, so it shares the feed family's
-    # ``at``/``pitch``/``extent`` outright rather than deriving its own --
-    # centred on 105 with a 70-unit band, it lands strictly inside the
-    # 65..145 the duty arrows already bound on *this* wall, the same
-    # clearance the feeds get on theirs. ``n_draws`` defaults to zero, so
-    # nothing here is drawn on a sheet that does not ask for one.
+    # The feed and draw families sit on opposite walls inside 65..145, the band the
+    # duty arrows bound: two 35 pitches fit, so extent = 70 / 200 = 0.35.
     ("column", "default"): ("vessels", "Pressurized Vessel",
                             {"feed": ("SERIES", "W", 105, 35, 0.35),
                              "draw": ("SERIES", "E", 105, 35, 0.35),
                              "distillate": ("N", 50), "bottoms": ("S", 50),
                              "reflux_in": ("E", 35), "boilup_in": ("E", 175),
                              "condenser_duty": ("E", 65), "reboiler_duty": ("E", 145)}),
-    # The packed tower: the same shell, with two beds of packing between their
-    # support grids. This is the one column stencil that draws an internal, so
-    # an absorber or a stripper stops coming out as a bare drum.
-    #
-    # Every nozzle is the default column's, restated in the tower's own 97-unit
-    # shell: SCALE puts the shape in a 62 x 200 box, so 16.975 lands on 35,
-    # 31.525 on 65, 70.325 on 145, 84.875 on 175 and the feed family's centre
-    # 50.925 on 105, the heights every column sheet is already drawn to. The two
-    # products take the head crowns at (7, 0) and (7, 97); everything else is on
-    # the straight shell, which spans y 3.5..93.5 on both walls.
-    #
-    # The family's ``extent`` is a fraction of the face rather than a length, so
-    # it is the one number here that is NOT restated: 0.35 is the same 0.35 the
-    # default column declares, and it has to be, since both towers come out
-    # 200 tall and their duty arrows land on the same 65 and 145. The pitch and
-    # the centre do scale (16.975 -> 35, 50.925 -> 105), which is what puts this
-    # tower's feed band on exactly the default column's.
+    # Packed tower: the default column's nozzles restated in the tower's 97-unit
+    # shell, which SCALE draws 200 tall; ``extent`` is a fraction, so it stays 0.35.
     ("column", "packed"): ("vessels", "Tower With Packing",
                            {"feed": ("SERIES", "W", 50.925, 16.975, 0.35),
                             "draw": ("SERIES", "E", 50.925, 16.975, 0.35),
@@ -359,197 +160,43 @@ KIND_MAP = {
                             "reflux_in": ("E", 16.975), "boilup_in": ("E", 84.875),
                             "condenser_duty": ("E", 31.525),
                             "reboiler_duty": ("E", 70.325)}),
-    # The stirred tank, and the conventional CSTR: the same plain dished-head
-    # cylinder the vessel, the flash drum and the column are cut from, in the
-    # drum's 62 x 100 box, with an ISO group-28 agitator composed *into* it by
-    # ``pandid.units.Reactor``.
-    #
-    # That is ISO item 1.27 X8006's construction -- a dished-end vessel, an
-    # agitator on a shaft through the top head, a drive above it -- rather than
-    # the "Mixing Reactor" stencil's rectangle with a V bottom and its motor box
-    # perched outside the shell.
-    #
-    # The nozzles are the drum's, in the drum's places: the product out of the
-    # bottom head, the duty on the straight east wall (which spans y 7.5..92.5)
-    # and the charge nozzles down the west one.
-    #
-    # **The vent is on the shell, not on the crown**, and that is 1.27 again
-    # rather than a preference. The crown of a stirred vessel carries the shaft
-    # and nothing else, because the motor is drawn on the shaft above it -- and
-    # pandid's own geometry says the same thing from the other side: a nozzle's
-    # face is the box edge it is nearest, the composed box is a third of the
-    # body's height taller than the body, and every point on a 62-wide crown is
-    # then nearer a side wall than the top. A vent left up there would take its
-    # stream out through the shell. So it sits at (62, 10), on the straight east
-    # wall just under the tangent line at y 7.5, which is where the off-gas
-    # leaves a vessel whose head is occupied.
-    #
-    # The outlet also has east and west placements at y 165, on the straight
-    # wall (y 15..185) below the duty and the feed family.
+    # Stirred tank (ISO item 1.27): the drum's body and box; ``Reactor`` composes the
+    # agitator. The vent sits on the east wall below the head, since the crown carries
+    # the shaft. The outlet also offers E and W at y = 165.
     ("reactor", "default"): ("vessels", "Pressurized Vessel",
                              {"feed": ("SERIES", "W", 100.0, 28.0, 0.32),
                               "outlet": [("S", 50.0), ("E", 165.0), ("W", 165.0)],
                               "duty": ("E", 100.0),
                               "vent": ("AT", 100.0, 20.0)}),
-    # The jacketed stirred tank -- ISO item 1.27 X8006 itself, which is the
-    # jacketed one: the same shell with a heating/cooling jacket wrapped round
-    # it. Shares its stencil with ``vessel/jacketed``, because a jacketed
-    # reactor and a jacketed vessel are one piece of equipment differing in what
-    # is in it. The duty connection is the jacket's, so it takes the jacket band
-    # rather than the shell wall.
-    #
-    # The vent is off the crown for the reason ``default``'s is, and lands at
-    # (46, 10): the shell's own east wall, which the outline draws from y 7.69
-    # to 87.69, at the one height above the jacket band (y 12.69..82.69) -- so
-    # the line leaves over the jacket rather than through it.
+    # Jacketed stirred tank: ``vessel/jacketed``'s stencil. The duty takes the jacket
+    # and the vent the shell wall above it.
     ("reactor", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
                               {"feed": ("SERIES", "W", 47.7, 14, 0.32),
                                "outlet": ("S", 26.0), "duty": ("E", 47.7),
                                "vent": ("AT", 46.0, 10.0)}),
-    # "Jacketed Mixing Vessel" and "Half Pipe Mixing Vessel" are the two shapes
-    # a reader looking for the entry above will find in vessels.xml, and neither
-    # is vendored.
-    #
-    # The first draws what ``jacketed`` already draws. Same dished capsule, same
-    # jacket wrapped round its lower half -- and then a motor box, a shaft and a
-    # pair of impeller ellipses drawn INTO the artwork. pandid draws those from
-    # ISO group 28 and item 20.6, composed by ``Reactor(agitator=...)``, so
-    # vendoring this puts a second drawing of one piece of equipment in the
-    # library with nothing to say which is the live one, and it is the worse of
-    # the two: its impeller is ink and cannot be changed to the one the plant
-    # has. That is the fault issue #307 is about. (``mixing`` is kept beside it
-    # for the opposite reason: its BODY is a different vessel, a rectangle with
-    # a V bottom, so it says something the composition cannot.)
-    #
-    # The second is that same drawing again with the jacket replaced by six
-    # limpet-coil turns in section, three down each shell wall. Those turns are
-    # the whole of what tells the two apart, and a coil is piped supply and
-    # return -- two nozzles, where ``Reactor`` declares one ``duty`` and
-    # ``Vessel`` declares none at all. So the marks that would make it worth
-    # having are the marks that cannot be connected to. It is the same gap
-    # ``examples/17_stirred_reactor_train.py`` already records against the
-    # jacket, and closing it is a change to the classes rather than a line here.
-    # A half-pipe jacket and a conventional one are in any case a datasheet
-    # fact: on a P&ID they are one vessel with a heating medium on it.
-    # The flash drum: the same plain dished-head cylinder the vessel and the
-    # column are drawn from, with the phases named. ``vessel``/``horizontal``
-    # and ``separator``/``horizontal`` are already one stencil ("Drum or
-    # Condenser") differing only in what its nozzles are called, because a
-    # separator IS a vessel the author wants the vapour and liquid products
-    # named on; the vertical pair was the odd one out, and this makes the
-    # family consistent in both attitudes.
-    #
-    # It is also what the class actually claims. A Separator is documented as
-    # the generic flash drum or phase separator, and "Knock-out Drum" asserts
-    # two internals the model never said were there:
-    #
-    # * a LEVEL GAUGE, drawn as a rect and two verticals hanging off the right
-    #   shell wall at x 40..51. pandid draws instruments as ISA-5.1 balloons on
-    #   signal lines (``pandid/loops.py``), so a gauge baked into the equipment
-    #   artwork is drawn a second time the moment a real LG or LT is added.
-    # * a DEMISTER PAD, the crosshatch at y 17.69..27.69. A mesh pad is a design
-    #   decision about entrainment, not something every flash drum has.
-    #
-    # Neither is lost: ``knockout`` below is that stencil, kept under a name
-    # that says what it draws, for the author who does want the mesh pad.
-    #
-    # Ports are the vessel's, in the vessel's places, since switching a vessel
-    # for a separator is a change of what the nozzles are called and not of
-    # where they are: feed in the west shell wall at mid-height (the straight
-    # shell spans y 15..185, so it is on ink at any box the unit is drawn at,
-    # rather than on a head where the ink curves away from the box edge), and
-    # the two products on the head crowns at (50, 0) and (50, 200), which is
-    # exactly where the column takes its distillate and its bottoms.
-    #
-    # The feed is a FAMILY -- a flash drum charged twice is a wash stream, or a
-    # second phase to knock out -- and it is CENTRED on the 100 the single feed
-    # has always been drawn at, so a one-feed drum is drawn exactly as 0.1.3
-    # drew it. Centred rather than run downwards, unlike the hopper bodies
-    # below: this nozzle is at mid-height with 85 units of straight shell above
-    # it and 85 below, which is the case that mode is for.
-    #
-    # The band is 0,5 of the shell -- y 50..150 unscaled, 25..75 as drawn --
-    # which is inside the straight wall (15..185, or 7,5..92,5) at both ends.
-    # The pitch is 40, or 20 as drawn.
-    #
-    # Measured against the ARROWHEAD rather than borrowed from the stirred
-    # tank this shell is shared with. The reactor's own band is 28/0,32, which
-    # spaces TWO charge nozzles 14 apart as drawn -- under
-    # ``symbols.MIN_NOZZLE_PITCH``, so the commonest multi-feed count there is
-    # a ``nozzles-crowded`` finding before it is anything else. Copying that
-    # here would have shipped the same defect on a new keyword. At 40/0,5 a
-    # drum draws two feeds 20 apart, three 20 apart and four 16,7 apart, all of
-    # them clear of two 12-unit heads; five is where the squeeze takes it under
-    # and where the finding is right to fire.
+    # The flash drum: the vessel's stencil, nozzle places and box, with the phases
+    # named. The feed family is centred on y = 100 at a 40 pitch, so two feeds sit
+    # 20 apart as drawn.
     ("separator", "default"): ("vessels", "Pressurized Vessel",
                                {"feed": ("SERIES", "W", 100.0, 40.0, 0.5),
                                 "vapor": ("N", 50.0), "liquid": ("S", 50.0)}),
-    # The knock-out drum, with its mesh pad and its level gauge, under the name
-    # of the thing it draws. Its nozzles are the ones it has always carried, on
-    # its own 51 x 95.38 body: the feed on the west shell wall (which spans
-    # y 7.69..87.69) and the two products on the head crowns, whose arcs reach
-    # y = 0 and y = 95.38 because a 40-wide chord scales rx = 13 / ry = 5 up
-    # until ry is the 7.69 the shell is inset by.
-    #
-    # The feed family is centred on the 55 the single nozzle was drawn at. A
-    # flare or relief knock-out drum taking a header per relief system is the
-    # ordinary reason to ask for this, and it is fed BELOW the demister pad,
-    # which the artwork draws across y 17,69..27,69.
-    #
-    # The band is 0,52 of the 95,38 body -- y 30,2..79,8 -- and every digit of
-    # that is one of the three things bounding it: above 27,69 so no feed is
-    # drawn at the pad, below 87,69 so none is drawn on the dished bottom, and
-    # wide enough that four feeds sit 16,5 apart, which two 12-unit ARROWHEADs
-    # can be told apart at. Five is where the squeeze takes it under and where
-    # ``nozzles-crowded`` is right to fire.
+    # Knock-out drum, with its mesh pad and level gauge. The feed band, 0.52 of the
+    # body, stays below the pad (y 27.69) and above the dished bottom.
     ("separator", "knockout"): ("vessels", "Knock-out Drum",
                                 {"feed": ("SERIES", "W", 55, 20, 0.52),
                                  "vapor": ("N", 25), "liquid": ("S", 25)}),
-    # Both roofs rise inside the bounding box, so a nozzle on the box's top edge
-    # floats above the drawn ink. Anything put on the roof goes on the roof
-    # itself: the dome crown, and the cone apex.
-    #
-    # A tank takes a third roof nozzle the vessels above do not: ``vent``, the
-    # conservation vent a fixed roof breathes through. It flanks the crown, and
-    # ``relief`` flanks it on the other side, so the roof connections read left
-    # to right in the order a reader meets them and neither of the two is nearer
-    # the middle than the other. Both are measured onto the roof's own ink, and
-    # ``drain`` onto the floor clear of the draw-off: see the ``vessel/default``
-    # block above for the rule and for what it costs.
-    #
-    # WHERE A TANK FILLS (#226). The fill is on the SHELL, low, and the crown is
-    # the alternate rather than the default. Splash-filling a flammable liquid
-    # into a vapour space generates static, so bottom entry -- or a fill pipe
-    # carried down to the floor -- is ordinary practice for a motor spirit or an
-    # ethanol tank, and a fill line drawn onto the crown with nothing said about
-    # a downcomer reads as the splash fill. Being honest about the evidence:
-    # none of the three documents on disk says anything about tank filling,
-    # static or downcomers, so this is ordinary practice and is claimed as
-    # nothing more -- unlike the relief above it, which CHEE4001 p.7 places
-    # outright.
-    #
-    # It is a default and not a rule, which is the whole of what #226 asked for:
-    # top entry with an internal downcomer is a real arrangement and a sheet
-    # reaches it with ``nozzle("inlet", "N")``. West and east are both offered
-    # because a fill header runs down whichever side the plot puts it on, and
-    # the layout engine picks from where the peer landed.
-    #
-    # The dished roof is an arc of r = 75 over a 100-wide chord springing from
-    # y = 25.46, so its centre is at (50, 25.46 + sqrt(75^2 - 50^2)) = (50,
-    # 81.36) and its crown at (50, 6.36). x = 35 and x = 65 are 15 either side
-    # of that crown, at y = 81.36 - sqrt(75^2 - 15^2) = 7.9. The shell is a
-    # plain rect from y = 25.46 to 95.46, so the fill takes its wall at y = 85,
-    # ten above the floor.
+    # Roof nozzles go on the roof's own ink, which rises inside the box; ``vent`` and
+    # ``relief`` flank the crown. The fill enters the shell low on W or E, with the
+    # crown as an alternate. The dished roof is r = 75 about (50, 81.36), so x = 35
+    # and 65 meet it at y = 7.9.
     ("tank", "default"):  ("vessels", "Tank (Dished Roof)",
                            {"inlet": [("W", 85), ("E", 85), ("AT", 50.0, 6.4)],
                             "outlet": ("S", 50),
                             "vent": ("AT", 35.0, 7.9),
                             "relief": ("AT", 65.0, 7.9),
                             "drain": ("S", 20)}),
-    # The conical roof runs (0, 20) - (50, 0) - (100, 20), so a nozzle halfway
-    # along either slope is at (25, 10) and (75, 10). The floor is a plain line
-    # across y = 90, so the drain takes it directly, 30 clear of the outlet, and
-    # the shell walls span y 20..90, so the fill takes them at y = 80.
+    # The conical roof's slopes put the vent and relief at (25, 10) and (75, 10); the
+    # fill takes the walls at y = 80.
     ("tank", "conical"):  ("vessels", "Tank (Conical Roof)",
                            {"inlet": [("W", 80), ("E", 80), ("N", 50)],
                             "outlet": ("S", 50),
@@ -558,45 +205,17 @@ KIND_MAP = {
                             "drain": ("S", 20)}),
     # Fittings.
     #
-    # A reducer is a trapezoid between a large face and a small one, and both
-    # faces are pipe: the run leaves the small end at whatever the reduced line
-    # size is. fittings.xml's "Reducer" is not that shape. It is a triangle,
-    # 70 x 50 to a point at (70, 25), so its E anchor sits on the apex and the
-    # line it reduces to comes out with no width at all: a reducer drawn as a
-    # blind cone. So ``default`` is piping.xml's Concentric Reducer, the same
-    # shape ``concentric`` names, on the pattern ``valve``/``gate`` and
-    # ``fitting``/``flange`` already follow: the unqualified name draws the
-    # ordinary member of the family, and the qualified one says which member
-    # that is. Nothing maps the triangle; a shape that draws the device wrongly
-    # is not a style to be kept under another name.
-    #
-    # Both bodies are drawn 12.5 tall, since a reducer's drawn height is the
-    # pipe it sits in and two of them in one run have to agree about that; see
-    # SCALE.
+    # The default reducer is piping.xml's concentric one; fittings.xml's "Reducer"
+    # draws a closed cone. Both bodies are drawn 12.5 tall; see SCALE.
     ("reducer", "default"): ("piping", "Concentric Reducer",
                              {"inlet": "W", "outlet": "E"}),
     ("reducer", "concentric"): ("piping", "Concentric Reducer",
                                 {"inlet": "W", "outlet": "E"}),
-    # Eccentric: flat on top, so the two ends share a roof and the small end's
-    # centreline is the HIGHER of the two, which is the whole point of it on a
-    # pump suction, where a concentric reducer would leave a pocket against the
-    # roof of the line for vapour to collect in. The stencil's own E anchor is
-    # on that raised centreline (y = 4.5 of 15, against the W anchor's 7.5) and
-    # not at mid-height, so it is taken as named rather than placed.
-    #
-    # Flat on the *bottom* is the same fitting rolled over, for the line that
-    # has to drain rather than vent, and it is a placement rather than a second
-    # drawing: ``pin(mirrored="y")`` turns the body over, and both nozzles stay
-    # on the west and east faces the run enters and leaves by.
+    # Eccentric: flat on top; the stencil's E anchor is on the raised centreline.
+    # ``pin(mirrored="y")`` draws it flat on the bottom.
     ("reducer", "eccentric"): ("piping", "Eccentric Reducer",
                                {"inlet": "W", "outlet": "E"}),
-    # In-line devices: one class, because a strainer, a sight glass and a
-    # rupture disc are the same thing to the flowsheet (a pair of faces on a
-    # line) and differ only in what is drawn between them. The default is the
-    # plain flanged joint, which is what an unqualified "fitting" draws.
-    #
-    # Every port here sits on a bounding-box edge that the stencil actually
-    # strokes, so they take the shapes' own W/E anchors.
+    # In-line devices: a pair of faces on a line, taking the shapes' own W/E anchors.
     ("fitting", "default"):        ("fittings", "Flanged Connection",
                                     {"inlet": "W", "outlet": "E"}),
     ("fitting", "flange"):         ("fittings", "Flanged Connection",
@@ -613,9 +232,7 @@ KIND_MAP = {
     # the two anchors sit: one on each arc's extremum.
     ("fitting", "expansion_joint"): ("fittings", "Compensator",
                                      {"inlet": "W", "outlet": "E"}),
-    # The four arrestor bodies encode different certifications (plain, explosion-
-    # proof, detonation-proof, fire-resistant) and are drawn differently, so each
-    # is its own variant rather than an alias.
+    # Each arrestor body is a distinct certification, so each is its own variant.
     ("fitting", "flame_arrestor"): ("fittings", "Flame Arrestor",
                                     {"inlet": "W", "outlet": "E"}),
     ("fitting", "flame_arrestor_explosion_proof"): (
@@ -630,37 +247,15 @@ KIND_MAP = {
     ("fitting", "clamped_coupling"): ("fittings", "Clamped Flange Coupling",
                                       {"inlet": "W", "outlet": "E"}),
     ("fitting", "hose"):           ("fittings", "Hose", {"inlet": "W", "outlet": "E"}),
-    # Restriction orifice. fittings.xml's "Orifice Plate" is NOT this: it is a
-    # paddle-on-a-handle overlay meant to be dropped on top of a line, with no
-    # flow path and no connections. valves.xml draws the in-line plate.
+    # Restriction orifice, from valves.xml; fittings.xml's "Orifice Plate" has no flow path.
     ("fitting", "orifice"):        ("valves", "Orifice", {"inlet": "W", "outlet": "E"}),
     ("fitting", "rotameter"):      ("valves", "Rotameter", {"inlet": "W", "outlet": "E"}),
     ("fitting", "static_mixer"):   ("mixers", "In-Line Static Mixer",
                                     {"inlet": "W", "outlet": "E"}),
 
     # --- Primary flow elements (flow_sensors.xml) ---
-    #
-    # The device an FE balloon reads: a venturi, a meter body, a probe in the
-    # line. They are in-line devices with a pair of faces, which is what a
-    # Fitting is, so they are variants of it rather than a class of their own:
-    # nothing about the flowsheet changes because the thing in the run measures
-    # rather than strains. (A ``FlowElement`` class would read better on an
-    # equipment list, and is worth its own change; it is not this one.)
-    #
-    # Every shape here names W and E on its own outline and every one of them is
-    # stroked (the meter bodies are a plain rectangle, and the two profiling
-    # elements close their bodies with a straight face at each end), so all of
-    # them take the stencil's own anchors.
-    #
-    # These are drawn on a 50-unit module rather than valves.xml's ~100, so
-    # SCALE halves them at 0.5 instead of 0.25 and they come out beside a
-    # 24.5 x 15.0 valve at the same length. See SCALE.
-    #
-    # The venturi is the one a differential-pressure loop is actually drawn
-    # with: a converging throat and a diverging recovery cone, closed by a flat
-    # face at each end where the flanges are. The stencil's N anchor is on the
-    # throat rather than the top of the box, and a Fitting has no third port to
-    # put it on, so it is left where it is.
+    # On a 50-unit module, so SCALE halves them; each takes its own W/E anchors.
+    # The venturi's N anchor is on the throat and goes unused.
     ("fitting", "venturi"):        ("flow_sensors", "Venturi",
                                     {"inlet": "W", "outlet": "E"}),
     ("fitting", "flow_nozzle"):    ("flow_sensors", "Flow Nozzle",
@@ -683,91 +278,32 @@ KIND_MAP = {
                                     {"inlet": "W", "outlet": "E"}),
     ("fitting", "target"):         ("flow_sensors", "Target",
                                     {"inlet": "W", "outlet": "E"}),
-    # The two impulse probes. draw.io spells the averaging one "Averging"; the
-    # shape name has to be the stencil's, so the typo is carried here and
-    # corrected in the variant name.
+    # draw.io spells the averaging probe "Averging"; the shape name keeps the typo.
     ("fitting", "pitot"):          ("flow_sensors", "Pitot Tube",
                                     {"inlet": "W", "outlet": "E"}),
     ("fitting", "averaging_pitot"): ("flow_sensors", "Averging Pitot Tube",
                                      {"inlet": "W", "outlet": "E"}),
 
-    # --- In-line piping devices (piping.xml) ---
-    #
-    # Drawn on the same 50-unit module as the flow elements above and scaled
-    # with them. Each takes its stencil's own W and E, which are on the pipe
-    # stubs the shape draws rather than on bare box corners.
-    #
-    # The three strainer bodies a piping drawing actually names. They are drawn
-    # lying in the run, unlike "strainer"/"strainer_cone" above, which come from
-    # fittings.xml's 40 x 80 upright box and stand across it.
+    # --- In-line piping devices (piping.xml), on the flow elements' module ---
+    # These strainers lie in the run; "strainer" and "strainer_cone" stand across it.
     ("fitting", "strainer_y"):      ("piping", "Y-Type Strainer",
                                      {"inlet": "W", "outlet": "E"}),
     ("fitting", "strainer_basket"): ("piping", "Basket Strainer",
                                      {"inlet": "W", "outlet": "E"}),
     ("fitting", "strainer_duplex"): ("piping", "Duplex Strainer",
                                      {"inlet": "W", "outlet": "E"}),
-    # Bellows: four convolutions between two flanges, which is the expansion
-    # joint a piping drawing draws. "expansion_joint" above is fittings.xml's
-    # Compensator, a plain lens between two faces; both are kept, because a
-    # variant is a style and neither is wrong.
+    # Bellows: piping.xml's expansion joint; "expansion_joint" is the plain lens.
     ("fitting", "bellows"):        ("piping", "Expansion Joint",
                                     {"inlet": "W", "outlet": "E"}),
-    # Blade on a pivot between two flanges. ("Damper2" is the same drawing with
-    # the pivot filled in draw.io's theme colour rather than black, and this
-    # converter paints no fills, so it would be a duplicate.)
+    # Blade on a pivot between two flanges.
     ("fitting", "damper"):         ("piping", "Damper", {"inlet": "W", "outlet": "E"}),
     # Removable spool: the length of pipe taken out to break a line for
     # maintenance, drawn as a pipe between two flanges.
     ("fitting", "spool"):          ("piping", "Removable Spool",
                                     {"inlet": "W", "outlet": "E"}),
-    # THE STEAM TRAP IS NOT HERE, and the reason is worth writing down, because
-    # every steam system has one and this table has thirty-eight fittings
-    # without it.
-    #
-    # piping.xml's "Steam Trap" draws nothing. It is a bare 50 x 50 rect with a
-    # W and an E constraint and an empty foreground -- and it is byte-for-byte
-    # its own file's "Desuper Heater", the way "Globe Valve" is valves.xml's
-    # "Ball Valve" (strip the two names and the XML is identical; the only other
-    # such group in the file is Detonation Arrestor / Flame Arrestor / In-Line
-    # Silencer). At this file's 0.5 it comes out a 25 x 25 empty square, which
-    # is what ``SymbolRegistry._generic_symbol`` already draws for a kind with
-    # no artwork at all. So vendoring it registers a blank box under two device
-    # names, which is the Globe Valve fault and issue #307's, committed on
-    # purpose.
-    #
-    # STENCIL_PATCHES cannot answer this one. That mechanism corrects a shape
-    # the stencil draws WRONGLY, and the globe valve's patch works because it
-    # quotes the stencil's own arcs back at it -- the seat was already drawn and
-    # only the fill was missing. Here there is nothing to quote: a trap's mark
-    # would be new artwork, which is a hand-drawn primitive under CONTRIBUTING
-    # section 1 and not a vendoring, and which STENCIL_PATCHES says outright it
-    # is not for.
-    #
-    # The gap is real and is being worked round today:
-    # ``examples/15_condensing_turbine.py`` draws its trap as a
-    # ``Product("Steam Trap Drain")``, which is a sheet boundary rather than a
-    # device in the run.
-    # Spectacle blind (figure-8 blind): two discs on a common tie, one bored
-    # through and one solid, bolted between a pair of flanges. Which of them is
-    # in the line is the whole of what it says, so it is the one in-line device
-    # the stencil set draws in two states -- see CLOSED_SHAPES, and
-    # ``Fitting(normal_position=...)``, which is how a user asks for the other.
-    #
-    # The stencil is 20 x 80: the two discs stacked at y 0..40, then a 40-long
-    # tie down to a lone "S" constraint at (10, 80). That constraint is where
-    # draw.io means the drawing to be dropped on a line, which would make this a
-    # flag on a stalk rather than a device in a run -- and a Fitting is a pair of
-    # faces on a line. So the run is taken THROUGH the disc in function, which
-    # is the lower one: the stencil pair fills that disc in the closed state and
-    # the upper, parked one in the open state, so a line drawn through it meets
-    # solid ink exactly when the line is blanked. Both points are on the
-    # ellipse's own extrema (it spans y 20..40 about x = 10, r = 10), and the
-    # tie hangs below the run as the handle it is.
-    #
-    # Piping the two ends N and S instead -- along the stencil's own axis, with
-    # the tie read as pipe -- draws every blind across its run, since face
-    # selection only chooses among declared alternates and nothing turns a unit
-    # but the author's own pin(). A blind sits in the run it isolates.
+    # Spectacle blind, the one in-line device drawn in two states (see CLOSED_SHAPES).
+    # The run passes through the lower disc at y = 30, the one that blanks the line;
+    # the tie hangs below.
     ("fitting", "blind"):          ("piping", "Open Figure 8 Blind",
                                     {"inlet": ("W", 30.0), "outlet": ("E", 30.0)}),
 
@@ -776,646 +312,185 @@ KIND_MAP = {
     ("hex", "shell_tube"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
                             {"tube_in": "W", "tube_out": "E",
                              "shell_in": "N", "shell_out": "S"}),
-    # U-tube: the channel head is the box at x 0..15, split into two chambers by
-    # the pass partition the stencil draws at y = 15, and the shell runs from the
-    # tubesheet at x = 15 to a dished head that bulges to x = 91.75. A U-tube
-    # bundle turns round inside the shell, so BOTH tube connections are on that
-    # channel head, one chamber each. That is the same arrangement "hairpin"
-    # below is drawn with, and the reason the variant is called u_tube at all.
-    #
-    # draw.io offers one W anchor, on the partition itself at (0, 15), and an E
-    # anchor on the shell's far head. Taking the pair would put a tube nozzle on
-    # the shell, so the two chambers are addressed directly instead and the E
-    # anchor goes unused. The shell keeps N and S, which are on its walls.
+    # U-tube: both tube connections on the channel head, one per chamber either side
+    # of the pass partition at y = 15; the shell keeps N and S.
     ("hex", "u_tube"):     ("heat_exchangers", "U-Tube Heat Exchanger",
                             {"tube_in": ("W", 7.5), "tube_out": ("W", 22.5),
                              "shell_in": "N", "shell_out": "S"}),
-    # Horizontal shell-and-tube in elevation: the exchanger a real sheet draws
-    # for an overhead condenser or a feed cooler. (The "shell_tube" variant above
-    # is the ISO circle-and-zigzag; despite the name it is not this shape.)
-    # Tube side runs through the heads at x 0..15 and 85..100; the shell nozzles
-    # sit between the tubesheets, which is where draw.io's NE/SW anchors land.
+    # Horizontal shell-and-tube in elevation: the tube side through the heads, the
+    # shell nozzles between the tubesheets.
     ("hex", "straight_tubes"): ("heat_exchangers", "Heat Exchanger (Straight Tubes)",
                                 {"tube_in": ("W", 15), "tube_out": ("E", 15),
                                  "shell_in": ("N", 75), "shell_out": ("S", 25)}),
-    # The same circle-and-zigzag as "default", inside a box and with the
-    # heat-removed arrow across it, so the sides read the same way: zigzag W->E
-    # is the tube, the circle around it is the shell.
+    # The circle-and-zigzag with the heat-removed arrow: tube W to E, shell N and S.
     ("hex", "condenser"):  ("heat_exchangers", "Condenser",
                             {"tube_in": "W", "tube_out": "E",
                              "shell_in": "N", "shell_out": "S"}),
-    # Plate: a pack of plates with the two circuits drawn as an X across it,
-    # (10, 0)->(90, 30) and (10, 30)->(90, 0). Neither circuit is a shell or a
-    # tube and the two are physically interchangeable, so they are lettered
-    # rather than named, and each one follows the diagonal the stencil actually
-    # draws: NW to SE and SW to NE. Pairing along the top and bottom edges
-    # instead, as the old naming did, crossed both streams over the ink.
+    # Plate: the circuits are lettered and follow the drawn diagonals, NW-SE and SW-NE.
     ("hex", "plate"):      ("heat_exchangers", "Heat Exchanger (Plate)",
                             {"side_a_in": "NW", "side_a_out": "SE",
                              "side_b_in": "SW", "side_b_out": "NE"}),
-    # Finned tubes: the same casing as "straight_tubes", with a finned tube in
-    # place of the bundle, so it takes that variant's nozzles exactly and is a
-    # drop-in change of artwork. It is a shell-and-tube exchanger and not an air
-    # cooler: the stencil draws a closed casing with tubesheets at x = 15 and 85
-    # and no fan, so the N/S pair is a piped shell connection. draw.io's own N/S
-    # anchors are at x = 7 and 93, which is over the channel heads rather than
-    # between the tubesheets. A shell nozzle cannot be on the tube side.
+    # Finned tubes: the "straight_tubes" casing and nozzles; the shell pair sits
+    # between the tubesheets, not on draw.io's N/S over the channel heads.
     ("hex", "finned"):     ("heat_exchangers", "Heat Exchanger (Finned Tubes)",
                             {"tube_in": "W", "tube_out": "E",
                              "shell_in": ("N", 75), "shell_out": ("S", 25)}),
-    # Air cooler (fin-fan). The only piped side is the tube bundle, drawn across
-    # the bottom at y = 80 where the stencil's own W/E anchors sit. There is no
-    # shell: the other side is air, and it is not piped either. An induced-draft
-    # bay pulls it in under the bundle and discharges it through the fan on top,
-    # so air_in and air_out sit on the plenum's own bottom and top faces on the
-    # fan's centreline.
+    # Air cooler: the tube bundle at y = 80 is the only piped side; the air enters
+    # under the bundle and leaves through the fan, on the fan's centreline.
     ("hex", "air_cooled"): ("heat_exchangers", "Heat Exchanger (Finned Tubes, Fan)",
                             {"tube_in": ("W", 80), "tube_out": ("E", 80),
                              "air_in": ("S", 50), "air_out": ("N", 50)}),
-    # Double pipe, drawn as a hairpin. The two bands at y 5..15 and y 35..45 are
-    # the OUTER pipe's walls and the line drawn down the middle of each is the
-    # inner pipe: it enters the west face at y = 10 and y = 40, where the stencil
-    # draws its flange ticks, and its return bend swings out to x = 90, clear of
-    # the annulus's own bend at x = 70. The annulus is the side that is stubbed
-    # up at (10, 0) and down at (10, 50), so N and S are the shell connections
-    # and the west pair is the tube.
-    #
-    # Both fluids enter at the same end and turn round at the far one, which is
-    # why neither side has an east nozzle. Counter-current: the tube enters low
-    # at (0, 40) where the annulus leaves.
+    # Double pipe as a hairpin: the annulus is stubbed N and S and the inner pipe
+    # enters the west face; both fluids turn at the far end, counter-current.
     ("hex", "double_pipe"): ("heat_exchangers", "Double Pipe Heat Exchanger",
                              {"shell_in": "N", "shell_out": "S",
                               "tube_in": "SW", "tube_out": "NW"}),
-    # Hairpin: a U-tube in a shell, with no <connections> at all. The tube ends
-    # are the two flared openings on the west face (y 7..10 and y 20..23); the
-    # shell draws four stubs, and the pair taken is the diagonal one, far end
-    # top and near end bottom, matching "straight_tubes". Like the double pipe
-    # above, the tube returns to the end it came in at, so both tube nozzles are
-    # on the west face.
+    # Hairpin: the tube ends are the two west openings; the shell takes the diagonal
+    # stub pair.
     ("hex", "hairpin"):    ("heat_exchangers", "Hairpin Exchanger",
                             {"tube_in": ("W", 8.5), "tube_out": ("W", 21.5),
                              "shell_in": ("N", 72.5), "shell_out": ("S", 17.5)}),
-    # Thin-film (wiped-film) evaporator: the one evaporator in the set, and the
-    # one exchanger whose two sides are a jacket and a product side rather than a
-    # shell and tubes. The product runs top to bottom: feed onto the wiper at the
-    # shell's top face, which is drawn at y = 10 rather than on the box edge, and
-    # concentrate out of the cone apex at (40, 120). The port is offset to x = 20
-    # to keep the inlet line off the rotor shaft the stencil draws down the
-    # centre. The jacket is opened on both walls at y = 30, so that is where the
-    # heating medium goes in and comes out.
+    # Thin-film evaporator: product top to bottom, the feed set over to x = 20 off
+    # the rotor shaft; the jacket opens on both walls at y = 30.
     ("hex", "thin_film"):  ("heat_exchangers", "Thin-Film Evaporator",
                             {"product_in": ("AT", 20.0, 10.0), "product_out": ("S", 40),
                              "jacket_in": ("W", 30), "jacket_out": ("E", 30)}),
     # Pump / compressor styles.
     ("pump", "vacuum"):           ("pumps", "Vacuum Pump",
                                    {"suction": ("W", 25.0), "discharge": ("E", 25.0)}),
-    # Peristaltic (hose) pump: the tube runs over the rollers and leaves the top
-    # of the head, so the only connections the stencil draws are the two stubs
-    # at (20, 0) and (40, 0). The casing circle would take a W/E pair and keep
-    # this in line with the rest of the pumps, but it would put both nozzles on
-    # blank casing wall; the rule for this family is that a drawn nozzle wins.
+    # Peristaltic: the only drawn connections are the two stubs on top.
     ("pump", "peristaltic"):      ("pumps", "Peristaltic",
                                    {"suction": ("N", 20.0), "discharge": ("N", 40.0)}),
-    # Submersible (sump) pump: it stands in the liquid it pumps, so the suction
-    # is the strainer plate it sits on and takes the stencil's own S anchor. The
-    # discharge is the elbow drawn out of the casing at y = 31.5, and the port
-    # is on the open end of that pipe at x = 96.77, not on the box edge 6.8
-    # further out, so the line meets the pipe instead of stopping short of it.
+    # Submersible: the suction is the strainer plate (S); the discharge is the open
+    # end of the drawn elbow, inboard of the box edge.
     ("pump", "submersible"):      ("pumps", "Submersible Pump",
                                    {"suction": "S", "discharge": ("AT", 96.77, 31.5)}),
     ("compressor", "rotary"):      ("compressors", "Rotary Compressor", {"suction": "W", "discharge": "N"}),
     ("compressor", "liquid_ring"): ("compressors", "Liquid Ring Compressor", {"suction": "W", "discharge": "N"}),
     # Vessel / tank styles.
-    # Brackets widen the bounding box past the shell, so box-edge ports float
-    # outside the vessel; pin them to the shell walls at x = 10 and x = 50.
-    #
-    # Six of the ten vessels below are one 40-wide dished shell dressed
-    # differently, and their heads are all the same ellipse: rx 20, ry 7.69,
-    # about (cx, 7.69) on top and (cx, 87.69) underneath. So the relief is the
-    # same point on all six, shifted with the shell: x = cx - 12 is 0.6 of a
-    # radius off the crown, at y = 7.69 - 7.69*0.8 = 1.5. The drain is the
-    # bottom head's own crown at (cx, 95.38). Stating the arithmetic once here
-    # is what keeps the six from drifting apart one variant at a time, which is
-    # the same reason ``insulated`` takes ``jacketed``'s map to the decimal.
+    # Brackets widen the box past the shell, so the process ports sit on the shell walls.
+    # The 40-wide dished shells share one head: relief at (cx - 12, 1.5), drain at
+    # (cx, 95.38).
     ("vessel", "dished"): ("vessels", "Vessel (Dished Ends, Brackets)",
                            {"inlet": ("AT", 10.0, 47.0), "outlet": ("AT", 50.0, 47.0),
                             "vent": ("N", 30.0),
                             "relief": ("AT", 18.0, 1.5), "drain": ("S", 30.0)}),
-    # the vent rides the raised manway dome on top, apex near x = 62.7
-    #
-    # The dome is the one vessel lying down in this group: a 95.4 x 55 body with
-    # its top wall drawn as a line at y = 14.95 and its bottom at y = 54.95, the
-    # manway riding above the first. So the relief goes on the body's top wall
-    # rather than on the manway, which the vent already has, and the drain on
-    # the bottom wall at the body's midpoint. Both are 15 or so inboard of the
-    # box edge the face is read against, which is what a dome and a manway cost
-    # in bounding box; both still resolve N and S, since the box is nearly twice
-    # as wide as it is tall.
+    # Dome: the vent rides the manway apex near x = 62.7; the relief and drain sit on
+    # the body's top and bottom walls, inboard of the box.
     ("vessel", "dome"):   ("vessels", "Vessel (Dome)",
                            {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7),
                             "relief": ("AT", 30.0, 15.0), "drain": ("S", 47.7)}),
-    # Jacketed: the same dished vessel inside a heating/cooling jacket, drawn as
-    # a panel down each side out to the box edge. The process nozzles go on the
-    # jacket's outer wall rather than on the shell at x = 6 and 46, so the line
-    # stops where it meets the equipment instead of being drawn across the
-    # jacket. Both are at the straight shell's mid-height, and the vent is on
-    # the top head's crown, as on "dished".
+    # Jacketed: the process nozzles on the jacket's outer wall at mid-height; the vent
+    # on the crown.
     ("vessel", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
                              {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
                               "vent": ("N", 26.0),
-                              # Shell at x 6..46, so cx = 26 and the heads'
-                              # arithmetic above gives 26 - 12 = 14 and 95.38.
-                              # The relief and the drain go on the SHELL's heads
-                              # and not on the jacket, which the two process
-                              # nozzles are moved out onto: a jacket is a
-                              # utility annulus, and a nozzle drawn on it would
-                              # be relieving the heating medium.
+                              # Relief and drain on the shell's heads (cx = 26), not on the jacket.
                               "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
-    # Insulated: the same vessel again, lagged rather than jacketed, and the
-    # closest thing in the set to a pure change of artwork. The insulation is
-    # drawn as a line down each side at x = 0 and x = 52 with the hatch ticks
-    # between it and the shell, which is exactly where the jacket's outer panel
-    # walls are: same 52 x 95.38 box, same shell at x 6..46, same heads. So it
-    # takes ``jacketed``'s port map to the decimal, and a sheet swapping one for
-    # the other does not move a run. Both process nozzles are on that outer
-    # line, which spans y 12.69..82.69 and so is under them at any box the unit
-    # is drawn at, and the vent is on the top head's crown at (26, 0).
+    # Insulated: the same box, shell and heads as ``jacketed``, so the same port map.
     ("vessel", "insulated"): ("vessels", "Vessel (Dished Ends, Thermal Insulation)",
                               {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
                                "vent": ("N", 26.0),
                                "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
-    # Electrically heated: a 40-wide shell at x 0..40 between heads that reach y = 0 and y = 95.38, with the
-    # resistor element hung on the OUTSIDE of the east wall at x 44..50. That
-    # element is the only thing widening the box to 50, and it is why this is
-    # the one vessel in the family whose nozzles are not its siblings' to the
-    # decimal.
-    #
-    # The inlet still is. Nothing is drawn on the west side, so the shell wall
-    # IS the box's west face there and the inlet keeps the family's 47.7.
-    #
-    # The outlet cannot. The element and its two leads occupy y 27.69..67.69 out
-    # to the box edge, so a nozzle at 47.7 has its run drawn straight through
-    # the heater; it drops to 77.7, on the clear shell below, which is a low
-    # draw-off and how a vessel with a heating element in its side wall is piped
-    # anyway. It is pinned to the shell at x = 40 rather than taken from the
-    # box's east face, on ``dished``'s reason: the ink out at x = 50 is the
-    # heater's own casing, and a process nozzle does not belong on it.
+    # Electrically heated: the element on the east wall widens the box, so the
+    # outlet drops to y = 77.7 below it, on the shell at x = 40.
     ("vessel", "electrical_heating"): (
         "vessels", "Vessel (Dished Ends, Electrical Heating)",
         {"inlet": ("W", 47.7), "outlet": ("AT", 40.0, 77.7), "vent": ("N", 20.0),
-         # Shell at x 0..40, so cx = 20 and the heads give 8 and 95.38. The
-         # element hangs off the east wall between y 27.69 and 67.69 and the
-         # drain is below all of it, so unlike the outlet above it needs no
-         # dodging: it is the family's bottom crown, unmoved.
+         # Shell at x 0..40, so cx = 20 and the heads give 8 and 95.38.
          "relief": ("AT", 8.0, 1.5), "drain": ("S", 20.0)}),
-    # Swaged: one vessel in two diameters, the narrow section on top of the wide
-    # one with a cone between them at y 40..50. It comes out at 50 x 97.5, in
-    # among ``jacketed``'s 52 x 95.38 and ``dished``'s 60 x 95.38 rather than
-    # standing out beside them.
-    #
-    # Both process nozzles go on the WIDE section, which is the one whose walls
-    # are the box's own west and east faces (x = 0 from y 50.25 to 85, x = 50
-    # from y 50 to 85); the narrow shell's walls are at x = 10 and x = 40,
-    # inboard of the box, and a pair placed up there would be the only nozzles
-    # in the family not on the box edge for no gain. 67 is that wide section's
-    # mid-height, so the two are level, as they are on every sibling.
-    #
-    # The vent is the top head's crown, at (25, 0). That head is a true
-    # semicircle rather than the family's flattened one: the stencil asks for
-    # r = 10 over a 30-wide chord, which SVG scales up to the r = 15 the chord
-    # needs, so the arc springs from y = 15 and its crown lands exactly on the
-    # box's top edge rather than a fraction under it.
-    #
-    # The relief goes on that same true semicircle, r = 15 about (25, 15), so
-    # x = 16 puts it at y = 15 - sqrt(15^2 - 9^2) = 3 -- the 3-4-5 triangle, not
-    # the flattened family's 0.6-of-a-radius rule, because this head is not that
-    # head. The drain is the bottom ellipse's crown at (25, 97.5), on the WIDE
-    # section, which is where a two-diameter vessel holds its liquid.
+    # Swaged: the process nozzles on the wide section at mid-height, y = 67. The top
+    # head is a true semicircle, r = 15 about (25, 15), so x = 16 puts the relief at y = 3.
     ("vessel", "swaged"): ("vessels", "Vessel (Different Diameters)",
                            {"inlet": ("W", 67.0), "outlet": ("E", 67.0),
                             "vent": ("N", 25.0),
                             "relief": ("AT", 16.0, 3.0), "drain": ("S", 25.0)}),
-    # The third roof that rises inside its bounding box: the shell is open
-    # between x = 5 and x = 95 at y = 0 (that gap is what the roof floats in),
-    # so anything on the box's top edge is drawn in mid-air 5 units above the
-    # roof plate. The plate spans x 5..95 at y = 5, and the vent and the relief
-    # go on it, 15 either side of its middle. A floating roof has no vapour
-    # space to conserve and is not what a conservation vent is for; the nozzles
-    # are still here because a declared nozzle is offered rather than asserted,
-    # which is the argument in ``units.Tank``, and because a rim vent and a roof
-    # bleeder are connections a floating roof does have.
-    #
-    # THE FILL HAS NO ROOF PLACEMENT AT ALL, and this is the one variant where
-    # that is not a default but a fact about the drawing (#226). A floating roof
-    # rides on the liquid: there is no fixed roof to weld a nozzle to, and the
-    # plate the reader sees at y = 5 is the deck, drawn at whatever level the
-    # tank happens to be at. A fill line landing on it is a pipe joined to a
-    # moving deck. So the shell wall is the whole menu -- west or east at y =
-    # 60, ten above the floor -- and ``nozzle("inlet", "N")`` raises rather than
-    # drawing something the plant cannot have. ``examples/14``'s TK-601 was
-    # taking its motor spirit onto the deck.
+    # Floating roof: the vent and relief on the deck plate at y = 5. The fill has no
+    # roof placement, since the deck moves; it enters the shell at y = 60.
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)",
                                 {"inlet": [("W", 60), ("E", 60)],
                                  "outlet": ("S", 50),
                                  "vent": ("AT", 15.0, 5.0),
                                  "relief": ("AT", 45.0, 5.0),
                                  "drain": ("S", 20)}),
-    # ...and the third: the sphere rides on a support skirt inside its box, so
-    # its crown is at (40, 5) and the box's top and bottom edges are the skirt,
-    # not the vessel.
-    #
-    # THIS IS THE ONE STENCIL IN THE LIBRARY THAT DRAWS A PROCESS NOZZLE AS A
-    # NOZZLE (all 229 registered symbols were swept for a second; the only
-    # other rectangle of the kind is ``separator/knockout``'s gauge stub,
-    # excluded as not a process nozzle -- see ``_NOT_NOZZLES`` and
-    # ``tests/test_symbol_invariants.py``'s drawn-nozzle check). Three 12 x 12
-    # rectangles, each with a flange line ruled across its free face: two on the
-    # crown at x 18..30 and 50..62, faces at y = 0, and one under the belly at
-    # x 34..46, face at y = 90. A rectangle drawn on a vessel is a statement
-    # that a connection exists *there*, so a port anywhere else on this drawing
-    # is the drawing disagreeing with itself. That is issue #225, and the whole
-    # of what it costs is that three nozzles have to carry five duties.
-    #
-    # WHICH THREE DUTIES GET THE NOZZLES. Two of the five are fixed by
-    # something other than preference and both are on top. CHEE4001 p.7 puts the
-    # protective device there -- wherever it can be, the PSV goes on the
-    # protected system itself, upright, discharging upward, at the top of the
-    # container -- so ``relief`` takes a crown rectangle. ``vent`` is
-    # the vapour connection and a vapour space is at the top of a vessel by
-    # definition, so it takes the other. Which rectangle is which is arbitrary;
-    # they are one drawing twice. That leaves the belly nozzle for one of the
-    # three liquid duties, and ``outlet`` has it: the draw is what the vessel is
-    # piped for on every day of its life, and on this sheet it is the whole
-    # reason the sphere is drawn at all (``examples/14``'s butane leaves under
-    # its own pressure and needs no pump). It also had the more visible half of
-    # the defect -- the outlet sat at (40, 100), on the base rail of the support
-    # skirt, so the sheet drew product leaving the *structure* 10 units below
-    # the nozzle the stencil drew for it.
-    #
-    # WHERE THE OTHER TWO GO. ``inlet`` and ``drain`` are both liquid and both
-    # therefore belong low, which is also the research issue #226 recorded for
-    # this vessel: an LPG sphere takes liquid in and out at the lowest part of
-    # the shell and reserves the crown for relief and vapour. They go on the
-    # shell either side of the belly nozzle, which is the ordinary convention
-    # and what every other stencil in the library does with every nozzle it has
-    # -- 226 of the other 227 draw no nozzle at all and let the line stop at
-    # the wall; the exception, ``separator/knockout``, draws a gauge stub
-    # rather than a process nozzle (see above).
-    # They are NOT stacked on the belly rectangle with the outlet: two ports on
-    # one placement draw two streams on one point, which
-    # ``Symbol.coincident_ports`` refuses and is right to.
-    #
-    # All three sit on the ellipse (cx 40, cy 45, r 40), so each coordinate is
-    # the circle solved for the height wanted:
-    #
-    #   inlet, the fill, at y = 75:   x = 40 -+ 40*sqrt(1 - (30/40)^2) = 13.5 / 66.5
-    #   drain, the water draw-off, at y = 82.1: x = 40 + 40*sqrt(1 - (37.1/40)^2) = 54.9
-    #
-    # The fill is the one port here with a face to choose, so it is the one with
-    # a menu: west by default and east on request, since a sphere is filled from
-    # whichever side the header runs down. 75 rather than 82.1 is what buys it
-    # those faces -- at 82.1 the point is nearer the box floor than either wall
-    # and ``outward_dir`` reads it as south, and a fill drawn arriving from
-    # underneath is a line the reader has to follow around the vessel to
-    # believe. The drain keeps south, which is the face its role asks for
-    # (``tests/test_symbol_invariants.py``) and where a low-point draw-off goes.
-    #
-    # The crown is deliberately left with no fill placement on it. A pressure
-    # sphere's two top connections are spoken for, and offering ``inlet`` an
-    # "N" it would have to share with the relief or the vent is offering a
-    # nozzle the drawing cannot honour.
+    # Sphere: the stencil draws three nozzles, two on the crown (vent, relief) and
+    # one under the belly (outlet). The inlet and drain sit low on the shell circle
+    # (cx 40, cy 45, r 40); the inlet at y = 75 keeps a W or E face.
     ("tank", "sphere"):        ("vessels", "Storage Sphere",
                                 {"inlet": [("AT", 13.5, 75.0), ("AT", 66.5, 75.0)],
                                  "outlet": ("AT", 40.0, 90.0),
                                  "vent": ("AT", 24.0, 0.0),
                                  "relief": ("AT", 56.0, 0.0),
                                  "drain": ("AT", 54.9, 82.1)}),
-    # Tanks that drain to a cone rather than to a floor. The four above vary the
-    # roof and all of them stand on a flat bottom; a hopper is what anything
-    # holding solids, a slurry or a settled phase is actually drawn with, and
-    # the family had none.
-    #
-    # ALL THREE KEEP THE CROWN AS THEIR DEFAULT FILL, where the flat-floored
-    # four moved theirs to the shell (#226, argued at ``tank/default``). The
-    # reason a flammable liquid is filled low is the static a splash fill
-    # generates in a vapour space, and a hopper is the drawing for solids, a
-    # slurry or a settled phase, filled over the top the way a silo is. The low
-    # shell nozzle is offered on both walls all the same, since the shape is
-    # also what a liquid tank with a drain cone is drawn as, and #226's
-    # complaint was that the library permitted only one arrangement.
-    #
-    # The outlet goes on the cone's APEX, which is the same rule the roofs above
-    # follow at the other end: a cone touches the box's bottom edge at one point
-    # and curves away from it either side, so a nozzle anywhere else on that
-    # edge hangs in the air beside the drawing. It is the cheaper of the two to
-    # say, though, because that one point is the middle of the south face, so
-    # ("S", 50) lands on it and no ("AT", ...) is needed -- where a dished roof's
-    # crown is inboard of the top edge and has to be named outright.
-    #
-    # Flat roof, conical bottom: 100 x 100, on the family's 100-unit width. The
-    # roof is a plain line across y = 0 from x 0 to 100, so the inlet takes the
-    # north face directly, and the cone runs from y = 70 down to its apex at
-    # (50, 100).
-    #
-    # The roof is flat, so the vent and the relief take the north face directly
-    # at x = 35 and 65, as the inlet does. The drain cannot take the south face:
-    # a cone touches the box's bottom edge at one point and the outlet is on it.
-    # It goes half way down the cone's west slope, from (0, 70) to the apex at
-    # (50, 100), which is (35, 91) -- still south-facing, since 9 units of
-    # bottom clearance beat 35 of side.
-    # The shell walls run from y = 0 to y = 70 where the cone springs, so the
-    # two alternate fills take them at y = 60.
+    # Hopper-bottomed tanks keep the crown as their default fill and offer the shell
+    # walls; the outlet takes the cone apex. Conical bottom: the flat roof takes the
+    # vent and relief at x = 35 and 65, the drain sits halfway down the west slope at
+    # (35, 91), and the fills take the walls at y = 60.
     ("tank", "conical_bottom"): ("vessels", "Tank (Conical Bottom)",
                                  {"inlet": [("N", 50), ("W", 60), ("E", 60)],
                                   "outlet": ("S", 50),
                                   "vent": ("N", 35), "relief": ("N", 65),
                                   "drain": ("AT", 35.0, 91.0)}),
-    # A cone at each end: the silo or bin a tank holding solids is drawn as.
-    # Called ``conical_ends`` and not ``conical_roof_bottom`` for the reason
-    # ``vessel/dished`` is called that after "Vessel (Dished Ends, Brackets)":
-    # naming the pair of ends is how this file says both, and the alternative
-    # reads as easily as "the bottom of a conical roof" -- which is a different
-    # place on the drawing. ``conical`` already means the roof alone, so the
-    # three names line up: one cone on top, one underneath, or one at each end.
-    #
-    # 101 x 150, and the tallest thing in the family by half again. That is the
-    # shape and not the scale: it is 101 wide, which is the 100 every other tank
-    # here is drawn at, and the extra height is the two 30-unit cones over and
-    # under a shell that is itself only 20 taller than ``conical``'s. Squashing
-    # it to the family's height would draw shallower cones than the stencil
-    # author drew, and the cone angle is what the variant is about.
-    #
-    # Both nozzles sit at x = 51 rather than 50 because the drawing does: the
-    # stencil puts its shell walls at x = 1 and x = 101 in a box 101 wide, so
-    # the two apexes are on the SHELL's centreline, half a unit right of the
-    # box's, and a nozzle at 50 would be half a unit off the point of the cone.
-    #
-    # Both cones are half as steep as they are wide -- 30 of rise over 50 of
-    # run -- so the midpoint of each slope is 25 across and 15 down from its
-    # apex: (26, 15) and (76, 15) on the roof, (26, 135) on the floor. All three
-    # keep the shell's x = 1..101, so the pair on the roof are as far either
-    # side of the fill as ``default``'s are, scaled to a taller drawing.
-    # The alternate fills take the shell walls at y = 110, ten above the cone.
-    # The west one is named outright: the wall is at x = 1 rather than at the
-    # box edge, for the same half-unit reason the two apexes are at x = 51.
+    # Cone at each end: the shell walls are at x = 1 and 101, so the apexes are at
+    # x = 51. Each cone rises 30 over 50, so the slope midpoints are (26, 15),
+    # (76, 15) and (26, 135).
     ("tank", "conical_ends"): ("vessels", "Tank (Conical Roof and Bottom)",
                                {"inlet": [("N", 51), ("AT", 1.0, 110.0), ("E", 110)],
                                 "outlet": ("S", 51),
                                 "vent": ("AT", 26.0, 15.0),
                                 "relief": ("AT", 76.0, 15.0),
                                 "drain": ("AT", 26.0, 135.0)}),
-    # Dished roof over a conical bottom: ``default``'s tank with the floor
-    # opened out into a cone, and it takes ``default``'s port map verbatim,
-    # character for character. The roof is the same arc drawn over the same
-    # 100-wide chord, so its crown is the same (50, 6.4) -- the stencil asks for
-    # r = 75 over a chord of 100, so the arc rises 75 - sqrt(75^2 - 50^2) = 19.1
-    # above the springing line at y = 25.46 and stops at 6.4, leaving the top
-    # 6.4 units of the box empty. The outlet's ("S", 50) resolves to
-    # the cone apex at (50, 125.46) where on ``default`` it resolved to the flat
-    # floor: same spec, same face, different ink, which is what a variant is.
-    # The roof nozzles are ``default``'s too, at (35, 7.9) and (65, 7.9), for
-    # the same arc, and the shell walls are ``default``'s as well -- y 25.46 to
-    # 95.46 -- so the alternate fills take them at the same y = 85. Only the
-    # drain differs, and for ``conical_bottom``'s reason: the apex is the
-    # outlet's, so the drain takes the west slope's midpoint, from (0, 95.46) to
-    # (50, 125.46), which is (35, 116.5). The fill's *default* differs too, for
-    # the reason given at ``conical_bottom``: this one stands on a hopper, so
-    # the crown keeps it.
+    # ``default``'s dished roof and port map over a cone; the drain takes the west
+    # slope's midpoint, (35, 116.5), since the apex is the outlet's.
     ("tank", "dished_roof_conical_bottom"): (
         "vessels", "Tank (Dished Roof, Conical Bottom)",
         {"inlet": [("AT", 50.0, 6.4), ("W", 85), ("E", 85)], "outlet": ("S", 50),
          "vent": ("AT", 35.0, 7.9), "relief": ("AT", 65.0, 7.9),
          "drain": ("AT", 35.0, 116.5)}),
-    # The gas holder: a bell floating in a water seal, which is how a plant
-    # holds a gas at constant pressure and varying volume. The one container in
-    # the family whose inventory is a vapour, and the only one with no roof of
-    # its own -- the bell IS the roof, and it rides.
-    #
-    # 70 x 95. The seal tank is drawn open at the top: three sides, from (0, 30)
-    # down to the floor at y = 95 and up again to (70, 30). The bell sits in it,
-    # skirts at x = 5 and x = 65 running from y = 55 up to y = 15 and closed by
-    # a dome the stencil asks for as an arc rx 30 ry 15 across a 60-wide chord,
-    # so the ellipse is centred (35, 15) and its crown is at (35, 0).
-    #
-    # THE GAS CONNECTIONS ARE ON THE SEAL TANK, not on the bell, and that is
-    # ``tank/floating_roof``'s reason rather than a preference: a nozzle welded
-    # to the bell is a pipe joined to something that travels the height of the
-    # holder every time it fills. The main enters the tank wall and turns up
-    # inside, so ``inlet`` and ``outlet`` take the two walls -- which the outline
-    # strokes from y 30 to 95, so both are on ink at any box the unit is drawn
-    # at -- at y = 45, level with each other as a buffer's two connections are.
-    # Neither offers the other's wall as an alternate: there are two walls and
-    # two gas nozzles, so a menu would be an offer to draw both on one point.
-    #
-    # ``vent`` and ``relief`` ARE on the bell, and the movement is no objection
-    # there: a holder's crown valves discharge to atmosphere and are not piped
-    # anywhere. Both go on the dome's own ink rather than on the box's top edge,
-    # which the drawing touches at the crown alone -- x = 35 -+ 18 is 0.6 of a
-    # radius off it, at y = 15 - 15*0.8 = 3 -- and they flank the crown as the
-    # roofs above flank theirs, leaving it free.
-    #
-    # ``drain`` is the seal water, on the floor. It is the one nozzle here that
-    # is not a gas connection, and the floor is clear of everything else, so it
-    # takes the south face outright.
+    # Gas holder: the gas connections are on the seal tank walls at y = 45, not on
+    # the moving bell; the vent and relief on the dome at x = 35 -+ 18; the drain on
+    # the floor.
     ("tank", "gas_holder"): ("vessels", "Gas Holder",
                              {"inlet": ("W", 45.0), "outlet": ("E", 45.0),
                               "vent": ("AT", 17.0, 3.0),
                               "relief": ("AT", 53.0, 3.0),
                               "drain": ("S", 20.0)}),
-    # THE OPEN-TOPPED CONTAINERS ARE ALL OUT, and one rule turns all four away:
-    # ``Tank`` carries a vent, a relief and a fill, every variant has to anchor
-    # all five of its nozzles on drawn ink (``tests/test_symbol_invariants.py``
-    # holds both halves), and ``vent`` and ``relief`` are positioned by their
-    # roles on the top of the container. An open container has no top to put
-    # them on.
-    #
-    # "Bunker (Conical Bottom)" is the clearest case, because it is a shape the
-    # library already draws with a lid: it is "Tank (Conical Bottom)" -- the
-    # same 100 x 100 outline, the same cone from y = 70 to an apex at (50, 100)
-    # -- with the roof line and the cone's springing line left off. So its box's
-    # top edge carries ink at exactly two points, the tops of the two shell
-    # walls, and the three roof connections ``tank/conical_bottom`` places at
-    # (35, 0), (50, 0) and (65, 0) have nothing under them. "Container, Tank,
-    # Cistern", ISO's own open tank 2061, is the same three-sided outline
-    # without the cone; "Tank (Covered)" and "Open Bulk Storage" are the lidded
-    # trough and the hatched stockpile beside it.
-    #
-    # The change that lets them in is a nozzle set for a container that is open
-    # -- a rim rather than a crown -- and that is a change to ``units.Tank``,
-    # not a line added to a port map.
-    #
-    # Two more shapes in vessels.xml were weighed with those and left out, and
-    # both for the same reason: a nozzle a class has no name for is a nozzle
-    # that cannot be drawn.
-    #
-    #   "Tank (Boot)", and the covered and floating-roof tanks drawn with one --
-    #   the sump welded under one end that a settled water phase is drawn off
-    #   separately from the product. The boot IS the variant: a tank with one
-    #   drawn and piped like a tank without one says nothing the plain tank does
-    #   not, and Tank.PORTS was inlet/outlet, so there was no third draw to put
-    #   on it. That half of the objection is now spent -- issue #222 gave Tank
-    #   the ``drain`` a settled phase leaves by, which is exactly the boot's
-    #   draw -- and the shapes are still out, because the change that lets them
-    #   in is a vendoring with its own measurements and its own place in the
-    #   variants table, not a line added to a port map.
-    #
-    #   "Vessel (Full-Tube Heating-Cooling Coil)" and its semi-tube sibling --
-    #   a 120 x 70 box holding a bare 100 x 70 rect, with the coil's four cut
-    #   tube ends drawn as circles beside it at (5, 25), (5, 55), (115, 15) and
-    #   (115, 45). Those four are
-    #   the only nozzles the shape draws and all four are the coil's, which
-    #   Vessel has no port for; inlet and outlet would land on plain casing
-    #   wall, which is what ``pump/peristaltic`` refuses on this same principle
-    #   (a drawn nozzle wins). There is nothing else to weigh against it either:
-    #   no head, no crown and no drawn level, so the vessel family's own reason
-    #   for not turning would have to be invented for it as well.
-    # Thickener / clarifier: draw.io's "Settling Tank", 100 x 80, and the one
-    # shape in the whole set that is a thickener's own silhouette rather than
-    # something else pressed into the job. Walls from y 0 down to y 55, then a
-    # shallow floor falling to an apex at (50, 80) -- a wide, shallow tank with
-    # a raked cone under it, which is what a thickener is and what neither a
-    # separating vessel nor a conical-bottomed tank looks like.
-    #
-    # OPEN AT THE TOP, and that is why the three nozzles sit where they do. The
-    # box's top edge carries ink at exactly two points, the tops of the two
-    # walls, so nothing may be anchored across it: ``feed`` and ``overflow``
-    # take the two walls at y = 8, which is a launder entering one side and the
-    # clarified liquor leaving over a weir on the other, and ``underflow``
-    # takes the apex the rake ploughs the thickened solids into.
-    #
-    # No SCALE entry. vessels.xml is on the ~100-unit module every tank and
-    # vessel here is already vendored at, so this lands at 100 x 80 beside a
-    # 100 x 95,5 tank rather than at half its size -- checked against the
-    # neighbour rather than assumed.
+    # Thickener: open at the top, so the feed and overflow take the walls at y = 8 and
+    # the underflow the apex.
     ("thickener", "default"): ("vessels", "Settling Tank",
                                {"feed": ("W", 8.0), "overflow": ("E", 8.0),
                                 "underflow": ("S", 50.0)}),
-    # Horizontal vessel: reflux drum, accumulator, knock-out pot. A lying
-    # cylinder with dished ends: the shape a vertical vessel does NOT become
-    # when rotated, since its saddles and shell bands would turn with it.
-    # Inlet on either head or from above, liquid out of the bottom, vent off the
-    # top; the top and bottom faces span x 5.77..85.77.
-    #
-    # The outlet takes no alternate: liquid draws off the bottom, and the right
-    # head is already the inlet's alternate. Giving both an "E" option would
-    # land two nozzles on the same point.
-    #
-    # A lying drum has no crown and no bottom head: the whole top wall is the
-    # top of the vessel and the whole bottom wall its low point, so the relief
-    # and the drain take the two faces directly rather than being measured onto
-    # a curve. 30 and 25 keep both clear of the three placements the inlet may
-    # take and of the outlet at 68.
+    # Horizontal vessel: inlet on either head or from above, liquid out of the bottom.
+    # The whole top and bottom walls are its high and low points, so the relief and
+    # drain take those faces directly.
     ("vessel", "horizontal"): ("vessels", "Drum or Condenser",
                                {"inlet": [("W", 15), ("N", 20.0), ("E", 15)],
                                 "outlet": ("S", 68.0),
                                 "vent": ("N", 55.0),
                                 "relief": ("N", 30.0), "drain": ("S", 25.0)}),
-    # The same shape as a horizontal phase separator, where naming the vapour
-    # and liquid products is the point. Neither product takes an alternate face:
-    # vapour always disengages off the top, liquid draws off the bottom.
-    #
-    # THE ONE SEPARATOR WHOSE FEED IS NOT A FAMILY, and the reason is the
-    # drawing rather than the plant. This nozzle authors THREE placements --
-    # the west head, the north shell, the east head -- and a series is one
-    # face with one band on it, so a symbol may declare the menu or the
-    # family and not both (``Symbol.__post_init__`` rejects the pair). The
-    # menu is worth more here: it is what lets the face selector put the
-    # inlet on the head the feed actually comes from, and this drum is the
-    # fixture the whole of ``tests/test_faces.py`` is written against.
-    # A family would have nowhere to go in any case -- the drum is 30 units
-    # tall, so its west face holds two 12-unit arrowheads and nothing more.
-    # ``pandid.units.Separator`` refuses ``n_feeds`` above one here and says
-    # so; see its ``_ONE_FEED_VARIANTS``.
+    # Horizontal separator: the feed offers three faces, so it is a menu rather than
+    # a family; ``Separator`` refuses ``n_feeds`` above one here.
     ("separator", "horizontal"): ("vessels", "Drum or Condenser",
                                   {"feed": [("W", 15), ("N", 20.0), ("E", 15)],
                                    "vapor": ("N", 30.0),
                                    "liquid": ("S", 68.0)}),
-    #
-    # THE FEED FAMILY ON EVERY HOPPER-BOTTOMED BODY, and the seven
-    # drawings below share it: ``("SERIES", "W", 12, 20, 0.5, FROM_START)``
-    # on the 80 x 120 box, plus ``symbols._SEPARATING_VESSEL``, which is
-    # the same body composed rather than vendored.
-    #
-    # ``FROM_START`` rather than centred, and this family is why that mode
-    # exists. The wall is y 0..80 -- the hopper takes the rest -- and the
-    # nozzle is drawn at 12, one module below the roof, because that is
-    # where a cyclone's tangential inlet and a screen's feed chute are.
-    # Straddling 12 puts the second member of a pair at 2 and the first of
-    # a triple on the top corner, where :func:`outward_dir` stops calling
-    # the face west; and squeezing the run small enough to avoid that
-    # leaves a pitch two 12-unit arrowheads cannot be told apart at. So
-    # the run starts at 12 and grows down: 12, 32, 52, 72 at four feeds,
-    # the last of them still 8 units of wall above the hopper. The
-    # one-feed drawing does not move, which is the point -- ``n_feeds=2``
-    # must not relocate the nozzle a sheet already had.
+    # Hopper-bottomed bodies share one feed family on the 80 x 120 box, run down from
+    # y = 12 (``FROM_START``) so that adding a feed leaves the first in place.
     ("separator", "cyclone"): ("separators", "Separator (Cyclone)",
                                {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
                                 "vapor": "N", "liquid": "S"}),
-    # Gas-cleaning vessels: hopper-bottomed box, gas across the top and the
-    # collected phase out of the apex at (40, 120). The scrubber's wash-liquid
-    # header is drawn on the centreline, so the clean gas leaves sideways rather
-    # than through the top face.
+    # Gas-cleaning vessels: gas across the top, the collected phase out of the apex.
+    # The scrubber's wash header is on the centreline, so the clean gas leaves east.
     ("separator", "scrubber"): ("separators", "Separator (Wet Scrubber)",
                                 {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
                                  "vapor": "E", "liquid": "S"}),
-    # The venturi scrubber, ISO 10628-2 item 8.11 X8034: ``scrubber``'s body
-    # exactly -- the same 80 x 120 outline down to the same hopper apex -- with
-    # a different internal in it. The throat that gives the machine its name is
-    # drawn as two chevrons, a cone converging from y = 40 to a flat at y = 55
-    # and a second one opening from y = 65 out to y = 80, so the gas is
-    # accelerated between them. Above it is the wash: a spray nozzle at (40,
-    # 0.5) fanning down to (30, 10) and (50, 10) about its own centre line,
-    # which is the identical mark that is the whole of "Spray Scrubber".
-    #
-    # It is therefore PIPED EXACTLY AS ``scrubber`` IS, and that is the rule
-    # this file already follows for a pair of casings that differ in what is
-    # inside them (see the four ``filter`` media): choosing between them is a
-    # statement about the internal, so a sheet swaps one for the other without
-    # moving a run. Feed on the west wall at y = 12, clean gas off the east one
-    # at the same height, scrubbing liquor and its catch out of the apex --
-    # ``scrubber``'s three points to the decimal. Both walls are stroked from
-    # y 0 to 80, so the pair is on ink at any box the unit is drawn at, and
-    # y = 12 is above the converging cone, which is the end a venturi is fed
-    # from.
-    #
-    # draw.io's own W and E anchors are at (0, 60) and (80, 60) and go unused.
-    # They are level with the throat, so the gas would be drawn arriving in the
-    # middle of the venturi rather than at the top of it, and they are 48 units
-    # off the sibling's, so every run on a sheet that swapped the two would
-    # move. The stencil's "N" is not taken either: it is at (40, 0), on the
-    # spray nozzle, and the wash header is drawn rather than piped here exactly
-    # as it is on ``scrubber``.
+    # Venturi scrubber (ISO 8.11 X8034): ``scrubber``'s body and nozzles, so the two
+    # swap without moving a run; draw.io's W/E anchors sit level with the throat, unused.
     ("separator", "venturi_scrubber"): ("separators", "Separator (Venturi Scrubber)",
                                         {"feed": ("SERIES", "W", 12.0, 20, 0.5, FROM_START),
                                          "vapor": ("E", 12.0), "liquid": "S"}),
-    # ``gravity``, ``electrostatic`` and ``electromagnetic`` are deliberately NOT
-    # vendored. All three are this same hopper-bottomed body carrying one ISO
-    # 10628-2 group-29 characteristic -- items 8.3 X8031, 8.6 X8125 and 8.8
-    # X8126 -- and the standard composes them itself, so pandid composes them
-    # too: ``SymbolRegistry._register_composed`` builds each from
-    # ``symbols._SEPARATING_VESSEL`` and the mark in ``render/iso_parts.py``.
-    #
-    # Vendoring a stencil for them as well would put a second drawing of each in
-    # the library with nothing to say which is the live one, which is the fault
-    # ``column/default`` already had (report 04, finding F-0).
-    #
-    # The five that stay vendored stay because ISO gives each a distinct
-    # registered symbol and group 29 has nothing to build them out of: no
-    # vortex, no baffle, no spray and no permanent magnet anywhere in it.
-    # The mechanical separators, which sort by size, inertia or magnetism rather
-    # than into phases. All four are the same body as the two above, anchor for
-    # anchor: 80 x 120, W (0, 12) and E (80, 12) on the two side walls (which
-    # span y 0..80, so both are on ink at any box the unit is drawn at), and S
-    # on the hopper apex at (40, 120). Only the internals tell them apart: the
-    # sifter's screen deck, the impact separator's baffle down the centreline,
-    # and the magnet's coil or block low in the body.
-    #
-    # The port map follows from that and from nothing else. A high draw and a
-    # low draw is all the artwork commits to, so ``overflow`` and ``underflow``
-    # name the two positions and leave which of them is the product to the
-    # service, exactly as ``shell``/``tube`` leaves which side is the hot one to
-    # the operating case. Naming either for its contents would be guessing: the
-    # same drawing is a scalping screen and a sizing screen.
+    # The mechanical separators share the hopper body's anchors; ``overflow`` and
+    # ``underflow`` name the high and low draws, not their contents.
     ("separator", "sifter"): ("separators", "Separator, Sifter",
                               {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
                                "overflow": "E", "underflow": "S"}),
@@ -1425,127 +500,48 @@ KIND_MAP = {
     ("separator", "permanent_magnet"): ("separators", "Separator (Permanent Magnet)",
                                         {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
                                          "overflow": "E", "underflow": "S"}),
-    # Filter styles. Press Filter's own W/E anchors sit on opposite *corners* of
-    # the box, so both faces are placed on the plate pack's mid-height instead.
-    #
-    # The wash and the cake, on the four casings that form one (``press``,
-    # ``rotary``, ``rotary_scraper``, ``belt`` -- see Filter._CAKE_FORMING),
-    # are placed by one rule the equipment states for itself: **the wash comes
-    # down from above and the cake falls out of the floor**. A displacement wash
-    # is sprayed onto the cake from over it on all four machines, and a cake is
-    # wet solids, which leave a filter the way solids leave anything. So the two
-    # take N and S, which is also the pair of faces every one of these casings
-    # has left free -- the family is piped across, W to E.
-    #
-    # ``ion_exchange`` takes the same two points under its own two names. Its
-    # regenerant is distributed over the bed and its spent regenerant leaves
-    # through the underdrain, which is N and S for the same physical reason and
-    # not for a shared one.
+    # Filter styles. Press Filter's W/E anchors sit on opposite corners, so both
+    # faces are placed at the plate pack's mid-height. On a cake-forming filter the
+    # wash comes in from above (N) and the cake falls out of the floor (S).
     ("filter", "gas"):    ("filters", "Gas Filter (Bag, Candle, Cartridge)",
                            {"inlet": "W", "outlet": "E"}),
-    # The plate pack lies down: 100 x 50, fed at one end and drained at the
-    # other. The wash port is on the roof over the feed end, between the two
-    # full-height plate lines at x = 20 and x = 40 so it lands on casing rather
-    # than on ink; the cake drops out of the middle of the pack, where the
-    # plates part, and x = 50 clears the same lines at 40 and 60.
+    # The plate pack lies down; the wash and cake ports sit between the plate lines.
     ("filter", "press"):  ("filters", "Press Filter",
                            {"inlet": ("W", 25.0), "wash_in": ("N", 25.0),
                             "outlet": ("E", 25.0), "cake": ("S", 50.0)}),
-    # The drum turns through the trough drawn at y 80 and the cake builds on the
-    # submerged face. Wash sprays land on top of the drum -- the ellipse is
-    # centred (25, 50) with r = 15, so (25, 0) is directly over it -- and the
-    # discharged cake falls through the casing floor.
+    # The wash lands on top of the drum at (25, 0); the cake falls through the floor.
     ("filter", "rotary"): ("filters", "Liquid Filter (Rotary, Drum or Disc)",
                            {"inlet": ("W", 50.0), "wash_in": ("N", 25.0),
                             "outlet": "E", "cake": ("S", 25.0)}),
-    # The same drum with the knife that lifts the cake off it. That knife is the
-    # whole of what tells the two drawings apart, and the drum is set 7 units
-    # left to make room for its arm.
-    #
-    # The arm reaches out to x = 55 while the casing stays the 50 the rest of
-    # the family is drawn at, so the bounding box is 5 units wider than the
-    # equipment -- exactly what ``vessel/dished``'s brackets do, and it gets
-    # ``vessel/dished``'s answer. A nozzle on the box's east face would be drawn
-    # in the air beside the casing, so the outlet is pinned to the casing wall
-    # instead. draw.io's own "E" is at 0.91 x 55 = 50.05, which is that same
-    # wall rounded to two places; naming 50 outright says so, rather than
-    # leaving a nozzle a twentieth of a unit outside the equipment for the next
-    # reader to measure. Nothing widens the west side, so the inlet keeps the
-    # box's own face there.
-    #
-    # The wash and the cake take ``rotary``'s two points unchanged, for the
-    # reason the outlet takes its own: this pair is one machine drawn with and
-    # without its knife, so it is piped alike and a sheet can swap one for the
-    # other without moving a run. Neither needs the outlet's ``AT`` -- the arm
-    # widens the box sideways only, so the roof and the floor of the bounding
-    # box are the casing's own, and the two edge specs land on ink. The drum is
-    # set 7 left (centred x = 18, r = 15, so it spans 3..33) and (25, 0) is
-    # still over it.
+    # The same drum with its scraper; the arm widens the box east, so the outlet is
+    # pinned to the casing wall at x = 50. The wash and cake match ``rotary``.
     ("filter", "rotary_scraper"): ("filters", "Liquid Filter (Rotary, Drum or Disc, Scraper)",
                                    {"inlet": ("W", 50.0), "wash_in": ("N", 25.0),
                                     "outlet": ("AT", 50.0, 50.0),
                                     "cake": ("S", 25.0)}),
-    # Ion exchanger: the resin bed between its two retention screens, the water
-    # treatment vessel every demineraliser train is drawn with. The stencil
-    # names only N and S, but the whole 50 x 100 casing is stroked, so the side
-    # walls carry the same W/E faces the rest of the filters use: a change of
-    # variant is a change of artwork, not of piping.
-    #
-    # The regeneration pair is the vertical one, and the bed's own two screens
-    # say where it goes: the resin sits between them at y 20 and y 80, so the
-    # regenerant distributor is above the top screen and the underdrain that
-    # takes the spent regenerant away is below the bottom one.
+    # Ion exchanger: piped across like the other filters; the regenerant enters
+    # above the bed and the spent regenerant leaves through the underdrain.
     ("filter", "ion_exchange"): ("filters", "Liquid Filter (Ion Exchanger)",
                                  {"inlet": ("W", 50.0), "regenerant_in": ("N", 25.0),
                                   "outlet": ("E", 50.0),
                                   "spent_regenerant": ("S", 25.0)}),
-    # Two more media, each drawn twice by the stencil set: once in a liquid
-    # casing and once in a gas one. The gas half of a pair adds the hopper below
-    # the medium and changes nothing else, and that hopper is the reason both
-    # halves ship: it is where what the medium sheds lands, so it is also what
-    # fixes the gas two the right way up and leaves the liquid two free to turn
-    # (see GRAVITY_FIXED).
-    #
-    # All four are piped straight across on the casing's side walls at
-    # mid-height, which is ``ion_exchange``'s placement and its reason: draw.io
-    # names a different subset of the compass points on each of these four
-    # (``fixed_bed`` has N and S alone, and the two ``belt`` shapes have three
-    # each, but not the same three), while the casing rect is stroked all the
-    # way round, so both walls carry a face whether the stencil named it or not.
-    # Choosing between these variants is a statement about the medium, so they
-    # are piped alike and a sheet can swap one for another without moving a run.
-    #
-    # Fixed bed: granular medium -- sand, anthracite, activated carbon -- held
-    # between the two retention screens the X is drawn between.
+    # Liquid and gas pairs of one medium; the gas half adds a hopper (see
+    # GRAVITY_FIXED). All four are piped across at mid-height on the side walls.
+    # Fixed bed: a granular medium between two retention screens.
     ("filter", "fixed_bed"):     ("filters", "Liquid Filter (Fixed Bed)",
                                   {"inlet": ("W", 50.0), "outlet": ("E", 50.0)}),
     ("filter", "gas_fixed_bed"): ("filters", "Gas Filter (Fixed Bed)",
                                   {"inlet": "W", "outlet": ("E", 50.0)}),
-    # Belt / roll: the medium is a cloth running between two rollers, drawn low
-    # in the casing at y 59..71, so nozzles at mid-height clear it rather than
-    # being piped into the roll.
-    #
-    # The liquid one is the only member of this quartet that forms a cake, and
-    # it takes the same N/S pair the presses and drums do: a belt filter washes
-    # in discrete zones, from sprays over the cloth, and throws the cake off the
-    # head roller to fall clear underneath. The gas one sheds dust into the
-    # hopper drawn under its belt instead, so it stays a two-nozzle clarifier.
+    # Belt / roll: the cloth runs low, so mid-height nozzles clear it. The liquid
+    # one forms a cake and takes the N/S wash and cake pair.
     ("filter", "belt"):          ("filters", "Liquid Filter (Belt, Roll)",
                                   {"inlet": ("W", 50.0), "wash_in": ("N", 25.0),
                                    "outlet": "E", "cake": ("S", 25.0)}),
     ("filter", "gas_belt"):      ("filters", "Gas Filter (Belt, Roll)",
                                   {"inlet": "W", "outlet": ("E", 50.0)}),
-    # Drier styles. A spray drier is fed through the atomiser in its roof and
-    # drops powder out of the floor, so it is piped top-to-bottom, not across.
-    #
-    # ``heating_in``/``vent`` are pandid's own addition, not the stencil's:
-    # ISO 10628-2 group 10 ticks only the solid pair, on any row, so there is
-    # no tabulated point either nozzle could be read off. The fluidised-bed
-    # and rotary drum driers keep the solid pair on the side walls and take
-    # the gas at the casing's own floor and roof, clear of it; the spray
-    # drier has already spent the roof and the floor on the solid pair, so
-    # its gas nozzles go on the side walls instead, at the drying chamber's
-    # own mid-height. See ``pandid.units.Dryer``.
+    # Drier styles. A spray drier is piped top to bottom, so its gas nozzles go on
+    # the side walls; the others take the gas at the floor and roof. ``heating_in``
+    # and ``vent`` are pandid's own; see ``pandid.units.Dryer``.
     ("dryer", "fluidized_bed"): ("driers", "Drier (Fluidized Bed)",
                                  {"feed": "W", "product": "E",
                                   "heating_in": ("S", 50.0), "vent": ("N", 50.0)}),
@@ -1554,46 +550,14 @@ KIND_MAP = {
                           "heating_in": ("W", 50.0), "vent": ("E", 50.0)}),
 
     # --- New classes (genuinely different port signature / function) ---
-    # The process coil is drawn entering at (0, 54.5) and leaving at (80, 79.5);
-    # the W/E anchors sit on blank casing wall at mid-height instead, which also
-    # destroys the high-in / low-out reading of the coil.
+    # The process coil enters at (0, 54.5) and leaves at (80, 79.5).
     ("furnace", "default"): ("vessels", "Furnace",
                              {"inlet": ("W", 54.5), "outlet": ("E", 79.5), "fuel": "S"}),
     ("turbine", "default"): ("pumps", "Turbine", {"inlet": "W", "outlet": "E"}),
-    # The cooling tower. Two drawings, and one of the very few pieces of plant
-    # that is on nearly every industrial sheet and had no symbol here at all.
-    #
-    # THE NOZZLES ARE NAMED FOR THE SIDE, which is ``hex``'s rule and is here
-    # for ``hex``'s reason: there is a water side and an air side, and which of
-    # the two is hot is the operating case rather than a fact about the
-    # equipment. The warm return is ``water_in`` in January as well as in
-    # August. ``makeup`` and ``blowdown`` are the two nozzles that make this a
-    # tower and not an exchanger -- it cools by boiling off part of its own
-    # inventory, so something has to replace what leaves and something has to
-    # bleed off what the evaporation leaves behind -- and both belong to the
-    # cold-water basin, which is where a plant taps them.
-    #
-    # Both drawings offer the same six in the same roles, so swapping one for
-    # the other is a change of artwork and moves no run.
-    #
-    # Induced draft, and the default: 98 x 70, the fan on a stack over the
-    # fill. The casing is an inverted trapezoid, (0, 10)-(98, 10) across the top
-    # narrowing to (24, 60)-(74, 60), with the stack at x 34..64 above it and
-    # the basin closing the bottom from (24, 70) to (74, 70).
-    #
-    #   air_out  the stack's own top edge at (49, 0), which is the one place on
-    #            this drawing air is meant to leave.
-    #   air_in   the louvred east wall. draw.io's "E" is at (86.24, 35), which
-    #            is within a quarter of a unit of the slope's own x at that
-    #            height (98 - 24*25/50 = 86), so it is taken as named.
-    #   water_in the riser up the west casing. The hot water is distributed over
-    #            the fill, so it is high: (4.8, 20) is the west slope solved at
-    #            y = 20, and it reads west because 4.8 is nearer that wall than
-    #            20 is the roof.
-    #   water_out the cold basin, at the middle of its floor.
-    #   makeup / blowdown flank it on that same floor, 21 either side, which
-    #            leaves 4 units of floor beyond each and so keeps both on the
-    #            basin's own x 24..74 at any box the unit is drawn at.
+    # Cooling tower: the nozzles are named for the side (water, air), as on ``hex``;
+    # ``makeup`` and ``blowdown`` flank ``water_out`` on the basin floor, and both
+    # drawings offer the same six. Induced draft: the air leaves the stack top and
+    # enters the east louvre; ``water_in`` is on the west slope at y = 20.
     ("cooling_tower", "default"): ("vessels", "Induced-Draft Cooling Tower",
                                    {"water_in": ("AT", 4.8, 20.0), "water_out": "S",
                                     "air_in": "E", "air_out": "N",
@@ -1602,19 +566,8 @@ KIND_MAP = {
                                          {"water_in": ("AT", 4.8, 20.0), "water_out": "S",
                                           "air_in": "E", "air_out": "N",
                                           "makeup": ("S", 28.0), "blowdown": ("S", 70.0)}),
-    # Forced draft: 99 x 99, the fan moved off the stack and into a housing at
-    # the foot of each side, which is the whole difference between the two
-    # machines. The casing stands at x 19.5..79.5 over a basin the full 99 wide
-    # from y 89.5 down, and each housing is the box the stencil closes with a
-    # wall at x = 9.5 and x = 89.5 between y 64.5 and 89.5.
-    #
-    # So air_in moves from a louvre to that housing's outer wall at (89.5, 77),
-    # which is where the fan takes it in, and air_out stays the top of the
-    # casing. Everything else is the induced-draft tower's, restated in this
-    # drawing's own dimensions: the water in high on the west casing wall (which
-    # runs the full y 0..89.5, so 25 is on ink), the water out of the middle of
-    # the basin floor, and the makeup and the blowdown either side of it at the
-    # same proportion of a floor that here is the whole width of the box.
+    # Forced draft: ``air_in`` on the fan housing's outer wall at (89.5, 77); the
+    # rest restates the induced-draft tower in this drawing's dimensions.
     ("cooling_tower", "forced_draft"): ("vessels", "Forced-Draft Cooling Tower",
                                         {"water_in": ("AT", 19.5, 25.0), "water_out": "S",
                                          "air_in": ("AT", 89.5, 77.0), "air_out": "N",
@@ -1623,24 +576,16 @@ KIND_MAP = {
     ("dryer", "default"):   ("driers", "Rotary Drum Drier, Tumbling Drier",
                              {"feed": "W", "product": "E",
                               "heating_in": ("S", 50.0), "vent": ("N", 50.0)}),
-    # Steam/gas ejector: motive fluid into the steam chest, entrained fluid up
-    # through its floor, mixture out of the diffuser cone. The stencil's own "S"
-    # anchor lands on the chest's bottom-*right* corner, where the cone starts,
-    # so the suction nozzle is placed mid-face instead.
+    # Ejector: the stencil's "S" sits on the chest's corner, so the suction is
+    # placed mid-face.
     ("ejector", "default"): ("fittings", "Injector",
                              {"motive": "W", "suction": ("S", 20.0), "discharge": "E"}),
     # Open ends. Each is a stem with something on top of it, so the single pipe
     # connection is the free end of that stem, at the bottom of the box.
     ("vent", "default"):   ("fittings", "Vent", {"inlet": ("S", 40.0)}),
     ("funnel", "default"): ("fittings", "Funnel", {"outlet": ("S", 40.0)}),
-    # Two more open ends, from piping.xml. Both discharge to atmosphere and are
-    # piped from below, so each has the one connection a Vent declares, on the
-    # point of the body the riser meets. draw.io names W and E on the exhaust
-    # head, which is its generic box anchors rather than a flow path: nothing
-    # passes through an open discharge.
-    #
-    # Exhaust head: the silencing/separating hood on a steam or relief vent.
-    # The riser meets the apex of the cone at (25, 40).
+    # Two open ends from piping.xml, piped from below like a Vent.
+    # Exhaust head: the riser meets the cone apex at (25, 40).
     ("vent", "exhaust_head"): ("piping", "Exhaust Head", {"inlet": ("S", 25.0)}),
     # Breather: the tank conservation vent, drawn as a box on a stem. The stem's
     # free end at (25, 30) is the tank connection.
@@ -1648,88 +593,25 @@ KIND_MAP = {
 }
 
 
-# Devices the stencil set draws twice: once open, once closed.
-#
-# These are not two shapes a user picks between. They are one device in two
-# positions, and the position is a property of the unit
-# (``Fitting(normal_position="closed")``), exactly as it is on a Valve. The
-# generator emits the second shape as a second Symbol, registered under the same
-# (kind, variant) through ``SymbolRegistry.register_closed``, so the name a user
-# writes stays the name of the device.
-#
-# Both shapes go through the same port map and the same SCALE, and render()
-# refuses to emit a pair whose boxes, nozzles or aspect disagree: two positions
-# of one device must differ in ink and in nothing else, or declaring the
-# position would move a line already drawn.
-#
-# Only the figure-8 pair is mapped. fittings.xml carries two more:
-#
-#   Open Disc / Blind Disc -- a single disc on a 100-long handle in a 40 x 140
-#   box, so 71% of the shape is bare stalk. Scaled until the disc reads, the
-#   stalk is most of a centimetre of plain line hanging off the run, which on a
-#   P&ID is how a branch is drawn. It also carries no <connections> at all,
-#   which is the stencil author saying overlay rather than device -- the same
-#   thing that keeps fittings.xml's "Orifice Plate" out of the table above.
-#
-#   Interchangeable Disc (Open Disc In Function) / (Blind Disc) -- the same
-#   drawing as the figure-8 pair: two tangent discs on a handle, one of them
-#   filled, at 40 x 140 instead of 20 x 80 (1:3.5 against 1:4). Two mappings a
-#   reader cannot tell apart are one mapping and a trap, so this ships once.
-#
+# Devices drawn open and closed: the closed shape, registered through
+# ``SymbolRegistry.register_closed`` under the same (kind, variant). render()
+# refuses a pair whose boxes, nozzles or aspect differ.
 # (kind, variant) -> the shape drawn when the device is declared normally closed
 CLOSED_SHAPES = {
     ("fitting", "blind"): "Closed Figure 8 Blind",
 }
 
-# Kinds ISO 10628-1 §5.3.1 c) rules at half the weight b) rules equipment
-# and machinery at: valves, fittings, piping accessories, and PCE
-# symbols (the last drawn by hand -- see Symbol.trim in symbols.py, which
-# is where ``instrument`` gets the same flag).
-#
-# By pandid's own kind, not by the stencil a shape happened to be filed
-# under in KIND_MAP above: draw.io keeps an orifice plate and a
-# rotameter in valves.xml, a static mixer in mixers.xml and eleven flow
-# elements in flow_sensors.xml, none of which is the class ISO 10628-2
-# files them in -- Table 1 puts every one of the fourteen in group 24,
-# FITTINGS, alongside the strainers and reducers that do keep the
-# ``piping``/``fittings`` stencil category. ``furnace`` is the opposite
-# trap the other way: filed under ``vessels.xml`` for its shape, and
-# equipment regardless.
+# Kinds ISO 10628-1 §5.3.1 c) draws at half the equipment line weight: valves,
+# fittings and piping accessories, chosen by pandid kind, not by stencil file.
 TRIM_KINDS = frozenset({"valve", "fitting", "reducer", "vent", "funnel", "ejector"})
 
 
-# Corrections to the vendored stencils themselves.
-#
-# vendor_data/drawio/*.xml is a mirror of jgraph/drawio and stays byte-for-byte
-# what was vendored, so re-vendoring is a file copy and nothing else. Where a
-# shape is *wrong* (not merely a style this library does not use), the
-# correction lives here instead: an mxGraph fragment appended to the shape's
-# <foreground>, written in the stencil's own drawing language and converted by
-# the same converter as the rest of the shape. Provenance therefore stays in
-# this file beside KIND_MAP, and a re-vendor cannot quietly drop the fix,
-# because a shape a patch cannot find stops the generator (see render()).
-#
-# This is not a way to draw something the stencil set lacks. A symbol nothing
-# upstream draws is a hand-drawn primitive and belongs in symbols.py, under the
-# rules in CONTRIBUTING section 1.
-#
+# Corrections to shapes draw.io draws wrongly, appended to the shape's
+# <foreground> in its own drawing language; the vendored XML stays as vendored.
 # (stencil, shape) -> (what is wrong upstream, mxGraph fragment)
 STENCIL_PATCHES = {
-    # draw.io's "Globe Valve" is a byte-for-byte copy of its "Ball Valve":
-    # strip the name and the two shapes' XML is identical, down to the
-    # <connections>. Both draw the bowtie whose waist is pinched around an OPEN
-    # circle, which is the ball valve (ISO 10628-2 X8071). The globe valve
-    # (X8068) is that same seat drawn SOLID, and the contrast between the two is
-    # the whole of what tells a reader which valve is in the line, so shipping
-    # them identical is not a plain drawing, it is the wrong one.
-    #
-    # The patch fills the seat, and nothing else: the four arcs below are the
-    # stencil's own, quoted from its background and foreground paths in the
-    # order that walks the circle once, so the filled region is exactly the seat
-    # already drawn rather than a circle re-derived from it. The two triangles
-    # that make up the BODY keep their white interiors, which is what keeps this
-    # clear of the fully-darkened body that means "normally closed"
-    # (PIP PIC001 4.2.2.7).
+    # Upstream's "Globe Valve" is a copy of "Ball Valve"; fill the seat with the
+    # stencil's own four arcs, leaving the body white.
     ("valves", "Globe Valve"): (
         "identical to Ball Valve upstream; ISO 10628-2 X8068 fills the seat",
         '<fillcolor color="#000000"/>'
@@ -1782,105 +664,25 @@ def patch_shape(stencil, name, el):
     return el
 
 
-# Stencil-derived symbols this generator cannot emit, and where they live
-# instead. It emits one fixed-size Symbol per shape, and a fixed drawing placed
-# in a box of a different aspect ratio is scaled unevenly, so a shape that has
-# to stretch along one axis only cannot come out of here. Recorded so the
-# provenance is in the mapping table with everything else, and so nobody
-# "restores" one of these by adding it to KIND_MAP above: doing that would draw
-# it at one fixed size and undo the reason it was written by hand.
-#
-# (kind, variant) -> (stencil, shape_name, where it lives, what was changed)
-ADAPTED_ELSEWHERE = {
-    ("conveyor", "default"): (
-        "driers", "Drier (Roller Conveyor Belt)",
-        "pandid.render.symbols.conveyor_symbol",
-        "drier housing dropped; roller spacing made a parameter, roller r=10 kept",
-    ),
-}
-
-
-# Symbols that must not be turned, as ``Symbol.gravity_fixed``.
-#
-# ISO 15519-1 §11.4.2, *Orientation of graphical symbols*, permits turning and
-# mirroring so that a symbol fits the layout the diagram actually has, and then
-# excepts one class of symbol: anything for a component or device whose function
-# depends on gravity. It names two of them, the open tank (2061) and the cyclone
-# separator (X 2618), drawn at Figure 22 b), and those must not be turned.
-#
-# Figure 22 b) draws those two: an open-topped U, and a body whose conical apex
-# points down with the vortex spiralling into it. Both are devices whose *job* is
-# done by gravity, and both say something the plant cannot do once turned.
-#
-# The test applied here is that one, not "stands on the ground": every piece of
-# plant does. A symbol is listed when the separation, containment or holdup it
-# depicts is performed by gravity **and the artwork draws it**: a free liquid
-# surface, an open top, a settling or classifying body with a low-point draw, a
-# falling-solids path. A device whose function is pressure, rotation, heat
-# transfer or throttling is not listed even when a nozzle happens to sit low,
-# because it is installed in whatever attitude the run wants and turning its
-# symbol states nothing false.
-#
-# What that leaves out, and why:
-#
-# * ``hex/kettle`` -- its bottoms draw is at the weir end and low, but an
-#   exchanger's function is heat transfer and the artwork draws no level. The
-#   rest of the shell-and-tube family is freely turnable and this one shares it.
-# * ``valve/bleed`` -- inlet N / outlet S encodes a *piping arrangement* (the
-#   stencil draws the tap running down into the bowtie), and varying a piping
-#   arrangement is what ``pin()`` and ``nozzle()`` are for. A bleeder tapped off
-#   the top of a line is the same device.
-# * ``conveyor`` -- its artwork is two rollers and a bar, symmetric top to
-#   bottom, so a turn makes nothing in the drawing false; the gravity fact about
-#   a belt lives in its port alternates (feed from above, discharge from
-#   underneath), which the symbol already fixes. ISO cites the conveyor in
-#   §13.1 as the case for a *horizontal-view* layout, which is about the sheet
-#   rather than about the symbol.
-# * ``dryer/default`` -- a rotary drum drawn as a circle in a box; nothing in it
-#   is up or down. Contrast ``dryer/spray`` and ``dryer/fluidized_bed`` below.
-# * ``fitting/*`` and every LIQUID ``filter`` -- plate packs, cartridges, resin
-#   and media beds, and a cloth on its rollers, all drawn as bands in a box and
-#   all driven by pressure drop across the medium. A bed rests on its support
-#   the way every piece of plant rests on the ground; nothing in the artwork is
-#   a level, a hopper or a fall. The gas ones are listed below, and they are
-#   listed for the hopper drawn under the medium rather than for the medium.
-#
+# Symbols that must not be turned, as ``Symbol.gravity_fixed`` (ISO 15519-1
+# §11.4.2): those whose artwork draws a separation, containment or holdup done by
+# gravity.
 # (kind, variant) -> what in the artwork only means one thing one way up
 GRAVITY_FIXED = {
-    # ISO's own example, X 2618: the vortex drops the heavy phase out of the
-    # apex. The six siblings separate by density the same way (one of them is
-    # called ``gravity``), and the three hopper-bottomed ones collect out of an
-    # apex exactly as the cyclone does.
-    #
-    # ``default`` no longer draws the demister its reason used to name, so the
-    # reason is now the disengagement itself, in the same words ``horizontal``
-    # already uses: the two are one stencil family in two attitudes and the
-    # fact that fixes them is the same fact.
+    # ISO's own example, X 2618, and the separators that drop a phase the same way.
     ("separator", "default"):       "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "cyclone"):       "ISO 14617 symbol X 2618; apex points down",
     ("separator", "horizontal"):    "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "knockout"):      "demister on top, vapour up and liquid down",
     ("separator", "scrubber"):      "hopper bottom under a wash-liquid header",
-    # The venturi is drawn running downward -- converging lip, throat, then the
-    # diverging cone opening onto the hopper -- so this one is fixed by its own
-    # internal as well as by the hopper the family shares. Turned, the gas is
-    # accelerated sideways into a wall and nothing collects.
+    # The venturi throat runs down into the hopper.
     ("separator", "venturi_scrubber"):
         "wash spray on the crown, throat running down into the hopper",
-    # The four mechanical separators, listed for the reason ``electrostatic``
-    # already is rather than for what does the separating. A precipitator sorts
-    # by charge and a magnet by magnetism, and neither is gravity; what fixes
-    # the attitude in both is the hopper the artwork draws under them, and the
-    # fall into it. Turned, the hopper is a roof and nothing collects.
+    # The mechanical separators, held by the hopper drawn under them.
     ("separator", "sifter"):           "screen deck over a hopper; the undersize falls through it",
     ("separator", "impact"):           "hopper bottom under the baffle, collected phase out of the apex",
     ("separator", "permanent_magnet"): "hopper bottom, separated fraction out of the apex",
-    # ISO's other example, 2061: Open tank. Every variant holds a liquid with a
-    # free surface, fills at the roof and drains at the low point; the floating
-    # roof is drawn floating on that surface. On the three hopper-bottomed ones
-    # that low point is a cone, which is the same fall the hopper-bottomed
-    # separators above are listed for: turned, the cone is a roof and the tank
-    # holds nothing and drains nowhere.
+    # ISO's other example, 2061: a free surface, filled at the roof, drained low.
     ("tank", "default"):        "dished roof over a free surface, draw at the floor",
     ("tank", "conical"):        "conical roof over a free surface, draw at the floor",
     ("tank", "floating_roof"):  "the roof floats on the liquid",
@@ -1889,17 +691,9 @@ GRAVITY_FIXED = {
     ("tank", "conical_ends"):   "conical roof over a free surface, drains to the cone apex",
     ("tank", "dished_roof_conical_bottom"):
         "dished roof over a free surface, drains to the cone apex",
-    # 2061 again, and the most literal case of it in the family: the bell is
-    # drawn *resting on* the water in the seal, which is the whole mechanism.
-    # Turned, the seal runs out and the holder holds nothing.
+    # The bell rests on the water seal.
     ("tank", "gas_holder"):     "the bell floats on the water seal",
-    # Holdup with a vapour space: every variant carries its vent on the top head
-    # and drains from the shell, and two of them draw the brackets or saddles
-    # they stand on. ``Vessel``'s own docstring already says this in
-    # prose, "the outlet still has to drain from the bottom whichever way the
-    # artwork is spun", and ``horizontal`` is the variant that sentence points
-    # at, which is ISO's recommended escape hatch: a new symbol drawn to the
-    # actual orientation, not the upright one turned.
+    # Holdup with a vapour space: vent on top, drain from the shell.
     ("vessel", "default"):    "vent on the top head, free surface below it",
     ("vessel", "dished"):     "vent on the top head; stands on brackets",
     ("vessel", "dome"):       "the manway dome is on top",
@@ -1907,77 +701,37 @@ GRAVITY_FIXED = {
     ("vessel", "jacketed"):   "vent on the top head, free surface below it",
     ("vessel", "insulated"):  "vent on the top head, free surface below it",
     ("vessel", "electrical_heating"): "vent on the top head, low draw-off from the shell",
-    # The swage is a second fact on top of the family's. A vessel drawn wide at
-    # the bottom and narrow at the top holds its inventory in the larger
-    # diameter and its vapour in the smaller one; turned, the two diameters are
-    # side by side and the drawing says nothing about either.
+    # The larger diameter, below, holds the inventory.
     ("vessel", "swaged"):     "vent on the top head, and the larger diameter is the one below it",
-    # A tower works because liquid runs down over the trays and vapour rises
-    # through them: distillate leaves the top head, bottoms the bottom one, and
-    # the packed variant draws the beds resting on their support grids.
+    # Liquid runs down a tower and vapour rises through it.
     ("column", "default"): "distillate off the top, bottoms off the floor",
     ("column", "packed"):  "packed beds rest on their support grids",
     # A charge vessel: the agitator hangs into it from above and the contents
     # drain out of the dished bottom, with the off-gas taken from the top.
     ("reactor", "default"):  "top-entering agitator over a dished bottom",
     ("reactor", "jacketed"): "top-entering agitator over a dished bottom, inside its jacket",
-    # Open ends. What leaves a vent rises, and what would otherwise fall into it
-    # is what the weather cap and the exhaust head's V-bottom drain are for; a
-    # funnel is charged by pouring into it. Turned, each of these is drawn as
-    # something else: an open end pointing down is a drain, not a vent.
+    # Open ends: pointing down, an open end is a drain, not a vent.
     ("vent", "default"):      "weather cap on top of the stack",
     ("vent", "breather"):     "the tank conservation vent sits on the roof",
     ("vent", "exhaust_head"): "the V-bottom catches and drains condensate",
     ("funnel", "default"):    "open cone above a stem that drains down",
-    # Water that falls. A cooling tower works because the warm water is
-    # distributed over the fill and rains down through the air rising against
-    # it, collecting in the basin the artwork draws under the whole machine.
-    # Both drawings put a free surface at the bottom and the air's way out at
-    # the top; turned, the water leaves sideways and the draught runs across the
-    # basin. The fan arrangement makes no difference to that, so all three keys
-    # are listed.
+    # Water falls through the fill into the basin, whatever the fan arrangement.
     ("cooling_tower", "default"):        "the water falls through the fill into the basin",
     ("cooling_tower", "induced_draft"):  "the water falls through the fill into the basin",
     ("cooling_tower", "forced_draft"):   "the water falls through the fill into the basin",
-    # Solids that fall. The spray drier atomises into its roof and drops powder
-    # out of the floor; the fluidised bed is a layer held down by gravity and
-    # lifted by the gas through its distributor, and the artwork draws it as a
-    # horizontal band of particles on that plate.
+    # Solids that fall: powder out of the spray drier's floor, a fluidised bed on its plate.
     ("dryer", "spray"):         "atomiser in the roof, powder out of the floor",
     ("dryer", "fluidized_bed"): "the bed is a layer on its distributor plate",
-    # The three filters drawn with a dust hopper. It is the whole difference
-    # between each gas casing and the liquid one beside it, and what it draws is
-    # a fall: the dislodged cake drops off the medium and is collected out of
-    # the apex, exactly as the hopper-bottomed separators above collect. Turned,
-    # the hopper is a roof and the dust falls out of the filter.
+    # The gas filters' dust hopper.
     ("filter", "gas"):           "dust hopper under the bags",
     ("filter", "gas_fixed_bed"): "dust hopper under the bed",
     ("filter", "gas_belt"):      "dust hopper under the belt",
-    # A thickener separates by settling and nothing else: the clarified liquor
-    # goes over a weir at the rim and the solids are raked to a cone under the
-    # floor. Turned, the cone is a roof, the weir is at the bottom and the
-    # machine has no free surface to clarify at.
+    # A thickener settles solids into a raked cone under an open rim.
     ("thickener", "default"): "open rim over a raked cone; the solids settle into it",
 }
 
-# Symbols whose artwork states a *direction of flow* that an axis flip would
-# reverse -- either mirror, and the half turn that is the two of them composed.
-# See ``Symbol.directional``: the placement still moves the nozzles, and the
-# renderer holds the drawing still under it rather than drawing the statement
-# backwards. A quarter turn is carried rather than reversed and is left alone.
-#
-# One family, drawn from two stencils that differ in nothing else. "Heater" and
-# "Condenser" are the same circle and the same zigzag on the same diagonal, and
-# which of the two a reader is looking at is *only* which end of that diagonal
-# carries the arrowhead. Flip either and the head lands at the far end, which is
-# where the other one draws it, so the sheet says heat is added where it is
-# removed. Nothing else vendored here has a mark of that kind: every other
-# arrowhead in the set (a separator's falling solids, a conveyor's belt) points
-# the way gravity or the run does, and those symbols are held one way up by
-# ``GRAVITY_FIXED`` or are built to their run instead.
-#
-# The reason is carried into the generated file, since that is where a reader
-# meets the keyword.
+# Symbols whose arrowhead states a direction of flow that a mirror would reverse,
+# as ``Symbol.directional``.
 DIRECTIONAL = {
     ("heater", "default"): "the arrowhead on the diagonal is the whole of what "
                            "makes this a heater and not a cooler",
@@ -1988,87 +742,36 @@ DIRECTIONAL = {
 }
 
 
-# Where a *family* may put a nozzle on a face, as ``{face: (lo, hi)}`` measured
-# along that face in the symbol's own finished coordinates -- top to bottom on
-# W/E, left to right on N/S. Emitted as ``Symbol.bands``; see it, and
-# :func:`pandid.render.symbols.spread`, which treats the pair as a hard limit
-# and slides a run into it rather than drawing past it.
-#
-# WHY THIS EXISTS. A tank's or a vessel's inlets and outlets are a family whose
-# count is the unit's, so ``vessel_symbol`` spreads them from the one nozzle the
-# stencil drew. That nozzle is a *point*, and it says nothing about how much
-# wall there is either side of it -- so a family centred on it walked off the
-# body: three inlets on tank/default put the third 9,5 units below the bottom of
-# the drawing, and the stream to it ended in blank paper (#488). The wall is a
-# feature of the artwork with no dimension anywhere until here.
-#
-# HOW EACH PAIR IS ARRIVED AT. The band is the straight run of shell that face
-# offers, held off each end by a clearance so a nozzle is never drawn into the
-# weld where a head, a roof or a floor is attached. Two readings of that
-# clearance, and each entry's comment says which it took:
-#
-#   * where the stencil drew its nozzle hard against one end of the wall -- a
-#     tank fills low on the shell, ten above the floor, see ("tank", "default")
-#     in KIND_MAP -- the clearance is that nozzle's own, taken at both ends. The
-#     drawn nozzle is then exactly the band's end, so a lone connection does not
-#     move and a family stacks away from it up the same wall.
-#   * where the nozzle is at mid-height -- a drum is fed at the middle of its
-#     shell -- there is no such statement to read, and the clearance is 10, the
-#     one the tank stencils' own low nozzles keep.
-#
-# A DOME CROWN IS A BAND OF NO LENGTH, NOT A MISSING BAND. A dished roof, a cone
-# apex and a dished head touch their face at exactly one point: a nozzle there
-# is on the ink and a *second* one beside it, at the same inset, is in mid-air
-# over the roof. That is the reported defect again on a curved face -- three
-# ``inputs=["N"]`` on tank/default put the outer two 2,65 units clear of the
-# dome, inside the box and off the drawing -- so those faces declare the point
-# they offer, ``(t, t)``, rather than being left out. A family of more than one
-# member on a band of no length is refused outright by
-# :func:`pandid.render.symbols.crowded_band`: there is nowhere on that face to
-# draw the second nozzle, the shell is where a second connection goes, and
-# saying so beats drawing it in the air.
-#
-# So every face either family may be piped from is named here, for every body.
-# ``test_every_family_face_declares_a_band`` holds that: a face with a
-# placement and no band would be a family bounded by the box alone.
+# Where a family may put a nozzle on a face, as ``{face: (lo, hi)}`` along that
+# face in finished coordinates; emitted as ``Symbol.bands``. A band is the
+# straight wall held 10 off each end, or the drawn nozzle's own clearance; a
+# curved head, apex or crown offers one point, ``(t, t)``.
 BANDS = {
-    # Shell y 25,46..95,46 under the dished roof; the fill sits at 85, ten and a
-    # half above the floor, so that clearance is taken at the roof end too. N is
-    # the dome crown and S the flat floor.
+    # Shell y 25.46..95.46; N is the dome crown, S the floor.
     ("tank", "default"): {"W": (36.0, 85.0), "E": (36.0, 85.0), "S": (10.0, 90.0),
                           "N": (50.0, 50.0)},
     # Shell y 20..90 under the conical roof; the fill at 80 is ten above the
     # floor. N is the cone apex; S is the flat floor.
     ("tank", "conical"): {"W": (30.0, 80.0), "E": (30.0, 80.0), "S": (10.0, 90.0),
                           "N": (50.0, 50.0)},
-    # Shell y 0..70 over the conical bottom; the fill at 60 is ten above the
-    # knuckle. The roof is flat and takes a family across its full width; S is
-    # the cone apex.
+    # Shell y 0..70 over the cone; the roof is flat; S is the cone apex.
     ("tank", "conical_bottom"): {"N": (10.0, 90.0), "W": (10.0, 60.0), "E": (10.0, 60.0),
                                  "S": (50.0, 50.0)},
     # Shell y 30..120 between the two cones; the fill at 110 is ten above the
     # lower knuckle. Both N and S are cone apexes.
     ("tank", "conical_ends"): {"W": (40.0, 110.0), "E": (40.0, 110.0),
                                "N": (51.0, 51.0), "S": (51.0, 51.0)},
-    # tank/default's shell over tank/conical_bottom's cone: the same y
-    # 25,46..95,46 wall and the same fill at 85. N is the dome crown, S the cone
-    # apex.
+    # tank/default's shell; N is the dome crown, S the cone apex.
     ("tank", "dished_roof_conical_bottom"): {"W": (36.0, 85.0), "E": (36.0, 85.0),
                                              "N": (50.0, 50.0), "S": (50.0, 50.0)},
     # Shell y 0..70, roof and floor both flat; the fill at 60 is ten above the
     # floor.
     ("tank", "floating_roof"): {"W": (10.0, 60.0), "E": (10.0, 60.0), "S": (10.0, 90.0)},
-    # The water-seal tank's own wall, y 30..95 -- the bell above it floats and
-    # carries no connection. Both nozzles are at 45, fifteen below the top of
-    # that wall, and that clearance is taken at the floor end too.
+    # The seal tank's wall, y 30..95; the bell carries no connection.
     ("tank", "gas_holder"): {"W": (45.0, 80.0), "E": (45.0, 80.0)},
-    # The shell is a sphere: the W and E faces of the box touch it at one point
-    # each, 75 down, and nowhere else. The draw-off below it is a 12-wide boss,
-    # which is a nozzle rather than a floor. All three are points.
+    # The sphere meets W and E at y = 75 only; S is the draw-off boss.
     ("tank", "sphere"): {"W": (75.0, 75.0), "E": (75.0, 75.0), "S": (40.0, 40.0)},
-    # The barrel between the two dished heads, at this family's 0,5 vertical
-    # scale: the stencil's y 15..185 wall drawn as 7,5..92,5. Fed at mid-height,
-    # so the clearance is the flat 10.
+    # The barrel, y 7.5..92.5 as drawn, held 10 off each end.
     ("vessel", "default"): {"W": (17.5, 82.5), "E": (17.5, 82.5)},
     ("vessel", "dished"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
     # Drawn on its side: the W and E faces are the two dished heads, and a head
@@ -2077,96 +780,31 @@ BANDS = {
     # The same 7,7..87,7 barrel. The outlet is drawn at 77,7, which is where the
     # 10 clearance already puts the band's lower end, so it does not move.
     ("vessel", "electrical_heating"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
-    # The insulation, not the shell: the W and E faces of this box are the two
-    # lagging lines at y 12,69..82,69, and the shell inside them is not on the
-    # face a nozzle leaves from.
+    # The lagging lines, y 12.69..82.69, are the W and E faces.
     ("vessel", "insulated"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
     # The jacket, for insulated's reason: the outer faces are the jacket boxes,
     # y 12,69..82,69.
     ("vessel", "jacketed"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
-    # The lower, larger barrel, which is the only part of this body the W and E
-    # faces of the box touch: y 50,25..85 on the west and 50..85 on the east.
-    # The upper barrel is drawn inboard at x 10..40 and a face nozzle cannot
-    # reach it. A short wall, so a family here squeezes early.
+    # Only the lower, larger barrel meets the W and E faces.
     ("vessel", "swaged"): {"W": (60.3, 75.0), "E": (60.0, 75.0)},
-    # The roof and the floor between the two dished heads, x 5,77..85,77. W and
-    # E are the heads themselves: one point each, at the 15 the barrel's
-    # centreline runs at.
+    # Roof and floor between the heads; W and E are the heads' apexes at y = 15.
     ("vessel", "horizontal"): {"N": (15.8, 75.8), "S": (15.8, 75.8),
                                "W": (15.0, 15.0), "E": (15.0, 15.0)},
 }
 
 
-# ISO 10628-2 registration numbers, for the vendored drawings someone has
-# since measured against Table 2 and found to be the row -- not filled in
-# by default, because a conformance claim made by assumption is worse than
-# none (see ``Symbol.iso_reg``). A key names the row the stencil was
-# checked against; the check itself lives beside the drawing this
-# generates, in ``pandid.render.symbols``.
+# ISO 10628-2 registration numbers for vendored drawings checked against
+# Table 2 (see ``Symbol.iso_reg``).
 ISO_REG = {
-    # Item 12.2 X2673, in-line static mixer: measured against a 6 M square
-    # with one mixing element inset 1 M from each wall -- the same
-    # construction (within a hand trace's rounding) symbols._mix_element
-    # draws fresh for items 12.1 and 12.3 beside it. See
-    # ``pandid.render.symbols._register_mixers``.
+    # Item 12.2 X2673; see ``pandid.render.symbols._register_mixers``.
     ("fitting", "static_mixer"): "X2673",
 }
 
 
-# draw.io draws inline devices oversized; scale them to read as small devices
-# (the converter is handed a matching heavier stroke, so the line still lands at
-# 2px once the transform has been applied).
-#
-# A key is a kind, or one (kind, variant) where a single variant is drawn at a
-# different size from the rest of its class. A value is one factor, or a pair
-# (sx, sy) for the cases where a symbol has to be *reproportioned* rather than
-# merely resized: the vessel, the flash drum and the column are all cut from one
-# stencil, and the first two are the short ones.
-#
-# An uneven pair is the one case where that compensation cannot be exact, since
-# it strokes the artwork with an elliptical pen (see ``drawing``). It divides by
-# sqrt(sx*sy), so nothing under such a pair lands ON 2px: a vertical stroke
-# comes out sqrt(sx/sy) heavy and a horizontal one the same factor light, about
-# a pen whose area is the sheet's. It used to divide by sx alone, which put the
-# vertical strokes exactly on 2px and left the horizontal ones at sy/sx of it --
-# a fifth light on the vessel and the flash drum, and under half on the packed
-# tower, where the bed grids read as a different sheet's ink from the shell they
-# sit in. Nothing here chooses which axis is the true one any more, because
-# there is no reading of a drawing on which one of them is.
-#
-# 0.25 is the inline family's factor, and it is measured rather than chosen. A
-# drawing unit is the CSS pixel, so an A3 sheet is 420 mm x 96/25.4 = 1587 units
-# wide and 1 mm is 3.78 of them. An issued A3 P&ID draws its gate valves 17.0 pt
-# long and 8.5 pt across (6.0 mm x 3.0 mm), the same 17.0 pt its instrument
-# balloons and its interlock squares are drawn at, the whole sheet being cut to
-# one 6 mm module. The valve stencil is 98 x 60, so 0.25 puts it at 24.5 x 15.0
-# units, 6.5 mm x 4.0 mm: within 8% of the reference along the flow axis, which
-# is the axis that decides how many valves fit on a run. At the 0.5 this
-# replaces, the same valve was 49 units (13 mm, over twice the reference), which
-# is why a station with isolation valves either side of a control valve took the
-# width five valves and a flow element occupy on a real sheet.
-#
-# It stays a single factor rather than an (sx, sy) pair even though the
-# reference's bowtie is 2:1 against the stencil's 98:60. Squashing the family to
-# match would draw the globe and ball seats as ovals and the check valve's
-# arrowhead askew, and an uneven pair strokes with an elliptical pen no single
-# stroke-width can round out, so the diagonals would land off 2px whatever the
-# compensation divides by. A valve one third taller than the reference's is a
-# smaller error than a valve whose internals are wrong.
-#
-# Everything that shares a pipe with a valve takes the same factor, because they
-# share a line size: a strainer, an orifice plate or a sight glass left at the
-# old scale would be drawn half again longer than the valve beside it.
-# ``reducer`` is the exception in this family and has its own entry below: it is
-# a piping.xml shape drawn on a 20-unit module, so 0.25 would put it at 5 units
-# long, a fifth of the valve it sits beside.
-#
-# flow_sensors.xml and piping.xml are the exception, and for a reason that is
-# about the stencils rather than about the drawing: they lay their in-line
-# devices out on a 50-unit module where valves.xml and fittings.xml use a ~100
-# one. Halving those would draw a venturi 12.5 units long beside a 24.5-unit
-# valve, so they take 0.5 and land on the same 25 x ~20 box the flame arrestors
-# and the static mixer already occupy. Same sheet size, different stencil scale.
+# Scale factors by kind, or by (kind, variant) for one variant. A value is one
+# factor, or an (sx, sy) pair that reproportions the shape. The inline family
+# takes 0.25, which draws a gate valve 24.5 x 15.0; flow_sensors.xml and
+# piping.xml shapes are on a 50-unit module and take 0.5.
 HALF_SCALE_FITTINGS = (
     # flow_sensors.xml: the primary elements
     "venturi", "flow_nozzle", "coriolis", "vortex", "ultrasonic",
@@ -2175,67 +813,13 @@ HALF_SCALE_FITTINGS = (
     # piping.xml: the in-line devices
     "strainer_y", "strainer_basket", "strainer_duplex",
     "bellows", "damper", "spool",
-    # ...and the spectacle blind, which is on that file's module like the rest
-    # of them and takes its factor for the same reason. It happens to be the
-    # right size for its own reason too: 0.5 draws each disc 10 units across, so
-    # the figure-8 is 20, the 5.3 mm that lands on the reference sheet's 6 mm
-    # module, and enough for the open disc's 8-unit bore to read as a hole
-    # rather than as a thick dot. The whole symbol is that one distinction, so
-    # it was checked at 1:1 and at print before this factor was settled; 0.375
-    # closes the bore to 5.5 units and the two states start to converge.
+    # ...and the spectacle blind, on the same module.
     "blind",
 )
 
-# Three shapes in valves.xml are not on that file's ~98-unit module, so the
-# kind's 0.25 draws them undersized: Safety PSV 1 is 55.5 x 94.5, Relief PRV
-# 40 x 59 and Pneumatic Operated Butterfly Valve 60 x 80, coming out at 13.9,
-# 10.0 and 15.0 units of length against everyone else's 24.5. Each therefore
-# takes its own factor below.
-#
-# What "the same size as the rest of the family" means is NOT the box, because
-# these are upright devices and the box holds whatever rides above the body: a
-# spring bonnet, a diaphragm dome, an operator. Forcing them into a gate valve's
-# landscape 24.5 x 15.0 would shrink the part that carries the flow to make room
-# for the part that does not.
-#
-# It is the SEAT. Every valve body in valves.xml is the same pair of triangles,
-# 60 units across the run with a 49-unit apex, and 0.25 draws that pair 15.0
-# across and 12.25 along wherever it appears. Gate Valve sets them base to base
-# and comes out 24.5 x 15.0; Angle folds them into an L (its own path is
-# (0,79)-(30,30)-(79,0)-(79,60)-(30,30)-(60,79), which is that triangle twice)
-# and comes out 19.8 x 19.8 at the very same 0.25. So an upright valve is sized
-# by drawing ITS seat at 15.0 across the run, and the bonnet above it is extra
-# height rather than a reason to shrink the seat.
-#
-# Safety PSV 1 draws exactly that pair, at 0.7 of the size: the inlet leg is
-# (0,94.5)-(21,60)-(42,94.5), a 42-wide base under a 34.5 apex, and the outlet
-# leg is the same triangle turned a quarter. 15.0 / 42 restores it, putting the
-# base on the family's 15.0 and the apex on 12.3 against the family's 12.25. It
-# comes out 19.8 x 33.8, whose lower 19.8 x 19.8 is valve/angle's box to the
-# decimal -- the same quarter-turn body, with 14 units of spring bonnet on top.
-# One factor and not a pair: the three spring strokes and both seat faces are
-# diagonals, which a non-uniform factor would tilt, and would stroke with a pen
-# no compensation can hold round, so they would also land off 2px. That is the
-# reason the valve family takes a single factor at all (see the paragraph
-# above).
-#
-# Relief PRV has no seat to measure: it is a 40-wide semicircular bonnet on a
-# stem, piped S to N, so across-the-run is that bonnet and 15.0 / 40 is the same
-# statement. It comes out 15.0 x 22.1 -- a gate valve's 15.0 across the run,
-# and 22.1 along it where a gate valve is 24.5, the difference being that this
-# one spends its length on a stem rather than on a bowtie. Uniform again,
-# because the bonnet is a true semicircle and a pair would draw it as a half
-# ellipse. The check that a bonnet is a bonnet across the three: this shape and
-# the butterfly draw the identical 40 x 20 semicircle, and come out 15.0 x 7.5
-# and 16.3 x 7.5.
-#
-# Pneumatic Operated Butterfly Valve is the one that does need the pair. Its
-# body is a plain rect, x 0..60 and y 40..80, at 3:2 where the family's bowtie
-# is 98:60, so a single factor cannot put the body on 24.5 x 15.0 and the run on
-# the family's height at once. (24.5/60, 15.0/40) does both: a 24.5 x 15.0 body
-# in a 24.5 x 30.0 box, with the W/E anchors at y = 0.75 landing 7.5 above the
-# bottom, which is where every other straight-through valve carries the line.
-# Uniform at 24.5/60 would leave the run 8.2 up and still off the family's run.
+# Three valves.xml shapes are off that file's module, so each takes its own
+# factor: the PSV and the relief valve scale their seat or bonnet to 15.0 across
+# the run, and the pneumatic butterfly takes a pair that draws its body 24.5 x 15.0.
 SCALE = {"valve": 0.25, "fitting": 0.25,
          "vent": 0.25, "funnel": 0.25,
          ("valve", "psv"): 15.0 / 42, ("valve", "relief"): 15.0 / 40,
@@ -2243,55 +827,15 @@ SCALE = {"valve": 0.25, "fitting": 0.25,
          **{("fitting", variant): 0.5 for variant in HALF_SCALE_FITTINGS},
          # ...and the two open ends taken from the same 50-unit file.
          ("vent", "exhaust_head"): 0.5, ("vent", "breather"): 0.5,
-         # Every reducer body is drawn 12.5 units tall. A reducer's drawn height
-         # is the line it sits in, so two of them in one run (the reduction into
-         # a control valve and the expansion out of it) have to agree about it,
-         # and so must the three variants, since switching one for another is a
-         # change of artwork and not of line size. The length follows from each
-         # stencil's own proportions: the concentric body is drawn square, the
-         # eccentric one longer than it is tall. The kind's entry covers
-         # ``default``, which is the same shape as ``concentric``.
+         # Every reducer is drawn 12.5 tall, the line it sits in.
          "reducer": 12.5 / 20, ("reducer", "eccentric"): 12.5 / 15,
-         # 62 x 100, at 1:1.6 against the column's 1:2: a drum is short because
-         # it holds inventory, a tower is slender because it holds trays, and
-         # two shapes cut to the same proportions read as one piece of equipment
-         # drawn at two sizes. It lands in the same family as vessel/dished
-         # (60 x 95), the knock-out drum (51 x 95) and the reactor (50 x 96).
-         #
-         # It is also the box the barrel occupied, to the unit: the nozzles keep
-         # the heights every pinned sheet was drawn to, so this changes what a
-         # vessel looks like without moving a single run.
+         # A drum is short and a tower slender: 62 x 100 against the column's 100 x 200.
          ("vessel", "default"): (0.62, 0.5),
-         # The flash drum takes vessel/default's reproportioning, for
-         # vessel/default's reason, and this entry is required rather than
-         # cosmetic: separator/default is cut from the same "Pressurized Vessel"
-         # stencil as the column, so left at 1.0 it comes out in the tower's
-         # 100 x 200 box and its artwork is pixel-identical to a column's on a
-         # sheet carrying both. 62 x 100 puts it in the box vessel/default
-         # already occupies, which is the point: a flash drum and a surge drum
-         # are the same size of equipment, and the tower beside them is the
-         # slender one.
+         # The flash drum shares the column's stencil and takes the drum's box.
          ("separator", "default"): (0.62, 0.5),
-         # The stirred tank takes the same reproportioning for the same reason: it
-         # is the same "Pressurized Vessel" stencil, and a reactor, a surge drum and
-         # a flash drum are one size of equipment with the tower beside them the
-         # slender one. 62 x 100 is also within four units of the box the "Mixing
-         # Reactor" stencil occupied (50 x 96,4), so the change is to what a reactor
-         # looks like and not to how much room it takes.
+         # The stirred tank shares the same stencil and box.
          ("reactor", "default"): (0.62, 0.5),
-         # 62 x 200. The packed tower is drawn 14 x 97, at 1:6.9, which is far
-         # slenderer than anything else on the sheet and would come out 14px
-         # wide. The height is the column's own 200, so every nozzle keeps the
-         # height it has on column/default and no pinned sheet moves vertically.
-         #
-         # The width is the drum's, not the column's, and that is the smaller of
-         # two evils. Stretching to 100 would take the dished heads to 14:1
-         # (flat lips rather than domes) and would draw the bed grids and the
-         # packing at under a third of the shell's line weight -- the ratio
-         # between a horizontal stroke and a vertical one is sy/sx whatever the
-         # compensation divides by, so widening the box widens that gap. At 62
-         # the heads are 8.6:1, which is where vessel/default's already are, and
-         # the internals are within about half the shell weight.
+         # 62 x 200: the column's height, so no nozzle moves vertically, at the drum's width.
          ("column", "packed"): (62 / 14, 200 / 97)}
 
 
@@ -2440,31 +984,12 @@ def drawing(el, kind, variant, port_map, sx, sy):
     SystemExit
         If an alternate face is not an edge or point spec.
     """
-    # Emit a heavier stroke on scaled symbols so it renders at 2px after the
-    # scale transform (2px matches streams + hand-drawn symbols exactly).
-    #
-    # The divisor is the geometric mean of the two factors, which is
-    # ``pandid.render.svg._pen_scale``'s answer to the same question one level
-    # down, arrived at for the same reason: stroking sweeps a *circular* pen,
-    # and a group that scales the axes differently sweeps an elliptical one, so
-    # the rendered weight depends on the direction the line runs in and no
-    # ``stroke-width`` -- one number -- can undo that. sqrt(sx*sy) holds the
-    # pen's area to the circle's, splits what is left evenly either side of 2px
-    # rather than piling it onto one axis, and is exact the moment the two
-    # factors agree, which is every family but the four SCALE reproportions.
+    # Stroke heavier so it renders at 2px after the scale; for uneven factors the
+    # geometric mean holds the elliptical pen's area to the circle's.
     inner, w, h, constraints, aspect = convert_shape(
         el, stroke_width=round(2.0 / math.sqrt(sx * sy), 3))
-    # A port spec may be a LIST: the first entry is the default placement and
-    # the rest are alternate faces the user can move that port to.
-    #
-    # An alternate is written the same two ways a home placement is. An edge
-    # spec -- ``("N", 30.0)`` -- names the face it lands on outright. An
-    # ``("AT", x, y)`` one does not, because it is a point *inboard* of the box:
-    # a dished roof's crown sits 6,4 under the top edge, and a tank offering a
-    # top fill has to put the nozzle on the roof plate rather than on the empty
-    # paper above it. So the face is read off the point, by the same
-    # :func:`outward_dir` that reads the home placement's, and read *after* the
-    # family's scale has been applied for the same reason that one is.
+    # A list spec is the home placement, then alternate faces; an ``AT`` alternate's
+    # face is read off the scaled point by ``outward_dir``.
     ports, alts, series = {}, {}, {}
     for p, spec in port_map.items():
         if is_series(spec):
@@ -2497,9 +1022,7 @@ def drawing(el, kind, variant, port_map, sx, sy):
     ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
     alts = {p: [(f, tuple(round(v, 1) for v in xy)) for f, xy in v]
             for p, v in alts.items()}
-    # Emit the whole menu, home first: Symbol keeps exactly one enumeration
-    # of a port's placements, so a symbol with alternates must declare the
-    # default among them rather than leave it to be merged in later.
+    # Emit the whole menu, home first.
     menu = {}
     for p, entries in alts.items():
         faces = {outward_dir(*ports[p], w, h): ports[p]}
@@ -2525,52 +1048,39 @@ def render() -> str:
         If a table names a shape or symbol the generator does not draw, or
         the two states of a device differ in more than their artwork.
     """
-    # Index every shape once, correcting the ones STENCIL_PATCHES names, and
-    # note the package each file declares, which is what its shapes are filed
-    # under at the draw.io end. See :func:`drawio_shape_key`.
+    # Index every shape once, applying STENCIL_PATCHES, and note each file's package.
     index = {}
     namespaces = {}
     for stencil in {m[0] for m in KIND_MAP.values()}:
         namespaces[stencil] = stencil_namespace(STENCILS / f"{stencil}.xml")
         for name, el in shapes_in(STENCILS / f"{stencil}.xml"):
             index[(stencil, name)] = patch_shape(stencil, name, el)
-    # A patch that matches nothing is a fix that has silently stopped being
-    # applied -- an upstream rename, or a stencil this generator no longer
-    # reads. Either way the drawing quietly reverts, so say so instead.
+    # Refuse a patch that matches nothing.
     missing = sorted(key for key in STENCIL_PATCHES if key not in index)
     if missing:
         raise SystemExit(
             "STENCIL_PATCHES names shapes the generator did not load: "
             + ", ".join(f"{stencil}:{shape}" for stencil, shape in missing)
         )
-    # A closed state for a device nothing draws is a position with no symbol
-    # behind it, which is exactly the silence the pairing exists to prevent.
+    # Refuse a table entry for a symbol KIND_MAP does not draw.
     orphans = sorted(key for key in CLOSED_SHAPES if key not in KIND_MAP)
     if orphans:
         raise SystemExit(
             "CLOSED_SHAPES names symbols KIND_MAP does not draw: "
             + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
-    # ...and a turning rule for a symbol nothing draws is a rule that never
-    # fires, which reads on the page as a symbol that has been cleared to turn.
     orphans = sorted(key for key in GRAVITY_FIXED if key not in KIND_MAP)
     if orphans:
         raise SystemExit(
             "GRAVITY_FIXED names symbols KIND_MAP does not draw: "
             + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
-    # ...and the same again for the arrow that must not be flipped: a rule for a
-    # symbol nothing draws is a rule that never fires, which reads on the page
-    # as an arrow that has been cleared to reverse.
     orphans = sorted(key for key in DIRECTIONAL if key not in KIND_MAP)
     if orphans:
         raise SystemExit(
             "DIRECTIONAL names symbols KIND_MAP does not draw: "
             + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
-    # ...and for the wall a family is confined to. A band for a symbol nothing
-    # draws confines nothing, and reads on the page as a wall that has been
-    # measured.
     orphans = sorted(key for key in BANDS if key not in KIND_MAP)
     if orphans:
         raise SystemExit(
@@ -2582,9 +1092,7 @@ def render() -> str:
     names = ["Symbol"]
     if any(is_series(spec) for spec in specs):
         names.append("PortSeries")
-    # Only where a series really asks for it: an alignment named on every
-    # generated registry whether or not one is used would be an unused
-    # import the moment the last FROM_START series was retired.
+    # Import FROM_START only when a series uses it.
     if any(is_series(spec) and len(spec) > 5 and spec[5] == FROM_START for spec in specs):
         names.append("FROM_START")
     imports = ", ".join(sorted(names))
@@ -2620,10 +1128,7 @@ def render() -> str:
             drawn[suffix] = drawing(el, kind, variant, port_map, sx, sy)
         if "_closed" in drawn:
             opened, closed = drawn[""], drawn["_closed"]
-            # Same device, two positions. A pair whose boxes or nozzles differ
-            # would move a line already drawn the moment the position was
-            # declared; a pair whose artwork does not differ would draw the two
-            # positions identically and say nothing at all.
+            # The two positions must share box and nozzles and differ in ink.
             if opened[1:] != closed[1:]:
                 raise SystemExit(
                     f"{kind}/{variant}: {shape!r} and "
@@ -2647,20 +1152,11 @@ def render() -> str:
                 f"        svg={svg!r},",
                 f"        width={w}, height={h},",
                 f"        ports={ports!r},",
-                # The stencil this drawing came from, named the way draw.io's
-                # own registry names it, so an export can hand the reader back
-                # the shape rather than a tracing of it. Emitted for every
-                # symbol here and for none of the hand-drawn ones, which is
-                # exactly the distinction: a symbol that carries this has a
-                # draw.io shape behind it and one that does not, does not.
+                # The draw.io registry key, so an export can name the stencil shape.
                 f"        drawio_shape="
                 f"{drawio_shape_key(namespaces[stencil], shape_name)!r},",
             ]
-            # A registration number is a conformance claim about the
-            # geometry above, so it is only ever added for the (kind,
-            # variant) someone has actually measured against Table 2; see
-            # ISO_REG. Suffixed shapes (a normally-closed second drawing)
-            # never carry one -- ISO_REG names the open drawing's own row.
+            # A registration number only for a drawing checked against Table 2; see ISO_REG.
             if not suffix and (kind, variant) in ISO_REG:
                 lines.append(f"        iso_reg={ISO_REG[(kind, variant)]!r},")
             # ISO 10628-1 §5.3.1 c), by kind; see TRIM_KINDS.
@@ -2678,13 +1174,7 @@ def render() -> str:
             # must not be turned.
             if (kind, variant) in GRAVITY_FIXED:
                 lines.append("        gravity_fixed=True,")
-            # The artwork says which way something goes, and an axis flip says
-            # the reverse of it.
             if (kind, variant) in DIRECTIONAL:
-                # The renderer holds the *whole* drawing still under a flip, so
-                # a glyph inside one would be counter-transformed twice over.
-                # Caught here rather than in the renderer, which has no way to
-                # report it by the time it is drawing.
                 if "<text" in inner:
                     raise SystemExit(
                         f"{kind}/{variant} is DIRECTIONAL and carries lettering; "
@@ -2694,9 +1184,7 @@ def render() -> str:
                 lines.append("        directional=True,")
             if menu:
                 lines.append(f"        port_faces={menu!r},")
-            # The stretch of each face a family may put a nozzle on; see BANDS.
-            # Emitted for the open drawing and the closed one alike, since a
-            # position is the same body with different ink in it.
+            # See BANDS; the closed drawing shares the open one's body.
             if (kind, variant) in BANDS:
                 lines.append(f"        bands={BANDS[(kind, variant)]!r},")
             # A family is named after the port it replaces: one member keeps
@@ -2713,9 +1201,7 @@ def render() -> str:
                 f"    ), {variant!r})",
                 "",
             ]
-    # "\n" and not os.linesep: this is the string the test compares against the
-    # committed file, which it reads back in text mode. Both ends therefore speak
-    # LF whatever the checkout does with line endings on the way to disk.
+    # LF, to match the committed file read back in text mode.
     return "\n".join(lines)
 
 

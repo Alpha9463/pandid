@@ -4,14 +4,6 @@ These diagrams are generated from the scripts in [`examples/`](../../examples).
 Each entry links to its Python source and vector SVG. Rebuild the gallery with
 `python scripts/gallery.py`.
 
-## 01 · Ammonia loop
-
-Automatic ammonia-loop layout with a recycle around the main equipment train.
-
-[`01_ammonia_loop.py`](../../examples/01_ammonia_loop.py) · [SVG](01_ammonia_loop.svg)
-
-![Ammonia loop](01_ammonia_loop.png)
-
 ## 02 · Manual layout, with the coordinate overlay
 
 Corner and nozzle pins, manual waypoints, and the debug coordinate overlay.
