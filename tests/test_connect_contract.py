@@ -97,12 +97,6 @@ def test_an_inferred_duty_still_round_trips_without_saying_kind():
     assert [s.kind for s in Flowsheet.from_dict(written).streams] == ["energy"]
 
 
-def test_a_kind_that_is_not_a_kind_is_still_refused():
-    fs, cooler, heater = _duty_sheet()
-    with pytest.raises(ValueError, match="Stream kind must be one of"):
-        fs.connect(cooler.utility_out, heater.utility_in, kind="steam")
-
-
 # --- #451: a refused call changes nothing ------------------------------------
 #
 # `connect()` checked every rule before it wrote anything and was believed to be

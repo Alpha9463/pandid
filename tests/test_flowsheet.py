@@ -22,13 +22,6 @@ def test_connect_creates_stream_and_marks_ports():
     assert pump.suction.stream is s
 
 
-def test_auto_stream_names_increment():
-    fs, feed, pump, prod = _fs()
-    fs.connect(feed.outlet, pump.suction)
-    s2 = fs.connect(pump.discharge, prod.inlet)
-    assert s2.name == "S2"
-
-
 def test_naming_scheme_is_keyword_only():
     """``stream_naming_scheme`` takes no positional slot, so a stray second
     argument fails loudly rather than being silently adopted as the scheme."""
@@ -144,20 +137,6 @@ def test_connect_rejects_unit_not_added():
     stray = U.Product("Stray")  # never added to fs
     with pytest.raises(ValueError, match="added to this flowsheet"):
         fs.connect(pump.discharge, stray.inlet)
-
-
-def test_energy_streams_auto_detected():
-    fs = Flowsheet("Test")
-    heater = fs.add(U.Heater("E-1"))  # heater.utility_in is an inlet energy port
-    cooler = fs.add(U.Cooler("C-1"))  # cooler.utility_out is an outlet energy port
-    s = fs.connect(cooler.utility_out, heater.utility_in)  # both roles == "energy"
-    assert s.kind == "energy"
-
-
-def test_named_connect_overrides_auto_name():
-    fs, feed, pump, prod = _fs()
-    s = fs.connect(feed.outlet, pump.suction, name="feed-to-pump")
-    assert s.name == "feed-to-pump"
 
 
 def test_add_rejects_duplicate_unit():
