@@ -1260,24 +1260,6 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
 }
 
 
-def _built_to_size(kind: str, variant: str) -> "Callable[..., Symbol] | None":
-    """Return the builder for ``(kind, variant)``, or ``None``.
-
-    Parameters
-    ----------
-    kind : str
-        Unit kind.
-    variant : str
-        Resolved variant.
-
-    Returns
-    -------
-    callable or None
-        Function taking the unit and returning its symbol.
-    """
-    return _BUILT_TO_SIZE.get((kind, variant)) or _BUILT_TO_SIZE.get((kind, None))
-
-
 # Normally closed devices.
 
 #: Valve variants whose body is darkened when normally closed.
@@ -3227,7 +3209,8 @@ class SymbolRegistry:
         """
         variant = getattr(unit, "variant", "default")
         sym = self.get(unit.kind, variant)
-        build = _built_to_size(unit.kind, variant)
+        build = (_BUILT_TO_SIZE.get((unit.kind, variant))
+                 or _BUILT_TO_SIZE.get((unit.kind, None)))
         if build is not None:
             return build(unit)
         overlays = tuple(getattr(unit, "overlays", ()) or ())

@@ -62,24 +62,6 @@ _JUMP_STYLES = {"arc": _JUMP_STYLE, "gap": "gap"}
 _NO_HOP = "noJump=1;"
 
 
-def _jump_size(radius: float, weight: float) -> int:
-    """Return draw.io's ``jumpSize`` for a hop on a line of ``weight``.
-
-    Parameters
-    ----------
-    radius : float
-        Hop radius in drawing units.
-    weight : float
-        Edge stroke width.
-
-    Returns
-    -------
-    int
-        ``jumpSize``, at least 1.
-    """
-    return max(1, round(2.0 * (radius - weight) + 2.0))
-
-
 def _hops(polylines: dict, direction: str,
           style: str = "arc") -> "tuple[list, set, set]":
     """Return the stream edge order, the hopping edges and lost hops.
@@ -1574,9 +1556,10 @@ class DrawioRenderer:
                 f"strokeWidth={fit.length(_stream_rung(signal).width):g}",
             ]
             if n in hops:
+                # draw.io's jumpSize for a hop of HOP_R on this line, at least 1.
                 weight = fit.length(_stream_rung(signal).width)
-                keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}",
-                         f"jumpSize={_jump_size(fit.length(HOP_R), weight)}"]
+                size = max(1, round(2.0 * (fit.length(HOP_R) - weight) + 2.0))
+                keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}", f"jumpSize={size}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
                 keys += ["endArrow=block", "endFill=1",
@@ -1835,12 +1818,16 @@ class DrawioRenderer:
         title = getattr(obj, "title", "") or ""
         if isinstance(obj, TableBox):
             size, _ncol, col_w, _row_h = F._table_layout(obj)
+            # Columns without a stated alignment are centred.
+            align = list(obj.col_align or [])
             # The table container draws the border and every rule.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
                           x, y, w, h, col_w, (size + F._TABLE_TITLE) if title else 0.0,
                           font=size, keys=f"strokeWidth={F._CELL_RULE:g};",
-                          col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
+                          col_keys=[_ALIGN_KEY.get(align[c] if c < len(align) else "c",
+                                                   "align=center;")
+                                    for c in range(len(col_w))])
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar rows, at the sheet's column widths. The first
@@ -2244,26 +2231,6 @@ _TEXT_INSET = 2.0
 _ALIGN_KEY = {"l": f"align=left;spacingLeft={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
               "r": f"align=right;spacingRight={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
               "c": "align=center;"}
-
-
-def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
-    """Return the alignment style keys for each column.
-
-    Parameters
-    ----------
-    col_align : sequence of str or None
-        ``"l"``, ``"c"`` or ``"r"`` per column; default ``"c"``.
-    ncol : int
-        Number of columns.
-
-    Returns
-    -------
-    list[str]
-        Style fragment per column.
-    """
-    align = list(col_align or [])
-    return [_ALIGN_KEY.get(align[c] if c < len(align) else "c", "align=center;")
-            for c in range(ncol)]
 
 
 def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,

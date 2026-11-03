@@ -833,43 +833,6 @@ def _section_span(m: "_Measured", columns: int) -> float:
     return max(m.label_w, m.span - m.name_w * columns)
 
 
-def _stream_rows(m: "_Measured", streams: list, cells: list,
-                 label_w: float) -> list[list[StreamCell]]:
-    """Return the table's cells, row by row, for the given columns.
-
-    Parameters
-    ----------
-    m : _Measured
-        Table measurements.
-    streams : list[Stream]
-        Each column's stream.
-    cells : list[dict]
-        Each column's property values.
-    label_w : float
-        Label column width.
-
-    Returns
-    -------
-    list[list[StreamCell]]
-        Rows, top to bottom.
-    """
-    rows: list[list[StreamCell]] = [
-        [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
-        + [StreamCell(s.name, m.name_w, _STREAM_HEAD_FILL, True, "middle")
-           for s in streams]]
-    for kind, key in m.disp:
-        if kind == "section":
-            rows.append([StreamCell(key, label_w + m.name_w * len(streams),
-                                    _STREAM_SECTION_FILL, True, "start")])
-            continue
-        rows.append(
-            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
-            + [StreamCell(_stream_cell_text(c, key), m.name_w,
-                          _STREAM_VALUE_FILL, False, "middle")
-               for c in cells])
-    return rows
-
-
 def _stream_table(m: "_Measured", streams: list, cells: list,
                   label_w: float) -> StreamTable:
     """Return a table over the given columns: whole, or one block.
@@ -890,7 +853,20 @@ def _stream_table(m: "_Measured", streams: list, cells: list,
     StreamTable
         Table geometry.
     """
-    rows = _stream_rows(m, streams, cells, label_w)
+    rows: list[list[StreamCell]] = [
+        [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
+        + [StreamCell(s.name, m.name_w, _STREAM_HEAD_FILL, True, "middle")
+           for s in streams]]
+    for kind, key in m.disp:
+        if kind == "section":
+            rows.append([StreamCell(key, label_w + m.name_w * len(streams),
+                                    _STREAM_SECTION_FILL, True, "start")])
+            continue
+        rows.append(
+            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
+            + [StreamCell(_stream_cell_text(c, key), m.name_w,
+                          _STREAM_VALUE_FILL, False, "middle")
+               for c in cells])
     return StreamTable(rows, m.size, m.row_h,
                        label_w + m.name_w * len(streams),
                        m.row_h * len(rows))
@@ -1152,27 +1128,6 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     gap = m.row_h * _BLOCK_ROWS
     return TableSheet(blocks, gap, max(b.w for b in blocks),
                       _total(b.h for b in blocks) + gap * (len(blocks) - 1))
-
-
-def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
-    """Return the top-left of the block stack, centred across ``free``.
-
-    Parameters
-    ----------
-    table : TableSheet
-        Stacked blocks.
-    free : tuple[float, float, float, float] or None
-        Region a fixed page leaves, or ``None`` for a grown sheet.
-
-    Returns
-    -------
-    tuple[float, float]
-        Top-left corner.
-    """
-    if free is None:
-        return (0.0, 0.0)
-    fx, fy, fw, _fh = free
-    return (fx + (fw - table.w) / 2, fy)
 
 
 def draw_stream_table(table: StreamTable, left: float, top: float, *,
