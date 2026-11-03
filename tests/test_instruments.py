@@ -1331,6 +1331,24 @@ def test_a_router_that_refuses_the_hung_sheet_gets_the_fallback() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
 
 
+def test_the_fallback_keeps_an_engine_that_refines_the_layout() -> None:
+    """An engine that adjusts the frames already laid out is not run
+    again; the sheet as laid out is routed without hanging."""
+
+    class SnapToGrid:
+        def layout(self, fs: Flowsheet) -> None:
+            for u in fs.units:
+                assert u.frame is not None
+                u.frame.x = round(u.frame.x)
+
+    fs = _close_transmitter()
+    fs.layout()
+    fs.layout(SnapToGrid())
+    fs.route()
+
+    assert [i for i in fs.validate() if i.severity == "error"] == []
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

@@ -60,6 +60,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     """
     from pandid.geometry import Frame
     from pandid.layout.attach import _nozzle_keepouts, stream_path
+    from pandid.layout.faces import select_faces
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -80,19 +81,20 @@ def _place_free(fs: "Flowsheet") -> bool:
               for s in fs.streams if s.route is not None]
     segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
                 for ends, points in lines for a, b in zip(points, points[1:])]
-    moved = False
+    moved = rehung = False
     # Place in flowsheet order, each against what is already placed.
     for inst in pending:
         w, h = resolve_size(inst)
         crossed = [box for ends, box in segments if inst not in ends]
-        hung = (None if fs._hang_refused
-                else _actuator_spot(fs, inst, w, h, taken + clear + crossed))
+        hung = (_actuator_spot(fs, inst, w, h, taken + clear + crossed)
+                if fs._may_hang else None)
         if hung is not None:
             fs._hung.add(id(inst))
         x, y = hung or _spot(fs, inst, w, h, taken)
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
             moved = True
+            rehung = rehung or hung is not None
         pin = inst.pin_
         inst.frame = Frame(
             x=x, y=y, w=w, h=h, label_pos="center",
@@ -106,6 +108,9 @@ def _place_free(fs: "Flowsheet") -> bool:
             port_faces=dict(old.port_faces) if old is not None else {},
         )
         taken.append(unit_box(inst, inst.frame))
+    # Faces were chosen for where a newly hung controller stood.
+    if rehung:
+        select_faces(fs)
     return moved
 
 

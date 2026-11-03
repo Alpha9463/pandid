@@ -4,6 +4,7 @@ A flowsheet also lays out, routes, validates and renders its drawing.
 """
 
 from __future__ import annotations
+import copy
 from contextlib import contextmanager
 from math import isfinite
 from numbers import Integral
@@ -547,12 +548,10 @@ class Flowsheet:
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
-        # Controllers hung off an actuator since the last layout(), and
-        # whether hanging is refused while route() lays out again.
+        # Whether route() may hang a controller off its actuator, and the
+        # controllers it hung.
+        self._may_hang = False
         self._hung: set[int] = set()
-        self._hang_refused = False
-        # Engine of the last layout(), for laying out again.
-        self._layout_engine: object = None
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2032,10 +2031,7 @@ class Flowsheet:
         self._mounted_layout = False
         if engine is None:
             engine = default_layout_engine
-        self._hung = set()
         engine.layout(self)
-        # Set after the engine, which may lay out through this method.
-        self._layout_engine = engine
         self._layout_stale = False
         self._route_stale = True
 
@@ -2057,8 +2053,6 @@ class Flowsheet:
         ValueError
             If the default router meets a frame that is not finite.
         """
-        # Routes drawn by hand before this call.
-        authored = {id(s) for s in self.streams if s.route is not None and s.route.manual}
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         if router is None:
@@ -2077,8 +2071,10 @@ class Flowsheet:
                     break
                 router.route(self)
 
-        # A controller hung off its actuator that leaves a clash, or that
-        # the router refuses: lay out and route again without hanging.
+        # The sheet as laid out, to route again if hanging fails.
+        laid = copy.deepcopy([(u.frame, getattr(u, "tap", None)) for u in self.units])
+        drawn = copy.deepcopy([s.route for s in self.streams])
+        self._may_hang, self._hung = True, set()
         try:
             settle()
             clash = bool(self._hung) and _clashes(self)
@@ -2086,25 +2082,19 @@ class Flowsheet:
             if not self._hung:
                 raise
             clash = True
+        finally:
+            self._may_hang = False
+        # A hung controller that leaves a clash, or that the router
+        # refuses: route the sheet as laid out, without hanging.
         if clash:
-            from pandid.layout.stages import is_control
-
-            self._hang_refused = True
-            try:
-                # Start the balloons and routes afresh, as on a sheet never
-                # laid out.
-                for u in self.units:
-                    if is_control(u):
-                        u.frame = None
-                        if hasattr(u, "tap"):
-                            u.tap = None
-                for s in self.streams:
-                    if id(s) not in authored:
-                        s.route = None
-                self.layout(self._layout_engine)
-                settle()
-            finally:
-                self._hang_refused = False
+            for u, (frame, tap) in zip(self.units, laid):
+                u.frame = frame
+                if hasattr(u, "tap"):
+                    u.tap = tap
+            for st, route in zip(self.streams, drawn):
+                st.route = route
+            self._hung = set()
+            settle()
         # Mark the routes current.
         self._route_stale = False
 
