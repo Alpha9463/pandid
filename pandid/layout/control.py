@@ -292,11 +292,11 @@ def _shared(a: tuple[float, float], b: tuple[float, float],
     Returns
     -------
     bool
-        True if both runs are level, or both upright, within 1 of the
-        same track, and overlap by more than 1 along it.
+        True if both runs are level, or both upright, to within 1, lie
+        within 1 of the same track, and overlap by more than 1 along it.
     """
     for along, across in ((0, 1), (1, 0)):
-        if (abs(a[across] - b[across]) < 0.01 and abs(c[across] - d[across]) < 0.01
+        if (abs(a[across] - b[across]) < 1 and abs(c[across] - d[across]) < 1
                 and abs(a[across] - c[across]) < 1):
             lo = max(min(a[along], b[along]), min(c[along], d[along]))
             hi = min(max(a[along], b[along]), max(c[along], d[along]))
