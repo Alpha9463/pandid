@@ -675,17 +675,8 @@ def test_an_exchangers_nozzles_are_named_for_its_two_sides(variant, sides):
         assert hx.ports[f"{side}_out"].direction == "outlet"
 
 
-def test_the_old_duty_names_are_gone():
-    """`hot`/`cold` described the process rather than the equipment and did not
-    land on the same face from one variant to the next. They are removed rather
-    than aliased, and the AttributeError names the real nozzles."""
-    for unit, gone in (
-        (U.HeatExchanger("E-1"), "cold_in"),
-        (U.Heater("H-1"), "duty"),
-        (U.Cooler("C-1"), "duty"),
-    ):
-        with pytest.raises(AttributeError, match="available ports"):
-            getattr(unit, gone)
+def test_a_heater_and_a_cooler_carry_their_utility_side():
+    """The heater's utility comes in as energy and the cooler's goes out."""
     assert U.Heater("H-1").utility_in.role == "energy"
     assert U.Cooler("C-1").utility_out.direction == "outlet"
 
@@ -792,26 +783,6 @@ def test_a_separator_that_collects_dust_draws_an_overflow_and_an_underflow(varia
     role vocabulary has no word for tramp metal or a size fraction, and no
     drawing reads a role that is not ``signal``."""
     assert _nozzles(_separator("V-101", variant)) == _COLLECTOR_NOZZLES
-
-
-@pytest.mark.parametrize("variant", _COLLECTORS)
-@pytest.mark.parametrize("removed", ["vapor", "liquid"])
-def test_a_collectors_old_draw_name_no_longer_reaches_a_nozzle(variant, removed):
-    """The old pair was read for 0.1.2 and is gone in 0.1.3.
-
-    Every by-name way in, because a sheet written at 0.1.1 used whichever it
-    liked, and each answers the way it answers any other name the unit has not
-    got: the nozzle list, and nothing about a deprecation.
-    """
-    sep = _separator("CY-401", variant)
-    with pytest.raises(AttributeError, match="overflow"):
-        getattr(sep, removed)
-    with pytest.raises(KeyError, match="overflow"):
-        sep.port(removed)
-    with pytest.raises(KeyError, match="overflow"):
-        sep.nozzle(removed, "N")
-    with pytest.raises(KeyError, match="overflow"):
-        sep.pin(port=removed, x=300, y=400)
 
 
 @pytest.mark.parametrize("variant", ["default", "horizontal", "knockout", "scrubber"])

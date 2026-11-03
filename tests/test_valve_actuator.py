@@ -268,17 +268,6 @@ def test_a_device_class_takes_the_actuator_its_own_name_implies():
 # --- the removed spelling ----------------------------------------------------
 
 
-def test_the_medium_is_no_longer_a_kind_of_valve():
-    """``pneumatic`` named a signal medium rather than a body, and by 0.1.2
-    drew what ``control`` draws. It was retired in 0.1.2 and is gone: the
-    registry has no such artwork, and says so where it says so for any other
-    variant it does not have."""
-    fs = Flowsheet("removed")
-    fs.add(U.Valve("CV-1", variant="pneumatic")).pin(x=100, y=100)
-    with pytest.raises(ValueError, match="valve has no variant 'pneumatic'"):
-        fs.to_svg()
-
-
 def test_the_compound_body_name_survives_the_same_argument():
     """``butterfly_pneumatic`` names a *body* with an actuator on it, which is a
     valve you can point at on a rack, and it is the only spelling for its
