@@ -77,11 +77,11 @@
     <path d="M 1833.0,359.0 L 1962.9,359.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 144.0,616.1 L 192.0,616.1" fill="none" stroke="black" stroke-width="2" />
     <path d="M 216.5,616.1 L 264.5,616.1" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 314.5,626.1 L 1993.0,626.1 L 1993.0,487.4 M 1993.0,477.4 L 1993.0,389.1" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 314.5,626.1 L 1993.0,626.1 L 1993.0,389.1" fill="none" stroke="black" stroke-width="2" />
     <path d="M 2023.1,359.0 L 2069.15,359.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 2093.65,359.0 L 2127.45,359.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 2151.95,359.0 L 2198.0,359.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1503.0,482.4 L 2034.4,482.4 L 2034.4,364 M 2034.4,354 L 2034.4,236.60000000000002 L 2059.4,236.60000000000002" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 1503.0,482.4 L 1938.0,482.4 L 1938.0,364 M 1938.0,354 L 1938.0,236.60000000000002 L 2059.4,236.60000000000002" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 2081.4,258.6 L 2081.4,321.6 L 2081.35,321.6 L 2081.35,346.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="2076.4" y1="284.6" x2="2086.4" y2="290.6" stroke="black" stroke-width="1" />
     <line x1="2076.4" y1="288.6" x2="2086.4" y2="294.6" stroke="black" stroke-width="1" />

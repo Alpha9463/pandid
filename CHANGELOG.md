@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the two units and the call that moves it: `at=` and `offset=` for an
   attached balloon, `pin()` for any other unit. A suggested `attach()`
   repeats the balloon's `relation=` and `angle=`.
+- **The router goes round a line rather than cross it (#613).** A crossing
+  now costs as much as a bend, so a line takes a short detour round another
+  line's end instead of crossing it; some sheets draw differently.
 
 ### Deprecated
 
