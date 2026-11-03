@@ -27,8 +27,12 @@ _AXIS: Dict[str, Axis] = {"E": "h", "W": "h", "N": "v", "S": "v"}
 class CrossingIndex:
     """Index of orthogonal route segments for crossing queries.
 
-    ``h`` maps each y to its horizontal spans; ``v`` maps each x to its
-    vertical spans.
+    Attributes
+    ----------
+    h : dict[float, list[tuple[float, float]]]
+        Horizontal spans ``(lo, hi)`` keyed by their y.
+    v : dict[float, list[tuple[float, float]]]
+        Vertical spans ``(lo, hi)`` keyed by their x.
     """
 
     h: Dict[float, List[Tuple[float, float]]] = field(default_factory=dict)
@@ -38,12 +42,34 @@ class CrossingIndex:
     _v_sorted: Optional[Tuple[int, List[float]]] = field(default=None, repr=False, compare=False)
 
     def record(self, path: List[Tuple[float, float]]) -> None:
-        """Record the merged segments of an orthogonal route."""
+        """Record the merged segments of an orthogonal route.
+
+        Parameters
+        ----------
+        path : list[tuple[float, float]]
+            Route waypoints.
+
+        Raises
+        ------
+        ValueError
+            If two consecutive waypoints form a diagonal segment.
+        """
         for axis, fixed, lo, hi in committed_segments(path):
             (self.h if axis == "h" else self.v).setdefault(fixed, []).append((lo, hi))
 
     def _sorted_keys(self, axis: Axis) -> List[float]:
-        """Return the sorted fixed coordinates of one axis, cached."""
+        """Return the sorted fixed coordinates of one axis, cached.
+
+        Parameters
+        ----------
+        axis : {"h", "v"}
+            Axis whose segments to read.
+
+        Returns
+        -------
+        list[float]
+            Sorted y of horizontal or x of vertical segments.
+        """
         d = self.h if axis == "h" else self.v
         cached = self._h_sorted if axis == "h" else self._v_sorted
         if cached is not None and cached[0] == len(d):
@@ -60,8 +86,20 @@ class CrossingIndex:
 
         Parameters
         ----------
+        node : tuple[float, float]
+            Point the route passes through.
         axis : {"h", "v"}
             Axis on which the route continues through ``node``.
+
+        Returns
+        -------
+        int
+            Number of segments crossed at ``node``.
+
+        Raises
+        ------
+        ValueError
+            If ``axis`` is not ``"h"`` or ``"v"``.
         """
         if axis not in ("h", "v"):
             raise ValueError(f"axis must be 'h' or 'v', got {axis!r}")
@@ -71,7 +109,18 @@ class CrossingIndex:
         return sum(1 for lo, hi in self.v.get(x, ()) if lo < y < hi)
 
     def crossings_along(self, p1: Tuple[float, float], p2: Tuple[float, float]) -> int:
-        """Count perpendicular segments strictly inside run p1-p2."""
+        """Count perpendicular segments strictly inside run p1-p2.
+
+        Parameters
+        ----------
+        p1, p2 : tuple[float, float]
+            Ends of the run.
+
+        Returns
+        -------
+        int
+            Number of crossings, 0 for a diagonal or empty run.
+        """
         if p1[1] == p2[1] and p1[0] != p2[0]:
             y = p1[1]
             xlo, xhi = sorted((p1[0], p2[0]))
@@ -92,10 +141,42 @@ class CrossingIndex:
 
 
 def committed_segments(path: List[Tuple[float, float]]) -> List[Tuple[Axis, float, float, float]]:
-    """Return a route's merged segments as ``(axis, fixed, lo, hi)``."""
+    """Return a route's merged segments.
+
+    Parameters
+    ----------
+    path : list[tuple[float, float]]
+        Route waypoints.
+
+    Returns
+    -------
+    list[tuple[str, float, float, float]]
+        One ``(axis, fixed, lo, hi)`` per straight run.
+
+    Raises
+    ------
+    ValueError
+        If two consecutive waypoints form a diagonal segment.
+    """
 
     def axis_of(p: Tuple[float, float], q: Tuple[float, float]) -> Optional[Axis]:
-        """Return the axis of segment p-q, or None for equal points."""
+        """Return the axis of segment p-q.
+
+        Parameters
+        ----------
+        p, q : tuple[float, float]
+            Segment ends.
+
+        Returns
+        -------
+        {"h", "v"} or None
+            Segment axis, or None for equal points.
+
+        Raises
+        ------
+        ValueError
+            If the segment is diagonal.
+        """
         dx, dy = p[0] != q[0], p[1] != q[1]
         if dx and dy:
             raise ValueError(f"committed_segments: {p!r} -> {q!r} is diagonal, not orthogonal")
@@ -132,7 +213,18 @@ OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
 
 
 def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
-    """Return the direction from p1 to p2, or None for equal points."""
+    """Return the compass direction from p1 to p2.
+
+    Parameters
+    ----------
+    p1, p2 : tuple[float, float]
+        Start and end points.
+
+    Returns
+    -------
+    str or None
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or None for equal points.
+    """
     if p1[0] < p2[0]:
         return "E"
     if p1[0] > p2[0]:
@@ -146,7 +238,20 @@ def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
 
 def heuristic(a: Tuple[float, float], b: Tuple[float, float],
               bend_cost: float = BEND_PENALTY) -> float:
-    """Return the Manhattan distance plus one bend if not aligned."""
+    """Return the Manhattan distance plus one bend if not aligned.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float]
+        Points to measure between.
+    bend_cost : float, default=BEND_PENALTY
+        Cost of one bend.
+
+    Returns
+    -------
+    float
+        Estimated path cost.
+    """
     dx = abs(a[0] - b[0])
     dy = abs(a[1] - b[1])
     h = dx + dy
@@ -166,10 +271,14 @@ def find_path(
     is_recycle: bool = False,
     crossing_index: Optional[CrossingIndex] = None,
 ) -> List[Tuple[float, float]]:
-    """Return the cheapest orthogonal path, or ``[]`` if none.
+    """Return the cheapest orthogonal path on the graph.
 
     Parameters
     ----------
+    graph : VisibilityGraph
+        Graph to search.
+    start, goal : tuple[float, float]
+        Escape nodes of the source and destination ports.
     start_dir, goal_dir : str or None, optional
         Outward directions at the source and destination ports.
     edge_penalties : dict, optional
@@ -178,6 +287,18 @@ def find_path(
         Apply recycle-lane costs.
     crossing_index : CrossingIndex, optional
         Routes drawn before this one.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Path from ``start`` to ``goal``, or ``[]`` if none.
+
+    Raises
+    ------
+    ValueError
+        If ``start`` or ``goal`` is non-finite.
+    RuntimeError
+        If the search exceeds its expansion budget.
     """
     for role, point in (("start", start), ("goal", goal)):
         if not (math.isfinite(point[0]) and math.isfinite(point[1])):

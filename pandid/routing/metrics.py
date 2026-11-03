@@ -13,7 +13,23 @@ Point = tuple[float, float]
 def min_bends(a: Point, dir_a: Optional[str], b: Point, dir_b: Optional[str]) -> Optional[int]:
     """Return the fewest bends between two directed ports.
 
-    Ignore obstacles. Return ``None`` if either direction is unknown.
+    Ignore obstacles.
+
+    Parameters
+    ----------
+    a : Point
+        Source port anchor.
+    dir_a : str or None
+        Outward direction of the source port.
+    b : Point
+        Destination port anchor.
+    dir_b : str or None
+        Outward direction of the destination port.
+
+    Returns
+    -------
+    int or None
+        Fewest bends, or None if either direction is unknown.
     """
     if dir_a is None or dir_b is None:
         return None
@@ -41,7 +57,18 @@ def min_bends(a: Point, dir_a: Optional[str], b: Point, dir_b: Optional[str]) ->
 
 
 def waypoint_segments(waypoints: list[Point]) -> list[tuple[Point, Point, str]]:
-    """Return each nonzero orthogonal segment as ``(p1, p2, axis)``."""
+    """Return each nonzero orthogonal segment of a route.
+
+    Parameters
+    ----------
+    waypoints : list[Point]
+        Route waypoints.
+
+    Returns
+    -------
+    list[tuple[Point, Point, str]]
+        One ``(p1, p2, axis)`` per segment; diagonals are skipped.
+    """
     segs = []
     for p1, p2 in zip(waypoints, waypoints[1:]):
         if p1 == p2:
@@ -54,7 +81,18 @@ def waypoint_segments(waypoints: list[Point]) -> list[tuple[Point, Point, str]]:
 
 
 def real_bends(waypoints: list[Point]) -> int:
-    """Count direction changes between consecutive route segments."""
+    """Count direction changes between consecutive route segments.
+
+    Parameters
+    ----------
+    waypoints : list[Point]
+        Route waypoints.
+
+    Returns
+    -------
+    int
+        Number of bends.
+    """
     segs = waypoint_segments(waypoints)
     dirs = []
     for p1, p2, axis in segs:
@@ -65,12 +103,36 @@ def real_bends(waypoints: list[Point]) -> int:
 
 
 def path_length(points: list[Point]) -> float:
-    """Return the Manhattan length of a waypoint path."""
+    """Return the Manhattan length of a waypoint path.
+
+    Parameters
+    ----------
+    points : list[Point]
+        Path waypoints.
+
+    Returns
+    -------
+    float
+        Sum of the segment lengths.
+    """
     return sum(abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(points, points[1:]))
 
 
 def crossing_point(h: tuple[Point, Point], v: tuple[Point, Point]) -> Optional[Point]:
-    """Return where segments h and v cross inside both, or None."""
+    """Return where two segments cross inside both.
+
+    Parameters
+    ----------
+    h : tuple[Point, Point]
+        Horizontal segment.
+    v : tuple[Point, Point]
+        Vertical segment.
+
+    Returns
+    -------
+    Point or None
+        Crossing point, or None if there is none.
+    """
     y = h[0][1]
     x = v[0][0]
     xlo, xhi = sorted((h[0][0], h[1][0]))
@@ -82,7 +144,18 @@ def crossing_point(h: tuple[Point, Point], v: tuple[Point, Point]) -> Optional[P
 
 
 def crossing_count(paths: list[list[Point]]) -> int:
-    """Count interior crossings between different paths."""
+    """Count interior crossings between different paths.
+
+    Parameters
+    ----------
+    paths : list[list[Point]]
+        Route waypoints, one list per path.
+
+    Returns
+    -------
+    int
+        Number of crossings.
+    """
     segments = [
         (index, *segment)
         for index, points in enumerate(paths)
@@ -99,7 +172,18 @@ def crossing_count(paths: list[list[Point]]) -> int:
 
 
 def crossing_pairs(paths: list[list[Point] | None]) -> frozenset[tuple[int, int]]:
-    """Return sorted index pairs of crossing paths, skipping None."""
+    """Return the index pairs of paths that cross.
+
+    Parameters
+    ----------
+    paths : list[list[Point] or None]
+        Route waypoints per path; None entries are skipped.
+
+    Returns
+    -------
+    frozenset[tuple[int, int]]
+        Crossing pairs as ``(lower, higher)`` indices.
+    """
     horizontal: list[tuple[int, tuple[Point, Point]]] = []
     vertical: list[tuple[int, tuple[Point, Point]]] = []
     for index, points in enumerate(paths):

@@ -19,7 +19,17 @@ def _compute_offsets(
 ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
     """Return the offsets for horizontal and vertical segments.
 
-    Both dicts are keyed by ``(id(stream), segment index)``.
+    Parameters
+    ----------
+    streams : Sequence[Stream]
+        Routed streams.
+    spacing : float
+        Minimum distance between separated tracks.
+
+    Returns
+    -------
+    tuple[dict, dict]
+        Horizontal and vertical offsets by ``(id(stream), segment)``.
     """
     # A run is a maximal chain of consecutive segments on one axis.
     h_runs: list[dict[str, Any]] = []
@@ -92,7 +102,20 @@ def _compute_offsets(
             offsets[(id(s), i)] = 0.0
 
     def enters(run, track):
-        """Return whether ``run`` on ``track`` crosses its end units."""
+        """Return whether a run on a track crosses its end units.
+
+        Parameters
+        ----------
+        run : dict
+            Run to test.
+        track : float
+            Candidate track coordinate.
+
+        Returns
+        -------
+        bool
+            Whether the run would enter one of its end units.
+        """
         lo, hi = run["min_val"], run["max_val"]
         for x0, y0, x1, y1 in run["boxes"]:
             across, along = ((y0, y1), (x0, x1)) if run["axis"] == "h" else ((x0, x1), (y0, y1))
@@ -107,7 +130,14 @@ def _compute_offsets(
         component of several streams, fixed runs keep their track, a
         free run joins its stream's nearer fixed track, and any other
         run takes the nearest free slot on a ``spacing`` grid around
-        the mean track. Write the offsets into ``offsets_dict``.
+        the mean track.
+
+        Parameters
+        ----------
+        runs : list[dict]
+            Runs of one cluster.
+        offsets_dict : dict[tuple[int, int], float]
+            Offsets to write, by ``(id(stream), segment)``.
         """
         runs.sort(key=lambda r: r["min_val"])
 
@@ -170,7 +200,20 @@ def _compute_offsets(
                     offsets_dict[(run["stream"], seg_idx)] = offset
 
     def group_by_track(runs, tolerance):
-        """Cluster runs whose tracks chain within ``tolerance``."""
+        """Cluster runs whose tracks chain within ``tolerance``.
+
+        Parameters
+        ----------
+        runs : list[dict]
+            Runs on one axis.
+        tolerance : float
+            Largest gap between neighbouring tracks in a cluster.
+
+        Returns
+        -------
+        list[list[dict]]
+            Clusters in track order.
+        """
         groups: list[list] = []
         current: list = []
         prev_track = None
@@ -201,7 +244,22 @@ def _apply_offsets(
     h_offsets: dict[tuple[int, int], float],
     v_offsets: dict[tuple[int, int], float],
 ) -> dict[int, list[tuple[float, float]]]:
-    """Return each stream's offset waypoints by ``id(stream)``."""
+    """Return each stream's waypoints moved by the segment offsets.
+
+    Parameters
+    ----------
+    streams : Sequence[Stream]
+        Routed streams.
+    h_offsets : dict[tuple[int, int], float]
+        Horizontal-segment offsets by ``(id(stream), segment)``.
+    v_offsets : dict[tuple[int, int], float]
+        Vertical-segment offsets by ``(id(stream), segment)``.
+
+    Returns
+    -------
+    dict[int, list[tuple[float, float]]]
+        Offset waypoints by ``id(stream)``.
+    """
     result: dict[int, list[tuple[float, float]]] = {}
     for s in streams:
         if not s.route or not s.route.waypoints:
@@ -237,7 +295,13 @@ def _apply_offsets(
 
 
 def separate_streams(fs: "Flowsheet") -> None:
-    """Separate overlapping parallel runs and write the waypoints."""
+    """Separate overlapping parallel runs and write the waypoints.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with routed streams.
+    """
     h_offsets, v_offsets = _compute_offsets(fs.streams, SPACING)
     new_waypoints = _apply_offsets(fs.streams, h_offsets, v_offsets)
     for s in fs.streams:
@@ -248,6 +312,17 @@ def separate_streams(fs: "Flowsheet") -> None:
 def preview_separated_waypoints(
     streams: "Sequence[Stream]",
 ) -> dict[int, list[tuple[float, float]]]:
-    """Return each stream's separated waypoints without writing them."""
+    """Return each stream's separated waypoints.
+
+    Parameters
+    ----------
+    streams : Sequence[Stream]
+        Routed streams.
+
+    Returns
+    -------
+    dict[int, list[tuple[float, float]]]
+        Separated waypoints by ``id(stream)``.
+    """
     h_offsets, v_offsets = _compute_offsets(streams, SPACING)
     return _apply_offsets(streams, h_offsets, v_offsets)

@@ -14,7 +14,15 @@ TAG_CLEAR = 3.0
 
 @dataclass
 class Rect:
-    """An axis-aligned routing obstacle."""
+    """An axis-aligned routing obstacle.
+
+    Attributes
+    ----------
+    x_min, x_max : float
+        Left and right edges.
+    y_min, y_max : float
+        Top and bottom edges.
+    """
 
     x_min: float
     x_max: float
@@ -22,7 +30,20 @@ class Rect:
     y_max: float
 
     def intersects_segment(self, x1: float, y1: float, x2: float, y2: float) -> bool:
-        """Return whether an orthogonal segment enters the rectangle."""
+        """Return whether an orthogonal segment enters the rectangle.
+
+        Parameters
+        ----------
+        x1, y1 : float
+            First end of the segment.
+        x2, y2 : float
+            Second end of the segment.
+
+        Returns
+        -------
+        bool
+            Whether the segment enters; False for a diagonal.
+        """
         if x1 == x2:
             return (
                 self.x_min <= x1 <= self.x_max
@@ -39,7 +60,20 @@ class Rect:
 
 
 def clear_gaps(lane: List[float], spans: List[Tuple[float, float]]) -> List[bool]:
-    """Return whether each gap between lane coordinates is clear."""
+    """Return whether each gap between lane coordinates is clear.
+
+    Parameters
+    ----------
+    lane : list[float]
+        Sorted node coordinates along one lane.
+    spans : list[tuple[float, float]]
+        Obstacle spans ``(lo, hi)`` on that lane.
+
+    Returns
+    -------
+    list[bool]
+        One flag per gap between neighbouring coordinates.
+    """
     clear = [True] * max(len(lane) - 1, 0)
     for lo, hi in spans:
         first = max(bisect_right(lane, lo) - 1, 0)
@@ -58,7 +92,22 @@ TRAVEL: Dict[str, Tuple[int, float]] = {
 
 
 def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
-    """Return the maximum outward distance of a port's escape node."""
+    """Return the maximum outward distance of a port's escape node.
+
+    Parameters
+    ----------
+    kind : str
+        Kind of the port's unit.
+    label_pos : str or None
+        Side of the unit its tag is drawn on.
+    face : str
+        Compass face of the port.
+
+    Returns
+    -------
+    float
+        Escape distance.
+    """
     if kind in ("feed", "product"):
         return 25.0
     if (face, label_pos) in (("N", "top"), ("S", "bottom")):
@@ -79,8 +128,30 @@ def share_escape_room(
 ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
     """Move two close facing ports' escape nodes onto their midline.
 
-    Return the nominal escape nodes if the ports do not face each other,
-    have room for both, or the midline is blocked.
+    The nodes move only when the ports face each other, lack room for
+    both stubs and have a clear midline.
+
+    Parameters
+    ----------
+    start : tuple[float, float]
+        Source port anchor.
+    start_dir : str
+        Outward direction of the source port.
+    start_proj : tuple[float, float]
+        Nominal source escape node.
+    goal : tuple[float, float]
+        Destination port anchor.
+    goal_dir : str
+        Outward direction of the destination port.
+    goal_proj : tuple[float, float]
+        Nominal destination escape node.
+    obstacles : list[Rect]
+        Obstacles the midline must clear.
+
+    Returns
+    -------
+    tuple[tuple[float, float], tuple[float, float]]
+        Source and destination escape nodes.
     """
     axis, sign = TRAVEL[start_dir]
     goal_axis, goal_sign = TRAVEL[goal_dir]
@@ -104,10 +175,43 @@ def share_escape_room(
 
 
 class VisibilityGraph:
-    """Graph of clear orthogonal lanes around units and tags."""
+    """Graph of clear orthogonal lanes around units and tags.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with unit frames and port faces.
+
+    Attributes
+    ----------
+    obstacles : list[Rect]
+        Unit bodies and tag halos.
+    body_obstacles : list[tuple[Unit, Rect]]
+        Unit bodies with their units.
+    port_anchors : dict[tuple[str, str], tuple[float, float]]
+        Port anchor by ``(unit name, port name)``.
+    port_dirs : dict[tuple[str, str], str]
+        Port outward direction by ``(unit name, port name)``.
+    port_projs : dict[tuple[str, str], tuple[float, float]]
+        Port escape node by ``(unit name, port name)``.
+    recycle_y : list[float]
+        Recycle lanes above and below the drawing.
+    xs, ys : list[float]
+        Sorted lane coordinates.
+    nodes : set[tuple[float, float]]
+        Lane intersections outside every obstacle.
+    edges : dict[tuple[float, float], list[tuple[float, float]]]
+        Clear neighbours of each node.
+    """
 
     def __init__(self, fs: "Flowsheet"):
-        """Build the lanes from the sheet's frames and port faces."""
+        """Build the lanes from the sheet's frames and port faces.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Sheet with unit frames and port faces.
+        """
         from pandid.layout.attach import is_attached
         from pandid.portgeom import port_anchor, tag_width, unit_box
 
@@ -288,12 +392,23 @@ class VisibilityGraph:
         direction: str,
         owner: "Unit",
     ) -> Tuple[float, float] | None:
-        """Return the furthest reachable node on a port's stub, or None.
+        """Return the furthest reachable node on a port's stub.
 
         Parameters
         ----------
+        anchor : tuple[float, float]
+            Port anchor.
         projection : tuple[float, float]
             Furthest escape node.
+        direction : str
+            Outward port direction.
+        owner : Unit
+            Unit the port belongs to.
+
+        Returns
+        -------
+        tuple[float, float] or None
+            Reachable node, or None if the whole stub is blocked.
         """
         axis, sign = TRAVEL[direction]
         distance = sign * (projection[axis] - anchor[axis])

@@ -46,6 +46,13 @@ def _clamp_projection(
         Outward port direction.
     target : tuple[float, float]
         Escape node at the other end of the stream.
+    nodes : set[tuple[float, float]]
+        Visibility graph nodes.
+
+    Returns
+    -------
+    tuple[float, float]
+        Clamped escape node, or ``proj``.
     """
     ax, ay = anchor
     px, py = proj
@@ -75,15 +82,37 @@ def _fallback_path(
 
     Parameters
     ----------
-    start, goal : tuple[float, float]
-        Port anchors.
-    start_proj, goal_proj : tuple[float, float]
-        Escape nodes of the two ports.
+    start : tuple[float, float]
+        Source port anchor.
+    start_proj : tuple[float, float]
+        Source escape node.
+    goal_proj : tuple[float, float]
+        Destination escape node.
+    goal : tuple[float, float]
+        Destination port anchor.
+    obstacles : list
+        Unit boxes to avoid.
     crossing_index : CrossingIndex or None, optional
         Routes already drawn in this pass.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Route waypoints from ``start`` to ``goal``.
     """
     def through(corner: tuple[float, float]) -> list[tuple[float, float]]:
-        """Return the route that turns at ``corner``."""
+        """Return the route that turns at ``corner``.
+
+        Parameters
+        ----------
+        corner : tuple[float, float]
+            Turning point between the two escape nodes.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            Route waypoints without repeated points.
+        """
         pts = [start]
         for point in (start_proj, corner, goal_proj, goal):
             if point != pts[-1]:
@@ -91,7 +120,18 @@ def _fallback_path(
         return pts
 
     def score(pts: list[tuple[float, float]]) -> tuple[int, int]:
-        """Count obstacle hits, then recorded-line crossings."""
+        """Count obstacle hits, then recorded-line crossings.
+
+        Parameters
+        ----------
+        pts : list[tuple[float, float]]
+            Route waypoints.
+
+        Returns
+        -------
+        tuple[int, int]
+            Obstacle hits and line crossings.
+        """
         obstacle_hits = sum(
             any(o.intersects_segment(a[0], a[1], b[0], b[1]) for o in obstacles)
             for a, b in zip(pts, pts[1:])
@@ -113,6 +153,15 @@ def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, 
 
     A manual route is recorded one orthogonal run at a time, skipping
     its diagonal legs.
+
+    Parameters
+    ----------
+    crossing_index : CrossingIndex
+        Index to record into.
+    waypoints : list[tuple[float, float]]
+        Route waypoints.
+    manual : bool
+        Whether the route was set by hand.
     """
     if not manual:
         crossing_index.record(waypoints)
@@ -129,7 +178,18 @@ def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, 
 
 
 def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
-    """Raise ValueError if a placed frame holds a NaN or an infinity."""
+    """Check that every placed frame is finite.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to check.
+
+    Raises
+    ------
+    ValueError
+        If a placed frame holds a NaN or an infinity.
+    """
     for unit in fs.units:
         frame = unit.frame
         if frame is None:
@@ -151,11 +211,22 @@ class DefaultRouter:
     Parameters
     ----------
     recover_exits : bool, optional
-        Replace a blocked escape node with a reachable one on the stub.
+        Swap a blocked escape node for a reachable one on the stub.
+
+    Attributes
+    ----------
+    recover_exits : bool
+        Escape-node recovery option.
     """
 
     def __init__(self, *, recover_exits: bool = True) -> None:
-        """Set the escape-node recovery option."""
+        """Set the escape-node recovery option.
+
+        Parameters
+        ----------
+        recover_exits : bool, optional
+            Swap a blocked escape node for a reachable one on the stub.
+        """
         self.recover_exits = recover_exits
 
     def route(self, fs: "Flowsheet") -> None:
@@ -186,6 +257,11 @@ class DefaultRouter:
 
             The index holds a preview of every routed stream's separated
             waypoints.
+
+            Parameters
+            ----------
+            stream : Stream
+                Stream with a route.
             """
             nonlocal crossing_index
             routed.append(stream)
