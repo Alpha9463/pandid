@@ -2,7 +2,8 @@
 
 A spec is a plain mapping that :func:`from_dict` reads and
 :func:`to_dict` writes. An unknown key or bad value raises
-:class:`SpecError` naming its entry.
+:class:`SpecError` naming its entry; a bad ``stream_naming_scheme``
+raises ValueError.
 
 The format::
 
@@ -110,7 +111,7 @@ from pandid.units import Instrument, Unit, _Boundary
 
 
 class SpecError(ValueError):
-    """Error for a flowsheet spec that cannot be read."""
+    """Error for a flowsheet spec that cannot be read or written."""
 
 
 # ----------------------------------------------------------------
@@ -387,7 +388,7 @@ def _faces(value: Any, where: str) -> int | list[str]:
     Raises
     ------
     SpecError
-        If it is neither a whole number nor a list of text.
+        If it is a bool, or neither a whole number nor a list of text.
     """
     if isinstance(value, bool) or _is_integral(value):
         return _integer(value, where)
@@ -612,7 +613,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     Raises
     ------
     SpecError
-        If the kind is unknown or is Instrument.
+        If the kind is not text, is unknown, or is Instrument.
     """
     name = _ALIASES.get(_text(value, f"{where}.kind").strip().lower())
     if name is None:
@@ -747,6 +748,8 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     ------
     SpecError
         If an entry is invalid; the message names it.
+    ValueError
+        If ``stream_naming_scheme`` cannot format a stream number.
     """
     where = "the flowsheet spec"
     data = _mapping(spec, where)
@@ -991,7 +994,7 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
     Raises
     ------
     SpecError
-        If a member, port or placement option is invalid.
+        If a key, member, wiring or placement option is invalid.
     """
     from pandid.stations import BYPASS_ANCHORS, StationAssembly, ValveStation
     from pandid.units import Reducer, Tee, Valve
@@ -1241,7 +1244,7 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
     Raises
     ------
     SpecError
-        If the element is not on the sheet or a value is refused.
+        If a key or value is refused, or the element is not on sheet.
     """
     _check_keys(entry, _BALLOON_KEYS, where)
     name = _text(entry["balloon_of"], f"{where}.balloon_of")
@@ -1400,7 +1403,7 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
     Raises
     ------
     SpecError
-        If a port is unknown or a face is refused.
+        If it is not a mapping, a port is unknown or a face is refused.
     """
     for port_name, face in _mapping(entry, where).items():
         _find_port(unit, port_name, where)
@@ -1425,7 +1428,7 @@ def _read_port_order(
     Raises
     ------
     SpecError
-        If a port is unknown or an order is refused.
+        If it is malformed, a port is unknown or an order is refused.
     """
     for face, names in _mapping(entry, where).items():
         at = f"{where}.{face}"
@@ -1622,7 +1625,7 @@ def _read_ends(entry: Any, where: str) -> "str | tuple[str, str]":
     Raises
     ------
     SpecError
-        If the value has the wrong shape.
+        If it is neither text nor a pair of text.
     """
     if isinstance(entry, str):
         return entry
@@ -1652,7 +1655,7 @@ def _read_properties(entry: Any, where: str) -> dict[str, str | float]:
     Raises
     ------
     SpecError
-        If a value is neither text nor a number.
+        If it is not a mapping, or a value is not text or a number.
     """
     out: dict[str, str | float] = {}
     for key, value in _mapping(entry, where).items():
@@ -1683,7 +1686,7 @@ def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
     Raises
     ------
     SpecError
-        If an item is not a pair of numbers.
+        If it is not a list of ``[x, y]`` pairs of finite numbers.
     """
     points = []
     for i, item in enumerate(_sequence(entry, where)):
@@ -1714,7 +1717,7 @@ def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
     Raises
     ------
     SpecError
-        If the name is ambiguous or unknown, or has no stream.
+        If it names nothing, a unit and a stream, or an unwired port.
     """
     if isinstance(entry, str):
         unit = next((u for u in fs.units if u.name == entry), None)
@@ -1760,7 +1763,7 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
     Raises
     ------
     SpecError
-        If the anchor keys are invalid or the attach is refused.
+        If the anchor keys or host are invalid, or attaching fails.
     """
     where = f"{where} {inst.name!r}"
     named = [key for key in _ANCHOR_KEYS if key in data]
@@ -1809,7 +1812,7 @@ def _read_section(entry: Any, where: str) -> tuple[str, str]:
     Raises
     ------
     SpecError
-        If it is not two text items.
+        If it is not a pair of a text key and a scalar heading.
     """
     pair = _sequence(entry, where)
     if len(pair) != 2:
@@ -1839,7 +1842,7 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
     Raises
     ------
     SpecError
-        If a key is unknown or a value has the wrong type.
+        If it is not a mapping, a key is unknown or a value is invalid.
     """
     data = _mapping(entry, where)
     _check_keys(data, {f.name for f in dataclass_fields(StreamTableOptions)}, where)
@@ -1874,7 +1877,7 @@ def _read_stream_labels(entry: Any, where: str) -> StreamLabelOptions:
     Raises
     ------
     SpecError
-        If a key is unknown or the enclosure is refused.
+        If it is not a mapping, has an unknown key or a bad enclosure.
     """
     data = _mapping(entry, where)
     _check_keys(data, {f.name for f in dataclass_fields(StreamLabelOptions)}, where)
@@ -1905,7 +1908,7 @@ def _read_title_block(entry: Any, where: str) -> TitleBlock:
     Raises
     ------
     SpecError
-        If a key is unknown or the revisions are malformed.
+        If it is not a mapping, a key is unknown or a revision is bad.
     """
     data = _mapping(entry, where)
     text_fields = _drawn_text_fields(TitleBlock)
@@ -1950,7 +1953,7 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
     Raises
     ------
     SpecError
-        If a value has the wrong type.
+        If a value is invalid or ``position`` is not a pair.
     """
     out: dict[str, Any] = {}
     if "align" in data:
@@ -2094,8 +2097,7 @@ _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
 def to_dict(fs: Flowsheet) -> dict:
     """Write a flowsheet as a spec that :func:`from_dict` reads back.
 
-    It writes author intent only, and only values that differ from a
-    default.
+    It writes author intent only, and leaves out most default values.
 
     Parameters
     ----------
@@ -2226,7 +2228,7 @@ def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
         value = getattr(unit, key)
         if value != default:
             entry[key] = value
-    # Write only the keyword where it is folded into the variant.
+    # Drop the variant when the keyword folded into it is written.
     folded = cls.COMPOSITION_VARIANT
     if folded and entry.get(folded) is not None:
         entry.pop("variant", None)
@@ -2621,8 +2623,12 @@ def from_json(path: str | Path) -> Flowsheet:
 
     Raises
     ------
+    OSError
+        If the file cannot be read.
     SpecError
         If the file is not valid JSON or the spec is invalid.
+    ValueError
+        If the file is not UTF-8 or ``stream_naming_scheme`` is invalid.
     """
     text = Path(path).read_text(encoding="utf-8")
     try:
@@ -2783,8 +2789,12 @@ def from_yaml(path: str | Path) -> Flowsheet:
     ------
     ImportError
         If PyYAML is not installed.
+    OSError
+        If the file cannot be read.
     SpecError
         If the file is not valid YAML, is empty, or the spec is invalid.
+    ValueError
+        If the file is not UTF-8 or ``stream_naming_scheme`` is invalid.
     """
     try:
         import yaml
