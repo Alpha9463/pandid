@@ -57,23 +57,76 @@ class Issue:
     message: str
 
     def __str__(self) -> str:
-        """Return ``[severity] code: message``."""
+        """Return ``[severity] code: message``.
+
+        Returns
+        -------
+        str
+            Formatted finding.
+        """
         return f"[{self.severity}] {self.code}: {self.message}"
 
 
 def _overlap_cure(a, b) -> str:
-    """Return a sentence naming the call that clears an overlap."""
+    """Return a sentence naming the call that clears an overlap.
+
+    Parameters
+    ----------
+    a, b : Unit
+        The two overlapping units.
+
+    Returns
+    -------
+    str
+        Advice naming a ``pin()``, ``attach()`` or placement call.
+    """
     from pandid.streams import Stream
 
     def attached(u) -> bool:
+        """Return whether a unit hangs off a host.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to test.
+
+        Returns
+        -------
+        bool
+            Whether ``u`` has a host.
+        """
         return getattr(u, "host", None) is not None
 
     def pinned(u) -> bool:
+        """Return whether a unit is pinned on an axis that places it.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to test.
+
+        Returns
+        -------
+        bool
+            Whether ``u`` has a pin that places it.
+        """
         pin = u.pin_
         axes = ("x", "y") if attached(u) else ("col", "row", "x", "y")
         return pin is not None and any(getattr(pin, f) is not None for f in axes)
 
     def how(u) -> str:
+        """Return the ``pin()`` call that moves a unit.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to move.
+
+        Returns
+        -------
+        str
+            Call text, naming the port each axis is pinned by.
+        """
         pin = u.pin_
         if not attached(u) and pin is not None and pin.x is None and pin.y is None:
             return f"call .pin(col=..., row=...) on {u.name}"
@@ -116,6 +169,18 @@ def _is_control_function(letters: str, i: int) -> bool:
     """Return whether ``letters[i]`` is a sequenced control function.
 
     The first letter and the ``C`` of a ``ZSC`` position tag are not.
+
+    Parameters
+    ----------
+    letters : str
+        Functional letters of a tag.
+    i : int
+        Index of the letter to test.
+
+    Returns
+    -------
+    bool
+        Whether the letter is sequenced.
     """
     c = letters[i].upper()
     if i == 0 or c not in CONTROL_FUNCTION_SEQUENCE:
@@ -125,12 +190,34 @@ def _is_control_function(letters: str, i: int) -> bool:
 
 
 def _control_functions(letters: str) -> list[str]:
-    """Return the sequenced letters of a tag, in the order written."""
+    """Return the sequenced letters of a tag, in the order written.
+
+    Parameters
+    ----------
+    letters : str
+        Functional letters of a tag.
+
+    Returns
+    -------
+    list[str]
+        Control-function letters.
+    """
     return [c for i, c in enumerate(letters) if _is_control_function(letters, i)]
 
 
 def _in_sequence(letters: str) -> str:
-    """Reorder a tag's control-function letters (ISO 15519-2)."""
+    """Return a tag with its control-function letters reordered.
+
+    Parameters
+    ----------
+    letters : str
+        Functional letters of a tag.
+
+    Returns
+    -------
+    str
+        Letters with the control functions in sequence.
+    """
     ordered = iter(sorted(_control_functions(letters),
                           key=lambda c: CONTROL_FUNCTION_SEQUENCE.index(c.upper())))
     return "".join(
@@ -140,23 +227,69 @@ def _in_sequence(letters: str) -> str:
 
 
 def _family_stem(port_name: str) -> str | None:
-    """Return the stem of a numbered port, or ``None``."""
+    """Return the stem of a numbered port, or ``None``.
+
+    Parameters
+    ----------
+    port_name : str
+        Port name, such as ``"in_2"``.
+
+    Returns
+    -------
+    str or None
+        Stem before ``_<n>``, or ``None`` if the name is not numbered.
+    """
     stem, sep, index = port_name.rpartition("_")
     return stem if sep and stem and index.isdigit() else None
 
 
 def _and(names: list[str]) -> str:
-    """Join names as ``"a"``, ``"a and b"`` or ``"a, b and c"``."""
+    """Join names as ``"a"``, ``"a and b"`` or ``"a, b and c"``.
+
+    Parameters
+    ----------
+    names : list[str]
+        Names to join.
+
+    Returns
+    -------
+    str
+        Joined names.
+    """
     return " and ".join(filter(None, [", ".join(names[:-1]), *names[-1:]]))
 
 
 def _square(x1, y1, x2, y2) -> bool:
-    """Return whether a segment lies along an axis."""
+    """Return whether a segment lies along an axis.
+
+    Parameters
+    ----------
+    x1, y1 : float
+        Start point.
+    x2, y2 : float
+        End point.
+
+    Returns
+    -------
+    bool
+        Whether the segment is horizontal or vertical.
+    """
     return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
 def _corners(pts):
-    """Return a drawn path as its ends and turning points."""
+    """Return a drawn path as its ends and turning points.
+
+    Parameters
+    ----------
+    pts : list[tuple[float, float]]
+        Drawn path.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Ends and corners, without repeated or collinear points.
+    """
     out: list = []
     for p in pts:
         if out and math.dist(p, out[-1]) <= _SQUARE_TOL:
@@ -178,8 +311,12 @@ def _pierced_end(path, ends):
     path : list[tuple[float, float]]
         :func:`_corners` of the drawn path, source nozzle first.
     ends : sequence
-        ``(unit, port, box, face)`` for the source then the destination,
-        or ``None`` for an end with no anchored nozzle.
+        ``(unit, port, box, face)`` per end, or ``None`` if unanchored.
+
+    Returns
+    -------
+    tuple or None
+        The pierced end's ``(unit, port, box, face)``, or ``None``.
     """
     last = len(path) - 2
     tips = ((0, ends[0], path[0], path[1]), (last, ends[1], path[-1], path[-2]))
@@ -200,7 +337,18 @@ def _pierced_end(path, ends):
 
 
 def _pinned_y(unit) -> bool:
-    """Return whether a unit has an explicit pixel ``y`` pin."""
+    """Return whether a unit has an explicit pixel ``y`` pin.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to test.
+
+    Returns
+    -------
+    bool
+        Whether ``unit`` is pinned in ``y``.
+    """
     pin = getattr(unit, "pin_", None)
     return pin is not None and getattr(pin, "y", None) is not None
 
@@ -208,9 +356,24 @@ def _pinned_y(unit) -> bool:
 def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     """Return how far two facing E/W nozzles miss a straight run.
 
-    Returns ``(offset, span, source_is_shorter)``, where ``span`` is the
-    shorter unit's height, or ``None`` when the run is level or the
-    offset clears the shorter unit.
+    ``span`` is the shorter unit's height; an offset that clears it is a
+    change of elevation.
+
+    Parameters
+    ----------
+    su : Unit
+        Source unit.
+    sp : ResolvedPort
+        Source port.
+    du : Unit
+        Destination unit.
+    dp : ResolvedPort
+        Destination port.
+
+    Returns
+    -------
+    tuple[float, float, bool] or None
+        ``(offset, span, source_is_shorter)``, or ``None`` for no miss.
     """
     from pandid.portgeom import unit_box
 
@@ -244,6 +407,11 @@ def _crowded(heads: list[tuple[float, str]], floor: float
         ``(position along the face, port name)`` for each arrowhead.
     floor : float
         Minimum pitch.
+
+    Returns
+    -------
+    tuple[float, str, str] or None
+        ``(pitch, port, port)`` of the tightest pair, or ``None``.
     """
     order = sorted(heads)
     pairs = sorted((b[0] - a[0], a[1], b[1]) for a, b in zip(order, order[1:]))
@@ -920,7 +1088,18 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
 
 def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
-    """Return ``lines-crowded`` findings (ISO 10628-1 5.3.2)."""
+    """Return ``lines-crowded`` findings (ISO 10628-1 5.3.2).
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to check.
+
+    Returns
+    -------
+    list[Issue]
+        One warning per pair of crowded parallel runs.
+    """
     from pandid.render.svg import stream_polyline, _stream_rung
     from pandid.render.weights import M
     from pandid.streams import SIGNAL_KINDS
