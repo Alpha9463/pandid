@@ -1,14 +1,4 @@
-"""ISO 15519-1:2010 11.4.2 -- symbols where gravity is a functionality.
-
-The clause excepts from turning any symbol for a component or device whose
-function depends on gravity, and names two of them: the open tank (2061) and
-the cyclone separator (X 2618), drawn at Figure 22 b). Those must not be turned.
-
-``Symbol.gravity_fixed`` marks them and ``validate()`` reports a turned one as
-``gravity-turned``. A warning rather than an error: the sheet still draws, the
-nozzles still land on ink, and the only thing wrong with it is what it says
-about the plant.
-"""
+"""Check the ``gravity-turned`` warning for symbols ISO 15519-1:2010 11.4.2 keeps upright."""
 
 import pytest
 
@@ -21,13 +11,7 @@ def _findings(fs):
 
 
 def _has_port(unit, name):
-    """Whether ``unit`` answers for ``name`` -- a real port, or a live
-    alias for one (``Tank.inlet``/``.outlet`` for ``in_1``/``out_1``).
-
-    ``name in unit.ports`` alone misses the alias: it is a plain
-    attribute and never a second entry in ``ports``, by design (see
-    ``Unit._canonical_port_name``).
-    """
+    """Return whether ``unit`` has port ``name`` or a live alias for it."""
     return unit._canonical_port_name(name) in unit.ports
 
 
@@ -56,9 +40,7 @@ def _sheet(unit, **pin):
 
 
 def test_the_two_symbols_the_clause_names_are_marked():
-    """Figure 22 b) draws exactly two: 2061 Open tank, and X 2618 Cyclone
-    separator. Whatever else the registry classifies, those two have to be in
-    it or the rule does not implement the clause it cites."""
+    """Check that the open tank and the cyclone separator are marked gravity-fixed."""
     assert default_registry.get("tank").gravity_fixed
     assert default_registry.get("separator", "cyclone").gravity_fixed
 
@@ -99,8 +81,7 @@ def test_one_finding_per_unit_however_many_ways_it_is_placed():
 
 
 def test_a_turned_pump_is_not_reported():
-    """A pump is installed in whatever attitude the run wants; nothing about
-    the symbol is up or down, so 11.4.2's exception does not reach it."""
+    """Check that a turned pump is not reported."""
     fs = Flowsheet("turned pump")
     feed = fs.add(U.Feed("F"))
     pump = fs.add(U.Pump("P-101")).pin(x=300, y=200, orientation=90)
@@ -113,8 +94,7 @@ def test_a_turned_pump_is_not_reported():
 
 
 def test_mirroring_is_left_alone():
-    """11.4.2 excepts *turning* only. A tank flipped left to right still stands
-    the right way up, and the flip is how its nozzles reach the other side."""
+    """Check that a mirrored tank is not reported."""
     assert _findings(_sheet(U.Tank("TK-301"), x=300, y=200, mirrored=True)) == []
 
 
@@ -122,8 +102,7 @@ def test_mirroring_is_left_alone():
 
 
 def test_the_message_names_the_variant_drawn_lying_down():
-    """11.4.2's own advice for a symbol that will not turn is to draw a fresh
-    one in the orientation actually wanted. Two families ship one."""
+    """Check that the warning names the variant drawn lying down."""
     fs = _sheet(U.Vessel("D-301"), x=300, y=200, orientation=90)
     assert "variant='horizontal'" in _findings(fs)[0].message
 
@@ -134,8 +113,7 @@ def test_the_lying_variant_is_the_answer_and_carries_no_finding():
 
 
 def test_a_turned_lying_variant_is_still_reported_and_offered_no_way_out():
-    """A drum already drawn lying down has no further variant to reach for, so
-    the message must not send the author to the one they are using."""
+    """Check that a turned lying variant is reported without being offered itself."""
     fs = _sheet(U.Vessel("D-301", variant="horizontal"), x=300, y=200, orientation=90)
     message = _findings(fs)[0].message
     assert "D-301" in message
@@ -317,10 +295,5 @@ def test_the_registry_marks_exactly_that_list():
     ),
 )
 def test_the_deliberate_exclusions_stay_turnable(key):
-    """Each of these was considered and left out; the reasons are recorded
-    beside GRAVITY_FIXED in scripts/vendor_symbols.py. A conveyor is the one
-    worth restating: its artwork is two rollers and a bar, symmetric top to
-    bottom, so a turn makes nothing in the drawing false. The two liquid filters
-    are here for the contrast with the gas casings above: the same medium drawn
-    the same way, and the hopper is the only thing that fixes an attitude."""
+    """Check that each deliberately excluded symbol stays turnable."""
     assert not default_registry.get(*key).gravity_fixed

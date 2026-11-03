@@ -1,20 +1,4 @@
-"""Equipment placement, read off the drawn sheet.
-
-``Flowsheet.layout()`` places equipment and boundary flags as a layered
-graph (:mod:`pandid.layout.layered`). What is held here is what an author
-can see on the sheet:
-
-- **a pin lands where it was put**, at every density of pinning from none
-  to all but one;
-- **nozzle faces and flow set the direction**: flow runs east, a return
-  line runs west, a peer sits on the side its nozzle is drawn on under a
-  mirror or a turn, and a top-to-bottom pipe stacks its two units;
-- **the same model draws the same sheet**, across processes with
-  different string-hash seeds and across a ``to_dict``/``from_dict``
-  round trip;
-- **the retired placement hints are reported**: a class that still sets
-  ``PLACES`` or ``LAYOUT_CONFIDENCE`` is told so.
-"""
+"""Check equipment placement as read off the drawn sheet."""
 
 from __future__ import annotations
 
@@ -30,7 +14,9 @@ import pytest
 
 from pandid import Flowsheet, devices as D, units as U
 from pandid.geometry import Frame
-from pandid.portgeom import port_faces, port_point
+from pandid.portgeom import port_faces
+
+from _layout_cases import frame_of, nozzle_of
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -41,23 +27,6 @@ SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)
 # ---------------------------------------------------------------------------
 # Reading the drawing
 # ---------------------------------------------------------------------------
-
-
-def _frame(unit: U.Unit) -> Frame:
-    """Return a unit's frame, which layout must have given it.
-
-    Parameters
-    ----------
-    unit : Unit
-        Laid-out unit.
-
-    Returns
-    -------
-    Frame
-        Its frame.
-    """
-    assert unit.frame is not None, f"{unit.name} has no frame"
-    return unit.frame
 
 
 def _frames(fs: Flowsheet) -> dict[str, Frame]:
@@ -73,25 +42,7 @@ def _frames(fs: Flowsheet) -> dict[str, Frame]:
     dict[str, Frame]
         Frame of each unit, keyed by its name.
     """
-    return {unit.name: _frame(unit) for unit in fs.units}
-
-
-def _nozzle(unit: U.Unit, port: str) -> tuple[float, float]:
-    """Return where a line attaches to one of a laid-out unit's nozzles.
-
-    Parameters
-    ----------
-    unit : Unit
-        Laid-out unit.
-    port : str
-        Port name.
-
-    Returns
-    -------
-    tuple[float, float]
-        Drawn attachment point.
-    """
-    return port_point(unit, _frame(unit), port)
+    return {unit.name: frame_of(unit) for unit in fs.units}
 
 
 # ---------------------------------------------------------------------------
@@ -242,47 +193,37 @@ def _held(fs: Flowsheet, share: float, seed: int) -> dict[U.Unit, tuple[int, int
 
 
 def test_a_col_pin_sets_the_layer_at_every_density() -> None:
-    """None, a quarter, a half, three quarters, and all but one pinned.
-
-    The frame reports the column the unit was pinned to, and the drawing
-    agrees: a unit pinned to a lower column is drawn west of one pinned to
-    a higher column.
-    """
+    """Check that col pins hold and order the drawing at every density of pinning."""
     for share in SHARES:
         for seed, fs in enumerate(_mocks()):
             wanted = _held(fs, share, seed * 17 + int(share * 100))
             fs.layout()
             for unit, (col, _) in wanted.items():
-                assert _frame(unit).col == col, (
+                assert frame_of(unit).col == col, (
                     f"{fs.name} at {share:.0%} pinned: {unit.name} was pinned to "
-                    f"col {col} and drew in col {_frame(unit).col}"
+                    f"col {col} and drew in col {frame_of(unit).col}"
                 )
             for west, (west_col, _) in wanted.items():
                 for east, (east_col, _) in wanted.items():
-                    assert west_col >= east_col or _frame(west).x < _frame(east).x, (
+                    assert west_col >= east_col or frame_of(west).x < frame_of(east).x, (
                         f"{fs.name} at {share:.0%} pinned: {west.name} (col {west_col}) "
                         f"is drawn east of {east.name} (col {east_col})"
                     )
 
 
 def test_a_row_pin_orders_its_column_at_every_density() -> None:
-    """Within one pinned column, a unit pinned to a lower row is drawn higher.
-
-    The frame reports the row the unit was pinned to, so the drawing has to
-    agree with it: frames that say one order over ink that shows another
-    have not honoured the pin.
-    """
+    """Check that row pins hold and order each pinned column at every density."""
     for share in SHARES:
         for seed, fs in enumerate(_mocks()):
             wanted = _held(fs, share, seed * 17 + int(share * 100))
             fs.layout()
             for unit, (_, row) in wanted.items():
-                assert _frame(unit).row == row
+                assert frame_of(unit).row == row
             for upper, (col, upper_row) in wanted.items():
                 for lower, (lower_col, lower_row) in wanted.items():
                     if col != lower_col or upper_row >= lower_row:
                         continue
-                    assert _frame(upper).y < _frame(lower).y, (
+                    assert frame_of(upper).y < frame_of(lower).y, (
                         f"{fs.name} at {share:.0%} pinned: {upper.name} (row {upper_row}) "
                         f"is drawn below {lower.name} (row {lower_row}) in col {col}"
                     )
@@ -307,7 +248,7 @@ def test_a_disconnected_piece_gets_a_band_of_its_own() -> None:
     fs.layout()
     spans: dict[str, tuple[float, float]] = {}
     for unit in fs.units:
-        frame = _frame(unit)
+        frame = frame_of(unit)
         tags = unit.name.split("-")
         piece = "A" if "A" in tags else "B" if "B" in tags else "orphan"
         top, bottom = spans.get(piece, (frame.y, frame.y_max))
@@ -357,12 +298,7 @@ def _pump_line(*, mirrored: bool) -> dict[str, Frame]:
 
 
 def test_a_mirrored_pump_draws_its_peers_on_the_mirrored_side() -> None:
-    """A mirror swaps the sides a pump's peers sit on, because it swaps its nozzles.
-
-    Drawn ``mirrored=True`` the pump's suction is on its east face, so its
-    supply is drawn east of it and the train reads right to left, which is
-    the whole of what mirroring a pump asks for (#471).
-    """
+    """Check that mirroring a pump puts its supply and product on the swapped sides."""
     at = _pump_line(mirrored=False)
     assert at["F"].x < at["P-1"].x < at["Pr"].x
 
@@ -374,31 +310,21 @@ def test_a_mirrored_pump_draws_its_peers_on_the_mirrored_side() -> None:
 
 
 def test_a_condenser_sits_beside_the_column_top() -> None:
-    """The overhead condenser is drawn east of the tower, level with its top nozzle.
-
-    Both nozzles are on top faces, so neither says which side the condenser
-    goes: flow order puts it east, and its inlet is drawn no lower than the
-    overhead nozzle that feeds it.
-    """
+    """Check that an overhead condenser sits east of the tower, no lower than its nozzle."""
     fs = Flowsheet("overhead")
     col = fs.add(U.DistillationColumn("T-1"))
     cond = fs.add(D.Condenser("E-1"))
     fs.connect(col.overhead, cond.shell_in)
     fs.layout()
-    assert _frame(col).x_max < _frame(cond).x
-    assert _nozzle(cond, "shell_in")[1] <= _nozzle(col, "overhead")[1] + 0.5, (
-        f"the condenser inlet at {_nozzle(cond, 'shell_in')} is below the overhead "
-        f"nozzle at {_nozzle(col, 'overhead')}"
+    assert frame_of(col).x_max < frame_of(cond).x
+    assert nozzle_of(cond, "shell_in")[1] <= nozzle_of(col, "overhead")[1] + 0.5, (
+        f"the condenser inlet at {nozzle_of(cond, 'shell_in')} is below the overhead "
+        f"nozzle at {nozzle_of(col, 'overhead')}"
     )
 
 
 def test_a_turned_unit_places_its_peers_on_its_turned_faces() -> None:
-    """A quarter turn moves the overhead nozzle to a side, and the condenser with it.
-
-    Turned 90 degrees clockwise the overhead leaves the east face and the
-    condenser is drawn east; turned 270 it leaves the west face and the
-    condenser is drawn west, against flow order.
-    """
+    """Check that a turned column puts its condenser on the face the overhead turns to."""
     for turn, face in ((90, "E"), (270, "W")):
         fs = Flowsheet(f"column turned {turn}")
         col = fs.add(U.DistillationColumn("T-1")).pin(orientation=turn)
@@ -406,7 +332,7 @@ def test_a_turned_unit_places_its_peers_on_its_turned_faces() -> None:
         fs.connect(col.overhead, cond.shell_in)
         fs.layout()
         assert port_faces(col, "overhead") == [face]
-        tower, peer = _frame(col), _frame(cond)
+        tower, peer = frame_of(col), frame_of(cond)
         if face == "E":
             assert tower.x_max < peer.x, f"turned {turn}: the condenser is not east"
         else:
@@ -414,29 +340,20 @@ def test_a_turned_unit_places_its_peers_on_its_turned_faces() -> None:
 
 
 def test_a_top_to_bottom_pipe_stacks_its_units_with_nozzles_lined_up() -> None:
-    """A pipe from a bottom nozzle to a top nozzle puts one unit over the other.
-
-    Both are drawn in one layer, the upper one wholly above, and the two
-    nozzles share an x so the pipe drops straight.
-    """
+    """Check that a bottom-to-top pipe stacks its two units with their nozzles lined up."""
     fs = Flowsheet("stack")
     upper = fs.add(U.Block("A", inputs=["W"], outputs=["S"]))
     lower = fs.add(U.Block("B", inputs=["N"], outputs=["E"]))
     fs.connect(upper.out_1, lower.in_1)
     fs.layout()
-    assert _frame(upper).col == _frame(lower).col
-    assert _frame(upper).y_max < _frame(lower).y
-    drop, landing = _nozzle(upper, "out_1"), _nozzle(lower, "in_1")
+    assert frame_of(upper).col == frame_of(lower).col
+    assert frame_of(upper).y_max < frame_of(lower).y
+    drop, landing = nozzle_of(upper, "out_1"), nozzle_of(lower, "in_1")
     assert abs(drop[0] - landing[0]) <= 0.5, f"the stack's nozzles {drop} and {landing}"
 
 
 def test_a_header_stays_between_the_column_and_the_bank_it_feeds() -> None:
-    """A free header sits between its pinned supply and its pinned bank at every size.
-
-    Between a column pinned to column 0 and one to eight pumps pinned to
-    column 4, the header is drawn east of the column, west of the bank, and
-    level with the bank rather than off either end of it.
-    """
+    """Check that a free header sits between its pinned supply and bank, level with the bank."""
     for pumps in range(1, 9):
         fs = Flowsheet("manifold")
         col = fs.add(U.Column("T-1")).pin(col=0, row=0)
@@ -448,9 +365,9 @@ def test_a_header_stays_between_the_column_and_the_bank_it_feeds() -> None:
             fs.connect(header.outlets[i], pump.suction)
             bank.append(pump)
         fs.layout()
-        at = _frame(header)
-        frames = [_frame(pump) for pump in bank]
-        assert _frame(col).x_max < at.x and at.x_max < min(f.x for f in frames), (
+        at = frame_of(header)
+        frames = [frame_of(pump) for pump in bank]
+        assert frame_of(col).x_max < at.x and at.x_max < min(f.x for f in frames), (
             f"{pumps} pumps: the header left the run between the column and the bank"
         )
         assert min(f.y for f in frames) <= at.y and at.y_max <= max(f.y_max for f in frames), (
@@ -459,12 +376,7 @@ def test_a_header_stays_between_the_column_and_the_bank_it_feeds() -> None:
 
 
 def test_a_header_is_not_sunk_by_the_bank_it_supplies() -> None:
-    """#459: five heaters do not drag their steam header below them.
-
-    Each heater takes its steam on a bottom nozzle. What is asserted is the
-    shape and not a crossing count: the header lands level with the bank it
-    feeds, never under all of it.
-    """
+    """Check that a steam header lands level with the heaters it feeds, not below them."""
     fs = Flowsheet("LP steam users")
     steam = fs.add(U.Feed("LP Steam"))
     condensate = fs.add(U.Product("Condensate"))
@@ -473,9 +385,9 @@ def test_a_header_is_not_sunk_by_the_bank_it_supplies() -> None:
         fs.connect(steam.outlet, heater.utility_in)
         fs.connect(heater.outlet, condensate.inlet)
     fs.layout()
-    top = min(_frame(h).y for h in heaters)
-    bottom = max(_frame(h).y_max for h in heaters)
-    header = _frame(steam)
+    top = min(frame_of(h).y for h in heaters)
+    bottom = max(frame_of(h).y_max for h in heaters)
+    header = frame_of(steam)
     assert top <= header.y and header.y_max <= bottom, (
         f"the header spans {header.y:.0f}..{header.y_max:.0f}, outside the bank's "
         f"{top:.0f}..{bottom:.0f}"
@@ -531,11 +443,7 @@ print(json.dumps(out))
 
 
 def test_the_sheet_does_not_depend_on_the_string_hash_seed() -> None:
-    """Run in fresh processes, so ``PYTHONHASHSEED`` really differs.
-
-    A dict or a set iterated somewhere in placement would show up here
-    and nowhere else: within one process every run agrees with itself.
-    """
+    """Check that the mock sheets lay out the same under three ``PYTHONHASHSEED`` values."""
     answers = set()
     for seed in ("0", "1", "12345"):
         env = dict(os.environ, PYTHONHASHSEED=seed)
@@ -558,9 +466,6 @@ def test_the_sheet_does_not_depend_on_the_string_hash_seed() -> None:
 def _shipped_unit_classes() -> list[type[U.Unit]]:
     """Return every ``Unit`` subclass pandid itself defines.
 
-    Test fixtures elsewhere subclass ``Unit`` too, and pytest has imported
-    them by the time this runs, so the walk keeps pandid's modules only.
-
     Returns
     -------
     list[type[Unit]]
@@ -579,12 +484,7 @@ def _shipped_unit_classes() -> list[type[U.Unit]]:
 
 
 def test_a_placement_hint_is_deprecated() -> None:
-    """``PLACES`` or ``LAYOUT_CONFIDENCE`` on a subclass warns and is reported.
-
-    Layout reads nozzle faces now, so a class that still states either is
-    told so twice, by a ``DeprecationWarning`` and by a ``deprecated``
-    finding carrying the same sentence. No class pandid ships states either.
-    """
+    """Check that ``PLACES`` or ``LAYOUT_CONFIDENCE`` on a subclass warns and is reported."""
 
     class Placed(U.Pump):
         PLACES = {"suction": "W"}

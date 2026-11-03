@@ -1,7 +1,6 @@
-"""Instrumentation subsystem: balloons, tags, attachment, signal lines."""
+"""Check instrument balloons: tags, attachment, placement and signal lines."""
 
 import math
-import os
 import warnings
 from collections.abc import Callable
 
@@ -11,19 +10,11 @@ from pandid import Flowsheet, units as U
 from pandid.portgeom import port_point
 from pandid.streams import Stream
 
+from _layout_cases import frame_of
+
 
 def _line(**kw):
-    """A left-to-right process line with a bubble tapping the middle of it.
-
-    The valve is pinned by its *nozzle* rather than by a literal or by its
-    centreline, so the run stays the straight horizontal these tests measure
-    along whatever the valve symbol is drawn like: a pin tuned to one symbol
-    height puts the nozzle off the feed's outlet the moment the artwork is
-    rescaled, and the router answers with a jog that every "along the line"
-    assertion here then reads through. Pinning by the centreline was the same
-    trap one artwork later -- a control valve carries its body under a diaphragm
-    actuator, so its nozzles are below the middle of the box, not on it.
-    """
+    """Return a level run through a control valve pinned by its nozzle, with FT-101 on it."""
     fs = Flowsheet("tap")
     feed = fs.add(U.Feed("Feed")).pin(x=110, y=195)
     fv = fs.add(U.Valve("FV-101", variant="control"))
@@ -37,13 +28,7 @@ def _line(**kw):
 
 
 def _hatch_marks(svg: str) -> int:
-    """Cross-hatch strokes on pneumatic signal lines.
-
-    Counted by element rather than by stroke width: every line on a signal is
-    drawn at the one fine weight ISO 15519-2 Annex A.1.02/A.1.03 puts it at, so
-    the width no longer tells a hatch from anything else. A stream is a
-    ``<path>`` and the hatch is the only ``<line>`` ink inside the stream group.
-    """
+    """Count the cross-hatch strokes drawn on pneumatic signal lines."""
     body = svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
     return body.count("<line ")
 
@@ -88,11 +73,6 @@ def test_instrument_tag_split_alphanumeric():
 # --- tag ---------------------------------------------------------------------
 
 
-def test_tag_splits_type_from_number():
-    inst = U.Instrument("FT", 101)
-    assert (inst.name, inst.type, inst.number) == ("FT-101", "FT", "101")
-
-
 def test_combined_tag_still_accepted():
     for tag, expect in (("FT-101", ("FT", "101")), ("PT101A", ("PT", "101A")), ("X", ("X", ""))):
         inst = U.Instrument(tag)
@@ -100,34 +80,20 @@ def test_combined_tag_still_accepted():
 
 
 def test_the_three_spellings_of_one_tag_are_one_instrument():
-    """``split_tag`` promises they are the same request, so the name is too.
-
-    Until #292 the name was worked out beside the split rather than from
-    it, so ``Instrument("FT101")`` came out named and tagged ``FT101``
-    while its balloon drew ``FT`` over ``101``. The equipment list, every
-    cross-reference and the spec round trip then carried a tag no other
-    spelling of the same request produced.
-    """
+    """Check that ``FT, 101``, ``FT-101`` and ``FT101`` name and tag one instrument alike."""
     built = [U.Instrument("FT", 101), U.Instrument("FT-101"), U.Instrument("FT101")]
     assert {(i.name, i.tag, i.type, i.number) for i in built} == {("FT-101", "FT-101", "FT", "101")}
 
 
 def test_a_tag_that_is_all_letters_or_all_digits_keeps_itself():
-    """Nothing to join, so nothing is joined -- no leading hyphen."""
+    """Check that an all-letter or all-digit tag is kept without a hyphen."""
     assert U.Instrument("X").name == "X"
     assert U.Instrument("101").name == "101"
 
 
 @pytest.mark.parametrize("spelling", [("FT", 101), ("FT-101",), ("FT101",)])
 def test_an_instrument_comes_back_from_the_spec_under_the_tag_it_went_out_with(spelling):
-    """Asserted on the rebuilt instrument, not on its dict.
-
-    The spec writes the *split* -- ``type`` and ``number`` -- so both sides of
-    a dict comparison agree however the name was worked out. The disagreement
-    is in the object: ``Instrument("FT101")`` was named ``FT101`` and came back
-    named ``FT-101``, renamed by a round trip through a file nobody had edited,
-    and every cross-reference to it by name went with it.
-    """
+    """Check that a spec round trip keeps an instrument's name and tag."""
     fs = Flowsheet("s")
     inst = fs.add(U.Instrument(*spelling))
     (rebuilt,) = Flowsheet.from_dict(fs.to_dict()).units
@@ -151,8 +117,7 @@ def test_interlock_square_carries_only_its_number():
 
 @pytest.mark.parametrize("variant", ["sis", "interlock"])
 def test_a_diamond_with_no_number_letters_in_capitals_in_both_backends(variant):
-    """Letters stand in for a missing number, in capitals as on every other
-    balloon; the SVG drew them as typed while draw.io capitalised (#574)."""
+    """Check that a numberless diamond writes its letters in capitals in SVG and draw.io."""
     fs = Flowsheet("i")
     fs.add(U.Instrument("is", variant=variant))
     assert ">IS</text>" in fs.to_svg()
@@ -160,15 +125,7 @@ def test_a_diamond_with_no_number_letters_in_capitals_in_both_backends(variant):
 
 
 def test_the_two_trip_squares_are_the_two_isa_symbols_they_claim_to_be():
-    """ANSI/ISA-5.1-2009 draws these as two different symbols, and conflating
-    them is what the bare square used to do.
-
-    Table 5.1.2 items 3-5 give the generic interlock logic function a *plain
-    diamond*; Table 5.1.1 column B gives the safety instrumented system a
-    *diamond inscribed in a square*. Both carry the interlock number in the
-    lower half of the diamond, so the number is not what tells them apart --
-    the square is.
-    """
+    """Check that the SIS symbol is a diamond in a square and the interlock a plain diamond."""
     from pandid.render.symbols import default_registry
 
     sis = default_registry.get("instrument", "sis")
@@ -182,8 +139,7 @@ def test_the_two_trip_squares_are_the_two_isa_symbols_they_claim_to_be():
 
 
 def test_logic_is_a_second_name_for_the_sis_square():
-    """The name the package shipped keeps working and keeps drawing the same
-    artwork, so no sheet already authored moves."""
+    """Check that ``logic`` draws the same artwork as ``sis``."""
     from pandid.render.symbols import default_registry
 
     assert default_registry.get("instrument", "sis") is default_registry.get("instrument", "logic")
@@ -198,21 +154,38 @@ def test_logic_is_a_second_name_for_the_sis_square():
 
 @pytest.mark.parametrize("variant", ["sis", "logic", "interlock"])
 def test_every_trip_square_repeats_wherever_its_logic_acts(variant):
-    """A trip square stands for a function, not a device, so the same tag may be
-    drawn at each place it acts -- whichever of the two symbols it is drawn as."""
+    """Check that a trip square's tag may be drawn at several places on one sheet."""
     fs = Flowsheet("i")
     squares = [fs.add_instrument("I", 1, variant=variant) for _ in range(3)]
     assert [s.tag for s in squares] == ["I-1"] * 3
     assert len({s.name for s in squares}) == 3
 
 
-def test_a_plain_diamond_and_a_diamond_in_a_square_are_not_one_function():
-    """They are different ISA-5.1 symbols, so one of each on a tag is two
-    different things claiming to be the same -- the clash `add()` exists for."""
+@pytest.mark.parametrize(
+    "tag, variants",
+    [
+        (("I", 1), ("sis", "interlock")),
+        (("LT", 101), ("default", "default")),
+        (("I", 1), ("logic", "default")),
+        (("I", 1), ("default", "logic")),
+    ],
+    ids=["diamond-and-square", "two-transmitters", "square-then-balloon", "balloon-then-square"],
+)
+def test_two_symbols_may_not_share_a_tag(tag, variants):
+    """Check that a second instrument on a tag already used is refused.
+
+    Parameters
+    ----------
+    tag : tuple
+        Letters and number of the shared tag.
+    variants : tuple[str, str]
+        Variants of the first and second instrument.
+    """
+    first, second = variants
     fs = Flowsheet("i")
-    fs.add(U.Instrument("I", 1, variant="sis"))
-    with pytest.raises(ValueError, match=r"already exists"):
-        fs.add(U.Instrument("I", 1, variant="interlock"))
+    fs.add(U.Instrument(*tag, variant=first))
+    with pytest.raises(ValueError, match="already exists on this flowsheet"):
+        fs.add(U.Instrument(*tag, variant=second))
 
 
 # --- attachment to a stream --------------------------------------------------
@@ -248,7 +221,7 @@ def test_angle_is_measured_from_the_flow_direction():
 
 
 def test_angle_follows_a_reroute_rather_than_the_screen():
-    """A vertical run must put the same tap on its left, not still 'up'."""
+    """Check that the angle is measured from the flow on a vertical leg, not the screen."""
     fs = Flowsheet("v")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=60)
     col = fs.add(U.Column("T-1")).pin(x=300, y=300)
@@ -292,16 +265,6 @@ def test_attached_to_unit_hangs_off_the_named_face():
     assert (lic.frame.cx, lic.frame.cy) == pytest.approx((f.x_max + 80, f.cy))
 
 
-def test_unit_face_default_and_validation():
-    fs = Flowsheet("u")
-    drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
-    assert fs.add_instrument("LT", 1, sensing=drum).face == "E"
-    with pytest.raises(ValueError):
-        fs.add_instrument("LT", 2, sensing=drum, at=0.5)
-    with pytest.raises(ValueError):
-        fs.add_instrument("LT", 3, sensing=drum, face="up")
-
-
 def test_stream_host_rejects_a_face():
     fs = Flowsheet("s")
     feed = fs.add(U.Feed("F"))
@@ -314,10 +277,7 @@ def test_stream_host_rejects_a_face():
 
 
 def test_a_balloon_refused_its_placement_never_reaches_the_sheet():
-    """#433: the balloon used to join ``units`` before ``attach()`` ran, so a
-    bad ``at=`` left it there under its tag. Correcting the argument and
-    retrying then reported a duplicate tag, and the only way out was a tag the
-    author did not want."""
+    """Check that a balloon refused its placement is not added and its tag stays free."""
     fs = Flowsheet("atomic")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
     before = list(fs.units)
@@ -330,9 +290,7 @@ def test_a_balloon_refused_its_placement_never_reaches_the_sheet():
 
 
 def test_a_balloon_may_not_be_anchored_to_another_sheets_unit():
-    """A sheet built from another sheet's units draws lines to names its own
-    spec never declares, so it cannot be read back. ``add_balloon()`` has
-    always refused this; the three anchors now do too."""
+    """Check that a balloon anchored to another sheet's unit is refused and not added."""
     fs = Flowsheet("host")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
     elsewhere = Flowsheet("owner")
@@ -346,11 +304,11 @@ def test_a_balloon_may_not_be_anchored_to_another_sheets_unit():
     assert fs.add_instrument("LT", 101, sensing=drum).name == "LT-101"
 
 
-# --- face= names a side of a unit, at= a fraction along a line (#438) ----------
+# --- face= names a side of a unit, at= a fraction along a line ---------------
 
 
 def _hosts() -> tuple[Flowsheet, U.Vessel, U.Fitting, Stream]:
-    """A line into a tagged venturi and on to a drum: one host of each kind."""
+    """Return a line into a tagged venturi and on to a drum: one host of each kind."""
     fs = Flowsheet("face")
     feed = fs.add(U.Feed("Feed"))
     fe = fs.add(U.Fitting("FE-303", variant="venturi"))
@@ -358,11 +316,6 @@ def _hosts() -> tuple[Flowsheet, U.Vessel, U.Fitting, Stream]:
     line = fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, drum.inlet)
     return fs, drum, fe, line
-
-
-def _same_file(path: str) -> str:
-    """Return a path as the file system resolves and compares it."""
-    return os.path.normcase(os.path.realpath(path))
 
 
 def _placement(fs: Flowsheet) -> list[tuple[object, ...]]:
@@ -398,14 +351,13 @@ _AT_A_FACE = {
 
 
 @pytest.mark.parametrize("entry", sorted(_AT_A_FACE))
-def test_a_face_given_as_at_warns_at_the_authors_line(entry: str):
-    """Python shows a DeprecationWarning only from ``__main__``, so the warning
-    names the author's file whichever entry point was called."""
+def test_a_face_given_as_at_warns_at_the_authors_line(entry: str, same_file):
+    """Check that ``at=`` given a face warns once, at the caller's line, and places by face."""
     fs, drum, fe, _ = _hosts()
     with pytest.warns(DeprecationWarning, match="use face='N'") as caught:
         inst = _AT_A_FACE[entry](fs, drum, fe)
     assert len(caught) == 1
-    assert _same_file(caught[0].filename) == _same_file(__file__)
+    assert same_file(caught[0].filename) == same_file(__file__)
     assert (inst.at, inst.face) == (None, "N")
     found = [i.message for i in fs.validate() if i.code == "deprecated"]
     assert found == [str(caught[0].message)]
@@ -521,7 +473,7 @@ def test_a_refused_attach_changes_no_field_and_warns_nothing(case: str):
 
 @pytest.mark.parametrize("typed, side", [("S", "S"), ("bottom", "S"), ("w", "W")])
 def test_the_warning_names_the_face_that_was_typed(typed: str, side: str):
-    """Following the advice has to leave the balloon where it is."""
+    """Check that the ``at=`` deprecation names the face typed and places the balloon there."""
     fs, drum, _, _ = _hosts()
     with pytest.warns(DeprecationWarning) as caught:
         lt = fs.add_instrument("LT", 101, sensing=drum, at=typed)
@@ -541,8 +493,7 @@ _OLD_FACE = {
 
 @pytest.mark.parametrize("case", sorted(_OLD_FACE))
 def test_a_deprecation_raised_as_an_error_changes_nothing(case: str):
-    """A warning filtered to an error refuses the call, so it must leave the
-    sheet, the balloon and the element as they were."""
+    """Check that an ``at=`` deprecation raised as an error leaves the sheet unchanged."""
     fs, drum, fe, _ = _hosts()
     lt = fs.add_instrument("LT", 100, sensing=drum, face="W")
     fields = ("host", "at", "face", "offset", "angle", "relation")
@@ -580,19 +531,11 @@ def test_attachment_survives_a_second_layout():
     assert (ft.frame.x, ft.frame.y) == pytest.approx(before)
 
 
-# --- standing a colliding balloon off (issue #428) ---------------------------
-
-
-def _placed(u: U.Unit):
-    """A unit's resolved frame, asserted present. The tests below are
-    about *where* a balloon landed, so one that landed nowhere is a
-    failure of the test's own setup, not the property under test."""
-    assert u.frame is not None, f"{u.name} was never placed"
-    return u.frame
+# --- standing a colliding balloon off ----------------------------------------
 
 
 def _centre(u: U.Unit) -> tuple[float, float]:
-    f = _placed(u)
+    f = frame_of(u)
     return (f.cx, f.cy)
 
 
@@ -602,19 +545,17 @@ def _tap_of(inst: U.Instrument) -> tuple[float, float]:
 
 
 def _overlaps(a: U.Unit, b: U.Unit) -> bool:
-    """The overlap `validate()` reports, over two units' drawn boxes."""
+    """Return whether two units' drawn boxes overlap by more than ``validate``'s tolerance."""
     from pandid.portgeom import unit_box
 
-    p, q = unit_box(a, _placed(a)), unit_box(b, _placed(b))
+    p, q = unit_box(a, frame_of(a)), unit_box(b, frame_of(b))
     return not (
         p[2] - 1.0 <= q[0] or q[2] - 1.0 <= p[0] or p[3] - 1.0 <= q[1] or q[3] - 1.0 <= p[1]
     )
 
 
 def test_the_search_and_the_checker_call_the_same_pair_collided():
-    """`TOUCHING` restates `validate`'s tolerance. If the two drifted apart
-    the placer would report itself finished with an overlap the checker
-    still reports, or move a bubble no reader would have called crowded."""
+    """Check that the placer's ``TOUCHING`` equals ``validate``'s tolerance."""
     from pandid.layout.attach import TOUCHING
     from pandid.validate import _TOL
 
@@ -622,8 +563,7 @@ def test_the_search_and_the_checker_call_the_same_pair_collided():
 
 
 def test_two_bubbles_on_one_tap_do_not_land_on_each_other():
-    """The whole of #428: nothing made a balloon aware of any other, so
-    every instrument tapping a line at the same place took the same spot."""
+    """Check that three balloons on one tap do not overlap and keep the same tap."""
     fs, s, first, _ = _line(at=0.5, offset=60)
     second = fs.add_instrument("PT", 102, sensing=s, at=0.5, offset=60)
     third = fs.add_instrument("TT", 103, sensing=s, at=0.5, offset=60)
@@ -637,9 +577,7 @@ def test_two_bubbles_on_one_tap_do_not_land_on_each_other():
 
 
 def test_a_bubble_is_stood_off_the_equipment_it_would_have_landed_on():
-    """An offset measured off a stream says nothing about what is standing
-    where it points, which is how a transmitter ended up drawn inside a
-    column."""
+    """Check that a balloon aimed into a valve is stood off it, its tap unmoved."""
     # angle=0 aims the standoff along the flow, straight into FV-101:
     # the tap is 19px short of the valve and the bubble is 44 across.
     fs, _, inst, fv = _line(at=0.9, offset=45, angle=0)
@@ -647,28 +585,23 @@ def test_a_bubble_is_stood_off_the_equipment_it_would_have_landed_on():
     # The anchor did not move: still on the run, still short of the valve.
     tap = _tap_of(inst)
     assert tap[1] == pytest.approx(195.0)
-    assert tap[0] < _placed(fv).x
+    assert tap[0] < frame_of(fv).x
     assert math.dist(_centre(inst), tap) >= 45 - 1e-6
 
 
 def test_a_bubble_mounted_flush_is_pushed_clear_of_the_wall():
-    """A unit host has no line for an element to be *in*, so a balloon
-    whose box swallows the face midpoint is half inside the vessel rather
-    than in line with anything."""
+    """Check that a balloon mounted flush on a vessel face is pushed clear of the vessel."""
     fs = Flowsheet("flush")
     drum = fs.add(U.Vessel("V-1")).pin(x=300, y=250)
     lt = fs.add_instrument("LT", 1, sensing=drum, face="E", offset=10)
     fs.route()
     assert not _overlaps(lt, drum)
-    face = _placed(drum)
+    face = frame_of(drum)
     assert _tap_of(lt) == pytest.approx((face.x_max, face.cy))
 
 
 def test_the_standoff_only_ever_grows():
-    """Monotone by construction: the search sweeps a ring before it walks
-    out to the next one, and never walks back in. A resolver that could
-    pull a balloon closer is one whose passes can trade two arrangements
-    back and forth until `MAX_PLACEMENT_PASSES` trips."""
+    """Check that a crowd of balloons on one tap keep at least their offset and never overlap."""
     fs, s, first, _ = _line(at=0.5, offset=45)
     crowd = [fs.add_instrument("PT", 200 + i, sensing=s, at=0.5, offset=45) for i in range(5)]
     fs.route()
@@ -681,9 +614,7 @@ def test_the_standoff_only_ever_grows():
 
 
 def test_a_nozzle_keepout_is_the_stand_off_in_front_of_a_live_nozzle():
-    """One rectangle per *connected* nozzle, reaching out along the face
-    it leaves by. A nozzle nothing is joined to costs the router nothing
-    to reach past, so listing it would only push bubbles about."""
+    """Check that each connected nozzle has one keepout reaching out along its face."""
     from pandid.layout.attach import _nozzle_keepouts
     from pandid.portgeom import port_anchor
     from pandid.routing.visibility import MIN_ESCAPE
@@ -692,19 +623,13 @@ def test_a_nozzle_keepout_is_the_stand_off_in_front_of_a_live_nozzle():
     keepouts = _nozzle_keepouts(fs)
     live = [(u, n) for u in fs.units for n, p in u.ports.items() if p.stream is not None]
     assert len(keepouts) == len(live)
-    ax, ay, facing = port_anchor(fv, _placed(fv), "inlet")
+    ax, ay, facing = port_anchor(fv, frame_of(fv), "inlet")
     assert facing == "W"
     assert (ax - MIN_ESCAPE, ay, ax, ay) in keepouts
 
 
 def test_a_moved_bubble_leaves_a_nozzle_its_room_to_escape():
-    """A run may not turn until it has cleared its nozzle, so a bubble
-    parked across that stand-off leaves the router no way out at all and
-    it draws the fallback L instead -- which is how three of #428's
-    collisions came back as unrouted lines when the search resolved them
-    against drawn boxes alone. Only a *moved* bubble answers for it: the
-    author's own standoff is judged on boxes, so a sheet already drawing
-    well is not rearranged around a rule it never had to meet."""
+    """Check that a moved balloon is stood further off rather than across a nozzle keepout."""
     from pandid.layout.attach import _anchor, _clear_standoff, _standoff_box
 
     fs, _, inst, _ = _line(at=0.5, offset=45)
@@ -728,19 +653,14 @@ def test_a_moved_bubble_leaves_a_nozzle_its_room_to_escape():
 
 
 def test_an_in_line_element_is_never_stood_off():
-    """``offset=0`` straddles the tap on purpose -- an orifice plate is
-    drawn *on* the line. The router already stands aside for one rather
-    than detouring round it, and so must the placer, even where the plate
-    is drawn hard against the valve below it and a bubble there would be
-    walked out."""
+    """Check that an element at ``offset=0`` stays on its tap even where it overlaps a valve."""
     fs, _, fe, fv = _line(at=0.95, offset=0)
     assert _overlaps(fe, fv)  # the search had something to react to
     assert _centre(fe) == pytest.approx(_tap_of(fe))
 
 
 def test_a_crowded_sheet_places_the_same_way_every_time():
-    """Declaration order decides who gives way, so the answer cannot
-    depend on set iteration or on what the previous pass left behind."""
+    """Check that a crowded tap places its balloons the same way every time."""
 
     def boxes() -> list[tuple[str, float, float]]:
         fs, s, _, _ = _line(at=0.5, offset=50)
@@ -754,21 +674,11 @@ def test_a_crowded_sheet_places_the_same_way_every_time():
     assert boxes() == first
 
 
-# --- a balloon the author placed (issue #467) --------------------------------
+# --- a balloon the author placed ---------------------------------------------
 
 
 def test_a_pinned_balloon_lands_where_it_was_pinned():
-    """``pin(x=, y=)`` on an attached balloon is a placement, not a suggestion.
-
-    It used to be neither: accepted, dropped, and the bubble drawn wherever
-    the standoff resolver had already put it -- while ``add_control_loop``'s
-    own documentation told authors that every part of a loop "is an ordinary
-    unit or stream: pin it". The docs described a capability the code did not
-    have, which is worse than not having it (#467).
-
-    The tap does not move with the balloon: the anchor is the host's, so the
-    impulse line still leaves the point on the line the bubble reads.
-    """
+    """Check that a pinned attached balloon lands on its pin, keeps its tap and is not reported."""
     fs, _, inst, _ = _line()
     assert inst.frame is not None
     tap = _tap_of(inst)
@@ -780,22 +690,11 @@ def test_a_pinned_balloon_lands_where_it_was_pinned():
     assert inst.frame is not None
     assert (inst.frame.x, inst.frame.y) == (1120.0, 760.0)
     assert _tap_of(inst) == tap
-    # And the checker is silent about the placement it was told to make: a
-    # sheet that honours the pin and then reports it would be the same defect
-    # wearing the other hat.
     assert "pin-not-honored" not in [i.code for i in fs.validate()]
 
 
 def test_a_pinned_balloon_is_never_walked_off_what_it_was_put_on():
-    """Honoured exactly, including where the author put it somewhere poor.
-
-    The standoff resolver's whole job is walking a bubble clear of what it
-    landed on, and a balloon it must not move is the one case it may not do
-    that in: moving it would be discarding the placement all over again, with
-    a smaller number. The overlap is reported instead, which is the honest
-    answer -- the drawing is what was asked for and the checker says what is
-    wrong with it.
-    """
+    """Check that a balloon pinned onto a valve stays there and the overlap is reported."""
     fs, _, inst, fv = _line()
     assert fv.frame is not None
     inst.pin(x=fv.frame.x, y=fv.frame.y)
@@ -808,12 +707,7 @@ def test_a_pinned_balloon_is_never_walked_off_what_it_was_put_on():
 
 
 def test_one_pinned_axis_leaves_the_other_to_the_standoff():
-    """Per axis, as an absolute coordinate supersedes a grid rank everywhere else.
-
-    An author who wants the bubble in a particular column and does not care
-    how far down the page it hangs says the one they mean, and the resolver
-    still finds clear air on the other axis.
-    """
+    """Check that a balloon pinned on one axis keeps the resolver's place on the other."""
     fs, _, inst, _ = _line()
     assert inst.frame is not None
     free_x, free_y = inst.frame.x, inst.frame.y
@@ -827,12 +721,7 @@ def test_one_pinned_axis_leaves_the_other_to_the_standoff():
 
 
 def test_a_balloon_pinned_by_a_nozzle_lands_that_nozzle():
-    """``pin(port=..., y=...)`` puts the *signal terminal* on that elevation.
-
-    The relation, not the corner (#294): a balloon's own box is furniture
-    around a circle, and the point an author lines up with a signal trunk is
-    where the signal leaves it.
-    """
+    """Check that ``pin(port=...)`` puts a balloon's signal terminal on the given point."""
     fs, _, inst, _ = _line()
 
     inst.pin(port="pv", x=700.0, y=500.0)
@@ -867,8 +756,7 @@ def test_controller_output_routes_to_the_valve_actuator():
 
 
 def _level_loop() -> tuple[Flowsheet, U.Instrument, U.Valve]:
-    """A drum's level transmitter wired to LIC-101, which is anchored to
-    nothing, and LV-101 on the drum's outlet."""
+    """Return a drum's level loop: LT-101 wired to a free LIC-101, and LV-101 on the outlet."""
     fs = Flowsheet("level")
     feed = fs.add(U.Feed("Feed"))
     drum = fs.add(U.Vessel("V-1"))
@@ -884,16 +772,14 @@ def _level_loop() -> tuple[Flowsheet, U.Instrument, U.Valve]:
 
 
 def test_an_unanchored_controller_hangs_beyond_the_actuator_it_drives():
-    """A controller with no host stands on the valve's actuator axis, 100
-    out past the face the actuator is on, rather than wherever the middle
-    of its wiring happens to be clear."""
+    """Check that a free controller hangs 100 out past the actuator, on its axis."""
     from pandid.portgeom import port_anchor
 
     fs, lic, lv = _level_loop()
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
     fs.route()
 
-    valve = _placed(lv)
+    valve = frame_of(lv)
     ax, ay, face = port_anchor(lv, valve, "actuator")
     cx, cy = _centre(lic)
     beyond = {"N": valve.y - cy, "S": cy - valve.y_max, "W": valve.x - cx, "E": cx - valve.x_max}
@@ -904,9 +790,7 @@ def test_an_unanchored_controller_hangs_beyond_the_actuator_it_drives():
 
 
 def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
-    """The valve is where layout puts the balloon, not an anchor the author
-    gave: the spec reads back without one, and a second layout lands the
-    balloon on the same spot."""
+    """Check that hanging a controller writes nothing to the spec and repeats on relayout."""
     from pandid.portgeom import port_anchor
 
     fs, lic, lv = _level_loop()
@@ -915,7 +799,7 @@ def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
     fs.layout()
     fs.route()
 
-    ax, ay, _ = port_anchor(lv, _placed(lv), "actuator")
+    ax, ay, _ = port_anchor(lv, frame_of(lv), "actuator")
     first = _centre(lic)
     assert math.dist(first, (ax, ay)) == pytest.approx(100.0, abs=1.0)
     assert lic.host is None
@@ -927,8 +811,7 @@ def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
 
 
 def test_a_controller_driving_no_actuator_is_not_hung():
-    """LIC-101 drives the relay on the valve, not the valve, so it is
-    offered no spot off the actuator even with nothing in the way."""
+    """Check that a controller driving a relay rather than the actuator gets no spot."""
     from pandid.layout.control import _actuator_spot
 
     fs, lic, lv = _level_loop()
@@ -941,8 +824,7 @@ def test_a_controller_driving_no_actuator_is_not_hung():
 
 
 def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
-    """No standoff off the actuator clears the valve, so the balloon is
-    placed from its wiring rather than over the valve."""
+    """Check that a controller too big for the actuator spot is placed clear of the valve."""
     fs = Flowsheet("big")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
     lic = fs.add(U.Instrument("LIC", 1, width=600, height=600))
@@ -954,8 +836,7 @@ def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
 
 
 def test_a_controller_is_not_hung_across_a_pipe():
-    """The supply pipe runs through the actuator's standoff, so the balloon
-    stands clear of it instead of on it."""
+    """Check that a controller is not hung across a pipe through the actuator's standoff."""
     fs = Flowsheet("pipe")
     feed = fs.add(U.Feed("Feed")).pin(port="outlet", x=100, y=100)
     fv = fs.add(U.Valve("FV-1", variant="control")).pin(port="inlet", x=300, y=212.4)
@@ -970,8 +851,7 @@ def test_a_controller_is_not_hung_across_a_pipe():
 
 
 def test_a_controller_driving_two_actuators_reads_back_in_place():
-    """Port order is not in the spec, so a balloon driving two actuators
-    hangs off neither and reads back onto the same spot."""
+    """Check that a controller driving two actuators reads back from the spec in place."""
     fs = Flowsheet("split")
     first = fs.add(U.Valve("FV-1", variant="control")).pin(x=100, y=300)
     second = fs.add(U.Valve("FV-2", variant="control")).pin(x=500, y=300)
@@ -988,8 +868,7 @@ def test_a_controller_driving_two_actuators_reads_back_in_place():
 
 
 def test_a_controller_hangs_from_the_actuators_own_point():
-    """An angle valve's actuator is off the middle of its top face, and the
-    balloon stands square to the actuator, not to the middle of the face."""
+    """Check that a controller hangs square to an off-centre actuator."""
     from pandid.portgeom import port_anchor
 
     fs = Flowsheet("angle")
@@ -998,14 +877,14 @@ def test_a_controller_hangs_from_the_actuators_own_point():
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()
 
-    ax, ay, face = port_anchor(valve, _placed(valve), "actuator")
+    ax, ay, face = port_anchor(valve, frame_of(valve), "actuator")
     assert face == "N"
-    assert abs(ax - _placed(valve).cx) > 1.0, "the actuator has to be off the face's middle"
+    assert abs(ax - frame_of(valve).cx) > 1.0, "the actuator has to be off the face's middle"
     assert _centre(lic) == pytest.approx((ax, ay - 100.0))
 
 
 def _hung_controller() -> tuple[Flowsheet, U.Instrument, U.Valve]:
-    """LIC-1, anchored to nothing, driving the actuator of a pinned valve."""
+    """Return a free LIC-1 driving the actuator of a pinned valve."""
     fs = Flowsheet("review")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
@@ -1014,8 +893,7 @@ def _hung_controller() -> tuple[Flowsheet, U.Instrument, U.Valve]:
 
 
 def test_a_hung_controller_clears_a_balloon_pinned_after_it():
-    """PI-1 is pinned onto the actuator's standoff and placed after LIC-1,
-    which still has to stand clear of it."""
+    """Check that a hung controller stands clear of a balloon pinned on its spot."""
     fs, lic, _ = _hung_controller()
     pi = fs.add_instrument("PI", 1).pin(x=300, y=178)
     fs.route()
@@ -1024,8 +902,7 @@ def test_a_hung_controller_clears_a_balloon_pinned_after_it():
 
 
 def test_a_hung_controller_clears_a_signal_line():
-    """A signal line drawn through the actuator's standoff is as much in the
-    way as a pipe."""
+    """Check that a hung controller stands clear of a signal line through its spot."""
     fs, _, _ = _hung_controller()
     first = fs.add_instrument("XI", 1).pin(x=100, y=178)
     second = fs.add_instrument("XI", 2).pin(x=600, y=178)
@@ -1036,8 +913,7 @@ def test_a_hung_controller_clears_a_signal_line():
 
 
 def test_a_hung_controller_clears_a_tap_line():
-    """PI-1 is added to a routed sheet and hung on the valve's top face, so
-    its tap line rises past the actuator; LIC-1 stays off that line."""
+    """Check that a hung controller stays off a tap line rising past the actuator."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -1048,7 +924,7 @@ def test_a_hung_controller_clears_a_tap_line():
     fs.layout()
     fs.route()
 
-    box = unit_box(lic, _placed(lic))
+    box = unit_box(lic, frame_of(lic))
     lines = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
     assert lines, "PI-1 draws a tap line"
     for route in lines:
@@ -1056,8 +932,7 @@ def test_a_hung_controller_clears_a_tap_line():
 
 
 def test_a_hung_controller_keeps_its_own_tap_line() -> None:
-    """A balloon tapped on LIC-1 hangs from it; LIC-1 settles and the tap
-    stays on its north face."""
+    """Check that a balloon tapped on a hung controller keeps its tap on the north face."""
     from pandid.portgeom import face_point
 
     fs, lic, _ = _hung_controller()
@@ -1065,11 +940,11 @@ def test_a_hung_controller_keeps_its_own_tap_line() -> None:
     fs.route()
 
     assert fs.route_converged
-    assert pi.tap == pytest.approx(face_point(lic, _placed(lic), "N")[0])
+    assert pi.tap == pytest.approx(face_point(lic, frame_of(lic), "N")[0])
 
 
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
-    """PI-1 is pinned by grid rank over the valve; LIC-1 stands clear of it."""
+    """Check that a hung controller stands clear of a balloon pinned by grid rank."""
     fs = Flowsheet("grid")
     valve = fs.add(U.Valve("V", variant="control")).pin(col=0, row=0)
     lic = fs.add_instrument("LIC", 1)
@@ -1081,8 +956,7 @@ def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
 
 
 def test_a_controller_carrying_a_balloon_is_not_hung() -> None:
-    """PI-1 hangs south of LIC-1, so LIC-1 is placed from its wiring and
-    PI-1's tap line does not run through the valve."""
+    """Check that a controller carrying a balloon is not hung across the valve."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -1091,15 +965,14 @@ def test_a_controller_carrying_a_balloon_is_not_hung() -> None:
     fs.add_instrument("PI", 1, sensing=lic, face="S", offset=140)
     fs.route()
 
-    box = unit_box(valve, _placed(valve))
+    box = unit_box(valve, frame_of(valve))
     ((inst, tap, centre),) = tap_lines(fs)
     route = tap_route(inst, tap, centre)
     assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
 
 
 def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
-    """LIC-1's own line is routed by hand past the actuator, so LIC-1 is
-    placed from its wiring rather than on that line."""
+    """Check that a controller whose line is routed by hand is not hung on that line."""
     fs, lic, valve = _hung_controller()
     line = lic.sig_out.stream
     assert line is not None
@@ -1110,8 +983,7 @@ def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
 
 
 def test_a_hung_controllers_line_clears_a_balloon_on_the_actuator() -> None:
-    """PI-1 hangs between the actuator and the spot above it, so LIC-1
-    stands where its own line to the actuator misses PI-1."""
+    """Check that a hung controller's line misses a balloon hung on the actuator face."""
     fs, _, valve = _hung_controller()
     fs.add_instrument("PI", 1, sensing=valve, face="N", offset=46)
     fs.route()
@@ -1120,8 +992,7 @@ def test_a_hung_controllers_line_clears_a_balloon_on_the_actuator() -> None:
 
 
 def test_a_controller_with_a_balloon_on_its_line_is_not_hung() -> None:
-    """ZI-1 sits in LIC-1's signal line near the actuator, so LIC-1 is
-    placed from its wiring and ZI-1 stays off the valve."""
+    """Check that a controller with a balloon on its line is not hung over it."""
     fs = Flowsheet("inline")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=270)
     lic = fs.add_instrument("LIC", 1)
@@ -1133,8 +1004,7 @@ def test_a_controller_with_a_balloon_on_its_line_is_not_hung() -> None:
 
 
 def test_a_controller_wired_from_behind_its_valve_is_not_hung() -> None:
-    """LT-1 is on the far side of the valve from its actuator, so LIC-1 is
-    placed from its wiring and LT-1's line does not cross the valve."""
+    """Check that a controller wired from behind its valve is not hung across it."""
     fs = Flowsheet("behind")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=100, y=350, orientation=180)
     lic = fs.add_instrument("LIC", 1)
@@ -1147,7 +1017,7 @@ def test_a_controller_wired_from_behind_its_valve_is_not_hung() -> None:
 
 
 def _close_transmitter() -> Flowsheet:
-    """LT-1 is pinned close by a turned valve, its line leaving north."""
+    """Return a free LIC-1 on a turned valve, with LT-1 pinned close by."""
     fs = Flowsheet("close")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=90)
     lic = fs.add_instrument("LIC", 1)
@@ -1159,7 +1029,7 @@ def _close_transmitter() -> Flowsheet:
 
 
 def _two_transmitters() -> Flowsheet:
-    """LIC-1 drives no actuator and reads two pinned transmitters."""
+    """Return a free LIC-1 that drives no actuator and reads two pinned transmitters."""
     fs = Flowsheet("no-actuator")
     fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
@@ -1171,7 +1041,7 @@ def _two_transmitters() -> Flowsheet:
 
 
 def _cascade() -> Flowsheet:
-    """LIC-1 and FIC-1 drive valves 50 apart and are wired to each other."""
+    """Return LIC-1 and FIC-1 driving valves 50 apart and wired to each other."""
     fs = Flowsheet("cascade")
     va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=300)
     vb = fs.add(U.Valve("VB", variant="control")).pin(x=300, y=350)
@@ -1184,8 +1054,7 @@ def _cascade() -> Flowsheet:
 
 
 def _crossed_cascade() -> Flowsheet:
-    """Two turned valves, their controllers wired in cascade, and LT-1 and
-    PI-1 close by."""
+    """Return two turned valves whose controllers are in cascade, with LT-1 and PI-1 nearby."""
     fs = Flowsheet("fallback")
     va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=500, orientation=270)
     vb = fs.add(U.Valve("VB", variant="control")).pin(x=350, y=550, orientation=90)
@@ -1201,7 +1070,7 @@ def _crossed_cascade() -> Flowsheet:
 
 
 def _tap_past_a_transmitter() -> Flowsheet:
-    """PI-1 hangs off a turned valve, near LT-1 which LIC-1 reads."""
+    """Return PI-1 hung off a turned valve near the LT-1 that LIC-1 reads."""
     fs = Flowsheet("tap")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=180)
     lic = fs.add_instrument("LIC", 1)
@@ -1213,7 +1082,7 @@ def _tap_past_a_transmitter() -> Flowsheet:
 
 
 def _drawn_by_hand() -> Flowsheet:
-    """LIC-1's line to the actuator is drawn by hand from its east face."""
+    """Return a free LIC-1 whose line to the actuator is drawn by hand."""
     fs = Flowsheet("manual")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
@@ -1225,8 +1094,7 @@ def _drawn_by_hand() -> Flowsheet:
 
 
 def _balloon_on_a_signal_line() -> Flowsheet:
-    """PI-1 sits on a signal line between two pinned indicators near the
-    valve LIC-1 drives."""
+    """Return PI-1 on a signal line between two indicators near LIC-1's valve."""
     fs = Flowsheet("signal balloon")
     valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
     lic = fs.add_instrument("LIC", 1)
@@ -1255,9 +1123,7 @@ def _balloon_on_a_signal_line() -> Flowsheet:
 def test_a_hung_controller_that_leaves_a_clash_is_placed_from_its_wiring(
     build: Callable[[], Flowsheet],
 ) -> None:
-    """Hanging that leaves a clash gives way to the placement from the
-    controller's wiring: no error, no line through a unit or on the
-    slant, and no tap line through a unit."""
+    """Check that a clash from hanging gives way to placing the controller from its wiring."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -1277,8 +1143,7 @@ def test_a_hung_controller_that_leaves_a_clash_is_placed_from_its_wiring(
 
 
 def test_a_router_that_freezes_its_routes_still_gets_the_fallback() -> None:
-    """A router that marks every route drawn by hand still has the sheet
-    laid out again when the hung controller leaves a slanted line."""
+    """Check that a router freezing every route still gets a sheet with no slanted line."""
     from pandid.routing import DefaultRouter
 
     class FreezeRouter(DefaultRouter):
@@ -1294,9 +1159,26 @@ def test_a_router_that_freezes_its_routes_still_gets_the_fallback() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
+def test_a_custom_router_routes_the_sheet_without_hanging() -> None:
+    """Check that a router freezing only its straight routes leaves no slanted line."""
+    from pandid.routing import DefaultRouter
+
+    class FreezeStraightRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for stream in fs.streams:
+                assert stream.route is not None
+                if len({x for x, _ in stream.route.waypoints}) == 1:
+                    stream.route.manual = True
+
+    fs, _, _ = _hung_controller()
+    fs.route(FreezeStraightRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
 def test_the_fallback_lays_out_with_an_engine_that_wraps_the_default() -> None:
-    """An engine that lays out through ``fs.layout()`` and then moves a
-    unit is the one the fallback runs again."""
+    """Check that the fallback reruns an engine that wraps ``fs.layout()`` and moves a unit."""
 
     class WrappedEngine:
         def layout(self, fs: Flowsheet) -> None:
@@ -1314,8 +1196,7 @@ def test_the_fallback_lays_out_with_an_engine_that_wraps_the_default() -> None:
 
 
 def test_a_router_that_refuses_the_hung_sheet_gets_the_fallback() -> None:
-    """A router that raises on a line through a unit routes the sheet laid
-    out without hanging instead."""
+    """Check that a router raising on the hung sheet routes the unhung sheet instead."""
     from pandid.routing import DefaultRouter
 
     class CheckingRouter(DefaultRouter):
@@ -1332,8 +1213,7 @@ def test_a_router_that_refuses_the_hung_sheet_gets_the_fallback() -> None:
 
 
 def test_the_fallback_keeps_an_engine_that_refines_the_layout() -> None:
-    """An engine that adjusts the frames already laid out is not run
-    again; the sheet as laid out is routed without hanging."""
+    """Check that a refining engine is not rerun and the sheet routes without errors."""
 
     class SnapToGrid:
         def layout(self, fs: Flowsheet) -> None:
@@ -1350,8 +1230,7 @@ def test_the_fallback_keeps_an_engine_that_refines_the_layout() -> None:
 
 
 def test_a_hung_controller_keeps_out_of_a_tag_halo() -> None:
-    """P-101's tag sits left of it, over the actuator's standoff; LIC-1
-    stands clear of the tag's halo."""
+    """Check that a hung controller stays out of a nearby tag's halo."""
     from pandid.layout.control import _halos
     from pandid.portgeom import unit_box
 
@@ -1359,14 +1238,13 @@ def test_a_hung_controller_keeps_out_of_a_tag_halo() -> None:
     fs.add(U.Pump("P-101", width=44, height=44, label_pos="left")).pin(x=350, y=178)
     fs.route()
 
-    box = unit_box(lic, _placed(lic))
+    box = unit_box(lic, frame_of(lic))
     for left, top, right, bottom in _halos(fs):
         assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
 
 
 def test_the_fallback_starts_from_the_settled_state_it_saved() -> None:
-    """A router that reads route_converged sees the value the sheet had
-    before the hung attempt."""
+    """Check that a router reading ``route_converged`` sees the pre-hanging value."""
     from pandid.routing import DefaultRouter
 
     class CheckingRouter(DefaultRouter):
@@ -1382,8 +1260,7 @@ def test_the_fallback_starts_from_the_settled_state_it_saved() -> None:
 
 
 def test_a_line_drawn_by_hand_after_routing_is_routed_from_the_unhung_sheet() -> None:
-    """A second route() after via() starts from the sheet as routed
-    without hanging, so the hand-drawn line stays square."""
+    """Check that a line drawn by hand after routing stays square on the next route."""
     fs, lic, valve = _hung_controller()
     line = lic.sig_out.stream
     assert line is not None
@@ -1395,8 +1272,7 @@ def test_a_line_drawn_by_hand_after_routing_is_routed_from_the_unhung_sheet() ->
 
 
 def test_a_hung_controllers_line_keeps_out_of_a_tag_halo() -> None:
-    """P-101's tag lies across the line up from the actuator, so the
-    controller is not hung and the line routes round the tag."""
+    """Check that a controller's line routes round a tag lying across it."""
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.layout.control import _halos
@@ -1413,8 +1289,7 @@ def test_a_hung_controllers_line_keeps_out_of_a_tag_halo() -> None:
 
 
 def test_a_hung_line_frozen_with_via_is_drawn_as_frozen() -> None:
-    """Freezing the drawn line with via() and routing again keeps the
-    controller where that line was drawn to."""
+    """Check that a hung line frozen with ``via()`` stays square on the next route."""
     fs, lic, _ = _hung_controller()
     line = lic.sig_out.stream
     assert line is not None
@@ -1426,27 +1301,8 @@ def test_a_hung_line_frozen_with_via_is_drawn_as_frozen() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
-def test_a_custom_router_routes_the_sheet_without_hanging() -> None:
-    """A router other than the default one is given the sheet as main
-    lays it out; a route it freezes is not left behind."""
-    from pandid.routing import DefaultRouter
-
-    class FreezeStraightRouter(DefaultRouter):
-        def route(self, fs: Flowsheet) -> None:
-            super().route(fs)
-            for stream in fs.streams:
-                assert stream.route is not None
-                if len({x for x, _ in stream.route.waypoints}) == 1:
-                    stream.route.manual = True
-
-    fs, _, _ = _hung_controller()
-    fs.route(FreezeStraightRouter())
-
-    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
-
-
 def test_a_balloon_moved_by_hanging_keeps_out_of_a_tag_halo() -> None:
-    """XI-1 follows the hung LIC-1; neither may land on P-101's tag."""
+    """Check that a hung controller and the balloon it moves stay out of a tag halo."""
     from pandid.layout.control import _halos
     from pandid.portgeom import unit_box
 
@@ -1457,14 +1313,13 @@ def test_a_balloon_moved_by_hanging_keeps_out_of_a_tag_halo() -> None:
     fs.route()
 
     for unit in (lic, xi):
-        box = unit_box(unit, _placed(unit))
+        box = unit_box(unit, frame_of(unit))
         for left, top, right, bottom in _halos(fs):
             assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
 
 
 def test_a_route_drawn_by_hand_and_then_cleared_stays_cleared() -> None:
-    """Clearing a hand-drawn route after a hung route() is not undone by
-    the next route()."""
+    """Check that a hand-drawn route cleared after a hung route stays cleared."""
     fs, _, _ = _hung_controller()
     feed = fs.add(U.Feed("Feed")).pin(x=100, y=700)
     prod = fs.add(U.Product("Product")).pin(x=600, y=700)
@@ -1477,8 +1332,7 @@ def test_a_route_drawn_by_hand_and_then_cleared_stays_cleared() -> None:
 
 
 def test_a_copied_sheet_routes_from_its_own_unhung_state() -> None:
-    """A deep copy of a hung sheet restores its own frames, so a line then
-    drawn by hand stays square."""
+    """Check that a deep copy of a hung sheet keeps a later hand-drawn line square."""
     import copy
 
     fs, _, _ = _hung_controller()
@@ -1491,9 +1345,7 @@ def test_a_copied_sheet_routes_from_its_own_unhung_state() -> None:
 
 
 def test_a_balloon_added_after_hanging_is_laid_out_from_the_unhung_sheet() -> None:
-    """A balloon put on a hung controller's line after routing is laid out
-    and routed from the sheet as routed without hanging, so it settles
-    with its tap on the line."""
+    """Check that a balloon added after hanging settles with its tap on the line."""
     from pandid.layout.attach import stream_path
 
     fs, lic, _ = _hung_controller()
@@ -1517,8 +1369,7 @@ def test_a_balloon_added_after_hanging_is_laid_out_from_the_unhung_sheet() -> No
 
 
 def test_hanging_adds_no_tap_line_through_a_tag_halo() -> None:
-    """PI-1's tap, on a balloon wired to the hung controller, runs through
-    no more tag halos than without hanging."""
+    """Check that hanging puts no tap line through a tag halo."""
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.layout.control import _halos
     from pandid.render.svg import tap_lines, tap_route
@@ -1537,8 +1388,7 @@ def test_hanging_adds_no_tap_line_through_a_tag_halo() -> None:
 
 
 def test_hanging_lays_no_line_along_another() -> None:
-    """A pipe drawn by hand runs up to the actuator; LIC-1 is not hung
-    where its line would lie along that pipe."""
+    """Check that a hung controller's line does not run along a hand-drawn pipe."""
     from pandid.layout.attach import stream_path
     from pandid.layout.control import _shared
 
@@ -1559,8 +1409,7 @@ def test_hanging_lays_no_line_along_another() -> None:
 
 
 def test_hanging_lays_no_line_along_a_tap_line() -> None:
-    """PI-1's tap rises past the actuator; LIC-1 is not hung where its
-    line would lie along that tap."""
+    """Check that a hung controller's line does not run along a tap line."""
     from pandid.layout.attach import stream_path
     from pandid.layout.control import _shared
     from pandid.render.svg import tap_lines, tap_route
@@ -1583,8 +1432,7 @@ def test_hanging_lays_no_line_along_a_tap_line() -> None:
 
 
 def test_hanging_lays_no_line_along_a_pipe_with_rounding_in_its_track() -> None:
-    """A hand-drawn pipe whose track carries rounding still counts as the
-    same track as the controller's line."""
+    """Check that a pipe track with rounding still counts as shared with the line."""
     from pandid.layout.attach import stream_path
 
     def shared(
@@ -1615,8 +1463,7 @@ def test_hanging_lays_no_line_along_a_pipe_with_rounding_in_its_track() -> None:
 
 
 def test_an_engine_that_routes_and_then_adjusts_keeps_its_adjustment() -> None:
-    """A layout engine that routes inside layout() and then moves a unit
-    keeps that move through the next route()."""
+    """Check that an engine routing inside ``layout()`` keeps its later move."""
     fs, _, _ = _hung_controller()
     marker = fs.add(U.Vessel("marker"))
 
@@ -1634,40 +1481,15 @@ def test_an_engine_that_routes_and_then_adjusts_keeps_its_adjustment() -> None:
     assert (marker.frame.x, marker.frame.y) == (1200, 1200)
 
 
-def test_every_valve_variant_has_an_actuator_on_its_symbol():
-    from pandid.render.symbols import default_registry
-
-    for variant in (
-        "default",
-        "gate",
-        "globe",
-        "ball",
-        "butterfly",
-        "check",
-        "control",
-        "needle",
-        "three_way",
-        "relief",
-    ):
-        sym = default_registry.get("valve", variant)
-        assert "actuator" in sym.ports, variant
-
-
 def _valve_variants() -> list[str]:
-    """Every registered valve variant. SymbolRegistry has no "list everything"
-    API by design, so the private dict is the only enumeration available."""
+    """Return every registered valve variant."""
     from pandid.render.symbols import default_registry
 
     return sorted(v for kind, v in default_registry._symbols if kind == "valve")
 
 
 def test_no_valve_variant_draws_its_actuator_inside_the_body():
-    """A signal terminates where it meets the valve: it has no nozzle to reach,
-    so the drawn end and the routing anchor are one point.
-
-    They part company when the symbol puts the actuator on interior ink, and
-    then the renderer draws the line into the body while the router stops it at
-    the edge, leaving a signal that ends in the middle of the valve."""
+    """Check that every valve variant draws its actuator at its routing anchor."""
     from pandid.geometry import Frame
     from pandid.portgeom import resolve_port, resolve_size
 
@@ -1682,12 +1504,7 @@ def test_no_valve_variant_draws_its_actuator_inside_the_body():
 
 
 def test_flipping_a_valve_turns_its_actuator_over_with_it():
-    """``mirrored="y"`` stands the symbol on its head, so the stem points down
-    and the signal has to arrive from below.
-
-    An actuator parked at the centre of the box is invariant under that mirror,
-    which leaves the operator drawn on top of a valve that has been turned
-    upside down."""
+    """Check that mirroring a valve top to bottom moves its actuator to the far face."""
     from pandid.portgeom import port_faces
 
     for variant in _valve_variants():
@@ -1719,11 +1536,7 @@ def test_hanger_is_not_drawn_where_a_signal_already_joins_the_pair():
         "FIC", 101, sensing=ft, face="N", offset=110, angle=35, display="central"
     )
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
-    # A drawn ``<line>`` starts its own text line; a nested one does not --
-    # ``display="central"`` is a trimmed balloon since #305 and its own
-    # ``<symbol>`` definition carries a bar drawn with a ``<line>`` too, on
-    # one text line with the balloon's now-1-wide outline, which a bare
-    # substring search over both would double-count.
+    # Count only lines that start a text line; a balloon's own bar is nested in its symbol.
     taps = [
         ln
         for ln in fs.to_svg().split("\n")
@@ -1741,21 +1554,10 @@ def test_interlock_hangs_off_its_controller_on_a_dashed_line():
 
 
 # --- what decides an impulse line from a functional connection ---------------
-#
-# The style of the line between a balloon and its host is a statement about the
-# *line*: solid says a length of tubing with process fluid in it, dashed says a
-# measurement or a command. It used to be chosen by the host's class alone --
-# solid off a unit, dashed off a balloon -- which answers a different question,
-# and drew a trip square hung on a valve as though the valve were piped to it
-# while three identical squares elsewhere on the same sheet were dashed.
-#
-# So the table below is written as a matrix rather than as a list of the cases
-# that were wrong: each half of the edge is varied against the other, and the
-# expected style is derived from the two rather than from either.
 
 
 def _tap_styles(fs) -> dict:
-    """``{balloon name: "solid" | "dashed"}`` for every tap line on the sheet."""
+    """Return ``"solid"`` or ``"dashed"`` for each balloon's tap line, by balloon name."""
     import re
 
     body = fs.to_svg().split('<g id="instrument_taps">', 1)
@@ -1792,14 +1594,7 @@ def _tap_styles(fs) -> dict:
     ],
 )
 def test_link_style_follows_the_balloon_not_only_its_host(variant, display, style):
-    """One host, every balloon: the host cannot be what decides it.
-
-    The vessel is the same piece of plant in all eight, and full of the same
-    fluid. What changes is whether there is anything at the other end of the
-    line for that fluid to reach -- which is both axes of the balloon, the
-    symbol type and the display, since either one can put the function off the
-    plant.
-    """
+    """Check that one host's tap line style follows the balloon's symbol and display."""
     fs = Flowsheet("what is on the end of it")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=200)
     fs.add_instrument(
@@ -1824,8 +1619,7 @@ def test_link_style_follows_the_balloon_not_only_its_host(variant, display, styl
     ],
 )
 def test_link_style_follows_the_host_not_only_its_balloon(host, style):
-    """One field balloon, every host: the balloon cannot be what decides it
-    either. Both ends are asked, and the line is tubing only if both answer."""
+    """Check that one field balloon's tap line style follows its host."""
     fs = Flowsheet("what it comes off")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     drum = fs.add(U.Vessel("V-101")).pin(x=400, y=140)
@@ -1847,13 +1641,7 @@ def test_link_style_follows_the_host_not_only_its_balloon(host, style):
 
 
 def test_the_trip_square_on_a_valve_is_drawn_as_the_signal_it_is():
-    """The defect as reported, from ``examples/11_ethanol_pid``.
-
-    Five trip squares on that sheet, one logic function, and the four hung on
-    balloons were dashed while the one hung on the feed's solenoid valve was
-    solid -- so the sheet drew the same command as tubing in one place and as a
-    signal in four. A trip is a signal wherever it acts.
-    """
+    """Check that a trip square on a valve is dashed while a gauge on it stays solid."""
     fs = Flowsheet("one function, five drawings")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     xv = fs.add(U.Valve("XV-301", variant="solenoid")).pin(x=250, port="inlet", y=195)
@@ -1872,8 +1660,7 @@ def test_the_trip_square_on_a_valve_is_drawn_as_the_signal_it_is():
 
 
 def test_balloon_signal_ports_reach_every_face():
-    """A balloon is a circle: a signal can meet it anywhere, so its connections
-    have no face of their own and every one of them offers all four."""
+    """Check that a balloon's signal port can be put on any of the four faces."""
     from pandid.portgeom import port_anchor
 
     seen = {}
@@ -1904,11 +1691,7 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
 
 
 def test_a_barred_balloons_tag_clears_its_location_bar():
-    """Every balloon carrying a location bar draws it across the middle of the
-    circle, right where the tag letters would otherwise sit. ISO 15519-2
-    5.1.2 (p. 8) puts the letters above it and the number below: the letter
-    codes for measured variable and control function go in the upper part of
-    the symbol and the reference designation in the lower part."""
+    """Check that a barred balloon writes its letters above the bar and number below."""
     import re
 
     from pandid.render.symbols import default_registry
@@ -1938,18 +1721,7 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
 
 
 def test_every_shared_display_balloon_carries_a_location_bar():
-    """Issue #181. A shared display is the central control system, and ISO
-    15519-2 Table 1 (p. 7) has one graphic for saying so -- one full horizontal
-    bar for a reading available in the central control system, against no bar
-    for one at a field-mounted instrument or display. A square
-    with no bar therefore stated the one thing about a DCS point that is
-    certainly false. All forty balloons on ``professional_examples/P&ID_301.pdf``
-    carry a bar, twelve of them circle-in-square.
-
-    The geometry is that sheet's: the bar runs the *circle's* full diameter
-    through its exact vertical centre, not the square's. The square is a
-    separate statement, about what the function is rather than where it lives.
-    """
+    """Check that the shared display balloon draws a bar across the circle's diameter."""
     import re
 
     from pandid.render.symbols import default_registry
@@ -1967,10 +1739,7 @@ def test_every_shared_display_balloon_carries_a_location_bar():
 
 
 def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
-    """ISA draws a pneumatic signal as a *solid* line marked with double
-    cross-hatches, so the hatch is the only thing distinguishing it from process
-    piping. One mark per 45px alone leaves a short run (a transducer to the
-    actuator right beneath it) with none at all, rendering it as plain pipe."""
+    """Check that a short pneumatic run still gets its cross-hatch."""
     fs = Flowsheet("short-pneumatic")
     valve = fs.add(U.Valve("LV-101", variant="control")).pin(x=300, y=300)
     ly = fs.add_instrument("LY", 101, near=valve, face="N", offset=58)
@@ -1996,7 +1765,7 @@ def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
 
 
 def _interlocked(n=4):
-    """One trip acting on *n* valves: the shape of P&ID_301's interlock I 1."""
+    """Return one trip square acting on ``n`` valves, drawn beside each."""
     fs = Flowsheet("interlock")
     pairs = []
     for i in range(n):
@@ -2008,9 +1777,7 @@ def _interlocked(n=4):
 
 
 def test_an_interlock_square_is_drawn_at_every_place_it_acts():
-    """P&ID_301 draws interlock I 1 four times: one logic function, tripping
-    four valves, shown where each of them is. A sheet that cannot repeat the
-    square cannot draw the interlock at all."""
+    """Check that one interlock square is drawn at each of four valves under one tag."""
     fs, pairs = _interlocked()
     squares = [square for square, _ in pairs]
     assert [s.tag for s in squares] == ["I-1"] * 4
@@ -2018,8 +1785,7 @@ def test_an_interlock_square_is_drawn_at_every_place_it_acts():
 
 
 def test_each_repeated_square_is_still_one_unit_to_look_up():
-    """The tag repeats; the name does not, so a stream endpoint, a spec entry
-    and an equipment-list row still each mean exactly one square."""
+    """Check that each repeated square has its own name and its own valve."""
     fs, pairs = _interlocked()
     for square, valve in pairs:
         assert [u for u in fs.units if u.name == square.name] == [square]
@@ -2027,37 +1793,15 @@ def test_each_repeated_square_is_still_one_unit_to_look_up():
 
 
 def test_the_repeated_square_draws_the_tag_it_shares():
-    """The name that tells two squares apart is the flowsheet's bookkeeping. The
-    square drawn carries the interlock number, four times over."""
+    """Check that each repeated square draws the shared number and not its name."""
     fs, _ = _interlocked()
     svg = fs.to_svg()
     assert svg.count(">1</text>") == 4
     assert "(2)" not in svg
 
 
-def test_two_transmitters_on_one_loop_number_are_refused():
-    """A balloon is a device and there is one of it: a second LT-101 is a tag
-    used twice, not one measurement shown twice."""
-    fs = Flowsheet("loop")
-    fs.add(U.Instrument("LT", 101))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Instrument("LT", 101))
-
-
-@pytest.mark.parametrize("variants", [("logic", "default"), ("default", "logic")])
-def test_a_square_and_a_balloon_cannot_share_a_tag(variants):
-    """Two different symbols claiming to be the same thing, whichever is drawn
-    first."""
-    first, second = variants
-    fs = Flowsheet("mixed")
-    fs.add(U.Instrument("I", 1, variant=first))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Instrument("I", 1, variant=second))
-
-
 def test_a_repeated_square_survives_a_round_trip_through_a_spec():
-    """Each square is written out and read back as its own entry, wired to its
-    own valve, which is what needs a name the spec can address it by."""
+    """Check that repeated squares round-trip through the spec with their wiring."""
     fs, _ = _interlocked()
     spec = fs.to_dict()
     rebuilt = Flowsheet.from_dict(spec)
@@ -2069,21 +1813,10 @@ def test_a_repeated_square_survives_a_round_trip_through_a_spec():
 
 
 # --- the signal pool: several connections on one balloon ----------------------
-#
-# P&ID-301 ("Ethanol Purification A300 -- Process & Instrumentation Diagram 1",
-# Rev B, 30/10/2025) draws PIC-301 with one signal line in from PT-301 and two
-# out, one to CV-301-1 and one to CV-301-2, and letters the split-range bands
-# beside them: `0-95%` alongside the leg that drops to CV-301-1, `95-100%` on
-# the leg that runs right to CV-301-2. That sheet is in this repository and this
-# package could not draw it, because a balloon had exactly one sig_out.
 
 
 def _split_range():
-    """P&ID-301's loop 301: one controller, two control valves, both strokes.
-
-    Pinned rather than laid out, so what the assertions read is the pool and the
-    face selection rather than whatever the ranking phase decided this week.
-    """
+    """Return loop 301: one controller on two control valves, pinned."""
     fs = Flowsheet("split range")
     loop = fs.add_loop("P", 301)
     pt = fs.add(U.Instrument("PT", 301)).pin(x=120, y=300)
@@ -2097,8 +1830,7 @@ def _split_range():
 
 
 def test_split_range_draws_one_controller_onto_two_valves():
-    """The sheet the package could not draw. Two outputs off one balloon, each
-    landing on its own valve's stem, and the drawing comes out."""
+    """Check that one controller draws two outputs onto two valve stems."""
     from pandid.portgeom import port_point
 
     fs, _, _, pic, (cv1, lo), (cv2, hi) = _split_range()
@@ -2115,10 +1847,7 @@ def test_split_range_draws_one_controller_onto_two_valves():
 
 
 def test_a_second_line_off_one_output_is_another_connection():
-    """``sig_out`` is a pool. Asking it to drive a second valve mints a member
-    rather than refusing, which is how an author writes split range; and the
-    first line stays exactly where it was, so ``pic.sig_out.stream`` still reads
-    back the connection it was given."""
+    """Check that a second line off ``sig_out`` mints ``sig_out_2`` and leaves the first."""
     _, _, _, pic, (_, lo), (_, hi) = _split_range()
     assert lo.source is pic.sig_out
     assert pic.sig_out.stream is lo
@@ -2127,9 +1856,7 @@ def test_a_second_line_off_one_output_is_another_connection():
 
 
 def test_a_balloon_with_one_line_each_way_grows_nothing():
-    """The pool costs the ordinary case nothing: three ports, the three it has
-    always had, in the order it has always had them. Every balloon in
-    ``tests/golden`` is one of these, and this is why none of them moved."""
+    """Check that a balloon with one line each way keeps its three ports."""
     fs = Flowsheet("plain")
     a = fs.add(U.Instrument("FT-101"))
     b = fs.add(U.Instrument("FIC-101", display="central"))
@@ -2139,9 +1866,7 @@ def test_a_balloon_with_one_line_each_way_grows_nothing():
 
 
 def test_a_minted_connection_is_drawn_on_the_balloons_own_nozzle():
-    """A pool member is not a nozzle the symbol has to be redrawn for. It takes
-    the menu its pool's first member has -- all four faces, since a balloon is a
-    circle -- so it lands on ink and not on the box-centre fallback."""
+    """Check that a minted port is anchored and offers the pool's four faces."""
     from pandid.portgeom import is_anchored, port_faces
 
     _, _, _, pic, _, _ = _split_range()
@@ -2151,9 +1876,7 @@ def test_a_minted_connection_is_drawn_on_the_balloons_own_nozzle():
 
 
 def test_each_output_takes_a_face_of_its_own():
-    """Two live connections may not resolve to one point, and the face selector
-    is what keeps that true as the pool grows: it serves each port in turn and
-    will not put one on a placement already spoken for."""
+    """Check that a balloon's three connections resolve to three faces."""
     from pandid.portgeom import resolve_port
     from pandid.validate import validate
 
@@ -2167,11 +1890,7 @@ def test_each_output_takes_a_face_of_its_own():
 
 
 def test_a_measurement_feeds_two_alarms_on_separate_lines():
-    """ISO 15519-2 §6.2 (p.14): signal lines for functions inside the PCI symbol
-    and for functions outside it are drawn separately between the PCI symbols,
-    not run together. A high alarm and a low alarm therefore each take a line from the
-    measurement rather than being chained one behind the other, which needs two
-    outputs on the transmitter."""
+    """Check that a measurement feeding two alarms takes two outputs."""
     fs = Flowsheet("alarms")
     li = fs.add(U.Instrument("LI", 322, variant="shared")).pin(x=200, y=300)
     lah = fs.add(U.Instrument("LAH", 322, variant="shared")).pin(x=420, y=200)
@@ -2185,9 +1904,7 @@ def test_a_measurement_feeds_two_alarms_on_separate_lines():
 
 
 def test_an_alarm_takes_an_input_and_an_output():
-    """P&ID-301 runs I-2 into LAH-322 and LAL-322 out into I-1. An alarm that
-    participates in a trip is a balloon with connections of its own, and it may
-    need one of each."""
+    """Check that an alarm takes a line in and a line out."""
     fs = Flowsheet("trip")
     lt = fs.add(U.Instrument("LT", 322)).pin(x=120, y=300)
     lal = fs.add(U.Instrument("LAL", 322, variant="shared")).pin(x=360, y=300)
@@ -2199,9 +1916,7 @@ def test_an_alarm_takes_an_input_and_an_output():
 
 
 def test_a_signal_connection_takes_either_end_of_its_line():
-    """A signal port carries no direction requirement. The same terminal is fed
-    on one sheet and trips from it on another, so which end it took is read off
-    the stream and not declared in advance."""
+    """Check that a signal port may be either end of a signal line."""
     fs = Flowsheet("either end")
     a = fs.add(U.Instrument("LAL-322", variant="shared"))
     b = fs.add(U.Instrument("I-1", variant="sis"))
@@ -2212,8 +1927,7 @@ def test_a_signal_connection_takes_either_end_of_its_line():
 
 
 def test_a_process_nozzle_still_has_a_direction():
-    """The guard is not gone, it is narrowed. Fluid enters a nozzle or leaves
-    it, and a pipe drawn the other way is still refused."""
+    """Check that a pipe drawn against a nozzle's direction is still refused."""
     fs = Flowsheet("piping")
     p1 = fs.add(U.Pump("P-101"))
     p2 = fs.add(U.Pump("P-102"))
@@ -2224,10 +1938,7 @@ def test_a_process_nozzle_still_has_a_direction():
 
 
 def test_the_process_tap_is_one_tap():
-    """``pv`` is not a pool. An instrument taps one process point, and a second
-    line to it is a mistake in the drawing rather than a request for another
-    connection. (A differential instrument tapping two points wants a second
-    *named* tap, high and low; nothing here is designed for it.)"""
+    """Check that a second line onto an instrument's ``pv`` is refused."""
     fs = Flowsheet("tap")
     fic = fs.add(U.Instrument("FIC-301", variant="shared"))
     a = fs.add(U.Instrument("FT-301"))
@@ -2238,8 +1949,7 @@ def test_the_process_tap_is_one_tap():
 
 
 def test_a_valve_has_one_actuator():
-    """Split range is one actuator per valve with the controller holding two
-    outputs, so the stem stays singular and a second line onto it is refused."""
+    """Check that a second line onto a valve's actuator is refused."""
     fs = Flowsheet("stem")
     cv = fs.add(U.Valve("CV-301-1", variant="control"))
     a = fs.add(U.Instrument("PIC-301", variant="shared"))
@@ -2253,9 +1963,7 @@ def test_a_valve_has_one_actuator():
 
 
 def test_naming_the_units_draws_the_signal_line():
-    """On a signal line the connection is not information: a balloon mints one
-    per line and a control valve has exactly one stem. So either end may be the
-    unit and the engine picks."""
+    """Check that naming two units on a signal line picks their signal ports."""
     fs = Flowsheet("units")
     ft = fs.add(U.Instrument("FT-305"))
     fic = fs.add(U.Instrument("FIC-305", variant="shared"))
@@ -2267,7 +1975,7 @@ def test_naming_the_units_draws_the_signal_line():
 
 
 def test_naming_the_units_mints_a_second_output():
-    """The split-range case written the short way."""
+    """Check that naming a controller twice mints its second output."""
     fs = Flowsheet("units split")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
     cv1 = fs.add(U.Valve("CV-301-1", variant="control"))
@@ -2278,8 +1986,7 @@ def test_naming_the_units_mints_a_second_output():
 
 
 def test_piping_still_names_its_nozzle():
-    """Which nozzle a pipe runs to is the whole question -- a column has a feed,
-    an overhead and a bottoms -- so a process kind refuses a bare unit."""
+    """Check that a process line between bare units is refused."""
     fs = Flowsheet("piping")
     p1 = fs.add(U.Pump("P-101"))
     p2 = fs.add(U.Pump("P-102"))
@@ -2288,8 +1995,7 @@ def test_piping_still_names_its_nozzle():
 
 
 def test_a_unit_with_no_signal_connection_is_named_not_guessed_at():
-    """A pump has no stem for a signal line to reach, so naming it refuses and
-    says which nozzles it does have."""
+    """Check that naming a unit with no signal port is refused."""
     fs = Flowsheet("no stem")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
     pump = fs.add(U.Pump("P-101"))
@@ -2298,8 +2004,7 @@ def test_a_unit_with_no_signal_connection_is_named_not_guessed_at():
 
 
 def test_a_unit_with_several_signal_connections_is_not_guessed_at():
-    """Two signal connections that are not a pool are two different things, so
-    this refuses rather than picking one."""
+    """Check that naming a unit with two signal ports outside a pool is refused."""
     fs = Flowsheet("ambiguous")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
     station = fs.add(U.Valve("CV-301", variant="control"))
@@ -2309,8 +2014,7 @@ def test_a_unit_with_several_signal_connections_is_not_guessed_at():
 
 
 def test_split_range_survives_a_round_trip_through_a_spec():
-    """A minted connection is written out under its own name and read back by
-    it, so a sheet the pool was used on rebuilds exactly."""
+    """Check that a minted port round-trips through the spec."""
     fs, *_ = _split_range()
     spec = fs.to_dict()
     rebuilt = Flowsheet.from_dict(spec)
@@ -2320,10 +2024,7 @@ def test_split_range_survives_a_round_trip_through_a_spec():
 
 
 def test_a_refused_connection_mints_nothing():
-    """Both refusals are made before either end is taken, so a call that raises
-    leaves the sheet exactly as it found it. A balloon carrying a spare nozzle
-    no line reaches is a drawing changed by an error, and ``debug=True`` draws
-    every port it has."""
+    """Check that a refused connection mints no port."""
     fs = Flowsheet("refused")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
     cv = fs.add(U.Valve("CV-301-1", variant="control"))
@@ -2337,11 +2038,7 @@ def test_a_refused_connection_mints_nothing():
 
 
 def test_a_fifth_line_onto_a_balloon_is_reported_not_hidden():
-    """A balloon is a circle with four faces, so the fifth connection has
-    nowhere of its own to go and lands on a placement already taken. The pool
-    does not pretend otherwise: the face selector leaves it on the symbol's own
-    nozzle and ``validate`` reports the stack as a hard error, which is the
-    signal to draw a trunk with stubs instead."""
+    """Check that a fifth line onto a balloon is reported as ``coincident-ports``."""
     from pandid.validate import validate
 
     fs = Flowsheet("crowded")
@@ -2354,9 +2051,7 @@ def test_a_fifth_line_onto_a_balloon_is_reported_not_hidden():
 
 
 def test_a_pool_member_can_be_asked_for_by_name():
-    """``signal_port`` is how a member the balloon has not grown yet is reached
-    -- what the spec reader needs, and what an author needs to name a face on
-    one before the line that mints it is written."""
+    """Check that ``signal_port`` mints a pool member once and refuses an unknown pool."""
     fs = Flowsheet("by name")
     pic = fs.add(U.Instrument("PIC-301", variant="shared"))
     port = pic.signal_port("sig_out_2")
@@ -2368,17 +2063,10 @@ def test_a_pool_member_can_be_asked_for_by_name():
 
 
 # --- what the balloon has to do with what it is placed against ----------------
-#
-# One keyword used to place a balloon and it meant only "here". Everything the
-# sheet then drew between the two was guessed from their classes, so an author
-# who wanted somewhere to hang a control-room faceplate got a line saying the
-# faceplate was piped to the drum (#137). The three keywords are that guess made
-# into a statement: ``sensing=`` reads the host, ``acting_on=`` commands it,
-# ``near=`` is a placement and nothing more.
 
 
 def _drum(relation, **kwargs):
-    """One balloon on one drum, placed by whichever keyword is named."""
+    """Return one balloon on one drum, placed by the named relation keyword."""
     fs = Flowsheet("relation")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
@@ -2391,13 +2079,7 @@ def _drum(relation, **kwargs):
 
 
 def test_a_placement_draws_nothing_where_a_reading_draws_a_line():
-    """``near=`` is the whole of the difference, held against ``sensing=`` on
-    the same pair so nothing else can be what moved.
-
-    Asserted on both the derivation and the drawing, because the two have to
-    agree: label placement dodges the lines :func:`tap_lines` reports, so a line
-    derived and then not drawn would leave the sheet with a gap nothing is in.
-    """
+    """Check that ``near=`` draws no tap line where ``sensing=`` draws one."""
     from pandid.render.svg import tap_lines
 
     read, reading = _drum("sensing")
@@ -2415,15 +2097,7 @@ def test_a_placement_draws_nothing_where_a_reading_draws_a_line():
     [("pipe", 1), ("face", 1), ("behind", 2), ("level", 3), ("near", 1), ("opposite", 3)],
 )
 def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) -> None:
-    """An off-axis balloon gets an L, or a Z behind a face, never a slope (#170).
-
-    A balloon behind the face and level with the unit is reached around
-    the unit's box, and one a fraction off the tap's axis still gets a
-    square turn.
-
-    The line leaves the tap square to its host, so a balloon at 45 degrees
-    or pinned anywhere is still drawn orthogonally (ISO 15519-1 12.4).
-    """
+    """Check that an off-axis balloon's tap line turns square and clears the unit."""
     import xml.etree.ElementTree as ET
 
     from pandid.portgeom import unit_box
@@ -2488,9 +2162,7 @@ def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
 
 
 def test_a_placement_is_still_a_placement():
-    """``near=`` gives up the line and keeps everything else: the balloon hangs
-    off the face it was given, which is what an author asked for by naming a
-    host at all."""
+    """Check that ``near=`` still hangs the balloon off the face it names."""
     _, standing = _drum("near")
     host = standing.host
     assert standing.face == "E"
@@ -2500,13 +2172,7 @@ def test_a_placement_is_still_a_placement():
 
 
 def test_a_command_is_a_signal_even_where_the_host_holds_fluid():
-    """The two ends were already both asked; the *line* is the third question.
-
-    A vessel is full of fluid and a bare balloon is out in the field, which is
-    every condition impulse tubing needs -- and a square stroking that vessel is
-    still commanding it. Tubing brings the fluid **to** the instrument, so only
-    a reading can be a length of it.
-    """
+    """Check that ``acting_on=`` a vessel draws a dashed line, not tubing."""
     from pandid.render.svg import impulse_tap
 
     _, reading = _drum("sensing")
@@ -2519,9 +2185,7 @@ def test_a_command_is_a_signal_even_where_the_host_holds_fluid():
 
 
 def test_a_balloon_is_placed_against_one_thing():
-    """Two keywords are two placements, and a second relationship is a second
-    line. The refusal names both, since which of the two the author meant to
-    delete is not the library's to decide."""
+    """Check that naming two relation keywords is refused with both named."""
     fs = Flowsheet("two anchors")
     drum = fs.add(U.Vessel("V-101"))
     valve = fs.add(U.Valve("FV-101", variant="control"))
@@ -2543,39 +2207,26 @@ def test_an_unknown_relation_is_refused_at_the_call_that_wrote_it():
 
 
 # --- two axes: what the instrument does, and where its reading is -------------
-#
-# ISO 15519-2 asks them separately. The outline is the symbol type -- a circle,
-# a circle in a square, a hexagon, a diamond -- and Table 1's additional graphic
-# is where the information is available: no bar in the field, one for the
-# central control system, two for a subsidiary one. The registry answers both
-# with one variant name, so ``Instrument`` is where the two meet.
 
 
 @pytest.mark.parametrize(
     "display,drawn", [("field", "default"), ("central", "panel"), ("subsidiary", "aux")]
 )
 def test_a_display_picks_the_artwork_its_bar_is_drawn_in(display, drawn):
-    """The pair resolves to one registered variant, and that variant is what the
-    rest of the package sees. Both halves stay readable off the instrument, so a
-    sheet can still be asked which of the two axes it stated."""
+    """Check that each display picks its registered balloon variant."""
     inst = U.Instrument("LIC", 101, display=display)
     assert (inst.symbol_type, inst.display, inst.variant) == ("default", display, drawn)
 
 
 def test_a_square_says_where_it_is_without_being_asked():
-    """A circle in a square is the shared display, and CHEE4001 p.13 is why the
-    display is not a second decision to make: it reads a circle inside a square
-    as an instrument with a controlling function, the circle standing for
-    continuous control such as a DCS. The bar it carries follows from the
-    symbol."""
-    assert U.Instrument("FIC", 301, variant="shared").display == "central"
+    """Check that the shared square's display is central and its variant kept."""
+    shared = U.Instrument("FIC", 301, variant="shared")
+    assert (shared.variant, shared.display) == ("shared", "central")
     assert U.Instrument("FIC", 301, variant="shared", display="central").variant == "shared"
 
 
 def test_a_display_is_registered_artwork_and_not_a_stripe_over_any_outline():
-    """The pairs that draw are a table, not a rule, so a pair with no artwork
-    behind it raises rather than drawing the outline and dropping the bar --
-    which would state the one thing about the point that is certainly false."""
+    """Check that an unregistered symbol and display pair is refused, naming those that are."""
     with pytest.raises(ValueError) as excinfo:
         U.Instrument("KIC", 301, variant="computer", display="central")
     message = str(excinfo.value)
@@ -2595,26 +2246,15 @@ def test_a_display_that_is_not_one_of_the_three_is_refused():
 
 
 def test_annotate_writes_high_and_low_into_the_quadrants_iso_names_them():
-    """ISO 15519-2 5.1.3 (p. 19) letters them: (c) takes a high output or input
-    function, an alarm or a switching action say, and (d) the same for a low
-    one. High above the centre line and low below is 5.2.5's rule that the
-    value a code stands for rises with its distance from that line."""
-    inst = U.Instrument("LIC", 304).annotate(high="LAH", low="LAL")
+    """Check that ``annotate`` writes high codes into quadrant c and low into d."""
+    inst = U.Instrument("LIC", 304)
+    assert inst.annotate(high="LAH", low="LAL") is inst
     written = {name: codes for name, codes in inst.quadrants.items() if codes}
     assert written == {"c": ("LAH",), "d": ("LAL",)}
 
 
-def test_annotate_returns_the_balloon_it_lettered():
-    inst = U.Instrument("LIC", 304)
-    assert inst.annotate(high="LAH") is inst
-
-
 def test_several_codes_in_one_quadrant_take_the_sequence_the_standard_fixes():
-    """ISO 15519-2 5.2.5 fixes the sequence: A, then S, then Z, with the value
-    each stands for rising away from the symbol's centre line. A shall is not an
-    author's choice to express, so the order they wrote is not preserved: an
-    alarm, a switch and a trip come out A, S, Z outward however they are given.
-    """
+    """Check that codes in one quadrant are ordered A, S, Z however they are given."""
     scrambled = U.Instrument("LIC", 304).annotate(high=("LZHH", "LAHH", "LSHH"))
     in_order = U.Instrument("LIC", 305).annotate(high=("LAHH", "LSHH", "LZHH"))
     assert scrambled.quadrants["c"] == ("LAHH", "LSHH", "LZHH")
@@ -2622,18 +2262,13 @@ def test_several_codes_in_one_quadrant_take_the_sequence_the_standard_fixes():
 
 
 def test_an_empty_letter_code_is_refused_rather_than_written():
-    """Nothing is not a thing to write in a quadrant. An empty string is a
-    mistake in the call that wrote it, and leaving the argument out is how an
-    author says nothing."""
+    """Check that an empty letter code is refused."""
     with pytest.raises(ValueError, match="empty letter code"):
         U.Instrument("LIC", 304).annotate(high=("LAH", ""))
 
 
 def test_an_annotated_balloon_spends_no_face():
-    """ISO 15519-2 5.1.3's own reason for the corners: keeping the four faces
-    clear is what lets the symbol be connected horizontally and vertically. The
-    alarms used to be balloons of their own hung off the controller, and a face
-    went with each."""
+    """Check that annotations are drawn as text and add no units."""
     fs = Flowsheet("annotated")
     lt = fs.add(U.Instrument("LT-304")).pin(x=200, y=400)
     lic = fs.add(U.Instrument("LIC-304", variant="shared")).pin(x=200, y=250)
@@ -2647,15 +2282,10 @@ def test_an_annotated_balloon_spends_no_face():
 
 
 # --- a primary element's balloon ----------------------------------------------
-#
-# A primary element is one instrument shown as two marks: the thing in the pipe
-# and the balloon that carries its tag. ``professional_examples/P&ID_301.pdf``
-# draws its venturi with no lettering at all and an ``FE 303`` balloon under it
-# on a short impulse line, which is what ``add_balloon()`` is for (#249).
 
 
 def _element():
-    """A venturi in a run, tagged, with nothing else on the sheet."""
+    """Return a tagged venturi in a run, with nothing else on the sheet."""
     fs = Flowsheet("primary element")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     fe = fs.add(U.Fitting("FE-303", variant="venturi")).pin(x=300, port="inlet", y=195)
@@ -2666,9 +2296,7 @@ def _element():
 
 
 def test_a_balloon_carries_the_elements_tag_and_the_element_stops_drawing_it():
-    """The tag is typed once, on the element, and moves. The element keeps the
-    plain name, since it is the item an equipment list schedules; the balloon is
-    named as a repeated square is."""
+    """Check that ``add_balloon`` moves the element's tag onto the balloon."""
     fs, fe = _element()
     balloon = fs.add_balloon(fe, face="N", offset=38)
     assert fe.balloon is balloon
@@ -2677,8 +2305,7 @@ def test_a_balloon_carries_the_elements_tag_and_the_element_stops_drawing_it():
 
 
 def test_the_shared_tag_is_drawn_exactly_once():
-    """Which is the whole of what moving it does to the sheet: one tag, one
-    place, and the bookkeeping name never reaches the paper."""
+    """Check that the element's tag is drawn once and its bookkeeping name never."""
     fs, fe = _element()
     fs.add_balloon(fe, face="N", offset=38)
     fs.route()
@@ -2688,8 +2315,7 @@ def test_the_shared_tag_is_drawn_exactly_once():
 
 
 def test_the_balloon_reads_the_element_it_stands_for():
-    """A short impulse line, solid: the element is in the pipe and the balloon
-    is a field device, so the one thing between them is tubing."""
+    """Check that an element's balloon senses it on a solid impulse line."""
     from pandid.render.svg import impulse_tap
 
     fs, fe = _element()
@@ -2701,8 +2327,7 @@ def test_the_balloon_reads_the_element_it_stands_for():
 
 
 def test_a_second_balloon_on_one_element_is_refused():
-    """One tag is drawn once. A second reading of the same point is a second
-    instrument with a tag of its own, and the refusal says so."""
+    """Check that a second balloon on one element is refused."""
     fs, fe = _element()
     fs.add_balloon(fe)
     with pytest.raises(ValueError, match=r"already in the balloon 'FE-303 \(2\)'"):
@@ -2726,9 +2351,7 @@ def test_an_element_on_another_sheet_is_refused():
 
 
 def test_the_anchor_no_longer_leaves_the_relationship_to_be_guessed():
-    """``on=`` said where and nothing else -- position, relationship and the
-    line drawn between the two, all from one word. Retired in 0.1.2 for
-    ``sensing=``, ``acting_on=`` and ``near=``, and gone in 0.1.3."""
+    """Check that the removed ``on=`` keyword is refused."""
     fs = Flowsheet("removed")
     drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
     with pytest.raises(TypeError, match="'on'"):
@@ -2737,22 +2360,9 @@ def test_the_anchor_no_longer_leaves_the_relationship_to_be_guessed():
 
 @pytest.mark.parametrize("variant,display", [("panel", "central"), ("aux", "subsidiary")])
 def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
-    """Both named where the information is available, which is Table 1's
-    additional graphic and not an outline. Retired in 0.1.2 and gone in 0.1.3;
-    the drawing is untouched and is reached by the axis it belongs to.
-    """
+    """Check that the removed ``panel`` and ``aux`` variants are refused, naming ``display=``."""
     with pytest.raises(ValueError, match=f"display={display!r}"):
         U.Instrument("LIC", 101, variant=variant)
-    inst = U.Instrument("LIC", 101, display=display)
-    assert inst.variant == variant
-    assert (inst.symbol_type, inst.display) == ("default", display)
-
-
-def test_the_square_is_not_a_removed_spelling():
-    """``variant='shared'`` is a symbol type and stays. Only the two that were a
-    location wearing a symbol type's name went, and a sweep over the whole of
-    the registry's balloons would have taken this with them."""
-    assert U.Instrument("FIC", 301, variant="shared").variant == "shared"
 
 
 def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():

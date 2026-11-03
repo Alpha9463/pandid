@@ -6,7 +6,9 @@ reduce crossings, then moved up or down to line up each pipe's nozzles.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
+from itertools import accumulate
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
@@ -721,11 +723,11 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         down = sweep % 2 == 0
         for k in (keys[1:] if down else keys[-2::-1]):
             near: dict[_Node, list[float]] = {}
-            for s, a, b in ends:
+            for s, a, b in gaps.get(k - 1 if down else k, []):
                 # Order a unit by its peers, ignoring its flags.
-                if down and s.right.layer == k and (_flag(s.rport) or not _flag(s.lport)):
+                if down and (_flag(s.rport) or not _flag(s.lport)):
                     near.setdefault(s.right, []).append(pos[s.left] + a)
-                elif not down and s.left.layer == k and (_flag(s.lport) or not _flag(s.rport)):
+                elif not down and (_flag(s.lport) or not _flag(s.rport)):
                     near.setdefault(s.left, []).append(pos[s.right] + b)
             layers[k].sort(key=lambda n: sum(near[n]) / len(near[n]) if n in near else pos[n] + 0.5)
             pos.update((n, float(i)) for i, n in enumerate(layers[k]))
@@ -829,7 +831,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
     segs : list[_Seg]
         Pipe steps between adjacent layers.
     """
-    near: dict[_Node, list[tuple[_Node, Port | None, Port | None, float]]] = {}
+    lead = {"N": LEAD, "S": -LEAD}
+    near: dict[_Node, list[tuple[_Node, float, float, float, float, float]]] = {}
     for s in segs:
         both = (s.lport, s.rport)
         level = all(_face(p) in (None, "E", "W") for p in both)
@@ -839,7 +842,9 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
                                          (s.right, s.rport, s.left, s.lport)):
             # A unit barely pulls toward its flags and return lines.
             w = 0.1 if (_flag(theirs) and not _flag(mine)) or (mine and (s.back or s.link.recycle)) else weight
-            near.setdefault(own, []).append((other, mine, theirs, w))
+            near.setdefault(own, []).append((other, _offset(other, theirs)[1], _offset(own, mine)[1],
+                                             lead.get(_face(mine) or "", 0.0),
+                                             lead.get(_face(theirs) or "", 0.0), w))
     pinned = {}
     for layer in layers.values():
         for n in layer:
@@ -857,9 +862,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
                 walk.append(other)
     far = len(hops) + 1
     for n, entries in near.items():
-        entries[:] = [(o, m, t, w * (1.5 if hops.get(o, far) < hops.get(n, far) else 1))
-                      for o, m, t, w in entries]
-    lead = {"N": LEAD, "S": -LEAD}
+        entries[:] = [(o, a, b, c, d, w * (1.5 if hops.get(o, far) < hops.get(n, far) else 1))
+                      for o, a, b, c, d, w in entries]
     # Start each layer centred on one axis.
     for layer in layers.values():
         y = 0.0
@@ -882,9 +886,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             if n in pinned:
                 targets.append([(pinned[n], 1e9)])
                 continue
-            t = [(other.y + _offset(other, theirs)[1] - _offset(n, mine)[1]
-                  + lead.get(_face(mine) or "", 0.0) - lead.get(_face(theirs) or "", 0.0), w)
-                 for other, mine, theirs, w in near.get(n, [])]
+            t = [(other.y + theirs - mine + up - down, w)
+                 for other, theirs, mine, up, down, w in near.get(n, [])]
             targets.append(t or [(n.y, 1e-3)])
         tops = _isotonic(targets, [n.h + _gap(n, b) for n, b in zip(layer, layer[1:])])
         for n, y in zip(layer, tops):
@@ -914,7 +917,7 @@ def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, floa
     keys = sorted(layers)
     left = {k: min(xs[n] - n.pad.west for n in layers[k]) for k in keys}
     right = {k: max(xs[n] + n.w + n.pad.east for n in layers[k]) for k in keys}
-    leaving = {k: sum(s.left.layer == k for s in segs) for k in keys}
+    leaving = Counter(s.left.layer for s in segs)
     bands, start = [], 0
     while True:
         last = max([i for i in range(start, len(keys))
@@ -976,9 +979,7 @@ def _isotonic(targets: list[list[tuple[float, float]]], steps: list[float]) -> l
     list[float]
         The tops.
     """
-    offsets = [0.0]
-    for step in steps:
-        offsets.append(offsets[-1] + step)
+    offsets = [0.0, *accumulate(steps)]
     blocks: list[tuple[list[tuple[float, float]], int, float]] = []
     for i, t in enumerate(targets):
         pool, count = [(v - offsets[i], w) for v, w in t], 1
