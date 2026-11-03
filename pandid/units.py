@@ -473,7 +473,10 @@ class Unit:
 
     @property
     def new_line_number(self) -> bool:
-        """Return whether a new line number starts after this unit.
+        """Return whether the line number breaks at this inline unit.
+
+        On a valve, reducer, fitting or tee, ``True`` starts a new stream
+        or line number after the unit.
 
         Returns
         -------
@@ -1242,7 +1245,7 @@ class _NormallyPositioned(Unit):
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
-        """Check that this variant may be shown closed."""
+        """Accept a closed position; subclasses refuse it where needed."""
 
 
 class Valve(_NormallyPositioned):
