@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Callable, Iterator, Union
 
 from pandid.geometry import Frame
+from pandid.inline import _INLINE_KINDS
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.portgeom import port_point, resolve_size, unit_box
@@ -42,8 +43,6 @@ TAP = 45.0
 
 #: Step, in pixels, of the search along a leg for a clear spot.
 NUDGE_STEP = 5.0
-
-_INLINE_KINDS = frozenset({"valve", "reducer", "fitting"})
 
 Point = tuple[float, float]
 Leg = tuple[Point, Point]

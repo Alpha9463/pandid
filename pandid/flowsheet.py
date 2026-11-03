@@ -19,6 +19,7 @@ from pandid.stations import (
     DEFAULT_GAP,
     DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
+from pandid.inline import _INLINE_KINDS
 from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 
 if TYPE_CHECKING:
@@ -46,7 +47,7 @@ DEFAULT_STREAM_NUMBER_START = 1
 DEFAULT_LOOP_NUMBER_START = 101
 
 #: Unit kinds that sit within a line.
-INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
+INLINE_KINDS = _INLINE_KINDS | {"tee"}
 
 #: Attribute types :func:`_restore` refills in place.
 _CONTAINERS = (list, dict, set)
@@ -1154,7 +1155,7 @@ class Flowsheet:
             return
         if (stream.kind != "material" or stream.draw_as_recycle
                 or stream.is_recycle or unit is None
-                or unit.kind not in {"valve", "reducer", "fitting"}):
+                or unit.kind not in _INLINE_KINDS):
             raise ValueError("inline position requires a material stream entering an inline device")
         if stream.dest.name != "inlet" or stream.dest.stream is not stream:
             raise ValueError("inline position requires the device inlet stream")
