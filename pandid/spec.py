@@ -69,6 +69,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
 from decimal import Decimal
+from functools import cache
 from pathlib import Path
 from typing import Any, Literal, cast
 from math import isfinite
@@ -2648,10 +2649,8 @@ def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return data
 
 
-_YAML_LOADER: Any = None
-
-
-def _core_schema_loader(yaml_module) -> Any:
+@cache
+def _core_schema_loader() -> Any:
     """Return the cached safe YAML loader for spec files.
 
     Untagged booleans are ``true`` or ``false`` in lower, title or
@@ -2659,82 +2658,76 @@ def _core_schema_loader(yaml_module) -> Any:
     and floats follow the YAML 1.2 core schema; ``0101`` and
     ``0x1F`` stay text.
 
-    Parameters
-    ----------
-    yaml_module : module
-        The imported ``yaml`` module.
-
     Returns
     -------
     type
         The ``SafeLoader`` subclass.
     """
-    global _YAML_LOADER
-    if _YAML_LOADER is None:
-        dropped = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:timestamp",
-                   "tag:yaml.org,2002:int", "tag:yaml.org,2002:float"}
+    import yaml
 
-        class Loader(yaml_module.SafeLoader):
-            """Safe loader with YAML 1.2 booleans and numbers."""
+    dropped = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:timestamp",
+               "tag:yaml.org,2002:int", "tag:yaml.org,2002:float"}
 
-            def flatten_mapping(self, node):
-                """Refuse a repeated key but ``<<``, then merge.
+    class Loader(yaml.SafeLoader):
+        """Safe loader with YAML 1.2 booleans and numbers."""
 
-                Parameters
-                ----------
-                node : yaml.MappingNode
-                    Mapping node to check.
+        def flatten_mapping(self, node):
+            """Refuse a repeated key but ``<<``, then merge.
 
-                Raises
-                ------
-                SpecError
-                    If a key other than ``<<`` is written twice.
-                """
-                checked = self.__dict__.setdefault("_checked", set())
-                # Check each node once, before merging rewrites it.
-                if node not in checked:
-                    checked.add(node)
-                    seen = set()
-                    for key_node, _value in node.value:
-                        if key_node.tag == "tag:yaml.org,2002:merge":
-                            continue
-                        key = self.construct_object(key_node)
-                        try:
-                            repeated = key in seen
-                        except TypeError:
-                            # Leave an unhashable key to the base class.
-                            continue
-                        if repeated:
-                            raise _written_twice(key, key_node.start_mark.line + 1)
-                        seen.add(key)
-                super().flatten_mapping(node)
+            Parameters
+            ----------
+            node : yaml.MappingNode
+                Mapping node to check.
 
-        Loader.yaml_implicit_resolvers = {
-            char: [(tag, pattern) for tag, pattern in resolvers if tag not in dropped]
-            for char, resolvers in yaml_module.SafeLoader.yaml_implicit_resolvers.items()
-        }
-        Loader.add_implicit_resolver(
-            "tag:yaml.org,2002:bool",
-            re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
-            list("tTfF"),
-        )
-        # Decimal integers only.
-        Loader.add_implicit_resolver(
-            "tag:yaml.org,2002:int",
-            re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$"),
-            list("-+0123456789"),
-        )
-        # YAML 1.2 core-schema floats, less bare digit strings: ``0101``
-        # stays text; ``1e3`` and ``.5`` are floats.
-        Loader.add_implicit_resolver(
-            "tag:yaml.org,2002:float",
-            re.compile(r"^(?:(?![-+]?[0-9]+$)[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)"
-                       r"(?:[eE][-+]?[0-9]+)?"
-                       r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"),
-            list("-+0123456789."),
-        )
-        _YAML_LOADER = Loader
-    return _YAML_LOADER
+            Raises
+            ------
+            SpecError
+                If a key other than ``<<`` is written twice.
+            """
+            checked = self.__dict__.setdefault("_checked", set())
+            # Check each node once, before merging rewrites it.
+            if node not in checked:
+                checked.add(node)
+                seen = set()
+                for key_node, _value in node.value:
+                    if key_node.tag == "tag:yaml.org,2002:merge":
+                        continue
+                    key = self.construct_object(key_node)
+                    try:
+                        repeated = key in seen
+                    except TypeError:
+                        # Leave an unhashable key to the base class.
+                        continue
+                    if repeated:
+                        raise _written_twice(key, key_node.start_mark.line + 1)
+                    seen.add(key)
+            super().flatten_mapping(node)
+
+    Loader.yaml_implicit_resolvers = {
+        char: [(tag, pattern) for tag, pattern in resolvers if tag not in dropped]
+        for char, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+    }
+    Loader.add_implicit_resolver(
+        "tag:yaml.org,2002:bool",
+        re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
+        list("tTfF"),
+    )
+    # Decimal integers only.
+    Loader.add_implicit_resolver(
+        "tag:yaml.org,2002:int",
+        re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$"),
+        list("-+0123456789"),
+    )
+    # YAML 1.2 core-schema floats, less bare digit strings: ``0101``
+    # stays text; ``1e3`` and ``.5`` are floats.
+    Loader.add_implicit_resolver(
+        "tag:yaml.org,2002:float",
+        re.compile(r"^(?:(?![-+]?[0-9]+$)[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)"
+                   r"(?:[eE][-+]?[0-9]+)?"
+                   r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"),
+        list("-+0123456789."),
+    )
+    return Loader
 
 
 def from_yaml(path: str | Path) -> Flowsheet:
@@ -2773,7 +2766,7 @@ def from_yaml(path: str | Path) -> Flowsheet:
         ) from e
     text = Path(path).read_text(encoding="utf-8")
     try:
-        data = yaml.load(text, Loader=_core_schema_loader(yaml))
+        data = yaml.load(text, Loader=_core_schema_loader())
     except yaml.YAMLError as e:
         raise SpecError(f"{path}: not valid YAML, {e}") from None
     except SpecError as e:
