@@ -120,8 +120,8 @@ DRAWING_IDS = [f"{kind}/{variant}" for kind, variant, _ in DRAWINGS]
 
 
 @pytest.mark.parametrize("entry", DRAWINGS, ids=DRAWING_IDS)
-def test_every_shape_reference_resolves_to_a_vendored_stencil(entry):
-    """The check the export turns on; see this module's docstring.
+def test_every_drawing_exports_as_a_stencil_or_a_written_down_approximation(entry):
+    """Check each drawing names a stretchable vendored stencil or a documented built-in.
 
     Parameters
     ----------
@@ -129,26 +129,18 @@ def test_every_shape_reference_resolves_to_a_vendored_stencil(entry):
         Registered symbol kind, variant, and definition.
     """
     kind, variant, sym = entry
-    if not sym.drawio_shape:
-        pytest.skip("drawn here rather than vendored; the approximations cover it")
-    assert sym.drawio_shape in STENCIL_KEYS, (
-        f"{kind}/{variant} references {sym.drawio_shape!r}, which no vendored "
-        f"stencil defines. draw.io answers an unresolvable shape with a plain "
-        f"rectangle and no error, so this would export a sheet of boxes."
-    )
-
-
-@pytest.mark.parametrize("entry", DRAWINGS, ids=DRAWING_IDS)
-def test_a_symbol_with_no_stencil_is_an_approximation_that_was_written_down(entry):
-    """Document every symbol that degrades to a built-in shape.
-
-    Parameters
-    ----------
-    entry : tuple[str, str, Symbol]
-        Registered symbol kind, variant, and definition.
-    """
-    kind, variant, sym = entry
+    assert ";" not in sym.drawio_shape and "=" not in sym.drawio_shape
     if sym.drawio_shape:
+        assert sym.drawio_shape in STENCIL_KEYS, (
+            f"{kind}/{variant} references {sym.drawio_shape!r}, which no vendored "
+            f"stencil defines. draw.io answers an unresolvable shape with a plain "
+            f"rectangle and no error, so this would export a sheet of boxes."
+        )
+        assert sym.stretchable, (
+            f"{kind}/{variant} references a fixed-aspect stencil. Check its "
+            f"SCALE entry: if it is uneven, the exported box has to be mapped "
+            f"onto the stencil's own aspect rather than copied."
+        )
         return
     base = variant.split(" [")[0]
     assert (kind, base) in _APPROXIMATIONS, (
@@ -157,19 +149,6 @@ def test_a_symbol_with_no_stencil_is_an_approximation_that_was_written_down(entr
         f"undocumented rectangle"
     )
     assert _APPROXIMATIONS[(kind, base)].shape in _BUILTIN_SHAPES
-
-
-@pytest.mark.parametrize("entry", DRAWINGS, ids=DRAWING_IDS)
-def test_a_shape_key_survives_being_written_into_a_style(entry):
-    """Preserve each stencil key in the exported style string.
-
-    Parameters
-    ----------
-    entry : tuple[str, str, Symbol]
-        Registered symbol kind, variant, and definition.
-    """
-    _, _, sym = entry
-    assert ";" not in sym.drawio_shape and "=" not in sym.drawio_shape
 
 
 def test_the_approximations_name_only_shapes_and_symbols_that_exist():
@@ -187,17 +166,6 @@ def test_the_approximations_name_only_shapes_and_symbols_that_exist():
                 f"{kind}/{variant} is approximated with {shape!r}, which is not "
                 f"an mxGraph built-in; a stencil key here could go stale, and the "
                 f"whole point of an approximation is a shape that is certainly there"
-            )
-
-
-def test_a_referenced_stencil_is_always_variable_aspect():
-    """Require referenced stencils to fill their exported cells."""
-    for kind, variant, sym in DRAWINGS:
-        if sym.drawio_shape:
-            assert sym.stretchable, (
-                f"{kind}/{variant} references a fixed-aspect stencil. Check its "
-                f"SCALE entry: if it is uneven, the exported box has to be mapped "
-                f"onto the stencil's own aspect rather than copied."
             )
 
 
