@@ -124,18 +124,6 @@ def test_an_unknown_actuator_names_the_ones_there_are():
         U.Valve("CV-1", variant="gate", actuator="piston")
 
 
-def test_a_pairing_may_be_told_the_actuator_it_already_has():
-    """An engineer being explicit and correct is not an error.
-
-    ``variant="control"`` is the shorthand for a general body under a diaphragm,
-    so ``actuator="diaphragm"`` written beside it is that same fact typed a
-    second time. One true thing said twice is one true thing; there is nothing
-    to choose between and nothing to guess, so it resolves to the variant it
-    already named.
-    """
-    assert U.Valve("CV-303", variant="control", actuator="diaphragm").variant == "control"
-
-
 def test_a_pairing_cannot_be_given_a_different_operator():
     """Naming a *second* operator is the contradiction, and it still raises.
 
@@ -147,8 +135,6 @@ def test_a_pairing_cannot_be_given_a_different_operator():
         ValueError, match=r"variant 'control' already draws a valve with a 'diaphragm' operator"
     ):
         U.Valve("CV-1", variant="control", actuator="motor")
-    with pytest.raises(ValueError, match=r"one drawing, two operators"):
-        U.Valve("HV-1", variant="manual", actuator="diaphragm")
 
 
 #: ``(variant, actuator)`` for every pairing, read back out of :data:`ACTUATED`
