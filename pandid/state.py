@@ -1,9 +1,4 @@
-"""Define the stream conditions a balance engine may record.
-
-pandid calculates no properties. :class:`State` is the slot on
-:class:`~pandid.streams.Stream` where a future mass and energy balance
-engine can write results without changing the topology model.
-"""
+"""Stream state: the conditions a balance engine may record."""
 
 from __future__ import annotations
 

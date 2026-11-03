@@ -1,7 +1,4 @@
-"""Define an entry in a flowsheet's chemical species list.
-
-No property data is attached; a future balance backend can add it.
-"""
+"""Chemical species registered on a flowsheet."""
 
 from __future__ import annotations
 

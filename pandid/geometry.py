@@ -1,21 +1,12 @@
-"""Define placement intent, resolved geometry and routes.
-
-- :class:`Pin` is the author's placement intent, set only through
-  :meth:`pandid.units.Unit.pin` and never written by the engine.
-- :class:`Frame` is the resolved box the layout engine writes and the
-  router and renderer read. It is recomputed from the pin on every
-  layout, so layout is idempotent.
-- :class:`Route` is a stream's resolved path.
-"""
+"""Placement intent, resolved unit boxes and stream routes."""
 
 from dataclasses import dataclass, field
 
-# Other angles would tilt text and break orthogonal routing.
 _QUARTER_TURNS = (0, 90, 180, 270)
 
 
 def normalize_orientation(value) -> int:
-    """Validate an orientation as a clockwise quarter turn.
+    """Return an orientation as a clockwise quarter turn in degrees.
 
     Parameters
     ----------
@@ -30,7 +21,8 @@ def normalize_orientation(value) -> int:
     Raises
     ------
     ValueError
-        If the value is not a number or not a multiple of 90 degrees.
+        If ``float(value)`` fails or the rounded angle is not a quarter
+        turn.
     """
     try:
         deg = int(round(float(value))) % 360
@@ -46,15 +38,14 @@ def normalize_orientation(value) -> int:
 def normalize_mirror(value) -> tuple[bool, bool]:
     """Resolve a mirror setting to ``(mirror_x, mirror_y)``.
 
-    ``mirror_x`` flips left to right (swapping the E and W faces);
-    ``mirror_y`` flips top to bottom (swapping N and S).
+    ``"h"`` and ``"horizontal"`` mean ``"x"``, ``"v"`` and
+    ``"vertical"`` mean ``"y"``, ``"both"`` means ``"xy"``, and
+    ``"none"`` flips nothing.
 
     Parameters
     ----------
     value : bool, str or None
-        ``True`` for a left-right flip, or ``"x"``/``"h"``/``"horizontal"``,
-        ``"y"``/``"v"``/``"vertical"``, ``"xy"``/``"both"``; ``None``,
-        ``False``, ``""`` and ``"none"`` mean no flip.
+        ``True`` or ``"x"`` (left-right), ``"y"`` or ``"xy"``.
 
     Returns
     -------
@@ -64,7 +55,7 @@ def normalize_mirror(value) -> tuple[bool, bool]:
     Raises
     ------
     ValueError
-        If the string is not recognised.
+        If the value is not recognised.
     """
     if value is None or value is False:
         return (False, False)
@@ -86,12 +77,10 @@ def normalize_mirror(value) -> tuple[bool, bool]:
 
 @dataclass(frozen=True)
 class Pin:
-    """Placement intent for a unit.
+    """Placement intent for a unit, set through ``Unit.pin()``.
 
-    Any subset of fields may be set. Grid and pixel intent may be mixed; a
-    pixel coordinate wins on its axis. The object is frozen because
-    :attr:`pandid.units.Unit.pin_` returns a derived value; change a
-    placement with :meth:`pandid.units.Unit.pin`.
+    Any subset of fields may be set; a pixel coordinate wins over a grid
+    one on its axis.
 
     Attributes
     ----------
@@ -119,8 +108,6 @@ class Pin:
 class Frame:
     """Resolved geometry of a unit, written by the layout engine.
 
-    Callers read it and do not mutate it.
-
     Attributes
     ----------
     x, y : float
@@ -134,11 +121,10 @@ class Frame:
     mirrored, mirror_y : bool
         Left-right and top-bottom flips.
     label_pos : str or None
-        Tag position: ``"top"``, ``"bottom"``, ``"left"``, ``"right"`` or
+        ``"top"``, ``"bottom"``, ``"left"``, ``"right"`` or
         ``"center"``.
     port_faces : dict[str, str]
-        Faces automatic selection chose for movable ports. Kept on the
-        frame, not the unit, so each layout starts from author intent.
+        Faces automatic selection chose for movable ports.
     """
     x: float
     y: float
@@ -154,45 +140,52 @@ class Frame:
 
     @property
     def x_max(self) -> float:
-        """Return the right edge in pixels."""
+        """Return the right edge in pixels.
+
+        Returns
+        -------
+        float
+            ``x + w``.
+        """
         return self.x + self.w
 
     @property
     def y_max(self) -> float:
-        """Return the bottom edge in pixels."""
+        """Return the bottom edge in pixels.
+
+        Returns
+        -------
+        float
+            ``y + h``.
+        """
         return self.y + self.h
 
     @property
     def cx(self) -> float:
-        """Return the horizontal centre in pixels."""
+        """Return the horizontal centre in pixels.
+
+        Returns
+        -------
+        float
+            ``x + w / 2``.
+        """
         return self.x + self.w / 2
 
     @property
     def cy(self) -> float:
-        """Return the vertical centre in pixels."""
+        """Return the vertical centre in pixels.
+
+        Returns
+        -------
+        float
+            ``y + h / 2``.
+        """
         return self.y + self.h / 2
 
 
 @dataclass
 class _Slot:
-    """Mutable solver state for one unit during layout.
-
-    Seeded from the unit's :class:`Pin`; layout passes fill in the missing
-    fields, then write a :class:`Frame`. Not public API.
-
-    Attributes
-    ----------
-    w, h : float
-        Resolved size.
-    col, row : int or None
-        Grid rank.
-    x, y : float or None
-        Top-left corner in pixels.
-    orientation : float
-        Clockwise quarter turn in degrees.
-    mirrored, mirror_y : bool
-        Left-right and top-bottom flips.
-    """
+    """Mutable solver state for one unit during layout."""
     w: float
     h: float
     col: int | None = None
@@ -215,7 +208,7 @@ class Route:
     manual : bool
         Whether the author supplied the path through ``via()``.
     used_fallback : bool
-        Whether automatic search failed and the router used its fallback.
+        Whether the router used its fallback path.
     """
     waypoints: list[tuple[float, float]] = field(default_factory=list)
     manual: bool = False
