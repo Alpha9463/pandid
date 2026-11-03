@@ -3,6 +3,7 @@
 import math
 import os
 import warnings
+from collections.abc import Callable
 
 import pytest
 
@@ -863,6 +864,774 @@ def test_controller_output_routes_to_the_valve_actuator():
     assert end[1] < fv.frame.cy
     assert fv.frame.x < end[0] < fv.frame.x_max
     assert _hatch_marks(fs.to_svg()) >= 2  # pneumatic slash ticks drawn
+
+
+def _level_loop() -> tuple[Flowsheet, U.Instrument, U.Valve]:
+    """A drum's level transmitter wired to LIC-101, which is anchored to
+    nothing, and LV-101 on the drum's outlet."""
+    fs = Flowsheet("level")
+    feed = fs.add(U.Feed("Feed"))
+    drum = fs.add(U.Vessel("V-1"))
+    lv = fs.add(U.Valve("LV-101", variant="control"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, lv.inlet)
+    fs.connect(lv.outlet, prod.inlet)
+    lt = fs.add_instrument("LT", 101, sensing=drum)
+    lic = fs.add_instrument("LIC", 101)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    return fs, lic, lv
+
+
+def test_an_unanchored_controller_hangs_beyond_the_actuator_it_drives():
+    """A controller with no host stands on the valve's actuator axis, 100
+    out past the face the actuator is on, rather than wherever the middle
+    of its wiring happens to be clear."""
+    from pandid.portgeom import port_anchor
+
+    fs, lic, lv = _level_loop()
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
+    fs.route()
+
+    valve = _placed(lv)
+    ax, ay, face = port_anchor(lv, valve, "actuator")
+    cx, cy = _centre(lic)
+    beyond = {"N": valve.y - cy, "S": cy - valve.y_max, "W": valve.x - cx, "E": cx - valve.x_max}
+    assert beyond[face] > 0, f"LIC-101 is not on the {face} side of LV-101"
+    assert (cx if face in "NS" else cy) == pytest.approx(ax if face in "NS" else ay, abs=0.5)
+    assert math.dist((cx, cy), (ax, ay)) == pytest.approx(100.0, abs=1.0)
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
+    """The valve is where layout puts the balloon, not an anchor the author
+    gave: the spec reads back without one, and a second layout lands the
+    balloon on the same spot."""
+    from pandid.portgeom import port_anchor
+
+    fs, lic, lv = _level_loop()
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
+    spec = fs.to_dict()
+    fs.layout()
+    fs.route()
+
+    ax, ay, _ = port_anchor(lv, _placed(lv), "actuator")
+    first = _centre(lic)
+    assert math.dist(first, (ax, ay)) == pytest.approx(100.0, abs=1.0)
+    assert lic.host is None
+    assert fs.to_dict() == spec
+    fs.layout()
+    fs.route()
+    assert _centre(lic) == pytest.approx(first)
+    assert fs.to_dict() == spec
+
+
+def test_a_controller_driving_no_actuator_is_not_hung():
+    """LIC-101 drives the relay on the valve, not the valve, so it is
+    offered no spot off the actuator even with nothing in the way."""
+    from pandid.layout.control import _actuator_spot
+
+    fs, lic, lv = _level_loop()
+    ly = fs.add_instrument("LY", 101, near=lv, face="N")
+    fs.connect(lic.sig_out, ly.sig_in, kind="electric")
+    fs.connect(ly.sig_out, lv.actuator, kind="pneumatic")
+    fs.route()
+
+    assert _actuator_spot(fs, lic, 44.0, 44.0, []) is None
+
+
+def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
+    """No standoff off the actuator clears the valve, so the balloon is
+    placed from its wiring rather than over the valve."""
+    fs = Flowsheet("big")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add(U.Instrument("LIC", 1, width=600, height=600))
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert not _overlaps(lic, valve)
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_a_controller_is_not_hung_across_a_pipe():
+    """The supply pipe runs through the actuator's standoff, so the balloon
+    stands clear of it instead of on it."""
+    fs = Flowsheet("pipe")
+    feed = fs.add(U.Feed("Feed")).pin(port="outlet", x=100, y=100)
+    fv = fs.add(U.Valve("FV-1", variant="control")).pin(port="inlet", x=300, y=212.4)
+    prod = fs.add(U.Product("Product")).pin(port="inlet", x=600, y=212.4)
+    fs.connect(feed.outlet, fv.inlet).via([(400, 100), (400, 160), (275, 160), (275, 212.4)])
+    fs.connect(fv.outlet, prod.inlet)
+    fic = fs.add(U.Instrument("FIC", 1))
+    fs.connect(fic.sig_out, fv.actuator, kind="electric")
+    fs.route()
+
+    assert "route-crosses-unit" not in {i.code for i in fs.validate()}
+
+
+def test_a_controller_driving_two_actuators_reads_back_in_place():
+    """Port order is not in the spec, so a balloon driving two actuators
+    hangs off neither and reads back onto the same spot."""
+    fs = Flowsheet("split")
+    first = fs.add(U.Valve("FV-1", variant="control")).pin(x=100, y=300)
+    second = fs.add(U.Valve("FV-2", variant="control")).pin(x=500, y=300)
+    fic = fs.add(U.Instrument("FIC", 1))
+    third_out = fic.signal_port("sig_out_3")
+    fs.connect(fic.signal_port("sig_out_2"), second.actuator, kind="electric")
+    fs.connect(third_out, first.actuator, kind="electric")
+    fs.route()
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    rebuilt.route()
+
+    (twin,) = [u for u in rebuilt.units if u.name == "FIC-1"]
+    assert _centre(twin) == pytest.approx(_centre(fic))
+
+
+def test_a_controller_hangs_from_the_actuators_own_point():
+    """An angle valve's actuator is off the middle of its top face, and the
+    balloon stands square to the actuator, not to the middle of the face."""
+    from pandid.portgeom import port_anchor
+
+    fs = Flowsheet("angle")
+    valve = fs.add(U.Valve("V", variant="angle", width=198, height=198)).pin(x=300, y=300)
+    lic = fs.add(U.Instrument("LIC", 1))
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    ax, ay, face = port_anchor(valve, _placed(valve), "actuator")
+    assert face == "N"
+    assert abs(ax - _placed(valve).cx) > 1.0, "the actuator has to be off the face's middle"
+    assert _centre(lic) == pytest.approx((ax, ay - 100.0))
+
+
+def _hung_controller() -> tuple[Flowsheet, U.Instrument, U.Valve]:
+    """LIC-1, anchored to nothing, driving the actuator of a pinned valve."""
+    fs = Flowsheet("review")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    return fs, lic, valve
+
+
+def test_a_hung_controller_clears_a_balloon_pinned_after_it():
+    """PI-1 is pinned onto the actuator's standoff and placed after LIC-1,
+    which still has to stand clear of it."""
+    fs, lic, _ = _hung_controller()
+    pi = fs.add_instrument("PI", 1).pin(x=300, y=178)
+    fs.route()
+
+    assert not _overlaps(lic, pi)
+
+
+def test_a_hung_controller_clears_a_signal_line():
+    """A signal line drawn through the actuator's standoff is as much in the
+    way as a pipe."""
+    fs, _, _ = _hung_controller()
+    first = fs.add_instrument("XI", 1).pin(x=100, y=178)
+    second = fs.add_instrument("XI", 2).pin(x=600, y=178)
+    fs.connect(first.sig_out, second.sig_in, kind="electric").via([(200, 200), (500, 200)])
+    fs.route()
+
+    assert "route-crosses-unit" not in {i.code for i in fs.validate()}
+
+
+def test_a_hung_controller_clears_a_tap_line():
+    """PI-1 is added to a routed sheet and hung on the valve's top face, so
+    its tap line rises past the actuator; LIC-1 stays off that line."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs, lic, valve = _hung_controller()
+    fs.route()
+    fs.add_instrument("PI", 1, sensing=valve, face="N", offset=100)
+    fs.layout()
+    fs.route()
+
+    box = unit_box(lic, _placed(lic))
+    lines = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
+    assert lines, "PI-1 draws a tap line"
+    for route in lines:
+        assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+
+
+def test_a_hung_controller_keeps_its_own_tap_line() -> None:
+    """A balloon tapped on LIC-1 hangs from it; LIC-1 settles and the tap
+    stays on its north face."""
+    from pandid.portgeom import face_point
+
+    fs, lic, _ = _hung_controller()
+    pi = fs.add_instrument("PI", 1, sensing=lic, face="N", offset=100)
+    fs.route()
+
+    assert fs.route_converged
+    assert pi.tap == pytest.approx(face_point(lic, _placed(lic), "N")[0])
+
+
+def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
+    """PI-1 is pinned by grid rank over the valve; LIC-1 stands clear of it."""
+    fs = Flowsheet("grid")
+    valve = fs.add(U.Valve("V", variant="control")).pin(col=0, row=0)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.add_instrument("PI", 1).pin(col=0, row=-1)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "unit-overlap"] == []
+
+
+def test_a_controller_carrying_a_balloon_is_not_hung() -> None:
+    """PI-1 hangs south of LIC-1, so LIC-1 is placed from its wiring and
+    PI-1's tap line does not run through the valve."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs, lic, valve = _hung_controller()
+    fs.add_instrument("PI", 1, sensing=lic, face="S", offset=140)
+    fs.route()
+
+    box = unit_box(valve, _placed(valve))
+    ((inst, tap, centre),) = tap_lines(fs)
+    route = tap_route(inst, tap, centre)
+    assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+
+
+def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
+    """LIC-1's own line is routed by hand past the actuator, so LIC-1 is
+    placed from its wiring rather than on that line."""
+    fs, lic, valve = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    line.via([(100, 200), (500, 200)])
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_hung_controllers_line_clears_a_balloon_on_the_actuator() -> None:
+    """PI-1 hangs between the actuator and the spot above it, so LIC-1
+    stands where its own line to the actuator misses PI-1."""
+    fs, _, valve = _hung_controller()
+    fs.add_instrument("PI", 1, sensing=valve, face="N", offset=46)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_controller_with_a_balloon_on_its_line_is_not_hung() -> None:
+    """ZI-1 sits in LIC-1's signal line near the actuator, so LIC-1 is
+    placed from its wiring and ZI-1 stays off the valve."""
+    fs = Flowsheet("inline")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=270)
+    lic = fs.add_instrument("LIC", 1)
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.add_instrument("ZI", 1, sensing=signal, at=0.9, offset=0)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "unit-overlap"] == []
+
+
+def test_a_controller_wired_from_behind_its_valve_is_not_hung() -> None:
+    """LT-1 is on the far side of the valve from its actuator, so LIC-1 is
+    placed from its wiring and LT-1's line does not cross the valve."""
+    fs = Flowsheet("behind")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=100, y=350, orientation=180)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=100, y=300)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def _close_transmitter() -> Flowsheet:
+    """LT-1 is pinned close by a turned valve, its line leaving north."""
+    fs = Flowsheet("close")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=90)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=450, y=275)
+    lt.nozzle("sig_out", face="N")
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    return fs
+
+
+def _two_transmitters() -> Flowsheet:
+    """LIC-1 drives no actuator and reads two pinned transmitters."""
+    fs = Flowsheet("no-actuator")
+    fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lt1 = fs.add_instrument("LT", 1).pin(x=325, y=275)
+    lt2 = fs.add_instrument("LT", 2).pin(x=325, y=325)
+    fs.connect(lt1.sig_out, lic.sig_in, kind="electric")
+    fs.connect(lt2.sig_out, lic.signal_port("sig_in_2"), kind="electric")
+    return fs
+
+
+def _cascade() -> Flowsheet:
+    """LIC-1 and FIC-1 drive valves 50 apart and are wired to each other."""
+    fs = Flowsheet("cascade")
+    va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=300)
+    vb = fs.add(U.Valve("VB", variant="control")).pin(x=300, y=350)
+    lic = fs.add_instrument("LIC", 1)
+    fic = fs.add_instrument("FIC", 1)
+    fs.connect(lic.sig_out, va.actuator, kind="electric")
+    fs.connect(fic.sig_out, vb.actuator, kind="electric")
+    fs.connect(lic, fic, kind="electric")
+    return fs
+
+
+def _crossed_cascade() -> Flowsheet:
+    """Two turned valves, their controllers wired in cascade, and LT-1 and
+    PI-1 close by."""
+    fs = Flowsheet("fallback")
+    va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=500, orientation=270)
+    vb = fs.add(U.Valve("VB", variant="control")).pin(x=350, y=550, orientation=90)
+    lic = fs.add_instrument("LIC", 1)
+    fic = fs.add_instrument("FIC", 1)
+    fs.connect(lic.sig_out, va.actuator, kind="electric")
+    fs.connect(fic.sig_out, vb.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=450, y=500)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.connect(lic.signal_port("sig_out_2"), fic.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=vb, face="S", offset=60)
+    return fs
+
+
+def _tap_past_a_transmitter() -> Flowsheet:
+    """PI-1 hangs off a turned valve, near LT-1 which LIC-1 reads."""
+    fs = Flowsheet("tap")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=180)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=250, y=350)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=valve, face="S", offset=100, angle=45)
+    return fs
+
+
+def _drawn_by_hand() -> Flowsheet:
+    """LIC-1's line to the actuator is drawn by hand from its east face."""
+    fs = Flowsheet("manual")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="E")
+    fs.connect(lic.sig_out, valve.actuator, kind="electric").via(
+        [(284.25, 234.9), (312.2, 234.9), (312.2, 275)]
+    )
+    return fs
+
+
+def _balloon_on_a_signal_line() -> Flowsheet:
+    """PI-1 sits on a signal line between two pinned indicators near the
+    valve LIC-1 drives."""
+    fs = Flowsheet("signal balloon")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=300, y=350)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    x1 = fs.add_instrument("XI", 1).pin(x=200, y=300)
+    x2 = fs.add_instrument("XI", 2).pin(x=550, y=500)
+    line = fs.connect(x1.sig_out, x2.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=line, at=0.5, offset=60)
+    return fs
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        _balloon_on_a_signal_line,
+        _close_transmitter,
+        _two_transmitters,
+        _cascade,
+        _crossed_cascade,
+        _tap_past_a_transmitter,
+        _drawn_by_hand,
+    ],
+)
+def test_a_hung_controller_that_leaves_a_clash_is_placed_from_its_wiring(
+    build: Callable[[], Flowsheet],
+) -> None:
+    """Hanging that leaves a clash gives way to the placement from the
+    controller's wiring: no error, no line through a unit or on the
+    slant, and no tap line through a unit."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = build()
+    fs.route()
+
+    codes = ("route-crosses-unit", "route-diagonal")
+    assert [i.code for i in fs.validate() if i.severity == "error" or i.code in codes] == []
+    for inst, tap, centre in tap_lines(fs):
+        route = tap_route(inst, tap, centre)
+        for u in fs.units:
+            if u is inst or u is inst.host or u.frame is None:
+                continue
+            box = unit_box(u, u.frame)
+            assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+
+
+def test_a_router_that_freezes_its_routes_still_gets_the_fallback() -> None:
+    """A router that marks every route drawn by hand still has the sheet
+    laid out again when the hung controller leaves a slanted line."""
+    from pandid.routing import DefaultRouter
+
+    class FreezeRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for stream in fs.streams:
+                assert stream.route is not None
+                stream.route.manual = True
+
+    fs, _, _ = _hung_controller()
+    fs.route(FreezeRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_the_fallback_lays_out_with_an_engine_that_wraps_the_default() -> None:
+    """An engine that lays out through ``fs.layout()`` and then moves a
+    unit is the one the fallback runs again."""
+
+    class WrappedEngine:
+        def layout(self, fs: Flowsheet) -> None:
+            fs.layout()
+            assert marker.frame is not None
+            marker.frame.x = marker.frame.y = 1200
+
+    fs = _close_transmitter()
+    marker = fs.add(U.Vessel("marker"))
+    fs.layout(WrappedEngine())
+    fs.route()
+
+    assert marker.frame is not None
+    assert (marker.frame.x, marker.frame.y) == (1200, 1200)
+
+
+def test_a_router_that_refuses_the_hung_sheet_gets_the_fallback() -> None:
+    """A router that raises on a line through a unit routes the sheet laid
+    out without hanging instead."""
+    from pandid.routing import DefaultRouter
+
+    class CheckingRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for issue in fs.validate():
+                if issue.code == "route-crosses-unit":
+                    raise ValueError(issue.message)
+
+    fs = _close_transmitter()
+    fs.route(CheckingRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_the_fallback_keeps_an_engine_that_refines_the_layout() -> None:
+    """An engine that adjusts the frames already laid out is not run
+    again; the sheet as laid out is routed without hanging."""
+
+    class SnapToGrid:
+        def layout(self, fs: Flowsheet) -> None:
+            for u in fs.units:
+                assert u.frame is not None
+                u.frame.x = round(u.frame.x)
+
+    fs = _close_transmitter()
+    fs.layout()
+    fs.layout(SnapToGrid())
+    fs.route()
+
+    assert [i for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_a_hung_controller_keeps_out_of_a_tag_halo() -> None:
+    """P-101's tag sits left of it, over the actuator's standoff; LIC-1
+    stands clear of the tag's halo."""
+    from pandid.layout.control import _halos
+    from pandid.portgeom import unit_box
+
+    fs, lic, _ = _hung_controller()
+    fs.add(U.Pump("P-101", width=44, height=44, label_pos="left")).pin(x=350, y=178)
+    fs.route()
+
+    box = unit_box(lic, _placed(lic))
+    for left, top, right, bottom in _halos(fs):
+        assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
+
+
+def test_the_fallback_starts_from_the_settled_state_it_saved() -> None:
+    """A router that reads route_converged sees the value the sheet had
+    before the hung attempt."""
+    from pandid.routing import DefaultRouter
+
+    class CheckingRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            if any(i.code == "route-not-settled" for i in fs.validate()):
+                raise ValueError("unsettled")
+
+    fs, _, _ = _hung_controller()
+    fs.route(CheckingRouter())
+
+    assert fs.route_converged
+
+
+def test_a_line_drawn_by_hand_after_routing_is_routed_from_the_unhung_sheet() -> None:
+    """A second route() after via() starts from the sheet as routed
+    without hanging, so the hand-drawn line stays square."""
+    fs, lic, valve = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    fs.route()
+    line.via([(284.25, 234.9), (312.2, 234.9), (312.2, 275)])
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_hung_controllers_line_keeps_out_of_a_tag_halo() -> None:
+    """P-101's tag lies across the line up from the actuator, so the
+    controller is not hung and the line routes round the tag."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.layout.control import _halos
+
+    fs, lic, _ = _hung_controller()
+    fs.add(U.Vessel("P-101", width=80, height=20, label_pos="left")).pin(x=330, y=235)
+    fs.route()
+
+    line = lic.sig_out.stream
+    assert line is not None
+    points = stream_path(line)
+    for halo in _halos(fs):
+        assert not any(segment_crosses_box(a, b, halo) for a, b in zip(points, points[1:]))
+
+
+def test_a_hung_line_frozen_with_via_is_drawn_as_frozen() -> None:
+    """Freezing the drawn line with via() and routing again keeps the
+    controller where that line was drawn to."""
+    fs, lic, _ = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    fs.route()
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_custom_router_routes_the_sheet_without_hanging() -> None:
+    """A router other than the default one is given the sheet as main
+    lays it out; a route it freezes is not left behind."""
+    from pandid.routing import DefaultRouter
+
+    class FreezeStraightRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for stream in fs.streams:
+                assert stream.route is not None
+                if len({x for x, _ in stream.route.waypoints}) == 1:
+                    stream.route.manual = True
+
+    fs, _, _ = _hung_controller()
+    fs.route(FreezeStraightRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_balloon_moved_by_hanging_keeps_out_of_a_tag_halo() -> None:
+    """XI-1 follows the hung LIC-1; neither may land on P-101's tag."""
+    from pandid.layout.control import _halos
+    from pandid.portgeom import unit_box
+
+    fs, lic, _ = _hung_controller()
+    xi = fs.add_instrument("XI", 1)
+    fs.connect(lic.signal_port("sig_out_2"), xi.sig_in, kind="electric")
+    fs.add(U.Pump("P-101-ABCDEF", width=44, height=44, label_pos="left")).pin(x=350, y=103)
+    fs.route()
+
+    for unit in (lic, xi):
+        box = unit_box(unit, _placed(unit))
+        for left, top, right, bottom in _halos(fs):
+            assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
+
+
+def test_a_route_drawn_by_hand_and_then_cleared_stays_cleared() -> None:
+    """Clearing a hand-drawn route after a hung route() is not undone by
+    the next route()."""
+    fs, _, _ = _hung_controller()
+    feed = fs.add(U.Feed("Feed")).pin(x=100, y=700)
+    prod = fs.add(U.Product("Product")).pin(x=600, y=700)
+    pipe = fs.connect(feed.outlet, prod.inlet).via([(200, 700), (200, 600), (500, 600), (500, 700)])
+    fs.route()
+    pipe.route = None
+    fs.route()
+
+    assert "via" not in fs.to_dict()["streams"][-1]
+
+
+def test_a_copied_sheet_routes_from_its_own_unhung_state() -> None:
+    """A deep copy of a hung sheet restores its own frames, so a line then
+    drawn by hand stays square."""
+    import copy
+
+    fs, _, _ = _hung_controller()
+    fs.route()
+    fs = copy.deepcopy(fs)
+    fs.streams[0].via([(284.25, 234.9), (312.2, 234.9), (312.2, 275)])
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_balloon_added_after_hanging_is_laid_out_from_the_unhung_sheet() -> None:
+    """A balloon put on a hung controller's line after routing is laid out
+    and routed from the sheet as routed without hanging, so it settles
+    with its tap on the line."""
+    from pandid.layout.attach import stream_path
+
+    fs, lic, _ = _hung_controller()
+    signal = lic.sig_out.stream
+    assert signal is not None
+    fs.route()
+    pi = fs.add_instrument("PI", 1, sensing=signal, at=0.1, offset=30)
+    fs.route()
+
+    assert fs.route_converged
+    assert pi.tap is not None
+    x, y = pi.tap
+
+    def gap(a: tuple[float, float], b: tuple[float, float]) -> float:
+        near_x = min(max(x, min(a[0], b[0])), max(a[0], b[0]))
+        near_y = min(max(y, min(a[1], b[1])), max(a[1], b[1]))
+        return math.hypot(x - near_x, y - near_y)
+
+    points = stream_path(signal)
+    assert min(gap(a, b) for a, b in zip(points, points[1:])) < 0.5
+
+
+def test_hanging_adds_no_tap_line_through_a_tag_halo() -> None:
+    """PI-1's tap, on a balloon wired to the hung controller, runs through
+    no more tag halos than without hanging."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.layout.control import _halos
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs, lic, _ = _hung_controller()
+    xi = fs.add_instrument("XI", 1)
+    fs.connect(lic.signal_port("sig_out_2"), xi.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=xi, face="N", offset=100)
+    fs.add(U.Pump("P-101", width=44, height=44, label_pos="left")).pin(x=275, y=28)
+    fs.route()
+
+    for inst, tap, centre in tap_lines(fs):
+        route = tap_route(inst, tap, centre)
+        for halo in _halos(fs):
+            assert not any(segment_crosses_box(a, b, halo) for a, b in zip(route, route[1:]))
+
+
+def test_hanging_lays_no_line_along_another() -> None:
+    """A pipe drawn by hand runs up to the actuator; LIC-1 is not hung
+    where its line would lie along that pipe."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+
+    fs = Flowsheet("coincident")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="S")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=265)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=265)
+    pipe = fs.connect(feed.outlet, prod.inlet).via(
+        [(312.2, 265), (312.2, 275), (500, 275), (500, 265)]
+    )
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    sp, pp = stream_path(signal), stream_path(pipe)
+    assert not any(_shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(pp, pp[1:]))
+
+
+def test_hanging_lays_no_line_along_a_tap_line() -> None:
+    """PI-1's tap rises past the actuator; LIC-1 is not hung where its
+    line would lie along that tap."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("tap overlap")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="S")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=270)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=270)
+    pipe = fs.connect(feed.outlet, prod.inlet)
+    fs.add_instrument("PI", 1, sensing=pipe, at=0.4244, offset=140, angle=10)
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    sp = stream_path(signal)
+    for inst, tap, centre in tap_lines(fs):
+        tp = tap_route(inst, tap, centre)
+        assert not any(_shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(tp, tp[1:]))
+
+
+def test_hanging_lays_no_line_along_a_pipe_with_rounding_in_its_track() -> None:
+    """A hand-drawn pipe whose track carries rounding still counts as the
+    same track as the controller's line."""
+    from pandid.layout.attach import stream_path
+
+    def shared(
+        a: tuple[float, float],
+        b: tuple[float, float],
+        c: tuple[float, float],
+        d: tuple[float, float],
+    ) -> bool:
+        if max(abs(a[0] - b[0]), abs(c[0] - d[0]), abs(a[0] - c[0])) >= 1:
+            return False
+        low = max(min(a[1], b[1]), min(c[1], d[1]))
+        return min(max(a[1], b[1]), max(c[1], d[1])) - low > 1
+
+    fs = Flowsheet("overlap")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="S")
+    feed = fs.add(U.Feed("F")).pin(x=100, y=265)
+    prod = fs.add(U.Product("P")).pin(x=600, y=265)
+    pipe = fs.connect(feed.outlet, prod.inlet).via(
+        [(312.2, 265), (312.1 + 0.1, 275), (500, 275), (500, 265)]
+    )
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    sp, pp = stream_path(signal), stream_path(pipe)
+    assert not any(shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(pp, pp[1:]))
+
+
+def test_an_engine_that_routes_and_then_adjusts_keeps_its_adjustment() -> None:
+    """A layout engine that routes inside layout() and then moves a unit
+    keeps that move through the next route()."""
+    fs, _, _ = _hung_controller()
+    marker = fs.add(U.Vessel("marker"))
+
+    class Engine:
+        def layout(self, fs: Flowsheet) -> None:
+            fs.layout()
+            fs.route()
+            assert marker.frame is not None
+            marker.frame.x = marker.frame.y = 1200
+
+    fs.layout(Engine())
+    fs.route()
+
+    assert marker.frame is not None
+    assert (marker.frame.x, marker.frame.y) == (1200, 1200)
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
