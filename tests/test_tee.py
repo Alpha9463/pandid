@@ -279,35 +279,17 @@ def tee_on_a_pfd():
     return fs
 
 
-def test_a_run_is_not_tipped_where_it_divides():
-    """The defect: a filled arrowhead in the middle of an unbroken run.
-
-    An arrowhead says the material arrives here. A tee is not a here -- it is a
-    point on a line where the line divides, and the run carries straight on
-    past it -- so the segment ending at one is drawn without a head.
-    """
+def test_only_the_line_into_the_junction_loses_its_arrowhead():
+    """Check that every line keeps its arrowhead except the one ending at the tee."""
     fs = tee_on_a_pfd()
-    heads = heads_by_destination(fs)
-    assert heads[("TEE", "inlet")] is False
-
-
-def test_every_line_that_arrives_somewhere_keeps_its_arrowhead():
-    """Including the two the boundary flags terminate and the one the belt
-    catches, which is a symbol built to its own length rather than a fixed one.
-    """
-    fs = tee_on_a_pfd()
-    heads = heads_by_destination(fs)
-    assert heads[("HV-1", "inlet")] is True
-    assert heads[("Run", "inlet")] is True
-    assert heads[("BC-1", "feed")] is True
-    assert heads[("Cake", "inlet")] is True
-
-
-def test_the_sheet_loses_one_arrowhead_per_junction_and_no_others():
-    fs = tee_on_a_pfd()
-    into_a_junction = sum(1 for s in fs.streams if isinstance(s.dest.owner, units.Tee))
-    assert into_a_junction == 1
-    assert fs.to_svg().count("marker-end=") == len(fs.streams) - into_a_junction
+    assert heads_by_destination(fs) == {
+        ("HV-1", "inlet"): True,
+        ("TEE", "inlet"): False,
+        ("Run", "inlet"): True,
+        ("BC-1", "feed"): True,
+        ("Cake", "inlet"): True,
+    }
+    assert fs.to_svg().count("marker-end=") == len(fs.streams) - 1
 
 
 def test_a_leg_rejoining_the_run_is_not_tipped_either(cv303):
