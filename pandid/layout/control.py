@@ -289,13 +289,15 @@ def _straight_runs(points: list) -> list:
     Returns
     -------
     list[tuple[tuple[float, float], tuple[float, float]]]
-        Each run of segments on one track, to within 1, as its two ends.
+        Each run of segments on one track, to within 1, that keeps one
+        direction, as its two ends.
     """
     out: list = []
     for a, b in zip(points, points[1:]):
         if out:
             p, q = out[-1]
-            if any(abs(p[i] - q[i]) < 1 and abs(q[i] - b[i]) < 1 for i in (0, 1)):
+            if any(abs(p[i] - q[i]) < 1 and abs(q[i] - b[i]) < 1
+                   and (q[1 - i] - p[1 - i]) * (b[1 - i] - q[1 - i]) >= 0 for i in (0, 1)):
                 out[-1] = (p, b)
                 continue
         out.append((a, b))
