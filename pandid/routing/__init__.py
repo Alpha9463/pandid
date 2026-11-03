@@ -219,14 +219,7 @@ class DefaultRouter:
         Escape-node recovery option.
     """
 
-    def __init__(self, *, recover_exits: bool = True) -> None:
-        """Set the escape-node recovery option.
-
-        Parameters
-        ----------
-        recover_exits : bool, optional
-            Swap a blocked escape node for a reachable one on the stub.
-        """
+    def __init__(self, *, recover_exits: bool = True) -> None:  # numpydoc ignore=GL08
         self.recover_exits = recover_exits
 
     def route(self, fs: "Flowsheet") -> None:

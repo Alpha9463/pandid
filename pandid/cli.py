@@ -36,16 +36,7 @@ class _Failure(Exception):
         Exit code.
     """
 
-    def __init__(self, message: str, code: int = EXIT_FAILED) -> None:
-        """Store the message and the exit code.
-
-        Parameters
-        ----------
-        message : str
-            Error message.
-        code : int, default=EXIT_FAILED
-            Exit code.
-        """
+    def __init__(self, message: str, code: int = EXIT_FAILED) -> None:  # numpydoc ignore=GL08
         super().__init__(message)
         self.code = code
 

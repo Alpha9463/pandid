@@ -204,14 +204,7 @@ class VisibilityGraph:
         Clear neighbours of each node.
     """
 
-    def __init__(self, fs: "Flowsheet"):
-        """Build the lanes from the sheet's frames and port faces.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Sheet with unit frames and port faces.
-        """
+    def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
         from pandid.portgeom import port_anchor, tag_width, unit_box
 
