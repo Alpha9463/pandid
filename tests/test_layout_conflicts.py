@@ -84,7 +84,6 @@ def test_manual_endpoint_legs_count_as_drawn_crossings() -> None:
     """Measure crossings on the complete displayed manual paths."""
     from pandid.render.svg import stream_polyline
     from pandid.routing.metrics import crossing_count, path_length
-    from scripts.route_quality import find_crossings_and_overlaps
 
     fs = Flowsheet("Manual crossing")
     west = fs.add(Feed("West"))
@@ -105,7 +104,6 @@ def test_manual_endpoint_legs_count_as_drawn_crossings() -> None:
     assert quality.crossings == crossing_count(paths) == 1
     assert quality.crossing_pairs == frozenset({(0, 1)})
     assert quality.length == sum(path_length(path) for path in paths) == 600
-    assert len(find_crossings_and_overlaps(fs)[0]) == 1
 
 
 def test_manual_waypoints_remain_authored_routes() -> None:

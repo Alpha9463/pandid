@@ -120,13 +120,9 @@ rewriting shared branch history after review begins.
 Geometry separates *intent* (`Pin`, written by `pin()`) from *result* (`Frame`,
 written by the layout engine), which is what makes `layout()` idempotent.
 
-`scripts/vendor_symbols.py` generates the symbol library into
-`pandid/render/_vendored_symbols.py`, converting mxGraph stencil XML to SVG via
-`scripts/mxgraph_to_svg.py`. `scripts/symbol_sheet.py` renders a catalogue.
-`scripts/gen_devices.py` generates the equipment classes into `pandid/devices.py`
-from the registry those symbols are in. `scripts/route_bench.py` times `layout()`
-and `route()` over the examples, which is where a geometry change shows up as
-runtime.
+`scripts/route_bench.py` times `layout()` and `route()` over the examples, which
+is where a geometry change shows up as runtime. Section 1 covers the symbol
+scripts.
 
 ---
 
@@ -148,8 +144,7 @@ scripts/vendor_data/drawio/*.xml     mxGraph stencil XML, vendored from jgraph/d
         └── scripts/vendor_symbols.py      KIND_MAP: (kind, variant) -> stencil shape + ports
                     │
                     ▼
-        pandid/render/_vendored_symbols.py    generated; registered last, overriding
-                                           the hand-drawn defaults of the same kind
+        pandid/render/_vendored_symbols.py    generated
 ```
 
 To add or change an equipment symbol:
@@ -185,11 +180,10 @@ The shape's `aspect` comes across with it, as `Symbol.stretchable`. The stencil
 author has already answered whether the drawing may be reshaped to fill a box of
 another shape (`aspect="variable"`, mxGraph's default) or has to keep its
 proportions (`aspect="fixed"`), and that is the same question a unit given an
-explicit `width` and `height` asks. Every shape `KIND_MAP` names today is a
-variable one, because the 24 fixed shapes in the stencil set are draw.io's own
-instrument balloons, which `pandid` draws itself, so no generated symbol carries
-the keyword. Do not set it by hand on one: change the stencil mapping, or say so
-in `symbols.py` if the symbol is hand-drawn.
+explicit `width` and `height` asks. Every shape `KIND_MAP` names is a variable
+one, so no generated symbol carries the keyword. Do not set it by hand on one:
+change the stencil mapping, or say so in `symbols.py` if the symbol is
+hand-drawn.
 
 Only a handful of symbols are hand-drawn in `pandid/render/symbols.py`: the
 Feed/Product boundary flags, the variable-port Mixer and Splitter, the ISA-5.1
@@ -221,16 +215,14 @@ It is still stencil-derived and still Apache-2.0. Adapting one means:
 
 1. write the builder in `pandid/render/symbols.py`, with a comment naming the
    stencil file, the shape, and what was changed;
-2. record it in `ADAPTED_ELSEWHERE` in `scripts/vendor_symbols.py`, so the
-   mapping table stays the place provenance is looked up;
-3. name it and its file in `NOTICE` section 2. It is not an original primitive
+2. name it and its file in `NOTICE` section 2. It is not an original primitive
    and does not belong in the section 1 paragraph that lists those.
 
 The second member is not stencil-derived and is built to *fit* rather than to a
 size the author gives: the block flow diagram's box, whose connections are a
 per-face count only the unit knows, and whose box grows so a run of them keeps a
-legible pitch instead of being squeezed. It is an original primitive, so steps 2
-and 3 do not apply to it; `pandid.units.Block.symbol` is where its drawing comes
+legible pitch instead of being squeezed. It is an original primitive, so step 2
+does not apply to it; `pandid.units.Block.symbol` is where its drawing comes
 from, and `pandid.render.symbols.block_symbol` builds it.
 
 Do not reach for this to avoid vendoring. A symbol with a fixed size goes
