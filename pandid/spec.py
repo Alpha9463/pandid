@@ -2102,25 +2102,15 @@ def to_dict(fs: Flowsheet) -> dict:
     ValueError
         If the stream-label enclosure is unknown.
     """
-    if not isinstance(fs.stream_naming_scheme, str):
-        raise SpecError(
-            "a callable stream_naming_scheme cannot be written to a spec; use a format "
-            "string such as 'S{n}'"
-        )
-    if not isinstance(fs.line_numbering_scheme, str):
-        raise SpecError(
-            "a callable line_numbering_scheme cannot be written to a spec; use a format "
-            f"string such as {DEFAULT_LINE_NUMBERING_SCHEME!r}"
-        )
-    if not isinstance(fs.valve_station_tag_scheme, str):
-        raise SpecError(
-            "a callable valve_station_tag_scheme cannot be written to a spec; use a format "
-            f"string such as {DEFAULT_VALVE_STATION_TAG_SCHEME!r}"
-        )
     spec: dict[str, Any] = {"name": fs.name}
-    for key, default, _ in _SHEET_SETTINGS:
-        if getattr(fs, key) != default:
-            spec[key] = getattr(fs, key)
+    for key, default, read in _SHEET_SETTINGS:
+        value = getattr(fs, key)
+        # The schemes are the text settings; only a format string is written.
+        if read is _text and not isinstance(value, str):
+            raise SpecError(f"a callable {key} cannot be written to a spec; use a format "
+                            f"string such as {default!r}")
+        if value != default:
+            spec[key] = value
     if not fs.auto_faces:
         spec["auto_faces"] = False
     if fs.components:
