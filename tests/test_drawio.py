@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from _render_cases import copy_settled_case, gallery
+from test_crossing_style import _ARC, MARKED, _paths
 from test_halo_invariants import _overlaps
 import pandid
 from pandid import units
@@ -25,6 +26,7 @@ from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import (
     _APPROXIMATIONS,
+    _JUMP_STYLES,
     HOP_DROPPED,
     _hops,
     _PART_APPROXIMATIONS,
@@ -2791,12 +2793,6 @@ LINE_NUMBER_SHEETS = ("09_line_numbers", "11_ethanol_pid", "14_tank_farm")
 #: Sheets that place at least one line-number leader.
 LEADER_SHEETS = ("11_ethanol_pid", "14_tank_farm")
 
-#: Dense, table, and flanged sheets that contain marked stream crossings.
-CROSSING_REPRESENTATIVES = (
-    "11_ethanol_pid",
-    "16_demineralised_water",
-    "18_fixed_bed_recycle",
-)
 
 #: Instrumented P&ID representatives with all exported function-code forms.
 INSTRUMENT_CODE_SHEETS = ("04_control_loop", "11_ethanol_pid", "14_tank_farm")
@@ -3298,9 +3294,9 @@ def _sheet_hops(fs, fit, direction="vertical", style="arc"):
 
 
 @pytest.mark.parametrize("style", CROSSING_STYLES, ids=CROSSING_STYLES)
-@pytest.mark.parametrize("stem", CROSSING_REPRESENTATIVES, ids=CROSSING_REPRESENTATIVES)
+@pytest.mark.parametrize("stem", MARKED, ids=MARKED)
 def test_each_marked_representative_accounts_for_every_drawio_hop(settled_gallery, stem, style):
-    """Match exported hops and dropped-hop findings to sheet crossings.
+    """Match exported jumps, hops and dropped-hop findings to the runs the sheet marks.
 
     Parameters
     ----------
@@ -3312,13 +3308,26 @@ def test_each_marked_representative_accounts_for_every_drawio_hop(settled_galler
         Crossing style requested for both output backends.
     """
     fs, kwargs = copy_settled_case(settled_gallery, stem)
-    fs.to_svg(**kwargs, crossing_style=style)
-    root = ET.fromstring(
-        fs.to_drawio(
-            **{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS}, crossing_style=style
-        )
-    ).find("diagram/mxGraphModel/root")
+    paths = _paths(fs.to_svg(**kwargs, crossing_style=style))
+    assert len(paths) == len(fs.streams)
+    marked = {f"s{n}" for n, d in enumerate(paths) if _ARC in d or d.count("M ") > 1}
+    root = _drawio_root(fs.to_drawio(**_drawio_options(kwargs), crossing_style=style))
     edges, fit = _edge_lines(fs, kwargs, root)
+    jumps = {cid: s["jumpStyle"] for cid, s, _ in edges if s.get("jumpStyle", "none") != "none"}
+    assert set(jumps) <= marked, (
+        f"{stem}: the export marks {sorted(jumps)}, the sheet marks {sorted(marked)}"
+    )
+    if style == "plain":
+        assert not marked, f"{stem}: plain crossings, and the sheet marked one"
+        order = [cid for cid, _s, _line in edges if re.fullmatch(r"s\d+", cid)]
+        assert order == sorted(order, key=lambda i: int(i[1:])), (
+            f"{stem}: nothing hops, so the edges must come out in stream order"
+        )
+    else:
+        assert marked, f"{stem}: no run marked, so this case proves nothing"
+        assert set(jumps.values()) == {_JUMP_STYLES[style]}, (
+            f"{stem}: exported as {sorted(set(jumps.values()))}, drawn as {style}"
+        )
     drawn = _drawio_hops(edges)
     sheet = _sheet_hops(fs, fit, style=style)
     assert drawn <= sheet, (

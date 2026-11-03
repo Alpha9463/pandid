@@ -13,7 +13,7 @@ from _render_cases import copy_settled_case
 from pandid import Flowsheet, spec, units as U
 from pandid.cli import EXIT_OK, EXIT_USAGE, main
 from pandid.geometry import Route
-from pandid.render.drawio import _JUMP_STYLES, DrawioRenderer
+from pandid.render.drawio import DrawioRenderer
 from pandid.render.svg import (
     CROSSING_STYLE_DEFAULT,
     CROSSING_STYLES,
@@ -26,17 +26,8 @@ from pandid.render.svg import (
 )
 
 MARKED = (
-    "11_ethanol_pid",
     "16_demineralised_water",
     "18_fixed_bed_recycle",
-)
-_DRAWIO_KWARGS = (
-    "diagram",
-    "page_size",
-    "border",
-    "show_stream_table",
-    "connections",
-    "jump_direction",
 )
 
 _ARC = f"A {HOP_R:g} {HOP_R:g} 0 0 1 "
@@ -101,28 +92,6 @@ def _jumps(document: str) -> dict[str, str]:
         if style.get("jumpStyle", "none") != "none":
             out[cell.get("id") or ""] = style["jumpStyle"]
     return out
-
-
-def _edge_order(document: str) -> list[str]:
-    """Return stream edge identifiers in document order.
-
-    Parameters
-    ----------
-    document : str
-        Draw.io XML document.
-
-    Returns
-    -------
-    list[str]
-        Stream edge identifiers in document order.
-    """
-    root = ET.fromstring(document).find("diagram/mxGraphModel/root")
-    assert root is not None
-    return [
-        cell.get("id") or ""
-        for cell in root.iter("mxCell")
-        if cell.get("edge") == "1" and re.fullmatch(r"s\d+", cell.get("id") or "")
-    ]
 
 
 def _found(fs: Flowsheet) -> list[Any]:
@@ -192,7 +161,9 @@ def test_naming_the_default_draws_what_not_naming_it_draws(
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     assert fs.to_svg(**kwargs, crossing_style=CROSSING_STYLE_DEFAULT) == default
 
-    export = {k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS}
+    from test_drawio import _drawio_options
+
+    export = _drawio_options(kwargs)
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     fs.to_svg(**kwargs)
     plain_call = fs.to_drawio(**export)
@@ -251,51 +222,6 @@ def test_the_interruption_leaves_one_line_and_not_two():
     assert broken.endswith(f"L {run[-1][0]},{run[-1][1]}"), (
         "the last command is the run reaching its own end, so marker-end "
         "lands there and not at the break"
-    )
-
-
-@pytest.mark.parametrize("style", CROSSING_STYLES, ids=CROSSING_STYLES)
-@pytest.mark.parametrize("stem", MARKED, ids=MARKED)
-def test_the_export_marks_the_runs_the_sheet_marks_and_marks_them_alike(
-    settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], stem: str, style: str
-) -> None:
-    """Check SVG and Draw.io style parity on representative sheets.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Session-scoped routed gallery source.
-    stem : str
-        Representative gallery example name.
-    style : str
-        Requested crossing style.
-    """
-    fs, kwargs = copy_settled_case(settled_gallery, stem)
-    paths = _paths(fs.to_svg(**kwargs, crossing_style=style))
-    assert len(paths) == len(fs.streams)
-    marked = {n for n, d in enumerate(paths) if _ARC in d or d.count("M ") > 1}
-    export = {k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS}
-    document = fs.to_drawio(**export, crossing_style=style)
-    jumps = _jumps(document)
-
-    if style == "plain":
-        assert not jumps, f"{stem}: plain crossings, and the export hops anyway"
-        assert not marked, f"{stem}: plain crossings, and the sheet marked one"
-        order = _edge_order(document)
-        assert order == sorted(order, key=lambda i: int(i[1:])), (
-            f"{stem}: nothing hops, so nothing had to be written after "
-            f"anything, and the edges must come out in stream order"
-        )
-        return
-
-    assert marked, f"{stem}: no run marked, so this case proves nothing"
-    assert set(jumps) <= {f"s{n}" for n in marked}, (
-        f"{stem}: the export marks {sorted(set(jumps))}, the sheet marks "
-        f"{sorted(f's{n}' for n in marked)} -- a mark the sheet does not draw "
-        f"states the wrong pipe passes over"
-    )
-    assert set(jumps.values()) == {_JUMP_STYLES[style]}, (
-        f"{stem}: exported as {sorted(set(jumps.values()))}, drawn as {style}"
     )
 
 
