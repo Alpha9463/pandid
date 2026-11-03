@@ -30,7 +30,7 @@ import pytest
 
 from pandid import Flowsheet, spec, units
 from pandid.portgeom import port_point, resolve_size
-from pandid.render.symbols import Symbol, expander
+from pandid.render.symbols import Overlay, Symbol, expander
 from pandid.render.symbols import default_registry as registry
 
 #: Every body a reducer is drawn with.
@@ -232,13 +232,31 @@ def test_the_turned_drawing_mirrors_its_bands_and_keeps_every_other_field() -> N
     """A band is a promise about the ink, so it turns with the ink (#508).
     Every field the mirror does not change is carried, so a field ``Symbol``
     grows later cannot be dropped silently."""
-    banded = replace(registry.get("reducer", "default"), bands={"N": (2.5, 5.0), "W": (4.0, 8.0)})
+    banded = replace(
+        registry.get("reducer", "default"),
+        bands={"N": (2.5, 5.0), "W": (4.0, 8.0)},
+        overlays=(Overlay(26, "bracket", 0.1, 0.2, 0.2, 0.1),),
+    )
     turned = expander(banded)
     assert turned.bands == {"N": (7.5, 10.0), "E": (4.0, 8.0)}
-    mirrored = {"svg", "ports", "port_faces", "bands", "id_suffix", "drawio_flip_h"}
+    (part,) = turned.overlays
+    assert (part.x, part.mirror) == (pytest.approx(0.7), True)
+    mirrored = {"svg", "ports", "port_faces", "bands", "overlays", "id_suffix", "drawio_flip_h"}
     for f in fields(Symbol):
         if f.name not in mirrored:
             assert getattr(turned, f.name) == getattr(banded, f.name), f.name
+
+
+def test_a_band_to_the_edge_of_an_uneven_width_still_fits_when_turned() -> None:
+    """The mirrored band is measured from the same width, so it stays on the face."""
+    sym = Symbol(
+        svg='<g id="sym_odd"><path d="M 0 0 L 20 10"/></g>',
+        width=20.00006,
+        height=10.0,
+        ports={"inlet": (0.0, 5.0), "outlet": (20.00006, 5.0)},
+        bands={"N": (0.0, 10.0)},
+    )
+    assert expander(sym).bands == {"N": (pytest.approx(10.00006), 20.00006)}
 
 
 def test_the_turned_drawing_is_built_once_and_shared():

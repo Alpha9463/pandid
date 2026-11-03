@@ -1522,9 +1522,9 @@ _GROUP = re.compile(r"\A(<g\b[^>]*>)(.*)(</g>)\Z", re.DOTALL)
 def expander(sym: Symbol) -> Symbol:
     """Return ``sym`` turned end for end, as an expander.
 
-    The artwork and bands are mirrored left to right and ``inlet`` and
-    ``outlet`` trade placements. The id gains ``_exp``. Every other
-    field is kept.
+    The artwork, bands and overlays are mirrored left to right and
+    ``inlet`` and ``outlet`` trade placements. The id gains ``_exp``.
+    Every other field is kept.
 
     Parameters
     ----------
@@ -1586,8 +1586,10 @@ def expander(sym: Symbol) -> Symbol:
                           for face, xy in sym.port_faces[old].items()}
                     for new, old in swap.items()},
         bands={_FLIPPED_FACE[face]: span if face in ("W", "E")
-               else (round(sym.width - span[1], 4), round(sym.width - span[0], 4))
+               else (sym.width - span[1], sym.width - span[0])
                for face, span in sym.bands.items()},
+        overlays=tuple(replace(o, x=1 - o.x - o.w, mirror=not o.mirror)
+                       for o in sym.overlays),
         id_suffix=sym.id_suffix + "_exp",
         # Carry the flip to the draw.io export.
         drawio_flip_h=not sym.drawio_flip_h,
