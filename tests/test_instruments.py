@@ -2444,6 +2444,60 @@ def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
     assert _flaws(fs)["tap-through-unit"] == 0
 
 
+def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():
+    """Keep the first drawing when the keep-off attempt does not settle either.
+
+    Returns
+    -------
+    None
+        TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("disconnected tap")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=400)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=400)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.4, offset=70, angle=0)
+    fs.add_instrument("TIC", 1, near=tt, face="E", offset=35, angle=135)
+    fs.route()
+
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)
+
+
+def test_an_unsettled_hang_is_not_kept():
+    """Keep the unhung drawing when hanging the controller does not settle.
+
+    Returns
+    -------
+    None
+        TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("unsettled hang")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=35, angle=30)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=500, orientation=180)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)
+
+
 def test_a_run_that_doubles_back_is_two_runs():
     """Split a straight run where it reverses along its track.
 

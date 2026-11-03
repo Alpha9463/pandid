@@ -2040,8 +2040,8 @@ class Flowsheet:
         :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES` passes;
         ``route_converged`` records whether it settled. The sheet is then
         placed again with balloons hung from balloons kept off the line
-        their chain taps, and that is kept only if no finding or clash
-        grows.
+        their chain taps, and that is kept only if it settles and no finding
+        or clash grows.
 
         Parameters
         ----------
@@ -2077,7 +2077,8 @@ class Flowsheet:
         router.route(self)
         place()
         # Hang each controller it can off its actuator, and keep that only
-        # if the sheet stays clean. The check assumes the default router.
+        # if the sheet settles and stays clean. The check assumes the default
+        # router.
         attempt = type(router) is DefaultRouter and not self._laying_out
         if attempt and any(_hangable(self, u) for u in self.units):
             unhung = self._geometry()
@@ -2085,7 +2086,8 @@ class Flowsheet:
             self._may_hang, self._hung = True, set()
             try:
                 place()
-                clash = any(n > before[k] for k, n in _flaws(self).items())
+                clash = not self.route_converged or any(
+                    n > before[k] for k, n in _flaws(self).items())
             except Exception:
                 clash = True
             finally:
@@ -2095,21 +2097,22 @@ class Flowsheet:
             else:
                 self._unhung = unhung
         # Then keep each chained balloon off its tapped line, hanging as
-        # above, and keep that only if the sheet stays as clean again.
+        # above, and keep that only if the sheet settles and stays as clean.
         if attempt and any(_chained(u) for u in self.units):
-            settled = self._geometry()
+            prior = self._geometry()
             before = _flaws(self)
             self._may_hang = self._unhung is not None
             self._keep_clear, self._kept_clear = True, False
             try:
                 place()
-                clash = any(n > before[k] for k, n in _flaws(self).items())
+                clash = not self.route_converged or any(
+                    n > before[k] for k, n in _flaws(self).items())
             except Exception:
                 clash = True
             finally:
                 self._may_hang = self._keep_clear = False
             if clash or not self._kept_clear:
-                self._put_geometry(settled, keep_manual=False)
+                self._put_geometry(prior, keep_manual=False)
         self._route_stale = False
 
     def _geometry(self) -> tuple:
