@@ -1,15 +1,8 @@
-"""Define the unit classes: equipment, flags, fittings and instruments.
+"""Unit classes: equipment, flags, fittings and instruments.
 
-Each class declares its ports in ``PORTS`` as ``(name, direction, role)``
-tuples, or adds them in ``__init__`` when the caller chooses how many.
-Ports are reachable as ``unit.ports["name"]``, ``unit.port("name")`` and
-as attributes (``pump.suction``), which each class annotates for type
-checkers. A family whose size the caller chooses is also a tuple in
-declaration order: ``mixer.inlets``, ``splitter.outlets``,
-``block.inlets``/``block.outlets`` and ``column.feeds``/``reactor.feeds``.
-
-This module is the public ``units`` namespace (``from pandid import
-units``).
+Ports are ``(name, direction, role)`` tuples in ``PORTS`` or added in
+``__init__``, reachable as ``unit.ports["name"]``, ``unit.port("name")``
+or attributes. A port family is also a tuple, such as ``mixer.inlets``.
 """
 
 from __future__ import annotations
@@ -81,9 +74,8 @@ __all__ = [
     "Block",
 ]
 
-# Port roles. Signal ports carry signal lines and all others carry fluid;
-# Flowsheet.connect enforces this. "draw" is a column side draw, like
-# "feed" in that it states no phase.
+# Port roles. "signal" ports carry signal lines, the rest carry fluid;
+# "draw" is a column side draw.
 _VALID_ROLES = {
     "process",
     "feed",
@@ -99,32 +91,22 @@ _VALID_ROLES = {
 # label_pos side names mapped to compass faces.
 _FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
 
-# Sentinel for pin() arguments whose falsy values are meaningful
-# (``orientation=0`` and ``mirrored=False`` reset the transform).
+# Sentinel for a pin() argument left unchanged.
 _UNCHANGED: Any = object()
 
-#: Sentinel for "not given", distinct from ``None``. ``Reactor()`` gets
-#: its default agitator; ``Reactor(agitator=None)`` gets none. Also used
-#: by :meth:`Unit.pin`'s ``port``.
+#: Sentinel for "not given", distinct from ``None``.
 _UNSTATED: Any = object()
 
 # Lets chainable methods return the subclass they were called on.
 _UnitT = TypeVar("_UnitT", bound="Unit")
 
 # Attributes layout and routing read. Assigning one marks the sheet's
-# cached geometry stale (see Unit.__setattr__), which also catches plain
-# assignments such as ``pump.width = 90``. Private names back properties
-# that change the resolved symbol (Block width, Conveyor length and
-# diameter, Reducer large_end, normal_position). ``name`` is included
-# because the drawn tag is a routing obstacle. Lettering the renderer lays
-# out afresh (description, reference, quadrants) and the engine's own
-# output (frame, _slot) are excluded.
+# cached geometry stale (see Unit.__setattr__).
 _LAYOUT_INPUTS = frozenset(
     {
         "name",
         "variant",
         "label_pos",
-        # Pin intent; ``pin_`` is derived from these and is not listed.
         "_pin",
         "_pin_ports",
         "width",
@@ -140,35 +122,22 @@ _LAYOUT_INPUTS = frozenset(
 
 
 class _NoSuchAttribute(AttributeError):
-    """A unit has no such attribute or port; worded only when shown.
-
-    Layout and rendering ask every unit for attributes only some classes
-    carry, such as ``large_end``, with ``getattr(unit, name, default)``, and
-    discard the error. Listing the ports for each of those messages was a
-    measurable part of a large render, so :meth:`__str__` writes it.
-
-    Parameters
-    ----------
-    cls_name, where, name : str
-        Class name, unit tag and the attribute asked for.
-    ports : Mapping[str, Port]
-        The unit's ports, listed in the message.
-    """
+    """Error for a missing attribute or port, worded only when shown."""
 
     def __init__(self, cls_name: str, where: str, name: str,
                  ports: "Mapping[str, Port]") -> None:
-        """Keep what the message needs, without writing it."""
+        """Store the parts of the message."""
         super().__init__(name)
         self._parts = (cls_name, where, name, ports)
 
     def __str__(self) -> str:
-        """Return the message, naming the ports the unit does have."""
+        """Return the message, listing the unit's ports."""
         cls_name, where, name, ports = self._parts
         return (f"{cls_name} {where!r} has no attribute or port {name!r}; "
                 f"available ports: {sorted(ports)}")
 
 
-#: Layout reads nozzle faces, so the old placement hints place nothing.
+#: Deprecation of the PLACES and LAYOUT_CONFIDENCE hints.
 _PLACEMENT_HINTS = Deprecation(
     what="PLACES or LAYOUT_CONFIDENCE on a Unit subclass",
     instead="unit.nozzle(port, face) or unit.pin(orientation=..., mirrored=...)",
@@ -185,48 +154,36 @@ class Unit:
     name : str
         Tag, unique on the sheet except for repeatable symbols.
     variant : str, default="default"
-        Drawing variant; must be in :attr:`VARIANTS` when that is set.
+        Drawing variant, one of :attr:`VARIANTS` when that is set.
     width, height : float or None, optional
-        Explicit box size, positive and finite; ``None`` uses the symbol's.
+        Box size, positive and finite; ``None`` uses the symbol's.
     label_pos : str or None, optional
-        Tag position: ``"top"``, ``"bottom"``, ``"left"`` or ``"right"``.
+        ``"top"``, ``"bottom"``, ``"left"`` or ``"right"``.
     description : str, default=""
         Text for the equipment list.
     reference : str, default=""
-        Off-page drawing reference; only for a Feed or Product.
+        Off-page drawing reference; Feed and Product only.
 
     Attributes
     ----------
     kind : str
-        Equipment type: the symbol registry key and the spec's ``kind``.
+        Equipment type and symbol registry key.
     PORTS : list[tuple[str, str, str]]
-        Declared ports as ``(name, direction, role)``. The nearest class in
-        the hierarchy that declares it supplies the whole list.
+        Declared ports as ``(name, direction, role)``.
     VARIANTS : tuple[str, ...]
-        Variants this class draws, class-local names first. Empty means any
-        registered variant of :attr:`kind`. A class that lists variants but
-        not ``"default"`` cannot be built without one.
+        Variants this class draws; empty means any of :attr:`kind`.
     VARIANT_ALIASES : dict[str, str]
-        Class-local variant name to registry name. ``variant`` stores the
-        registry name, so list both in :attr:`VARIANTS` if the class-local
-        name must survive a spec round trip.
+        Class-local variant name to registry name.
     PORT_ANCHORS : dict[str, str]
-        Port name to the name the symbol anchors it under, for a renamed
-        nozzle. Read through :meth:`_symbol_anchor`.
+        Port name to the name the symbol anchors it under.
     LAYOUT_CONFIDENCE, PLACES
-        Deprecated, and read by nothing: layout places a unit's peers by
-        its nozzle faces. A subclass that sets either is reported.
+        Deprecated; a subclass that sets either is reported.
     ONE_NOZZLE_MANY_RUNS : bool
-        Whether several streams may meet at one point on purpose. Only
-        boundary flags set it; elsewhere coincident ports are an error.
+        Whether several streams may meet at one port.
     COMPOSITION : dict[str, Any]
-        Composition keywords (ISO 10628-2 supplementary parts) and their
-        defaults. The constructor and both directions of :mod:`pandid.spec`
-        read this one declaration. :data:`_UNSTATED` means the default
-        depends on the body; see :meth:`composition_defaults`.
+        Composition keywords and their defaults.
     COMPOSITION_VARIANT : str
-        Composition keyword this class folds into :attr:`variant`, so a
-        serializer writes the keyword rather than the variant.
+        Composition keyword this class folds into :attr:`variant`.
     name : str
         Tag.
     variant : str
@@ -236,22 +193,21 @@ class Unit:
     flowsheet : Flowsheet or None
         Sheet the unit is on.
     frame : Frame or None
-        Resolved geometry, written only by layout.
+        Resolved geometry, set by layout.
     balloon : Instrument or None
-        Balloon carrying this unit's tag, set by
-        :meth:`~pandid.flowsheet.Flowsheet.add_balloon`.
+        Balloon carrying this unit's tag.
 
     Raises
     ------
     ValueError
-        If the name is empty, the variant is not drawn by this class, a size
-        is not positive and finite, or ``reference`` is given on equipment.
+        If the name is empty, the variant is not drawn by this class, a
+        size is not positive and finite, or ``reference`` is given on
+        equipment.
     """
 
     kind: str = "unit"
     PORTS: list[tuple[str, str, str]] = []
-    # Ports that depend on the variant, which a subclass's __init__ adds
-    # through _variant_ports: _VARIANT_PORTS by variant, else _DEFAULT_PORTS.
+    # Variant-dependent ports, added through _variant_ports.
     _DEFAULT_PORTS: list[tuple[str, str, str]] = []
     _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
 
@@ -266,37 +222,22 @@ class Unit:
 
     ONE_NOZZLE_MANY_RUNS = False
 
-    # Attributes read once in __init__ to build ports and artwork (such as a
-    # column's internals or a reactor's agitator); __setattr__ refuses a
-    # later assignment.
+    # Attributes __setattr__ refuses to reassign after __init__.
     _FIXED_AT_CONSTRUCTION: frozenset[str] = frozenset()
 
     COMPOSITION: dict[str, Any] = {}
 
     COMPOSITION_VARIANT: str = ""
 
-    # Layout solver state, seeded by pandid.layout._seed_slots; absent until
-    # the first layout.
+    # Layout solver state, set by the first layout.
     _slot: _Slot | None
 
-    # Backing store for pin_. The class default keeps a unit mid-__init__
-    # reading as unpinned.
+    # Backing store for pin_.
     _pin: "Pin | None" = None
-
-    # Subclasses annotate their ports (``suction: Port``) so type checkers
-    # see what _add_port creates; tests/test_port_annotations.py keeps the
-    # annotations and PORTS in step.
 
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
-        """Return the ports this class declares.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            :attr:`PORTS` from the nearest class in the MRO that declares
-            it.
-        """
+        """Return PORTS from the nearest class that declares it."""
         for klass in cls.__mro__:
             if "PORTS" in klass.__dict__:
                 return list(klass.__dict__["PORTS"])
@@ -304,21 +245,7 @@ class Unit:
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return the ports a variant adds.
-
-        A subclass that declares :attr:`PORTS` gets none, so a per-variant
-        subclass does not add its ports twice.
-
-        Parameters
-        ----------
-        variant : str
-            Resolved variant.
-
-        Returns
-        -------
-        list[tuple[str, str, str]]
-            Port specs.
-        """
+        """Return a variant's ports, none if this class sets PORTS."""
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
 
     @classmethod
@@ -326,11 +253,6 @@ class Unit:
         cls, variant: str, stated: Mapping[str, Any] | None = None
     ) -> dict[str, Any]:
         """Return each composition keyword's default for a variant.
-
-        The constructor and the spec serializer both ask here, so the rule
-        is written once. A class whose defaults depend on the body or on
-        other keywords overrides this; for example, a reactor with internals
-        defaults to no agitator.
 
         Parameters
         ----------
@@ -342,20 +264,13 @@ class Unit:
         Returns
         -------
         dict[str, Any]
-            Default per keyword, never :data:`_UNSTATED`.
+            Resolved default per keyword.
         """
         return dict(cls.COMPOSITION)
 
     @classmethod
     def _generic_class(cls) -> type["Unit"] | None:
-        """Return the ancestor that draws every variant of this class's kind.
-
-        Returns
-        -------
-        type[Unit] or None
-            Nearest ancestor with an empty :attr:`VARIANTS` and the same
-            :attr:`kind`, named in errors as the generic form.
-        """
+        """Return the ancestor that draws every variant of this kind."""
         for klass in cls.__mro__:
             if issubclass(klass, Unit) and not klass.VARIANTS and klass.kind == cls.kind:
                 return klass
@@ -363,23 +278,7 @@ class Unit:
 
     @classmethod
     def _unknown_variant(cls, name: str, variant: str) -> ValueError:
-        """Build the error for a variant this class does not draw.
-
-        Returned rather than raised, so the traceback starts at the
-        constructor. The message names the generic class that does draw it.
-
-        Parameters
-        ----------
-        name : str
-            Unit name.
-        variant : str
-            Requested variant.
-
-        Returns
-        -------
-        ValueError
-            The error to raise.
-        """
+        """Return the error for a variant this class does not draw."""
         suggestion = suggest(variant, cls.VARIANTS)
         generic = cls._generic_class()
         escape = (
@@ -430,8 +329,7 @@ class Unit:
         self.ports: dict[str, Port] = {}
         self._new_line_number = False
         self._pin: Pin | None = None  # intent; set only via pin()
-        # Whether pin() was given an orientation or a mirror, so a stated 0 or
-        # False is not "unstated".
+        # Whether pin() was given an orientation or a mirror.
         self._turn_stated = False
         self._mirror_stated = False
         # Axes pinned to a port rather than the corner: {"y": "inlet"}.
@@ -444,43 +342,16 @@ class Unit:
             _PLACEMENT_HINTS.warn(self, where=name)
 
     def _invalidate_layout(self) -> None:
-        """Mark the sheet's cached geometry stale, if the unit is on one.
-
-        A unit not yet on a sheet needs nothing: adding it marks the sheet
-        stale. Uses ``getattr`` because :meth:`__setattr__` calls this
-        before ``flowsheet`` exists.
-        """
+        """Mark the sheet's cached geometry stale."""
         fs = getattr(self, "flowsheet", None)
         if fs is not None:
             fs._invalidate_layout()
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Set an attribute, invalidating layout for one layout reads.
-
-        Attributes in :data:`_LAYOUT_INPUTS` mark the sheet stale. An
-        attribute fixed at construction can be set once and is refused
-        afterwards.
-
-        Parameters
-        ----------
-        name : str
-            Attribute name.
-        value : Any
-            New value.
-
-        Raises
-        ------
-        AttributeError
-            If the attribute is fixed at construction and already set.
-        TypeError
-            If ``width`` or ``height`` is not a number or ``None``.
-        ValueError
-            If ``width`` or ``height`` is not positive and finite.
-        """
+        """Set an attribute, marking layout stale for a layout input."""
         if name in ("width", "height") and value is not None:
             where = self.__dict__.get("name", "?")
             check_real(value, f"{where}: {name}")
-            # SVG draws nothing for a zero or negative size, so refuse it here.
             if value <= 0:
                 raise ValueError(
                     f"{where}: {name}={value!r} is not a usable size; a symbol is "
@@ -501,83 +372,29 @@ class Unit:
 
     @property
     def tag(self) -> str:
-        """Return the tag drawn beside this unit.
-
-        For equipment this is the name. It is empty once a balloon carries
-        the tag. Repeatable symbols override it; see :attr:`Instrument.tag`
-        and :attr:`_Boundary.tag`.
-
-        Returns
-        -------
-        str
-            Drawn tag.
-        """
+        """Return the drawn tag; empty once a balloon carries it."""
         return "" if self.balloon is not None else self.name
 
     def repeats(self, other: "Unit") -> bool:
-        """Return whether this unit is another drawing of ``other``.
-
-        ``False`` for equipment. Overridden by repeatable symbols
-        (:meth:`Instrument.repeats`, :meth:`_Boundary.repeats`) and by
-        :meth:`Tee.repeats`.
-
-        Parameters
-        ----------
-        other : Unit
-            Unit with the same name.
-
-        Returns
-        -------
-        bool
-            Whether the two may share a tag.
-        """
+        """Return whether this unit is another drawing of ``other``."""
         return False
 
     @property
     def new_line_number(self) -> bool:
-        """Return whether the line number breaks at this inline unit.
-
-        On a valve, reducer, fitting or tee, ``True`` starts a new stream or
-        line number after the unit, such as at a piping spec break. Setting
-        it renumbers the sheet.
-
-        Returns
-        -------
-        bool
-            Current setting.
-        """
+        """Return whether a new line number starts after this unit."""
         return self._new_line_number
 
     @new_line_number.setter
     def new_line_number(self, value: bool) -> None:
-        """Set the line-number break and renumber the sheet.
-
-        Parameters
-        ----------
-        value : bool
-            New setting.
-        """
+        """Set the line-number break and renumber the sheet."""
         self._new_line_number = value
         if self.flowsheet is not None:
-            # New names change label sizes, so layout is stale too.
             self.flowsheet._invalidate_layout()
             self.flowsheet.renumber_streams()
 
     @property
     def pin_(self) -> Pin | None:
-        """Return the placement intent with ``x`` and ``y`` as the corner.
-
-        An axis pinned to a port (``valve.pin(port="inlet", y=440)``) is
-        stored as that relation and converted to a corner on every read, so
-        a later turn, mirror, resize or :meth:`nozzle` call keeps the port on
-        its coordinate. Layout's own face selection leaves a pinned port's
-        face alone (:func:`pandid.layout.faces.select_faces`).
-
-        Returns
-        -------
-        Pin or None
-            Placement with corner coordinates, or ``None`` when unpinned.
-        """
+        """Return the pin with ``x`` and ``y`` set to the corner."""
         pin = self._pin
         if pin is None or not self._pin_ports:
             return pin
@@ -594,16 +411,7 @@ class Unit:
 
     @pin_.setter
     def pin_(self, value: Pin | None) -> None:
-        """Replace the placement with corner coordinates.
-
-        Any port relation is dropped. Use this to restore a placement read
-        from :attr:`pin_`; :meth:`pin` keeps port relations.
-
-        Parameters
-        ----------
-        value : Pin or None
-            Placement, or ``None`` to unpin.
-        """
+        """Replace the placement, dropping any port relation."""
         self._pin_ports = {}
         self._pin = value
         self._turn_stated = value is not None and value.orientation != 0
@@ -622,33 +430,21 @@ class Unit:
     ) -> _UnitT:
         """Record placement intent for the unit.
 
-        Layout honours pinned axes exactly. Omitted arguments keep their
-        current value, so a second ``pin(y=...)`` keeps an earlier turn;
-        pass ``orientation=0`` or ``mirrored=False`` to clear them.
-
-        With ``port``, ``x`` and ``y`` in this call place that port rather
-        than the corner, so ``valve.pin(port="inlet", y=run_y)`` puts a
-        valve on a run. The named port must locate a coordinate in the
-        resulting pin; a grid cell alone has no port in it. On a
-        :class:`Feed` or :class:`Product`, ``x`` and ``y`` place the flag's
-        tip by default; ``port=None`` places the corner instead. On an
-        attached :class:`Instrument`, ``x`` and ``y`` replace the standoff on
-        their axes, while ``col`` and ``row`` are reported as
-        ``pin-not-honored``.
+        Omitted arguments keep their current value. With ``port``, ``x``
+        and ``y`` place that port rather than the corner. On a Feed or
+        Product they place the flag's port unless ``port=None``.
 
         Parameters
         ----------
         col, row : int or None, optional
-            Flow column, counted west to east, and place down that column:
-            a lower ``row`` is drawn above a higher one in the same column.
+            Flow column, west to east, and place down that column.
         x, y : float or None, optional
             Pixel coordinate of the corner, or of ``port``.
         orientation : float, optional
-            Clockwise quarter turn: 0, 90, 180 or 270. A quarter turn swaps
-            width and height.
+            Clockwise turn: 0, 90, 180 or 270.
         mirrored : bool or str, optional
-            ``True`` or ``"x"`` flips left to right (E and W faces), ``"y"``
-            top to bottom, ``"xy"`` both.
+            ``True`` or ``"x"`` flips E and W, ``"y"`` N and S, ``"xy"``
+            both.
         port : str or None, optional
             Port that ``x`` and ``y`` locate.
 
@@ -662,11 +458,11 @@ class Unit:
         KeyError
             If ``port`` is not a port of this unit.
         TypeError
-            If ``x`` or ``y`` is not a number, or ``col`` or ``row`` not a
-            whole number.
+            If ``x`` or ``y`` is not a number, or ``col`` or ``row`` is
+            not a whole number.
         ValueError
-            If the named port locates no coordinate, or a face set with
-            :meth:`nozzle` cannot be reached under the new transform.
+            If the port locates no coordinate, or a face set with
+            :meth:`nozzle` is unreachable under the new transform.
         """
         from dataclasses import replace
 
@@ -679,8 +475,7 @@ class Unit:
 
         from pandid.geometry import normalize_mirror, normalize_orientation
 
-        # Build from the stored intent, not pin_, so port relations survive.
-        # Pin is frozen, so collect the changes and apply one replace().
+        # Start from the stored intent, which keeps port relations.
         fields: dict[str, Any] = {axis: value
                                   for axis, value in (("col", col), ("row", row),
                                                       ("x", x), ("y", y))
@@ -691,7 +486,7 @@ class Unit:
         if mirrored is not _UNCHANGED:
             fields["mirrored"], fields["mirror_y"] = normalize_mirror(mirrored)
         candidate = replace(self._pin if self._pin is not None else Pin(), **fields)
-        # Keep the port the caller named; the flag default below fills one in.
+        # The port the caller named, before the flag default applies.
         named_port: str | None = None if port is _UNSTATED else port
         if port is _UNSTATED:
             # A flag's coordinates place its only port by default.
@@ -707,8 +502,7 @@ class Unit:
             else:
                 ports[axis] = nozzle
         if named_port is not None:
-            # Check the resulting pin, not this call alone, so splitting
-            # arguments across calls cannot get past the rule.
+            # Check the resulting pin, not this call alone.
             from pandid.portgeom import port_refusal
 
             complaint = port_refusal(
@@ -725,8 +519,6 @@ class Unit:
 
             for port_name, face in self._port_faces.items():
                 self._check_face(port_name, face, port_faces(self, port_name, candidate))
-        # Set the port relations before the pin, so the pair is never
-        # inconsistent.
         self._pin_ports = ports
         self._pin = candidate
         self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
@@ -734,23 +526,7 @@ class Unit:
         return self
 
     def _pin_port(self, port_name: str) -> str:
-        """Return the real port name for a name given to :meth:`pin`.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name or alias.
-
-        Returns
-        -------
-        str
-            Key in :attr:`ports`.
-
-        Raises
-        ------
-        KeyError
-            If the unit has no such port.
-        """
+        """Return the real port name for a name given to :meth:`pin`."""
         canonical = self._canonical_port_name(port_name)
         if canonical not in self.ports:
             raise KeyError(
@@ -760,18 +536,17 @@ class Unit:
         return canonical
 
     def nozzle(self: _UnitT, port_name: str, face: str) -> _UnitT:
-        """Fix the face a port is drawn on, overriding automatic selection.
+        """Fix the face a port is drawn on.
 
-        The face is as drawn on the sheet, so a mirrored unit takes the face
-        the reader sees. A later :meth:`pin` that turns or mirrors the unit
-        re-checks the choice.
+        The face is as drawn, so a mirrored unit takes the face the
+        reader sees.
 
         Parameters
         ----------
         port_name : str
             Port name.
         face : str
-            ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or ``"top"``, ``"bottom"``,
+            ``"N"``, ``"S"``, ``"E"``, ``"W"``, ``"top"``, ``"bottom"``,
             ``"left"`` or ``"right"``.
 
         Returns
@@ -796,55 +571,19 @@ class Unit:
             )
         face = _FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
         self._check_face(port_name, face, port_faces(self, port_name))
-        # Mutating the dict bypasses __setattr__, so invalidate explicitly.
         self._port_faces[port_name] = face
         self._invalidate_layout()
         return self
 
     def _check_face(self, port_name: str, face: str, options: list[str]) -> None:
-        """Check that a face is one a port can be drawn on.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-        face : str
-            Requested face.
-        options : list[str]
-            Faces available.
-
-        Raises
-        ------
-        ValueError
-            The same error :mod:`pandid.portgeom` raises at resolve time.
-        """
+        """Raise ValueError if ``face`` is not in ``options``."""
         if face not in options:
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, options)
 
     def _add_port(self, name: str, direction: str, role: str) -> Port:
-        """Create a port and expose it as an attribute.
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-        direction : str
-            ``"inlet"`` or ``"outlet"``.
-        role : str
-            One of :data:`_VALID_ROLES`.
-
-        Returns
-        -------
-        Port
-            The new port.
-
-        Raises
-        ------
-        ValueError
-            If the name exists or the role is invalid.
-        """
+        """Create a port and expose it as an attribute."""
         if name in self.ports:
             raise ValueError(f"{type(self).__name__!r} already has a port named {name!r}")
         if role not in _VALID_ROLES:
@@ -854,48 +593,15 @@ class Unit:
         port = Port(name=name, owner=self, direction=direction, role=role)
         self.ports[name] = port
         setattr(self, name, port)
-        # A new port can join a series, so drop the cached membership.
         self.__dict__.pop("_series_members_cache", None)
         return port
 
     def has_another_port(self, port: "Port") -> bool:
-        """Return whether a connected port can take another stream.
-
-        True for a member of a port pool (:meth:`_pool_of`), so ``False``
-        for equipment, where a second pipe needs a :class:`Tee`. Asked
-        separately from :meth:`another_port` so
-        :meth:`~pandid.flowsheet.Flowsheet.connect` can check both ends
-        before adding a port to either.
-
-        Parameters
-        ----------
-        port : Port
-            Connected port.
-
-        Returns
-        -------
-        bool
-            Whether :meth:`another_port` can supply a free equivalent.
-        """
+        """Return whether a connected port can take another stream."""
         return self._pool_of(port.name) is not None
 
     def another_port(self, port: "Port") -> "Port":
-        """Return a free port equivalent to ``port``, adding one if needed.
-
-        Called only where :meth:`has_another_port` is true. A new member
-        takes the pool's first member's direction and role.
-
-        Parameters
-        ----------
-        port : Port
-            Connected port.
-
-        Returns
-        -------
-        Port
-            Free member of ``port``'s pool, or ``port`` itself when it is
-            not in a pool.
-        """
+        """Return a free member of ``port``'s pool, or ``port``."""
         base = self._pool_of(port.name)
         if base is None:
             return port
@@ -903,26 +609,7 @@ class Unit:
         return self._next_member(base, first.direction, first.role)
 
     def _next_member(self, base: str, direction: str, role: str) -> "Port":
-        """Return a free member of a port pool, adding one if all are used.
-
-        Shared by :class:`Instrument` and :class:`_Boundary`, so pools number
-        alike. The new member takes the next unused number, so after
-        ``sig_out_2`` and ``sig_out_4`` the next is ``sig_out_5``.
-
-        Parameters
-        ----------
-        base : str
-            Pool name, such as ``"sig_out"``.
-        direction : str
-            Direction of a new member.
-        role : str
-            Role of a new member.
-
-        Returns
-        -------
-        Port
-            Free member.
-        """
+        """Return a free pool member, adding one if all are used."""
         members = self._pool_members(base)
         for member in members:
             if member.stream is None:
@@ -933,54 +620,15 @@ class Unit:
         return self._add_port(f"{base}_{n}", direction, role)
 
     def _pool_of(self, port_name: str) -> str | None:
-        """Return the pool a port belongs to.
-
-        :class:`Instrument` signal ports and :class:`_Boundary` flags have
-        pools; the defaults here are written over this one hook.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str or None
-            Pool name, or ``None`` for a port in no pool.
-        """
+        """Return the pool a port belongs to, or ``None``."""
         return None
 
     def _pool_members(self, base: str) -> list["Port"]:
-        """Return the ports in a pool, in port order.
-
-        Parameters
-        ----------
-        base : str
-            Pool name.
-
-        Returns
-        -------
-        list[Port]
-            Members; empty on classes without pools.
-        """
+        """Return the ports in a pool, in port order."""
         return [p for name, p in self.ports.items() if self._pool_of(name) == base]
 
     def _mint_port(self, name: str) -> "Port | None":
-        """Create a pool member by name, for the spec reader.
-
-        A spec may name a pool member such as ``sig_out_3`` before its
-        stream exists (:func:`pandid.spec._find_port`).
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-
-        Returns
-        -------
-        Port or None
-            The port, or ``None`` when this class has no such pool.
-        """
+        """Create the named pool member, or return ``None``."""
         base = self._pool_of(name)
         if base is None:
             return None
@@ -988,58 +636,15 @@ class Unit:
         return self._add_port(name, first.direction, first.role)
 
     def _symbol_anchor(self, port_name: str) -> str:
-        """Return the name the symbol anchors a port under.
-
-        A pool member anchors under its pool, so it shares the pool's
-        point or menu of faces; other ports use :attr:`PORT_ANCHORS`. An
-        unknown name falls back to the box centre in :mod:`pandid.portgeom`.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str
-            Anchor name.
-        """
+        """Return the name the symbol anchors a port under."""
         return self._pool_of(port_name) or type(self).PORT_ANCHORS.get(port_name, port_name)
 
     def _series_pin(self, port_name: str) -> float | None:
-        """Return a fixed position for a port within its port series.
-
-        ``None`` lets the series spread its members evenly. :class:`Column`
-        overrides it to place feeds and draws on their stages.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        float or None
-            Fraction along the series face, or ``None``.
-        """
+        """Return a port's fraction along its series, or ``None``."""
         return None
 
     def _series_members(self, series: "PortSeries") -> dict[str, int]:
-        """Return the ports in a port series and their order.
-
-        Cached per series, so placing a large family is linear;
-        :meth:`_add_port` clears the cache.
-
-        Parameters
-        ----------
-        series : PortSeries
-            Symbol's port series.
-
-        Returns
-        -------
-        dict[str, int]
-            Port name to index among the members, in port order.
-        """
+        """Return the ports in a series and their order."""
         cache = self.__dict__.setdefault("_series_members_cache", {})
         members = cache.get(id(series))
         if members is None:
@@ -1048,24 +653,7 @@ class Unit:
         return members
 
     def _canonical_port_name(self, name: str) -> str:
-        """Return the real port name for a name or alias.
-
-        ``Reactor.feed`` and ``Column.feed`` with one feed are attribute
-        aliases of ``feed_1`` and not keys of :attr:`ports`. Call this wherever
-        a caller's name is used as a key or passed to :mod:`pandid.portgeom`.
-        An attribute that is not a port (such as ``width``) is returned
-        unchanged.
-
-        Parameters
-        ----------
-        name : str
-            Port name or alias.
-
-        Returns
-        -------
-        str
-            Real port name, or ``name`` unchanged.
-        """
+        """Return the real port name for a name or alias."""
         if name in self.ports:
             return name
         aliased = getattr(self, name, None)
@@ -1077,7 +665,7 @@ class Unit:
         Parameters
         ----------
         name : str
-            Port name.
+            Port name or alias.
 
         Returns
         -------
@@ -1101,27 +689,11 @@ class Unit:
         """Return ``ClassName('tag')``."""
         return f"{type(self).__name__}({self.name!r})"
 
-    # Hidden from type checkers, which would otherwise accept any attribute.
-    # Families declare their numbered ports through typed __new__ overloads
-    # instead; Block alone keeps a visible __getattr__ (see
-    # tests/test_port_annotations.py).
+    # Hidden from type checkers.
     if not TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any:
-            """Explain an unknown attribute.
-
-            Called only when normal lookup fails.
-
-            Parameters
-            ----------
-            name : str
-                Attribute name.
-
-            Raises
-            ------
-            AttributeError
-                Listing the unit's ports when the name is unknown.
-            """
+            """Raise an AttributeError that lists the unit's ports."""
             ports = self.__dict__.get("ports")
             if ports is not None and not name.startswith("_"):
                 where = self.__dict__.get("name", "?")
