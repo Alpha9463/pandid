@@ -10,6 +10,7 @@ feature. A bare ValueError is a bug report waiting to happen.
 import json
 import sys
 import warnings
+from typing import Any
 
 import pytest
 
@@ -381,11 +382,15 @@ def test_absorber_and_stripper_still_take_n_feeds_and_feed_stages():
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
 
-def test_a_columns_feed_stages_round_trip():
-    """The keyword the writer must not drop: unlike ``n_feeds``, nothing else
-    on the entry says where a feed landed, so a dropped ``feed_stages`` reads
-    back as the even spread and both sides of a dict comparison would agree
-    on a drawing that had moved."""
+_STAGED_FAMILIES = [("n_feeds", "feed_stages"), ("n_draws", "draw_stages")]
+
+
+@pytest.mark.parametrize(
+    ("count", "stages", "where"),
+    [("n_feeds", "feed_stages", [12, 22]), ("n_draws", "draw_stages", [8, 20])],
+)
+def test_a_columns_stages_round_trip(count, stages, where):
+    """Check that a column's feed and draw stages are written and read back."""
     fs = Flowsheet.from_dict(
         {
             "name": "T",
@@ -395,25 +400,21 @@ def test_a_columns_feed_stages_round_trip():
                     "name": "T-101",
                     "internals": "valve_tray",
                     "trays": 30,
-                    "n_feeds": 2,
-                    "feed_stages": [12, 22],
+                    count: 2,
+                    stages: where,
                 },
             ],
         }
     )
-    col = fs.units[0]
-    assert col.feed_stages == [12, 22]
-    written = fs.to_dict()["units"][0]
-    assert written["feed_stages"] == [12, 22]
+    assert getattr(fs.units[0], stages) == where
+    assert fs.to_dict()["units"][0][stages] == where
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
     assert Flowsheet.from_dict(fs.to_dict()).to_svg() == fs.to_svg()
 
 
-def test_a_null_feed_stage_round_trips_as_null_not_as_absent():
-    """``feed_stages: [12, null]`` and no ``feed_stages`` at all are two
-    different requests -- one feed pinned and the other free, against
-    neither feed pinned -- and the writer has to be able to tell them apart
-    on the way back out."""
+@pytest.mark.parametrize(("count", "stages"), _STAGED_FAMILIES)
+def test_a_null_stage_round_trips_as_null_not_as_absent(count, stages):
+    """Check that a null stage is written as null and read back as null."""
     fs = Flowsheet.from_dict(
         {
             "name": "T",
@@ -423,44 +424,49 @@ def test_a_null_feed_stage_round_trips_as_null_not_as_absent():
                     "name": "T-101",
                     "internals": "tray",
                     "trays": 8,
-                    "n_feeds": 2,
-                    "feed_stages": [3, None],
+                    count: 2,
+                    stages: [3, None],
                 },
             ],
         }
     )
-    written = fs.to_dict()["units"][0]
-    assert written["feed_stages"] == [3, None]
-    assert Flowsheet.from_dict(fs.to_dict()).units[0].feed_stages == [3, None]
+    assert fs.to_dict()["units"][0][stages] == [3, None]
+    assert getattr(Flowsheet.from_dict(fs.to_dict()).units[0], stages) == [3, None]
 
 
-def test_an_unstated_feed_stages_is_not_written_down():
-    col = units.Column("T-101", n_feeds=2)
+@pytest.mark.parametrize(("count", "stages"), _STAGED_FAMILIES)
+def test_an_unstated_stage_list_is_not_written_down(count, stages):
+    """Check that a family with no stages written writes none."""
+    family: dict[str, Any] = {count: 2}
     fs = Flowsheet("T")
-    fs.add(col)
-    entry = fs.to_dict()["units"][0]
-    assert "feed_stages" not in entry
+    fs.add(units.Column("T-101", **family))
+    assert stages not in fs.to_dict()["units"][0]
 
 
-def test_a_feed_stages_length_mismatch_is_refused_from_a_spec():
+@pytest.mark.parametrize(("count", "stages"), _STAGED_FAMILIES)
+def test_a_stage_list_of_the_wrong_length_is_refused_from_a_spec(count, stages):
+    """Check that a stage list longer or shorter than its family is refused."""
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
-            {
-                "name": "T",
-                "units": [
-                    {"kind": "Column", "name": "T-1", "n_feeds": 2, "feed_stages": [5]},
-                ],
-            }
+            {"name": "T", "units": [{"kind": "Column", "name": "T-1", count: 2, stages: [5]}]}
         )
-    assert "feed_stages names 1" in str(excinfo.value)
+    assert f"{stages} names 1" in str(excinfo.value)
 
 
-def test_feed_stages_on_a_kind_with_no_feed_family_is_rejected():
+@pytest.mark.parametrize(
+    ("key", "value", "owners"),
+    [
+        ("feed_stages", [1], "a Column"),
+        ("draw_stages", [1], "a Column"),
+        ("n_draws", 2, "a Column"),
+        ("n_feeds", 2, "a Column or a Reactor or a Separator"),
+    ],
+)
+def test_a_family_key_on_a_kind_with_no_such_family_is_rejected(key, value, owners):
+    """Check that a family key on a pump is refused, naming the kinds that take it."""
     with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict(
-            {"name": "T", "units": [{"kind": "Pump", "name": "P-1", "feed_stages": [1]}]}
-        )
-    assert "only a Column takes 'feed_stages', not a Pump" in str(excinfo.value)
+        Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", key: value}]})
+    assert f"only {owners} takes {key!r}, not a Pump" in str(excinfo.value)
 
 
 def test_a_columns_draw_count_round_trips():
@@ -475,89 +481,6 @@ def test_a_columns_draw_count_round_trips():
     assert written["n_draws"] == 2
     bare = Flowsheet.from_dict({"name": "T", "units": [{"kind": "Column", "name": "T-101"}]})
     assert "n_draws" not in bare.to_dict()["units"][0]
-
-
-def test_a_columns_draw_stages_round_trip():
-    """The keyword the writer must not drop, for the reason
-    ``test_a_columns_feed_stages_round_trip`` gives ``feed_stages``: nothing
-    else on the entry says where a draw landed."""
-    fs = Flowsheet.from_dict(
-        {
-            "name": "T",
-            "units": [
-                {
-                    "kind": "Column",
-                    "name": "T-301",
-                    "internals": "valve_tray",
-                    "trays": 30,
-                    "n_draws": 2,
-                    "draw_stages": [8, 20],
-                },
-            ],
-        }
-    )
-    col = fs.units[0]
-    assert col.draw_stages == [8, 20]
-    written = fs.to_dict()["units"][0]
-    assert written["draw_stages"] == [8, 20]
-    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
-    assert Flowsheet.from_dict(fs.to_dict()).to_svg() == fs.to_svg()
-
-
-def test_a_null_draw_stage_round_trips_as_null_not_as_absent():
-    fs = Flowsheet.from_dict(
-        {
-            "name": "T",
-            "units": [
-                {
-                    "kind": "Column",
-                    "name": "T-101",
-                    "internals": "tray",
-                    "trays": 8,
-                    "n_draws": 2,
-                    "draw_stages": [3, None],
-                },
-            ],
-        }
-    )
-    written = fs.to_dict()["units"][0]
-    assert written["draw_stages"] == [3, None]
-    assert Flowsheet.from_dict(fs.to_dict()).units[0].draw_stages == [3, None]
-
-
-def test_an_unstated_draw_stages_is_not_written_down():
-    col = units.Column("T-101", n_draws=2)
-    fs = Flowsheet("T")
-    fs.add(col)
-    entry = fs.to_dict()["units"][0]
-    assert "draw_stages" not in entry
-
-
-def test_a_draw_stages_length_mismatch_is_refused_from_a_spec():
-    with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict(
-            {
-                "name": "T",
-                "units": [
-                    {"kind": "Column", "name": "T-1", "n_draws": 2, "draw_stages": [5]},
-                ],
-            }
-        )
-    assert "draw_stages names 1" in str(excinfo.value)
-
-
-def test_draw_stages_on_a_kind_with_no_draw_family_is_rejected():
-    with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict(
-            {"name": "T", "units": [{"kind": "Pump", "name": "P-1", "draw_stages": [1]}]}
-        )
-    assert "only a Column takes 'draw_stages', not a Pump" in str(excinfo.value)
-
-
-def test_a_draw_count_on_a_kind_with_no_draw_family_is_rejected():
-    with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_draws": 2}]})
-    assert "only a Column takes 'n_draws', not a Pump" in str(excinfo.value)
 
 
 def test_a_column_with_both_feed_and_draw_families_round_trips():
@@ -616,14 +539,6 @@ def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
     written = {u["name"]: u for u in fs.to_dict()["units"]}["V-1"]
     assert set(written) == {"kind", "name", "variant"}
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
-
-
-def test_a_feed_count_on_a_kind_with_no_feed_family_is_rejected():
-    with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_feeds": 2}]})
-    assert "only a Column or a Reactor or a Separator takes 'n_feeds', not a Pump" in str(
-        excinfo.value
-    )
 
 
 # --- composition: what a body carries -----------------------------------------
