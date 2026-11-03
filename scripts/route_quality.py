@@ -48,7 +48,7 @@ from pandid.portgeom import port_point  # noqa: E402
 from pandid.route_geometry import stream_polyline  # noqa: E402
 from pandid.units import Feed, Product, Pump, Valve  # noqa: E402
 import pandid.routing.astar as astar_mod  # noqa: E402
-from pandid.routing import DefaultRouter  # noqa: E402
+from pandid.routing import DefaultRouter, _routing_rank  # noqa: E402
 from pandid.routing.astar import (  # noqa: E402
     MAX_EXPANSIONS_PER_NODE,
     MIN_EXPANSION_BUDGET,
@@ -446,10 +446,10 @@ def eligible_streams(fs: Flowsheet, graph: VisibilityGraph) -> list:
     Returns
     -------
     list[Stream]
-        Streams in flowsheet order.
+        Streams in router order.
     """
     out = []
-    for stream in fs.streams:
+    for stream in sorted(fs.streams, key=lambda s: _routing_rank(s, graph)):
         if stream.route and stream.route.manual:
             continue
         src_u, dst_u = stream.source.owner, stream.dest.owner
