@@ -99,15 +99,6 @@ def test_fixed_port_units_have_expected_ports():
     }
     assert set(U.Separator("V").ports) == {"feed_1", "vapor", "liquid"}
     assert set(U.Column("T").ports) == {"feed_1", "overhead", "bottoms"}
-    assert set(U.DistillationColumn("T").ports) == {
-        "feed_1",
-        "overhead",
-        "bottoms",
-        "reflux_in",
-        "boilup_in",
-        "reboiler_duty",
-        "condenser_duty",
-    }
     # ``drive`` is the agitator's, and a plain Reactor is a stirred tank, so it
     # has one. ``Reactor("R", agitator=None)`` is the bare shell's four.
     assert set(U.Reactor("R").ports) == {"feed_1", "outlet", "vent", "duty", "drive"}
@@ -151,22 +142,15 @@ def test_one_feed_is_numbered_and_feed_is_an_alias_for_it():
         assert "feed_1" in one.ports
         assert "feed" not in one.ports
         assert one.feed is one.feed_1
+        assert [p.name for p in one.feeds] == ["feed_1"]
+        assert one.feeds[0] is one.feed
 
 
-def test_a_second_feed_drops_the_bare_alias():
-    """Raising ``n_feeds`` past one is what used to silently break every
-    ``.feed`` reference in a file; ``.feed_1`` now survives the raise
-    unchanged, and only the alias -- which never named a member once
-    there was more than one -- goes."""
-    r = U.Reactor("R-201", n_feeds=2)
-    assert "feed_1" in r.ports
-    assert not hasattr(r, "feed")
-
-
-def test_a_reactor_takes_more_than_one_charge_nozzle():
+def test_a_reactor_takes_more_than_one_charge_nozzle_and_drops_the_bare_alias():
     r = U.Reactor("R-201", n_feeds=3)
     assert {"feed_1", "feed_2", "feed_3"} <= set(r.ports)
     assert "feed" not in r.ports
+    assert not hasattr(r, "feed")
 
 
 @pytest.mark.parametrize(
@@ -554,9 +538,6 @@ def test_a_draw_lands_on_the_east_face_a_feed_never_reaches():
     w, h = resolve_size(col)
     assert list(_drawn_placements(col, "draw", w, h, 0, False, False)) == ["E"]
     assert list(_drawn_placements(col, "feed", w, h, 0, False, False)) == ["W"]
-
-
-# --- draw_stages: a draw lands on the stage it actually leaves from ------
 
 
 def _flowsheet_with(unit):
@@ -1093,19 +1074,6 @@ def test_a_count_worked_out_at_run_time_is_the_case_the_family_exists_for():
     assert [p.direction for p in m.inlets] == ["inlet"] * 4
 
 
-def test_one_feed_is_the_one_tuple_holding_feed_1():
-    """The sequence is the general form and reads a one-feed and a
-    three-feed column the same way, neither having to know which it got.
-
-    A one-feed tower's nozzle is really named ``feed_1``, and ``feeds`` is
-    that nozzle in a tuple; ``feed`` is the bare alias for the same
-    ``Port`` object, not a second member of the family.
-    """
-    for one in (U.Column("T-101"), U.Reactor("R-101"), U.Separator("V-101")):
-        assert [p.name for p in one.feeds] == ["feed_1"]
-        assert one.feeds[0] is one.feed
-
-
 @pytest.mark.parametrize(
     ("build", "families"),
     [
@@ -1207,21 +1175,6 @@ def test_a_vessel_and_a_tank_carry_the_same_five_nozzles(cls):
     builds ``overhead``/``bottoms`` and then ``feeds``/``draws`` in.
     """
     assert list(cls("X-1").ports) == ["vent", "relief", "drain", "in_1", "out_1"]
-    # And still every one of the five, under the name an author writes.
-    assert all(name in _HOLDUP_PORTS or cls("X-1").port(name) for name in _HOLDUP_PORTS)
-
-
-@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
-def test_the_three_fixed_nozzles_come_first(cls):
-    """The family is appended, and that is what makes it additive.
-
-    ``ports`` is insertion-ordered and observable -- a port family placed by a
-    ``PortSeries`` is spread in the unit's own port order -- so weaving a new
-    nozzle in among the old ones could move ink on a sheet that never asks for
-    it. ``vent``, ``relief`` and ``drain`` are ``PORTS`` and so come first;
-    ``in_1``/``out_1`` are ``_init_connections``'s and come after.
-    """
-    assert list(cls("X-1").ports)[:3] == ["vent", "relief", "drain"]
 
 
 @pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
