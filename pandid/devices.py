@@ -2420,8 +2420,8 @@ class MotorOperatedValve(Valve):
 class CheckValve(Valve):
     """Check valve: passes flow one way and shuts against the other.
 
-    It has no ``actuator`` port. A normally closed one is marked ``NC``
-    (PIP PIC001 4.2.2.8).
+    Its ports are ``inlet`` and ``outlet``. A normally closed one is
+    marked ``NC`` (PIP PIC001 4.2.2.8).
 
     Parameters are those of :class:`~pandid.units.Valve`.
     """
