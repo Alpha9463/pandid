@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from pandid.layout.layered import COL_GAP, ROW_GAP
 
 if TYPE_CHECKING:
+    from collections import Counter
+
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
 
@@ -21,6 +23,9 @@ STEP = 25.0
 
 #: Rings searched before a balloon is left at its preferred spot.
 REACH = 40
+
+#: Standoff of a balloon hung off the actuator it drives.
+ACTUATOR_OFFSET = 100.0
 
 
 def place_control(fs: "Flowsheet") -> bool:
@@ -56,8 +61,11 @@ def _place_free(fs: "Flowsheet") -> bool:
         True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
+    from pandid.layout.attach import _nozzle_keepouts, stream_path
+    from pandid.layout.faces import select_faces
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
+    from pandid.render.svg import tap_lines, tap_route
 
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
@@ -66,14 +74,31 @@ def _place_free(fs: "Flowsheet") -> bool:
     # Use each unit's drawn box, which may reach outside its frame.
     taken = [unit_box(u, u.frame) for u in fs.units
              if u.frame is not None and u not in set(pending)]
-    moved = False
+    # Strips a balloon hung off an actuator must clear.
+    clear = _nozzle_keepouts(fs, skip=set(pending))
+    # Drawn lines it must clear too, each with the units it joins.
+    lines: list[tuple[tuple[object, ...], list[tuple[float, float]]]] = [
+        ((u.host,), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+    lines += [((s.source.owner, s.dest.owner), stream_path(s))
+              for s in fs.streams if s.route is not None]
+    segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
+                for ends, points in lines for a, b in zip(points, points[1:])]
+    # Tag halos a hung balloon must clear, as the router blocks them.
+    halos = _halos(fs) if fs._may_hang else []
+    moved = rehung = False
     # Place in flowsheet order, each against what is already placed.
     for inst in pending:
         w, h = resolve_size(inst)
-        x, y = _spot(fs, inst, w, h, taken)
+        crossed = [box for ends, box in segments if inst not in ends]
+        hung = (_actuator_spot(fs, inst, w, h, taken + clear + crossed + halos)
+                if fs._may_hang else None)
+        if hung is not None:
+            fs._hung.add(id(inst))
+        x, y = hung or _spot(fs, inst, w, h, taken)
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
             moved = True
+            rehung = rehung or hung is not None
         pin = inst.pin_
         inst.frame = Frame(
             x=x, y=y, w=w, h=h, label_pos="center",
@@ -87,7 +112,196 @@ def _place_free(fs: "Flowsheet") -> bool:
             port_faces=dict(old.port_faces) if old is not None else {},
         )
         taken.append(unit_box(inst, inst.frame))
+    # Faces were chosen for where a newly hung controller stood.
+    if rehung:
+        select_faces(fs)
     return moved
+
+
+def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
+                   blocked: list[_Box]) -> tuple[float, float] | None:
+    """Return the corner of a balloon hung off the one actuator it drives.
+
+    An unpinned balloon that, with its lines, carries no attached
+    balloon, and whose signal lines drive exactly one placed valve's
+    actuator, stands
+    :data:`ACTUATOR_OFFSET` out from that actuator, square to its face.
+    It steps out and swings as an attached balloon does until it clears
+    every blocked box.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet the balloon is on.
+    inst : Unit
+        Free-standing balloon.
+    w : float
+        Balloon width.
+    h : float
+        Balloon height.
+    blocked : list[_Box]
+        Boxes the balloon must clear.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Top-left corner, or None if the balloon is not hung or no
+        standoff is clear.
+    """
+    from pandid.layout.attach import (
+        RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
+        _standoff_box)
+    from pandid.portgeom import face_point, port_anchor
+
+    valve = _hangable(fs, inst)
+    if valve is None:
+        return None
+    ax, ay, face = port_anchor(valve, valve.frame, "actuator")
+    _, (nx, ny) = face_point(valve, valve.frame, face)
+    for ring in range(STANDOFF_STEPS + 1):
+        for angle in _branch_angles(90.0):
+            box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
+                                angle, w, h)
+            if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
+                return box[0], box[1]
+    return None
+
+
+def _hangable(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
+    """Return the valve a free balloon may hang off, if any.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet the balloon is on.
+    inst : Unit
+        Unit to test.
+
+    Returns
+    -------
+    Unit or None
+        The one placed valve whose actuator the balloon drives, or None
+        if it is not a free, unpinned control balloon whose lines carry
+        no balloon.
+    """
+    from pandid.layout.stages import is_control
+
+    if not is_control(inst) or getattr(inst, "host", None) is not None or inst.pin_ is not None:
+        return None
+    wired = [(p, s) for p in inst.ports.values() if (s := p.stream) is not None]
+    hosts = {id(inst), *(id(s) for _, s in wired)}
+    if any(id(getattr(u, "host", None)) in hosts for u in fs.units):
+        return None
+    driven = [s.dest.owner for p, s in wired if s.source is p and s.dest.name == "actuator"]
+    if len(driven) != 1 or driven[0].frame is None:
+        return None
+    return driven[0]
+
+
+def _halos(fs: "Flowsheet") -> list[_Box]:
+    """Return the tag halos the router blocks, as boxes.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+
+    Returns
+    -------
+    list[_Box]
+        Each halo as ``(left, top, right, bottom)``.
+    """
+    from pandid.routing.visibility import VisibilityGraph
+
+    graph = VisibilityGraph(fs)
+    bodies = {id(r) for _, r in graph.body_obstacles}
+    return [(r.x_min, r.y_min, r.x_max, r.y_max) for r in graph.obstacles
+            if id(r) not in bodies]
+
+
+def _flaws(fs: "Flowsheet") -> "Counter[str]":
+    """Count the routed sheet's findings and drawn clashes.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    Counter[str]
+        Each validate() finding by code, plus units on tag halos, lines
+        through tag halos, tap lines through units or tag halos, and runs
+        two lines or tap lines share.
+    """
+    from collections import Counter
+
+    from pandid.layout.attach import stream_path
+    from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    def crosses(points: list, box: _Box) -> bool:
+        """Return whether a polyline crosses a box.
+
+        Parameters
+        ----------
+        points : list
+            Polyline points.
+        box : _Box
+            Box to test.
+
+        Returns
+        -------
+        bool
+            True if any segment crosses the box.
+        """
+        return any(segment_crosses_box(a, b, box) for a, b in zip(points, points[1:]))
+
+    flaws = Counter(i.code for i in fs.validate())
+    halos = _halos(fs)
+    boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    flaws["unit-on-tag"] = sum(boxes_overlap(box, h, -_BODY_TOL)
+                               for _, box in boxes for h in halos)
+    lines = [stream_path(s) for s in fs.streams if s.route is not None]
+    flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
+    taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
+    for inst, route in taps:
+        flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
+                                         if u is not inst and u is not inst.host)
+        flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
+    runs = [(k, a, b) for k, points in enumerate(lines + [route for _, route in taps])
+            for a, b in zip(points, points[1:])]
+    flaws["line-on-line"] = sum(
+        _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
+        for m, c, d in runs[i + 1:] if m != k)
+    return flaws
+
+
+def _shared(a: tuple[float, float], b: tuple[float, float],
+            c: tuple[float, float], d: tuple[float, float]) -> bool:
+    """Return whether two square runs lie on one track and overlap.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float]
+        Ends of the first run.
+    c, d : tuple[float, float]
+        Ends of the second run.
+
+    Returns
+    -------
+    bool
+        True if both runs are level, or both upright, to within 1, lie
+        within 1 of the same track, and overlap by more than 1 along it.
+    """
+    for along, across in ((0, 1), (1, 0)):
+        if (abs(a[across] - b[across]) < 1 and abs(c[across] - d[across]) < 1
+                and abs(a[across] - c[across]) < 1):
+            lo = max(min(a[along], b[along]), min(c[along], d[along]))
+            hi = min(max(a[along], b[along]), max(c[along], d[along]))
+            return hi - lo > 1
+    return False
 
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,

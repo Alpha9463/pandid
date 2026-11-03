@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 from pandid.routing.visibility import MIN_ESCAPE
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
     from pandid.units import Instrument, Unit
@@ -233,7 +235,8 @@ def _intrusion(a: Box, b: Box, gap: float) -> float:
     return max(0.0, wide) * max(0.0, tall)
 
 
-def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
+def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0,
+                     skip: "Collection[Unit]" = ()) -> list[Box]:
     """Return the escape strips at unattached units' connected nozzles.
 
     Parameters
@@ -242,6 +245,8 @@ def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
         Sheet to read.
     margin : float, optional
         Growth on every side of each strip.
+    skip : collection of Unit, optional
+        Units whose nozzles get no strip.
 
     Returns
     -------
@@ -252,7 +257,7 @@ def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
 
     out: list[Box] = []
     for u in fs.units:
-        if u.frame is None or is_attached(u):
+        if u.frame is None or is_attached(u) or u in skip:
             continue
         for name, port in u.ports.items():
             if port.stream is None:

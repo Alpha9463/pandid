@@ -166,8 +166,13 @@ Two molecular-sieve beds with switching valves and repeated control logic.
 
 ## 21 · Alumina refinery
 
-Bayer-process PFD from crushing to calcination, including the liquor recycle.
+Bayer-process PFDs from crushing to calcination on three sheets, joined by off-page
+connectors that name each other's drawing. One script builds and renders all three.
 
-[`21_alumina_refinery.py`](../../examples/21_alumina_refinery.py) · [SVG](21_alumina_refinery.svg)
+[`21_alumina_refinery.py`](../../examples/21_alumina_refinery.py) · SVG: [sheet 1](21_alumina_refinery_1.svg), [sheet 2](21_alumina_refinery_2.svg), [sheet 3](21_alumina_refinery_3.svg)
 
-![Alumina refinery PFD](21_alumina_refinery.png)
+![Alumina refinery, sheet 1: grinding and digestion](21_alumina_refinery_1.png)
+
+![Alumina refinery, sheet 2: clarification](21_alumina_refinery_2.png)
+
+![Alumina refinery, sheet 3: precipitation and calcination](21_alumina_refinery_3.png)

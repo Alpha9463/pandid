@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the two units and the call that moves it: `at=`/`face=` and `offset=` for
   an attached balloon, `pin()` for any other unit. A suggested `attach()`
   repeats the balloon's `relation=` and `angle=`.
+- **A controller with no anchor is drawn beyond the valve it drives (#443).**
+  A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives
+  exactly one valve's `actuator` stands 100 out from it, on its axis, or at
+  the nearest clear standoff, when the default router runs. If no standoff
+  is clear, or hanging adds any finding or any line or balloon over a unit
+  or tag, the sheet is routed as it was before this rule.
+- **The alumina refinery example draws three sheets (#622).** Its areas are
+  joined by off-page `Feed`/`Product` flags that name each other's drawing.
 
 ### Deprecated
 
