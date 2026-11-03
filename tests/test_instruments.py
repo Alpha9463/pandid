@@ -602,8 +602,9 @@ def test_a_nozzle_keepout_is_the_stand_off_in_front_of_a_live_nozzle():
     """One rectangle per *connected* nozzle, reaching out along the face
     it leaves by. A nozzle nothing is joined to costs the router nothing
     to reach past, so listing it would only push bubbles about."""
-    from pandid.layout.attach import ESCAPE_ROOM, _nozzle_keepouts
+    from pandid.layout.attach import _nozzle_keepouts
     from pandid.portgeom import port_anchor
+    from pandid.routing.visibility import MIN_ESCAPE
 
     fs, _, _, fv = _line(at=0.5, offset=45)
     keepouts = _nozzle_keepouts(fs)
@@ -611,7 +612,7 @@ def test_a_nozzle_keepout_is_the_stand_off_in_front_of_a_live_nozzle():
     assert len(keepouts) == len(live)
     ax, ay, facing = port_anchor(fv, _placed(fv), "inlet")
     assert facing == "W"
-    assert (ax - ESCAPE_ROOM, ay, ax, ay) in keepouts
+    assert (ax - MIN_ESCAPE, ay, ax, ay) in keepouts
 
 
 def test_a_moved_bubble_leaves_a_nozzle_its_room_to_escape():

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pandid.portgeom import resolve_port, unit_box
+from pandid.portgeom import COMPASS, resolve_port, unit_box
 from pandid.route_geometry import stream_polyline
 from pandid.routing.metrics import crossing_pairs
 
@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 _BODY_TOL = 1.0
 _SQUARE_TOL = 0.5
 _POINT_TOL = 0.05
-# Outward unit step for each face, with y increasing down the sheet.
-_DIRECTION = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}
 
 
 @dataclass(frozen=True, order=True)
@@ -47,9 +45,10 @@ class Conflict:
 
 
 def boxes_overlap(
-    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float],
+    gap: float = 0.0,
 ) -> bool:
-    """Return whether two boxes overlap beyond the edge tolerance.
+    """Return whether two boxes come closer than a gap.
 
     Parameters
     ----------
@@ -57,18 +56,17 @@ def boxes_overlap(
         First box as left, top, right, bottom.
     b : tuple[float, float, float, float]
         Second box as left, top, right, bottom.
+    gap : float, default=0.0
+        Clearance the boxes must keep; a negative gap lets them overlap
+        by that much.
 
     Returns
     -------
     bool
-        True if they overlap by more than the tolerance.
+        True if they come closer than ``gap`` on both axes.
     """
-    return not (
-        a[2] - _BODY_TOL <= b[0]
-        or b[2] - _BODY_TOL <= a[0]
-        or a[3] - _BODY_TOL <= b[1]
-        or b[3] - _BODY_TOL <= a[1]
-    )
+    return (a[2] + gap > b[0] and b[2] + gap > a[0]
+            and a[3] + gap > b[1] and b[3] + gap > a[1])
 
 
 def segment_crosses_box(
@@ -143,9 +141,7 @@ def _outward(a: tuple[float, float], b: tuple[float, float], face: str) -> bool:
     bool
         True if the leg leaves the face square to it.
     """
-    direction = _DIRECTION.get(face)
-    if direction is None:
-        return False
+    direction = COMPASS[face]
     dx, dy = b[0] - a[0], b[1] - a[1]
     if direction[0]:
         return abs(dy) < _SQUARE_TOL and dx * direction[0] > _POINT_TOL
@@ -236,7 +232,7 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
     conflicts: set[Conflict] = set()
     for position, (first, first_box) in enumerate(boxes):
         for second, second_box in boxes[position + 1 :]:
-            if boxes_overlap(first_box, second_box):
+            if boxes_overlap(first_box, second_box, -_BODY_TOL):
                 conflicts.add(Conflict("unit-overlap", units=(first, second)))
 
     for stream_index, stream in enumerate(fs.streams):

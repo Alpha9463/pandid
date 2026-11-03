@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 from pandid.layout.stages import slot
+from pandid.portgeom import COMPASS
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -136,30 +137,13 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     elif is_control(node):
         return None
     else:
-        nx, ny = _face_normal(str(getattr(root, "face", None) or "E"))
+        nx, ny = COMPASS[getattr(root, "face", None) or "E"]
         flow = (-ny, nx)  # the face's tangent
         hosts = [node]
 
     ux, uy = _rotate_ccw(flow[0], flow[1], float(getattr(root, "angle", 90.0)))
     face = "E" if ux >= abs(uy) else ("W" if -ux >= abs(uy) else ("N" if uy < 0 else "S"))
     return reach, girth, face, hosts
-
-
-def _face_normal(face: str) -> tuple[float, float]:
-    """Return a compass face's outward normal, ``"E"`` by default.
-
-    Parameters
-    ----------
-    face : str
-        Compass face, in any case.
-
-    Returns
-    -------
-    tuple[float, float]
-        Unit outward normal.
-    """
-    return {"N": (0.0, -1.0), "S": (0.0, 1.0),
-            "W": (-1.0, 0.0), "E": (1.0, 0.0)}.get(face.upper(), (1.0, 0.0))
 
 
 def _run_direction(src: "Unit", dst: "Unit") -> tuple[float, float]:
