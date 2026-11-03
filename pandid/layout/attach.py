@@ -276,7 +276,7 @@ def _intrusion(a: Box, b: Box, gap: float) -> float:
 
 
 def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
-    """Return the escape strips at the connected nozzles of units hung from nothing.
+    """Return the escape strips at free units' connected nozzles.
 
     Parameters
     ----------
