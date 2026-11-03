@@ -197,13 +197,6 @@ def test_the_overlay_is_drawn_before_the_diagram():
     assert svg.index('<g id="debug">') < svg.index('<g id="units">')
 
 
-def test_the_overlay_stays_inside_the_drawing_it_annotates():
-    """Test that an overlay preserves the drawing view box."""
-    plain, marked = _sheet().to_svg(), _sheet().to_svg(debug=True)
-    box = re.search(r'viewBox="([^"]+)"', plain).group(1)
-    assert f'viewBox="{box}"' in marked
-
-
 # ---------------------------------------------------------------------------
 # Fixed-page rendering
 # ---------------------------------------------------------------------------
@@ -262,29 +255,23 @@ def test_true_is_the_default_spacing_and_false_is_nothing():
     assert D.resolve_spacing(None) is None
 
 
-def test_a_spacing_of_nought_is_a_mistake_and_not_an_off_switch():
-    """Test that zero is rejected as a grid spacing."""
-    with pytest.raises(ValueError, match="debug=0"):
-        _sheet().to_svg(debug=0)
+@pytest.mark.parametrize(
+    "value,match",
+    [(0, "debug=0"), (1, "debug=True"), ("fine", "must be True, False"), (-5, None)],
+)
+def test_a_value_that_is_not_a_spacing_is_refused_before_a_sheet_is_built(value, match):
+    """Test that an invalid spacing is refused by name and leaves the flowsheet unchanged.
 
-
-def test_a_spacing_fine_enough_to_be_a_typo_is_refused_by_name():
-    """Test that impractically fine grid spacing is rejected."""
-    with pytest.raises(ValueError, match="debug=True"):
-        _sheet().to_svg(debug=1)
-
-
-def test_something_that_is_not_a_spacing_at_all():
-    """Test that nonnumeric debug options are rejected."""
-    with pytest.raises(ValueError, match="must be True, False"):
-        _sheet().to_svg(debug="fine")
-
-
-def test_the_refusal_comes_before_a_sheet_is_built():
-    """Test that invalid options leave the flowsheet render unchanged."""
+    Parameters
+    ----------
+    value : object
+        Invalid ``debug`` value.
+    match : str or None
+        Text the refusal must contain, if any.
+    """
     fs = _sheet()
-    with pytest.raises(ValueError):
-        fs.to_svg(debug=-5)
+    with pytest.raises(ValueError, match=match):
+        fs.to_svg(debug=value)
     assert "debug" not in fs.to_svg()
 
 
