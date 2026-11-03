@@ -12,13 +12,7 @@ from pandid.state import State
 
 
 def test_add_on_keeps_the_line_handle_and_places_the_valve() -> None:
-    """Keep the caller's stream handle through insertion and a spec round-trip.
-
-    Returns
-    -------
-    None
-        The device lies on the straight run and the original host survives.
-    """
+    """Keep the caller's stream handle through insertion and a spec round-trip."""
     fs = Flowsheet("Inline valve")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -55,13 +49,7 @@ def test_add_on_keeps_the_line_handle_and_places_the_valve() -> None:
 
 
 def test_add_on_orders_insertions_by_fraction() -> None:
-    """Insert devices in run order even when calls arrive in reverse order.
-
-    Returns
-    -------
-    None
-        Fractions and physical segments follow the material direction.
-    """
+    """Insert devices in run order even when calls arrive in reverse order."""
     fs = Flowsheet("Two valves")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -82,13 +70,7 @@ def test_add_on_orders_insertions_by_fraction() -> None:
 
 
 def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
-    """Place two attached valves after solving their external equipment.
-
-    Returns
-    -------
-    None
-        The routed train is compact, clear, and stable across layout runs.
-    """
+    """Place two attached valves after solving their external equipment."""
     fs = Flowsheet("Inline equipment train")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -116,18 +98,10 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
 def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> None:
     """Place inline valves on the leg that reaches the receiver.
 
-    The reactor's outlet may leave south or east; either way the valves sit
-    level with the receiver's inlet, with at most one bend in the line.
-
     Parameters
     ----------
     pinned_origin : bool
         Fix the reactor's absolute frame position when true.
-
-    Returns
-    -------
-    None
-        The valves are on the receiver's leg and the line is clear.
     """
     fs = Flowsheet("South outlet inline train")
     feed = fs.add(Feed("Feed"))
@@ -156,13 +130,7 @@ def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> 
 
 
 def test_south_discharge_does_not_put_inline_valves_above_its_outlet() -> None:
-    """Reject a receiver leg that opposes the reactor's south nozzle.
-
-    Returns
-    -------
-    None
-        A pinned upstream receiver keeps the full placement path.
-    """
+    """Reject a receiver leg that opposes the reactor's south nozzle."""
     fs = Flowsheet("Pinned receiver")
     reactor = fs.add(Reactor("R-101"))
     product = fs.add(Product("Product")).pin(y=50)
@@ -177,13 +145,7 @@ def test_south_discharge_does_not_put_inline_valves_above_its_outlet() -> None:
 
 
 def test_inline_chain_preserves_a_pinned_branch_origin() -> None:
-    """Propagate a feed's absolute pin through a contracted branch run.
-
-    Returns
-    -------
-    None
-        The tee and valve follow the feed without a routing defect.
-    """
+    """Propagate a feed's absolute pin through a contracted branch run."""
     fs = Flowsheet("Pinned branch inline")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=450, y=300)
     tee = fs.add(Tee())
@@ -205,13 +167,7 @@ def test_inline_chain_preserves_a_pinned_branch_origin() -> None:
 
 
 def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
-    """Require every contracted device to fit its own host corridor.
-
-    Returns
-    -------
-    None
-        A separate placed device cannot make a failed chain look complete.
-    """
+    """Require every contracted device to fit its own host corridor."""
     fs = Flowsheet("Separate inline runs")
     feed_a = fs.add(Feed("Feed A"))
     product_a = fs.add(Product("Product A"))
@@ -230,13 +186,7 @@ def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
 
 
 def test_rotation_only_pin_places_inline_valve_on_its_host_run() -> None:
-    """Keep a rotated valve at its requested fraction of the host run.
-
-    Returns
-    -------
-    None
-        The valve remains on the material path with its turn respected.
-    """
+    """Keep a rotated valve at its requested fraction of the host run."""
     fs = Flowsheet("Rotated inline valve")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100)
     product = fs.add(Product("Product")).pin(port="inlet", x=900, y=100)
@@ -256,13 +206,7 @@ def test_rotation_only_pin_places_inline_valve_on_its_host_run() -> None:
 
 
 def test_adjacent_logical_runs_use_their_own_fractions() -> None:
-    """Keep each attachment's fraction tied to its own logical run.
-
-    Returns
-    -------
-    None
-        Both devices appear between the endpoints of their own root runs.
-    """
+    """Keep each attachment's fraction tied to its own logical run."""
     fs = Flowsheet("Adjacent logical runs")
     feed = fs.add(Feed("Feed"))
     middle = fs.add(Valve("HV-M"))
@@ -292,13 +236,7 @@ def test_adjacent_logical_runs_use_their_own_fractions() -> None:
 
 
 def test_adjacent_roots_with_handwired_preference_keep_full_placement() -> None:
-    """Exclude a merged run containing a separately positioned valve.
-
-    Returns
-    -------
-    None
-        The mixed run remains on the established full placement path.
-    """
+    """Exclude a merged run containing a separately positioned valve."""
     fs = Flowsheet("Mixed inline preferences")
     feed = fs.add(Feed("Feed"))
     first_boundary = fs.add(Valve("HV-M"))
@@ -323,13 +261,7 @@ def test_adjacent_roots_with_handwired_preference_keep_full_placement() -> None:
 
 
 def test_add_on_refuses_invalid_calls_without_mutation() -> None:
-    """Reject unsupported inputs before adding a unit or splitting a stream.
-
-    Returns
-    -------
-    None
-        The topology and original stream remain unchanged.
-    """
+    """Reject unsupported inputs before adding a unit or splitting a stream."""
     fs = Flowsheet("Invalid insertion")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -348,13 +280,7 @@ def test_add_on_refuses_invalid_calls_without_mutation() -> None:
 
 
 def test_add_on_restores_ports_after_numbering_failure() -> None:
-    """Restore every pre-existing object if renumbering rejects a split.
-
-    Returns
-    -------
-    None
-        The original run and unused device keep their identities and ports.
-    """
+    """Restore every pre-existing object if renumbering rejects a split."""
     fs = Flowsheet("Numbering rollback")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -375,13 +301,7 @@ def test_add_on_restores_ports_after_numbering_failure() -> None:
 
 
 def test_add_on_respects_branch_and_exact_device_pin() -> None:
-    """Keep a branch junction and an exact pinned device as placed.
-
-    Returns
-    -------
-    None
-        The branch remains a node and the valve stays at its pin.
-    """
+    """Keep a branch junction and an exact pinned device as placed."""
     fs = Flowsheet("Pinned branch")
     feed = fs.add(Feed("Feed"))
     junction = fs.add(Tee())
@@ -400,13 +320,7 @@ def test_add_on_respects_branch_and_exact_device_pin() -> None:
 
 
 def test_position_after_pinned_device_uses_full_run_fraction() -> None:
-    """Measure later attachments from the original run endpoints.
-
-    Returns
-    -------
-    None
-        A pinned inline node does not reset the fraction's origin.
-    """
+    """Measure later attachments from the original run endpoints."""
     fs = Flowsheet("Pinned inline origin")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100)
     product = fs.add(Product("Product")).pin(port="inlet", x=900, y=100)
@@ -421,13 +335,7 @@ def test_position_after_pinned_device_uses_full_run_fraction() -> None:
 
 
 def test_devices_without_at_go_in_the_order_added() -> None:
-    """Put several devices on a line without inventing fractions for them.
-
-    Returns
-    -------
-    None
-        They sit in the order added, spread evenly, and round-trip.
-    """
+    """Put several devices on a line without inventing fractions for them."""
     fs = Flowsheet("Three valves")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100)
     product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=100)
@@ -445,13 +353,7 @@ def test_devices_without_at_go_in_the_order_added() -> None:
 
 
 def test_a_device_with_at_goes_before_any_with_a_larger_at() -> None:
-    """Order a stated fraction among devices added without one.
-
-    Returns
-    -------
-    None
-        Each unstated device keeps its place relative to the stated ones.
-    """
+    """Order a stated fraction among devices added without one."""
     fs = Flowsheet("Mixed positions")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -468,13 +370,7 @@ def test_a_device_with_at_goes_before_any_with_a_larger_at() -> None:
 
 
 def test_at_without_on_is_refused() -> None:
-    """Refuse a position that names no line, for a device and a station.
-
-    Returns
-    -------
-    None
-        Nothing is added.
-    """
+    """Refuse a position that names no line, for a device and a station."""
     fs = Flowsheet("No line")
     with pytest.raises(ValueError, match="on="):
         fs.add(Valve("HV-1"), at=0.5)
@@ -485,13 +381,7 @@ def test_at_without_on_is_refused() -> None:
 
 @pytest.mark.parametrize("on_line", [True, False])
 def test_a_refused_valve_station_leaves_the_sheet_unchanged(on_line: bool) -> None:
-    """A member tag that clashes refuses the station after others are built.
-
-    Returns
-    -------
-    None
-        No member, stream or line splice survives the refusal.
-    """
+    """A member tag that clashes refuses the station after others are built."""
     fs = Flowsheet("Clash")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))

@@ -10,7 +10,8 @@ from pandid import Flowsheet, units as U
 from pandid.render import debug as D
 from pandid.render.export import flatten
 
-from test_halo_invariants import _halos, _overlaps
+from _layout_cases import overlaps
+from test_halo_invariants import _halos
 from test_label_invariants import CORPUS, _RENDER_OPTS
 
 SVG = "{http://www.w3.org/2000/svg}"
@@ -124,24 +125,13 @@ def test_a_sheet_drawn_without_it_is_the_sheet_that_was_drawn_before_it_existed(
     ----------
     off : bool | None
         Debug option that disables the overlay.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
     """
     assert _sheet().to_svg(debug=off) == _sheet().to_svg()
     assert "debug" not in _sheet().to_svg()
 
 
 def test_it_is_off_by_default_everywhere_a_sheet_can_be_asked_for():
-    """Test that SVG render entry points omit the overlay by default.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that SVG render entry points omit the overlay by default."""
     for svg in (_sheet().to_svg(), _sheet()._repr_svg_()):
         assert 'id="debug"' not in svg
 
@@ -152,13 +142,7 @@ def test_it_is_off_by_default_everywhere_a_sheet_can_be_asked_for():
 
 
 def test_the_marker_sits_on_the_point_pin_set():
-    """Test that a marker reports a unit corner pin.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that a marker reports a unit corner pin."""
     g = _group(_sheet().to_svg(debug=True))
     assert "F-1 60,105" in _texts(g)
     assert "P-1 430,105" in _texts(g)
@@ -174,13 +158,7 @@ def test_the_marker_sits_on_the_point_pin_set():
 
 
 def test_a_port_marker_sits_on_the_nozzle_and_not_on_the_corner():
-    """Test that a port marker reports its nozzle pin.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that a port marker reports its nozzle pin."""
     g = _group(_sheet().to_svg(debug=True))
     assert "tube_in 210,330" in _texts(g)
     dots = [(float(c.get("cx")), float(c.get("cy"))) for c in g.iter(f"{SVG}circle")]
@@ -189,13 +167,7 @@ def test_a_port_marker_sits_on_the_nozzle_and_not_on_the_corner():
 
 
 def test_the_grid_is_ruled_on_round_multiples_of_the_spacing():
-    """Test that grid rules use round spacing multiples.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that grid rules use round spacing multiples."""
     g = _group(_sheet().to_svg(debug=True))
     verticals = {float(ln.get("x1")) for ln in _rules(g) if ln.get("x1") == ln.get("x2")}
     assert {100.0, 200.0, 300.0, 400.0} <= verticals
@@ -204,26 +176,14 @@ def test_the_grid_is_ruled_on_round_multiples_of_the_spacing():
 
 
 def test_the_spacing_is_the_one_that_was_asked_for():
-    """Test that the overlay honors an explicit grid spacing.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that the overlay honors an explicit grid spacing."""
     g = _group(_sheet().to_svg(debug=25))
     verticals = {float(ln.get("x1")) for ln in _rules(g) if ln.get("x1") == ln.get("x2")}
     assert 225.0 in verticals and 250.0 in verticals
 
 
 def test_the_written_coordinates_stay_a_hundred_apart_at_any_spacing():
-    """Test that coordinate labels retain a readable interval.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that coordinate labels retain a readable interval."""
     for spacing in (10, 25, 50, 100):
         g = _group(_sheet().to_svg(debug=spacing))
         assert {"100", "200", "300"} <= set(_texts(g))
@@ -233,28 +193,9 @@ def test_the_written_coordinates_stay_a_hundred_apart_at_any_spacing():
 
 
 def test_the_overlay_is_drawn_before_the_diagram():
-    """Test that the overlay is placed beneath diagram content.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that the overlay is placed beneath diagram content."""
     svg = _sheet().to_svg(debug=True)
     assert svg.index('<g id="debug">') < svg.index('<g id="units">')
-
-
-def test_the_overlay_stays_inside_the_drawing_it_annotates():
-    """Test that an overlay preserves the drawing view box.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
-    plain, marked = _sheet().to_svg(), _sheet().to_svg(debug=True)
-    box = re.search(r'viewBox="([^"]+)"', plain).group(1)
-    assert f'viewBox="{box}"' in marked
 
 
 # ---------------------------------------------------------------------------
@@ -263,13 +204,7 @@ def test_the_overlay_stays_inside_the_drawing_it_annotates():
 
 
 def test_a_fixed_page_does_not_move_the_numbers():
-    """Test that fixed-page scaling preserves drawing coordinates.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that fixed-page scaling preserves drawing coordinates."""
     svg = _wide().to_svg(page_size="A3", border="zone", debug=True)
     fit = _FIT.search(svg)
     assert fit and float(fit.group(3)) < 1.0, "this sheet is meant to be fitted"
@@ -284,13 +219,7 @@ def test_a_fixed_page_does_not_move_the_numbers():
 
 
 def test_a_fixed_page_holds_the_lettering_to_a_constant_size_on_paper():
-    """Test that fixed-page overlays preserve readable text size.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that fixed-page overlays preserve readable text size."""
     fitted_svg = _wide().to_svg(page_size="A3", border="zone", debug=True)
     s = float(_FIT.search(fitted_svg).group(3))
     assert s < 1.0
@@ -310,13 +239,7 @@ def test_a_fixed_page_holds_the_lettering_to_a_constant_size_on_paper():
 
 
 def test_the_overlay_survives_the_route_to_pdf_and_png():
-    """Test that export flattening preserves the coordinate overlay.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that export flattening preserves the coordinate overlay."""
     flat = flatten(_wide().to_svg(page_size="A3", border="zone", debug=True))
     assert 'id="debug"' in flat
 
@@ -327,65 +250,29 @@ def test_the_overlay_survives_the_route_to_pdf_and_png():
 
 
 def test_true_is_the_default_spacing_and_false_is_nothing():
-    """Test the boolean debug options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test the boolean debug options."""
     assert D.resolve_spacing(True) == D.DEFAULT_SPACING
     assert D.resolve_spacing(False) is None
     assert D.resolve_spacing(None) is None
 
 
-def test_a_spacing_of_nought_is_a_mistake_and_not_an_off_switch():
-    """Test that zero is rejected as a grid spacing.
+@pytest.mark.parametrize(
+    "value,match",
+    [(0, "debug=0"), (1, "debug=True"), ("fine", "must be True, False"), (-5, None)],
+)
+def test_a_value_that_is_not_a_spacing_is_refused_before_a_sheet_is_built(value, match):
+    """Test that an invalid spacing is refused by name and leaves the flowsheet unchanged.
 
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
-    with pytest.raises(ValueError, match="debug=0"):
-        _sheet().to_svg(debug=0)
-
-
-def test_a_spacing_fine_enough_to_be_a_typo_is_refused_by_name():
-    """Test that impractically fine grid spacing is rejected.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
-    with pytest.raises(ValueError, match="debug=True"):
-        _sheet().to_svg(debug=1)
-
-
-def test_something_that_is_not_a_spacing_at_all():
-    """Test that nonnumeric debug options are rejected.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
-    with pytest.raises(ValueError, match="must be True, False"):
-        _sheet().to_svg(debug="fine")
-
-
-def test_the_refusal_comes_before_a_sheet_is_built():
-    """Test that invalid options leave the flowsheet render unchanged.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
+    Parameters
+    ----------
+    value : object
+        Invalid ``debug`` value.
+    match : str or None
+        Text the refusal must contain, if any.
     """
     fs = _sheet()
-    with pytest.raises(ValueError):
-        fs.to_svg(debug=-5)
+    with pytest.raises(ValueError, match=match):
+        fs.to_svg(debug=value)
     assert "debug" not in fs.to_svg()
 
 
@@ -395,13 +282,7 @@ def test_the_refusal_comes_before_a_sheet_is_built():
 
 
 def test_a_turned_or_mirrored_unit_still_marks_the_point_pin_set():
-    """Test that transformed units retain their marker coordinates.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that transformed units retain their marker coordinates."""
     fs = Flowsheet("turned")
     pump = fs.add(U.Pump("P-1")).pin(x=300, y=200, orientation=90, mirrored=True)
     prod = fs.add(U.Product("P-2")).pin(x=600, y=200)
@@ -410,13 +291,7 @@ def test_a_turned_or_mirrored_unit_still_marks_the_point_pin_set():
 
 
 def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
-    """Test that a feed symbol ends at its pin coordinate.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that a feed symbol ends at its pin coordinate."""
     fs = Flowsheet("feed")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     prod = fs.add(U.Product("P-1")).pin(x=430, y=105)
@@ -467,19 +342,13 @@ def _placed(svg: str) -> "list[tuple[tuple[float, float, float, float], str]]":
 
 
 def test_a_port_label_is_not_written_under_the_unit_tags_halo():
-    """Test that a port label avoids a unit-tag halo.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that a port label avoids a unit-tag halo."""
     svg = _sheet().to_svg(debug=True)
     halos = _halos(svg)
     shell_in = [b for b, text in _placed(svg) if text.startswith("shell_in")]
     assert shell_in, "the exchanger's shell_in port is not labelled at all"
     for box in shell_in:
-        assert not [h for h in halos if _overlaps(box, h)], (
+        assert not [h for h in halos if overlaps(box, h)], (
             "shell_in is written under an opaque halo and loses characters to it"
         )
 
@@ -531,11 +400,6 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
         Cached flowsheets with debug and plain SVGs.
     name : str
         Corpus sheet name.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
     """
     fs, svg, _plain = corpus_drawings[name]
     halos, labels = _halos(svg), _placed(svg)
@@ -547,8 +411,8 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
     buried = [
         text
         for i, (box, text) in enumerate(labels)
-        if any(_overlaps(box, h) for h in halos)
-        or any(_overlaps(box, other) for j, (other, _) in enumerate(labels) if j != i)
+        if any(overlaps(box, h) for h in halos)
+        or any(overlaps(box, other) for j, (other, _) in enumerate(labels) if j != i)
     ]
     assert len(buried) <= _CROWDED.get(name, 0), (
         f"{name}: {len(buried)} of {len(labels)} overlay labels are written under a "
@@ -557,13 +421,7 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
 
 
 def test_a_label_that_had_to_move_is_joined_to_the_marker_it_names():
-    """Test that displaced labels include a marker tether.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that displaced labels include a marker tether."""
     svg = _sheet().to_svg(debug=True)
     g = _group(svg)
     (shell_in,) = [b for b, text in _placed(svg) if text.startswith("shell_in")]
@@ -580,13 +438,7 @@ def test_a_label_that_had_to_move_is_joined_to_the_marker_it_names():
 
 
 def test_a_label_still_against_its_own_marker_is_left_alone():
-    """Test that adjacent labels do not include a tether.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
-    """
+    """Test that adjacent labels do not include a tether."""
     fs = Flowsheet("plain")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     prod = fs.add(U.Product("P-1")).pin(x=430, y=105)
@@ -613,11 +465,6 @@ def test_the_drawing_is_the_same_drawing_with_the_overlay_lifted_off(corpus_draw
         Cached flowsheets with debug and plain SVGs.
     name : str
         Corpus sheet name.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behavior.
     """
     _fs, marked, plain = corpus_drawings[name]
     head, rest = marked.split('  <g id="debug">', 1)

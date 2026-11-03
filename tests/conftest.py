@@ -1,5 +1,8 @@
 """Shared fixtures."""
 
+import os
+from collections.abc import Callable
+
 import pytest
 
 from pandid import Flowsheet, units as U
@@ -18,8 +21,7 @@ def settled_gallery() -> dict[str, tuple[Flowsheet, dict]]:
 
     Notes
     -----
-    Consumers copy a case before rendering or mutating it. The fixture owns
-    cold layout and routing; each test owns its output and mutations.
+    Copy a case with ``copy_settled_case`` before rendering or mutating it.
     """
     cases = {}
     for stem in gallery.sheets():
@@ -28,6 +30,58 @@ def settled_gallery() -> dict[str, tuple[Flowsheet, dict]]:
         fs.route()
         cases[stem] = fs, kwargs
     return cases
+
+
+@pytest.fixture
+def caught(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """Record what ``show()`` hands the preview instead of opening a window.
+
+    Parameters
+    ----------
+    monkeypatch : pytest.MonkeyPatch
+        Replaces ``pandid.render.preview.preview`` with a recorder.
+
+    Returns
+    -------
+    dict[str, str]
+        The ``svg`` and ``title`` of the last call; empty if nothing was shown.
+    """
+    from pandid.render import preview as P
+
+    seen: dict[str, str] = {}
+
+    def fake(svg: str, *, title: str = "") -> str:
+        """Record one preview call.
+
+        Parameters
+        ----------
+        svg : str
+            Rendered SVG markup.
+        title : str, default=""
+            Flowsheet title.
+
+        Returns
+        -------
+        str
+            ``"window"``, as a successful preview returns.
+        """
+        seen["svg"], seen["title"] = svg, title
+        return "window"
+
+    monkeypatch.setattr(P, "preview", fake)
+    return seen
+
+
+@pytest.fixture
+def same_file() -> Callable[[str], str]:
+    """Provide a function that returns a path as the file system resolves and compares it.
+
+    Returns
+    -------
+    Callable[[str], str]
+        Path normaliser for comparing a warning's file with ``__file__``.
+    """
+    return lambda path: os.path.normcase(os.path.realpath(path))
 
 
 @pytest.fixture

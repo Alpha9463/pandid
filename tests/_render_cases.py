@@ -2,29 +2,36 @@
 
 import copy
 import importlib.util
-from functools import partial
+from functools import cache, partial
 from pathlib import Path
 from typing import Any
 
 from pandid import Flowsheet
 
 
-def _generator():
-    """Load the gallery generator module.
+@cache
+def _script(name: str) -> Any:
+    """Import a script from ``scripts/`` by name, once.
+
+    Parameters
+    ----------
+    name : str
+        Script stem.
 
     Returns
     -------
     module
-        Imported ``scripts/gallery.py`` module.
+        Imported script module.
     """
-    path = Path(__file__).resolve().parent.parent / "scripts" / "gallery.py"
-    spec = importlib.util.spec_from_file_location("_pandid_script_gallery", path)
+    path = Path(__file__).resolve().parent.parent / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"_pandid_script_{name}", path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-gallery = _generator()
+gallery = _script("gallery")
 
 
 def _build(stem: str) -> Flowsheet:

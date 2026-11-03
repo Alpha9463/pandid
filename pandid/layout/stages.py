@@ -68,24 +68,6 @@ def process_units(fs: "Flowsheet") -> list["Unit"]:
     return [u for u in fs.units if not is_control(u)]
 
 
-def is_process_stream(stream: "Stream") -> bool:
-    """Return whether a material stream joins two process units.
-
-    Parameters
-    ----------
-    stream : Stream
-        Stream to test.
-
-    Returns
-    -------
-    bool
-        True for a material stream between two process units.
-    """
-    src, dst = stream.source.owner, stream.dest.owner
-    return (stream.kind == "material" and src is not None and dst is not None
-            and not is_control(src) and not is_control(dst))
-
-
 def process_streams(fs: "Flowsheet") -> list["Stream"]:
     """Return the process streams, in flowsheet order.
 
@@ -99,4 +81,6 @@ def process_streams(fs: "Flowsheet") -> list["Stream"]:
     list[Stream]
         Material streams between process units.
     """
-    return [s for s in fs.streams if is_process_stream(s)]
+    return [s for s in fs.streams if s.kind == "material"
+            and s.source.owner is not None and s.dest.owner is not None
+            and not is_control(s.source.owner) and not is_control(s.dest.owner)]
