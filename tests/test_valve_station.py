@@ -388,39 +388,43 @@ def test_a_branch_takes_the_number_the_station_was_given():
 # --- Refusals ----------------------------------------------------------------
 
 
-def test_a_bypass_with_no_isolation_valves_to_go_round_is_refused():
-    """Check that a bypass without isolation valves is refused."""
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        (dict(isolation=False, bypass=True), "no isolation valves to tap outside of"),
+        (dict(drains=3), "drains= is how many drain valves"),
+        (dict(x=300), "placed by"),
+        (dict(x=300, y=RUN_Y, reducers=False, bypass_over="reduction"), "told to leave out"),
+        (dict(x=300, y=RUN_Y, bypass_over="drain"), "bypass_over names the member"),
+        (dict(mirrored=True, gap=50), "mirrored=, gap="),
+        (dict(mirrored=False), "mirrored="),
+    ],
+    ids=[
+        "bypass_without_isolation",
+        "bad_drain_count",
+        "x_without_y",
+        "bypass_over_a_role_left_out",
+        "bypass_over_a_role_that_does_not_exist",
+        "a_word_about_a_run_that_is_not_drawn",
+        "mirrored_false_without_a_run",
+    ],
+)
+def test_a_refused_call_says_why_and_leaves_the_sheet_exactly_as_it_was(kwargs, match):
+    """Check that a refused call names its fault and adds no unit or stream to the sheet.
+
+    Parameters
+    ----------
+    kwargs : dict
+        Options passed to ``add_valve_station``.
+    match : str
+        Pattern the refusal must contain.
+    """
     fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="no isolation valves to tap outside of"):
-        fs.add_valve_station("CV-1", isolation=False, bypass=True)
-
-
-def test_a_drain_count_that_is_not_zero_one_or_two_is_refused():
-    """Check that a drain count other than 0, 1 or 2 is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="drains= is how many drain valves"):
-        fs.add_valve_station("CV-1", drains=3)
-
-
-def test_one_of_x_and_y_without_the_other_is_refused():
-    """Check that ``x`` without ``y`` is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="placed by"):
-        fs.add_valve_station("CV-1", x=300)
-
-
-def test_a_bypass_over_a_member_that_is_not_there_is_refused():
-    """Check that ``bypass_over`` naming an omitted member is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="told to leave out"):
-        fs.add_valve_station("CV-1", x=300, y=RUN_Y, reducers=False, bypass_over="reduction")
-
-
-def test_a_bypass_over_something_that_is_not_a_member_is_refused():
-    """Check that ``bypass_over`` naming an unknown role is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="bypass_over names the member"):
-        fs.add_valve_station("CV-1", x=300, y=RUN_Y, bypass_over="drain")
+    before_units, before_streams = list(fs.units), list(fs.streams)
+    with pytest.raises(ValueError, match=match):
+        fs.add_valve_station("CV-1", **kwargs)
+    assert fs.units == before_units
+    assert fs.streams == before_streams
 
 
 # --- Run options without a drawn run -----------------------------------------
@@ -510,35 +514,6 @@ def test_a_station_on_a_line_takes_run_words_only_with_x_and_y():
     station = fs.add_valve_station("CV-1", on=run, x=300, y=RUN_Y, mirrored=False)
     assert run.dest is station.inlet
     assert station.control.pin_ is not None and station.control.pin_.x is not None
-
-
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        dict(isolation=False, bypass=True),
-        dict(drains=3),
-        dict(x=300),
-        dict(x=300, y=RUN_Y, reducers=False, bypass_over="reduction"),
-        dict(mirrored=True, gap=50),
-        dict(mirrored=False),
-    ],
-    ids=[
-        "bypass_without_isolation",
-        "bad_drain_count",
-        "x_without_y",
-        "bypass_over_a_role_left_out",
-        "a_word_about_a_run_that_is_not_drawn",
-        "mirrored_false_without_a_run",
-    ],
-)
-def test_a_refused_call_leaves_the_sheet_exactly_as_it_was(kwargs):
-    """Check that a refused call adds no unit or stream to the sheet."""
-    fs = Flowsheet("bad")
-    before_units, before_streams = list(fs.units), list(fs.streams)
-    with pytest.raises(ValueError):
-        fs.add_valve_station("CV-1", **kwargs)
-    assert fs.units == before_units
-    assert fs.streams == before_streams
 
 
 def test_a_bypass_over_a_role_left_out_can_be_retried_with_the_same_tag():
