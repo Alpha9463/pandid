@@ -1,12 +1,12 @@
 """SVG symbols for the unit kinds and the registry that holds them.
 
-Valves, pumps, compressors, blowers, coolers, heaters, heat exchangers,
-cooling towers, vessels, columns, reactors, separators, tanks, dryers,
-filters, furnaces, thickeners, turbines, reducers, in-line fittings,
-ejectors, vents and funnels come from ``_vendored_symbols.py`` and
-replace hand-drawn symbols of the same kind. The vendored symbols and
-the belt conveyor are adapted from draw.io stencils (Apache-2.0); see
-``NOTICE``.
+The symbols in ``_vendored_symbols.py`` cover valves, pumps,
+compressors, blowers, coolers, heaters, heat exchangers, cooling
+towers, vessels, columns, reactors, separators, tanks, dryers, filters,
+furnaces, thickeners, turbines, reducers, in-line fittings, ejectors,
+vents and funnels, and replace hand-drawn symbols of the same kind.
+They and the belt conveyor are adapted from draw.io stencils
+(Apache-2.0); see ``NOTICE``.
 """
 
 import hashlib
