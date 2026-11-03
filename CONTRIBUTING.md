@@ -151,8 +151,7 @@ scripts/vendor_data/drawio/*.xml     mxGraph stencil XML, vendored from jgraph/d
         └── scripts/vendor_symbols.py      KIND_MAP: (kind, variant) -> stencil shape + ports
                     │
                     ▼
-        pandid/render/_vendored_symbols.py    generated; registered last, overriding
-                                           the hand-drawn defaults of the same kind
+        pandid/render/_vendored_symbols.py    generated
 ```
 
 To add or change an equipment symbol:
