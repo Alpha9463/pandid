@@ -169,13 +169,42 @@ def test_a_reactor_takes_more_than_one_charge_nozzle():
     assert "feed" not in r.ports
 
 
-def test_a_unit_with_no_feed_at_all_is_rejected():
-    with pytest.raises(ValueError, match="Column requires at least 1 feed"):
-        U.Column("T", n_feeds=0)
-    with pytest.raises(ValueError, match="Reactor requires at least 1 feed"):
-        U.Reactor("R", n_feeds=0)
-    with pytest.raises(ValueError, match="Separator requires at least 1 feed"):
-        U.Separator("V", n_feeds=0)
+@pytest.mark.parametrize(
+    ("build", "message"),
+    [
+        (lambda: U.Column("T", n_feeds=0), "Column requires at least 1 feed"),
+        (lambda: U.Reactor("R", n_feeds=0), "Reactor requires at least 1 feed"),
+        (lambda: U.Separator("V", n_feeds=0), "Separator requires at least 1 feed"),
+        (lambda: U.Column("T", n_draws=-1), "cannot take a negative number of draws"),
+        (lambda: U.Mixer("M", n_inlets=0), "at least 1 inlet"),
+        (lambda: U.Splitter("S", n_outlets=0), "at least 1 outlet"),
+        (
+            lambda: U.Column("T-1", n_feeds=2, feed_stages=[5]),
+            r"T-1 has 2 feeds \(feed_1, feed_2\) but feed_stages names 1",
+        ),
+        (
+            lambda: U.Column("T-1", n_draws=2, draw_stages=[5]),
+            r"T-1 has 2 draws \(draw_1, draw_2\) but draw_stages names 1",
+        ),
+        (
+            lambda: U.Column("T-1", internals="tray", trays=30, feed_stages=[40]),
+            "stage 40 is not on a column of 30",
+        ),
+        (
+            lambda: U.Column("T-1", internals="tray", trays=30, n_draws=1, draw_stages=[40]),
+            "stage 40 is not on a column of 30",
+        ),
+        (lambda: U.Column("T-1", internals=None, feed_stages=[1]), "internals is None"),
+        (
+            lambda: U.Column("T-1", internals=None, n_draws=1, draw_stages=[1]),
+            "draw_stages names a stage",
+        ),
+    ],
+)
+def test_a_count_or_stage_the_unit_cannot_draw_is_refused(build, message):
+    """Check that an impossible nozzle count or stage is refused by name."""
+    with pytest.raises(ValueError, match=message):
+        build()
 
 
 # --- Separator: the feed family (#452) --------------------------------------
@@ -477,27 +506,6 @@ def test_a_packed_beds_stage_lands_above_the_bed_not_through_it():
     assert (y - col.frame.y) / col.frame.h == pytest.approx(expected)
 
 
-def test_feed_stages_length_must_match_the_feeds():
-    with pytest.raises(
-        ValueError,
-        match=r"T-1 has 2 feeds \(feed_1, feed_2\) but "
-        r"feed_stages names 1",
-    ):
-        U.Column("T-1", n_feeds=2, feed_stages=[5])
-
-
-def test_a_stage_out_of_range_names_the_tray_count():
-    with pytest.raises(ValueError, match=r"stage 40 is not on a column of 30"):
-        U.Column("T-1", internals="tray", trays=30, feed_stages=[40])
-
-
-def test_feed_stages_on_a_bare_shell_is_refused():
-    """A bare shell has no stages, so a stage number would name a tray
-    line no reader can find on the drawing."""
-    with pytest.raises(ValueError, match="internals is None"):
-        U.Column("T-1", internals=None, feed_stages=[1])
-
-
 def test_feed_stages_all_null_is_fine_even_on_a_bare_shell():
     """Every entry left ``None`` asks nothing of the shell, so it is not
     the same request as naming a real stage."""
@@ -505,9 +513,10 @@ def test_feed_stages_all_null_is_fine_even_on_a_bare_shell():
     assert col.feed_stages == [None, None]
 
 
-def test_feed_stages_is_none_by_default_and_unwritten():
-    col = U.Column("T-1", n_feeds=2)
+def test_stages_are_none_by_default_and_unwritten():
+    col = U.Column("T-1", n_feeds=2, n_draws=2)
     assert col.feed_stages is None
+    assert col.draw_stages is None
 
 
 # --- n_draws: a side draw, the feed family reversed ---------------------
@@ -536,11 +545,6 @@ def test_a_column_takes_more_than_one_side_draw():
     assert col.draw_2.role == "draw"
 
 
-def test_a_negative_draw_count_is_rejected():
-    with pytest.raises(ValueError, match="cannot take a negative number of draws"):
-        U.Column("T", n_draws=-1)
-
-
 def test_a_draw_lands_on_the_east_face_a_feed_never_reaches():
     """A draw is a feed's flow reversed: it leaves opposite the wall a
     feed enters on."""
@@ -553,29 +557,6 @@ def test_a_draw_lands_on_the_east_face_a_feed_never_reaches():
 
 
 # --- draw_stages: a draw lands on the stage it actually leaves from ------
-
-
-def test_draw_stages_length_must_match_the_draws():
-    with pytest.raises(
-        ValueError,
-        match=r"T-1 has 2 draws \(draw_1, draw_2\) but draw_stages names 1",
-    ):
-        U.Column("T-1", n_draws=2, draw_stages=[5])
-
-
-def test_a_draw_stage_out_of_range_names_the_tray_count():
-    with pytest.raises(ValueError, match=r"stage 40 is not on a column of 30"):
-        U.Column("T-1", internals="tray", trays=30, n_draws=1, draw_stages=[40])
-
-
-def test_draw_stages_on_a_bare_shell_is_refused():
-    with pytest.raises(ValueError, match="draw_stages names a stage"):
-        U.Column("T-1", internals=None, n_draws=1, draw_stages=[1])
-
-
-def test_draw_stages_is_none_by_default_and_unwritten():
-    col = U.Column("T-1", n_draws=2)
-    assert col.draw_stages is None
 
 
 def _flowsheet_with(unit):
@@ -1284,16 +1265,6 @@ def test_the_three_fixed_nozzles_are_never_numbered(cls):
         for n in cls("X-1").ports
         if _family_stem(n) is not None and not n.startswith(("in_", "out_"))
     ] == []
-
-
-def test_mixer_rejects_zero_inlets():
-    with pytest.raises(ValueError, match="at least 1 inlet"):
-        U.Mixer("M", n_inlets=0)
-
-
-def test_splitter_rejects_zero_outlets():
-    with pytest.raises(ValueError, match="at least 1 outlet"):
-        U.Splitter("S", n_outlets=0)
 
 
 def test_fitting_is_one_class_with_device_variants():
