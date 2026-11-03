@@ -791,6 +791,57 @@ def test_a_controller_hangs_from_the_actuators_own_point():
     assert _centre(lic) == pytest.approx((ax, ay - 100.0))
 
 
+def _hung_controller() -> tuple[Flowsheet, U.Instrument, U.Valve]:
+    """LIC-1, anchored to nothing, driving the actuator of a pinned valve."""
+    fs = Flowsheet("review")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    return fs, lic, valve
+
+
+def test_a_hung_controller_clears_a_balloon_pinned_after_it():
+    """PI-1 is pinned onto the actuator's standoff and placed after LIC-1,
+    which still has to stand clear of it."""
+    fs, lic, _ = _hung_controller()
+    pi = fs.add_instrument("PI", 1).pin(x=300, y=178)
+    fs.route()
+
+    assert not _overlaps(lic, pi)
+
+
+def test_a_hung_controller_clears_a_signal_line():
+    """A signal line drawn through the actuator's standoff is as much in the
+    way as a pipe."""
+    fs, _, _ = _hung_controller()
+    first = fs.add_instrument("XI", 1).pin(x=100, y=178)
+    second = fs.add_instrument("XI", 2).pin(x=600, y=178)
+    fs.connect(first.sig_out, second.sig_in, kind="electric").via([(200, 200), (500, 200)])
+    fs.route()
+
+    assert "route-crosses-unit" not in {i.code for i in fs.validate()}
+
+
+def test_a_hung_controller_clears_a_tap_line():
+    """PI-1 is added to a routed sheet and hung on the valve's top face, so
+    its tap line rises past the actuator; LIC-1 stays off that line."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs, lic, valve = _hung_controller()
+    fs.route()
+    fs.add_instrument("PI", 1, sensing=valve, at="N", offset=100)
+    fs.layout()
+    fs.route()
+
+    box = unit_box(lic, _placed(lic))
+    lines = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
+    assert lines, "PI-1 draws a tap line"
+    for route in lines:
+        assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

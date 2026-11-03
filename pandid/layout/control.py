@@ -62,7 +62,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     from pandid.layout.attach import _nozzle_keepouts, stream_path
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
-    from pandid.streams import SIGNAL_KINDS
+    from pandid.render.svg import tap_lines, tap_route
 
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
@@ -71,19 +71,27 @@ def _place_free(fs: "Flowsheet") -> bool:
     # Use each unit's drawn box, which may reach outside its frame.
     taken = [unit_box(u, u.frame) for u in fs.units
              if u.frame is not None and u not in set(pending)]
-    # Strips and routed pipes a balloon hung off an actuator must clear.
+    # Strips and pinned balloons a balloon hung off an actuator must clear.
     clear = _nozzle_keepouts(fs, skip=set(pending))
-    for stream in fs.streams:
-        if stream.kind in SIGNAL_KINDS or stream.route is None:
-            continue
-        points = stream_path(stream)
-        clear += [(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
-                  for a, b in zip(points, points[1:])]
+    for u in pending:
+        pin = u.pin_
+        if pin is not None and pin.x is not None and pin.y is not None:
+            w, h = resolve_size(u)
+            clear.append((pin.x, pin.y, pin.x + w, pin.y + h))
+    # Drawn lines it must clear too, each with the units it joins.
+    lines: list[tuple[tuple[Unit, ...], list[tuple[float, float]]]] = [
+        ((), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+    lines += [((s.source.owner, s.dest.owner), stream_path(s))
+              for s in fs.streams if s.route is not None]
+    segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
+                for ends, points in lines for a, b in zip(points, points[1:])]
     moved = False
     # Place in flowsheet order, each against what is already placed.
     for inst in pending:
         w, h = resolve_size(inst)
-        x, y = _actuator_spot(inst, w, h, taken + clear) or _spot(fs, inst, w, h, taken)
+        crossed = [box for ends, box in segments if inst not in ends]
+        x, y = (_actuator_spot(inst, w, h, taken + clear + crossed)
+                or _spot(fs, inst, w, h, taken))
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
             moved = True
