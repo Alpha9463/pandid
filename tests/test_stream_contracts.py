@@ -24,13 +24,7 @@ def _inline_chain() -> Flowsheet:
 
 
 def test_is_recycle_is_read_only_until_layout_marks_a_stream() -> None:
-    """Verify that callers cannot assign the layout-owned recycle flag.
-
-    Returns
-    -------
-    None
-        The stream retains its default non-recycle state.
-    """
+    """Verify that callers cannot assign the layout-owned recycle flag."""
     stream = _inline_chain().streams[0]
 
     assert stream.is_recycle is False
@@ -40,13 +34,7 @@ def test_is_recycle_is_read_only_until_layout_marks_a_stream() -> None:
 
 
 def test_spec_rejects_an_inline_position_on_an_outgoing_segment() -> None:
-    """Verify that a serialized inline position identifies its invalid stream.
-
-    Returns
-    -------
-    None
-        The reader reports the outgoing segment's ``inline_at`` field.
-    """
+    """Verify that a serialized inline position identifies its invalid stream."""
     data = _inline_chain().to_dict()
     data["streams"][1]["inline_at"] = 0.5
 

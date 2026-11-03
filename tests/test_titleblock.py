@@ -1782,11 +1782,6 @@ def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
         Name of the renderer method.
     what : str
         Field name included in assertion output.
-
-    Returns
-    -------
-    None
-        This helper does not return a value.
     """
     cells = _cells_drawing(fs, how, answer.drawn)
     assert len(cells) == answer.cells, (what, answer.drawn, cells)

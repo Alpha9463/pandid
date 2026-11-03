@@ -17,13 +17,7 @@ from pandid.streams import Stream
 
 
 def test_route_report_uses_drawn_nozzles_for_length_baseline() -> None:
-    """Compare a route's drawn length with its nozzle-to-nozzle minimum.
-
-    Returns
-    -------
-    None
-        An inset nozzle does not inflate the reported length ratio.
-    """
+    """Compare a route's drawn length with its nozzle-to-nozzle minimum."""
     from scripts import gallery, route_quality
     from pandid.portgeom import port_point
 

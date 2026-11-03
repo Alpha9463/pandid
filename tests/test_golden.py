@@ -86,11 +86,6 @@ def _check_golden(name: str, svg: str) -> None:
         Golden fixture name.
     svg : str
         Rendered SVG document text.
-
-    Returns
-    -------
-    None
-        Writes the fixture only when explicit update mode is enabled.
     """
     path = GOLDEN_DIR / f"{name}.svg"
     normalized = _normalize(svg)

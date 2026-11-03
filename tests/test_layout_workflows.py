@@ -230,11 +230,6 @@ def test_scenario_meets_invariants_and_budget(name: str) -> None:
     ----------
     name : str
         Scenario key in ``SCENARIOS``.
-
-    Returns
-    -------
-    None
-        Invariants, repeat runs and each budget are checked separately.
     """
     build, budget = SCENARIOS[name]
     fs, options = build()

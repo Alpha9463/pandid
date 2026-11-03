@@ -14,13 +14,7 @@ from pandid.spec import SpecError
 
 
 def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
-    """Place an unpinned station as one horizontal assembly.
-
-    Returns
-    -------
-    None
-        Main members share the host corridor; bypass and drains remain local.
-    """
+    """Place an unpinned station as one horizontal assembly."""
     fs = Flowsheet("Station assembly")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=300)
@@ -56,13 +50,7 @@ def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
 
 
 def test_hand_wired_station_is_set_on_its_pipe() -> None:
-    """Keep an unpinned hand-wired station out of the equipment grid.
-
-    Returns
-    -------
-    None
-        The station settles as one compact, clear material-run assembly.
-    """
+    """Keep an unpinned hand-wired station out of the equipment grid."""
     fs = Flowsheet("Hand-wired station")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -88,11 +76,6 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
     ----------
     product_col : int
         Receiver rank, including a skipped grid column.
-
-    Returns
-    -------
-    None
-        The assembly aligns with the receiver and retains clear routing.
     """
     fs = Flowsheet("Reactor outlet station")
     reactor = fs.add(Reactor("R-101")).pin(col=0)
@@ -127,13 +110,7 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
 
 
 def test_station_does_not_force_an_outward_facing_elbow() -> None:
-    """Set a station on the routed pipe after it leaves an east nozzle westward.
-
-    Returns
-    -------
-    None
-        The pipe turns clear of the nozzle and the station sits on one leg.
-    """
+    """Set a station on the routed pipe after it leaves an east nozzle westward."""
     fs = Flowsheet("Reverse outlet station")
     feed = fs.add(Feed("Feed")).pin(x=1300, y=300)
     reactor = fs.add(Reactor("R-101")).pin(x=100, y=100, orientation=90)
@@ -155,13 +132,7 @@ def test_station_does_not_force_an_outward_facing_elbow() -> None:
 
 
 def test_station_compacts_an_equipment_train_from_a_pinned_origin() -> None:
-    """Keep a station's members out of the equipment grid solve.
-
-    Returns
-    -------
-    None
-        The downstream equipment follows the pin and retains clear routes.
-    """
+    """Keep a station's members out of the equipment grid solve."""
     fs = Flowsheet("Pinned train")
     feed = fs.add(Feed("Feed"))
     reactor = fs.add(Reactor("R-101")).pin(x=500, y=350)
@@ -183,13 +154,7 @@ def test_station_compacts_an_equipment_train_from_a_pinned_origin() -> None:
 
 
 def test_branch_station_keeps_a_clear_compact_default_route() -> None:
-    """Avoid routing regressions after contracting a branched train.
-
-    Returns
-    -------
-    None
-        The finished station drawing is compact and has no crossing.
-    """
+    """Avoid routing regressions after contracting a branched train."""
     fs = Flowsheet("Branched train")
     feed = fs.add(Feed("Feed"))
     reactor = fs.add(Reactor("R-101"))
@@ -210,13 +175,7 @@ def test_branch_station_keeps_a_clear_compact_default_route() -> None:
 
 
 def test_station_on_a_line_retains_the_line_and_fraction() -> None:
-    """Insert a station into one material run without replacing its handle.
-
-    Returns
-    -------
-    None
-        Topology, instrument host, geometry, and spec preserve insertion.
-    """
+    """Insert a station into one material run without replacing its handle."""
     fs = Flowsheet("Station insertion")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=300)
@@ -242,13 +201,7 @@ def test_station_on_a_line_retains_the_line_and_fraction() -> None:
 
 
 def test_station_insertion_rejects_invalid_run_without_mutation() -> None:
-    """Reject an out-of-range fraction before creating station members.
-
-    Returns
-    -------
-    None
-        The original sheet and ports remain unchanged.
-    """
+    """Reject an out-of-range fraction before creating station members."""
     fs = Flowsheet("Rejected station")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -261,13 +214,7 @@ def test_station_insertion_rejects_invalid_run_without_mutation() -> None:
 
 
 def test_station_reverse_flow_and_optional_members() -> None:
-    """Keep a reduced station together when its host flows westward.
-
-    Returns
-    -------
-    None
-        Main member order reverses without adding omitted branches.
-    """
+    """Keep a reduced station together when its host flows westward."""
     fs = Flowsheet("Reverse station")
     feed = fs.add(Feed("Feed")).pin(mirrored=True).pin(port="outlet", x=1300, y=300)
     product = fs.add(Product("Product")).pin(mirrored=True).pin(port="inlet", x=100, y=300)
@@ -288,13 +235,7 @@ def test_station_reverse_flow_and_optional_members() -> None:
 
 
 def test_station_member_pin_remains_exact() -> None:
-    """Keep an authored member coordinate when it conflicts with the corridor.
-
-    Returns
-    -------
-    None
-        The pinned control valve stays at its stated position.
-    """
+    """Keep an authored member coordinate when it conflicts with the corridor."""
     fs = Flowsheet("Pinned member")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=300)
@@ -315,13 +256,7 @@ def test_station_member_pin_remains_exact() -> None:
 
 
 def test_feasible_member_pin_anchors_the_complete_station() -> None:
-    """Keep a station compact around an exact control-valve position.
-
-    Returns
-    -------
-    None
-        Every main member follows the pinned control on the host run.
-    """
+    """Keep a station compact around an exact control-valve position."""
     fs = Flowsheet("Pinned station assembly")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=300)
@@ -351,13 +286,7 @@ def test_feasible_member_pin_anchors_the_complete_station() -> None:
 
 
 def test_station_member_nearby_pin_remains_exact_after_render() -> None:
-    """Keep a member pin even when its proposed assembly frame is nearby.
-
-    Returns
-    -------
-    None
-        Rendering leaves the pinned coordinate exact and raises no pin warning.
-    """
+    """Keep a member pin even when its proposed assembly frame is nearby."""
     fs = Flowsheet("Nearby pinned member")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=200)
     product = fs.add(Product("Product")).pin(port="inlet", x=1300, y=200)
@@ -377,13 +306,7 @@ def test_station_member_nearby_pin_remains_exact_after_render() -> None:
 
 
 def test_two_stations_use_fractions_of_the_original_run() -> None:
-    """Measure every inserted station from the same original endpoints.
-
-    Returns
-    -------
-    None
-        Stations inserted out of order settle near their global fractions.
-    """
+    """Measure every inserted station from the same original endpoints."""
     fs = Flowsheet("Two stations")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=2000, y=300)
@@ -400,13 +323,7 @@ def test_two_stations_use_fractions_of_the_original_run() -> None:
 
 
 def test_inline_pass_does_not_scatter_a_tee_free_station() -> None:
-    """Keep a station assembled when every member is inline eligible.
-
-    Returns
-    -------
-    None
-        Main members keep their material order after both placement passes.
-    """
+    """Keep a station assembled when every member is inline eligible."""
     fs = Flowsheet("Tee-free station")
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = fs.add(Product("Product")).pin(port="inlet", x=1800, y=300)
@@ -420,13 +337,7 @@ def test_inline_pass_does_not_scatter_a_tee_free_station() -> None:
 
 
 def test_spec_rejects_missing_station_tees_before_layout() -> None:
-    """Refuse a station record that omits its wired junctions.
-
-    Returns
-    -------
-    None
-        Deserialization reports the invalid station section.
-    """
+    """Refuse a station record that omits its wired junctions."""
     fs = Flowsheet("Bad station record")
     fs.add_valve_station("CV-101")
     spec = fs.to_dict()
@@ -436,13 +347,7 @@ def test_spec_rejects_missing_station_tees_before_layout() -> None:
 
 
 def test_a_device_or_station_without_at_sits_mid_line() -> None:
-    """Draw a lone item at the line's midpoint without storing a fraction.
-
-    Returns
-    -------
-    None
-        Nothing the author did not type is stored or written to the spec.
-    """
+    """Draw a lone item at the line's midpoint without storing a fraction."""
     valve_sheet = Flowsheet("Default valve")
     feed = valve_sheet.add(Feed("Feed")).pin(port="outlet", x=100, y=300)
     product = valve_sheet.add(Product("Product")).pin(port="inlet", x=1300, y=300)
@@ -468,13 +373,7 @@ def test_a_device_or_station_without_at_sits_mid_line() -> None:
 
 
 def test_spec_rejects_station_attached_to_an_unrelated_run() -> None:
-    """Reject a station record that claims another stream as its host.
-
-    Returns
-    -------
-    None
-        An unrelated root cannot silently replace the station attachment.
-    """
+    """Reject a station record that claims another stream as its host."""
     fs = Flowsheet("Unrelated run")
     source = fs.add(Feed("A"))
     sink = fs.add(Product("Z"))
