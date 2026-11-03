@@ -1,84 +1,14 @@
 #!/usr/bin/env python3
-"""Measure what the layout engine draws when nothing is pinned.
-
-Every shipped example hand-places almost everything, and "how many pins"
-has three different right answers, so this says which it means. Counted by
-AST as ``.pin(`` call sites in ``examples/*.py``, there are **350** across
-the 21 examples; **319** of them carry a ``col``/``row``/``x``/``y`` and
-are what :func:`strip_placement` below takes away, and the other 31 pass
-``orientation=`` or ``mirrored=`` and nothing else, which is a drawing
-decision rather than a placement and is kept. Counted at run time instead
-there are 456 calls, 410 of them placing, because a site inside a loop is
-one site and many calls -- ``11_ethanol_pid``'s 29 sites make 129 of them.
-These counts describe the examples loaded through ``gallery.sheets()``.
-The golden and geometry tests use the same example corpus.
-
-Sheet for sheet the hand placement is near total wherever it is used at
-all: ``21_alumina_refinery`` and ``13_mineral_dewatering`` place every unit
-they build, and ``11_ethanol_pid``, ``14_tank_farm`` and
-``20_molecular_sieve_dryer`` place all but their instruments, which go
-where whatever they attach to went. Six of the 21 -- 01, 05, 08, 15, 16 and
-18 -- place nothing at all and are already the engine's own work.
-
-The auto-layout engine's own quality has therefore never been measured:
-this strips the placement out of every example, re-runs ``layout()`` and
-``route()``, and compares the result against the hand-placed original that
-ships in ``docs/gallery/``.
+"""Compare each example as authored with the same example with its placement stripped.
 
     python scripts/layout_quality.py                    # every example
     python scripts/layout_quality.py 10_ethanol_pfd      # one of them
     python scripts/layout_quality.py --render OUT_DIR    # also write auto SVG/PNG
     python scripts/layout_quality.py --worst 15          # widen the offender lists
 
-Nothing here changes a shipped sheet: it reads ``docs/gallery/`` nowhere
-and writes nothing there. ``scripts/route_quality.py`` already measures
-routing quality per sheet; this reuses it wholesale (``measure_sheet``, the
-crossing/bend/fallback analysis, the printed tables) rather than scoring
-routes a second way, and adds the placement-side measurements it does not:
-whether units collide, whether the sheet still fits the page the example
-asked for, and how long ``layout()`` itself took.
-
-=== What "stripped" means ===
-
-``pin()`` carries two different kinds of thing: **placement**
-(``col``/``row``/``x``/``y``, and ``port=``, which only says how to read
-``x``/``y`` -- as a nozzle instead of a corner) and **drawing decisions**
-(``orientation=``, ``mirrored=``) that are not a position at all. A
-mirrored pump is a choice about which way the discharge points, not where
-the pump sits, so :func:`strip_placement` keeps it: every call becomes
-whatever ``orientation=``/``mirrored=`` it carried, with the placement
-axes forced to ``None`` -- the same ``Pin`` a unit would have if ``pin()``
-had never been called on it at all. Because ``port=`` only has meaning
-alongside an ``x``/``y`` this also removes, it is forced to ``None`` too;
-that skips ``Unit._offset_to_port`` entirely rather than leaving it to
-compute an offset for coordinates that no longer exist. ``Block.pin()``
-and the boundary flags' implicit ``port=`` default (see
-:meth:`pandid.units.Unit.pin`) both run through this same seam --
-``Block.pin()`` via its own ``super().pin(...)`` call, boundary flags
-because their default is applied inside the same stripped call -- so
-neither needs a seam of its own.
-
-Two more things turned out to need stripping for the corpus to build at
-all, not just to be a fair test:
-
-**``Stream.via()``.** A manual route is exact pixel waypoints the router
-never touches (``DefaultRouter.route()`` skips any stream whose
-``route.manual`` is set). Once the units it threads between move, those
-waypoints point at nothing -- a floating line, not a routing decision --
-so it is neutralized to a no-op rather than left to draw garbage that
-would be blamed on the router. 80 calls across 8 examples, six of them
-also among the ``pinned_x``/``pinned_y`` callers below.
-
-**``pinned_x()``/``pinned_y()``.** Eight examples read a unit's own
-already-committed pin back, to compute where the *next* unit goes --
-``cake_x = pinned_x(press, "cake")`` then ``funnel.pin(x=cake_x, ...)``.
-With placement stripped there is no pin left to read, and the two
-functions raise exactly as documented ("pin it first ... the solver
-decides it"). Every one of the 77 call sites across those eight examples
-feeds its result straight into a ``pin()`` or ``via()`` call this module
-already strips (checked by inspection, not assumed), so what they return
-is never used for anything -- patched to hand back ``0.0`` rather than
-abort the example before it finishes building.
+Print each variant's extent, page fit, ``layout()`` time and ``validate()``
+counts, then the routing tables of ``scripts/route_quality.py``. Write nothing
+under ``docs/gallery/``.
 """
 
 from __future__ import annotations
@@ -116,14 +46,11 @@ Extent = tuple[float, float, float, float]  # x0, y0, x1, y1
 
 @contextlib.contextmanager
 def strip_placement():
-    """Force every ``pin()`` call's placement axes to unset, for the
-    duration of the ``with`` block. See the module docstring for exactly
-    what is and is not stripped, and why.
+    """Strip placement from every example built inside the ``with`` block.
 
-    Patches ``Unit.pin`` -- which ``Block.pin()`` reaches through its own
-    ``super().pin(...)`` call, so both are covered from the one seam --
-    plus ``Stream.via`` and ``pandid.portgeom.pinned_x``/``pinned_y``,
-    restoring all four on exit regardless of how the block ends.
+    ``pin()`` keeps ``orientation=`` and ``mirrored=`` and drops ``col``,
+    ``row``, ``x``, ``y`` and ``port``. ``Stream.via()`` does nothing, and
+    ``pinned_x()``/``pinned_y()`` return ``0.0``. Restore all four on exit.
     """
     original_pin = units_mod.Unit.pin
     original_via = streams_mod.Stream.via
