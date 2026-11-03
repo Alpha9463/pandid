@@ -1131,6 +1131,20 @@ def test_a_controller_with_a_balloon_on_its_line_is_not_hung() -> None:
     assert [i.code for i in fs.validate() if i.code == "unit-overlap"] == []
 
 
+def test_a_controller_wired_from_behind_its_valve_is_not_hung() -> None:
+    """LT-1 is on the far side of the valve from its actuator, so LIC-1 is
+    placed from its wiring and LT-1's line does not cross the valve."""
+    fs = Flowsheet("behind")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=100, y=350, orientation=180)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=100, y=300)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

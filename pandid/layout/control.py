@@ -113,10 +113,12 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
 
     An unpinned balloon that, with its lines, carries no attached
     balloon, has no hand-routed line, and whose signal lines drive
-    exactly one placed valve's actuator stands :data:`ACTUATOR_OFFSET`
-    out from that actuator, square to its face. It steps out and swings
-    as an attached balloon does until it clears every blocked box, and
-    the line from the actuator to it crosses no solid box.
+    exactly one placed valve's actuator, with every other placed unit it
+    is wired to on the actuator's side of the valve, stands
+    :data:`ACTUATOR_OFFSET` out from that actuator, square to its face.
+    It steps out and swings as an attached balloon does until it clears
+    every blocked box, and the line from the actuator to it crosses no
+    solid box.
 
     Parameters
     ----------
@@ -159,6 +161,10 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     valve = driven[0]
     ax, ay, face = port_anchor(valve, valve.frame, "actuator")
     _, (nx, ny) = face_point(valve, valve.frame, face)
+    ends = [u for _, s in wired for u in (s.source.owner, s.dest.owner)]
+    if any((u.frame.cx - ax) * nx + (u.frame.cy - ay) * ny < 0
+           for u in ends if u not in (inst, valve) and u.frame is not None):
+        return None
     others = [b for b in solid if b != unit_box(valve, valve.frame)]
     for ring in range(STANDOFF_STEPS + 1):
         for angle in _branch_angles(90.0):
