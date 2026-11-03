@@ -105,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A balloon hung from another balloon no longer sits on the line it taps
   (#619).** It keeps clear of that line, so the line no longer bends round it
-  and drags it along from pass to pass.
+  and drags it along from pass to pass. A sheet that does not settle so is
+  routed as before.
 - **A refused balloon placement changes nothing (#438).** `attach()` with a
   bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
   face no longer leaves the balloon on the sheet, and `add_instrument()`

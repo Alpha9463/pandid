@@ -555,6 +555,10 @@ class Flowsheet:
         self._unhung: tuple | None = None
         # Whether a layout engine is running, which routes without hanging.
         self._laying_out = False
+        # Whether a balloon hung from a balloon keeps off the tapped line,
+        # and whether any did since route() turned that on.
+        self._keep_clear = False
+        self._kept_clear = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2049,7 +2053,9 @@ class Flowsheet:
         Attached instruments are placed and the sheet re-routed until
         neither moves, up to
         :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES` passes;
-        ``route_converged`` records whether it settled.
+        ``route_converged`` records whether it settled. A balloon hung from
+        another balloon keeps off the line its chain taps; if the sheet does
+        not settle so, it is routed again from the start without that rule.
 
         Parameters
         ----------
@@ -2082,8 +2088,18 @@ class Flowsheet:
         # Start from the sheet as routed without hanging, not from a hung
         # controller left by the last route().
         self._unhang()
-        router.route(self)
-        place()
+        start = self._geometry()
+        self._keep_clear, self._kept_clear = True, False
+        try:
+            router.route(self)
+            place()
+        finally:
+            self._keep_clear = False
+        # Route again as if chained balloons could sit on the tapped line.
+        if not self.route_converged and self._kept_clear:
+            self._put_geometry(start, keep_manual=False)
+            router.route(self)
+            place()
         # Hang each controller it can off its actuator, and keep that only
         # if the sheet stays clean. The check assumes the default router.
         if (type(router) is DefaultRouter and not self._laying_out

@@ -2939,3 +2939,30 @@ def test_a_chain_on_a_tap_balloon_sitting_on_its_line_settles_with_the_tap_on_th
         min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
         for (ax, ay), (bx, by) in zip(points, points[1:])
     ), (tt.tap, points)
+
+
+def test_a_sheet_the_keep_off_rule_cannot_settle_is_routed_as_before():
+    """Route as without the rule when keeping a chained balloon off its line never settles.
+
+    Returns
+    -------
+    None
+        Routing settles and TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("fallback")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=500)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=200, y=300)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.25, offset=70, angle=45)
+    fs.add_instrument("TIC", 1, near=tt)
+    fs.route()
+
+    assert fs.route_converged
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)

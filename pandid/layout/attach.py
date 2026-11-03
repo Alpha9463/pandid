@@ -482,10 +482,12 @@ def place_attached(fs: "Flowsheet") -> bool:
                 continue
             (tx, ty), ref = anchor
             w, h = resolve_size(inst)
+            runs = _tapped_runs(inst) if fs._keep_clear else ()
+            fs._kept_clear = fs._kept_clear or bool(runs)
             distance, angle = _clear_standoff(
                 inst, (tx, ty), ref, w, h,
                 obstacles + keepouts if mounted else obstacles,
-                [] if mounted else keepouts, _tapped_runs(inst))
+                [] if mounted else keepouts, runs)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis.
