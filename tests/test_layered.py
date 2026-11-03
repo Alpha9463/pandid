@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 
 from _layout_cases import build as build_biodiesel
@@ -13,7 +16,56 @@ from pandid.geometry import Frame, Route
 from pandid.streams import Stream
 from pandid.routing.metrics import real_bends
 from scripts import layout_quality, route_quality
-from scripts.layout_compare import _fingerprint
+
+
+def _fingerprint(fs: Flowsheet) -> str:
+    """Hash the resolved frames, port faces, routes, and convergence state.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed flowsheet.
+
+    Returns
+    -------
+    str
+        SHA-256 digest of the drawing geometry, rounded to six decimal places.
+    """
+    geometry = {
+        "units": [
+            (
+                u.name,
+                None
+                if u.frame is None
+                else (
+                    round(u.frame.x, 6),
+                    round(u.frame.y, 6),
+                    round(u.frame.w, 6),
+                    round(u.frame.h, 6),
+                    u.frame.col,
+                    u.frame.row,
+                    u.frame.orientation,
+                    u.frame.mirrored,
+                    u.frame.mirror_y,
+                    u.frame.label_pos,
+                    sorted(u.frame.port_faces.items()),
+                ),
+            )
+            for u in fs.units
+        ],
+        "streams": [
+            (
+                s.name,
+                None
+                if s.route is None
+                else (s.route.manual, [(round(x, 6), round(y, 6)) for x, y in s.route.waypoints]),
+            )
+            for s in fs.streams
+        ],
+        "converged": fs.route_converged,
+    }
+    encoded = json.dumps(geometry, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @pytest.mark.parametrize("stem", ["04_control_loop", "08_from_data", "16_demineralised_water"])
