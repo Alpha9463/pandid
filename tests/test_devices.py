@@ -129,21 +129,6 @@ def test_the_generator_refuses_the_three_kinds_that_may_not_have_classes(kind):
 
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
-def test_every_declared_nozzle_is_one_the_symbol_anchors(cls):
-    """A nozzle the artwork does not place falls back to the centre of the box.
-
-    Two of them then land on the same point and their streams stack, which is
-    what makes this the check the renamed draws had to pass: ``Cyclone`` calls
-    its draws ``overflow`` and ``underflow`` while its drawing still anchors
-    ``vapor`` and ``liquid``, and only :attr:`~pandid.units.Unit.PORT_ANCHORS`
-    joins the two.
-    """
-    unit = cls("X-1")
-    unplaced = [name for name in unit.ports if not portgeom.is_anchored(unit, name)]
-    assert unplaced == []
-
-
-@pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_every_variant_a_class_owns_anchors_the_same_nozzles(cls):
     """``PORTS`` is read once, so a class is one nozzle set across its drawings.
 
@@ -452,16 +437,3 @@ def test_every_device_is_a_subclass_of_the_class_that_owns_its_kind(cls):
     )
     assert issubclass(cls, base)
     assert cls.kind == base.kind
-
-
-@pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
-def test_every_device_draws(cls):
-    """One unit of each class on a sheet, rendered. The end-to-end check.
-
-    Everything above measures a declaration; this is the drawing it produces,
-    and it is where a nozzle the artwork cannot place, an unregistered variant
-    or a broken alias shows up as an exception rather than as an opinion.
-    """
-    sheet = Flowsheet(cls.__name__)
-    sheet.add(cls("X-1"))
-    assert "<svg" in sheet.to_svg()

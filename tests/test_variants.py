@@ -101,16 +101,6 @@ def test_every_generated_class_names_its_variants():
 
 
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
-def test_every_shipped_variant_still_constructs(cls, variant):
-    """Construction is not where a shipped ``Kind(variant=...)`` can fail.
-
-    Every unit takes its name as the first positional argument, so one call
-    builds any of them; the variant is the only thing varying here.
-    """
-    assert cls("X-1", **_drawing(cls, variant)).variant == variant
-
-
-@pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
 def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     """The ports, against the expression that built them before this change.
 
@@ -128,7 +118,9 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     unit rather than per variant. ``_STIRRED`` is the list of bodies that get
     one when the author names none.
     """
-    built = set(cls("X-1", **_drawing(cls, variant)).ports)
+    unit = cls("X-1", **_drawing(cls, variant))
+    assert unit.variant == variant
+    built = set(unit.ports)
     if cls is units.HeatExchanger:
         table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}
