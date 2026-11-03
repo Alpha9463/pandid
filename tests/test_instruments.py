@@ -1381,6 +1381,37 @@ def test_the_fallback_starts_from_the_settled_state_it_saved() -> None:
     assert fs.route_converged
 
 
+def test_a_line_drawn_by_hand_after_routing_is_routed_from_the_unhung_sheet() -> None:
+    """A second route() after via() starts from the sheet as routed
+    without hanging, so the hand-drawn line stays square."""
+    fs, lic, valve = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    fs.route()
+    line.via([(284.25, 234.9), (312.2, 234.9), (312.2, 275)])
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_hung_controllers_line_keeps_out_of_a_tag_halo() -> None:
+    """P-101's tag lies across the line up from the actuator, so the
+    controller is not hung and the line routes round the tag."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.layout.control import _halos
+
+    fs, lic, _ = _hung_controller()
+    fs.add(U.Vessel("P-101", width=80, height=20, label_pos="left")).pin(x=330, y=235)
+    fs.route()
+
+    line = lic.sig_out.stream
+    assert line is not None
+    points = stream_path(line)
+    for halo in _halos(fs):
+        assert not any(segment_crosses_box(a, b, halo) for a, b in zip(points, points[1:]))
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

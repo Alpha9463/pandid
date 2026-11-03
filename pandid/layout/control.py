@@ -151,7 +151,40 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
         _standoff_box)
     from pandid.portgeom import face_point, port_anchor
 
-    if inst.pin_ is not None:
+    valve = _hangable(fs, inst)
+    if valve is None:
+        return None
+    ax, ay, face = port_anchor(valve, valve.frame, "actuator")
+    _, (nx, ny) = face_point(valve, valve.frame, face)
+    for ring in range(STANDOFF_STEPS + 1):
+        for angle in _branch_angles(90.0):
+            box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
+                                angle, w, h)
+            if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
+                return box[0], box[1]
+    return None
+
+
+def _hangable(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
+    """Return the valve a free balloon may hang off, if any.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet the balloon is on.
+    inst : Unit
+        Unit to test.
+
+    Returns
+    -------
+    Unit or None
+        The one placed valve whose actuator the balloon drives, or None
+        if it is not a free, unpinned control balloon whose lines carry
+        no balloon and none drawn by hand.
+    """
+    from pandid.layout.stages import is_control
+
+    if not is_control(inst) or getattr(inst, "host", None) is not None or inst.pin_ is not None:
         return None
     wired = [(p, s) for p in inst.ports.values() if (s := p.stream) is not None]
     hosts = {id(inst), *(id(s) for _, s in wired)}
@@ -162,16 +195,7 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     driven = [s.dest.owner for p, s in wired if s.source is p and s.dest.name == "actuator"]
     if len(driven) != 1 or driven[0].frame is None:
         return None
-    valve = driven[0]
-    ax, ay, face = port_anchor(valve, valve.frame, "actuator")
-    _, (nx, ny) = face_point(valve, valve.frame, face)
-    for ring in range(STANDOFF_STEPS + 1):
-        for angle in _branch_angles(90.0):
-            box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
-                                angle, w, h)
-            if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
-                return box[0], box[1]
-    return None
+    return driven[0]
 
 
 def _halos(fs: "Flowsheet") -> list[_Box]:
@@ -198,8 +222,9 @@ def _halos(fs: "Flowsheet") -> list[_Box]:
 def _clashes(fs: "Flowsheet") -> bool:
     """Return whether the routed sheet has a clash.
 
-    A clash is an error finding, a line through a unit, a slanted line,
-    unsettled placement, or a tap line through a unit other than its own.
+    A clash is an error finding, a line through a unit or a tag halo, a
+    slanted line, unsettled placement, or a tap line through a unit other
+    than its own.
 
     Parameters
     ----------
@@ -211,6 +236,7 @@ def _clashes(fs: "Flowsheet") -> bool:
     bool
         True if the sheet has a clash.
     """
+    from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -218,6 +244,14 @@ def _clashes(fs: "Flowsheet") -> bool:
     codes = ("route-crosses-unit", "route-diagonal", "route-not-settled")
     if any(i.severity == "error" or i.code in codes for i in fs.validate()):
         return True
+    halos = _halos(fs)
+    for s in fs.streams:
+        if s.route is None:
+            continue
+        points = stream_path(s)
+        if any(segment_crosses_box(a, b, h) for a, b in zip(points, points[1:])
+               for h in halos):
+            return True
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     for inst, tap, centre in tap_lines(fs):
         route = tap_route(inst, tap, centre)

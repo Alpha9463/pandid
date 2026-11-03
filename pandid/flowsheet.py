@@ -548,10 +548,11 @@ class Flowsheet:
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
-        # Whether route() may hang a controller off its actuator, and the
-        # controllers it hung.
+        # Whether route() may hang a controller off its actuator, the
+        # controllers it hung, and the sheet as routed without them.
         self._may_hang = False
         self._hung: set[int] = set()
+        self._unhung: tuple | None = None
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2032,6 +2033,7 @@ class Flowsheet:
         if engine is None:
             engine = default_layout_engine
         engine.layout(self)
+        self._unhung = None
         self._layout_stale = False
         self._route_stale = True
 
@@ -2059,11 +2061,10 @@ class Flowsheet:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
-        from pandid.layout.control import _clashes, place_control
+        from pandid.layout.control import _clashes, _hangable, place_control
 
-        def settle() -> None:
-            """Route, then place balloons and re-route until nothing moves."""
-            router.route(self)
+        def place() -> None:
+            """Place balloons and re-route until nothing moves."""
             self.route_converged = False
             for _ in range(MAX_PLACEMENT_PASSES):
                 if not place_control(self):
@@ -2071,32 +2072,49 @@ class Flowsheet:
                     break
                 router.route(self)
 
-        # The sheet as laid out, to route again if hanging fails.
-        laid = copy.deepcopy([(u.frame, getattr(u, "tap", None)) for u in self.units])
-        drawn = copy.deepcopy([s.route for s in self.streams])
-        converged = self.route_converged
-        self._may_hang, self._hung = True, set()
-        try:
-            settle()
-            clash = bool(self._hung) and _clashes(self)
-        except Exception:
-            if not self._hung:
-                raise
-            clash = True
-        finally:
-            self._may_hang = False
-        # A hung controller that leaves a clash, or that the router
-        # refuses: route the sheet as laid out, without hanging.
-        if clash:
-            for u, (frame, tap) in zip(self.units, laid):
-                u.frame = frame
-                if hasattr(u, "tap"):
-                    u.tap = tap
-            for st, route in zip(self.streams, drawn):
-                st.route = route
+        def save() -> tuple:
+            """Return the frames, taps, routes and settled flag."""
+            return (copy.deepcopy({id(u): (u.frame, getattr(u, "tap", None))
+                                   for u in self.units}),
+                    copy.deepcopy({id(st): st.route for st in self.streams}),
+                    self.route_converged)
+
+        def restore(state: tuple) -> None:
+            """Put back what save() returned; a route drawn by hand stays."""
+            frames, routes, converged = state
+            for u in self.units:
+                if id(u) in frames:
+                    u.frame, tap = frames[id(u)]
+                    if hasattr(u, "tap"):
+                        u.tap = tap
+            for st in self.streams:
+                if id(st) in routes and not (st.route is not None and st.route.manual):
+                    st.route = routes[id(st)]
             self.route_converged = converged
-            self._hung = set()
-            settle()
+
+        # Start from the sheet as routed without hanging, not from a hung
+        # controller left by the last route().
+        if self._unhung is not None:
+            restore(self._unhung)
+            self._unhung = None
+        router.route(self)
+        place()
+        # Hang each controller it can off its actuator, and keep that only
+        # if the sheet stays clean.
+        if any(_hangable(self, u) for u in self.units):
+            unhung = save()
+            self._may_hang, self._hung = True, set()
+            try:
+                place()
+                clash = _clashes(self)
+            except Exception:
+                clash = True
+            finally:
+                self._may_hang = False
+            if clash or not self._hung:
+                restore(unhung)
+            else:
+                self._unhung = unhung
         # Mark the routes current.
         self._route_stale = False
 
