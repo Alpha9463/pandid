@@ -3523,14 +3523,7 @@ class SvgRenderer:
         Symbols drawn with.
     """
 
-    def __init__(self, registry=None):
-        """Store the symbol registry.
-
-        Parameters
-        ----------
-        registry : SymbolRegistry, optional
-            Symbols to draw with; ``default_registry`` when omitted.
-        """
+    def __init__(self, registry=None):  # numpydoc ignore=GL08
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
 
