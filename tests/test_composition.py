@@ -876,37 +876,10 @@ def test_group_4_matches_the_rows_it_claims():
     assert flare.iso_reg == "2591"
 
 
-def test_the_group_10_outline_is_the_row_table_2_draws():
-    """The chamfered casing every group-10 row shares.
-
-    Measured off row 10.1: casing x 8..16 M at y 6..16 M, chamfered 1 M x
-    2 M at the top two corners only -- (8,6) to (9,4) and (16,6) to
-    (15,4) -- so an 8 M x 12 M box. The two connection ticks Table 2 draws
-    are on the west and east walls, nine tenths of the way down a
-    straight-sided run from y 20 to y 120 units -- also its own mid-point.
-
-    ``heating_in``/``vent`` are not ticked by the row at all -- no row in
-    the group draws a third connection -- and are this library's own
-    addition to it, centred on the casing's own floor and roof rather
-    than read off anything Table 2 tabulates; see
-    ``pandid.units.Dryer``.
-    """
-    general = default_registry.get("dryer", "general")
-    assert (general.width, general.height) == (80.0, 120.0)
-    assert "M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" in general.svg
-    assert general.ports == {
-        "feed": (0.0, 70.0),
-        "product": (80.0, 70.0),
-        "heating_in": (40.0, 120.0),
-        "vent": (40.0, 0.0),
-    }
-    assert general.iso_reg == "C0046"
-    assert not general.overlays
-
-
 @pytest.mark.parametrize(
     "variant, reg, needle",
     [
+        ("general", "C0046", "M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z"),
         ("shelf", "X8083", '<line x1="20" y1="30" x2="60" y2="30"'),
         (
             "turbo",
@@ -926,6 +899,8 @@ def test_group_10_marks_match_their_rows(variant, reg, needle):
     ``overlays``.
     """
     sym = default_registry.get("dryer", variant)
+    # Row 10.1: an 8 M x 12 M casing chamfered 1 M x 2 M at its top corners.
+    assert (sym.width, sym.height) == (80.0, 120.0)
     assert "M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" in sym.svg
     assert needle in sym.svg
     assert sym.iso_reg == reg
@@ -938,32 +913,10 @@ def test_group_10_marks_match_their_rows(variant, reg, needle):
     }
 
 
-def test_the_group_5_outline_is_the_row_table_2_draws():
-    """The trapezoid-on-a-basin every group-5 row shares.
-
-    Measured off row 5.1: a trapezoid 4 M across the top (20,0) (60,0)
-    widening to 8 M at a shoulder 8 M down (0,80) (80,80), sitting on a
-    2 M deep basin the same 8 M wide -- an 8 M x 10 M box overall, the
-    apex centred on it.
-    """
-    general = default_registry.get("cooling_tower", "general")
-    assert (general.width, general.height) == (80.0, 100.0)
-    assert "M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" in general.svg
-    assert general.iso_reg == "2521"
-    assert not general.overlays
-    assert general.ports == {
-        "air_out": (40.0, 0.0),
-        "water_in": (0.0, 90.0),
-        "air_in": (80.0, 90.0),
-        "water_out": (40.0, 100.0),
-        "makeup": (20.0, 100.0),
-        "blowdown": (60.0, 100.0),
-    }
-
-
 @pytest.mark.parametrize(
     "variant, reg, has_dry, has_wet, has_fan",
     [
+        ("general", "2521", False, False, None),
         ("dry_natural", "X8109", True, False, None),
         ("dry_forced", "X8110", True, False, 65.0),
         ("dry_induced", "X8111", True, False, 15.0),
@@ -984,9 +937,19 @@ def test_group_5_fill_and_draught_marks_match_their_rows(variant, reg, has_dry, 
     it for an induced one -- there is no fan on a naturally draughted row.
     """
     sym = default_registry.get("cooling_tower", variant)
+    # Row 5.1: a trapezoid 4 M to 8 M wide over 8 M, on a 2 M deep basin.
+    assert (sym.width, sym.height) == (80.0, 100.0)
     assert "M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" in sym.svg
     assert sym.iso_reg == reg
     assert not sym.overlays
+    assert sym.ports == {
+        "air_out": (40.0, 0.0),
+        "water_in": (0.0, 90.0),
+        "air_in": (80.0, 90.0),
+        "water_out": (40.0, 100.0),
+        "makeup": (20.0, 100.0),
+        "blowdown": (60.0, 100.0),
+    }
     assert ('<line x1="0" y1="90" x2="80" y2="90"' in sym.svg) is has_dry
     assert ("M 10 40 L 40 40 M 30 50 L 40 40 L 50 50" in sym.svg) is has_wet
     if has_fan is None:
