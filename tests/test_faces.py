@@ -38,32 +38,31 @@ def _drum_fed_from(x, y, *, fs=None, **drum_pin):
 # --- Selection by peer position ----------------------------------------------
 
 
-def test_a_peer_overhead_takes_the_north_shell():
-    """Select the north placement for a peer above the drum."""
-    fs, drum = _drum_fed_from(220, 60)
+@pytest.mark.parametrize(
+    "x, y, pin, face",
+    [
+        (220, 60, {}, "N"),
+        (500, 215, {}, "E"),
+        (20, 215, {}, "W"),
+        (220, 400, {"mirrored": "y"}, "S"),
+    ],
+    ids=["overhead-north-shell", "astern-far-head", "ahead-home-nozzle", "mirrored-drawn-face"],
+)
+def test_the_feed_takes_the_face_toward_its_peer(x, y, pin, face):
+    """Select the feed placement facing the peer, named as drawn.
+
+    Parameters
+    ----------
+    x, y : float
+        Pinned position of the flag's nozzle.
+    pin : dict
+        Extra ``pin()`` keywords for the drum.
+    face : str
+        Face the feed is drawn on.
+    """
+    fs, drum = _drum_fed_from(x, y, **pin)
     fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "N"
-
-
-def test_a_peer_astern_takes_the_far_head():
-    """Select the east placement for a peer to the right of the drum."""
-    fs, drum = _drum_fed_from(500, 215)
-    fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "E"
-
-
-def test_a_peer_ahead_leaves_the_home_nozzle_alone():
-    """Keep the home placement for a peer to the left of the drum."""
-    fs, drum = _drum_fed_from(20, 215)
-    fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "W"
-
-
-def test_the_face_is_named_in_drawn_space():
-    """Name the selected face as drawn on a vertically mirrored unit."""
-    fs, drum = _drum_fed_from(220, 400, mirrored="y")
-    fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "S"
+    assert port_anchor(drum, drum.frame, "feed")[2] == face
 
 
 # --- Ports selection leaves alone --------------------------------------------
