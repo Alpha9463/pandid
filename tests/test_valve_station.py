@@ -21,9 +21,10 @@ import pytest
 
 from pandid import Flowsheet, spec, units
 from pandid.document import equipment_list
-from pandid.geometry import Frame
 from pandid.portgeom import port_offset, port_point, resolve_size
 from pandid.stations import DEFAULT_GAP, ValveStation
+
+from _layout_cases import frame_of, nozzle_of
 
 RUN_Y = 400.0
 
@@ -252,41 +253,6 @@ def test_a_member_is_an_ordinary_unit_that_can_still_be_moved_and_instrumented()
 # --- Placement ---------------------------------------------------------------
 
 
-def _nozzle(unit, port):
-    """Return the drawn position of a port on a laid-out unit.
-
-    Parameters
-    ----------
-    unit : Unit
-        Laid-out unit.
-    port : str
-        Port name.
-
-    Returns
-    -------
-    tuple of (float, float)
-        Port position on the sheet.
-    """
-    return port_point(unit, unit.frame, port)
-
-
-def _box(unit: units.Unit) -> Frame:
-    """Return the frame layout resolved for a unit.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit on a laid-out sheet.
-
-    Returns
-    -------
-    Frame
-        The unit's frame; asserted to exist.
-    """
-    assert unit.frame is not None
-    return unit.frame
-
-
 def _drawn(station: ValveStation) -> list[tuple[float, float, bool, bool]]:
     """Return where each member is drawn and which way round.
 
@@ -300,7 +266,10 @@ def _drawn(station: ValveStation) -> list[tuple[float, float, bool, bool]]:
     list of tuple of (float, float, bool, bool)
         Each member's ``x``, ``y``, ``mirrored`` and ``mirror_y``.
     """
-    return [(_box(u).x, _box(u).y, _box(u).mirrored, _box(u).mirror_y) for u in station.members]
+    return [
+        (frame_of(u).x, frame_of(u).y, frame_of(u).mirrored, frame_of(u).mirror_y)
+        for u in station.members
+    ]
 
 
 def test_every_device_on_the_run_lands_on_the_run():
@@ -311,8 +280,8 @@ def test_every_device_on_the_run_lands_on_the_run():
         u for u in st.members if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
     ]
     for unit in on_the_run:
-        assert _nozzle(unit, "inlet")[1] == pytest.approx(RUN_Y)
-        assert _nozzle(unit, "outlet")[1] == pytest.approx(RUN_Y)
+        assert nozzle_of(unit, "inlet")[1] == pytest.approx(RUN_Y)
+        assert nozzle_of(unit, "outlet")[1] == pytest.approx(RUN_Y)
 
 
 def test_the_run_is_drawn_left_to_right_in_piping_order():
@@ -335,7 +304,7 @@ def test_gap_is_edge_to_edge_between_one_device_and_the_next():
         u for u in st.members if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
     ]
     for before, after in zip(on_the_run, on_the_run[1:]):
-        assert _box(after).x - _box(before).x_max == pytest.approx(50)
+        assert frame_of(after).x - frame_of(before).x_max == pytest.approx(50)
 
 
 def test_a_mirrored_station_is_the_same_run_drawn_the_other_way_round():
@@ -348,17 +317,19 @@ def test_a_mirrored_station_is_the_same_run_drawn_the_other_way_round():
     xs = [u.frame.x for u in on_the_run]
     assert xs == sorted(xs, reverse=True)
     # Flow still enters at the station inlet, now at its east end.
-    assert _nozzle(st.upstream_isolation, "inlet")[0] > _nozzle(st.upstream_isolation, "outlet")[0]
+    assert (
+        nozzle_of(st.upstream_isolation, "inlet")[0] > nozzle_of(st.upstream_isolation, "outlet")[0]
+    )
 
 
 def test_the_bypass_stands_over_the_run_and_the_drains_hang_under_it():
     """Check that ``bypass_rise`` and ``drain_drop`` set the leg offsets."""
     fs, st = _sheet(bypass_rise=45, drain_drop=36)
     fs.layout()
-    assert _nozzle(st.bypass, "inlet")[1] == pytest.approx(RUN_Y - 45)
+    assert nozzle_of(st.bypass, "inlet")[1] == pytest.approx(RUN_Y - 45)
     for drain in (st.upstream_drain, st.downstream_drain):
-        assert _nozzle(drain, "inlet")[1] == pytest.approx(RUN_Y + 36)
-        assert _nozzle(drain, "inlet")[0] == pytest.approx(_nozzle(drain, "outlet")[0])
+        assert nozzle_of(drain, "inlet")[1] == pytest.approx(RUN_Y + 36)
+        assert nozzle_of(drain, "inlet")[0] == pytest.approx(nozzle_of(drain, "outlet")[0])
 
 
 def test_a_drain_hangs_off_its_own_tee():
@@ -366,14 +337,14 @@ def test_a_drain_hangs_off_its_own_tee():
     fs, st = _sheet()
     fs.layout()
     for tee, drain in ((st.tees[1], st.upstream_drain), (st.tees[2], st.downstream_drain)):
-        assert _nozzle(drain, "inlet")[0] == pytest.approx(_nozzle(tee, "branch")[0])
+        assert nozzle_of(drain, "inlet")[0] == pytest.approx(nozzle_of(tee, "branch")[0])
 
 
 def test_the_bypass_valve_sits_in_the_middle_of_its_leg_by_default():
     """Check that the bypass valve is centred between the takeoff and rejoin."""
     fs, st = _sheet()
     fs.layout()
-    legs = [_nozzle(st.tees[0], "branch")[0], _nozzle(st.tees[-1], "branch")[0]]
+    legs = [nozzle_of(st.tees[0], "branch")[0], nozzle_of(st.tees[-1], "branch")[0]]
     centre = st.bypass.frame.x + resolve_size(st.bypass)[0] / 2
     assert centre == pytest.approx(sum(legs) / 2)
 
@@ -539,7 +510,7 @@ def test_a_word_left_unsaid_is_the_default_it_always_was():
         if u not in (placed.bypass, placed.upstream_drain, placed.downstream_drain)
     ]
     for before, after in zip(on_the_run, on_the_run[1:]):
-        assert _box(after).x - _box(before).x_max == pytest.approx(DEFAULT_GAP)
+        assert frame_of(after).x - frame_of(before).x_max == pytest.approx(DEFAULT_GAP)
 
 
 def test_a_station_on_a_line_takes_run_words_only_with_x_and_y():

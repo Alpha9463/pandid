@@ -30,7 +30,9 @@ import pytest
 
 from pandid import Flowsheet, devices as D, units as U
 from pandid.geometry import Frame
-from pandid.portgeom import port_faces, port_point
+from pandid.portgeom import port_faces
+
+from _layout_cases import frame_of, nozzle_of
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -41,23 +43,6 @@ SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)
 # ---------------------------------------------------------------------------
 # Reading the drawing
 # ---------------------------------------------------------------------------
-
-
-def _frame(unit: U.Unit) -> Frame:
-    """Return a unit's frame, which layout must have given it.
-
-    Parameters
-    ----------
-    unit : Unit
-        Laid-out unit.
-
-    Returns
-    -------
-    Frame
-        Its frame.
-    """
-    assert unit.frame is not None, f"{unit.name} has no frame"
-    return unit.frame
 
 
 def _frames(fs: Flowsheet) -> dict[str, Frame]:
@@ -73,25 +58,7 @@ def _frames(fs: Flowsheet) -> dict[str, Frame]:
     dict[str, Frame]
         Frame of each unit, keyed by its name.
     """
-    return {unit.name: _frame(unit) for unit in fs.units}
-
-
-def _nozzle(unit: U.Unit, port: str) -> tuple[float, float]:
-    """Return where a line attaches to one of a laid-out unit's nozzles.
-
-    Parameters
-    ----------
-    unit : Unit
-        Laid-out unit.
-    port : str
-        Port name.
-
-    Returns
-    -------
-    tuple[float, float]
-        Drawn attachment point.
-    """
-    return port_point(unit, _frame(unit), port)
+    return {unit.name: frame_of(unit) for unit in fs.units}
 
 
 # ---------------------------------------------------------------------------
@@ -253,13 +220,13 @@ def test_a_col_pin_sets_the_layer_at_every_density() -> None:
             wanted = _held(fs, share, seed * 17 + int(share * 100))
             fs.layout()
             for unit, (col, _) in wanted.items():
-                assert _frame(unit).col == col, (
+                assert frame_of(unit).col == col, (
                     f"{fs.name} at {share:.0%} pinned: {unit.name} was pinned to "
-                    f"col {col} and drew in col {_frame(unit).col}"
+                    f"col {col} and drew in col {frame_of(unit).col}"
                 )
             for west, (west_col, _) in wanted.items():
                 for east, (east_col, _) in wanted.items():
-                    assert west_col >= east_col or _frame(west).x < _frame(east).x, (
+                    assert west_col >= east_col or frame_of(west).x < frame_of(east).x, (
                         f"{fs.name} at {share:.0%} pinned: {west.name} (col {west_col}) "
                         f"is drawn east of {east.name} (col {east_col})"
                     )
@@ -277,12 +244,12 @@ def test_a_row_pin_orders_its_column_at_every_density() -> None:
             wanted = _held(fs, share, seed * 17 + int(share * 100))
             fs.layout()
             for unit, (_, row) in wanted.items():
-                assert _frame(unit).row == row
+                assert frame_of(unit).row == row
             for upper, (col, upper_row) in wanted.items():
                 for lower, (lower_col, lower_row) in wanted.items():
                     if col != lower_col or upper_row >= lower_row:
                         continue
-                    assert _frame(upper).y < _frame(lower).y, (
+                    assert frame_of(upper).y < frame_of(lower).y, (
                         f"{fs.name} at {share:.0%} pinned: {upper.name} (row {upper_row}) "
                         f"is drawn below {lower.name} (row {lower_row}) in col {col}"
                     )
@@ -307,7 +274,7 @@ def test_a_disconnected_piece_gets_a_band_of_its_own() -> None:
     fs.layout()
     spans: dict[str, tuple[float, float]] = {}
     for unit in fs.units:
-        frame = _frame(unit)
+        frame = frame_of(unit)
         tags = unit.name.split("-")
         piece = "A" if "A" in tags else "B" if "B" in tags else "orphan"
         top, bottom = spans.get(piece, (frame.y, frame.y_max))
@@ -385,10 +352,10 @@ def test_a_condenser_sits_beside_the_column_top() -> None:
     cond = fs.add(D.Condenser("E-1"))
     fs.connect(col.overhead, cond.shell_in)
     fs.layout()
-    assert _frame(col).x_max < _frame(cond).x
-    assert _nozzle(cond, "shell_in")[1] <= _nozzle(col, "overhead")[1] + 0.5, (
-        f"the condenser inlet at {_nozzle(cond, 'shell_in')} is below the overhead "
-        f"nozzle at {_nozzle(col, 'overhead')}"
+    assert frame_of(col).x_max < frame_of(cond).x
+    assert nozzle_of(cond, "shell_in")[1] <= nozzle_of(col, "overhead")[1] + 0.5, (
+        f"the condenser inlet at {nozzle_of(cond, 'shell_in')} is below the overhead "
+        f"nozzle at {nozzle_of(col, 'overhead')}"
     )
 
 
@@ -406,7 +373,7 @@ def test_a_turned_unit_places_its_peers_on_its_turned_faces() -> None:
         fs.connect(col.overhead, cond.shell_in)
         fs.layout()
         assert port_faces(col, "overhead") == [face]
-        tower, peer = _frame(col), _frame(cond)
+        tower, peer = frame_of(col), frame_of(cond)
         if face == "E":
             assert tower.x_max < peer.x, f"turned {turn}: the condenser is not east"
         else:
@@ -424,9 +391,9 @@ def test_a_top_to_bottom_pipe_stacks_its_units_with_nozzles_lined_up() -> None:
     lower = fs.add(U.Block("B", inputs=["N"], outputs=["E"]))
     fs.connect(upper.out_1, lower.in_1)
     fs.layout()
-    assert _frame(upper).col == _frame(lower).col
-    assert _frame(upper).y_max < _frame(lower).y
-    drop, landing = _nozzle(upper, "out_1"), _nozzle(lower, "in_1")
+    assert frame_of(upper).col == frame_of(lower).col
+    assert frame_of(upper).y_max < frame_of(lower).y
+    drop, landing = nozzle_of(upper, "out_1"), nozzle_of(lower, "in_1")
     assert abs(drop[0] - landing[0]) <= 0.5, f"the stack's nozzles {drop} and {landing}"
 
 
@@ -448,9 +415,9 @@ def test_a_header_stays_between_the_column_and_the_bank_it_feeds() -> None:
             fs.connect(header.outlets[i], pump.suction)
             bank.append(pump)
         fs.layout()
-        at = _frame(header)
-        frames = [_frame(pump) for pump in bank]
-        assert _frame(col).x_max < at.x and at.x_max < min(f.x for f in frames), (
+        at = frame_of(header)
+        frames = [frame_of(pump) for pump in bank]
+        assert frame_of(col).x_max < at.x and at.x_max < min(f.x for f in frames), (
             f"{pumps} pumps: the header left the run between the column and the bank"
         )
         assert min(f.y for f in frames) <= at.y and at.y_max <= max(f.y_max for f in frames), (
@@ -473,9 +440,9 @@ def test_a_header_is_not_sunk_by_the_bank_it_supplies() -> None:
         fs.connect(steam.outlet, heater.utility_in)
         fs.connect(heater.outlet, condensate.inlet)
     fs.layout()
-    top = min(_frame(h).y for h in heaters)
-    bottom = max(_frame(h).y_max for h in heaters)
-    header = _frame(steam)
+    top = min(frame_of(h).y for h in heaters)
+    bottom = max(frame_of(h).y_max for h in heaters)
+    header = frame_of(steam)
     assert top <= header.y and header.y_max <= bottom, (
         f"the header spans {header.y:.0f}..{header.y_max:.0f}, outside the bank's "
         f"{top:.0f}..{bottom:.0f}"

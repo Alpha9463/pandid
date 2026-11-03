@@ -8,6 +8,8 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.portgeom import pinned_x, pinned_y, port_offset
 
+from _layout_cases import nozzle_of
+
 
 def _small_auto():
     fs = Flowsheet("auto")
@@ -170,14 +172,6 @@ def _valve_on_a_run():
     return fs, valve
 
 
-def _drawn(unit, port_name):
-    """Where a laid-out unit's nozzle ended up on the sheet."""
-    from pandid.portgeom import port_point
-
-    assert unit.frame is not None, f"{unit.name} was never placed"
-    return port_point(unit, unit.frame, port_name)
-
-
 def test_a_later_turn_leaves_a_port_pinned_nozzle_on_its_run():
     """``pin(port=...)`` says where a *nozzle* goes, and it keeps saying it.
 
@@ -191,11 +185,11 @@ def test_a_later_turn_leaves_a_port_pinned_nozzle_on_its_run():
     fs, valve = _valve_on_a_run()
     valve.pin(port="inlet", y=RUN_Y)
     fs.layout()
-    assert _drawn(valve, "inlet")[1] == RUN_Y
+    assert nozzle_of(valve, "inlet")[1] == RUN_Y
 
     valve.pin(orientation=90)
     fs.layout()
-    assert _drawn(valve, "inlet")[1] == RUN_Y
+    assert nozzle_of(valve, "inlet")[1] == RUN_Y
 
 
 def test_a_later_mirror_leaves_a_port_pinned_nozzle_on_its_run():
@@ -208,11 +202,11 @@ def test_a_later_mirror_leaves_a_port_pinned_nozzle_on_its_run():
     fs, valve = _valve_on_a_run()
     valve.pin(port="inlet", x=300.0, y=RUN_Y)
     fs.layout()
-    was = _drawn(valve, "inlet")
+    was = nozzle_of(valve, "inlet")
 
     valve.pin(mirrored=True)
     fs.layout()
-    assert _drawn(valve, "inlet") == was
+    assert nozzle_of(valve, "inlet") == was
 
 
 def test_piping_the_nozzle_from_another_face_leaves_it_where_it_was_pinned():
@@ -229,11 +223,11 @@ def test_piping_the_nozzle_from_another_face_leaves_it_where_it_was_pinned():
     fs.connect(tank.outlet, prod.inlet)
     tank.pin(port="in_1", y=RUN_Y)
     fs.layout()
-    assert _drawn(tank, "in_1")[1] == RUN_Y
+    assert nozzle_of(tank, "in_1")[1] == RUN_Y
 
     tank.nozzle("in_1", "N")
     fs.layout()
-    assert _drawn(tank, "in_1")[1] == RUN_Y
+    assert nozzle_of(tank, "in_1")[1] == RUN_Y
 
 
 def test_resizing_the_box_leaves_a_port_pinned_nozzle_where_it_was_pinned():
@@ -252,7 +246,7 @@ def test_resizing_the_box_leaves_a_port_pinned_nozzle_where_it_was_pinned():
 
     tank.height = 200.0
     fs.layout()
-    assert _drawn(tank, "in_1")[1] == RUN_Y
+    assert nozzle_of(tank, "in_1")[1] == RUN_Y
 
 
 def _tank_the_selector_wants_to_move(port_pin: bool):
@@ -302,10 +296,10 @@ def test_the_engine_does_not_pick_a_face_out_from_under_a_pinned_nozzle():
     assert loose.frame is not None
     assert len(port_faces(loose, "in_1", loose.frame)) > 1
     assert loose.frame.port_faces.get("in_1") == "N"
-    assert _drawn(loose, "in_1") != (300.0, RUN_Y)
+    assert nozzle_of(loose, "in_1") != (300.0, RUN_Y)
 
     fs, tank = _tank_the_selector_wants_to_move(port_pin=True)
-    assert _drawn(tank, "in_1") == (300.0, RUN_Y)
+    assert nozzle_of(tank, "in_1") == (300.0, RUN_Y)
     assert "pin-not-honored" not in [i.code for i in fs.validate()]
 
 
@@ -326,7 +320,7 @@ def test_a_pinned_nozzle_may_still_be_sent_to_a_face_by_name():
     fs.layout()
     assert tank.frame is not None
     assert resolve_port(tank, tank.frame, "in_1").face == "N"
-    assert _drawn(tank, "in_1") == (300.0, RUN_Y)
+    assert nozzle_of(tank, "in_1") == (300.0, RUN_Y)
     assert "pin-not-honored" not in [i.code for i in fs.validate()]
 
 
@@ -350,7 +344,7 @@ def test_only_the_pinned_nozzle_is_taken_out_of_the_engine_s_hands():
 
     assert belt.frame is not None
     assert belt.frame.port_faces == {"discharge": "E"}
-    assert _drawn(belt, "feed") == (400.0, RUN_Y)
+    assert nozzle_of(belt, "feed") == (400.0, RUN_Y)
 
 
 def test_a_pin_reads_back_as_the_corner_it_always_did():
@@ -830,7 +824,7 @@ def test_a_rank_and_a_located_nozzle_are_both_honoured():
     fs.route()
     assert valve.frame is not None
     assert valve.frame.x == column_one, "the column the pin named was not honoured"
-    assert _drawn(valve, "inlet")[1] == RUN_Y, "the elevation the pin named was not honoured"
+    assert nozzle_of(valve, "inlet")[1] == RUN_Y, "the elevation the pin named was not honoured"
     assert valve.frame.col == 1
     assert "pin-not-honored" not in [i.code for i in fs.validate()]
 
@@ -846,7 +840,7 @@ def test_an_absolute_coordinate_still_supersedes_the_rank_beside_a_nozzle():
     valve.pin(col=1, x=5.0, port="inlet")
     fs.layout()
     fs.route()
-    assert _drawn(valve, "inlet")[0] == 5.0
+    assert nozzle_of(valve, "inlet")[0] == 5.0
     assert "pin-not-honored" not in [i.code for i in fs.validate()]
 
 
