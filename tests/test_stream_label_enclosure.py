@@ -1014,17 +1014,15 @@ def no_clear_paper() -> Flowsheet:
     Flowsheet
         Flowsheet with no clear text-plate positions.
     """
-    fs = Flowsheet("dense", stream_naming_scheme="L" + "0" * 22 + "{n}")
+    fs = Flowsheet("dense", stream_naming_scheme="L000000{n}")
     for row in range(13):
         y = 400 + row * 14
-        feed = fs.add(Feed(f"F{row}")).pin(x=200, y=y)
-        vessel = fs.add(Vessel(f"V-{row}")).pin(x=900, y=y - 50)
+        feed = fs.add(Feed(f"F{row}")).pin(x=270, y=y)
+        vessel = fs.add(Vessel(f"V-{row}")).pin(x=360, y=y - 50)
         fs.connect(feed.outlet, vessel.inlet)
-    for picket in range(14):
-        x = 300 + picket * 30
-        top = fs.add(Tank(f"TA-{picket}")).pin(x=x, y=120)
-        bottom = fs.add(Tank(f"TB-{picket}")).pin(x=x, y=900)
-        fs.connect(top.outlet, bottom.inlet)
+    top = fs.add(Tank("TA")).pin(x=300, y=120)
+    bottom = fs.add(Tank("TB")).pin(x=300, y=900)
+    fs.connect(top.outlet, bottom.inlet)
     return fs
 
 
