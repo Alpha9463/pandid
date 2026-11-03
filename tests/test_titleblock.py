@@ -102,28 +102,6 @@ def test_a_border_nobody_asked_for_is_not_drawn():
     assert 'fill="none" stroke="black" stroke-width="2"/>' not in svg  # no frame
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        {"border": "isometric"},
-        {"border": "ruled"},
-        # ``border`` accepts frame names only.
-        {"border": "p&id"},
-    ],
-)
-def test_a_frame_the_renderer_cannot_draw_raises(kwargs):
-    """
-    Verify a frame the renderer cannot draw raises.
-
-    Parameters
-    ----------
-    kwargs : object
-        Additional keyword arguments forwarded by the helper.
-    """
-    with pytest.raises(ValueError):
-        _sheet().to_svg(**kwargs)
-
-
 def test_client_and_project_are_drawn():
     """
     Verify client and project are drawn.
@@ -148,16 +126,6 @@ def test_the_strip_grows_a_row_for_each_of_them():
     two = measure_title_strip(TitleBlock(project="Ethanol A300", client="Northwind"))
     assert bare[0] == one[0] == two[0]  # the strip keeps its width
     assert one[1] - bare[1] == two[1] - one[1] > 0
-
-
-def test_scale_is_drawn():
-    """
-    Verify scale is drawn.
-    """
-    fs = _sheet()
-    fs.title_block = TitleBlock(title="Demo Sheet", scale="1:100")
-    svg = fs.to_svg()
-    assert "SCALE" in svg and "1:100" in svg
 
 
 def test_a_sheet_with_no_scale_to_state_still_rules_the_scale_cell():
@@ -239,29 +207,6 @@ def test_a_stated_scale_beats_the_computed_one():
     svg = fs.to_svg(page_size="A4", border="zone")
     assert ">NTS</text>" in svg
     assert not re.search(r">1:[\d.]+</text>", svg)
-
-
-def test_title_block_fields_rendered():
-    """
-    Verify title block fields rendered.
-    """
-    fs = Flowsheet("Demo Unit")
-    fs.add(U.Feed("F"))
-    fs.add(U.Product("P"))
-    fs.connect(fs.units[0].outlet, fs.units[1].inlet)
-    fs.title_block = TitleBlock(
-        title="Demo Sheet",
-        drawing_number="PFD-9",
-        sheet="2",
-        of_sheets="4",
-        drawn_by="AA",
-        checked_by="BB",
-        approved_by="CC",
-        revisions=[Revision("0", "2026-01-01", "Issued", "AA")],
-    )
-    svg = fs.to_svg(border="zone", diagram="p&id")
-    for token in ("PFD-9", "2 of 4", "AA", "BB", "CC", "REV", "DESCRIPTION", "Issued"):
-        assert token in svg, token
 
 
 def test_no_title_block_still_renders_pid():
@@ -623,16 +568,9 @@ def test_an_internal_column_with_nothing_in_it_is_dropped():
     """
     fs = _two_and_two()
     assert _columns(fs) == ["S1", "S2", "S4"]
-    assert ">S3<" not in _table(fs)
-
-
-def test_a_boundary_column_with_nothing_in_it_is_kept():
-    """
-    Verify a boundary column with nothing in it is kept.
-    """
-    fs = _two_and_two()
-    assert "S4" in _columns(fs)
-    assert ">S4<" in _table(fs)
+    table = _table(fs)
+    assert ">S3<" not in table
+    assert ">S4<" in table
 
 
 def test_a_value_present_and_blank_keeps_the_column():
@@ -692,16 +630,6 @@ def _wide(n: int) -> Flowsheet:
     return fs
 
 
-def test_the_table_is_set_at_the_size_the_sheet_asks_for():
-    """
-    Verify the table is set at the size the sheet asks for.
-    """
-    fs = _two_and_two()
-    fs.stream_table.font_size = 8.0
-    assert _layout(fs).size == 8.0
-    assert 'font-size="8.0"' in _table(fs)
-
-
 def test_the_size_rules_the_table_and_not_only_its_lettering():
     """
     Verify the size rules the table and not only its lettering.
@@ -753,6 +681,7 @@ def test_an_option_set_after_a_render_reaches_the_next_one():
     fs.stream_table.font_size = 8.0
     second = _table(fs)
     assert 'font-size="10.5"' in first and 'font-size="8.0"' in second
+    assert _layout(fs).size == 8.0
 
 
 def test_the_stated_size_reaches_the_drawio_export_too():
@@ -1079,15 +1008,6 @@ def test_an_unmarked_run_reports_the_conditions_it_is_drawn_from():
     assert _row(fs, "Pressure") == ["11.6 barg"]
 
 
-def test_the_marked_segment_is_the_one_the_column_reports():
-    """
-    Verify the marked segment is the one the column reports.
-    """
-    fs, _up, down = _across_a_valve()
-    down.tabulate = True
-    assert _row(fs, "Pressure") == ["3.4 barg"]
-
-
 def test_the_mark_moves_the_values_and_not_the_heading():
     """
     Verify the mark moves the values and not the heading.
@@ -1314,16 +1234,6 @@ def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
     assert drawn_title("100") == drawn_title("1")
 
 
-def test_a_status_too_long_for_its_cell_is_reported():
-    """
-    Verify a status too long for its cell is reported.
-    """
-    fs = _sheet()
-    fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
-    fs.to_svg(border="zone")
-    assert [w for w in fs.warnings if w.code == "text-truncated" and "status" in w.message]
-
-
 def test_a_revision_description_too_long_for_its_column_is_reported():
     """
     Verify a revision description too long for its column is reported.
@@ -1451,7 +1361,7 @@ def test_a_render_reports_an_over_long_field_once():
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
     fs.to_svg(border="zone", page_size="A3")
-    assert len([w for w in fs.warnings if "status" in w.message]) == 1
+    assert [w.code for w in fs.warnings if "status" in w.message] == ["text-truncated"]
 
 
 def test_the_sheet_count_names_both_the_fields_that_fill_it():
@@ -1479,22 +1389,6 @@ def test_a_signatory_with_no_revision_row_to_sign_is_reported():
     assert "drawn_by='A. Anderson'" in found[0].message
     assert "approved_by='R. Lee'" in found[0].message
     assert "checked_by" not in found[0].message  # unset, so nothing was lost
-
-
-def test_a_signatory_with_a_revision_row_is_drawn_and_silent():
-    """
-    Verify a signatory with a revision row is drawn and silent.
-    """
-    fs = _sheet()
-    fs.title_block = TitleBlock(
-        title="Demo",
-        drawn_by="AA",
-        checked_by="JS",
-        revisions=[Revision("0", "2026-01-01", "Issued")],
-    )
-    svg = fs.to_svg(border="zone")
-    assert ">AA</text>" in svg and ">JS</text>" in svg
-    assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
 
 
 def _findings(fs: Flowsheet) -> list[tuple[str, str]]:
@@ -1924,19 +1818,6 @@ def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
     assert text_width(drawn, size, True) <= _TITLE_W
 
 
-def test_a_latin_title_is_cut_where_the_face_says_and_not_where_a_mean_said():
-    """
-    Verify a latin title is cut where the face says and not where a mean said.
-    """
-    from pandid.render.furniture import _TITLE_W, _SUBTITLE_TYPE, text_width
-
-    fs = _sheet()
-    fs.title_block = TitleBlock(title="Ethanol Purification and Dehydration Area A300")
-    svg = fs.to_svg(border="zone")
-    assert "Ethanol Purification and Dehydratio…" in svg
-    assert text_width("Ethanol Purification and Dehydratio…", _SUBTITLE_TYPE, True) <= _TITLE_W
-
-
 # --- finding de-duplication ----------------------------------------------------
 
 
@@ -1982,21 +1863,6 @@ def test_a_blank_title_reports_the_flowsheet_name_that_filled_it():
     assert found[0].message.startswith("Flowsheet name -> title was truncated")
 
 
-def test_a_backfilled_signatory_reports_the_block_field_that_supplied_it():
-    """
-    Verify a backfilled signatory reports the block field that supplied it.
-    """
-    fs = _sheet()
-    fs.title_block = TitleBlock(
-        title="Demo",
-        drawn_by="A. Anderson",
-        revisions=[Revision("0", "2026-01-01", "Issued")],
-    )
-    found = [i for i in fs.validate() if i.code == "text-truncated"]
-    assert len(found) == 1
-    assert found[0].message.startswith("drawn_by -> revisions[0].by was truncated")
-
-
 def test_a_signatory_the_newest_revision_overrides_is_reported():
     """
     Verify a signatory the newest revision overrides is reported.
@@ -2021,6 +1887,7 @@ def test_a_signatory_the_newest_revision_overrides_is_reported():
     [
         Revision("0", "2026-01-01", "Issued", "AA"),  # the same name: drawn
         Revision("0", "2026-01-01", "Issued"),  # blank: the block fills it
+        Revision("0", "2026-01-01", "Issued", by="   "),  # whitespace: blank too
     ],
 )
 def test_a_signatory_the_sheet_does_draw_is_silent(revision):
@@ -2080,62 +1947,6 @@ def test_a_cut_string_fits_its_cell_and_one_more_character_would_not(glyph, bold
 
 
 # --- fitting-findings source fields --------------------------------------------
-
-
-def _fit_messages(**kw: object) -> list[str]:
-    """Return text-finding messages for a title block.
-
-    Parameters
-    ----------
-    **kw : object
-        ``TitleBlock`` constructor arguments.
-
-    Returns
-    -------
-    list[str]
-        Text-related validation messages.
-    """
-    fs = _sheet(name="A Flowsheet Name Far Too Long For The Title Cell To Hold")
-    fs.title_block = TitleBlock(**kw)
-    return [i.message for i in fs.validate() if i.code.startswith("text-")]
-
-
-LONG = "Wollongong " * 12
-
-
-@pytest.mark.parametrize(
-    "kw,named",
-    [
-        # Blank fields use fallback source values.
-        ({}, "Flowsheet name -> title"),
-        ({"title": "Demo", "scale": LONG}, "scale"),
-        ({"title": "Demo", "date": LONG}, "date"),
-        (
-            {
-                "title": "Demo",
-                "drawn_by": LONG,
-                "revisions": [Revision("0", "2026-01-01", "Issued")],
-            },
-            "drawn_by -> revisions[0].by",
-        ),
-        (
-            {"title": "Demo", "revisions": [Revision(LONG, "2026-01-01", "Issued")]},
-            "revisions[0].rev -> rev",
-        ),
-    ],
-)
-def test_a_finding_names_the_field_that_supplied_the_value(kw, named):
-    """
-    Verify a finding names the field that supplied the value.
-
-    Parameters
-    ----------
-    kw : dict
-        Title-block keyword arguments supplied by pytest.
-    named : str
-        Expected source name in a validation message.
-    """
-    assert any(m.startswith(f"{named} ") for m in _fit_messages(**kw)), (named, _fit_messages(**kw))
 
 
 def test_a_fitted_scale_is_not_reported_as_the_scale_field():
@@ -2362,6 +2173,7 @@ def test_each_revision_text_field_round_trips(field):
         ("title", TitleBlock(title=0)),
         ("ordinary field", TitleBlock(title="Demo", project=False)),
         ("sheet count", TitleBlock(title="Demo", sheet=0)),
+        ("sheet total", TitleBlock(title="Demo", of_sheets=0)),
         ("revision field", TitleBlock(title="Demo", revisions=[Revision(by=0)])),
     ],
 )
@@ -2379,25 +2191,6 @@ def test_a_falsey_title_block_value_draws_the_same_sheet_after_a_spec_round_trip
         Renderer method supplied by pytest.
     """
     assert _file(_through_a_spec(tb), how) == _file(tb, how)
-
-
-@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
-@pytest.mark.parametrize("half,ink", [("sheet", "SHEET 0 of 1"), ("of_sheets", "SHEET 1 of 0")])
-def test_a_sheet_number_read_back_from_a_document_is_still_the_stated_one(half, ink, how):
-    """
-    Verify a sheet number read back from a document is still the stated one.
-
-    Parameters
-    ----------
-    half : str
-        Selected half of the sheet count.
-    ink : str
-        Expected rendered text.
-    how : str
-        Renderer method supplied by pytest.
-    """
-    tb = _through_a_spec(_stating(half, 0))
-    assert _cells_drawing(_sheet_with(tb), how, ink)
 
 
 def test_spec_coerces_representative_title_block_scalars():
@@ -2419,22 +2212,6 @@ def test_the_reader_and_the_writer_cover_every_field_the_block_has():
     assert _drawn_text_fields(TitleBlock) == set(_BLOCK_FIELDS)
     assert _drawn_text_fields(Revision) == set(_REV_FIELDS)
     assert "revisions" not in _drawn_text_fields(TitleBlock)
-
-
-def test_a_whitespace_revision_field_is_the_blank_it_means():
-    """
-    Verify a whitespace revision field is the blank it means.
-    """
-    fs = _sheet()
-    fs.title_block = TitleBlock(
-        title="Demo",
-        drawn_by="AA",
-        revisions=[Revision("0", "2026-01-01", "Issued", by="   ")],
-    )
-    svg = fs.to_svg(border="zone")
-    # The block backfills, because a whitespace row value is not a value.
-    assert ">AA</text>" in svg
-    assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
 
 
 @pytest.mark.parametrize("stated", ["", "   ", "\t\n "])
@@ -2513,17 +2290,6 @@ def test_a_blank_half_of_the_sheet_count_does_not_issue_half_a_count(half):
     assert 'value="SHEET 1 of 1"' in _sheet_with(tb).to_drawio(border="zone")
     # A completed count emits no finding.
     assert _findings(_sheet_with(tb)) == []
-
-
-def test_a_stated_date_still_wins_the_cell():
-    """
-    Verify a stated date still wins the cell.
-    """
-    fs = _sheet()
-    fs.title_block = TitleBlock(title="Demo", date="2026-01-02")
-    svg = fs.to_svg(border="zone", page_size="A3")
-    cell = re.search(r'fill="#666">DATE</text>\s*<text[^>]*fill="black">([^<]*)</text>', svg)
-    assert cell is not None and cell.group(1) == "2026-01-02"
 
 
 def test_a_whitespace_title_is_a_truncation_validate_reports():

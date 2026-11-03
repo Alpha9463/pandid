@@ -300,6 +300,7 @@ def test_a_pid_reaches_render_as_well_as_to_svg(tmp_path):
     [
         ({"diagram": "isometric"}, ["'p&id'", "'pid'", "'pfd'", "'bfd'"]),
         ({"border": "isometric"}, ["none", "zone"]),
+        ({"border": "p&id"}, ["none", "zone"]),
     ],
 )
 def test_a_drawing_the_renderer_cannot_draw_raises_naming_the_spellings(kwargs, expected):
