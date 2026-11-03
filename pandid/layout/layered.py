@@ -676,7 +676,8 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
     """Order each layer to reduce pipe crossings.
 
     Barycentre sweeps keep the order with the fewest crossings, adjacent
-    swaps remove more, then each flag moves beside the nozzle it serves.
+    swaps remove more, then each flag moves beside the nozzle it serves
+    unless that adds a crossing.
 
     Parameters
     ----------
@@ -755,7 +756,13 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         if s.rport is not None and _flag(s.rport) and s.right.members == [s.rport.owner]:
             peer[s.right] = pos[s.left] + a
     for k in keys:
-        layers[k].sort(key=lambda n: peer.get(n, pos[n]))
+        for flag in [n for n in layers[k] if n in peer]:
+            before, old = crossings(k - 1) + crossings(k), list(layers[k])
+            layers[k].sort(key=lambda n: peer[n] if n is flag else pos[n])
+            index()
+            if crossings(k - 1) + crossings(k) > before:
+                layers[k][:] = old
+                index()
 
 
 def _row_pins(layers: dict[int, list[_Node]]) -> None:
