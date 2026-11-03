@@ -67,30 +67,6 @@ _ADV_BOLD = 620
 Reporter = Callable[[str, str, str, float, float], None]
 
 
-def script_counts(s: str) -> "tuple[int, int, int]":
-    """Return ``(narrow, wide, zero)`` codepoint counts of ``s``.
-
-    Parameters
-    ----------
-    s : str
-        Text to count.
-
-    Returns
-    -------
-    tuple[int, int, int]
-        Narrow, wide and zero-width counts.
-    """
-    narrow = wide = zero = 0
-    for ch in s:
-        if unicodedata.category(ch) in ("Mn", "Me"):
-            zero += 1
-        elif unicodedata.east_asian_width(ch) in ("W", "F"):
-            wide += 1
-        else:
-            narrow += 1
-    return narrow, wide, zero
-
-
 def text_width(s, size: float, bold: bool = False) -> float:
     """Return the drawn width of ``s`` at ``size``.
 

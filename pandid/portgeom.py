@@ -304,10 +304,10 @@ def tag_width(tag: str) -> float:
     float
         Halo width.
     """
-    from pandid.render.furniture import script_counts
+    from pandid.render.furniture import text_width
+    from pandid.render.symbols import _TAG_TYPE
 
-    narrow, wide, _zero = script_counts(tag)
-    return narrow * 6.6 + wide * 12 + 8
+    return text_width(tag, _TAG_TYPE) + 8
 
 
 def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
