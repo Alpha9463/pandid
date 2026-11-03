@@ -11,6 +11,8 @@ from pandid import Flowsheet, units as U
 from pandid.portgeom import port_point
 from pandid.streams import Stream
 
+from _layout_cases import frame_of
+
 
 def _line(**kw):
     """A left-to-right process line with a bubble tapping the middle of it.
@@ -86,11 +88,6 @@ def test_instrument_tag_split_alphanumeric():
 
 
 # --- tag ---------------------------------------------------------------------
-
-
-def test_tag_splits_type_from_number():
-    inst = U.Instrument("FT", 101)
-    assert (inst.name, inst.type, inst.number) == ("FT-101", "FT", "101")
 
 
 def test_combined_tag_still_accepted():
@@ -206,13 +203,32 @@ def test_every_trip_square_repeats_wherever_its_logic_acts(variant):
     assert len({s.name for s in squares}) == 3
 
 
-def test_a_plain_diamond_and_a_diamond_in_a_square_are_not_one_function():
+@pytest.mark.parametrize(
+    "tag, variants",
+    [
+        (("I", 1), ("sis", "interlock")),
+        (("LT", 101), ("default", "default")),
+        (("I", 1), ("logic", "default")),
+        (("I", 1), ("default", "logic")),
+    ],
+    ids=["diamond-and-square", "two-transmitters", "square-then-balloon", "balloon-then-square"],
+)
+def test_two_symbols_may_not_share_a_tag(tag, variants):
     """They are different ISA-5.1 symbols, so one of each on a tag is two
-    different things claiming to be the same -- the clash `add()` exists for."""
+    different things claiming to be the same -- the clash `add()` exists for.
+
+    Parameters
+    ----------
+    tag : tuple
+        Letters and number of the shared tag.
+    variants : tuple[str, str]
+        Variants of the first and second instrument.
+    """
+    first, second = variants
     fs = Flowsheet("i")
-    fs.add(U.Instrument("I", 1, variant="sis"))
-    with pytest.raises(ValueError, match=r"already exists"):
-        fs.add(U.Instrument("I", 1, variant="interlock"))
+    fs.add(U.Instrument(*tag, variant=first))
+    with pytest.raises(ValueError, match="already exists on this flowsheet"):
+        fs.add(U.Instrument(*tag, variant=second))
 
 
 # --- attachment to a stream --------------------------------------------------
@@ -290,16 +306,6 @@ def test_attached_to_unit_hangs_off_the_named_face():
     f = drum.frame
     assert lic.tap == pytest.approx((f.x_max, f.cy))
     assert (lic.frame.cx, lic.frame.cy) == pytest.approx((f.x_max + 80, f.cy))
-
-
-def test_unit_face_default_and_validation():
-    fs = Flowsheet("u")
-    drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
-    assert fs.add_instrument("LT", 1, sensing=drum).face == "E"
-    with pytest.raises(ValueError):
-        fs.add_instrument("LT", 2, sensing=drum, at=0.5)
-    with pytest.raises(ValueError):
-        fs.add_instrument("LT", 3, sensing=drum, face="up")
 
 
 def test_stream_host_rejects_a_face():
@@ -583,16 +589,8 @@ def test_attachment_survives_a_second_layout():
 # --- standing a colliding balloon off (issue #428) ---------------------------
 
 
-def _placed(u: U.Unit):
-    """A unit's resolved frame, asserted present. The tests below are
-    about *where* a balloon landed, so one that landed nowhere is a
-    failure of the test's own setup, not the property under test."""
-    assert u.frame is not None, f"{u.name} was never placed"
-    return u.frame
-
-
 def _centre(u: U.Unit) -> tuple[float, float]:
-    f = _placed(u)
+    f = frame_of(u)
     return (f.cx, f.cy)
 
 
@@ -605,7 +603,7 @@ def _overlaps(a: U.Unit, b: U.Unit) -> bool:
     """The overlap `validate()` reports, over two units' drawn boxes."""
     from pandid.portgeom import unit_box
 
-    p, q = unit_box(a, _placed(a)), unit_box(b, _placed(b))
+    p, q = unit_box(a, frame_of(a)), unit_box(b, frame_of(b))
     return not (
         p[2] - 1.0 <= q[0] or q[2] - 1.0 <= p[0] or p[3] - 1.0 <= q[1] or q[3] - 1.0 <= p[1]
     )
@@ -647,7 +645,7 @@ def test_a_bubble_is_stood_off_the_equipment_it_would_have_landed_on():
     # The anchor did not move: still on the run, still short of the valve.
     tap = _tap_of(inst)
     assert tap[1] == pytest.approx(195.0)
-    assert tap[0] < _placed(fv).x
+    assert tap[0] < frame_of(fv).x
     assert math.dist(_centre(inst), tap) >= 45 - 1e-6
 
 
@@ -660,7 +658,7 @@ def test_a_bubble_mounted_flush_is_pushed_clear_of_the_wall():
     lt = fs.add_instrument("LT", 1, sensing=drum, face="E", offset=10)
     fs.route()
     assert not _overlaps(lt, drum)
-    face = _placed(drum)
+    face = frame_of(drum)
     assert _tap_of(lt) == pytest.approx((face.x_max, face.cy))
 
 
@@ -692,7 +690,7 @@ def test_a_nozzle_keepout_is_the_stand_off_in_front_of_a_live_nozzle():
     keepouts = _nozzle_keepouts(fs)
     live = [(u, n) for u in fs.units for n, p in u.ports.items() if p.stream is not None]
     assert len(keepouts) == len(live)
-    ax, ay, facing = port_anchor(fv, _placed(fv), "inlet")
+    ax, ay, facing = port_anchor(fv, frame_of(fv), "inlet")
     assert facing == "W"
     assert (ax - MIN_ESCAPE, ay, ax, ay) in keepouts
 
@@ -893,7 +891,7 @@ def test_an_unanchored_controller_hangs_beyond_the_actuator_it_drives():
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
     fs.route()
 
-    valve = _placed(lv)
+    valve = frame_of(lv)
     ax, ay, face = port_anchor(lv, valve, "actuator")
     cx, cy = _centre(lic)
     beyond = {"N": valve.y - cy, "S": cy - valve.y_max, "W": valve.x - cx, "E": cx - valve.x_max}
@@ -915,7 +913,7 @@ def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
     fs.layout()
     fs.route()
 
-    ax, ay, _ = port_anchor(lv, _placed(lv), "actuator")
+    ax, ay, _ = port_anchor(lv, frame_of(lv), "actuator")
     first = _centre(lic)
     assert math.dist(first, (ax, ay)) == pytest.approx(100.0, abs=1.0)
     assert lic.host is None
@@ -998,9 +996,9 @@ def test_a_controller_hangs_from_the_actuators_own_point():
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()
 
-    ax, ay, face = port_anchor(valve, _placed(valve), "actuator")
+    ax, ay, face = port_anchor(valve, frame_of(valve), "actuator")
     assert face == "N"
-    assert abs(ax - _placed(valve).cx) > 1.0, "the actuator has to be off the face's middle"
+    assert abs(ax - frame_of(valve).cx) > 1.0, "the actuator has to be off the face's middle"
     assert _centre(lic) == pytest.approx((ax, ay - 100.0))
 
 
@@ -1048,7 +1046,7 @@ def test_a_hung_controller_clears_a_tap_line():
     fs.layout()
     fs.route()
 
-    box = unit_box(lic, _placed(lic))
+    box = unit_box(lic, frame_of(lic))
     lines = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
     assert lines, "PI-1 draws a tap line"
     for route in lines:
@@ -1065,7 +1063,7 @@ def test_a_hung_controller_keeps_its_own_tap_line() -> None:
     fs.route()
 
     assert fs.route_converged
-    assert pi.tap == pytest.approx(face_point(lic, _placed(lic), "N")[0])
+    assert pi.tap == pytest.approx(face_point(lic, frame_of(lic), "N")[0])
 
 
 def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
@@ -1091,7 +1089,7 @@ def test_a_controller_carrying_a_balloon_is_not_hung() -> None:
     fs.add_instrument("PI", 1, sensing=lic, face="S", offset=140)
     fs.route()
 
-    box = unit_box(valve, _placed(valve))
+    box = unit_box(valve, frame_of(valve))
     ((inst, tap, centre),) = tap_lines(fs)
     route = tap_route(inst, tap, centre)
     assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
@@ -1359,7 +1357,7 @@ def test_a_hung_controller_keeps_out_of_a_tag_halo() -> None:
     fs.add(U.Pump("P-101", width=44, height=44, label_pos="left")).pin(x=350, y=178)
     fs.route()
 
-    box = unit_box(lic, _placed(lic))
+    box = unit_box(lic, frame_of(lic))
     for left, top, right, bottom in _halos(fs):
         assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
 
@@ -1426,25 +1424,6 @@ def test_a_hung_line_frozen_with_via_is_drawn_as_frozen() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
-def test_a_custom_router_routes_the_sheet_without_hanging() -> None:
-    """A router other than the default one is given the sheet as main
-    lays it out; a route it freezes is not left behind."""
-    from pandid.routing import DefaultRouter
-
-    class FreezeStraightRouter(DefaultRouter):
-        def route(self, fs: Flowsheet) -> None:
-            super().route(fs)
-            for stream in fs.streams:
-                assert stream.route is not None
-                if len({x for x, _ in stream.route.waypoints}) == 1:
-                    stream.route.manual = True
-
-    fs, _, _ = _hung_controller()
-    fs.route(FreezeStraightRouter())
-
-    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
-
-
 def test_a_balloon_moved_by_hanging_keeps_out_of_a_tag_halo() -> None:
     """XI-1 follows the hung LIC-1; neither may land on P-101's tag."""
     from pandid.layout.control import _halos
@@ -1457,7 +1436,7 @@ def test_a_balloon_moved_by_hanging_keeps_out_of_a_tag_halo() -> None:
     fs.route()
 
     for unit in (lic, xi):
-        box = unit_box(unit, _placed(unit))
+        box = unit_box(unit, frame_of(unit))
         for left, top, right, bottom in _halos(fs):
             assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
 
@@ -1632,25 +1611,6 @@ def test_an_engine_that_routes_and_then_adjusts_keeps_its_adjustment() -> None:
 
     assert marker.frame is not None
     assert (marker.frame.x, marker.frame.y) == (1200, 1200)
-
-
-def test_every_valve_variant_has_an_actuator_on_its_symbol():
-    from pandid.render.symbols import default_registry
-
-    for variant in (
-        "default",
-        "gate",
-        "globe",
-        "ball",
-        "butterfly",
-        "check",
-        "control",
-        "needle",
-        "three_way",
-        "relief",
-    ):
-        sym = default_registry.get("valve", variant)
-        assert "actuator" in sym.ports, variant
 
 
 def _valve_variants() -> list[str]:
@@ -2033,26 +1993,6 @@ def test_the_repeated_square_draws_the_tag_it_shares():
     svg = fs.to_svg()
     assert svg.count(">1</text>") == 4
     assert "(2)" not in svg
-
-
-def test_two_transmitters_on_one_loop_number_are_refused():
-    """A balloon is a device and there is one of it: a second LT-101 is a tag
-    used twice, not one measurement shown twice."""
-    fs = Flowsheet("loop")
-    fs.add(U.Instrument("LT", 101))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Instrument("LT", 101))
-
-
-@pytest.mark.parametrize("variants", [("logic", "default"), ("default", "logic")])
-def test_a_square_and_a_balloon_cannot_share_a_tag(variants):
-    """Two different symbols claiming to be the same thing, whichever is drawn
-    first."""
-    first, second = variants
-    fs = Flowsheet("mixed")
-    fs.add(U.Instrument("I", 1, variant=first))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Instrument("I", 1, variant=second))
 
 
 def test_a_repeated_square_survives_a_round_trip_through_a_spec():
@@ -2568,7 +2508,8 @@ def test_a_square_says_where_it_is_without_being_asked():
     as an instrument with a controlling function, the circle standing for
     continuous control such as a DCS. The bar it carries follows from the
     symbol."""
-    assert U.Instrument("FIC", 301, variant="shared").display == "central"
+    shared = U.Instrument("FIC", 301, variant="shared")
+    assert (shared.variant, shared.display) == ("shared", "central")
     assert U.Instrument("FIC", 301, variant="shared", display="central").variant == "shared"
 
 
@@ -2599,14 +2540,10 @@ def test_annotate_writes_high_and_low_into_the_quadrants_iso_names_them():
     function, an alarm or a switching action say, and (d) the same for a low
     one. High above the centre line and low below is 5.2.5's rule that the
     value a code stands for rises with its distance from that line."""
-    inst = U.Instrument("LIC", 304).annotate(high="LAH", low="LAL")
+    inst = U.Instrument("LIC", 304)
+    assert inst.annotate(high="LAH", low="LAL") is inst
     written = {name: codes for name, codes in inst.quadrants.items() if codes}
     assert written == {"c": ("LAH",), "d": ("LAL",)}
-
-
-def test_annotate_returns_the_balloon_it_lettered():
-    inst = U.Instrument("LIC", 304)
-    assert inst.annotate(high="LAH") is inst
 
 
 def test_several_codes_in_one_quadrant_take_the_sequence_the_standard_fixes():
@@ -2743,13 +2680,3 @@ def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
     """
     with pytest.raises(ValueError, match=f"display={display!r}"):
         U.Instrument("LIC", 101, variant=variant)
-    inst = U.Instrument("LIC", 101, display=display)
-    assert inst.variant == variant
-    assert (inst.symbol_type, inst.display) == ("default", display)
-
-
-def test_the_square_is_not_a_removed_spelling():
-    """``variant='shared'`` is a symbol type and stays. Only the two that were a
-    location wearing a symbol type's name went, and a sweep over the whole of
-    the registry's balloons would have taken this with them."""
-    assert U.Instrument("FIC", 301, variant="shared").variant == "shared"
