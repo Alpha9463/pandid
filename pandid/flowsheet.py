@@ -52,7 +52,18 @@ _CONTAINERS = (list, dict, set)
 
 
 def _snapshot(obj) -> dict:
-    """Save every attribute of an object for :func:`_restore`."""
+    """Save every attribute of an object for :func:`_restore`.
+
+    Parameters
+    ----------
+    obj : object
+        Object to save.
+
+    Returns
+    -------
+    dict
+        Attribute name to ``(value, container copy or None)``.
+    """
     return {k: (v, v.copy() if isinstance(v, _CONTAINERS) else None)
             for k, v in vars(obj).items()}
 
@@ -61,6 +72,13 @@ def _restore(obj, saved: dict) -> None:
     """Restore an object's attributes saved by :func:`_snapshot`.
 
     Containers are emptied and refilled in place.
+
+    Parameters
+    ----------
+    obj : object
+        Object to restore.
+    saved : dict
+        Result of :func:`_snapshot`.
     """
     obj.__dict__.clear()
     for k, (value, contents) in saved.items():
@@ -80,8 +98,17 @@ _OUTPUT_FORMATS = frozenset({"", ".svg", ".pdf", ".png", ".drawio"})
 def _inferred_kind(src: "Port", dst: "Port") -> str:
     """Return the stream kind two ports imply.
 
-    ``"energy"`` between two energy or utility ports, else
-    ``"material"``.
+    Two energy or utility ports imply ``"energy"``.
+
+    Parameters
+    ----------
+    src, dst : Port
+        Source and destination ports.
+
+    Returns
+    -------
+    str
+        ``"energy"`` or ``"material"``.
     """
     return ("energy" if src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES
             else "material")
@@ -91,6 +118,23 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
     """Build a stream's line number from its components.
 
     An unset component is dropped with the separator before it.
+
+    Parameters
+    ----------
+    scheme : str or Callable[[Stream], str]
+        Format string over the line-number components, or a callable.
+    stream : Stream
+        Stream to number.
+
+    Returns
+    -------
+    str
+        Line number.
+
+    Raises
+    ------
+    ValueError
+        If the scheme names an unknown component or yields nothing.
     """
     if callable(scheme):
         return scheme(stream)
@@ -125,7 +169,25 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
 
 
 def _format_stream_name(scheme: "str | Callable[[int], str]", number: int) -> str:
-    """Return a generated stream name from the naming scheme."""
+    """Return a generated stream name from the naming scheme.
+
+    Parameters
+    ----------
+    scheme : str or Callable[[int], str]
+        Format string over ``n``, or a callable of the number.
+    number : int
+        Stream number.
+
+    Returns
+    -------
+    str
+        Stream name.
+
+    Raises
+    ------
+    ValueError
+        If the format string cannot format the number.
+    """
     if callable(scheme):
         return scheme(number)
     try:
@@ -148,7 +210,18 @@ def _format_stream_name(scheme: "str | Callable[[int], str]", number: int) -> st
 
 
 def _spell(port: "Port") -> str:
-    """Return ``"<unit>.<port>"`` for messages."""
+    """Return ``"<unit>.<port>"`` for messages.
+
+    Parameters
+    ----------
+    port : Port
+        Port to name.
+
+    Returns
+    -------
+    str
+        Owner name and port name.
+    """
     return f"{port.owner.name}.{port.name}"
 
 
@@ -157,6 +230,27 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
 
     An instrument gives its signal pool; another unit its one signal
     port.
+
+    Parameters
+    ----------
+    end : Port or Unit
+        End as the caller gave it.
+    kind : str
+        Stream kind.
+    which : str
+        ``"source"`` or ``"destination"``.
+
+    Returns
+    -------
+    Port
+        Port to connect.
+
+    Raises
+    ------
+    TypeError
+        If ``end`` is neither a port nor a unit.
+    ValueError
+        If a unit ends a process line or has no single signal port.
     """
     from pandid.ports import Port
     from pandid.units import Instrument, Unit
@@ -194,7 +288,18 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
 
 
 def _port_bearers(*ends: "Port | Unit") -> "tuple[Any, ...]":
-    """Return the units at a connection's ends, then all their ports."""
+    """Return the units at a connection's ends, then all their ports.
+
+    Parameters
+    ----------
+    *ends : Port or Unit
+        Connection ends.
+
+    Returns
+    -------
+    tuple
+        Distinct units, then each of their ports.
+    """
     from pandid.ports import Port
     from pandid.units import Unit
 
@@ -207,15 +312,44 @@ def _port_bearers(*ends: "Port | Unit") -> "tuple[Any, ...]":
 
 
 def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
-    """Return the keyword arguments that are not ``None``."""
+    """Return the keyword arguments that are not ``None``.
+
+    Parameters
+    ----------
+    **kwargs : float, str or None
+        Candidate arguments.
+
+    Returns
+    -------
+    dict[str, Any]
+        Arguments with a value.
+    """
     return {name: value for name, value in kwargs.items() if value is not None}
 
 
 def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) -> str:
     """Return and check one control-loop member's functional code.
 
-    ``stated`` overrides ``default``; ``role`` names the argument in
-    messages.
+    Parameters
+    ----------
+    loop : Loop
+        Loop the member belongs to.
+    stated : str or None
+        Code the author gave, or ``None`` to use ``default``.
+    default : str
+        Code composed from the loop.
+    role : str
+        Argument name, for messages.
+
+    Returns
+    -------
+    str
+        Functional code.
+
+    Raises
+    ------
+    ValueError
+        If the code is blank or invalid for the loop.
     """
     if stated is None:
         return default
@@ -238,7 +372,20 @@ def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) 
 
 
 def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
-    """Check that a stream's kind matches the roles of its two ports."""
+    """Check that a stream's kind matches the roles of its two ports.
+
+    Parameters
+    ----------
+    src, dst : Port
+        Source and destination ports.
+    kind : str
+        Stream kind.
+
+    Raises
+    ------
+    ValueError
+        If the ports mix signal and process roles, or the kind differs.
+    """
     signal_ends = [p for p in (src, dst) if p.role == "signal"]
     if len(signal_ends) == 1:
         signal = signal_ends[0]
@@ -265,7 +412,25 @@ _UnitT = TypeVar("_UnitT", bound="Unit")
 
 
 def _whole_number(value: Any, name: str) -> int:
-    """Return an integral value as an ``int``; refuse anything else."""
+    """Return an integral value as an ``int``.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    name : str
+        Attribute name, for the message.
+
+    Returns
+    -------
+    int
+        The value as a built-in ``int``.
+
+    Raises
+    ------
+    TypeError
+        If ``value`` is not an integer.
+    """
     if isinstance(value, bool) or not isinstance(value, Integral):
         raise TypeError(
             f"{name} must be a whole number (an int), got {value!r}; stream, line "
@@ -276,6 +441,25 @@ def _whole_number(value: Any, name: str) -> int:
 
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
+
+    Parameters
+    ----------
+    name : str
+        Drawing title.
+    stream_naming_scheme : str or callable, default="S{n}"
+        Stream name format over ``n``, or a callable of ``n``.
+    stream_number_start : int, default=1
+        First ``n`` in ``stream_naming_scheme``.
+    line_numbering_scheme : str or callable, optional
+        Line number format, or a callable of the stream.
+    line_number_start : int, default=1001
+        First generated ``sequence`` component of a line number.
+    loop_number_start : int, default=101
+        First number :meth:`add_loop` allocates.
+    valve_station_tag_scheme : str or callable, optional
+        Valve station member tag format, or a callable.
+    auto_faces : bool, default=True
+        Whether movable port faces are chosen automatically.
 
     Attributes
     ----------
@@ -305,14 +489,24 @@ class Flowsheet:
         Stream-table sizing and title.
     stream_labels : StreamLabelOptions
         How numbers on lines are enclosed.
-    stream_naming_scheme, stream_number_start, line_numbering_scheme,
-    line_number_start, loop_number_start, valve_station_tag_scheme
-        Numbering settings; see :meth:`__init__`.
+    stream_naming_scheme, line_numbering_scheme : str or callable
+        Stream and line numbering schemes.
+    valve_station_tag_scheme : str or callable
+        Valve station member tag format.
+    stream_number_start, line_number_start, loop_number_start : int
+        First generated stream, line and loop numbers.
     auto_faces : bool
         Whether movable port faces are chosen automatically.
+
+    Raises
+    ------
+    TypeError
+        If a number start is not an integer.
+    ValueError
+        If ``stream_naming_scheme`` cannot format a stream number.
     """
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self, name: str, *,
         stream_naming_scheme: str | Callable[[int], str] = "S{n}",
         stream_number_start: int = DEFAULT_STREAM_NUMBER_START,
@@ -323,37 +517,6 @@ class Flowsheet:
             DEFAULT_VALVE_STATION_TAG_SCHEME),
         auto_faces: bool = True,
     ):
-        """Create an empty flowsheet.
-
-        Parameters
-        ----------
-        name : str
-            Drawing title.
-        stream_naming_scheme : str or callable, default="S{n}"
-            Format over ``n``, or callable of the number, for stream
-            names.
-        stream_number_start : int, default=1
-            First ``n`` in ``stream_naming_scheme``.
-        line_numbering_scheme : str or callable, optional
-            Format, or callable of the stream, for line numbers; default
-            ``"{size}-{service}-{sequence}-{spec}"``.
-        line_number_start : int, default=1001
-            First generated ``sequence`` component of a line number.
-        loop_number_start : int, default=101
-            First number :meth:`add_loop` allocates.
-        valve_station_tag_scheme : str or callable, optional
-            Format for valve station member tags; default
-            ``"{letters}-{number}{suffix}"``.
-        auto_faces : bool, default=True
-            Whether movable port faces are chosen automatically.
-
-        Raises
-        ------
-        TypeError
-            If a number start is not an integer.
-        ValueError
-            If ``stream_naming_scheme`` cannot format a stream number.
-        """
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
         self.stream_number_start = stream_number_start
@@ -401,18 +564,35 @@ class Flowsheet:
 
         When ``False``, each port keeps its symbol's face or the one set
         with :meth:`~pandid.units.Unit.nozzle`.
+
+        Returns
+        -------
+        bool
+            Current setting.
         """
         return self._auto_faces
 
     @auto_faces.setter
     def auto_faces(self, value: bool) -> None:
-        """Set automatic face selection and invalidate layout."""
+        """Set automatic face selection and invalidate layout.
+
+        Parameters
+        ----------
+        value : bool
+            New setting.
+        """
         self._auto_faces = value
         self._invalidate_layout()
 
     @property
     def stream_naming_scheme(self) -> "str | Callable[[int], str]":
-        """Return the stream naming scheme."""
+        """Return the stream naming scheme.
+
+        Returns
+        -------
+        str or Callable[[int], str]
+            Current scheme.
+        """
         return self._stream_naming_scheme
 
     @stream_naming_scheme.setter
@@ -435,7 +615,13 @@ class Flowsheet:
 
     @property
     def stream_number_start(self) -> int:
-        """Return the first ``n`` in ``stream_naming_scheme``."""
+        """Return the first ``n`` in ``stream_naming_scheme``.
+
+        Returns
+        -------
+        int
+            First generated stream number.
+        """
         return self._stream_number_start
 
     @stream_number_start.setter
@@ -456,7 +642,13 @@ class Flowsheet:
 
     @property
     def line_number_start(self) -> int:
-        """Return the first generated line sequence number."""
+        """Return the first generated line sequence number.
+
+        Returns
+        -------
+        int
+            First generated line sequence number.
+        """
         return self._line_number_start
 
     @line_number_start.setter
@@ -477,7 +669,13 @@ class Flowsheet:
 
     @property
     def loop_number_start(self) -> int:
-        """Return the first number :meth:`add_loop` allocates."""
+        """Return the first number :meth:`add_loop` allocates.
+
+        Returns
+        -------
+        int
+            First loop number.
+        """
         return self._loop_number_start
 
     @loop_number_start.setter
@@ -560,8 +758,22 @@ class Flowsheet:
                           alongside: "Sequence[Unit]" = ()) -> "Unit | None":
         """Check that a unit may join the sheet.
 
-        Return the unit it repeats, or ``None``. ``alongside`` lists
-        units the same call is about to add.
+        Parameters
+        ----------
+        unit : Unit
+            Unit to check.
+        alongside : Sequence[Unit], optional
+            Units the same call is about to add.
+
+        Returns
+        -------
+        Unit or None
+            The unit this one repeats, or ``None``.
+
+        Raises
+        ------
+        ValueError
+            If the unit is already on a sheet, or its name clashes.
         """
         if unit in self.units:
             raise ValueError(
@@ -594,7 +806,18 @@ class Flowsheet:
         return clash
 
     def _repeat_name(self, tag: str) -> str:
-        """Return ``"<tag> (n)"`` with the least free ``n`` from 2."""
+        """Return a unique name for another drawing of a repeated tag.
+
+        Parameters
+        ----------
+        tag : str
+            Repeated tag.
+
+        Returns
+        -------
+        str
+            ``"<tag> (n)"`` with the least free ``n`` from 2.
+        """
         taken = {u.name for u in self.units}
         n = 2
         while f"{tag} ({n})" in taken:
@@ -636,9 +859,24 @@ class Flowsheet:
 
     def _new_loop(self, variable: str,
                   number: str | int | None = None) -> "tuple[Loop, bool]":
-        """Build and check a loop without declaring it.
+        """Build and check a loop.
 
-        Return the loop and whether its number was allocated.
+        Parameters
+        ----------
+        variable : str
+            ISA measured-variable letter.
+        number : str, int or None, optional
+            Loop number, or ``None`` to allocate the next one.
+
+        Returns
+        -------
+        tuple[Loop, bool]
+            The loop and whether its number was allocated.
+
+        Raises
+        ------
+        ValueError
+            If the variable is invalid, or the loop is already declared.
         """
         from pandid.loops import Loop
 
@@ -670,7 +908,15 @@ class Flowsheet:
         return loop, allocated
 
     def _register_loop(self, loop: "Loop", *, allocated: bool) -> None:
-        """Declare a loop that :meth:`_new_loop` has checked."""
+        """Declare a loop that :meth:`_new_loop` has checked.
+
+        Parameters
+        ----------
+        loop : Loop
+            Checked loop.
+        allocated : bool
+            Whether its number came from the counter.
+        """
         if allocated:
             self._loops_allocated += 1
         self.loops.append(loop)
@@ -692,24 +938,21 @@ class Flowsheet:
                        variant: str = "default", **kwargs) -> "Instrument":
         """Add an ISA-5.1 instrument balloon.
 
-        The tag is ``type`` and ``number``:
-        ``add_instrument("FT", 101)`` gives ``FT-101``. A
-        :class:`~pandid.loops.Loop` or
-        :class:`~pandid.loops.ControlLoop` as ``number`` supplies the
-        number and checks ``type``. Give at most one anchor:
-
-        - ``sensing=``: the balloon reads from this host.
-        - ``acting_on=``: the balloon commands this host.
-        - ``near=``: the balloon is placed here, with no line drawn.
+        The tag is ``type`` and ``number``, such as ``FT-101``. Give at
+        most one of ``sensing``, ``acting_on`` and ``near``.
 
         Parameters
         ----------
         type : str
             Functional letters, such as ``"FT"``.
         number : str, int, Loop or ControlLoop, default=""
-            Loop number or loop.
-        sensing, acting_on, near : Stream or Unit or None, optional
-            Anchor, as above.
+            Loop number, or a loop whose variable ``type`` must match.
+        sensing : Stream or Unit or None, optional
+            Host the balloon reads from.
+        acting_on : Stream or Unit or None, optional
+            Host the balloon commands.
+        near : Stream or Unit or None, optional
+            Host the balloon is placed by, with no line drawn.
         at : float, str or None, optional
             Fraction along a stream host, or face of a unit host.
         offset : float, default=45.0
@@ -719,8 +962,7 @@ class Flowsheet:
         variant : str, default="default"
             Balloon symbol.
         **kwargs
-            Passed to :class:`~pandid.units.Instrument`, such as
-            ``display``.
+            Passed to :class:`~pandid.units.Instrument`.
 
         Returns
         -------
@@ -730,8 +972,7 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the letters, variant, anchors, placement or tag are
-            invalid, or a host is on another sheet.
+            If an argument is invalid or a host is on another sheet.
 
         Examples
         --------
@@ -760,7 +1001,37 @@ class Flowsheet:
                           at: float | str | None = None,
                           offset: float = 45.0, angle: float = 90.0,
                           variant: str = "default", **kwargs) -> "Instrument":
-        """Build and anchor a balloon."""
+        """Build and anchor a balloon.
+
+        Parameters
+        ----------
+        type : str
+            Functional letters.
+        number : str, int, Loop or ControlLoop, default=""
+            Loop number, or a loop to take it from.
+        sensing, acting_on, near : Stream or Unit or None, optional
+            Anchor; at most one.
+        at : float, str or None, optional
+            Fraction along a stream host, or face of a unit host.
+        offset : float, default=45.0
+            Distance from the tap to the balloon centre.
+        angle : float, default=90.0
+            Branch angle from the host's reference direction.
+        variant : str, default="default"
+            Balloon symbol.
+        **kwargs
+            Passed to :class:`~pandid.units.Instrument`.
+
+        Returns
+        -------
+        Instrument
+            The anchored balloon.
+
+        Raises
+        ------
+        ValueError
+            If the letters, variant, anchors or placement are invalid.
+        """
         from pandid.loops import ControlLoop, Loop
         from pandid.units import Instrument
 
@@ -776,7 +1047,20 @@ class Flowsheet:
         return inst
 
     def _refuse_foreign(self, role: str, thing: "Stream | Port | Unit") -> None:
-        """Check that a unit, port or stream belongs to this sheet."""
+        """Check that a unit, port or stream belongs to this sheet.
+
+        Parameters
+        ----------
+        role : str
+            Argument name, for messages.
+        thing : Stream, Port or Unit
+            Object to check.
+
+        Raises
+        ------
+        ValueError
+            If it belongs to another sheet or to none.
+        """
         from pandid.ports import Port
         from pandid.units import Unit
 
@@ -803,8 +1087,17 @@ class Flowsheet:
     def _set_inline_at(self, stream: Stream, at: float) -> None:
         """Record an inline device's preferred position on its run.
 
-        ``stream`` enters the device; ``at`` is a fraction of the whole
-        run.
+        Parameters
+        ----------
+        stream : Stream
+            Material segment entering the device.
+        at : float
+            Fraction of the whole run, strictly between 0 and 1.
+
+        Raises
+        ------
+        ValueError
+            If ``at`` is out of range, or the segment is ineligible.
         """
         self._refuse_foreign("stream", stream)
         if (isinstance(at, bool) or not isinstance(at, (int, float))
@@ -836,7 +1129,25 @@ class Flowsheet:
         self._invalidate_layout()
 
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
-        """Return the one anchor named, as ``(host, relation)``."""
+        """Return the one anchor named.
+
+        Parameters
+        ----------
+        inst : Instrument
+            Balloon being built, for messages.
+        sensing, acting_on, near : Stream, Unit or None
+            Anchor arguments.
+
+        Returns
+        -------
+        tuple
+            ``(host, relation)``, or ``(None, "sensing")`` if none.
+
+        Raises
+        ------
+        ValueError
+            If more than one anchor is named.
+        """
         given = [("sensing", sensing), ("acting_on", acting_on), ("near", near)]
         named = [(relation, host) for relation, host in given if host is not None]
         if len(named) > 1:
@@ -884,8 +1195,7 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the element is not on this sheet, already has a balloon,
-            or has no tag.
+            If the element is off this sheet, has a balloon, or no tag.
         """
         from pandid.units import Instrument
 
@@ -929,26 +1239,23 @@ class Flowsheet:
     ) -> "ControlLoop":
         """Add a control loop around a final control element.
 
-        Adds a transmitter and a controller and connects the measurement
-        and output signals. The final element must already be on the
-        sheet. Letters follow from the measured variable (``"F"`` gives
-        ``FT`` and ``FIC``) unless whole functional codes are given.
+        Adds a transmitter and a controller, and connects the
+        measurement and output signals to the final element, which must
+        be on this sheet. Letters follow from the variable (``"F"``
+        gives ``FT`` and ``FIC``) unless whole codes are given.
 
         Parameters
         ----------
         variable : str or Loop
-            ISA measured-variable letter, or a loop declared on this
-            sheet.
+            Measured-variable letter, or a loop declared on this sheet.
         number : str, int or None, optional
-            Loop number when ``variable`` is a letter; ``None``
-            allocates one.
+            Loop number for a letter ``variable``; ``None`` allocates.
         measuring : Stream or Unit
             What the transmitter reads.
         acting_on : Port or Unit
             Final control element, or its signal port.
         at : float, str or None, optional
-            Transmitter tap: a fraction along a stream or a face of a
-            unit.
+            Transmitter tap: a stream fraction or a unit face.
         offset, angle : float or None, optional
             Transmitter standoff and branch angle.
         controller_at : str or None, optional
@@ -972,9 +1279,7 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If a declared loop is given a number or is from another
-            sheet, a functional code is invalid, an anchor is on another
-            sheet, or a composed call would refuse.
+            If an argument is invalid or belongs to another sheet.
         """
         from pandid.loops import ControlLoop, Loop
         from pandid.ports import Port
@@ -1054,9 +1359,8 @@ class Flowsheet:
     ) -> "ValveStation":
         """Build a wired control valve station.
 
-        See :mod:`pandid.stations` for the arrangement. With ``x`` and
-        ``y`` every member is pinned; without them the layout engine
-        places the station. With ``on`` the station goes in that line.
+        Members are pinned at ``x`` and ``y`` when given, else placed by
+        the layout engine; see :mod:`pandid.stations`.
 
         Parameters
         ----------
@@ -1069,8 +1373,7 @@ class Flowsheet:
         variant : str, default="control"
             Control valve symbol.
         number : str, int or None, optional
-            Number for member tags; defaults to the control tag's
-            number.
+            Member tag number; defaults to the control tag's.
         isolation, reducers, bypass : bool, default=True
             Include isolation valves, reducers and a bypass.
         drains : int, default=2
@@ -1078,15 +1381,16 @@ class Flowsheet:
         description : str, default=""
             Service word prefixed to member descriptions.
         bypass_over : str or None, optional
-            Main member to centre the bypass valve over; one of
+            Member to centre the bypass valve over; one of
             :data:`~pandid.stations.BYPASS_ANCHORS`.
         tag_scheme : str, callable or None, optional
             Member tag format; defaults to ``valve_station_tag_scheme``.
         gap, bypass_rise, drain_drop : float or None, optional
             Spacing for a pinned station.
-        size, schedule, service, sequence, spec, insulation : optional
-            Line-number components for the bypass and drain legs, each a
-            str, float or None.
+        size, schedule, service : str or float, optional
+            Bypass and drain line bore, wall schedule and service.
+        sequence, spec, insulation : str or float, optional
+            Bypass and drain line sequence, piping class and insulation.
         on : Stream or None, optional
             Material line from :meth:`connect` to put the station in.
         at : float or None, optional
@@ -1100,11 +1404,8 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If ``drains`` is out of range, a bypass lacks isolation,
-            only one of ``x`` and ``y`` is given, run options are given
-            without them, ``bypass_over`` names an unknown or omitted
-            member, ``at`` is given without ``on``, or the station
-            cannot go in that line.
+            If ``drains`` or ``bypass_over`` is invalid, options
+            conflict, or the station cannot go in the ``on`` line.
         """
         # Undo every member if any step raises.
         with self._unchanged_if_it_raises():
@@ -1175,11 +1476,35 @@ class Flowsheet:
             num = str(number) if number is not None else station_number(tag)
 
             def described(role: str) -> str:
-                """Return a member's description."""
+                """Return a member's description.
+
+                Parameters
+                ----------
+                role : str
+                    Member role.
+
+                Returns
+                -------
+                str
+                    Description.
+                """
                 return f"{description} {ROLE_WORDS[role]}".strip()
 
             def valve(role: str, closed: bool = False) -> "Valve":
-                """Add a member valve."""
+                """Add a member valve.
+
+                Parameters
+                ----------
+                role : str
+                    Member role.
+                closed : bool, default=False
+                    Whether the valve is normally closed.
+
+                Returns
+                -------
+                Valve
+                    The added valve.
+                """
                 unit = Valve(member_tag(scheme, role, tag, num),
                              description=described(role),
                              normal_position="closed" if closed else "open")
@@ -1187,7 +1512,18 @@ class Flowsheet:
                 return unit
 
             def size_change(role: str) -> "Reducer":
-                """Add the station's reducer or expander."""
+                """Add the station's reducer or expander.
+
+                Parameters
+                ----------
+                role : str
+                    ``"reduction"`` or ``"expansion"``.
+
+                Returns
+                -------
+                Reducer
+                    The added reducer.
+                """
                 unit = Reducer(member_tag(scheme, role, tag, num),
                                description=described(role),
                                large_end="inlet" if role == "reduction" else "outlet")
@@ -1195,7 +1531,18 @@ class Flowsheet:
                 return unit
 
             def tee(returns: bool = False) -> "Tee":
-                """Add a station tee."""
+                """Add a station tee.
+
+                Parameters
+                ----------
+                returns : bool, default=False
+                    Whether the branch flows into the run.
+
+                Returns
+                -------
+                Tee
+                    The added tee.
+                """
                 unit = Tee(branch="inlet" if returns else "outlet")
                 self.add(unit)
                 return unit
@@ -1259,7 +1606,18 @@ class Flowsheet:
                         drawn._turn_stated = drawn._mirror_stated = False
 
             def branch_line(src: "Port", dst: "Port") -> Stream:
-                """Connect a leg with the station's line number."""
+                """Connect a leg with the station's line number.
+
+                Parameters
+                ----------
+                src, dst : Port
+                    Leg ends.
+
+                Returns
+                -------
+                Stream
+                    The new stream.
+                """
                 return self.connect(src, dst, size=size, schedule=schedule, service=service,
                                     sequence=sequence, spec=spec, insulation=insulation)
 
@@ -1325,10 +1683,9 @@ class Flowsheet:
                 ends: "str | tuple[str, str] | None" = None) -> Stream:
         """Connect two ports with a new stream.
 
-        A process stream runs from an outlet to an inlet. A signal
-        stream joins two signal ports; either end may be given as a
-        unit, and an instrument gives a free port from its signal pool.
-        The returned stream carries its drawn number.
+        A process stream runs from an outlet to an inlet; a signal
+        stream joins two signal ports, and either end may be a unit. Any
+        line-number component but ``sequence`` shows a line number.
 
         Parameters
         ----------
@@ -1338,20 +1695,17 @@ class Flowsheet:
             Destination port, or a unit for a signal line.
         kind : str or None, optional
             One of :data:`~pandid.streams.STREAM_KINDS`; ``None`` infers
-            ``"energy"`` between energy or utility ports, else
-            ``"material"``.
+            it from the ports.
         name : str or None, optional
             Fixed stream name; ``None`` numbers it automatically.
         draw_as_recycle : bool, default=False
             Prefer this stream as a cycle's return line.
-        size, schedule, service, sequence, spec, insulation : optional
-            Line-number components, each a str, float or None
-            (``spec`` is the piping class); any but ``sequence`` makes
-            the stream show a line number.
+        size, schedule, service : str or float, optional
+            Nominal bore, wall schedule and service.
+        sequence, spec, insulation : str or float, optional
+            Sequence (automatic if unset), piping class and insulation.
         ends : str, tuple[str, str] or None, optional
-            Joint style for both ends or ``(source, dest)``, from
-            :data:`~pandid.render.svg.CONNECTIONS`; overrides
-            ``connections``.
+            ``connections`` style for both ends or ``(source, dest)``.
 
         Returns
         -------
@@ -1360,9 +1714,10 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If an end is neither a port nor a unit.
         ValueError
-            If the kind, ports, directions or line-number scheme are
-            invalid, or a port is already connected.
+            If an argument is invalid or a port is already connected.
         """
         # Restore the sheet and both end units if anything raises.
         with self._unchanged_if_it_raises((self, *_port_bearers(src, dst))):
@@ -1402,10 +1757,30 @@ class Flowsheet:
         ends: "str | tuple[str, str] | None" = None,
         pending: "Sequence[Unit]" = (),
     ) -> "tuple[Port, Port, str]":
-        """Resolve and check a connection without writing.
+        """Resolve and check a connection.
 
-        Return the ports as named and the kind. ``pending`` units pass
-        the same-sheet check.
+        Parameters
+        ----------
+        src, dst : Port or Unit
+            Ends as given to :meth:`connect`.
+        kind : str or None
+            Stream kind; ``None`` infers it from the ports.
+        ends : str, tuple[str, str] or None, optional
+            Joint styles to check.
+        pending : Sequence[Unit], optional
+            Units about to be added; they pass the same-sheet check.
+
+        Returns
+        -------
+        tuple[Port, Port, str]
+            Source port, destination port and kind.
+
+        Raises
+        ------
+        TypeError
+            If an end is neither a port nor a unit.
+        ValueError
+            If the connection is invalid.
         """
         if ends is not None:
             from pandid.render.svg import check_connections
@@ -1488,6 +1863,11 @@ class Flowsheet:
         -------
         Flowsheet
             New flowsheet.
+
+        Raises
+        ------
+        SpecError
+            If the file is not valid JSON or the spec is invalid.
         """
         from pandid.spec import from_json as _from_json
         return _from_json(path)
@@ -1495,8 +1875,6 @@ class Flowsheet:
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Flowsheet":
         """Build a flowsheet from a YAML spec file.
-
-        Requires the ``yaml`` extra.
 
         Parameters
         ----------
@@ -1507,6 +1885,13 @@ class Flowsheet:
         -------
         Flowsheet
             New flowsheet.
+
+        Raises
+        ------
+        ImportError
+            If PyYAML is not installed.
+        SpecError
+            If the file is not valid YAML or the spec is invalid.
         """
         from pandid.spec import from_yaml as _from_yaml
         return _from_yaml(path)
@@ -1531,8 +1916,7 @@ class Flowsheet:
         Parameters
         ----------
         engine : object or None, optional
-            Layout engine with a ``layout(fs)`` method; ``None`` uses
-            the default.
+            Engine with ``layout(fs)``; ``None`` uses the default.
         """
         from pandid.layout import default_layout_engine
 
@@ -1554,8 +1938,7 @@ class Flowsheet:
         Parameters
         ----------
         router : object or None, optional
-            Router with a ``route(fs)`` method; ``None`` uses the
-            default.
+            Router with ``route(fs)``; ``None`` uses the default.
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
@@ -1585,7 +1968,18 @@ class Flowsheet:
 
     @staticmethod
     def _raise_on_errors(issues: list) -> None:
-        """Raise one error listing every error-severity finding."""
+        """Raise one error listing every error-severity finding.
+
+        Parameters
+        ----------
+        issues : list[Issue]
+            Findings to check.
+
+        Raises
+        ------
+        ValueError
+            If any finding is an error.
+        """
         errors = [i for i in issues if i.severity == "error"]
         if errors:
             raise ValueError(
@@ -1597,7 +1991,15 @@ class Flowsheet:
     def _unchanged_if_it_raises(self, objects: "Sequence[Any] | None" = None):
         """Restore objects to their entry state if the block raises.
 
-        ``objects=None`` guards the sheet, every unit and every stream.
+        Parameters
+        ----------
+        objects : Sequence or None, optional
+            Objects to guard; ``None`` means the sheet and its contents.
+
+        Yields
+        ------
+        None
+            Control to the guarded block.
         """
         saved = [(obj, _snapshot(obj))
                  for obj in ((self, *self.units, *self.streams)
@@ -1611,7 +2013,22 @@ class Flowsheet:
 
     def _prepare_to_draw(self, *, diagram: str | None, check: bool,
                          **arguments) -> None:
-        """Number, check, lay out and route the sheet before drawing."""
+        """Number, check, lay out and route the sheet before drawing.
+
+        Parameters
+        ----------
+        diagram : str or None
+            Diagram type being drawn.
+        check : bool
+            Whether to validate the model and geometry.
+        **arguments
+            Other render arguments to check.
+
+        Raises
+        ------
+        ValueError
+            If an argument is invalid or validation finds an error.
+        """
         from pandid.document import _resolve_enclosure
         from pandid.render.svg import (check_render_arguments, draws_arrowheads,
                                        tabulates_boundary_flows)
@@ -1639,13 +2056,29 @@ class Flowsheet:
 
         A run passes from an inline device's inlet to its outlet unless
         the device sets ``new_line_number``.
+
+        Returns
+        -------
+        list[list[Stream]]
+            Runs in order of their first segment.
         """
         material = [s for s in self.streams if s.kind == "material"]
         pos = {id(s): i for i, s in enumerate(material)}  # Stream: unhashable
         parent = list(range(len(material)))
 
         def find(i):
-            """Return the representative of a stream's group."""
+            """Return the representative of a stream's group.
+
+            Parameters
+            ----------
+            i : int
+                Stream index.
+
+            Returns
+            -------
+            int
+                Index of the group's representative.
+            """
             while parent[i] != i:
                 parent[i] = parent[parent[i]]
                 i = parent[i]
@@ -1666,7 +2099,13 @@ class Flowsheet:
         return list(groups.values())
 
     def _named_runs(self) -> "dict[str, list[Stream]]":
-        """Group non-signal streams by name for the stream table."""
+        """Group non-signal streams by name for the stream table.
+
+        Returns
+        -------
+        dict[str, list[Stream]]
+            Segments per name, in order of first appearance.
+        """
         from pandid.streams import SIGNAL_KINDS
 
         runs: dict[str, list[Stream]] = {}
@@ -1678,12 +2117,9 @@ class Flowsheet:
     def renumber_streams(self) -> None:
         """Assign stream and line numbers to every stream.
 
-        Runs on every :meth:`connect` and before each render. A number
-        carries through inline valves, reducers, fittings and the run of
-        a tee; set ``unit.new_line_number = True`` to break it. A run
-        takes an explicit segment name, else its line number, else a
-        generated name. Material runs are numbered first, then energy
-        lines, then signal lines, in one sequence.
+        A number carries through inline devices and a tee's run unless
+        the unit sets ``new_line_number``. Material runs come first,
+        then energy lines, then signal lines.
 
         Raises
         ------
@@ -1703,9 +2139,22 @@ class Flowsheet:
             self._group_of = {id(s): i for i, g in enumerate(groups) for s in g}
 
     def _number_appended(self, stream: "Stream") -> bool:
-        """Number a just-connected stream without a full pass.
+        """Number a just-connected stream incrementally.
 
-        Return ``False`` when a full pass is needed.
+        Parameters
+        ----------
+        stream : Stream
+            Stream just added.
+
+        Returns
+        -------
+        bool
+            Whether it was numbered; ``False`` asks for a full pass.
+
+        Raises
+        ------
+        ValueError
+            If a naming scheme cannot name the stream's group.
         """
         groups, index = self._groups, self._group_of
         if groups is None:  # no full pass yet
@@ -1740,7 +2189,17 @@ class Flowsheet:
     def _joined_groups(self, stream: "Stream", index: dict) -> "list[int] | None":
         """Return the cached groups a new material stream joins.
 
-        Return ``None`` when a neighbour has no cached group.
+        Parameters
+        ----------
+        stream : Stream
+            New material stream.
+        index : dict
+            Group index by ``id(stream)``.
+
+        Returns
+        -------
+        list[int] or None
+            Joined group indices, or ``None`` for an uncached peer.
         """
         found: list[int] = []
         for port in (stream.source, stream.dest):
@@ -1766,7 +2225,25 @@ class Flowsheet:
         return found
 
     def _name_group(self, group: "list[Stream]", place: int) -> str:
-        """Name one group's segments for its place in the sequence."""
+        """Name one group's segments for its place in the sequence.
+
+        Parameters
+        ----------
+        group : list[Stream]
+            Segments of one run.
+        place : int
+            1-based position in the sequence.
+
+        Returns
+        -------
+        str
+            The name given.
+
+        Raises
+        ------
+        ValueError
+            If a naming scheme cannot name the group.
+        """
         with self._unchanged_if_it_raises(group):
             # Sequence and stream number share the place, not the start.
             sequence = str(self.line_number_start + place - 1)
@@ -1790,8 +2267,17 @@ class Flowsheet:
     def _number_tail(self, used: int) -> None:
         """Number non-material lines after the material runs.
 
-        Energy lines come before signal lines; ``used`` is the places
-        taken.
+        Energy lines come before signal lines.
+
+        Parameters
+        ----------
+        used : int
+            Places already taken.
+
+        Raises
+        ------
+        ValueError
+            If the stream naming scheme cannot name a line.
         """
         with self._unchanged_if_it_raises(self._tail):
             for s in sorted(self._tail, key=lambda s: s.kind != "energy"):
@@ -1839,31 +2325,25 @@ class Flowsheet:
         ----------
         show_stream_table : bool or {"sheet"}, default=False
             ``True`` docks the stream table under the drawing;
-            ``"sheet"`` draws the table as its own sheet instead of the
-            diagram.
+            ``"sheet"`` draws the table as its own sheet.
         border : str or None, optional
-            ``"none"`` (default) or ``"zone"`` for the ISO 5457
-            zone-ruled frame.
+            ``"none"`` or ``"zone"`` (ISO 5457 zone-ruled frame).
         diagram : str or None, optional
             ``"pfd"`` (default), ``"p&id"`` (or ``"pid"``) or ``"bfd"``.
         page_size : str or None, optional
-            ``"A4"`` to ``"A0"`` to fit the drawing to that sheet;
-            ``None`` sizes the sheet to the drawing.
+            Sheet ``"A4"`` to ``"A0"``, or ``None`` to fit the drawing.
         connections : str or None, optional
             Joint marks on a P&ID: ``"none"`` (default), ``"flanged"``
             (nozzles, valves and inline fittings) or
             ``"flanged-at-nozzles"``. Reducers and tees stay unmarked.
         jump_direction : str, default="vertical"
-            Which crossing line carries the mark: ``"vertical"`` or
-            ``"horizontal"``.
+            ``"vertical"`` or ``"horizontal"`` line carries the mark.
         crossing_style : str, default="gap"
             Crossing mark: ``"gap"``, ``"arc"`` or ``"plain"``.
         debug : bool or float, default=False
-            Draw a coordinate grid and markers; a number sets the
-            spacing.
+            Draw a debug grid and markers; a number sets the spacing.
         check : bool, default=True
-            Validate before and after layout; errors raise, warnings go
-            to ``warnings``.
+            Validate; errors raise and warnings go to ``warnings``.
 
         Returns
         -------
@@ -1905,8 +2385,7 @@ class Flowsheet:
         diagram : str or None, optional
             As for :meth:`to_svg`.
         page_size : str or None, optional
-            Sheet size to fit the drawing to; ``None`` keeps an
-            unbounded canvas.
+            As for :meth:`to_svg`; ``None`` leaves the canvas unbounded.
         border : str or None, optional
             ``"zone"`` draws the frame and zone band.
         connections : str or None, optional
@@ -1982,8 +2461,7 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the extension or an argument is invalid, ``debug`` is
-            given for ``.drawio``, or validation finds an error.
+            If an argument is invalid or validation finds an error.
         ImportError
             If PDF or PNG output is requested without ``pandid[pdf]``.
         OSError
@@ -2030,7 +2508,13 @@ class Flowsheet:
                 Path(path).write_bytes(data)
 
     def _repr_svg_(self) -> str:
-        """Return SVG for notebook display."""
+        """Return SVG for notebook display.
+
+        Returns
+        -------
+        str
+            SVG document.
+        """
         return self.to_svg()
 
     def show(self, *, show_stream_table: bool | Literal["sheet"] = False,
@@ -2066,6 +2550,11 @@ class Flowsheet:
             As for :meth:`to_svg`.
         check : bool, default=True
             As for :meth:`to_svg`.
+
+        Raises
+        ------
+        ValueError
+            If an argument is invalid or validation finds an error.
         """
         # Guard the whole call, including the preview.
         with self._unchanged_if_it_raises():
@@ -2078,7 +2567,13 @@ class Flowsheet:
             ), title=self.name)
 
     def __repr__(self) -> str:
-        """Return a summary with the name and unit and stream counts."""
+        """Return a summary with the name and unit and stream counts.
+
+        Returns
+        -------
+        str
+            ``Flowsheet(name, units=n, streams=m)``.
+        """
         return (
             f"Flowsheet({self.name!r}, "
             f"units={len(self.units)}, streams={len(self.streams)})"
