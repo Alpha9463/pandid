@@ -151,9 +151,11 @@ def _load(path: Path) -> Flowsheet:
     _Failure
         If the extension is not supported.
     OSError
-        If the file cannot be opened.
+        If the file cannot be opened or read.
     ImportError
         If PyYAML is needed and not installed.
+    UnicodeDecodeError
+        If the file is not UTF-8 text.
     SpecError
         If the spec is invalid.
     """
@@ -181,7 +183,18 @@ def _draw(args: argparse.Namespace) -> int:
     Returns
     -------
     int
-        Exit code.
+        ``EXIT_OK``.
+
+    Raises
+    ------
+    _Failure
+        If the spec's extension is not supported.
+    OSError
+        If the spec cannot be read or the drawing written.
+    ImportError
+        If PyYAML or the PDF extra is needed and not installed.
+    ValueError
+        If the spec is invalid or the render refuses it.
     """
     fs = _load(args.spec)
     out = args.output if args.output is not None else args.spec.with_suffix(".svg")
@@ -221,6 +234,17 @@ def _validate(args: argparse.Namespace) -> int:
     -------
     int
         Exit code: 1 if any finding is an error, else 0.
+
+    Raises
+    ------
+    _Failure
+        If the spec's extension is not supported.
+    OSError
+        If the spec cannot be read.
+    ImportError
+        If PyYAML is needed and not installed.
+    ValueError
+        If the spec is invalid or layout or routing refuses it.
     """
     fs = _load(args.spec)
     # The geometric checks measure the routed frames.
@@ -303,7 +327,7 @@ def _symbols(args: argparse.Namespace) -> int:
     Returns
     -------
     int
-        Exit code.
+        ``EXIT_OK``.
 
     Raises
     ------
@@ -465,8 +489,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns
     -------
     int
-        0 on success, 1 for a rejected sheet, 2 for a bad command line,
-        3 for a missing optional extra.
+        0 on success, 1 on a failure or an error finding, 2 on a bad
+        command line, 3 on a missing optional extra.
     """
     parser = _build_parser()
     try:

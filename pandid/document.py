@@ -19,7 +19,7 @@ class Revision:
     rev, date, description : str
         Revision mark, date and description.
     by, checked, approved : str
-        Initials; a blank one leaves its cell empty.
+        Initials; blank ones on the newest row take the block's.
     """
     rev: str = ""
     date: str = ""
@@ -36,20 +36,24 @@ class TitleBlock:
     Attributes
     ----------
     title, subtitle : str
-        Title lines.
-    drawing_number, project, client : str
-        Information cells; a blank client or project draws no line.
+        Title lines; a blank title draws the flowsheet name.
+    drawing_number : str
+        Drawing number; a blank one draws a dash.
+    project, client : str
+        Information rows; a blank one draws no row.
     company : str
         Organisation issuing the drawing.
     status : str
-        Issue status, such as ``"ISSUED FOR REVIEW"``.
+        Issue status, such as ``"ISSUED"``; a blank one draws a dash.
     sheet, of_sheets : str
         The ``SHEET n of m`` count; a blank one draws ``"1"``.
     scale : str
         Scale, such as ``"1:100"``. A blank one shows the placed scale
         when ``page_size`` fixes the page, and is blank otherwise.
-    drawn_by, checked_by, approved_by, date : str
-        Initials and date.
+    drawn_by, checked_by, approved_by : str
+        Initials for the newest revision row's blank cells.
+    date : str
+        Issue date; a blank one draws today's.
     revisions : list[Revision]
         Revision history.
     """
@@ -206,6 +210,8 @@ class _Box:
         ------
         TypeError
             If a numeric field or ``position`` entry is not a number.
+        ValueError
+            If a numeric field or ``position`` entry is not finite.
         """
         where = f"{type(self).__name__}.{name}"
         if name == "rows":
@@ -224,8 +230,8 @@ class _Box:
 class Annotation(_Box):
     """Titled text box placed on the sheet.
 
-    A row is a string (one line) or a sequence of cells aligned into
-    columns.
+    A row is a string (one line) or a tuple or list of cells aligned
+    into columns.
 
     Attributes
     ----------
@@ -249,7 +255,7 @@ class Annotation(_Box):
     TypeError
         If a numeric field or ``position`` coordinate is not a number.
     ValueError
-        If ``align`` is not a docking position.
+        If ``align`` is invalid or a number is not finite.
     """
     title: str = ""
     rows: list = field(default_factory=list)
@@ -298,7 +304,7 @@ class TableBox(_Box):
     TypeError
         If a numeric field or ``position`` coordinate is not a number.
     ValueError
-        If ``align`` or a ``col_align`` entry is invalid.
+        If ``align`` or ``col_align`` is bad or a number is not finite.
     """
     title: str = ""
     headers: list[str] = field(default_factory=list)
@@ -328,11 +334,11 @@ class StreamTableOptions:
     Attributes
     ----------
     font_size : float or None
-        Type size; ``None`` chooses it from the column count.
+        Positive type size, or ``None`` to choose one.
     label_width : float or "auto"
-        Minimum width of the row-label column.
+        Row-label column floor, 0 or more, or ``"auto"`` for none.
     column_width : float or "auto"
-        Minimum width shared by every stream column.
+        Stream column floor, 0 or more, or ``"auto"`` for none.
     sheet_subtitle : str
         Subtitle of the table's own sheet.
     sheet_drawing_number : str
@@ -359,7 +365,7 @@ def table_sheet_block(block: "TitleBlock | None",
     Parameters
     ----------
     block : TitleBlock or None
-        Diagram's title block.
+        Diagram's title block, or ``None`` for a blank one.
     options : StreamTableOptions
         Table options giving the subtitle and number.
 
@@ -564,7 +570,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
                    position=None, margin=0.0, include=None, width=None):
     """Build an :class:`Annotation` scheduling the major equipment.
 
-    Each row is ``(tag, description)``.
+    Each row is ``(name, description)``.
 
     Parameters
     ----------
@@ -579,7 +585,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
     margin : float, default=0.0
         Inset from the frame.
     include : Sequence[str], optional
-        Tags to list, in order, instead of the major equipment.
+        Unit names to list, in order, instead of the major equipment.
     width : float, optional
         Box width.
 
@@ -591,7 +597,10 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
     Raises
     ------
     ValueError
-        If ``include`` names a tag not on the flowsheet.
+        If an ``include`` name is not on the sheet, ``align`` is
+        invalid, or a number is not finite.
+    TypeError
+        If ``margin``, ``width`` or ``position`` is not a number.
     """
     if include is None:
         chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
@@ -637,6 +646,13 @@ def notes(items, *, title="NOTES", align="top-right", position=None,
     -------
     Annotation
         Notes box.
+
+    Raises
+    ------
+    ValueError
+        If ``align`` is invalid or a number is not finite.
+    TypeError
+        If ``margin``, ``width`` or ``position`` is not a number.
     """
     rows = []
     for i, text in enumerate(items, start=1):
@@ -668,6 +684,13 @@ def legend(entries, *, title="LEGEND", align="top-left",
     -------
     Annotation
         Legend box.
+
+    Raises
+    ------
+    ValueError
+        If ``align`` is invalid or a number is not finite.
+    TypeError
+        If ``margin``, ``width`` or ``position`` is not a number.
     """
     if isinstance(entries, dict):
         entries = list(entries.items())
