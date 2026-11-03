@@ -1,47 +1,12 @@
-"""SVG symbol registry for the topology primitives.
+"""SVG symbols for the unit kinds and the registry that holds them.
 
-Equipment shapes follow the conventions of ISO 10628-2 and instrument
-balloons follow ANSI/ISA-5.1. Neither set is certified conformant to
-anything, and the stencil library the equipment comes from makes no
-standards claim of its own. Sources:
-
-- **Vendored (draw.io / diagrams.net P&ID stencils, Apache-2.0)**:
-  valves and their variants, pumps, compressors, blowers, coolers,
-  heaters, heat exchangers, cooling towers, vessels, columns, reactors,
-  separators, tanks, dryers, filters, furnaces, thickeners, turbines,
-  reducers, in-line fittings, ejectors, vents and funnels. Converted
-  from mxGraph stencil XML by ``scripts/vendor_symbols.py`` into
-  ``_vendored_symbols.py`` and registered last (overriding the
-  hand-drawn defaults of the same kind). See the repo ``NOTICE`` for
-  attribution.
-- **Hand-drawn primitives**: Feed/Product boundary markers, the
-  variable-port Mixer and Splitter, the pipe tee, and the block flow
-  diagram's box.
-- **Built to size (draw.io-derived, Apache-2.0)**: the belt conveyor.
-  Adapted from a stencil but drawn here rather than generated, because a
-  fixed path cannot stretch; see :func:`conveyor_symbol` and the repo
-  ``NOTICE``.
-- **Built to fit (original)**: the block flow diagram's box, whose
-  nozzles are a per-face count the symbol cannot know until it has the
-  unit, and whose box is sized to hold them; see :func:`block_symbol`.
-
-Authoring conventions (hand-drawn symbols)
-------------------------------------------
-- Local coordinates: (0, 0) top-left, spanning ``width`` × ``height``.
-- Ports: named anchors on the boundary face a stream attaches to; names
-  MUST match the owning :class:`~pandid.units.Unit`'s port names.
-- Variants share a ``kind`` and register under a ``variant`` name.
-- A symbol whose shape carries meaning sets ``stretchable=False`` and is
-  centred in a box of another shape rather than distorted to fill it. A
-  balloon is a circle because ISA-5.1 says a circle.
-
-Composed symbols
-----------------
-ISO 10628-2 also builds symbols from a body and the parts of subject
-groups 26-29, and clause 5 requires this for anything it does not
-tabulate. :class:`IsoPart`, :class:`Overlay`, :class:`OverlayPart` and
-:func:`compose` implement it; read the comment block above
-:class:`IsoPart` for when a drawing may be composed.
+Valves, pumps, compressors, blowers, coolers, heaters, heat exchangers,
+cooling towers, vessels, columns, reactors, separators, tanks, dryers,
+filters, furnaces, thickeners, turbines, reducers, in-line fittings,
+ejectors, vents and funnels come from ``_vendored_symbols.py`` and
+replace hand-drawn symbols of the same kind. The vendored symbols and
+the belt conveyor are adapted from draw.io stencils (Apache-2.0); see
+``NOTICE``.
 """
 
 import hashlib
@@ -57,67 +22,31 @@ from pandid.portgeom import outward_dir
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS
 
-# Two placements closer together than this are the same point as far as
-# a reader (and a stream endpoint) is concerned.
+# Placements closer than this are the same point.
 _COINCIDENT = 0.5
 
-#: Side of the arrowhead a PFD draws at the end of a process line, in
-#: drawing units. The renderer uses it as the marker size with
-#: ``markerUnits="userSpaceOnUse"``
-#: (:meth:`pandid.render.svg.SvgRenderer._defs`), so the filled triangle
-#: is this long along the run and this wide across it.
+#: Side of a process-line arrowhead, in drawing units.
 ARROWHEAD = 12.0
 
-#: Paper to leave between two arrowheads side by side on one face, in
-#: drawing units: twice the main flow line weight, the floor ISO
-#: 128-20:1996 4.4 and ISO 10628-1 5.3.2 set between parallel lines
-#: (:attr:`pandid.render.weights.LineWeight.MAIN_FLOW`).
-#: ``tests/test_validate.py`` keeps the two in step. The physical minimum
-#: of ISO 15519-1 6.2 (0.18 mm on the final medium) is not checked.
+#: Gap between two arrowheads side by side: twice the main flow line
+#: weight (ISO 128-20 4.4).
 MIN_HEAD_CLEARANCE = 2 * LineWeight.MAIN_FLOW.width
 
-#: Smallest pitch between two nozzles that both carry an arrowhead: the
-#: head plus :data:`MIN_HEAD_CLEARANCE`. A floor reported as
-#: ``nozzles-crowded`` by :func:`pandid.validate.validate`;
-#: :data:`BLOCK_PITCH` is the larger pitch a symbol chooses.
+#: Smallest pitch between two nozzles that both carry an arrowhead.
 MIN_NOZZLE_PITCH = ARROWHEAD + MIN_HEAD_CLEARANCE
 
 
 def wears_arrowhead(stream, registry) -> bool:
-    """Return whether a stream carries an arrowhead at its destination.
-
-    Signal lines never do, nor does a stream ending at a bare-run symbol
-    such as a tee (:attr:`Symbol.bare_run`), since the run continues past
-    it. Whether the sheet draws arrowheads at all (not on a P&ID) is the
-    caller's question. Takes the registry so the validator can ask without
-    a renderer.
-
-    Parameters
-    ----------
-    stream : Stream
-        Stream to check.
-    registry : SymbolRegistry
-        Registry resolving the destination unit's symbol.
-
-    Returns
-    -------
-    bool
-        Whether the path gets a ``marker-end``.
-    """
+    """Return whether a stream ends in an arrowhead."""
     if stream.kind in SIGNAL_KINDS:
         return False
     return not registry.for_unit(stream.dest.owner).bare_run
 
 
-#: Spread a family symmetrically about ``at``, where a single nozzle is
-#: drawn: two members straddle it, three put the middle one on it. The
-#: default.
+#: Spread a family symmetrically about ``at``. The default.
 CENTRED = "centre"
 
-#: Start a family at ``at`` and grow it along the face. For a nozzle drawn
-#: near the end of its wall (a hopper separator's feed, 12 units down an
-#: 80-unit wall) there is no room to straddle it, and this keeps the first
-#: member where the single nozzle was when a feed is added.
+#: Start a family at ``at`` and grow it along the face.
 FROM_START = "start"
 
 
@@ -125,30 +54,14 @@ def spread(index: int, count: int, along: float, pitch: float,
            extent: float, at: float | None = None,
            align: str = CENTRED,
            band: "tuple[float, float] | None" = None) -> float:
-    """Return the position of member ``index`` of ``count`` along a face.
+    """Return the position of member ``index`` of ``count`` on a face.
 
-    The one spacing rule for nozzle families (mixer inlets, column feeds,
-    block connections). Members sit ``pitch`` apart around ``at``; if
-    that would run off the face, the run is squeezed to ``extent`` of it,
-    so the drawn count lands where fixed nozzles would.
-
-    ``band`` is an outer limit: the run is squeezed to fit inside it, then
-    slid by the least amount to lie inside it, so no member is ever off
-    the band. The span is ``min(pitch * (count - 1), extent * along,
-    hi - lo)``. Sliding rather than re-centring leaves a family that fits
-    exactly where ``at`` and ``align`` put it. A zero-length band (a dome
-    crown, cone apex or dished head) puts every member on one point and is
-    refused by callers; see :func:`bandless_face`.
-
-    :class:`PortSeries` is the declarative form; :func:`block_symbol` calls
-    this directly because a block's family spans several faces.
+    Members sit ``pitch`` apart about ``at``. The run is squeezed to at
+    most ``extent * along`` and the band length, then slid into the
+    band.
 
     Parameters
     ----------
-    index : int
-        Member index, from 0.
-    count : int
-        Family size.
     along : float
         Face length.
     pitch : float
@@ -156,17 +69,12 @@ def spread(index: int, count: int, along: float, pitch: float,
     extent : float
         Largest fraction of the face the run may span.
     at : float, optional
-        Position of a lone member; the middle of the band when omitted.
+        Position of a lone member; the band middle when omitted.
     align : str, default=CENTRED
         :data:`CENTRED` or :data:`FROM_START`.
     band : tuple[float, float], optional
-        ``(lo, hi)`` stretch of face a member may use; the whole face when
-        omitted.
-
-    Returns
-    -------
-    float
-        Coordinate along the face.
+        ``(lo, hi)`` part of the face members may use; the whole face
+        when omitted.
     """
     lo, hi = (0.0, along) if band is None else band
     start = (lo + hi) / 2 if at is None else at
@@ -179,22 +87,7 @@ def spread(index: int, count: int, along: float, pitch: float,
 
 
 def walled_faces(sym: "Symbol", role: str) -> list[str]:
-    """Return the faces a role may use that have room for several nozzles.
-
-    Used in refusal messages, so they name faces with a real wall.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol.
-    role : str
-        Port role, such as ``"inlet"``.
-
-    Returns
-    -------
-    list[str]
-        Faces whose band has length.
-    """
+    """Return the faces a role may use whose band has length."""
     return [face for face, band in ((f, sym.bands.get(f))
                                     for f in sym.port_faces.get(role, {}))
             if band is None or band[0] < band[1]]
@@ -202,30 +95,18 @@ def walled_faces(sym: "Symbol", role: str) -> list[str]:
 
 def bandless_face(who: str, face: str, at: float, members: "list[str]",
                   offered: "list[str]") -> ValueError:
-    """Return the error for several nozzles on a face with no wall.
-
-    A dished roof, cone apex or dished head meets its box at one point, so
-    a second nozzle there would be drawn in mid-air. Raised by
-    :meth:`pandid.units._MultiPortVessel._check_face_room` and
-    :func:`vessel_symbol`, so both give the same message.
+    """Return the error for several nozzles on a one-point face.
 
     Parameters
     ----------
     who : str
         Unit name.
-    face : str
-        Face.
     at : float
-        The single point along the face.
+        The face's single point.
     members : list[str]
-        Ports placed there.
+        Ports placed on the face.
     offered : list[str]
         Faces with a wall, from :func:`walled_faces`.
-
-    Returns
-    -------
-    ValueError
-        The error to raise.
     """
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
@@ -248,22 +129,7 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
 def _on_face(face: str, t: float, width: float, height: float) -> tuple[float, float]:
     """Return the symbol-space point ``t`` along a face.
 
-    ``t`` runs top to bottom on W and E and left to right on N and S, the
-    direction :func:`spread` and readers number nozzles in.
-
-    Parameters
-    ----------
-    face : str
-        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
-    t : float
-        Distance along the face.
-    width, height : float
-        Symbol box.
-
-    Returns
-    -------
-    tuple[float, float]
-        Point in symbol coordinates.
+    ``t`` runs top to bottom on W and E, left to right on N and S.
     """
     return {"W": (0.0, t), "E": (width, t),
             "N": (t, 0.0), "S": (t, height)}[face]
@@ -273,25 +139,17 @@ def _on_face(face: str, t: float, width: float, height: float) -> tuple[float, f
 class PortSeries:
     """A family of like ports spread along one face of a symbol.
 
-    A unit such as :class:`~pandid.units.Mixer` decides its port count, so
-    the symbol declares a rule and coordinates are resolved once the count
-    is known, using :func:`spread`.
-
     Attributes
     ----------
     prefix : str
-        Member names are ``prefix`` plus a 1-based index (``in_1``).
-    face : str
-        Face the family is on.
-    pitch : float, default=20.0
-        Preferred spacing.
-    extent : float, default=0.7
+        Member names are ``prefix`` plus a 1-based index.
+    extent : float
         Largest fraction of the face the run may span.
-    at : float or None, default=None
+    at : float or None
         Position of a lone member; the face middle when ``None``.
-    singular : str or None, default=None
+    singular : str or None
         Name of a lone member, such as a column's ``feed``.
-    align : str, default=CENTRED
+    align : str
         :data:`CENTRED` or :data:`FROM_START`.
     """
 
@@ -312,34 +170,19 @@ class PortSeries:
     def placement(self, index: int, count: int, width: float, height: float,
                   pin: float | None = None,
                   band: "tuple[float, float] | None" = None) -> tuple[float, float]:
-        """Return the symbol-space point of member ``index`` of ``count``.
+        """Return the point of member ``index`` of ``count``.
 
         Parameters
         ----------
-        index : int
-            Member index, from 0.
-        count : int
-            Family size.
-        width, height : float
-            Symbol box.
         pin : float, optional
-            Fraction of the face that overrides the spread for this member,
-            from :meth:`pandid.units.Unit._series_pin` (a column's
-            ``feed_stages``).
+            Fraction of the face that places this member instead of the
+            spread.
         band : tuple[float, float], optional
-            :attr:`Symbol.bands` entry for this face; the whole face when
-            omitted.
-
-        Returns
-        -------
-        tuple[float, float]
-            Point in symbol coordinates.
+            :attr:`Symbol.bands` entry for this face.
         """
         along = height if self.face in ("W", "E") else width
         if pin is not None:
             lo, hi = (0.0, along) if band is None else band
-            # Clamp a pin to the band, so a stage off the shell still lands
-            # on the ink.
             t = min(max(pin * along, lo), hi)
         else:
             t = spread(index, count, along, self.pitch, self.extent, self.at,
@@ -349,23 +192,10 @@ class PortSeries:
     def reach(self, width: float, height: float,
               band: "tuple[float, float] | None" = None
               ) -> tuple[float, float, float]:
-        """Return the stretch of face members can occupy, at any count.
+        """Return ``(fixed, lo, hi)``: where members can sit.
 
-        Read from :func:`spread` at the widest run, so collision checks and
-        drawn points agree.
-
-        Parameters
-        ----------
-        width, height : float
-            Symbol box.
-        band : tuple[float, float], optional
-            :attr:`Symbol.bands` entry for this face.
-
-        Returns
-        -------
-        tuple[float, float, float]
-            ``(face_coordinate, lo, hi)``: the fixed coordinate of the face
-            and the range along it.
+        ``fixed`` is the face's coordinate and ``lo`` to ``hi`` the
+        range along it, at any count.
         """
         along = height if self.face in ("W", "E") else width
         # Two members at full extent give the ends of the range.
@@ -377,52 +207,11 @@ class PortSeries:
 
 
 # ----------------------------------------------------------------
-# Supplementary symbols: the parts a body is composed with.
-#
-# ISO 10628-2:2012 Table 1 numbers 29 subject groups. Groups 1-25 name
-# whole apparatus; groups **26-29 name the parts you overlay onto one**:
-#
-#   26 apparatus elements   support leg, bracket, skirt, ring, manhole,
-#                           connection nozzle
-#   27 internals            tray, baffle tray, bubble-cap tray, valve
-#                           tray, sieve element, filter insert,
-#                           fluidised bed, packing
-#   28 agitators, stirrers  the general stirrer and nine impeller forms
-#   29 internal             the characteristic that says what separates,
-#      characteristics      crushes or settles inside the body
-#
-# ISO 10628-2 clause 5 makes composing from them a **shall** when the
-# symbol wanted is not tabulated, and ISO 14617-1:2025 §4.7 with Annex B
-# restates it with a worked six-part example. The standard demonstrates
-# it on itself: item 8.6 (electrostatic precipitator, X8125) is the
-# group-8 body carrying item 29.2 (C2030), item 8.8 (electromagnetic
-# separator, X8126) is the same body carrying item 29.3 (C2031), and
-# item 8.7 (wet electrostatic precipitator, X8033) is that body carrying
-# **two** parts at once.
-#
-# The rule before adding a composition
-# ------------------------------------
-# **Compose only where ISO itself composes; where ISO registers a distinct
-# symbol, it stays a distinct symbol.**
-#
-# Test: is every mark distinguishing the drawing from the shared body a
-# tabulated group 26-29 item, nameable by registration number? Item 8.3
-# (gravity separator, X8031) passes: its arrow is item 29.1, C2028. Item
-# 8.10 (cyclone, X2618) fails: no group-29 item draws its vortex, so X2618
-# stays its own symbol.
-#
-# One exception: item 1.27 (X8006) draws the electric motor (item 20.6,
-# group 20 drives) above a stirred vessel and registers the result. Such
-# items are listed one by one in :data:`COMPOSED_APPARATUS`.
-#
-# :class:`IsoPart` makes the test checkable: each part names its group,
-# item and registration number, the identity of a symbol (ISO 14617-1 3.6,
-# 4.2), so ``tests/test_composition.py`` can check it against Table 2.
+# Supplementary symbols: ISO 10628-2 group 26-29 parts composed onto a
+# body (clause 5).
 # ----------------------------------------------------------------
 
-#: ISO 10628-2 Table 1 subject groups that are parts rather than
-#: apparatus, with their group names. Only these may be overlaid; a whole
-#: apparatus inside another is two pieces of equipment.
+#: ISO 10628-2 Table 1 subject groups whose items may be overlaid.
 PART_GROUPS = {
     26: "apparatus elements",
     27: "internals",
@@ -430,25 +219,12 @@ PART_GROUPS = {
     29: "internal characteristics and built-in components",
 }
 
-#: Apparatus items ISO itself draws inside another apparatus, each with
-#: the tabulated row that licenses it. Item 20.6 C0082 (electric motor)
-#: is drawn by item 1.27 X8006 above a stirred vessel. Listed by item, not
-#: group: other group-20 drives (turbine, gearbox, generator) are tagged
-#: machines drawn beside what they drive. A new entry needs its own
-#: tabulated row.
+#: Apparatus items that may be overlaid, with the item that draws each.
 COMPOSED_APPARATUS = {
     "20.6": "1.27 X8006, the motor above a stirred vessel",
 }
 
-# The registration-number forms of ISO 10628-2 clause 5, column 2:
-#
-# ``nnn`` / ``nnnn``   an ISO 14617 graphical symbol (normative)
-# ``Cnnnn``            a preliminary number, for ISO 14617's next review
-# ``X2nnn``            an ISO 14617 symbol example (a guideline)
-# ``X8nnn``            an ISO 10628-2 symbol example
-#
-# ISO 14617-1 3.5 Note 2: an example is a guideline, a bare number a
-# normative basic symbol.
+# Registration number forms of ISO 10628-2 clause 5.
 _REG_NO = re.compile(r"\A(?:\d{3,4}|C\d{3,4}|X[28]\d{3})\Z")
 
 
@@ -456,26 +232,16 @@ _REG_NO = re.compile(r"\A(?:\d{3,4}|C\d{3,4}|X[28]\d{3})\Z")
 class IsoPart:
     """Identity of one ISO 10628-2 group 26-29 supplementary symbol.
 
-    Required on every :class:`OverlayPart`, so each part can be checked
-    against Table 2: a part that cannot name its item has no licence to be
-    composed.
-
     Attributes
     ----------
     group : int
-        Table 1 subject group, one of :data:`PART_GROUPS`, or a group whose
-        item is in :data:`COMPOSED_APPARATUS`.
+        Table 1 subject group.
     item : str
-        Item number including the group, as Table 2 writes it (``"27.3"``).
+        Item number, such as ``"27.3"``.
     reg : str
-        Registration number in a clause 5 namespace (see ``_REG_NO``).
+        Registration number, such as ``"C2028"``.
     name : str
-        The standard's descriptor for the item.
-
-    Raises
-    ------
-    ValueError
-        If the group, item, registration number or name is invalid.
+        The item's descriptor in the standard.
     """
 
     group: int
@@ -518,36 +284,21 @@ class IsoPart:
 class Overlay:
     """One supplementary part and where it sits on a body's box.
 
-    Refers to the part by registry name, so artwork and registration
-    number are looked up in one place and the overlay is a small hashable
-    cache key. Placement is in fractions of the body's box, so a part stays
-    in proportion when the unit is resized. Fractions outside 0 to 1 put
-    the part outside the body, as ISO item 1.27 (X8006) puts the motor
-    above the head; :func:`compose` grows the box to hold it. A repeated
-    part, such as a tray deck, is one overlay per copy.
+    Placement is in fractions of the body's box. Values outside 0 to 1
+    put the part outside the body, and :func:`compose` grows the box.
 
     Attributes
     ----------
     group : int
-        ISO subject group: 26 to 29, or 20 for the drive in
-        :data:`COMPOSED_APPARATUS`.
+        ISO subject group.
     name : str
-        Registry name in pandid's spelling (``"turbine"``).
+        Part name in the registry.
     x, y : float
         Left and top edge, as fractions of the body's width and height.
     w, h : float
         Width and height, as fractions of the body's width and height.
-    mirror : bool, default=False
-        Reflect the part left to right. Item 26.2's bracket and item
-        26.4's ring are drawn against one wall, and a vessel needs a pair;
-        a second registered part would give one symbol two registration
-        numbers. Vertical flips are not offered: an inverted support is not
-        a support.
-
-    Raises
-    ------
-    ValueError
-        If ``w`` or ``h`` is not positive.
+    mirror : bool
+        Reflect the part left to right.
     """
 
     group: int
@@ -570,78 +321,50 @@ class Overlay:
 
 @dataclass
 class Symbol:
-    """SVG template for a unit, with named port anchors.
+    """SVG artwork for a unit, with named port anchors.
 
     Attributes
     ----------
     svg : str
-        Artwork, in local coordinates from (0, 0) at the top left.
+        Artwork in local coordinates, (0, 0) at the top left.
     width, height : float
         Artwork box.
     ports : dict[str, tuple[float, float]]
-        Home anchor of each fixed port.
+        Home anchor of each fixed port, keyed by the unit's port name.
     port_faces : dict[str, dict[str, tuple[float, float]]]
-        Every placement a port may take, by face, such as
-        ``{"feed": {"W": (0.0, 15.0), "N": (30.0, 0.0)}}``. The home anchor
-        is folded in, so this is the whole menu.
+        Every placement each port may take, by face, home included.
     faceless_ports : frozenset[str]
-        Ports with no face of their own (a balloon's signals), which alone
-        may share placements with each other.
+        Ports with no face, which may share placements with each other.
     port_series : tuple[PortSeries, ...]
-        Families whose size the unit decides; each is the only authority
-        for its members.
+        Port families whose size the unit decides.
     bands : dict[str, tuple[float, float]]
-        Stretch of each face a family may use, measured along it, where the
-        artwork does not span the whole box: ``tank/default`` uses
-        ``{"W": (36.0, 85.0), "E": (36.0, 85.0), "S": (10.0, 90.0)}`` to
-        keep fills off the roof and floor. Read only for families, for
-        inlets and outlets alike.
+        Stretch of each face a family may use.
     label_pos : str or None
-        Fixed tag side, such as a balloon's ``"center"``.
+        Fixed tag side, such as ``"center"``.
     id_suffix : str
-        Distinguishes definitions of one (kind, variant) that differ, such
-        as conveyors built to different lengths.
+        Suffix telling apart definitions of one kind and variant.
     stretchable : bool
-        Whether the artwork may be scaled unevenly to fill a box. False
-        where shape carries meaning (an ISA-5.1 balloon is a circle);
-        vendored symbols take it from the stencil's ``aspect``.
+        Whether the artwork may be scaled unevenly to fill a box.
     bare_run : bool
-        The artwork is only pipe, as a tee; a stream ending here gets no
-        arrowhead (:func:`wears_arrowhead`).
+        The artwork is only pipe; a stream ending here has no arrowhead.
     gravity_fixed : bool
-        The depicted function depends on gravity, so turning it is reported
-        as ``gravity-turned`` (ISO 15519-1 11.4.2, Figure 22 b); the open
-        tank 2061 and cyclone X 2618). Vendored symbols take it from
-        ``GRAVITY_FIXED`` in ``scripts/vendor_symbols.py``.
+        The function depends on gravity; turning it is reported.
     directional : bool
-        The artwork states a direction a flip would reverse (heater versus
-        cooler arrow). The renderer holds it still under reflections
-        (:func:`pandid.render.svg._reflections`); ISO 15519-1 11.4.2 allows
-        mirroring. Such artwork must keep ports on ink under any flip and
-        carry no lettering. Vendored symbols take it from ``DIRECTIONAL``.
+        The artwork states a direction and is never mirrored.
     drawio_shape : str
-        draw.io stencil key this artwork was converted from
-        (``"mxgraph.pid.valves.gate_valve"``), derived by
-        ``drawio_shape_key`` at vendoring time; empty for hand-drawn
-        symbols.
+        draw.io stencil key; empty for hand-drawn symbols.
     drawio_flip_h : bool
-        The draw.io stencil must be flipped (:func:`expander`).
+        Flip the draw.io stencil left to right.
     drawio_fill : str
-        Fill for the draw.io stencil (:func:`darkened`).
+        Fill for the draw.io stencil.
     drawio_body_shape : str
-        Stencil for a composition's body; the parts are exported as child
-        cells. Set by :func:`compose`.
+        draw.io stencil for a composition's body.
     overlays : tuple[Overlay, ...]
-        Parts painted over the body, set only by :func:`compose`.
+        Parts drawn over the body.
     iso_reg : str
-        ISO registration number this drawing claims ("2062", "X2618"), or
-        empty where unchecked; the symbol's identity per ISO 14617-1 3.6
-        and 4.2. Left empty rather than assumed.
+        ISO registration number of the drawing, or empty.
     trim : bool
-        The outline is ISO 10628-1 5.3.1 c) (valves, fittings, piping
-        accessories, PCE symbols) at half the b) equipment weight. Set per
-        drawing, not inferred from ``kind``; read through
-        :func:`pandid.render.svg._class_weight`.
+        Draw the outline at the trim weight (ISO 10628-1 5.3.1 c).
 
     Raises
     ------
@@ -672,10 +395,8 @@ class Symbol:
     trim: bool = False
 
     def __post_init__(self) -> None:
-        """Validate the port declarations and build the full face menus."""
+        """Validate the ports and build the full face menus."""
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}
-        # Reject rather than repair: a misfiled placement would vanish
-        # silently once menus are keyed by coordinate.
         stray = sorted(set(declared) - set(self.ports))
         if stray:
             raise ValueError(
@@ -748,7 +469,7 @@ class Symbol:
             )
 
     def series_for(self, port_name: str) -> PortSeries | None:
-        """Return the series placing ``port_name``, or ``None`` for a fixed port."""
+        """Return the series placing ``port_name``, if any."""
         for series in self.port_series:
             if series.matches(port_name):
                 return series
@@ -762,15 +483,8 @@ class Symbol:
     def coincident_ports(self) -> list[tuple[str, str, tuple[float, float]]]:
         """Return pairs of different ports that share a placement.
 
-        A stream to one would land on a stream to the other. Placements of
-        one port may coincide, since only one is live. Faceless ports are
-        exempt only from each other. A :class:`PortSeries` is checked as
-        the stretch of face it may use, reported as ``prefix*``.
-
-        Returns
-        -------
-        list[tuple[str, str, tuple[float, float]]]
-            ``(port, port, point)`` for each clash.
+        Faceless ports may share with each other. A series is checked as
+        the stretch of face it may use and reported as ``prefix*``.
         """
         placements = [(name, xy) for name, faces in self.port_faces.items()
                       for xy in faces.values()]
@@ -801,64 +515,27 @@ class Symbol:
 
 
 # ----------------------------------------------------------------
-# Belt conveyor.
-#
-# Derived from the draw.io / diagrams.net P&ID stencils (Apache-2.0):
-# the shape ``Drier (Roller Conveyor Belt)`` in
-# scripts/vendor_data/drawio/driers.xml (w=100, h=140,
-# aspect="variable"). Changed: the drier housing is dropped, and the run
-# and roller size are parameters, defaulting to the stencil's 60-apart
-# r=10 rollers. See NOTICE, and ADAPTED_ELSEWHERE in
-# scripts/vendor_symbols.py. Built here rather than generated, because a
-# fixed drawing stretched to another aspect would draw elliptical rollers.
+# Belt conveyor, adapted from the draw.io P&ID stencil "Drier (Roller
+# Conveyor Belt)" (Apache-2.0; see NOTICE): the housing is dropped and
+# the run and roller size are parameters.
 # ----------------------------------------------------------------
 
-#: Default roller radius, from the stencil's 20x20 roller ellipses.
+#: Default roller radius.
 CONVEYOR_ROLLER = 10.0
-#: Default roller diameter, and the drawn depth: the belt is tangent to
-#: both rollers.
+#: Default roller diameter, and the drawn depth.
 CONVEYOR_DIAMETER = 2 * CONVEYOR_ROLLER
-#: Default belt run: the stencil's rollers at x=20 and x=80 span x=10..90.
+#: Default belt run.
 CONVEYOR_LENGTH = 80.0
 
 
 def conveyor_min_length(diameter: float = CONVEYOR_DIAMETER) -> float:
-    """Return the shortest belt run: two roller diameters.
-
-    Parameters
-    ----------
-    diameter : float, default=CONVEYOR_DIAMETER
-        Roller diameter.
-
-    Returns
-    -------
-    float
-        Minimum run; shorter runs overlap the rollers.
-    """
+    """Return the shortest belt run: two roller diameters."""
     return 2 * diameter
 
 
 def conveyor_too_short(length: float, owner: str = "",
                        diameter: float = CONVEYOR_DIAMETER) -> ValueError:
-    """Return the error for a belt run too short for its rollers.
-
-    Shared by :class:`~pandid.units.Conveyor` and :func:`conveyor_symbol`
-    so both give the same message.
-
-    Parameters
-    ----------
-    length : float
-        Requested run.
-    owner : str, default=""
-        Unit name, for the message.
-    diameter : float, default=CONVEYOR_DIAMETER
-        Roller diameter.
-
-    Returns
-    -------
-    ValueError
-        The error to raise.
-    """
+    """Return the error for a belt run too short for its rollers."""
     return ValueError(
         f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
         f"conveyor can be drawn: the rollers are {diameter / 2:g} in radius "
@@ -868,20 +545,7 @@ def conveyor_too_short(length: float, owner: str = "",
 
 
 def conveyor_bad_diameter(diameter: float, owner: str = "") -> ValueError:
-    """Return the error for a non-positive roller diameter.
-
-    Parameters
-    ----------
-    diameter : float
-        Requested diameter.
-    owner : str, default=""
-        Unit name, for the message.
-
-    Returns
-    -------
-    ValueError
-        The error to raise.
-    """
+    """Return the error for a non-positive roller diameter."""
     return ValueError(
         f"{owner + ': ' if owner else ''}diameter={diameter:g} is not a "
         f"conveyor: the rollers are circles and a circle has a positive "
@@ -895,30 +559,9 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
                     diameter: float = CONVEYOR_DIAMETER) -> Symbol:
     """Return a belt conveyor symbol built to its run and roller size.
 
-    The artwork is drawn at the requested size, so its width is the run and
-    its height the roller diameter, and the ``<use>`` scales by exactly 1:
-    rollers stay circles. ``feed`` is the tail roller, also offered on the
-    top for material dropped on; ``discharge`` is the head roller, also
-    offered underneath for a chute. Cached, as port resolution asks for it
-    on every call.
-
-    Parameters
-    ----------
-    length : float, default=CONVEYOR_LENGTH
-        Run from tail to head.
-    diameter : float, default=CONVEYOR_DIAMETER
-        Roller diameter, and the drawn depth.
-
-    Returns
-    -------
-    Symbol
-        Conveyor symbol.
-
-    Raises
-    ------
-    ValueError
-        If ``diameter`` is not positive or ``length`` is under two roller
-        diameters.
+    The box is ``length`` wide and ``diameter`` deep. ``feed`` is the
+    tail roller, also offered on top; ``discharge`` is the head roller,
+    also offered underneath.
     """
     if diameter <= 0:
         raise conveyor_bad_diameter(diameter)
@@ -926,7 +569,7 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
         raise conveyor_too_short(length, diameter=diameter)
     r, height = diameter / 2, float(diameter)
     tail, head = r, length - r
-    # Omit the default roller from the id, so ids without one are stable.
+    # The default diameter is left out of the id.
     suffix = f"_L{length:g}" + (f"_D{diameter:g}"
                                 if diameter != CONVEYOR_DIAMETER else "")
     roller = ('<ellipse cx="{:g}" cy="{:g}" rx="{:g}" ry="{:g}" fill="none" '
@@ -945,65 +588,35 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
         port_faces={"feed": {"N": (tail, 0.0)},
                     "discharge": {"S": (head, height)}},
         id_suffix=suffix,
-        # Built to size so the rollers stay circles.
         stretchable=False,
     )
 
 
 # ----------------------------------------------------------------
-# The screw conveyor, ISO 10628-2 Table 2 item 18.5 X8063.
-#
-# Original artwork following the construction row 18.5 specifies (see
-# pandid.render.iso_parts): a 15 M x 6 M casing, the screw axis along it,
-# and zigzag turns 4 M wide reaching 2 M either side. Built to its length,
-# not scaled, so the pitch is kept: a longer casing gets more turns.
+# Screw conveyor, ISO 10628-2 item 18.5 X8063, built to its length.
 # ----------------------------------------------------------------
 
-#: Row 18.5's grid module in drawing units, half of
-#: :data:`pandid.render.iso_parts.M`, so the 6 M casing is 30 units deep,
-#: comparable with the belt conveyor's 20.
+#: Grid module of item 18.5, in drawing units.
 SCREW_MODULE = 5.0
 
-#: Default casing depth (bore in elevation): 6 M, from row 18.5.
+#: Default casing depth: 6 modules.
 SCREW_HEIGHT = 6 * SCREW_MODULE
 
-#: One turn of the screw: 4 M along the axis, reaching 2 M either side,
-#: drawn as three straight runs as Table 2 flattens a helix (compare item
-#: 28.6's helical ribbon).
+#: Width of one turn along the axis, and its reach either side.
 SCREW_TURN, SCREW_REACH = 4 * SCREW_MODULE, 2 * SCREW_MODULE
 
-#: Fraction of the bore the flight sweeps (row 18.5: 4 M across 6 M). The
-#: one dimension that follows the bore, since a screw fills its trough;
-#: nothing along the axis changes with the bore.
+#: Fraction of the bore the flight sweeps.
 SCREW_SWEEP = 2 * SCREW_REACH / SCREW_HEIGHT
 
-#: Pitch between turn starts (7 M) and clear casing at each end (2 M),
-#: from row 18.5's turns at x 7..11 and 14..18 in a casing at x 5..20.
+#: Pitch between turn starts, and clear casing at each end.
 SCREW_PITCH, SCREW_MARGIN = 7 * SCREW_MODULE, 2 * SCREW_MODULE
 
-#: Shortest drawable screw: clear casing, one turn, clear casing. It
-#: happens to equal the belt's :func:`conveyor_min_length`.
+#: Shortest screw: clear casing, one turn, clear casing.
 SCREW_MIN_LENGTH = 2 * SCREW_MARGIN + SCREW_TURN
 
 
 def screw_too_short(length: float, owner: str = "") -> ValueError:
-    """Return the error for a screw casing too short for one turn.
-
-    Separate from :func:`conveyor_too_short`, whose message is about
-    rollers. Takes no diameter: the minimum is measured along the axis.
-
-    Parameters
-    ----------
-    length : float
-        Requested run.
-    owner : str, default=""
-        Unit name, for the message.
-
-    Returns
-    -------
-    ValueError
-        The error to raise.
-    """
+    """Return the error for a screw casing too short for one turn."""
     return ValueError(
         f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
         f"screw conveyor can be drawn: one turn of the flight is "
@@ -1013,20 +626,7 @@ def screw_too_short(length: float, owner: str = "") -> ValueError:
 
 
 def screw_bad_diameter(diameter: float, owner: str = "") -> ValueError:
-    """Return the error for a non-positive screw bore.
-
-    Parameters
-    ----------
-    diameter : float
-        Requested bore.
-    owner : str, default=""
-        Unit name, for the message.
-
-    Returns
-    -------
-    ValueError
-        The error to raise.
-    """
+    """Return the error for a non-positive screw bore."""
     return ValueError(
         f"{owner + ': ' if owner else ''}diameter={diameter:g} is not a screw "
         f"conveyor: the casing is a tube and a tube has a positive bore. "
@@ -1038,33 +638,11 @@ def screw_bad_diameter(diameter: float, owner: str = "") -> ValueError:
 @lru_cache(maxsize=None)
 def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
                           diameter: float = SCREW_HEIGHT) -> Symbol:
-    """Return a closed screw conveyor symbol, ISO item 18.5 X8063.
+    """Return a closed screw conveyor symbol (ISO 10628-2 item 18.5).
 
-    The casing, the screw axis and as many turns as fit at
-    :data:`SCREW_PITCH`. Dimensions along the axis (turn width, pitch,
-    end clearance) are fixed, so a longer casing gets more turns; across
-    it, the flight follows the bore (:data:`SCREW_SWEEP`). ``feed`` is on
-    top a module from the tail and ``discharge`` underneath a module from
-    the head, as row 18.5 draws its spouts; the ends are also offered.
-    Cached, as :func:`conveyor_symbol` is.
-
-    Parameters
-    ----------
-    length : float, default=CONVEYOR_LENGTH
-        Casing length.
-    diameter : float, default=SCREW_HEIGHT
-        Casing bore, and the drawn depth.
-
-    Returns
-    -------
-    Symbol
-        Screw conveyor symbol.
-
-    Raises
-    ------
-    ValueError
-        If ``diameter`` is not positive or ``length`` is below
-        :data:`SCREW_MIN_LENGTH`.
+    Turns repeat at :data:`SCREW_PITCH` along the casing and the flight
+    follows the bore. ``feed`` is on top near the tail and ``discharge``
+    underneath near the head; the ends are also offered.
     """
     if diameter <= 0:
         raise screw_bad_diameter(diameter)
@@ -1082,7 +660,7 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
         f'L {x0 + 3 * SCREW_MODULE:g} {axis + reach:g} '
         f'L {x0 + SCREW_TURN:g} {axis:g} '
         for x0 in starts)
-    # The default bore is left out of the id, for the belt's reason.
+    # The default bore is left out of the id.
     suffix = f"_L{length:g}" + (f"_D{diameter:g}"
                                 if diameter != SCREW_HEIGHT else "")
     svg = (
@@ -1100,66 +678,33 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
         port_faces={"feed": {"W": (0.0, axis)},
                     "discharge": {"E": (float(length), axis)}},
         id_suffix=suffix,
-        # Built to size; stretching would distort the turns.
         stretchable=False,
         iso_reg="X8063",
     )
 
 
 # ----------------------------------------------------------------
-# The bucket elevator, ISO 10628-2 Table 2 items 18.7 X8065 and 18.8
-# X8066.
-#
-# Original artwork on the screw's rule, measured off rows 18.7 and 18.8
-# at :data:`pandid.render.iso_parts.M` = 10 units per module. Both rows
-# draw a bucket belt closed by a pulley at each end inside a casing, with
-# a loading and a discharge chute; the Z-form adds two runs and pulleys.
-# Fixed drawings: the lift is not stated, and scaling would flatten the
-# pulleys.
+# Bucket elevator, ISO 10628-2 items 18.7 X8065 and 18.8 X8066.
 # ----------------------------------------------------------------
 
 # Grid module of both elevator rows, in drawing units.
 _LIFT_M = 10.0
 
-# Belt half-width and pulley radius (1 M): the runs are 2 M apart.
+# Pulley radius and belt half-width: 1 module.
 _LIFT_R = _LIFT_M
 
 
 def _lift_pulley(cx: float, cy: float) -> str:
-    """Return a pulley circle of radius 1 M at ``(cx, cy)``.
-
-    Parameters
-    ----------
-    cx, cy : float
-        Centre.
-
-    Returns
-    -------
-    str
-        SVG ``<circle>``.
-    """
+    """Return a pulley circle of radius 1 M at ``(cx, cy)``."""
     return (f'<circle cx="{cx:g}" cy="{cy:g}" r="{_LIFT_R:g}" '
             f'fill="none" stroke="#111" stroke-width="2"/>')
 
 
 def _lift_chute(x: float, y: float, dx: float, dy: float) -> str:
-    """Return a chute: a straight run then a quarter arc back to the belt.
+    """Return a chute: a run and a quarter arc back to the belt.
 
-    The run goes from ``(x, y)`` to ``(x + dx, y)`` and the arc returns to
-    ``(x, y + dy)``. Only the two outer edges are drawn; the belt is the
-    third side.
-
-    Parameters
-    ----------
-    x, y : float
-        Start on the belt.
-    dx, dy : float
-        Run length and arc drop, signed.
-
-    Returns
-    -------
-    str
-        SVG ``<path>``.
+    The run goes from ``(x, y)`` to ``(x + dx, y)`` and the arc returns
+    to ``(x, y + dy)``.
     """
     r = abs(dx)
     return (f'<path d="M {x:g} {y:g} L {x + dx:g} {y:g} '
@@ -1168,26 +713,17 @@ def _lift_chute(x: float, y: float, dx: float, dy: float) -> str:
 
 
 # ----------------------------------------------------------------
-# The block flow diagram's box.
-#
-# An original primitive (see NOTICE section 1). Its connections are split
-# across up to four faces with a count on each, so the symbol is built per
-# unit and the box sizes itself to them.
+# Block flow diagram box, sized to its connections.
 # ----------------------------------------------------------------
 
-#: Spacing of a block's connections on one face: 2.5 arrowheads, which
-#: leaves a head's width of paper between adjacent arrows so they do not
-#: read as one.
+#: Spacing of a block's connections on one face.
 BLOCK_PITCH = 2.5 * ARROWHEAD
 
-#: Smallest block box: room for a short 12 pt name, and clearly a section
-#: of plant rather than a fitting.
+#: Smallest block box.
 BLOCK_MIN_WIDTH = 120.0
 BLOCK_MIN_HEIGHT = 80.0
 
-# Width of one narrow tag character at the renderer's 12 pt sans-serif,
-# and the padding; :func:`pandid.portgeom.resolve_size` uses the same
-# rule for boundary flags.
+# Width of one narrow tag character, and the padding.
 _LABEL_EM = 8.0
 _LABEL_PAD = 30.0
 
@@ -1198,22 +734,8 @@ _LABEL_EM_WIDE = 12.0
 def label_span(text: str) -> float:
     """Return the width a tag needs to letter ``text`` inside a box.
 
-    Used by :func:`block_symbol` to size a box,
-    ``label-overruns-symbol`` (:mod:`pandid.validate`) to check one, and
-    :func:`pandid.portgeom.resolve_size` for boundary flags, so all agree.
-    Narrow characters count :data:`_LABEL_EM`, wide (CJK or fullwidth) ones
-    :data:`_LABEL_EM_WIDE` and combining marks nothing
-    (:func:`pandid.render.furniture.script_counts`), plus padding.
-
-    Parameters
-    ----------
-    text : str
-        Tag text.
-
-    Returns
-    -------
-    float
-        Width in drawing units.
+    Narrow characters count :data:`_LABEL_EM`, wide ones
+    :data:`_LABEL_EM_WIDE` and combining marks nothing, plus padding.
     """
     from pandid.render.furniture import script_counts
     narrow, wide, zero = script_counts(text)
@@ -1223,21 +745,7 @@ def label_span(text: str) -> float:
 
 
 def block_span(count: int) -> float:
-    """Return the face length needed for ``count`` block connections.
-
-    One :data:`BLOCK_PITCH` per connection: the spacing plus half a pitch
-    at each end.
-
-    Parameters
-    ----------
-    count : int
-        Connections on the face.
-
-    Returns
-    -------
-    float
-        Minimum face length.
-    """
+    """Return the face length ``count`` block connections need."""
     return BLOCK_PITCH * count
 
 
@@ -1246,32 +754,16 @@ def block_box_too_small(owner: str, face: str, count: int, axis: str,
                         turned: bool = False) -> ValueError:
     """Return the error for a block box too small for its connections.
 
-    Raised by the constructor, :meth:`pandid.units.Block.nozzle`,
-    :meth:`pandid.units.Block.pin` and width or height assignment, so all
-    give the same message.
-
     Parameters
     ----------
-    owner : str
-        Unit name.
-    face : str
-        Crowded face.
-    count : int
-        Connections on it.
     axis : str
         ``"width"`` or ``"height"``.
     given : float
-        Box size along that axis.
+        Box size along ``axis``.
     needed : float
         Size the block would choose.
     turned : bool, default=False
-        Whether a quarter turn moved the face onto ``axis``; explained in
-        the message.
-
-    Returns
-    -------
-    ValueError
-        The error to raise.
+        Whether a quarter turn moved ``face`` onto ``axis``.
     """
     spun = (f" The block is turned a quarter, so its {face} face is drawn along "
             f"the box's {axis}." if turned else "")
@@ -1285,7 +777,7 @@ def block_box_too_small(owner: str, face: str, count: int, axis: str,
     )
 
 
-# Fixed face order, so the drawing does not depend on declaration order.
+# Faces in drawing order.
 _BLOCK_FACES = ("W", "E", "N", "S")
 
 
@@ -1293,24 +785,14 @@ _BLOCK_FACES = ("W", "E", "N", "S")
 def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
     """Return a block flow diagram box with a port per connection.
 
-    Each face is made at least :func:`block_span` long, so the box grows
-    instead of squeezing the spacing. Every port sits on the rectangle, and
-    each connection has only its declared face;
-    :meth:`pandid.units.Block.nozzle` changes the declaration and rebuilds.
-    Cached, as port resolution asks for it on every call.
+    Each face is at least :func:`block_span` long.
 
     Parameters
     ----------
     faces : tuple[tuple[str, str], ...]
         ``(port_name, face)`` in the unit's port order.
     label : str, default=""
-        Tag lettered inside the box, which widens it to fit. Empty when the
-        unit has an explicit width, which wins.
-
-    Returns
-    -------
-    Symbol
-        Block symbol.
+        Tag lettered inside the box, which widens it to fit.
     """
     on: dict[str, list[str]] = {face: [] for face in _BLOCK_FACES}
     for port_name, face in faces:
@@ -1323,8 +805,7 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
         members = on[face]
         along = height if face in ("W", "E") else width
         for i, port_name in enumerate(members):
-            # extent=1.0: the box already fits the full pitch, and Block
-            # refuses a smaller box.
+            # The box always fits the full pitch.
             t = spread(i, len(members), along, BLOCK_PITCH, 1.0)
             ports[port_name] = _on_face(face, t, width, height)
     svg = (
@@ -1335,38 +816,18 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
     )
     return Symbol(
         svg=svg, width=width, height=height, ports=ports,
-        # The name is lettered inside the box, so no outside label.
+        # The name is lettered inside the box.
         label_pos="center",
-        # Built to the box, so each box size is its own <defs> entry.
+        # Each box size is its own <defs> entry.
         id_suffix=f"_{width:g}x{height:g}",
     )
 
 
-# Drawings built from the unit, not drawn once and scaled: a conveyor to
-# keep its rollers round, a block, tank or vessel to fit its connection
-# families. Keyed by (kind, variant), with ``None`` meaning every variant;
-# the belt conveyor names its variant so the screw gets its own builder.
 def _face_local(face: str, x: float, y: float, width: float, height: float
                 ) -> tuple[float, float]:
-    """Return a symbol-space point as (position along face, inset from edge).
+    """Return ``(along, inset)`` of a symbol-space point on a face.
 
-    The inverse of :func:`_face_point`. A dished roof recedes from its box,
-    so a crown nozzle is inset; keeping the inset (which :func:`_on_face`
-    assumes is zero) lets a squeezed family stay on the drawn roofline.
-
-    Parameters
-    ----------
-    face : str
-        Face.
-    x, y : float
-        Point in symbol coordinates.
-    width, height : float
-        Symbol box.
-
-    Returns
-    -------
-    tuple[float, float]
-        ``(along, inset)``.
+    The inverse of :func:`_face_point`.
     """
     if face == "W":
         return y, x
@@ -1379,25 +840,9 @@ def _face_local(face: str, x: float, y: float, width: float, height: float
 
 def _face_point(face: str, t: float, inset: float, width: float, height: float
                 ) -> tuple[float, float]:
-    """Return the symbol-space point at ``t`` along a face and ``inset`` in.
+    """Return the point ``t`` along a face, ``inset`` from its edge.
 
     The inverse of :func:`_face_local`.
-
-    Parameters
-    ----------
-    face : str
-        Face.
-    t : float
-        Position along the face.
-    inset : float
-        Distance in from the box edge.
-    width, height : float
-        Symbol box.
-
-    Returns
-    -------
-    tuple[float, float]
-        Point in symbol coordinates.
     """
     if face == "W":
         return inset, t
@@ -1408,10 +853,7 @@ def _face_point(face: str, t: float, inset: float, width: float, height: float
     return t, height - inset  # "S"
 
 
-# Pitch and extent for tank and vessel inlet and outlet families, the
-# PortSeries defaults. The extent limits how tightly a family is pitched;
-# Symbol.bands limits where it may be drawn; whichever is tighter wins
-# (see :func:`spread`).
+# Pitch and extent of tank and vessel inlet and outlet families.
 _VESSEL_PITCH = 20.0
 _VESSEL_EXTENT = 0.7
 
@@ -1419,43 +861,20 @@ _VESSEL_EXTENT = 0.7
 @lru_cache(maxsize=None)
 def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
-    """Return a tank or vessel symbol with its inlet and outlet families placed.
+    """Return a tank or vessel symbol with its nozzle families placed.
 
-    Starts from the vendored stencil with ``overlays`` composed on
-    (:meth:`SymbolRegistry.composed`); this must happen here because
-    :data:`_BUILT_TO_SIZE` sends tanks and vessels here before
-    :meth:`SymbolRegistry.for_unit` reaches its own overlay branch. ``vent``,
-    ``relief`` and ``drain`` keep the stencil's placements and menus.
-
-    Families are squeezed, not grown, since the vendored size is
-    meaningful; a single member lands exactly on the stencil's anchor. Each
-    run is confined to :attr:`Symbol.bands`, the shell between roof and
-    floor. The artwork itself is unchanged, so the ``<defs>`` id is shared.
-    A role with one member keeps its full face menu for ``nozzle()`` and
-    automatic face selection. Cached, as port resolution asks on every call.
+    Starts from the vendored symbol with ``overlays`` composed on. Each
+    family is spread about the stencil's anchor within
+    :attr:`Symbol.bands`. A role with one member keeps its full face
+    menu.
 
     Parameters
     ----------
-    kind : str
-        ``"tank"`` or ``"vessel"``.
-    variant : str
-        Resolved variant.
     faces : tuple[tuple[str, str], ...]
         ``(port_name, face)`` for the inlet and outlet families, in port
         order.
     overlays : tuple[Overlay, ...], default=()
-        The unit's composed parts, such as a vessel's supports.
-
-    Returns
-    -------
-    Symbol
-        Symbol with the families placed.
-
-    Raises
-    ------
-    ValueError
-        If a role has no placement on a requested face, or several members
-        share a face with no wall (:func:`bandless_face`).
+        The unit's composed parts.
     """
     base = default_registry.composed(kind, variant, overlays)
     ports = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
@@ -1487,23 +906,22 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
             t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT,
                        at=t0, band=band)
             ports[name] = _face_point(face, t, inset, base.width, base.height)
-    # Inlets and outlets count together, as in _check_face_room: one of
-    # each on a point face is two nozzles on one point.
+    # Inlets and outlets count together on a point face.
     for face, on_face in by_face.items():
         band = base.bands.get(face)
         if len(on_face) > 1 and band is not None and band[0] >= band[1]:
             last = "inlet" if on_face[-1].startswith("in_") else "outlet"
             raise bandless_face(f"{kind}/{variant}", face, band[0], on_face,
                                 walled_faces(base, last))
-    # A lone member keeps its whole menu for nozzle() and automatic face
-    # selection (:mod:`pandid.layout.faces`); members sharing a face keep
-    # only their spread placement.
+    # A lone member keeps its whole face menu.
     for role, members in members_by_role.items():
         if len(members) == 1 and menus[role]:
             port_faces[members[0]] = dict(menus[role])
     return replace(base, ports=ports, port_faces=port_faces)
 
 
+# Builders of symbols drawn per unit, by (kind, variant). A ``None``
+# variant matches every variant.
 _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("conveyor", "default"): lambda unit: conveyor_symbol(unit.length,
                                                           unit.diameter),
@@ -1516,77 +934,32 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
 
 
 def _built_to_size(kind: str, variant: str) -> "Callable[..., Symbol] | None":
-    """Return the builder for ``(kind, variant)``, most specific first.
-
-    Parameters
-    ----------
-    kind : str
-        Unit kind.
-    variant : str
-        Resolved variant.
-
-    Returns
-    -------
-    callable or None
-        Function taking the unit and returning its symbol.
-    """
+    """Return the builder for ``(kind, variant)``, or ``None``."""
     return _BUILT_TO_SIZE.get((kind, variant)) or _BUILT_TO_SIZE.get((kind, None))
 
 
 # ----------------------------------------------------------------
-# Devices drawn in a normal position.
-#
-# Normally closed valves: PIP PIC001 4.2.2.7 darkens the body. Neither
-# ISA-5.1 nor ISO 10628 has this convention, so a sheet using it needs a
-# legend entry (ISA-5.1 2.8.1(b)(1), 2.8.2, 5.2.5). See
-# :class:`pandid.units.Valve`.
-#
-# A spectacle blind's closed state is a second registered stencil
-# (``SymbolRegistry.register_closed``), not a derived mark, so it needs no
-# legend entry.
+# Normally closed devices.
 # ----------------------------------------------------------------
 
-#: Valve variants whose body may be darkened: those whose outline alone
-#: still identifies the valve, with any marks and operators outside the
-#: body. Others (butterfly disc, check arrow, knife blade, all inside the
-#: outline) take the NC letters of PIP PIC001 4.2.2.8, which is also the
-#: safe default for new variants. ``solenoid`` is included: despite the
-#: stencil's name, its artwork matches the motor valve and carries no
-#: fill.
+#: Valve variants whose body is darkened when normally closed.
 NC_DARKENS = frozenset({
     "default", "gate", "globe", "ball", "needle", "plug", "pinch", "three_way",
     "angle", "bleed", "manual", "motor", "solenoid", "hydraulic",
 })
 
-#: Valve variants that may not be shown normally closed (PIP PIC001
-#: 4.2.2.10: control and relief valves). ``butterfly_pneumatic`` is
-#: allowed: it is usually an on-off block valve, and takes the 4.2.2.8
-#: letters.
+#: Valve variants that may not be normally closed
+#: (PIP PIC001 4.2.2.10).
 NC_FORBIDDEN = frozenset({"control", "regulator", "relief", "psv"})
 
 # ----------------------------------------------------------------
-# Body and actuator: two questions, one drawing that answers both.
-#
-# ISO 15519-2:2015 Table A.3 treats body and actuator separately: A.3.20,
-# the general control valve with a general actuator, carries three
-# registration numbers (2101A, 210A, P050B). 7.4.4.3 asks for a general
-# actuator unless the type matters. The API takes ``variant`` (body) and
-# ``actuator`` separately, but the draw.io stencils fuse body and operator
-# into one shape, so only the pairings below can be drawn; others raise
-# rather than substitute a drawing. A synthesised pairing would have no
-# ``drawio_shape``. ``default`` and ``gate`` are the same stencil, ISO's
-# general two-way body.
+# Valve body and actuator pairings.
 # ----------------------------------------------------------------
 
-#: ``(body, actuator)`` -> the variant whose artwork draws that pairing.
-#: :class:`pandid.units.Valve` resolves the pair and stores only the
-#: variant.
+#: ``(body, actuator)`` to the variant whose artwork draws the pair.
 ACTUATED: dict[tuple[str, str], str] = {
-    # Control valve: A.3.20's general body with A.3.41's diaphragm, as on
-    # professional_examples/P&ID_301.pdf and CHEE4001-7103 p.5.
     ("default", "diaphragm"): "control",
     ("gate", "diaphragm"): "control",
-    # The one non-bowtie pairing.
     ("butterfly", "diaphragm"): "butterfly_pneumatic",
     # Lettered operator boxes.
     ("default", "motor"): "motor",
@@ -1595,40 +968,17 @@ ACTUATED: dict[tuple[str, str], str] = {
     ("gate", "solenoid"): "solenoid",
     ("default", "hydraulic"): "hydraulic",
     ("gate", "hydraulic"): "hydraulic",
-    # A handwheel is an operator, not an actuator, so it has no fail
-    # position (:data:`FAIL_ACTUATED`).
     ("default", "handwheel"): "manual",
     ("gate", "handwheel"): "manual",
 }
 
-#: Actuators that may be named: the powered ones ISA-5.1 note 5.3.4(10)
-#: applies failure symbols to, then the hand operator. No ``piston``: ISO
-#: A.3.43 registers a cylinder (P051B) but the stencils draw none; register
-#: artwork with :meth:`SymbolRegistry.register` if needed.
+#: Actuators that may be named.
 ACTUATORS: tuple[str, ...] = ("diaphragm", "motor", "solenoid", "hydraulic",
                               "handwheel")
 
 
 def actuated_variant(body: str, actuator: str) -> str:
-    """Return the variant that draws ``body`` with ``actuator`` on it.
-
-    Parameters
-    ----------
-    body : str
-        Body variant.
-    actuator : str
-        One of :data:`ACTUATORS`.
-
-    Returns
-    -------
-    str
-        Variant from :data:`ACTUATED`.
-
-    Raises
-    ------
-    ValueError
-        If the pairing has no drawing; the message lists every pairing.
-    """
+    """Return the variant drawing ``body`` with ``actuator`` on it."""
     drawn = ACTUATED.get((body, actuator))
     if drawn is not None:
         return drawn
@@ -1646,15 +996,11 @@ def actuated_variant(body: str, actuator: str) -> str:
 
 
 # ----------------------------------------------------------------
-# Fail position: where an actuated valve goes when its power is lost.
-# A different property from ``normal_position``, marked by a different
-# standard in a different place -- see :attr:`pandid.units.Valve.fail`.
+# Fail position: where an actuated valve goes on loss of power.
 # ----------------------------------------------------------------
 
-#: Fail positions a valve may declare, with the letters drawn
-#: (ANSI/ISA-5.1-2009 Table 5.4.4 Method B): ``FO``, ``FC``, ``FL``,
-#: ``FI`` (fail indeterminate) and 2009's ``FL/DO`` and ``FL/DC`` (fail
-#: last, drifting). Ordered for the error message.
+#: Fail positions and the letters drawn for them (ANSI/ISA-5.1-2009
+#: Table 5.4.4 Method B).
 FAIL_POSITIONS: dict[str, str] = {
     "open": "FO",
     "closed": "FC",
@@ -1664,46 +1010,17 @@ FAIL_POSITIONS: dict[str, str] = {
     "indeterminate": "FI",
 }
 
-#: Valve variants with an actuator powered from outside the valve, and so
-#: a fail position (ANSI/ISA-5.1-2009 note 5.3.4(10)). Excluded:
-#: hand-operated valves (``manual``, ``knife``), self-acting valves
-#: (``regulator``, ``relief``, ``psv``) and bare bodies. All are two-port:
-#: PIP PIC001 4.5.3.2(2) restricts multi-port valves to ``FL`` or ``FI``
-#: plus fail-path arrows this package does not draw, so an actuated
-#: multi-port variant must not simply be added here.
+#: Valve variants with a powered actuator, which take a fail position.
 FAIL_ACTUATED = frozenset({
     "control", "butterfly_pneumatic", "solenoid", "motor", "hydraulic",
 })
 
 
 def fail_marking(unit) -> str:
-    """Return the fail-position letters for an actuated valve.
-
-    Uses the letters of ANSI/ISA-5.1-2009 Table 5.4.4 Method B, as PIP
-    PIC001 4.5.3.2 requires, not Method A's stem arrows. The letters are
-    the whole mark, so the drawing is otherwise unchanged. See
-    :attr:`pandid.units.Valve.fail`.
-
-    Parameters
-    ----------
-    unit : Unit
-        Valve.
-
-    Returns
-    -------
-    str
-        Letters, or ``""`` when no fail position is declared.
-
-    Raises
-    ------
-    ValueError
-        If a fail position is declared on a variant with no actuator.
-    """
+    """Return the fail-position letters for a valve, or ``""``."""
     declared = getattr(unit, "fail", "") or ""
     if not declared:
         return ""
-    # Construction refuses this, but a later variant change can reach it;
-    # raise rather than silently drop the mark.
     if getattr(unit, "variant", "") not in FAIL_ACTUATED:
         raise ValueError(
             f"{getattr(unit, 'name', unit.kind)}: declared fail={declared!r}, but "
@@ -1714,44 +1031,29 @@ def fail_marking(unit) -> str:
     return FAIL_POSITIONS[declared]
 
 
-# Fill for a darkened body: the vendored artwork's stroke colour.
+# Fill for a darkened body.
 _BODY_INK = "#111"
 
-# The body is the artwork's first <path>; checked, not assumed, since
-# _vendored_symbols.py is generated.
+# The body is the artwork's first <path>.
 _FIRST_PATH = re.compile(r"<path\b[^>]*>")
 
-# The body's fill before darkening (scripts/mxgraph_to_svg.DEFAULT_FILL).
+# The body's fill before darkening.
 _BODY_PAPER = 'fill="white"'
 
 
 def closed_marking(unit, registry=None) -> str:
     """Return how a unit's normally closed position is drawn.
 
-    ``"stencil"`` uses a second registered drawing (a spectacle blind),
-    ``"fill"`` darkens the body (PIP PIC001 4.2.2.7) and ``"NC"`` letters
-    the valve above and to the right (ISO 15519-1 11.4.5, Figure 28; PIP
-    4.2.2.8 places it below). No ISO or ISA document fills a body. Deciding
-    all three here stops the renderer both darkening and lettering a valve.
+    ``"stencil"`` uses a registered closed drawing, ``"fill"`` darkens
+    the body (PIP PIC001 4.2.2.7) and ``"NC"`` letters the valve
+    (ISO 15519-1 11.4.5). Returns ``""`` when the unit is not normally
+    closed.
 
     Parameters
     ----------
-    unit : Unit
-        Valve or fitting.
     registry : SymbolRegistry, optional
-        Registry to look up closed stencils in; ``default_registry`` when
-        omitted.
-
-    Returns
-    -------
-    str
-        ``"stencil"``, ``"fill"``, ``"NC"``, or ``""`` when not normally
-        closed.
-
-    Raises
-    ------
-    ValueError
-        If a non-valve with no closed drawing is normally closed.
+        Registry to look up closed drawings in; ``default_registry``
+        when omitted.
     """
     if getattr(unit, "normal_position", "open") != "closed":
         return ""
@@ -1759,9 +1061,7 @@ def closed_marking(unit, registry=None) -> str:
     reg = default_registry if registry is None else registry
     if reg.closed_symbol(unit.kind, variant) is not None:
         return "stencil"
-    # Fill and letters are valve conventions, so another closed device
-    # needs a closed stencil. Construction refuses this, but a later
-    # variant change can reach it; raise rather than draw it open.
+    # Only valves take the fill or the letters.
     if unit.kind != "valve":
         raise ValueError(
             f"{getattr(unit, 'name', unit.kind)}: {unit.kind}/{variant} is drawn one "
@@ -1773,26 +1073,7 @@ def closed_marking(unit, registry=None) -> str:
 
 
 def darkened(sym: Symbol) -> Symbol:
-    """Return ``sym`` with its body filled: the normally closed valve.
-
-    A separate symbol with the ``_nc`` id suffix, since the open and closed
-    valves need separate ``<defs>``; box and ports are unchanged.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Open valve symbol.
-
-    Returns
-    -------
-    Symbol
-        Darkened symbol.
-
-    Raises
-    ------
-    ValueError
-        If the first ``<path>`` is not a paper-filled body.
-    """
+    """Return ``sym`` with its body filled and an ``_nc`` id suffix."""
     head = _FIRST_PATH.search(sym.svg)
     if head is None or _BODY_PAPER not in head.group(0):
         raise ValueError(
@@ -1811,59 +1092,30 @@ def darkened(sym: Symbol) -> Symbol:
         label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_nc",
         stretchable=sym.stretchable, bare_run=sym.bare_run,
         gravity_fixed=sym.gravity_fixed,
-        # The fill travels with the draw.io reference, or the export would
-        # show the valve open.
+        # Carry the fill to the draw.io export.
         drawio_shape=sym.drawio_shape, drawio_flip_h=sym.drawio_flip_h,
         drawio_fill=_BODY_INK,
     )
 
 
 # ----------------------------------------------------------------
-# The fitting piped the other way round.
-#
-# A reducer and an expander are one casting installed either way round,
-# and the drawing must show which way the cone points. ``pin(mirrored="x")``
-# cannot say this, since it mirrors the ports too and the run would enter
-# from downstream. This derivation mirrors only the artwork and keeps
-# ``inlet`` west and ``outlet`` east. See
-# :attr:`pandid.units.Reducer.large_end`.
+# Expander: a reducer piped the other way round.
 # ----------------------------------------------------------------
 
 # Face after a left-to-right mirror.
 _FLIPPED_FACE = {"W": "E", "E": "W", "N": "N", "S": "S"}
 
-# A symbol's artwork split into opening <g>, contents and closing tag. Every
-# symbol is one group, so :func:`expander` and :func:`compose` can reach
-# the contents without parsing SVG.
+# A symbol's artwork as opening <g>, contents and closing tag.
 _GROUP = re.compile(r"\A(<g\b[^>]*>)(.*)(</g>)\Z", re.DOTALL)
 
 
 def expander(sym: Symbol) -> Symbol:
-    """Return ``sym`` turned end for end: the fitting piped the other way.
+    """Return ``sym`` turned end for end, as an expander.
 
     The artwork is mirrored left to right and ``inlet`` and ``outlet``
-    trade placements, so ``inlet`` stays west and the run passes in its
-    drawn direction; every placement is mirrored with its ink. A separate
-    symbol with the ``_exp`` id suffix, as for :func:`darkened`.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Reducer symbol.
-
-    Returns
-    -------
-    Symbol
-        Expander symbol.
-
-    Raises
-    ------
-    ValueError
-        If the ports are not exactly ``inlet`` and ``outlet``, or the
-        artwork is not a single ``<g>``.
+    trade placements, so ``inlet`` stays west. The id gains ``_exp``.
     """
     swap = {"inlet": "outlet", "outlet": "inlet"}
-    # Only inlet and outlet: any other port would be silently dropped.
     if set(sym.ports) != set(swap) or sym.port_series:
         raise ValueError(
             f"{sym.symbol_id()}: cannot be turned end for end -- its nozzles are "
@@ -1879,7 +1131,7 @@ def expander(sym: Symbol) -> Symbol:
         )
     head, body, tail = match.groups()
     head = re.sub(r'id="([^"]*)"', r'id="\1_exp"', head, count=1)
-    # Mirror about the box's mid-line so the drawing stays in its box.
+    # Mirror about the box's mid-line.
     svg = (f'{head}<g transform="translate({sym.width:g},0) scale(-1,1)">'
            f'{body}</g>{tail}')
 
@@ -1897,16 +1149,14 @@ def expander(sym: Symbol) -> Symbol:
         label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_exp",
         stretchable=sym.stretchable, bare_run=sym.bare_run,
         gravity_fixed=sym.gravity_fixed,
-        # The flip travels with the draw.io reference, or the export would
-        # draw the reduction.
+        # Carry the flip to the draw.io export.
         drawio_shape=sym.drawio_shape, drawio_fill=sym.drawio_fill,
         drawio_flip_h=not sym.drawio_flip_h,
     )
 
 
 # ----------------------------------------------------------------
-# The body carrying its parts. See the block above :class:`IsoPart` for
-# when a drawing may be composed.
+# Composition: a body carrying its parts.
 # ----------------------------------------------------------------
 
 
@@ -1914,52 +1164,30 @@ def expander(sym: Symbol) -> Symbol:
 class OverlayPart:
     """One supplementary symbol's artwork, and the ISO item it is.
 
-    A part is only ever combined with a body, never drawn alone, which
-    makes it a supplementary symbol under ISO 14617-1 3.3 rather than a
-    basic one under 3.2. It is drawn in its own ``width`` x ``height`` box
-    with (0, 0) at the top left, and :func:`compose` maps that box onto the
-    rectangle of the body an :class:`Overlay` names.
-
-    A part's ports are added to the body's, never substituted: an agitator
-    brings its ``drive`` (ISO item 1.27 X8006 draws the shaft up through
-    the head to the item 20.6 C0082 motor), while internals (group 27) and
-    characteristics (group 29) are marks no line reaches and anchor nothing.
-    A unit connects to a part's port only if it declares it in ``PORTS`` or
-    ``_VARIANT_PORTS``.
+    :func:`compose` maps the part's own box onto the rectangle of the
+    body an :class:`Overlay` names. A part's ports are added to the
+    body's.
 
     Attributes
     ----------
     name : str
-        pandid's spelling and half the registry key, such as ``"turbine"``
-        for "Agitator, turbine type".
+        Registry name, such as ``"turbine"``.
     iso : IsoPart
-        The Table 2 row this drawing claims to be.
+        The Table 2 item this drawing is.
     svg : str
-        A single ``<g>`` group; only its contents are painted onto a body.
+        A single ``<g>`` group.
     width, height : float
         Box the artwork is drawn in.
     ports : dict[str, tuple[float, float]]
         Connections the part brings, in the part's own coordinates.
-        Usually empty.
-    stretchable : bool, default=True
-        Whether the artwork may be scaled unevenly. A tray deck may; an
-        impeller or a manhole may not. A part that may not is scaled evenly
-        and centred, and makes the whole composition unstretchable.
-    gravity_fixed : bool, default=False
-        Whether the part states that gravity does the work, as item 29.1's
-        settling arrow does; the body then may not be turned (ISO 14617-1
-        4.5).
-    directional : bool, default=False
+    stretchable : bool
+        Whether the artwork may be scaled unevenly.
+    gravity_fixed : bool
+        Whether a body carrying the part may not be turned.
+    directional : bool
         Whether an axis flip would reverse what the artwork says.
-    drawio_shape : str, default=""
-        draw.io stencil that draws this part alone, such as ``Prop
-        Agitator``; empty where the part is exported as geometry.
-
-    Raises
-    ------
-    ValueError
-        If the name is blank, the box is empty, the artwork is not a single
-        ``<g>`` group, or a port lies outside the box.
+    drawio_shape : str
+        draw.io stencil that draws this part alone, or empty.
     """
 
     name: str
@@ -2000,34 +1228,16 @@ class OverlayPart:
                 )
 
     def key(self) -> "tuple[int, str]":
-        """Return the registry key: ISO subject group, then pandid's name."""
+        """Return the registry key ``(group, name)``."""
         return (self.iso.group, self.name)
 
 
-# Every symbol writes stroke-width as an attribute, never through CSS, so
-# a string rewrite suffices. Also used by svg._at_pen_scale.
+# A stroke-width attribute.
 _STROKE = re.compile(r'stroke-width="([\d.]+)"')
 
 
 def _at_part_scale(svg: str, scale: float) -> str:
-    """Return ``svg`` with every line weight divided by ``scale``.
-
-    ISO 14617-1 4.3 requires resizing to leave line width unchanged. A part
-    is scaled onto its rectangle, so dividing its weights first keeps the
-    drawn weights the ones the part declares.
-
-    Parameters
-    ----------
-    svg : str
-        Part artwork.
-    scale : float
-        Scale the part will be drawn at.
-
-    Returns
-    -------
-    str
-        Artwork with compensated stroke widths.
-    """
+    """Return ``svg`` with every line weight divided by ``scale``."""
     if math.isclose(scale, 1.0, rel_tol=1e-9):
         return svg
     return _STROKE.sub(
@@ -2036,23 +1246,7 @@ def _at_part_scale(svg: str, scale: float) -> str:
 
 def _shifted_bands(body: Symbol, ox: float, oy: float
                    ) -> "dict[str, tuple[float, float]]":
-    """Return ``body.bands`` moved onto the composed box.
-
-    Bands are absolute coordinates along a face, so they move by ``oy`` on
-    a W/E face and ``ox`` on an N/S face and are not rescaled.
-
-    Parameters
-    ----------
-    body : Symbol
-        Body being composed.
-    ox, oy : float
-        Offset of the body within the composed box.
-
-    Returns
-    -------
-    dict[str, tuple[float, float]]
-        Face to ``(start, end)`` along that face.
-    """
+    """Return ``body.bands`` moved by the body's offset ``(ox, oy)``."""
     if (ox, oy) == (0.0, 0.0):
         return dict(body.bands)
     return {face: (lo + (oy if face in ("W", "E") else ox),
@@ -2064,26 +1258,8 @@ def _shifted_series(series: PortSeries, body: Symbol, ox: float, oy: float,
                     width: float, height: float) -> PortSeries:
     """Return ``series`` moved and rescaled onto the composed box.
 
-    ``at`` and ``pitch`` are absolute but ``extent`` is a fraction of the
-    face, so on a grown box ``at`` moves with the ink and ``extent`` is
-    rescaled to cover the same length of wall. Otherwise a family would
-    move along the face, as when a motor is drawn above a vessel.
-
-    Parameters
-    ----------
-    series : PortSeries
-        Body's port series.
-    body : Symbol
-        Body being composed.
-    ox, oy : float
-        Offset of the body within the composed box.
-    width, height : float
-        Composed box.
-
-    Returns
-    -------
-    PortSeries
-        The series, unchanged if the face neither moved nor grew.
+    ``at`` moves by the body's offset and ``extent`` is rescaled to
+    cover the same length of wall.
     """
     along, grown = ((body.height, height) if series.face in ("W", "E")
                     else (body.width, width))
@@ -2098,33 +1274,13 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
             iso_reg: str = "") -> Symbol:
     """Return ``body`` with its supplementary parts painted over it.
 
-    The result is one :class:`Symbol`, placed, resized, mirrored, exported
-    and cached like any other, with its own ``<defs>`` id as for
-    :func:`darkened` and :func:`expander`. Each part maps from its own box
-    onto the fraction of the body box its :class:`Overlay` names, so
-    stretching the finished symbol keeps parts in proportion.
-
-    The composition is:
-
-    - stretchable only if the body and every part are, since the renderer
-      stretches the finished symbol as one drawing and a round impeller
-      must stay round (ISO 14617-1 4.4);
-    - gravity-fixed or directional if the body or any part is, so a body
-      carrying item 29.1's settling arrow may not be turned (ISO 14617-1
-      4.5) or flipped.
-
-    The composed box is the union of the body's and every part's. A part
-    outside the body, such as item 1.27's motor above the head, grows the
-    box and shifts the ink, fixed ports and port series
-    (:func:`_shifted_series`) with it. A body port that would then be
-    nearest a different face is refused, since its stream would leave
-    through the wrong side; clear the crown first, as item 1.27 does.
-
-    The result has no ``drawio_shape``: a stencil names one shape, and a
-    composed reactor exported as its body would silently lose its parts.
-    draw.io reads :attr:`Symbol.overlays` and
-    :attr:`Symbol.drawio_body_shape` instead and emits one cell per part
-    grouped under the body.
+    Each part maps from its own box onto the fraction of the body box
+    its :class:`Overlay` names. The composed box is the union of the
+    body's and every part's; growing it shifts the ink, ports and
+    series. The result is stretchable only if the body and every part
+    are, and gravity-fixed or directional if any of them is. It has no
+    ``drawio_shape``; the draw.io export reads :attr:`Symbol.overlays`
+    and :attr:`Symbol.drawio_body_shape`.
 
     Parameters
     ----------
@@ -2133,20 +1289,7 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
     parts : list[tuple[Overlay, OverlayPart]]
         Placements and the parts placed.
     iso_reg : str, default=""
-        Registration number of the composition, where it reproduces a
-        tabulated symbol (a body with item 29.2 is X8125). The body's is not
-        carried over.
-
-    Returns
-    -------
-    Symbol
-        Composed symbol.
-
-    Raises
-    ------
-    ValueError
-        If the body is not a single group, a body port would change face,
-        or a part port reuses a body port name.
+        Registration number of the composition, if it has one.
     """
     match = _GROUP.match(body.svg)
     if match is None:
@@ -2163,8 +1306,7 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         rw, rh = overlay.w * body.width, overlay.h * body.height
         sx, sy = rw / part.width, rh / part.height
         if not part.stretchable:
-            # Letterbox as pandid.portgeom.ink_box does: keep the aspect,
-            # take the smaller scale and centre the rest.
+            # Keep the aspect: use the smaller scale and centre.
             scale = min(sx, sy)
             rx, ry = rx + (rw - scale * part.width) / 2, ry + (rh - scale * part.height) / 2
             sx = sy = scale
@@ -2175,9 +1317,8 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
     for part, rx, ry, sx, sy, _ in placed:
         xs += [rx, rx + sx * part.width]
         ys += [ry, ry + sy * part.height]
-    # Shift the union's top-left corner to the origin; zero when every
-    # part is inside the body. ``+ 0.0`` turns -0.0 into 0.0, which would
-    # otherwise be written as ``-0``.
+    # Shift the union's top-left corner to the origin. ``+ 0.0`` turns
+    # -0.0 into 0.0.
     ox, oy = -min(xs) + 0.0, -min(ys) + 0.0
     width, height = max(xs) + ox, max(ys) + oy
 
@@ -2185,11 +1326,9 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
            else f'<g transform="translate({ox:g},{oy:g})">{inner}</g>']
     for part, rx, ry, sx, sy, mirror in placed:
         contents = _GROUP.match(part.svg).group(2)  # type: ignore[union-attr]
-        # Mirror about the rectangle's own centre line: translate to its
-        # right edge and scale x by -1, as the ports below are mapped.
+        # A mirrored part starts at its rectangle's right edge.
         left = rx + ox + (sx * part.width if mirror else 0.0)
-        # Compensate strokes by the geometric mean of the two scales, as
-        # pandid.render.svg._pen_scale does; abs() ignores the mirror sign.
+        # Compensate strokes by the geometric mean of the two scales.
         art.append(
             f'<g transform="translate({left:g},{ry + oy:g}) '
             f'scale({-sx if mirror else sx:g},{sy:g})">'
@@ -2201,9 +1340,7 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         return (round(xy[0] + ox, 4), round(xy[1] + oy, 4))
 
     ports = {name: shift(xy) for name, xy in body.ports.items()}
-    # A port leaves by its nearest box edge (:func:`pandid.portgeom.
-    # outward_dir`), so a grown box can move a crown nozzle onto a side.
-    # Refuse it here, where the message can name the part.
+    # Refuse a body port that the grown box moves onto another face.
     for name, menu in body.port_faces.items():
         for face, xy in menu.items():
             moved = shift(xy)
@@ -2234,112 +1371,75 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         svg=head + "".join(art) + tail,
         width=round(width, 4), height=round(height, 4),
         ports=ports,
-        # The body's face menu, moved with the ink and checked above.
+        # The body's face menu, moved with the ink.
         port_faces={name: {face: shift(xy) for face, xy in menu.items()}
                     for name, menu in body.port_faces.items()},
         faceless_ports=body.faceless_ports,
         port_series=tuple(_shifted_series(s, body, ox, oy, width, height)
                           for s in body.port_series),
-        # Moved with the ink, not lengthened.
         bands=_shifted_bands(body, ox, oy),
         label_pos=body.label_pos,
-        # One definition per composition, as for darkened() and
-        # expander(). A short blake2s digest keeps ids readable and, unlike
-        # hash(), stable across processes for the golden fixtures.
+        # One definition per composition, with an id stable across
+        # processes.
         id_suffix=body.id_suffix + "_c" + hashlib.blake2s(
             repr([o for o, _ in parts]).encode(), digest_size=4).hexdigest(),
         stretchable=body.stretchable and all(p.stretchable for p, *_ in placed),
         bare_run=body.bare_run,
         gravity_fixed=body.gravity_fixed or any(p.gravity_fixed for p, *_ in placed),
         directional=body.directional or any(p.directional for p, *_ in placed),
-        # Not the body's; see the docstring. The exporter reads the body's
-        # stencil from drawio_body_shape.
         drawio_shape="",
         drawio_body_shape=body.drawio_shape or body.drawio_body_shape,
         drawio_flip_h=body.drawio_flip_h, drawio_fill=body.drawio_fill,
         overlays=tuple(overlay for overlay, _ in parts),
-        # Not the body's number, which would mislabel the composition; the
-        # caller states the composition's own number where it has one.
         iso_reg=iso_reg,
     )
 
 
-# ISO 10628-2 Table 2's separating vessel: the empty outline every group-8
-# row except the cyclone is drawn on. Measured off item 8.3 in grid
-# modules: a 6 M x 6 M rectangle over a 3 M V, 6 M x 9 M overall, the same
-# ratio as the 80 x 120 draw.io separator stencils. Not registered as a
-# variant, since ISO has no empty separator (item 8.1 X8081 draws arrows
-# inside it); it is the body for SymbolRegistry._register_composed.
+# The ISO 10628-2 group-8 separating vessel outline, a body for
+# compositions.
 _SEPARATING_VESSEL = Symbol(
     svg='<g id="sym_separator_vessel">'
         '<path d="M 0 0 L 80 0 L 80 80 L 40 120 L 0 80 Z" '
         'fill="white" stroke="#111" stroke-width="2"/></g>',
     width=80.0, height=120.0,
-    # Anchors as on the mechanical separators: high draw opposite the
-    # feed, collected phase out of the apex. Feeds are the series below.
+    # High draw opposite the feed, collected phase out of the apex.
     ports={"vapor": (80.0, 12.0), "liquid": (40.0, 120.0)},
-    # Feeds run down the west wall from (0, 12) (:data:`FROM_START`): the
-    # wall is y 0..80 and a centred family would reach the top corner.
+    # Feeds run down the west wall from (0, 12).
     port_series=(PortSeries("feed_", "W", pitch=20.0, extent=0.5, at=12.0,
                             singular="feed", align=FROM_START),),
-    # A hopper collects at its apex, so it may not be turned (ISO 15519-1
-    # 11.4.2).
     gravity_fixed=True,
 )
 
 
-# ISO 10628-2 group 9's shared outline: an 8 M x 8 M square, at 10 units
-# to the module as for _CRUSHER_OUTLINE.
+# Side of the ISO 10628-2 group-9 square outline: 8 modules.
 _CENTRIFUGE_SQ = 80.0
 
-# Ink outside the square, one module: a shaft below the floor (9.1-9.4)
-# or a feed pipe through the west wall (9.5-9.8). Both are equipment
-# geometry, not connection ticks, so the box holds them.
+# Ink outside the square: a shaft below it (9.1-9.4) or a feed pipe
+# through the west wall (9.5-9.8).
 _CENTRIFUGE_MARGIN = 10.0
 
 
 def _centrifuge_outline(ox: float) -> str:
-    """Return the bare group-9 square with its west wall at ``ox``.
-
-    Parameters
-    ----------
-    ox : float
-        0 for 9.1-9.4; :data:`_CENTRIFUGE_MARGIN` for 9.5-9.8, whose box is
-        one module wider for the feed pipe (:data:`_CENTRIFUGE_SIDE_PORTS`).
-
-    Returns
-    -------
-    str
-        SVG path.
-    """
+    """Return the bare group-9 square with its west wall at ``ox``."""
     return (f'<path d="M {ox:g} 0 L {ox + _CENTRIFUGE_SQ:g} 0 '
             f'L {ox + _CENTRIFUGE_SQ:g} {_CENTRIFUGE_SQ:g} '
             f'L {ox:g} {_CENTRIFUGE_SQ:g} Z" fill="white" stroke="#111" stroke-width="2"/>')
 
 
-# A perforated wall's three ink runs, as (start, end) offsets from the
-# square's near edge, measured off item 9.2: 1 M ink, 1 M gap, 2 M ink,
-# 1 M gap, 1 M ink, a module in from each end. Items 9.5, 9.7 and 9.8 use
-# it turned 90 degrees.
+# Ink runs of a perforated wall, as (start, end) offsets from the
+# square's near edge.
 _CENTRIFUGE_DASH = ((10.0, 20.0), (30.0, 50.0), (60.0, 70.0))
 
 
 def _dashed_wall(fixed: float, offset: float, vertical: bool) -> str:
-    """Return one perforated wall drawn as :data:`_CENTRIFUGE_DASH`'s runs.
+    """Return one perforated wall as :data:`_CENTRIFUGE_DASH` runs.
 
     Parameters
     ----------
     fixed : float
-        The wall's x (vertical) or y (horizontal).
+        The wall's x if vertical, else its y.
     offset : float
-        Position of the square's left or top edge along the wall.
-    vertical : bool
-        Whether the wall is vertical.
-
-    Returns
-    -------
-    str
-        SVG lines.
+        Position of the square's near edge along the wall.
     """
     out = []
     for a, b in _CENTRIFUGE_DASH:
@@ -2353,34 +1453,28 @@ def _dashed_wall(fixed: float, offset: float, vertical: bool) -> str:
     return "".join(out)
 
 
-# Ports of 9.1-9.4: feed on the top-edge tick, overflow on the east wall
-# 2 M down (the position 9.3, 9.4 and 9.6 draw; 9.1 and 9.2 draw it at
-# 0 M), underflow at the end of the drawn shaft a module below the floor.
+# Ports of items 9.1-9.4.
 _CENTRIFUGE_TOP_PORTS = {
     "feed": (40.0, 0.0),
     "overflow": (80.0, 20.0),
     "underflow": (40.0, 90.0),
 }
 
-# Ports of 9.5-9.8: feed at the end of the pipe drawn through the west
-# wall, overflow as for 9.1-9.4 shifted a module for the margin, underflow
-# at the tick below the south-east corner, where a screw discharges.
+# Ports of items 9.5-9.8.
 _CENTRIFUGE_SIDE_PORTS = {
     "feed": (0.0, 40.0),
     "overflow": (90.0, 20.0),
     "underflow": (80.0, 80.0),
 }
 
-# Item 9.1 X2619: an open funnel (two strokes rising from the floor, 2 M
-# apart at the top) and the shaft a module below the floor.
+# Item 9.1 X2619: an open funnel on a shaft.
 _CENTRIFUGE_ROTOR = (
     '<path d="M 10 70 L 30 20 M 50 20 L 70 70 L 10 70" '
     'fill="none" stroke="#111" stroke-width="2"/>'
     '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 9.2 X2614: a 6 M x 6 M basket inset a module from the walls, open
-# at the top, with perforated (broken) side walls.
+# Item 9.2 X2614: a basket with perforated side walls.
 _CENTRIFUGE_BASKET_DASHED = (
     _dashed_wall(10.0, 0.0, True) + _dashed_wall(70.0, 0.0, True) +
     '<line x1="10" y1="70" x2="70" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
@@ -2394,17 +1488,14 @@ _CENTRIFUGE_BASKET_SOLID = (
     '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 9.4 X8036: two chevrons 2 M apart (the disc stack edge on) on a
-# shaft from above the top chevron to below the floor.
+# Item 9.4 X8036: a disc stack edge on, on a shaft.
 _CENTRIFUGE_DISC_STACK = (
     '<path d="M 10 24 L 40 10 L 70 24 M 10 44 L 40 30 L 70 44" '
     'fill="none" stroke="#111" stroke-width="2"/>'
     '<line x1="40" y1="10" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 9.5 X8037: a basket lying on its side with a solid west wall and
-# perforated roof and floor, the feed pipe at mid-height and a zigzag
-# screw flight inside.
+# Item 9.5 X8037: a horizontal perforated basket with a screw flight.
 _CENTRIFUGE_SCREW_PERFORATED = (
     '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
     + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
@@ -2412,8 +1503,7 @@ _CENTRIFUGE_SCREW_PERFORATED = (
     '<path d="M 30 40 L 40 20 L 60 60 L 70 40" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 9.6 X8082, the decanter (the Centrifuge default): 9.5 with a solid
-# roof and floor.
+# Item 9.6 X8082, the decanter: 9.5 with a solid roof and floor.
 _CENTRIFUGE_SCREW_SOLID = (
     '<path d="M 20 70 L 20 10 L 80 10 M 20 70 L 80 70" '
     'fill="none" stroke="#111" stroke-width="2"/>'
@@ -2421,8 +1511,7 @@ _CENTRIFUGE_SCREW_SOLID = (
     '<path d="M 30 40 L 40 20 L 60 60 L 70 40" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 9.7 X8038: 9.5's basket with a pusher rod in place of the screw;
-# the feed pipe stops at the rod.
+# Item 9.7 X8038: 9.5's basket with a pusher rod for the screw.
 _CENTRIFUGE_PUSHER = (
     '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
     + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
@@ -2430,8 +1519,7 @@ _CENTRIFUGE_PUSHER = (
     '<line x1="30" y1="20" x2="30" y2="60" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 9.8 X8039: 9.5's basket with the feed stopping at the wall and a
-# skimmer tube near the roof.
+# Item 9.8 X8039: 9.5's basket with a skimmer tube.
 _CENTRIFUGE_SKIMMER = (
     '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
     + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
@@ -2442,30 +1530,14 @@ _CENTRIFUGE_SKIMMER = (
 
 def _centrifuge(name: str, reg: str, width: float, height: float, ox: float,
                detail: str, ports: dict) -> Symbol:
-    """Return one group-9 centrifuge: the shared square plus its row's mark.
-
-    There is no draw.io stencil for a centrifuge, so none is named. Not
-    gravity-fixed: rotation, not gravity, separates (ISO 15519-1 11.4.2).
+    """Return a group-9 centrifuge: the shared square plus its mark.
 
     Parameters
     ----------
-    name : str
-        Variant, used in the SVG id.
-    reg : str
-        ISO registration number.
-    width, height : float
-        Box.
     ox : float
         West wall offset (:func:`_centrifuge_outline`).
     detail : str
-        The row's mark.
-    ports : dict
-        Port positions.
-
-    Returns
-    -------
-    Symbol
-        The centrifuge symbol.
+        The item's mark.
     """
     return Symbol(
         svg=f'<g id="sym_centrifuge_{name}">{_centrifuge_outline(ox)}{detail}</g>',
@@ -2474,26 +1546,20 @@ def _centrifuge(name: str, reg: str, width: float, height: float, ox: float,
     )
 
 
-# ISO 10628-2 group 11's shared outline, measured off rows 11.1-11.12: a
-# trapezoid 10 M across the top, 6 M across the bottom and 6 M deep, at 10
-# units to the module (:data:`~pandid.render.iso_parts.M`). Keeping the
-# standard's proportions keeps composed group-29 marks undistorted.
+# Box of the ISO 10628-2 group-11 trapezoid outline.
 _CRUSHER_W, _CRUSHER_H = 100.0, 60.0
 
-# The trapezoid path. Not registered, since ISO has no empty trapezoid.
+# The group-11 trapezoid outline.
 _CRUSHER_OUTLINE = (
     f'<path d="M 0 0 L {_CRUSHER_W:g} 0 L {_CRUSHER_W * 0.8:g} {_CRUSHER_H:g} '
     f'L {_CRUSHER_W * 0.2:g} {_CRUSHER_H:g} Z" '
     f'fill="white" stroke="#111" stroke-width="2"/>'
 )
 
-# Foot of the mill's corner chord on the sloping wall. The chord starts
-# 2.5 M in on the top edge and falls 4 down per 3 across; the wall is
-# x = y/3 (in modules), so the foot is at (10/13, 30/13) M. From row 11.8.
+# Foot of the mill's corner chord on the sloping wall (item 11.8).
 _MILL_CHORD_X, _MILL_CHORD_Y = 100 / 13, 300 / 13
 
-# Group 11's only two ticks: feed above the top edge, discharge below the
-# bottom. ISO draws no drive connection for these machines.
+# Group-11 ports: feed above the top edge, discharge below the bottom.
 _CRUSHER_PORTS = {"feed": (_CRUSHER_W / 2, 0.0),
                   "discharge": (_CRUSHER_W / 2, _CRUSHER_H)}
 
@@ -2501,22 +1567,12 @@ _CRUSHER_PORTS = {"feed": (_CRUSHER_W / 2, 0.0),
 def _crushing_machine(name: str, reg: str, *detail: str) -> Symbol:
     """Return one group-11 body: the shared trapezoid plus its mark.
 
-    Gravity-fixed, since feed falls in at the top and out at the bottom
-    (ISO 15519-1 11.4.2). There is no draw.io stencil.
-
     Parameters
     ----------
-    name : str
-        Name used in the SVG id.
     reg : str
-        Registration number of the row it reproduces, or ``""``.
+        Registration number of the item it reproduces, or ``""``.
     *detail : str
         Marks drawn inside the outline.
-
-    Returns
-    -------
-    Symbol
-        The body.
     """
     return Symbol(
         svg=f'<g id="sym_{name}">{_CRUSHER_OUTLINE}'
@@ -2528,52 +1584,41 @@ def _crushing_machine(name: str, reg: str, *detail: str) -> Symbol:
     )
 
 
-# Crusher mark, ISO item 11.2 X8085: two full-depth verticals at x 9 and
-# 15 M, carried by 11.3-11.7. Drawn into the body, as group 29 has no
-# such part.
+# Crusher mark, ISO item 11.2 X8085: two full-depth verticals.
 _CRUSHER_JAWS = (
     f'<path d="M {_CRUSHER_W * 0.2:g} 0 L {_CRUSHER_W * 0.2:g} {_CRUSHER_H:g} '
     f'M {_CRUSHER_W * 0.8:g} 0 L {_CRUSHER_W * 0.8:g} {_CRUSHER_H:g}" '
     f'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Mill mark, ISO item 11.8 X8086: two chords cutting the top corners
-# (:data:`_MILL_CHORD_X`), carried by 11.9-11.12; body, not part.
+# Mill mark, ISO item 11.8 X8086: two chords cutting the top corners.
 _MILL_CHAMFERS = (
     f'<path d="M 25 0 L {_MILL_CHORD_X:.4f} {_MILL_CHORD_Y:.4f} '
     f'M 75 0 L {_CRUSHER_W - _MILL_CHORD_X:.4f} {_MILL_CHORD_Y:.4f}" '
     f'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Vibration mill drum, ISO item 11.12 X8054: a 4 M circle holding 29.14's
-# arrows. Group 29 has no circle, so the drum is body; without it the
-# composition would not be X8054.
+# Vibration mill drum, ISO item 11.12 X8054: a 4 M circle.
 _VIBRATION_DRUM = (
     f'<circle cx="{_CRUSHER_W / 2:g}" cy="{_CRUSHER_H / 2:g}" r="20" '
     f'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
 
-# Stack inlet on the tapering west wall, (2,0) M to (1,10) M. Row 4.7
-# ticks it at 9 M, but there the point is nearer the bottom edge and
-# outward_dir would face it south, so it is held at 8 M, where
-# x = 2 - (8/10) M keeps it on the west face.
+# Stack inlet on the tapering west wall, 8 M down.
 _STACK_INLET_Y = 80.0
 _STACK_INLET_X = 20.0 - (20.0 - 10.0) * (_STACK_INLET_Y / 100.0)
 
 
-# ISO 10628-2 group 10's shared outline, from row 10.1: an 8 M x 12 M
-# casing with 1 M x 2 M chamfers at the top corners, origin at the
-# chamfer's top-left. Rows 10.1-10.7 differ only in the mark inside.
+# ISO 10628-2 group-10 dryer casing, from item 10.1.
 _DRIER_W, _DRIER_H = 80.0, 120.0
 _DRIER_OUTLINE = (
     '<path d="M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" '
     'fill="white" stroke="#111" stroke-width="2"/>'
 )
 
-# feed and product are group 10's two ticks, mid-way down the straight
-# walls. No row ticks a third, so heating_in and vent are centred on the
-# floor and the flat top (see :class:`~pandid.units.Dryer`).
+# Group-10 ports: feed and product on the walls, heating_in on the
+# floor and vent on the top.
 _DRIER_PORTS = {
     "feed": (0.0, 70.0), "product": (80.0, 70.0),
     "heating_in": (40.0, 120.0), "vent": (40.0, 0.0),
@@ -2583,25 +1628,12 @@ _DRIER_PORTS = {
 def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Symbol:
     """Return one group-10 dryer: the shared casing plus its mark.
 
-    Group 10 has no supplementary parts, so marks are drawn into the body.
-
     Parameters
     ----------
-    name : str
-        Name used in the SVG id.
-    reg : str
-        ISO registration number.
     *detail : str
         Marks drawn inside the casing.
     gravity_fixed : bool, default=False
-        True only where the mark itself relies on gravity, as a tray
-        dryer's shelves do; the casing's horizontal feed and discharge do
-        not.
-
-    Returns
-    -------
-    Symbol
-        The dryer symbol.
+        Whether the mark relies on gravity, as shelves do.
     """
     return Symbol(
         svg=f'<g id="sym_drier_{name}">{_DRIER_OUTLINE}' + "".join(detail) + "</g>",
@@ -2612,20 +1644,18 @@ def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Sy
     )
 
 
-# Item 10.2 X8083: three centred 4 M shelf lines at y 3, 4 and 5 M.
+# Item 10.2 X8083: three shelves.
 _DRIER_SHELVES = "".join(
     f'<line x1="20" y1="{y:g}" x2="60" y2="{y:g}" fill="none" stroke="#111" '
     f'stroke-width="2"/>' for y in (30, 40, 50))
 
-# Item 10.3 X8040: a shaft up to the chamfered top crossed by two shelf
-# lines and a wider third broken at the shaft (the rotating disc stack).
+# Item 10.3 X8040: a rotating disc stack on a shaft.
 _DRIER_TURBO = (
     '<path d="M 20 30 L 60 30 M 20 50 L 60 50 M 0 40 L 30 40 M 50 40 L 80 40 '
     'M 40 50 L 40 0" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 10.6 X8043: two 1.5 M rollers centred at x 1.75 and 6.25 M, y 4 M,
-# with belt lines at y 3.25 and 4.75 M.
+# Item 10.6 X8043: a belt between two rollers.
 _DRIER_BELT = (
     '<circle cx="17.5" cy="40" r="7.5" fill="none" stroke="#111" stroke-width="2"/>'
     '<circle cx="62.5" cy="40" r="7.5" fill="none" stroke="#111" stroke-width="2"/>'
@@ -2634,9 +1664,7 @@ _DRIER_BELT = (
 )
 
 
-# ISO 10628-2 group 5's shared outline, from row 5.1: a trapezoid 4 M
-# wide at the top widening to 8 M at a shoulder 8 M down, on a 2 M basin,
-# 8 M x 10 M overall. Rows 5.1-5.8 differ only in fill and draught marks.
+# ISO 10628-2 group-5 cooling tower outline, from item 5.1.
 _TOWER_W, _TOWER_TRAP_H, _TOWER_H = 80.0, 80.0, 100.0
 _TOWER_OUTLINE = (
     '<path d="M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" '
@@ -2644,47 +1672,29 @@ _TOWER_OUTLINE = (
     '<line x1="0" y1="80" x2="80" y2="80" fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# The six CoolingTower ports: air out of the apex, water in (west) and air
-# in (east) at the basin's mid-height (row 5.1's side ticks), and three
-# bottom connections. ISO ticks no bottom connection, so water_out, makeup
-# and blowdown are offered, not read off a mark.
+# CoolingTower ports: air out of the apex, water and air in at the
+# basin's sides, and three bottom connections.
 _TOWER_PORTS = {
     "air_out": (40.0, 0.0),
     "water_in": (0.0, 90.0), "air_in": (80.0, 90.0),
     "water_out": (40.0, 100.0), "makeup": (20.0, 100.0), "blowdown": (60.0, 100.0),
 }
 
-# Dry-fill mark (items 5.2-5.4, 5.8), from row 5.2: a rule at the basin's
-# mid-height (y 13 M) with seven 1 M ticks a module apart.
+# Dry-fill mark (items 5.2-5.4 and 5.8): a ticked rule.
 _TOWER_DRY = (
     '<line x1="0" y1="90" x2="80" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
     + "".join(f'<line x1="{x:g}" y1="85" x2="{x:g}" y2="95" fill="none" stroke="#111" '
               f'stroke-width="2"/>' for x in range(10, 71, 10))
 )
 
-# Wet-fill mark (items 5.5-5.8), from row 5.5: a distribution stub off the
-# west wall at y 4 M ending in an upward arrow.
+# Wet-fill mark (items 5.5-5.8): a distribution stub and arrow.
 _TOWER_WET = (
     '<path d="M 10 40 L 40 40 M 30 50 L 40 40 L 50 50 M 40 40 L 40 50" '
     'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
 def _tower_fan(cy: float) -> str:
-    """Return a 2 M fan circle with bow-tie blades centred at height ``cy``.
-
-    Low for forced draught (items 5.3, 5.6) and high for induced draught
-    (5.4, 5.7); rows 5.3 and 5.4 differ only in this height.
-
-    Parameters
-    ----------
-    cy : float
-        Centre height in drawing units.
-
-    Returns
-    -------
-    str
-        SVG elements.
-    """
+    """Return a 2 M fan with bow-tie blades centred at height ``cy``."""
     return (
         f'<circle cx="40" cy="{cy:g}" r="10" fill="none" stroke="#111" stroke-width="2"/>'
         f'<path d="M 36 {cy - 9:g} L 31 {cy + 5:g} M 44 {cy - 9:g} L 49 {cy + 5:g}" '
@@ -2696,14 +1706,9 @@ _TOWER_FAN_FORCED = _tower_fan(65.0)
 _TOWER_FAN_INDUCED = _tower_fan(15.0)
 
 
-# ISO 10628-2 item 18.7 X8065, the bucket elevator, measured in modules:
-# an 8 M x 12 M casing (origin at its top-left); belt runs at x 3 and 5 M
-# from y 2 to 10 M between 1 M pulleys; loading chute west at y 8 M and
-# discharge chute east at y 4 M. ISO's ticks are vertical (in at the top,
-# out at the bottom), which as nozzles would put the discharge below the
-# feed. So the home ports are on the walls at the chute heights, in low
-# west and out high east, and ISO's directions are offered as N and S
-# faces.
+# ISO 10628-2 item 18.7 X8065, the bucket elevator. The home ports are
+# on the walls at the chute heights; the item's own ticks are offered
+# as N and S faces.
 _BUCKET_ELEVATOR = Symbol(
     svg='<g id="sym_elevator">'
         '<rect x="0" y="0" width="80" height="120" '
@@ -2711,8 +1716,7 @@ _BUCKET_ELEVATOR = Symbol(
         '<path d="M 30 20 L 30 100 M 50 20 L 50 100" '
         'fill="none" stroke="#111" stroke-width="2"/>'
         + _lift_pulley(40, 20) + _lift_pulley(40, 100)
-        # Head chute east and boot chute west, each a quadrant whose third
-        # side is the belt run.
+        # Head chute east and boot chute west.
         + _lift_chute(50, 40, 2 * _LIFT_M, -2 * _LIFT_M)
         + _lift_chute(30, 80, -2 * _LIFT_M, 2 * _LIFT_M)
         + '</g>',
@@ -2721,21 +1725,13 @@ _BUCKET_ELEVATOR = Symbol(
     # Row 18.7's own ticks, offered as alternatives.
     port_faces={"feed": {"N": (10.0, 0.0)},
                 "discharge": {"S": (70.0, 120.0)}},
-    # Pulleys must stay round.
     stretchable=False,
-    # It raises material, so it may not be turned (ISO 15519-1 11.4.2).
     gravity_fixed=True,
     iso_reg="X8065",
 )
 
-# ISO 10628-2 item 18.8 X8066, the Z-form bucket elevator: an eight-sided
-# Z casing (2,13) (2,9) (10,9) (10,1) (22,1) (22,5) (14,5) (14,13) M, a
-# 20 M x 12 M box, with the belt in three runs (low arm, riser, high arm),
-# each drawn as two edges 2 M apart. ISO ticks the feed above the low arm
-# and the discharge below the high arm, but those points are nearer a side
-# edge of the box than the crown (outward_dir), so the ports are on the
-# arms' end walls instead: in at the west end low, out at the east end
-# high.
+# ISO 10628-2 item 18.8 X8066, the Z-form bucket elevator. The ports
+# are on the arms' end walls: in low at the west, out high at the east.
 _Z_ELEVATOR = Symbol(
     svg='<g id="sym_elevator_z_form">'
         '<path d="M 0 120 L 0 80 L 80 80 L 80 0 L 200 0 L 200 40 '
@@ -2757,38 +1753,16 @@ _Z_ELEVATOR = Symbol(
 
 
 # ----------------------------------------------------------------
-# ISO 10628-2 group 19: proportioners, feeders and distribution, and item
-# 19.5, the spray nozzle. 19.1 and 19.2 share a 4 M circle; 19.3 and 19.4
-# are their own drawings. Group 19 has no supplementary parts, so marks are
-# drawn into the body.
+# ISO 10628-2 group 19: feeders, and item 19.5, the spray nozzle.
 # ----------------------------------------------------------------
 
-# The 4 M circle of 19.1 C2056 and 19.2 X8067, fed from above and
-# discharging below.
+# The 4 M circle of items 19.1 C2056 and 19.2 X8067.
 _FEEDER_CIRCLE = 40.0
 _FEEDER_CIRCLE_PORTS = {"feed": (20.0, 0.0), "discharge": (20.0, 40.0)}
 
 
 def _feeder_circle(name: str, reg: str, mark: str) -> Symbol:
-    """Return one group-19 circle body: the shared rim plus its mark.
-
-    Gravity-fixed: fed from above and discharged below (ISO 15519-1
-    11.4.2).
-
-    Parameters
-    ----------
-    name : str
-        Name used in the SVG id.
-    reg : str
-        ISO registration number.
-    mark : str
-        The row's mark.
-
-    Returns
-    -------
-    Symbol
-        The feeder symbol.
-    """
+    """Return a group-19 circle body: the shared rim plus its mark."""
     return Symbol(
         svg=f'<g id="sym_feeder_{name}">'
             f'<circle cx="20" cy="20" r="20" fill="white" stroke="#111" '
@@ -2800,34 +1774,19 @@ def _feeder_circle(name: str, reg: str, mark: str) -> Symbol:
     )
 
 
-# Item 19.1 C2056: a Z in one stroke, two 3.46 M bars at y 1 and 3 M,
-# each 0.27 M in from the wall, joined by the diagonal.
+# Item 19.1 C2056: a Z in one stroke.
 _FEEDER_Z = (
     '<path d="M 37.3 30 L 2.7 30 L 37.3 10 L 2.7 10" '
     'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Item 19.2 X8067: a rotary valve rotor end-on, a 0.3 M hub with six
-# spokes 60 degrees apart reaching the rim.
+# Item 19.2 X8067: a rotary valve rotor end-on, a hub and six spokes.
 _FEEDER_HUB_R = 3.0
 _FEEDER_ROTOR_ANGLES = (0, 60, 120, 180, 240, 300)
 
 
 def _feeder_rotor(cx: float, cy: float, hub_r: float, rim_r: float) -> str:
-    """Return a hub circle and spokes from the hub to the rim.
-
-    Parameters
-    ----------
-    cx, cy : float
-        Centre.
-    hub_r, rim_r : float
-        Hub and rim radii.
-
-    Returns
-    -------
-    str
-        SVG elements.
-    """
+    """Return a hub circle and spokes from the hub to the rim."""
     ink = 'fill="none" stroke="#111" stroke-width="2"'
     spokes = "".join(
         f'<line x1="{cx + hub_r * math.cos(math.radians(a)):g}" '
@@ -2842,10 +1801,8 @@ def _feeder_rotor(cx: float, cy: float, hub_r: float, rim_r: float) -> str:
 _FEEDER_ROTOR_MARK = _feeder_rotor(20.0, 20.0, _FEEDER_HUB_R, 20.0)
 
 
-# ISO item 19.3 C0074, the rotary table feeder: a 5 M table bar, a shaft
-# down 6 M to the discharge, and the rotation as a 5 M x 2.5 M ellipse two
-# thirds down. ISO breaks the ellipse at the arrow; only the arrow is
-# drawn, at the ellipse's east point where the tangent is vertical.
+# ISO item 19.3 C0074, the rotary table feeder: a table, a shaft and a
+# rotation arrow.
 _FEEDER_TABLE_W = 50.0
 _FEEDER_TABLE_H = 60.0
 _FEEDER_TABLE = (
@@ -2853,17 +1810,14 @@ _FEEDER_TABLE = (
     '<line x1="25" y1="0" x2="25" y2="60" fill="none" stroke="#111" stroke-width="2"/>'
     '<ellipse cx="25" cy="37.5" rx="25" ry="12.5" fill="none" stroke="#111" '
     'stroke-width="2"/>'
-    # Rotation arrow: a 0.7 M tail up the east tangent with a head in
-    # 29.1's proportions (1 M long, about 0.5 M wide).
+    # Rotation arrow up the east tangent.
     '<line x1="50" y1="37.5" x2="50" y2="30.5" fill="none" stroke="#111" '
     'stroke-width="2"/>'
     '<polygon points="50,27.5 47.3,30.5 52.7,30.5" fill="#111" stroke="none"/>'
 )
 
-# ISO item 19.4 C0035, the metering feeder: a 14.8 M beam with a 2.2 M
-# pan at each end and a fulcrum triangle (base 3 M below, 1.7 M each side).
-# The beam sits 0.3 M below the top edge so the end ports are not on box
-# corners, where outward_dir cannot tell north from west or east.
+# ISO item 19.4 C0035, the metering feeder: a beam with a pan at each
+# end on a fulcrum.
 _METER_W = 148.0
 _METER_H = 33.0
 _METER_BEAM_Y = 3.0
@@ -2881,12 +1835,8 @@ _METER = (
     f'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# ISO item 19.5 2037, the spray nozzle: a three-pronged fan 4 M x 2 M
-# meeting under a header, apex (2 M, 0), legs to (0, 2), (2, 2) and
-# (4, 2) M. ISO ticks the header on both sides, so the header spans the box
-# and inlet is offered west and east (:class:`~pandid.units.SprayNozzle`).
-# The port sits 0.1 M below the header, off the box corner, as for
-# _METER_BEAM_Y.
+# ISO item 19.5 2037, the spray nozzle: three prongs under a header.
+# The inlet is offered west and east.
 _SPRAY_W = 40.0
 _SPRAY_H = 20.0
 _SPRAY_PORT_Y = 1.0
@@ -2904,29 +1854,12 @@ _SPRAY_NOZZLE = Symbol(
 
 
 # ----------------------------------------------------------------
-# ISO 10628-2 group 12: mixers and kneaders. 12.1-12.3 are one box with
-# one, two or three "N" mixing elements. 12.2 is the vendored
-# fitting/static_mixer, which matches item 12.2 X2673 and is registered
-# rather than redrawn (pandid.render._vendored_symbols). 12.4, the kneader,
-# draws a wave and is :class:`~pandid.units.Kneader`.
+# ISO 10628-2 group 12: mixers and kneaders. Item 12.2 is the vendored
+# fitting/static_mixer.
 # ----------------------------------------------------------------
 
 def _mix_element(x0: float) -> str:
-    """Return one 4 M "N" mixing element in the 6 M group-12 band.
-
-    A top stub from y 0.5 to 2.5 M, a diagonal to the opposite corner and a
-    bottom stub from y 3.5 to 5.5 M, as on items 12.1-12.3.
-
-    Parameters
-    ----------
-    x0 : float
-        Left edge.
-
-    Returns
-    -------
-    str
-        SVG path.
-    """
+    """Return one "N" mixing element of items 12.1-12.3 at ``x0``."""
     ink = 'fill="none" stroke="#111" stroke-width="2"'
     return (
         f'<path d="M {x0:g} 5 L {x0:g} 25 M {x0:g} 5 L {x0 + 40:g} 55 '
@@ -2934,9 +1867,8 @@ def _mix_element(x0: float) -> str:
     )
 
 
-# ISO item 12.1 X2672, the in-line rotary mixer: a 12 M x 6 M box with two
-# elements and a flow-axis stroke at mid-height reaching a module past the
-# west wall, which _MIXER_W includes so inlet lands on ink.
+# ISO item 12.1 X2672, the in-line rotary mixer: two elements and a
+# flow axis reaching a module past the west wall.
 _MIXER_W = 130.0
 _MIXER_H = 60.0
 _MIXER_PORTS = {"inlet": (0.0, 30.0), "outlet": (_MIXER_W, 30.0)}
@@ -2951,12 +1883,10 @@ _ROTARY_MIXER = Symbol(
     width=_MIXER_W, height=_MIXER_H,
     ports=dict(_MIXER_PORTS),
     iso_reg="X2672",
-    # An in-line piping accessory (:attr:`Symbol.trim`).
     trim=True,
 )
 
-# ISO item 12.3 X8184, the mixing path: a 16 M x 6 M box with three
-# elements, 1 M margins and gaps, ticks at mid-height, no flow-axis stroke.
+# ISO item 12.3 X8184, the mixing path: three elements in a box.
 _PATH_W = 160.0
 _PATH_H = 60.0
 _MIXING_PATH = Symbol(
@@ -2968,13 +1898,10 @@ _MIXING_PATH = Symbol(
     width=_PATH_W, height=_PATH_H,
     ports={"inlet": (0.0, 30.0), "outlet": (_PATH_W, 30.0)},
     iso_reg="X8184",
-    # An in-line piping accessory, as _ROTARY_MIXER.
     trim=True,
 )
 
-# ISO item 12.4 X8134, the kneader: a 10 M x 6 M casing crossed on its
-# centre line by one wave (up 1 M, down 2 M, back up 1 M), poking 1 M out
-# of the west wall as 12.1's axis does.
+# ISO item 12.4 X8134, the kneader: a casing crossed by one wave.
 _KNEADER_W = 110.0
 _KNEADER_H = 60.0
 _KNEADER_PORTS = {"inlet": (0.0, 30.0), "outlet": (_KNEADER_W, 30.0)}
@@ -2986,24 +1913,19 @@ _KNEADER = Symbol(
         'fill="none" stroke="#111" stroke-width="2"/></g>',
     width=_KNEADER_W, height=_KNEADER_H,
     ports=dict(_KNEADER_PORTS),
-    # Shafts driven from above over a trough below, so not turned.
     gravity_fixed=True,
     iso_reg="X8134",
 )
 
 
 # ----------------------------------------------------------------
-# ISO 10628-2 item 24.15, registered 2181: the steam trap. Hand-drawn
-# because the draw.io "Steam Trap" is an empty box identical to its
-# "Desuper Heater" (see scripts/vendor_symbols.py). The half-filled body is
-# in no group 26-29, so it is drawn into the body, not composed.
+# ISO 10628-2 item 24.15, registered 2181: the steam trap.
 # ----------------------------------------------------------------
 
-#: Steam trap body diameter: a 4 M circle on the run's horizontal axis.
+#: Steam trap body diameter.
 TRAP_BODY_D = 40.0
 
-#: Run drawn each side of the trap body: 1 M. ISO leaves this gap empty;
-#: it is drawn so the ports are on ink.
+#: Run drawn each side of the trap body.
 TRAP_LEAD = 10.0
 
 TRAP_W = TRAP_LEAD + TRAP_BODY_D + TRAP_LEAD
@@ -3012,7 +1934,7 @@ _TRAP_R = TRAP_BODY_D / 2
 _TRAP_CX = TRAP_LEAD + _TRAP_R
 _TRAP_CY = _TRAP_H / 2
 
-# Half the 45-degree diameter on each axis, from lower left to upper right.
+# Half the 45-degree diameter on each axis.
 _TRAP_SEAT = _TRAP_R / math.sqrt(2)
 
 # Ports on the horizontal diameter, at the ends of the leads.
@@ -3025,14 +1947,13 @@ _TRAP_RUN = (
     f'fill="none" stroke="#111" stroke-width="2"/>'
 )
 
-# Layer 2: the body, filled white so lines behind it are hidden.
+# Layer 2: the body, filled white.
 _TRAP_BODY = (
     f'<circle cx="{_TRAP_CX:g}" cy="{_TRAP_CY:g}" r="{_TRAP_R:g}" '
     f'fill="white" stroke="#111" stroke-width="2"/>'
 )
 
-# Layer 3: the half below the diameter, filled. Two quarter arcs, since a
-# 180-degree arc has an undetermined centre when _scaled_path redraws it.
+# Layer 3: the half below the diameter, filled, as two quarter arcs.
 _TRAP_DISCHARGE = (
     f'<path d="M {_TRAP_CX - _TRAP_SEAT:.6f} {_TRAP_CY + _TRAP_SEAT:.6f} '
     f'A {_TRAP_R:g} {_TRAP_R:g} 0 0 0 '
@@ -3048,42 +1969,31 @@ _STEAM_TRAP = Symbol(
         + '</g>',
     width=TRAP_W, height=_TRAP_H,
     ports=dict(_TRAP_PORTS),
-    # Stretching would change the 45-degree diameter, so keep the aspect.
     stretchable=False,
-    # A piping accessory at half equipment weight (ISO 10628-1 5.3.1 c)).
     trim=True,
     iso_reg="2181",
 )
 
 
 # ----------------------------------------------------------------
-# ISO 10628-2 group 7: screening devices, sieves and rakes. Six rows share
-# _SCREEN_OUTLINE with different marks; 7.7 has a taller box for its
-# rollers (_REEL_OUTLINE). The vendored separator/sifter is not one of
-# these rows (group 8 proportions, a different mesh mark) and is left
-# unregistered here.
+# ISO 10628-2 group 7: screening devices, sieves and rakes.
 # ----------------------------------------------------------------
 
-# Group 7 outline (all rows but 7.7), from row 7.1: a 6 M x 6 M wall
-# square over a 3 M point, 6 M x 9 M, the 2:2:1 proportion of
-# _SEPARATING_VESSEL.
+# Group-7 outline, from item 7.1 (all items but 7.7).
 _SCREEN_W, _SCREEN_H = 60.0, 90.0
 _SCREEN_OUTLINE = (
     '<path d="M 0 0 L 60 0 L 60 60 L 30 90 L 0 60 Z" '
     'fill="white" stroke="#111" stroke-width="2"/>'
 )
 
-# From row 7.1: feed above the top edge, oversize out of the east wall
-# five sixths of the way down, undersize out of the apex
-# (:class:`~pandid.units.ScreeningDevice`).
+# Group-7 ports, from item 7.1.
 _SCREEN_PORTS = {"feed": (30.0, 0.0), "oversize": (60.0, 50.0), "undersize": (30.0, 90.0)}
 
-# ISO's 2 M dash, 1 M gap, as iso_parts._DASH_LONG; repeated because
-# iso_parts imports this module.
+# A 2 M dash and a 1 M gap.
 _SCREEN_DASH = 'stroke-dasharray="20,10"'
 
-# The dashed corner-to-corner mesh diagonal, (0,0) to (60,60): item 7.1
-# X8123's mark and the base of 7.2-7.5.
+# The dashed mesh diagonal: item 7.1 X8123's mark and the base of
+# 7.2-7.5.
 _SCREEN_MESH = (
     f'<line x1="0" y1="0" x2="60" y2="60" fill="none" stroke="#111" '
     f'stroke-width="2" {_SCREEN_DASH}/>'
@@ -3091,25 +2001,7 @@ _SCREEN_MESH = (
 
 
 def _screen(name: str, reg: str, mark: str) -> Symbol:
-    """Return one group-7 screen: the shared outline plus its row's mark.
-
-    Gravity-fixed: oversize stays on the deck and undersize falls through
-    (ISO 15519-1 11.4.2).
-
-    Parameters
-    ----------
-    name : str
-        Name used in the SVG id.
-    reg : str
-        ISO registration number.
-    mark : str
-        The row's mark.
-
-    Returns
-    -------
-    Symbol
-        The screen symbol.
-    """
+    """Return a group-7 screen: the shared outline plus its mark."""
     return Symbol(
         svg=f'<g id="sym_screen_{name}">{_SCREEN_OUTLINE}{mark}</g>',
         width=_SCREEN_W, height=_SCREEN_H,
@@ -3119,15 +2011,12 @@ def _screen(name: str, reg: str, mark: str) -> Symbol:
     )
 
 
-# cos 45 = sin 45, the axis step of a tick perpendicular to the mesh
-# diagonal; local copy of iso_parts._SQ2.
+# cos 45 = sin 45.
 _SCREEN_SQ2 = math.sqrt(2) / 2
 
 
 def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
     """Return rake teeth crossing :data:`_SCREEN_MESH` at right angles.
-
-    Item 7.2 X8026 draws three coarse teeth and 7.3 X8027 five finer ones.
 
     Parameters
     ----------
@@ -3135,11 +2024,6 @@ def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
         Fractions along the diagonal.
     half_len : float
         Half the tooth length.
-
-    Returns
-    -------
-    str
-        SVG lines.
     """
     ink = 'fill="none" stroke="#111" stroke-width="2"'
     out = []
@@ -3154,22 +2038,14 @@ def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
 def _screen_vibration() -> str:
     """Return item 7.5 X2605's vibration mark beside the mesh diagonal.
 
-    Two opposed arrows on tracks either side of the diagonal, as item
-    29.14 draws oscillation, turned to 45 degrees and kept beside the
-    diagonal's middle so the mesh stays legible. Built from the diagonal's
-    unit vectors ``along`` and ``across``, so the tracks are parallel to it.
-
-    Returns
-    -------
-    str
-        SVG elements.
+    Two opposed arrows on tracks either side of the diagonal's middle.
     """
     along = (_SCREEN_SQ2, _SCREEN_SQ2)
     across = (_SCREEN_SQ2, -_SCREEN_SQ2)
     ink = 'fill="none" stroke="#111" stroke-width="2"'
 
     def track(tail: "tuple[float, float]", tip: "tuple[float, float]") -> str:
-        """Return one arrow from ``tail`` to ``tip``, head 6 units long."""
+        """Return one arrow from ``tail`` to ``tip``."""
         base = (tip[0] - 6 * along[0], tip[1] - 6 * along[1])
         wing = 2.5
         left = (base[0] + wing * across[0], base[1] + wing * across[1])
@@ -3181,8 +2057,8 @@ def _screen_vibration() -> str:
             f'{right[0]:g},{right[1]:g}" fill="#111" stroke="none"/>'
         )
 
-    # Tracks 4 units either side of the midpoint (30, 30), 10 units long,
-    # pointing away from each other.
+    # Tracks 4 units either side of the midpoint (30, 30), 10 units
+    # long, pointing away from each other.
     o1 = (30 + 4 * across[0], 30 + 4 * across[1])
     o2 = (30 - 4 * across[0], 30 - 4 * across[1])
     return (
@@ -3195,28 +2071,23 @@ def _screen_vibration() -> str:
 
 _SCREEN_VIBRATION = _screen_vibration()
 
-# Item 7.6 X8029: the rotating drum, dashed as a hidden rotating part, a
-# 1.5 M radius circle at (30, 45).
+# Item 7.6 X8029: the rotating drum, dashed.
 _SCREEN_DRUM = (
     '<circle cx="30" cy="45" r="15" fill="none" stroke="#111" stroke-width="2" '
     + _SCREEN_DASH + "/>"
 )
 
-# ISO item 7.7 X8030's outline: an 8 M x 12 M wall over a 4 M point,
-# 8 M x 16 M, the group's 2:2:1 proportion in a larger box for the rollers.
+# ISO item 7.7 X8030's outline, taller for the rollers.
 _REEL_W, _REEL_H = 80.0, 160.0
 _REEL_OUTLINE = (
     '<path d="M 0 0 L 80 0 L 80 120 L 40 160 L 0 120 Z" '
     'fill="white" stroke="#111" stroke-width="2"/>'
 )
 
-# 7.7 is ticked on the west and east walls at y 20, level with the top
-# roller, rather than above the top edge.
+# Item 7.7 is ported on the walls level with the top roller.
 _REEL_PORTS = {"feed": (0.0, 20.0), "oversize": (_REEL_W, 20.0), "undersize": (40.0, 160.0)}
 
-# Item 7.7 X8030: two 1 M rollers 8 M apart on the centre line, joined by
-# dashed rails a module either side (the wire basket). The basket's sag is
-# not drawn.
+# Item 7.7 X8030: two rollers joined by dashed rails, the wire basket.
 _REEL_MARK = (
     '<circle cx="40" cy="20" r="10" fill="none" stroke="#111" stroke-width="2"/>'
     '<circle cx="40" cy="100" r="10" fill="none" stroke="#111" stroke-width="2"/>'
@@ -3236,22 +2107,15 @@ _REEL_BODY = Symbol(
 
 
 # ----------------------------------------------------------------
-# Evaporators and kilns: pandid's own drawings, since ISO 10628-2 has
-# neither. They carry no registration number (ISO 14617-1 3.6; see
-# :class:`IsoPart`), and every feature has a named dimension so the
-# drawing can be checked by measurement.
+# Evaporators and kilns: original drawings with no registration number.
 # ----------------------------------------------------------------
 
-# Detail weight, ISO 10628-1:2014 5.3.1 c), and outline weight, 5.3.1 b).
-# Repeated from iso_parts.PART_STROKE, since iso_parts imports this module.
+# Detail weight (ISO 10628-1 5.3.1 c) and outline weight (5.3.1 b).
 _DETAIL = 'fill="none" stroke="#111" stroke-width="1"'
 _OUTLINE = 'fill="white" stroke="#111" stroke-width="2"'
 
 
-# Evaporator body: dished head, straight side, dished bottom. 80 wide like
-# the other upright bodies; heads 12 deep on a 40 half-width, as the
-# vendored dished vessels; a 136 straight side to hold both the heating
-# element and the disengaging space.
+# Evaporator body: dished head, straight side, dished bottom.
 _EVAP_W = 80.0
 _EVAP_HEAD = 12.0
 _EVAP_SHELL = 136.0
@@ -3265,65 +2129,35 @@ _EVAP_OUTLINE = (
     f'{_OUTLINE}/>'
 )
 
-# Long-tube heating band (falling film, climbing film and the general row):
-# a third of the way down the shell to a fifth off the bottom, leaving
-# disengaging space above and a pool below.
+# Long-tube heating band (falling film, climbing film and general).
 _EVAP_TUBE_TOP, _EVAP_TUBE_BOT = 60.0, 130.0
 
-# Short-tube (calandria) band: 32 units against 70, centred on the long
-# band.
+# Short-tube (calandria) band, centred on the long band.
 _EVAP_CALANDRIA_TOP, _EVAP_CALANDRIA_BOT = 79.0, 111.0
 
-# Steam-chest ports sit this far inside their tubesheet, so they read as
-# the chest's. Steam enters west and condensate leaves east, so in a
-# left-to-right multiple-effect train each effect's vapour reaches the next
-# effect's west wall without crossing the body.
+# Steam-chest ports sit this far inside their tubesheet. Steam enters
+# west and condensate leaves east.
 _EVAP_STEAM_INSET = 6.0
 
-# Feed height above the element (falling film, onto the top tubesheet) and
-# below it (climbing film, into the tube bottoms).
+# Feed height above the element (falling film) and below it
+# (climbing film).
 _EVAP_FEED_HIGH, _EVAP_FEED_LOW = 30.0, 140.0
 
 
 def _evap_tubesheets(top: float, bot: float) -> str:
-    """Return the two tubesheets, drawn wall to wall as welded sheets.
-
-    Parameters
-    ----------
-    top, bot : float
-        Tubesheet heights.
-
-    Returns
-    -------
-    str
-        SVG path.
-    """
+    """Return the two tubesheets at heights ``top`` and ``bot``."""
     return (f'<path d="M 0 {top:g} L {_EVAP_W:g} {top:g} '
             f'M 0 {bot:g} L {_EVAP_W:g} {bot:g}" {_DETAIL}/>')
 
 
 def _evap_tubes(top: float, bot: float, xs: "tuple[float, ...]") -> str:
-    """Return tubes between the tubesheets at each x in ``xs``.
-
-    Parameters
-    ----------
-    top, bot : float
-        Tubesheet heights.
-    xs : tuple[float, ...]
-        Tube positions.
-
-    Returns
-    -------
-    str
-        SVG path.
-    """
+    """Return tubes between the tubesheets at each x in ``xs``."""
     return ('<path d="'
             + " ".join(f"M {x:g} {top:g} L {x:g} {bot:g}" for x in xs)
             + f'" {_DETAIL}/>')
 
 
-# The general row draws an unspecified element as a closed box inset from
-# the walls; a bare pair of lines would read as a tray.
+# The general element: a closed box inset from the walls.
 _EVAP_ELEMENT_INSET = 12.0
 _EVAP_ELEMENT = (
     f'<rect x="{_EVAP_ELEMENT_INSET:g}" y="{_EVAP_TUBE_TOP:g}" '
@@ -3332,17 +2166,16 @@ _EVAP_ELEMENT = (
 )
 
 
-# Long-tube rows: five tubes on a 12-unit pitch, centred; a picture of a
-# bundle, not a count.
+# Long-tube rows: five tubes on a 12-unit pitch, centred.
 _EVAP_TUBE_XS = (16.0, 28.0, 40.0, 52.0, 64.0)
 
-# Calandria: three tubes either side of a central downcomer, drawn as two
-# walls at twice the 8-unit tube pitch so it does not read as a tube.
+# Calandria: three tubes either side of a central downcomer, drawn as
+# two walls.
 _EVAP_CALANDRIA_XS = (8.0, 16.0, 24.0, 56.0, 64.0, 72.0)
 _EVAP_DOWNCOMER_XS = (32.0, 48.0)
 
-# Falling-film distributor: a tray 8 units above the top tubesheet with
-# three drops; the only mark that differs from the climbing-film row.
+# Falling-film distributor: a tray above the top tubesheet with three
+# drops.
 _EVAP_DISTRIBUTOR_GAP = 8.0
 _EVAP_DISTRIBUTOR_DROP = 5.0
 _EVAP_DISTRIBUTOR_XS = (24.0, 40.0, 56.0)
@@ -3356,8 +2189,7 @@ _EVAP_DISTRIBUTOR = (
     + f'" {_DETAIL}/>'
 )
 
-# Plate row: nine plates on an 8-unit pitch wall to wall, with no
-# tubesheets.
+# Plate row: nine plates wall to wall, with no tubesheets.
 _EVAP_PLATE_XS = tuple(8.0 + 8.0 * i for i in range(9))
 _EVAP_PLATES = (
     '<path d="'
@@ -3372,25 +2204,15 @@ def _evaporator(name: str, *detail: str,
                 feed_y: float = _EVAP_FEED_HIGH) -> Symbol:
     """Return one evaporator: the shared shell plus its element.
 
-    Steam-chest ports are placed from ``band``, so they follow the element.
-    Gravity-fixed: vapour leaves the crown and concentrate the bottom (ISO
-    15519-1 11.4.2).
-
     Parameters
     ----------
-    name : str
-        Variant, used in the SVG id.
     *detail : str
         Element marks.
     band : tuple[float, float], default=(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT)
-        Heating element's top and bottom.
+        Heating element's top and bottom, which place the steam-chest
+        ports.
     feed_y : float, default=_EVAP_FEED_HIGH
         Feed height on the west wall.
-
-    Returns
-    -------
-    Symbol
-        The evaporator symbol.
     """
     top, bot = band
     return Symbol(
@@ -3407,9 +2229,7 @@ def _evaporator(name: str, *detail: str,
     )
 
 
-# Rotary kiln shell: 26 units of fall over 180 of length. Much steeper
-# than a real kiln, since a near-level cylinder would read as a rotary
-# dryer (ISO item 10.7 X8044).
+# Rotary kiln shell: 26 units of fall over 180 of length.
 _KILN_W = 180.0
 _KILN_BORE = 28.0
 _KILN_FALL = 26.0
@@ -3417,21 +2237,7 @@ _KILN_H = _KILN_BORE + _KILN_FALL
 
 
 def _kiln_top(x: float) -> float:
-    """Return the shell's upper wall height at ``x``.
-
-    Every mark and port is placed through this, so they follow
-    :data:`_KILN_FALL`.
-
-    Parameters
-    ----------
-    x : float
-        Distance along the kiln.
-
-    Returns
-    -------
-    float
-        Height of the upper wall.
-    """
+    """Return the shell's upper wall height at ``x``."""
     return _KILN_FALL * x / _KILN_W
 
 
@@ -3441,7 +2247,6 @@ _KILN_OUTLINE = (
 )
 
 # Riding rings: position along the shell and how far they stand proud.
-# They show the shell rotates.
 _KILN_RING_XS = (60.0, 130.0)
 _KILN_RING_PROUD = 5.0
 _KILN_RINGS = (
@@ -3453,8 +2258,7 @@ _KILN_RINGS = (
     + f'" {_DETAIL}/>'
 )
 
-# Girth gear and pinion: an 18 x 7 block under the shell between the
-# rings, where the drive station stands.
+# Girth gear and pinion: a block under the shell between the rings.
 _KILN_DRIVE_X, _KILN_DRIVE_W, _KILN_DRIVE_H = 95.0, 18.0, 7.0
 _KILN_DRIVE = (
     f'<rect x="{_KILN_DRIVE_X - _KILN_DRIVE_W / 2:g}" '
@@ -3462,9 +2266,8 @@ _KILN_DRIVE = (
     f'width="{_KILN_DRIVE_W:g}" height="{_KILN_DRIVE_H:g}" {_DETAIL}/>'
 )
 
-# Solids in at the high end, out at the low end. Fired counter-current
-# from the discharge end, so offgas leaves at the feed end; fuel and air
-# enter the hood underneath at the discharge end.
+# Solids in at the high end and out at the low end; offgas at the feed
+# end; fuel and air into the hood at the discharge end.
 _KILN_PORTS = {
     "feed": (0.0, _KILN_BORE / 2),
     "product": (_KILN_W, _KILN_FALL + _KILN_BORE / 2),
@@ -3473,10 +2276,8 @@ _KILN_PORTS = {
     "fuel": (160.0, _kiln_top(160.0) + _KILN_BORE),
 }
 
-# Fluidised-bed calciner: dished crown, straight freeboard and a windbox
-# cone. The dashed distributor grid where the walls meet the cone is the
-# defining mark (dashed as perforated, like item 27.5). The bed is not
-# drawn; it is part 27.7 (2604) in iso_parts.
+# Fluidised-bed calciner: dished crown, straight freeboard and a
+# windbox cone, with a dashed distributor grid where they meet.
 _FBC_W = 90.0
 _FBC_CROWN = 12.0
 _FBC_FREEBOARD = 98.0
@@ -3498,9 +2299,8 @@ _FBC_GRID = (
     f'{_DETAIL} {_SCREEN_DASH}/>'
 )
 
-# Feed high on one wall and product over a weir low on the other, both
-# above the grid; offgas off the crown; fuel into the bed; air into the
-# windbox.
+# Feed high, product low over a weir, offgas off the crown, fuel into
+# the bed and air into the windbox.
 _FBC_PORTS = {
     "feed": (0.0, 40.0),
     "product": (_FBC_W, 100.0),
@@ -3509,10 +2309,8 @@ _FBC_PORTS = {
     "air": (_FBC_W / 2, _FBC_H),
 }
 
-# Shaft kiln: charging mouth, shaft and discharge cone in a 70 x 160 box,
-# narrower than the 80-wide bodies. The 20-deep cones leave 120 of
-# straight wall so it reads as a shaft. The two zone lines bound the
-# calcining zone, where burners and cooling air enter.
+# Shaft kiln: charging mouth, shaft and discharge cone. The two zone
+# lines bound the calcining zone.
 _SHAFT_W, _SHAFT_H = 70.0, 160.0
 _SHAFT_CONE = 20.0
 _SHAFT_MOUTH = 40.0
@@ -3532,9 +2330,8 @@ _SHAFT_ZONES = (
     f'M 0 {_SHAFT_ZONE_BOT:g} L {_SHAFT_W:g} {_SHAFT_ZONE_BOT:g}" {_DETAIL}/>'
 )
 
-# Charged over the mouth and discharged from the cone; offgas above the
-# calcining zone, fuel at its top and cooling air below it,
-# counter-current to the burden.
+# Charged over the mouth and discharged from the cone; offgas above
+# the calcining zone, fuel at its top and cooling air below it.
 _SHAFT_PORTS = {
     "feed": (_SHAFT_W / 2, 0.0),
     "product": (_SHAFT_W / 2, _SHAFT_H),
@@ -3547,39 +2344,31 @@ _SHAFT_PORTS = {
 class SymbolRegistry:
     """Catalogue of symbols keyed by ``(kind, variant)``, and ISO parts.
 
-    Holds whole drawings (:meth:`register`), their normally closed
-    states (:meth:`register_closed`) and the ISO 10628-2 group 26-29
-    supplementary symbols (:meth:`register_part`). :meth:`for_unit`
-    resolves the drawing for a unit, including derived drawings built
-    from the unit (built to size, composed, darkened, closed or turned end
-    for end), each cached because port resolution asks on every call.
+    :meth:`for_unit` resolves the drawing for a unit, including drawings
+    derived from it, each cached.
     """
 
     def __init__(self):
         """Create the registry and register the default symbols."""
         self._symbols: dict[tuple[str, str], Symbol] = {}
-        # Caches of derived symbols: port resolution asks for a unit's
-        # symbol on every call, so each is built once and shared.
+        # Caches of derived symbols.
         self._darkened: dict[tuple[str, str], Symbol] = {}
-        # Closed-state drawings: one (kind, variant) with two states, chosen
-        # by the unit's normal_position, not a second variant.
+        # Closed-state drawings.
         self._closed: dict[tuple[str, str], Symbol] = {}
         # Fittings turned end for end (expanders).
         self._expanders: dict[tuple[str, str], Symbol] = {}
         # ISO 10628-2 group 26-29 supplementary symbols, keyed by
         # (group, name).
         self._parts: dict[tuple[int, str], OverlayPart] = {}
-        # Bodies with parts, per (kind, variant, overlays); a tray column
-        # has dozens of parts, so rebuilding per lookup would be costly.
+        # Bodies with parts, per (kind, variant, overlays).
         self._composed: dict[tuple, Symbol] = {}
         self._register_defaults()
 
     def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
-        """Register a drawing for ``(kind, variant)``, replacing any earlier one.
+        """Register a drawing for ``(kind, variant)``.
 
-        Derived drawings cached for that key (darkened, closed, expander,
-        composed) are dropped. Re-registering drops the closed-state
-        pairing, so call :meth:`register_closed` afterwards.
+        Replaces any earlier drawing and drops the drawings derived from
+        it, closed state included.
 
         Parameters
         ----------
@@ -3600,40 +2389,17 @@ class SymbolRegistry:
     def register_part(self, part: OverlayPart) -> None:
         """Register one ISO 10628-2 group 26-29 supplementary symbol.
 
-        Keyed by ``(group, name)``: a name is unique only within its ISO
-        subject group. A part should carry the registration number of the
-        composition the standard draws (see :class:`IsoPart`).
-
         Parameters
         ----------
         part : OverlayPart
-            Part to register.
+            Part to register, keyed by ``(group, name)``.
         """
         self._parts[part.key()] = part
         # Drop every composition; any may use this part.
         self._composed.clear()
 
     def part(self, group: int, name: str) -> OverlayPart:
-        """Return the supplementary symbol registered as ``(group, name)``.
-
-        Parameters
-        ----------
-        group : int
-            ISO 10628-2 subject group (26-29).
-        name : str
-            Part name.
-
-        Returns
-        -------
-        OverlayPart
-            Registered part.
-
-        Raises
-        ------
-        ValueError
-            If no such part is registered; the message suggests a close
-            name.
-        """
+        """Return the part registered as ``(group, name)``."""
         if (group, name) in self._parts:
             return self._parts[(group, name)]
         known = self.part_names(group)
@@ -3644,56 +2410,18 @@ class SymbolRegistry:
         )
 
     def part_names(self, group: int) -> list[str]:
-        """Return the part names registered in one ISO subject group, sorted.
-
-        Parameters
-        ----------
-        group : int
-            ISO 10628-2 subject group.
-
-        Returns
-        -------
-        list[str]
-            Part names.
-        """
+        """Return the sorted part names registered in ``group``."""
         return sorted(name for (g, name) in self._parts if g == group)
 
     def parts(self) -> list[OverlayPart]:
-        """Return every registered supplementary symbol, by group then name.
-
-        Returns
-        -------
-        list[OverlayPart]
-            Registered parts.
-        """
+        """Return every registered part, by group then name."""
         return [self._parts[key] for key in sorted(self._parts)]
 
     def composed(self, kind: str, variant: str = "default",
                  overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
-        """Return ``(kind, variant)`` with ``overlays`` drawn on it, cached.
+        """Return ``(kind, variant)`` with ``overlays`` drawn on it.
 
-        The body comes from :meth:`get`, each part from :meth:`part`, and
-        :func:`compose` paints them. With no overlays the body is returned
-        unchanged and nothing is cached.
-
-        Parameters
-        ----------
-        kind : str
-            Unit kind.
-        variant : str, default="default"
-            Variant name.
-        overlays : tuple[Overlay, ...], optional
-            Parts to draw on the body.
-
-        Returns
-        -------
-        Symbol
-            Composed drawing.
-
-        Raises
-        ------
-        ValueError
-            If the variant or a part is not registered.
+        With no overlays the body is returned unchanged.
         """
         if not overlays:
             return self.get(kind, variant)
@@ -3708,11 +2436,6 @@ class SymbolRegistry:
 
     def register_closed(self, kind: str, template: Symbol, variant: str = "default") -> None:
         """Register the normally closed drawing of ``(kind, variant)``.
-
-        For a device whose closed state is a shape of its own rather than
-        a fill of the open one, such as a spectacle blind. It is a state,
-        not a second variant. Register the open drawing first, since
-        re-registering it drops this pairing.
 
         Parameters
         ----------
@@ -3736,53 +2459,19 @@ class SymbolRegistry:
         self._closed[(kind, variant)] = template
 
     def closed_symbol(self, kind: str, variant: str = "default") -> Symbol | None:
-        """Return the normally closed drawing of ``(kind, variant)``.
-
-        Parameters
-        ----------
-        kind : str
-            Unit kind.
-        variant : str, default="default"
-            Variant name.
-
-        Returns
-        -------
-        Symbol or None
-            Closed-state drawing, or ``None`` if there is none.
-        """
+        """Return the closed drawing of ``(kind, variant)``, if any."""
         return self._closed.get((kind, variant))
 
     def closed_variants(self, kind: str) -> list[str]:
-        """Return the variants of a kind that have a closed drawing, sorted.
-
-        Parameters
-        ----------
-        kind : str
-            Unit kind.
-
-        Returns
-        -------
-        list[str]
-            Variant names.
-        """
+        """Return the sorted ``kind`` variants with a closed drawing."""
         return sorted(variant for (k, variant) in self._closed if k == kind)
 
     def for_unit(self, unit) -> Symbol:
         """Return the symbol to draw a unit with.
 
-        Starts from :meth:`get`, which also rejects an unregistered
-        variant, then derives from the unit where needed, in order:
-
-        1. a symbol built to the unit's size (conveyors, blocks, vessels);
-        2. the body with the unit's supplementary parts
-           (:meth:`composed`);
-        3. a normally closed device's own closed drawing, or its darkened
-           body (:func:`closed_marking`);
-        4. a reducer with ``large_end="outlet"`` turned end for end
-           (:func:`expander`).
-
-        Composition and the closed or reversed forms never meet: valves
-        and fittings carry no parts.
+        Starts from :meth:`get`, then uses, in order, a symbol built
+        to the unit's size, the body with the unit's parts, a normally
+        closed drawing, or a reducer turned end for end.
 
         Parameters
         ----------
@@ -3815,7 +2504,6 @@ class SymbolRegistry:
             if key not in self._darkened:
                 self._darkened[key] = darkened(sym)
             return self._darkened[key]
-        # An expansion is the vendored reduction piped the other way round.
         if getattr(unit, "large_end", "inlet") == "outlet":
             key = (unit.kind, variant)
             if key not in self._expanders:
@@ -3842,8 +2530,7 @@ class SymbolRegistry:
     def get(self, kind: str, variant: str = "default") -> Symbol:
         """Return the registered drawing for ``(kind, variant)``.
 
-        A kind with no drawings at all, such as a custom Unit subclass,
-        gets a blank 60 x 60 box.
+        A kind with no drawings gets a blank 60 x 60 box.
 
         Parameters
         ----------
@@ -3860,17 +2547,13 @@ class SymbolRegistry:
         Raises
         ------
         ValueError
-            If the kind has drawings but none under ``variant``; the
-            message suggests a close name.
+            If the kind has drawings but none under ``variant``.
         """
         if (kind, variant) in self._symbols:
             return self._symbols[(kind, variant)]
         known = self.variants(kind)
         if not known:
-            # No catalogue to check the variant against.
             return self._generic_symbol()
-        # An unknown variant is a typo; drawing the default instead would
-        # hide it.
         suggestion = suggest(variant, known)
         raise ValueError(
             f"{kind} has no variant {variant!r}{suggestion}; "
@@ -3878,7 +2561,7 @@ class SymbolRegistry:
         )
 
     def _generic_symbol(self) -> Symbol:
-        """Return the blank 60 x 60 box drawn for an unregistered kind."""
+        """Return the blank 60 x 60 box for an unregistered kind."""
         svg = (
             '<g id="sym_generic">'
             '<rect x="0" y="0" width="60" height="60" fill="none" stroke="black" stroke-width="2" />'
@@ -3887,12 +2570,8 @@ class SymbolRegistry:
         return Symbol(svg=svg, width=60, height=60)
 
     def _register_defaults(self):
-        """Register the hand-drawn symbols, the vendored set and ISO families.
-
-        The hand-drawn symbols cover kinds with no stencil; the vendored
-        draw.io symbols, the ISO parts and generated families follow.
-        """
-        # Feed and Product are drawn by the renderer; these are fallbacks.
+        """Register the hand-drawn, vendored and ISO symbols."""
+        # Fallbacks for Feed and Product, which the renderer draws.
         self.register("feed", Symbol(
             svg='<g id="sym_feed"><polygon points="0,10 35,10 50,25 35,40 0,40" fill="none" stroke="black" stroke-width="2"/></g>',
             width=50.0, height=50.0,
@@ -3904,8 +2583,7 @@ class SymbolRegistry:
             ports={"inlet": (0.0, 25.0)}
         ))
 
-        # Mixer: no stencil, so drawn here as a triangle pointing right;
-        # inlets on the left face, outlet at the right vertex.
+        # Mixer: a triangle pointing right.
         self.register("mixer", Symbol(
             svg='<g id="sym_mixer"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></g>',
             width=50.0, height=50.0,
@@ -3913,22 +2591,16 @@ class SymbolRegistry:
             port_series=(PortSeries("in_", "W"),),
         ))
 
-        # Belt conveyor at its default length; other lengths are built by
-        # for_unit() (conveyor_symbol).
+        # Belt and screw conveyors at their default length.
         self.register("conveyor", conveyor_symbol())
-        # Screw conveyor, ISO item 18.5 X8063, the same way.
         self.register("conveyor", screw_conveyor_symbol(), "screw")
 
-        # Bucket elevators, ISO items 18.7 X8065 and 18.8 X8066, at a
-        # fixed size: a flowsheet does not state the lift.
+        # Bucket elevators, at a fixed size.
         self.register("elevator", _BUCKET_ELEVATOR)
         self.register("elevator", _Z_ELEVATOR, "z_form")
 
-        # Pipe tee: three lines meeting, drawn as pipe with no junction
-        # mark, as on reference sheet P&ID-301. The run crosses at
-        # mid-height and the branch drops to the south face; the box is
-        # just large enough for the stub to read. An original primitive:
-        # the draw.io set has no bare junction (NOTICE section 1).
+        # Pipe tee: the run crosses at mid-height and the branch drops
+        # to the south face.
         self.register("tee", Symbol(
             svg='<g id="sym_tee">'
                 '<path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" '
@@ -3936,19 +2608,15 @@ class SymbolRegistry:
                 '</g>',
             width=12.0, height=12.0,
             ports={"inlet": (0.0, 6.0), "outlet": (12.0, 6.0), "branch": (6.0, 12.0)},
-            # No tag, so reserve no label side.
+            # The tee carries no tag.
             label_pos="center",
-            # No arrowhead: the run divides and carries on.
             bare_run=True,
         ))
 
-        # Block flow diagram box, registered with one inlet west and one
-        # outlet east; other blocks are built by for_unit()
-        # (block_symbol).
+        # Block box with one inlet west and one outlet east.
         self.register("block", block_symbol((("in_1", "W"), ("out_1", "E"))))
 
-        # Splitter: triangle pointing left; inlet at the left vertex,
-        # outlets on the right face.
+        # Splitter: a triangle pointing left.
         self.register("splitter", Symbol(
             svg='<g id="sym_splitter"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></g>',
             width=50.0, height=50.0,
@@ -3956,25 +2624,18 @@ class SymbolRegistry:
             port_series=(PortSeries("out_", "E"),),
         ))
 
-        # ISA-5.1 instrument balloons; the renderer letters the tag. Ports:
-        # pv (process, bottom), sig_in and sig_out. Variants: default
-        # (field), panel (one bar), aux (two bars), shared (circle in
-        # square with a bar), computer (hexagon), sis/logic (diamond in
-        # square) and interlock (diamond). Every port offers all four faces,
-        # one unit clear of the r=21 circle.
+        # ISA-5.1 instrument balloons, lettered by the renderer. Every
+        # port offers all four faces.
         _inst_faces = {"N": (22.0, 0.0), "S": (22.0, 44.0),
                        "W": (0.0, 22.0), "E": (44.0, 22.0)}
         _inst_ports = {'pv': (22.0, 44.0), 'sig_in': (0.0, 22.0), 'sig_out': (44.0, 22.0)}
-        # The face menus overlap by design (faceless_ports).
+        # The face menus overlap (faceless_ports).
         _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
         _inst_faceless = frozenset(_inst_ports)
-        # Not stretchable: an oval balloon or squashed hexagon would read
-        # as a different ISA-5.1 symbol, so each keeps its proportions.
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
-            # A PCE symbol, ISO 10628-1 §5.3.1 c). See :attr:`Symbol.trim`.
             trim=True))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></g>',
@@ -3986,11 +2647,8 @@ class SymbolRegistry:
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
             trim=True), "aux")
-        # A shared display is in the central control system, so it carries
-        # one bar (ISO 15519-2 Table 1). The bar spans the circle through
-        # its centre, with letters above and number below (ISO 15519-2
-        # 5.1.2), as on reference sheet P&ID-301. Drawn at 1.5, this
-        # package's location-bar weight, like panel and aux.
+        # Shared display: a circle in a square with one bar
+        # (ISO 15519-2 Table 1).
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
@@ -3998,40 +2656,27 @@ class SymbolRegistry:
             trim=True), "shared")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
-            # The hexagon's bottom is at y=41, so pv moves up to keep a
-            # 1-unit stub.
+            # pv sits 1 unit below the hexagon's flat bottom.
             width=44.0, height=44.0, label_pos="center", stretchable=False,
             faceless_ports=_inst_faceless,
             ports={**_inst_ports, "pv": (22.0, 42.0)},
-            # Flat top and bottom at y=3 and y=41 need their own N and S
-            # stubs.
+            # N and S stubs on the flat top and bottom.
             port_faces={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
                         for n in _inst_ports},
             trim=True), "computer")
-        # Trip and logic symbols (ANSI/ISA-5.1-2009):
-        #
-        #   Table 5.1.2 items 3-5  a plain diamond           interlock
-        #   Table 5.1.1 column B   a diamond inside a square sis/logic
-        #
-        # The diamond in a square is what reference sheet P&ID-301 draws
-        # for a trip. ``logic`` is a second package name for ``sis``, used
-        # by existing sheets and Instrument's repeat rule. Both are drawn in
-        # a 40 box: an inscribed diamond needs the square grown by root two
-        # to hold a two-figure number. Ports sit at the side midpoints,
-        # which are the diamond's vertices.
+        # ISA-5.1 trip and logic symbols. Ports sit on the diamond's
+        # vertices.
         _logic_ports = {'pv': (20.0, 39.0), 'sig_in': (1.0, 20.0), 'sig_out': (39.0, 20.0)}
-        # One Symbol under two names, so they cannot drift apart.
+        # One Symbol under two names.
         _sis = Symbol(
             svg='<g id="sym_instrument_sis">'
                 '<rect x="1" y="1" width="38" height="38" fill="white" stroke="black" stroke-width="2"/>'
                 '<polygon points="20,1 39,20 20,39 1,20" fill="none" stroke="black" stroke-width="2"/>'
                 '</g>',
-            # Not stretchable: the vertices must stay on the ports.
             width=40.0, height=40.0, label_pos="center", stretchable=False,
             ports=_logic_ports, trim=True)
         self.register("instrument", _sis, "sis")
         self.register("instrument", _sis, "logic")
-        # A white fill keeps lines from striking through the number.
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_interlock">'
                 '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
@@ -4040,11 +2685,7 @@ class SymbolRegistry:
             ports=_logic_ports, trim=True),
             "interlock")
 
-        # Tubular reactor (PFR). ISO 10628-2 has no reactor symbol, so it is
-        # built like item 3.7 (reg 2514, coil-tube heat exchanger): a 12 M x
-        # 4 M rectangular shell with a serpentine tube. Straight walls let
-        # several feeds sit on the west face. The tube pass is drawn at
-        # ``iso_parts.PART_STROKE`` (ISO 10628-1:2014 5.3.1 c)).
+        # Tubular reactor: a rectangular shell with a serpentine tube.
         self.register("reactor", Symbol(
             svg='<g id="sym_reactor_tubular">'
                 '<rect x="0" y="0" width="120" height="40" fill="white" '
@@ -4058,45 +2699,31 @@ class SymbolRegistry:
                                     extent=0.5, at=20.0, singular="feed"),),
         ), "tubular")
 
-        # ISO 10628-2 Table 2 group 4: boiler, stack and flare, each its own
-        # outline since groups 26-29 have nothing to compose them from.
-        # Item 4.3 (2533, furnace) is not registered: furnace/default is
-        # the vendored fired-heater drawing, which is not that row, and
-        # replacing it would change every existing sheet.
+        # ISO 10628-2 group 4: boiler, stack and flare.
 
-        # Item 4.1, 2532, boiler with dome: a 10 M square shell with a 5 M
-        # semicircular dome on its crown. Feedwater a quarter of the way
-        # down the west wall; steam at the dome's apex (connection ticks as
-        # in ``iso_parts``).
+        # Item 4.1, 2532, boiler with dome.
         self.register("boiler", Symbol(
             svg='<g id="sym_boiler"><path d="M 25 25 A 25 25 0 0 1 75 25 '
                 'L 100 25 L 100 125 L 0 125 L 0 25 Z" '
                 'fill="white" stroke="#111" stroke-width="2"/></g>',
             width=100.0, height=125.0,
             ports={"feedwater": (0.0, 50.0), "steam": (50.0, 0.0)},
-            # The dome must be the high point (ISO 15519-1 11.4.2).
             gravity_fixed=True,
             iso_reg="2532",
         ), "default")
 
-        # Item 4.7, 2041, stack: a shaft tapering from a 2 M cap to a 6 M
-        # foundation flange drawn as one stroke beneath it, as Table 2
-        # draws it (open strokes, not a closed outline). One inlet low on
-        # the west wall (:data:`_STACK_INLET_Y`).
+        # Item 4.7, 2041, stack: a tapering shaft on a flange.
         self.register("stack", Symbol(
             svg='<g id="sym_stack"><path d="M 20 0 L 40 0 M 20 0 L 10 100 '
                 'M 40 0 L 50 100 M 0 100 L 60 100" '
                 'fill="none" stroke="#111" stroke-width="2"/></g>',
             width=60.0, height=100.0,
             ports={"inlet": (_STACK_INLET_X, _STACK_INLET_Y)},
-            # A stack exhausts upward (ISO 15519-1 11.4.2).
             gravity_fixed=True,
             iso_reg="2041",
         ), "default")
 
-        # Item 4.8, 2591, gas flare: the stack's construction with straight
-        # walls and a 2 M x 4 M vesica flame on top, its arcs struck from
-        # centres 1.5 M either side of the shaft centreline.
+        # Item 4.8, 2591, gas flare: a shaft with a flame on top.
         self.register("flare", Symbol(
             svg='<g id="sym_flare">'
                 '<path d="M 30 40 A 25 25 0 0 1 30 0 A 25 25 0 0 1 30 40 Z" '
@@ -4105,10 +2732,8 @@ class SymbolRegistry:
                 'M 0 120 L 60 120" fill="none" stroke="#111" stroke-width="2"/>'
                 '</g>',
             width=60.0, height=120.0,
-            # Inlet on the west wall at x 2 M, two modules up rather than
-            # ISO's one so it reads as on the wall (see _STACK_INLET_Y).
+            # Inlet on the west wall, two modules up.
             ports={"inlet": (20.0, 90.0)},
-            # The flame burns upward.
             gravity_fixed=True,
             iso_reg="2591",
         ), "default")
@@ -4117,8 +2742,7 @@ class SymbolRegistry:
         from pandid.render._vendored_symbols import register_vendored
         register_vendored(self)
 
-        # ISO 10628-2 group 26-29 parts, in their own namespace and added
-        # after the whole symbols they overlay.
+        # ISO 10628-2 group 26-29 parts, then the ISO families.
         from pandid.render.iso_parts import register_parts
         register_parts(self)
         self._register_composed()
@@ -4134,41 +2758,11 @@ class SymbolRegistry:
         self._register_steam_trap()
 
     def _register_steam_trap(self):
-        """Register the steam trap, ISO 10628-2 Table 2 item 24.15 (2181).
-
-        A :class:`~pandid.units.Fitting` variant, like the other in-line
-        group 24 items. Hand-drawn because the vendored "Steam Trap"
-        stencil is empty (see ``scripts/vendor_symbols.py``).
-        """
+        """Register the steam trap, ISO 10628-2 item 24.15 (2181)."""
         self.register("fitting", _STEAM_TRAP, "steam_trap")
 
     def _register_composed(self):
-        """Register the three group-8 drawings ISO composes and numbers.
-
-        Author-configured compositions (agitators, trays) are built per
-        unit; these are fixed compositions the standard tabulates, so they
-        are registered. Each is the separating vessel
-        (:data:`_SEPARATING_VESSEL`) with one group-29 characteristic:
-
-        =====  ======  ==============================================
-        item   reg     body + part
-        =====  ======  ==============================================
-        8.3    X8031   separating vessel + 29.1 C2028 gravity
-        8.6    X8125   separating vessel + 29.2 C2030 electrostatic
-        8.8    X8126   separating vessel + 29.3 C2031 electromagnetic
-        =====  ======  ==============================================
-
-        The other group-8 drawings stay vendored whole, because group 29
-        has no mark to build them from: the cyclone (8.10 X2618, named in
-        ISO 15519-1 11.4.2 and ISO 14617-1 4.5), the baffle (8.2 X2616),
-        the spray (8.5 X2621) and the permanent magnet (8.9 X8127). The wet
-        scrubber (8.4) could now be composed from 29.10 but stays vendored,
-        since composing it would change an existing drawing and its ports.
-
-        These three lose their draw.io stencils: the exporter draws the
-        body as a rectangle with the mark as a child cell, because
-        :func:`compose` refuses a ``drawio_shape`` on a composed symbol.
-        """
+        """Register the three composed group-8 separators."""
         from pandid.render.iso_parts import characteristic_overlays
 
         for name, reg in (("gravity", "X8031"), ("electrostatic", "X8125"),
@@ -4182,43 +2776,13 @@ class SymbolRegistry:
             ), name)
 
     def _register_crushing_machines(self):
-        """Register ISO 10628-2 Table 2 group 11, all twelve rows.
-
-        One trapezoid (:data:`_CRUSHER_OUTLINE`) in two layers:
-
-        1. The body mark: the crusher's two verticals (11.2 X8085), the
-           mill's two chords (11.8 X8086) or none (11.1 X8084, a machine
-           not yet chosen, for an early PFD). Group 29 has neither mark,
-           so the three bodies are whole drawings.
-        2. A group-29 characteristic from :mod:`pandid.render.iso_parts`,
-           centred on the body, on nine of the rows.
-
-        Item 11.12 X8054 adds a 4 M drum around 29.14's arrows; see
-        :data:`_VIBRATION_DRUM`.
-
-        ==============  ======  =====================================
-        item            reg     body + part
-        ==============  ======  =====================================
-        11.1            X8084   general machine, no mark
-        11.2            X8085   crusher, no mark
-        11.3            X8045   crusher + 29.7 C2034 hammer
-        11.4            X8046   crusher + 29.8 C2035 impact
-        11.5            X8047   crusher + 29.9 C2036 jaw
-        11.6            X8048   crusher + 29.11 C2037 roller
-        11.7            X8049   crusher + 29.12 C2038 cone
-        11.8            X8086   mill, no mark
-        11.9            X8050   mill + 29.7 C2034 hammer
-        11.10           X8051   mill + 29.8 C2035 impact
-        11.11           X8053   mill + 29.11 C2037 roller
-        11.12           X8054   mill and drum + 29.14 3831 vibration
-        ==============  ======  =====================================
-        """
+        """Register ISO 10628-2 group 11, the crushers and mills."""
         from pandid.render.iso_parts import crushing_overlays
 
         general = _crushing_machine("crushing_machine", "X8084")
         crusher = _crushing_machine("crusher", "X8085", _CRUSHER_JAWS)
         mill = _crushing_machine("mill", "X8086", _MILL_CHAMFERS)
-        # Unregistered drum body; X8054 numbers the composition.
+        # Unregistered drum body.
         drum = _crushing_machine("mill_vibration", "", _MILL_CHAMFERS, _VIBRATION_DRUM)
         self.register("crushing_machine", general)
         self.register("crusher", crusher)
@@ -4242,29 +2806,9 @@ class SymbolRegistry:
                 ), name)
 
     def _register_centrifuges(self):
-        """Register ISO 10628-2 Table 2 group 9, all eight rows: centrifuges.
+        """Register ISO 10628-2 group 9, the centrifuges.
 
-        One 8 M x 8 M square (:func:`_centrifuge_outline`) with each row's
-        mark drawn in; group 29 has none of these marks, so none is a part.
-
-        ====  ======  ==================================================
-        item  reg     descriptor
-        ====  ======  ==================================================
-        9.1   X2619   High speed centrifuge
-        9.2   X2614   Centrifuge with perforated shell
-        9.3   X8035   Centrifuge with solid shell
-        9.4   X8036   Centrifuge, separator disc-type
-        9.5   X8037   Centrifuge, screw-type with perforated shell
-        9.6   X8082   Decanter, centrifuge, screw type with solid shell
-        9.7   X8038   Centrifuge, pusher type
-        9.8   X8039   Centrifuge, skimmer type
-        ====  ======  ==================================================
-
-        All eight have the same ``feed``, ``overflow`` and ``underflow``
-        ports, at :data:`_CENTRIFUGE_TOP_PORTS` (9.1-9.4) or
-        :data:`_CENTRIFUGE_SIDE_PORTS` (9.5-9.8; 9.6 uses its drawn side
-        pipe). The decanter (9.6) is also registered as ``default``; see
-        :class:`~pandid.units.Centrifuge`.
+        The decanter is also registered as ``default``.
         """
         top, side = _CENTRIFUGE_TOP_PORTS, _CENTRIFUGE_SIDE_PORTS
         sq, margin = _CENTRIFUGE_SQ, _CENTRIFUGE_MARGIN
@@ -4288,32 +2832,13 @@ class SymbolRegistry:
             sym = _centrifuge(name, reg, width, height, ox, detail, ports)
             self.register("centrifuge", sym, name)
             by_name[name] = sym
-        # The default is the decanter; look it up so a missing row fails.
+        # The default is the decanter.
         self.register("centrifuge", by_name["decanter"])
 
     def _register_driers(self):
-        """Register four ISO 10628-2 Table 2 group-10 dryer rows.
-
-        One shared outline (:data:`_DRIER_OUTLINE`) and four bodies; group
-        10 has no supplementary-symbol group.
-
-        ========  ======  ================================================
-        item      reg     descriptor
-        ========  ======  ================================================
-        10.1      C0046   Drier (general)
-        10.2      X8083   Drying oven, drying chamber, shelf drier
-        10.3      X8040   Turbo drier, disc drier, moving shelf drier
-        10.6      X8043   Belt drier, roller-conveyor type drier
-        ========  ======  ================================================
-
-        Rows 10.4 (X8041, fluidised bed), 10.5 (X8042, spray) and 10.7
-        (X8044, rotary drum) are left to the vendored ``fluidized_bed``,
-        ``spray`` and ``default`` drawings, which differ slightly from these
-        rows; replacing them would change existing sheets.
-        """
+        """Register four ISO 10628-2 group-10 dryers."""
         self.register("dryer", _drier("general", "C0046"), "general")
-        # Only the shelf dryer is gravity-fixed: turned over, its trays fall
-        # (ISO 15519-1 11.4.2).
+        # Only the shelf dryer is gravity-fixed.
         self.register(
             "dryer", _drier("shelf", "X8083", _DRIER_SHELVES, gravity_fixed=True),
             "shelf")
@@ -4323,30 +2848,9 @@ class SymbolRegistry:
             "dryer", _drier("belt", "X8043", _DRIER_BELT), "belt")
 
     def _register_cooling_towers(self):
-        """Register ISO 10628-2 Table 2 group 5 except the spray cooler.
+        """Register ISO 10628-2 group 5 except the spray cooler.
 
-        One outline (:data:`_TOWER_OUTLINE`) with a fill mark (dry, wet or
-        both) and a draught mark (fan low for forced, high for induced, none
-        for natural), in the eight combinations Table 2 tabulates:
-
-        =================  ======  =========================================
-        item               reg     fill + draught
-        =================  ======  =========================================
-        5.1                2521    none (general)
-        5.2                X8109   dry, natural
-        5.3                X8110   dry, forced
-        5.4                X8111   dry, induced
-        5.5                X8112   wet, natural
-        5.6                X8113   wet, forced
-        5.7                X8114   wet, induced
-        5.8                X8115   wet-dry, natural
-        =================  ======  =========================================
-
-        Table 2 has the wet-dry hybrid at natural draught only. Item 5.9
-        (X2504, spray cooler) is a different body with three connections
-        and would need its own class. The vendored ``default``,
-        ``induced_draft`` and ``forced_draft`` drawings are a different
-        outline and are left as they are.
+        Each tower combines a fill mark and a draught mark.
         """
         self.register("cooling_tower", Symbol(
             svg=f'<g id="sym_cooling_tower_general">{_TOWER_OUTLINE}</g>',
@@ -4371,25 +2875,7 @@ class SymbolRegistry:
             ), name)
 
     def _register_feeders(self):
-        """Register ISO 10628-2 Table 2 group 19, all five rows.
-
-        19.1 and 19.2 are a 4 M circle with one mark each; 19.3 and 19.4
-        are their own drawings. 19.5, a distribution fitting, is registered
-        as its own kind. Group 19 has no parts.
-
-        ====  ======  ==============================================
-        item  reg     descriptor
-        ====  ======  ==============================================
-        19.1  C2056   Proportional feeder (general)
-        19.2  X8067   Proportional feeder, rotary valve type
-        19.3  C0074   Feeder, rotary table type
-        19.4  C0035   Proportional feeder, metering type
-        19.5  2037    Spray nozzle
-        ====  ======  ==============================================
-
-        :class:`~pandid.units.Feeder` is the class that draws the first
-        four; :class:`~pandid.units.SprayNozzle` draws the fifth.
-        """
+        """Register the ISO 10628-2 group 19 symbols."""
         self.register("feeder", _feeder_circle("general", "C2056", _FEEDER_Z), "general")
         self.register(
             "feeder", _feeder_circle("rotary_valve", "X8067", _FEEDER_ROTOR_MARK),
@@ -4409,46 +2895,13 @@ class SymbolRegistry:
         self.register("spray_nozzle", _SPRAY_NOZZLE)
 
     def _register_mixers(self):
-        """Register ISO 10628-2 Table 2 group 12: mixers and kneaders.
-
-        ====  ======  ==============================================
-        item  reg     descriptor
-        ====  ======  ==============================================
-        12.1  X2672   In-line rotary mixer
-        12.2  X2673   In-line static mixer
-        12.3  X8184   Mixing path
-        12.4  X8134   Kneader
-        ====  ======  ==============================================
-
-        12.2 is the vendored ``fitting/static_mixer``, which matches the
-        row. 12.1 and 12.3 are :class:`~pandid.units.Fitting` variants
-        beside it; 12.4 is the tagged :class:`~pandid.units.Kneader`.
-        """
+        """Register ISO 10628-2 items 12.1, 12.3 and 12.4."""
         self.register("fitting", _ROTARY_MIXER, "rotary_mixer")
         self.register("fitting", _MIXING_PATH, "mixing_path")
         self.register("kneader", _KNEADER)
 
     def _register_screens(self):
-        """Register ISO 10628-2 Table 2 group 7: screening devices.
-
-        One outline (:data:`_SCREEN_OUTLINE`) with each row's mark drawn
-        in, plus 7.7's larger outline for its reel. Group 7 has no parts.
-
-        ====  ======  ==============================================
-        item  reg     descriptor
-        ====  ======  ==============================================
-        7.1   X8123   Screening device, sieve, strainer, general
-        7.2   X8026   coarse rake type
-        7.3   X8027   fine rake type
-        7.4   X8028   with coarse and fine screens
-        7.5   X2605   sieve, strainer, vibrating type
-        7.6   X8029   rotating drum type
-        7.7   X8030   basket reel type
-        ====  ======  ==============================================
-
-        ``separator/sifter`` is a different drawing; see
-        :data:`_SCREEN_OUTLINE`.
-        """
+        """Register ISO 10628-2 group 7, the screening devices."""
         self.register("screening_device", _screen("general", "X8123", _SCREEN_MESH), "general")
         self.register("screening_device", _screen(
             "coarse_rake", "X8026",
@@ -4468,29 +2921,7 @@ class SymbolRegistry:
         self.register("screening_device", _REEL_BODY, "basket_reel")
 
     def _register_evaporators(self):
-        """Register the five evaporator bodies on one shell.
-
-        ISO 10628-2 has no evaporator group; the set covers the machines a
-        designer chooses between, as far as the drawing can show them:
-
-        =================  =============================================
-        variant            what tells it from the others
-        =================  =============================================
-        ``default``        two tubesheets around a plain boxed element:
-                           an evaporator whose element is not yet chosen
-        ``calandria``      short tubes and a central downcomer
-        ``falling_film``   long tubes, fed onto a distributor over them
-        ``climbing_film``  the same long tubes, fed into the foot of them
-        ``plate``          a plate pack, and so no tubesheets at all
-        =================  =============================================
-
-        ``default`` is for an early PFD, like ISO item 11.1. The falling-
-        and climbing-film bodies share tubes but differ in feed height
-        (:data:`_EVAP_FEED_HIGH`, :data:`_EVAP_FEED_LOW`) and in the
-        distributor, which only falling film has. Forced circulation is
-        three tagged items (body, heater, pump), not one symbol; see
-        :data:`COMPOSED_APPARATUS`.
-        """
+        """Register the five evaporator bodies on one shell."""
         self.register("evaporator", _evaporator(
             "general", _evap_tubesheets(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT),
             _EVAP_ELEMENT))
@@ -4513,26 +2944,7 @@ class SymbolRegistry:
         self.register("evaporator", _evaporator("plate", _EVAP_PLATES), "plate")
 
     def _register_kilns(self):
-        """Register the three kiln bodies, which share only their ports.
-
-        A rotary kiln, a fluidised calciner and a shaft kiln have no common
-        outline; each takes solids in, calcined solids and off-gas out, and
-        fires its own fuel.
-
-        ==================  ============================================
-        variant             body
-        ==================  ============================================
-        ``default``         rotary kiln: the sloping shell, its two
-                            riding rings and its drive
-        ``fluidized_bed``   fluidised-bed or gas-suspension calciner
-        ``shaft``           vertical shaft kiln
-        ==================  ============================================
-
-        ``default`` is the rotary kiln, the usual meaning of "kiln". All
-        three are gravity-fixed (ISO 15519-1 11.4.2): the rotary shell
-        falls from feed to discharge, the calciner's bed rests on its grid,
-        and the shaft kiln is charged at the top.
-        """
+        """Register the rotary, fluidised-bed and shaft kilns."""
         self.register("kiln", Symbol(
             svg=f'<g id="sym_kiln">{_KILN_OUTLINE}{_KILN_RINGS}{_KILN_DRIVE}</g>',
             width=_KILN_W, height=_KILN_H, ports=dict(_KILN_PORTS),
