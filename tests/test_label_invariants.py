@@ -57,8 +57,20 @@ def _crowded_number() -> "tuple[Flowsheet, dict]":
     return fs, {}
 
 
+def _short_run() -> "tuple[Flowsheet, dict]":
+    """Build a sheet whose one line is under half as long as its number."""
+    fs = Flowsheet("short run")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    feed.pin(port="outlet", x=100, y=100)
+    prod.pin(port="inlet", x=116, y=100)
+    fs.connect(feed.outlet, prod.inlet, service="P", sequence=1, spec="A")
+    return fs, {}
+
+
 CORPUS: dict = {name: (lambda b=build, k=kw: (b(), k)) for name, (build, kw) in SCENARIOS.items()}
 CORPUS["crowded_number"] = _crowded_number
+CORPUS["short_run"] = _short_run
 
 #: The render options a corpus sheet ships with, which these checks redraw it with.
 _RENDER_OPTS = (

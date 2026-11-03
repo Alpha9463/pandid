@@ -1325,13 +1325,16 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         window = (cx - rx, cy - ry, cx + rx, cy + ry)
 
         axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
-        # Extent of the whole collinear run, through inline valves.
+        # Centreline extent of the whole collinear run, through inline valves.
         run_lo = min(sy1, sy2) if vertical else min(sx1, sx2)
         run_hi = max(sy1, sy2) if vertical else max(sx1, sx2)
         for line in ink:
-            if line.line == name and line.axis == axis and abs(line.at - at) < 0.5:
-                run_lo = min(run_lo, line.y0 if vertical else line.x0)
-                run_hi = max(run_hi, line.y1 if vertical else line.x1)
+            if (line.kind == "pipe" and line.line == name and line.axis == axis
+                    and abs(line.at - at) < 0.5):
+                # A pipe's box pads its centreline equally on every side.
+                pad = (line.x1 - line.x0) / 2 if vertical else (line.y1 - line.y0) / 2
+                run_lo = min(run_lo, (line.y0 if vertical else line.x0) + pad)
+                run_hi = max(run_hi, (line.y1 if vertical else line.x1) - pad)
 
         near_symbols = [p for p in symbols if boxes_overlap(p, window)]
         occupied = [p for p in placed if boxes_overlap(p, window)]
