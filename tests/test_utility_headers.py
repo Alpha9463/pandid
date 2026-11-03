@@ -88,52 +88,34 @@ def test_a_header_flag_carries_its_off_page_reference_to_every_tap():
 # --- and a genuine duplicate still does not ----------------------------------
 
 
-def test_two_flags_of_one_name_are_refused_unless_they_are_a_header():
-    """Two boundary flags called 'Reactor Effluent' are one line drawn as if it
-    left the sheet twice. Nothing can tell that from a header except the author,
-    which is what header= says."""
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        (lambda: U.Product("Reactor Effluent"), lambda: U.Product("Reactor Effluent")),
+        (lambda: U.Feed("CWSH", header=True), lambda: U.Feed("CWSH")),
+        (lambda: U.Feed("CWSH"), lambda: U.Feed("CWSH", header=True)),
+        (lambda: U.Feed("CWSH", header=True), lambda: U.Product("CWSH", header=True)),
+        (
+            lambda: U.Feed("CWSH", header=True, reference="U-1201"),
+            lambda: U.Feed("CWSH", header=True, reference="U-1300"),
+        ),
+        (lambda: U.Pump("P-101"), lambda: U.Pump("P-101")),
+    ],
+    ids=[
+        "two flags",
+        "second not a header",
+        "first not a header",
+        "supply and return",
+        "two references",
+        "equipment",
+    ],
+)
+def test_a_repeated_name_is_refused_unless_both_are_taps_of_one_header(first, second):
+    """Check that a second unit under a taken name is refused unless it repeats a header."""
     fs = Flowsheet("duplicate")
-    fs.add(U.Product("Reactor Effluent"))
+    fs.add(first())
     with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Product("Reactor Effluent"))
-
-
-@pytest.mark.parametrize("headers", [(True, False), (False, True)])
-def test_both_flags_have_to_be_declared_a_header(headers):
-    """Whichever way round: one of the two is a line leaving the sheet, and the
-    author has said so."""
-    first, second = headers
-    fs = Flowsheet("half declared")
-    fs.add(U.Feed("CWSH", header=first))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Feed("CWSH", header=second))
-
-
-def test_a_supply_and_a_return_cannot_share_a_label():
-    """Two flags pointing opposite ways under one label is two services the
-    reader cannot tell apart."""
-    fs = Flowsheet("supply and return")
-    fs.add(U.Feed("CWSH", header=True))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Product("CWSH", header=True))
-
-
-def test_two_taps_disagreeing_on_where_the_header_goes_are_refused():
-    """One header continues onto one drawing. Two flags naming different ones
-    are two headers, however they are labelled."""
-    fs = Flowsheet("two references")
-    fs.add(U.Feed("CWSH", header=True, reference="U-1201"))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Feed("CWSH", header=True, reference="U-1300"))
-
-
-def test_equipment_still_refuses_a_repeated_tag():
-    """header= is not a general escape from the rule: a pump is a piece of
-    plant and there is one of it."""
-    fs = Flowsheet("two pumps")
-    fs.add(U.Pump("P-101"))
-    with pytest.raises(ValueError, match="already exists on this flowsheet"):
-        fs.add(U.Pump("P-101"))
+        fs.add(second())
 
 
 def test_header_is_refused_on_equipment():
