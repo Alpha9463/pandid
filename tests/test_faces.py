@@ -10,9 +10,6 @@ from pandid.routing import DefaultRouter
 def _drum_fed_from(x, y, *, fs=None, **drum_pin):
     """Build a horizontal separator fed by one boundary flag.
 
-    The drum's ``feed`` has west, north, and east placements, so the flag
-    position alone decides the face.
-
     Parameters
     ----------
     x, y : float
@@ -38,69 +35,38 @@ def _drum_fed_from(x, y, *, fs=None, **drum_pin):
 # --- Selection by peer position ----------------------------------------------
 
 
-def test_a_peer_overhead_takes_the_north_shell():
-    """Select the north placement for a peer above the drum.
+@pytest.mark.parametrize(
+    "x, y, pin, face",
+    [
+        (220, 60, {}, "N"),
+        (500, 215, {}, "E"),
+        (20, 215, {}, "W"),
+        (220, 400, {"mirrored": "y"}, "S"),
+    ],
+    ids=["overhead-north-shell", "astern-far-head", "ahead-home-nozzle", "mirrored-drawn-face"],
+)
+def test_the_feed_takes_the_face_toward_its_peer(x, y, pin, face):
+    """Select the feed placement facing the peer, named as drawn.
 
-    Returns
-    -------
-    None
-        The feed is drawn on the north face.
+    Parameters
+    ----------
+    x, y : float
+        Pinned position of the flag's nozzle.
+    pin : dict
+        Extra ``pin()`` keywords for the drum.
+    face : str
+        Face the feed is drawn on.
     """
-    fs, drum = _drum_fed_from(220, 60)
+    fs, drum = _drum_fed_from(x, y, **pin)
     fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "N"
-
-
-def test_a_peer_astern_takes_the_far_head():
-    """Select the east placement for a peer to the right of the drum.
-
-    Returns
-    -------
-    None
-        The feed is drawn on the east face.
-    """
-    fs, drum = _drum_fed_from(500, 215)
-    fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "E"
-
-
-def test_a_peer_ahead_leaves_the_home_nozzle_alone():
-    """Keep the home placement for a peer to the left of the drum.
-
-    Returns
-    -------
-    None
-        The feed stays on the west face.
-    """
-    fs, drum = _drum_fed_from(20, 215)
-    fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "W"
-
-
-def test_the_face_is_named_in_drawn_space():
-    """Name the selected face as drawn on a vertically mirrored unit.
-
-    Returns
-    -------
-    None
-        The symbol's north placement is drawn, and reported, on the south.
-    """
-    fs, drum = _drum_fed_from(220, 400, mirrored="y")
-    fs.layout()
-    assert port_anchor(drum, drum.frame, "feed")[2] == "S"
+    assert port_anchor(drum, drum.frame, "feed")[2] == face
 
 
 # --- Ports selection leaves alone --------------------------------------------
 
 
 def test_an_explicit_nozzle_beats_the_engine():
-    """Keep a face the author chose with ``nozzle()``.
-
-    Returns
-    -------
-    None
-        The authored face is drawn and no automatic choice is stored.
-    """
+    """Keep a face the author chose with ``nozzle()``."""
     fs, drum = _drum_fed_from(220, 60)
     drum.nozzle("feed", "E")
     fs.layout()
@@ -109,13 +75,7 @@ def test_an_explicit_nozzle_beats_the_engine():
 
 
 def test_a_nozzle_fixed_by_physics_is_never_considered():
-    """Leave a port with one declared placement on its face.
-
-    Returns
-    -------
-    None
-        A column's bottoms stays south although its peer is above.
-    """
+    """Leave a port with one declared placement on its face."""
     fs = Flowsheet("gravity")
     col = fs.add(units.Column("T-1")).pin(x=300, y=400)
     sump = fs.add(units.Product("Bottoms")).pin(x=300, y=100)
@@ -126,13 +86,7 @@ def test_a_nozzle_fixed_by_physics_is_never_considered():
 
 
 def test_a_feed_family_is_fixed_the_way_a_single_nozzle_is():
-    """Leave every member of a column feed family on the west wall.
-
-    Returns
-    -------
-    None
-        Both feeds stay west at distinct anchors with no automatic choice.
-    """
+    """Leave every member of a column feed family on the west wall."""
     fs = Flowsheet("extractive")
     col = fs.add(units.Column("T-302", n_feeds=2)).pin(x=300, y=200)
     solvent = fs.add(units.Feed("Solvent")).pin(x=80, y=250)
@@ -148,13 +102,7 @@ def test_a_feed_family_is_fixed_the_way_a_single_nozzle_is():
 
 
 def test_a_draw_family_is_fixed_on_the_east_wall_a_feed_never_reaches():
-    """Leave every member of a column draw family on the east wall.
-
-    Returns
-    -------
-    None
-        Both draws stay east at distinct anchors with no automatic choice.
-    """
+    """Leave every member of a column draw family on the east wall."""
     fs = Flowsheet("sidestream")
     col = fs.add(units.Column("T-401", n_draws=2)).pin(x=300, y=200)
     heavy = fs.add(units.Product("Heavy Naphtha")).pin(x=500, y=250)
@@ -170,13 +118,7 @@ def test_a_draw_family_is_fixed_on_the_east_wall_a_feed_never_reaches():
 
 
 def test_a_kettles_bottoms_draw_is_a_fixed_target_its_peer_aims_at():
-    """Score a movable port against its peer's fixed nozzle.
-
-    Returns
-    -------
-    None
-        The kettle's bottoms stays south and the drum feed turns north.
-    """
+    """Score a movable port against its peer's fixed nozzle."""
     fs = Flowsheet("reboiler")
     reb = fs.add(units.HeatExchanger("E-702", variant="kettle")).pin(x=300, y=200)
     # Place the drum's north nozzle directly below the kettle's draw.
@@ -189,26 +131,14 @@ def test_a_kettles_bottoms_draw_is_a_fixed_target_its_peer_aims_at():
 
 
 def test_a_port_with_no_stream_keeps_its_home():
-    """Select faces only for connected ports.
-
-    Returns
-    -------
-    None
-        The unconnected vapor and liquid ports have no automatic choice.
-    """
+    """Select faces only for connected ports."""
     fs, drum = _drum_fed_from(220, 60)
     fs.layout()
     assert set(drum.frame.port_faces) == {"feed_1"}
 
 
 def test_the_kill_switch_restores_the_symbols_own_nozzles():
-    """Keep home placements when ``auto_faces`` is disabled.
-
-    Returns
-    -------
-    None
-        The feed stays west and no automatic choice is stored.
-    """
+    """Keep home placements when ``auto_faces`` is disabled."""
     fs, drum = _drum_fed_from(220, 60, fs=Flowsheet("faces", auto_faces=False))
     fs.layout()
     assert port_anchor(drum, drum.frame, "feed")[2] == "W"
@@ -232,11 +162,6 @@ def test_recovered_escape_preserves_selected_and_authored_faces(
         Whether the author fixed the nozzle to the east face.
     face : str
         Expected drawn face before and after routing.
-
-    Returns
-    -------
-    None
-        The router leaves the face choice unchanged.
     """
     fs, drum = _drum_fed_from(220, 60, fs=Flowsheet("faces", auto_faces=auto_faces))
     if explicit:
@@ -296,12 +221,6 @@ def test_a_reactor_outlet_takes_a_side_only_when_it_saves_a_bend(x, y, face):
         Pinned position of the product flag's nozzle.
     face : str
         Expected drawn face of the reactor outlet.
-
-    Returns
-    -------
-    None
-        A peer level with or above the shell takes a side; one below keeps
-        the floor outlet.
     """
     fs, reactor = _reactor_discharging_to(x, y)
     fs.layout()
@@ -309,13 +228,7 @@ def test_a_reactor_outlet_takes_a_side_only_when_it_saves_a_bend(x, y, face):
 
 
 def test_a_reactor_outlet_stays_on_the_floor_without_automatic_faces():
-    """Keep the floor outlet when ``auto_faces`` is disabled.
-
-    Returns
-    -------
-    None
-        The outlet stays south although a side would save a bend.
-    """
+    """Keep the floor outlet when ``auto_faces`` is disabled."""
     fs, reactor = _reactor_discharging_to(600, 150, auto_faces=False)
     fs.layout()
     assert port_anchor(reactor, reactor.frame, "outlet")[2] == "S"
@@ -323,13 +236,7 @@ def test_a_reactor_outlet_stays_on_the_floor_without_automatic_faces():
 
 
 def test_an_explicit_reactor_outlet_face_beats_the_engine():
-    """Keep a reactor outlet face the author chose with ``nozzle()``.
-
-    Returns
-    -------
-    None
-        The authored floor outlet is drawn and no automatic choice is stored.
-    """
+    """Keep a reactor outlet face the author chose with ``nozzle()``."""
     fs, reactor = _reactor_discharging_to(600, 150)
     reactor.nozzle("outlet", "S")
     fs.layout()
@@ -352,11 +259,6 @@ def test_a_face_whose_stub_crosses_a_unit_is_skipped(x, y, blocker, faces):
         Pinned corner of the vessel inside the preferred face's stub.
     faces : set[str]
         Clear faces the selection may take.
-
-    Returns
-    -------
-    None
-        A clear face is drawn and the route crosses no unit.
     """
     fs, reactor = _reactor_discharging_to(x, y, blocker=blocker)
     fs.layout()
@@ -369,13 +271,7 @@ def test_a_face_whose_stub_crosses_a_unit_is_skipped(x, y, blocker, faces):
 
 
 def test_the_pick_never_becomes_the_authors_intent():
-    """Keep an automatic choice out of the serialized model.
-
-    Returns
-    -------
-    None
-        The choice is on the frame only, not in ``to_dict()`` output.
-    """
+    """Keep an automatic choice out of the serialized model."""
     fs, drum = _drum_fed_from(220, 60)
     fs.layout()
     assert drum.frame.port_faces == {"feed_1": "N"}
@@ -384,13 +280,7 @@ def test_the_pick_never_becomes_the_authors_intent():
 
 
 def test_laying_the_sheet_out_twice_draws_it_the_same_way():
-    """Repeat the same choice on a second layout and route.
-
-    Returns
-    -------
-    None
-        Both runs select the north face.
-    """
+    """Repeat the same choice on a second layout and route."""
     fs, drum = _drum_fed_from(220, 60)
     fs.layout()
     fs.route()
@@ -401,13 +291,7 @@ def test_laying_the_sheet_out_twice_draws_it_the_same_way():
 
 
 def test_a_balloons_pick_survives_being_re_placed_by_the_router():
-    """Keep an attached balloon's choice when routing replaces its frame.
-
-    Returns
-    -------
-    None
-        The controller's signal output stays on the west face.
-    """
+    """Keep an attached balloon's choice when routing replaces its frame."""
     fs = Flowsheet("loop")
     feed = fs.add(units.Feed("Feed")).pin(x=60, y=270)
     fv = fs.add(units.Valve("FV-1", variant="control")).pin(x=260, y=280)
@@ -428,13 +312,7 @@ def test_a_balloons_pick_survives_being_re_placed_by_the_router():
 
 
 def test_two_signals_from_the_same_side_do_not_land_on_one_point():
-    """Give two signals with the same cheapest face separate faces.
-
-    Returns
-    -------
-    None
-        The controller's ports differ and no ``coincident-ports`` is reported.
-    """
+    """Give two signals with the same cheapest face separate faces."""
     fs = Flowsheet("stack")
     fv = fs.add(units.Valve("FV-1", variant="control")).pin(x=300, y=180)
     feed = fs.add(units.Feed("F")).pin(x=100, y=175)
@@ -455,13 +333,7 @@ def test_two_signals_from_the_same_side_do_not_land_on_one_point():
 
 
 def test_the_label_dodges_the_face_the_engine_chose():
-    """Place the label after face selection.
-
-    Returns
-    -------
-    None
-        The tag moves to the bottom because the feed enters at the top.
-    """
+    """Place the label after face selection."""
     fs, drum = _drum_fed_from(220, 60)
     fs.layout()
     assert drum.frame.label_pos == "bottom"

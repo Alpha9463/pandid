@@ -800,26 +800,6 @@ class Unit:
         base = self._pool_of(port.name)
         if base is None:
             return port
-        first = self._pool_members(base)[0]
-        return self._next_member(base, first.direction, first.role)
-
-    def _next_member(self, base: str, direction: str, role: str) -> "Port":
-        """Return a free pool member, adding one if all are used.
-
-        Parameters
-        ----------
-        base : str
-            Pool name.
-        direction : str
-            Direction of a new member.
-        role : str
-            Role of a new member.
-
-        Returns
-        -------
-        Port
-            Free member.
-        """
         members = self._pool_members(base)
         for member in members:
             if member.stream is None:
@@ -827,7 +807,7 @@ class Unit:
         n = len(members) + 1
         while f"{base}_{n}" in self.ports:
             n += 1
-        return self._add_port(f"{base}_{n}", direction, role)
+        return self._add_port(f"{base}_{n}", members[0].direction, members[0].role)
 
     def _pool_of(self, port_name: str) -> str | None:
         """Return the pool a port belongs to, or ``None``.
@@ -1005,9 +985,7 @@ class Unit:
             raise AttributeError(name)
 
 
-# ----------------------------------------------------------------
 # Fixed-port unit types
-# ----------------------------------------------------------------
 
 
 class _Boundary(Unit):
@@ -1541,7 +1519,6 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     unit.overlays = overlays
 
 
-# Self type for _FaceFamilies methods.
 _FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
 
 
@@ -1709,7 +1686,6 @@ class _FaceFamilies(Unit):
         return self
 
 
-# Self type for _MultiPortVessel methods.
 _MultiPortVesselT = TypeVar("_MultiPortVesselT", bound="_MultiPortVessel")
 
 
@@ -1777,24 +1753,6 @@ class _MultiPortVessel(_FaceFamilies):
         x, y = sym.ports[role]
         return outward_dir(x, y, sym.width, sym.height)
 
-    def _legal_faces(self, role: str) -> "dict[str, tuple[float, float]] | None":
-        """Return a role's allowed faces and their symbol points.
-
-        Parameters
-        ----------
-        role : str
-            ``"inlet"`` or ``"outlet"``.
-
-        Returns
-        -------
-        dict[str, tuple[float, float]] or None
-            Point per face, or ``None`` without a symbol.
-        """
-        sym = self._registry_symbol()
-        if sym is None:
-            return None
-        return dict(sym.port_faces.get(role, {}))
-
     def _validate_face(self, role: str, port_name: str, face: str) -> None:
         """Check that a family port may be drawn on a face.
 
@@ -1812,10 +1770,11 @@ class _MultiPortVessel(_FaceFamilies):
         ValueError
             If the artwork offers no such face, or the face has no room.
         """
-        options = self._legal_faces(role)
-        if options is None:
+        sym = self._registry_symbol()
+        if sym is None:
             # Unknown variant: leave the error to render time.
             return
+        options = dict(sym.port_faces.get(role, {}))
         if face not in options:
             from pandid.portgeom import unreachable_face
 
@@ -3630,29 +3589,15 @@ class Instrument(Unit):
         bool
             Whether the shared tag is allowed.
         """
-
-        def symbol(variant: object) -> object:
-            """Return the symbol a variant draws.
-
-            Parameters
-            ----------
-            variant : object
-                Balloon variant.
-
-            Returns
-            -------
-            object
-                ``"sis"`` for ``"logic"``, else ``variant``.
-            """
-            return "sis" if variant == "logic" else variant
-
         if other is self._marks:
             return True
         return (
             isinstance(other, Instrument)
             and other.tag == self.tag
             and self.variant in self._REPEATABLE_VARIANTS
-            and symbol(self.variant) == symbol(other.variant)
+            # A logic square draws the sis symbol.
+            and ("sis" if self.variant == "logic" else self.variant)
+            == ("sis" if other.variant == "logic" else other.variant)
         )
 
     def annotate(
@@ -3895,23 +3840,8 @@ def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> 
                 f"quadrant holds the codes written outside the symbol, e.g. "
                 f"high='LAH'; leave the argument out to write nothing there"
             )
-
-    def rank(code: str) -> int:
-        """Return a code's sort rank from its A, S or Z letter.
-
-        Parameters
-        ----------
-        code : str
-            Letter code.
-
-        Returns
-        -------
-        int
-            1 for A, 2 for S, 3 for Z, else 4.
-        """
-        return next((" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)
-
-    return tuple(sorted(out, key=rank))
+    return tuple(sorted(out, key=lambda code: next(
+        (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
 
 
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
@@ -4479,7 +4409,6 @@ class Reactor(Unit):
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
-            # An alias, not a second port.
             self.feed = self.feeds[0]
 
 
@@ -4681,7 +4610,6 @@ class Separator(Unit):
         "horizontal": {"feed_1": "feed"},
     }
 
-    # Values of ``characteristic``.
     _CHARACTERISTICS = ("gravity", "electrostatic", "electromagnetic")
 
     # Variant -> advice, for variants that take one feed.
@@ -4723,7 +4651,6 @@ class Separator(Unit):
         reference: str = "",
     ):
         names = _feed_names(n_feeds, "Separator")
-        # Refuse a characteristic given as the variant.
         if variant in self._CHARACTERISTICS:
             raise ValueError(
                 f"{name}: {variant!r} is a characteristic, not a variant; "
@@ -4770,7 +4697,6 @@ class Separator(Unit):
         # Feeds come before the draws.
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
-            # An alias, not a second port.
             self.feed = self.feeds[0]
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -5070,7 +4996,6 @@ class Column(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         self.draws = tuple(self._add_port(draw, "outlet", "draw") for draw in draw_names)
         if n_feeds == 1:
-            # An alias, not a second port.
             self.feed = self.feeds[0]
         self.feed_stages = feed_stages
         self.draw_stages = draw_stages
@@ -5657,9 +5582,7 @@ if TYPE_CHECKING:
         feed_8: Port
 
 
-# ----------------------------------------------------------------
 # Variable-port unit types
-# ----------------------------------------------------------------
 
 
 class Mixer(Unit):

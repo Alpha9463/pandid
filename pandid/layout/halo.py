@@ -132,7 +132,10 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
         src, dst = node.source.owner, node.dest.owner
         if src is None or dst is None:
             return None
-        flow = _run_direction(src, dst)
+        across = (slot(dst).col or 0) - (slot(src).col or 0)
+        down = (slot(dst).row or 0) - (slot(src).row or 0)
+        flow = ((1.0 if across > 0 else -1.0, 0.0) if across
+                else (0.0, 1.0 if down >= 0 else -1.0))
         hosts = [src] if src is dst else [src, dst]
     elif is_control(node):
         return None
@@ -144,25 +147,3 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     ux, uy = _rotate_ccw(flow[0], flow[1], float(getattr(root, "angle", 90.0)))
     face = "E" if ux >= abs(uy) else ("W" if -ux >= abs(uy) else ("N" if uy < 0 else "S"))
     return reach, girth, face, hosts
-
-
-def _run_direction(src: "Unit", dst: "Unit") -> tuple[float, float]:
-    """Return the direction a stream runs, from its ends' grid ranks.
-
-    Parameters
-    ----------
-    src : Unit
-        Source unit.
-    dst : Unit
-        Destination unit.
-
-    Returns
-    -------
-    tuple[float, float]
-        Unit direction along x or y.
-    """
-    across = (slot(dst).col or 0) - (slot(src).col or 0)
-    if across:
-        return (1.0 if across > 0 else -1.0, 0.0)
-    down = (slot(dst).row or 0) - (slot(src).row or 0)
-    return (0.0, 1.0 if down >= 0 else -1.0)

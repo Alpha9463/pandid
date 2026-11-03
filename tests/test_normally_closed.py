@@ -1,16 +1,4 @@
-"""Devices declared in a normal position, and what each one draws for it.
-
-Normally closed valves: PIP PIC001 4.2.2.7's darkened body, and ISO 15519-1
-§11.4.5's ``NC`` abbreviation for a body that cannot carry it. Two sources
-because only one standard offers each -- no ISO or ISA document fills a valve
-body, and ISO 15519-1 §11.4.5 is the clause that rules on the letters -- so the
-drawn behaviour is pinned here rather than assumed from any one of them.
-
-Spectacle blinds: the same ``normal_position``, drawn a different way. A blind
-is two discs and the sheet says which is in the line by filling it, so the two
-states are two *shapes* the stencil set already draws, not a mark applied to
-one of them.
-"""
+"""Test normally closed valves (PIP PIC001 4.2.2.7, ISO 15519-1 §11.4.5) and spectacle blinds."""
 
 from __future__ import annotations
 
@@ -28,7 +16,7 @@ PAPER_FILL = 'fill="white"'
 
 
 def _line(*valves):
-    """A feed -> valves -> product run, laid out and rendered."""
+    """Build a feed -> valves -> product run, laid out and rendered."""
     fs = Flowsheet("normally closed")
     feed = fs.add(units.Feed("FEED"))
     prev = feed.outlet
@@ -46,8 +34,7 @@ def _line(*valves):
 
 
 def test_the_position_defaults_to_open_and_open_is_not_marked():
-    """The convention is one-sided: a normally open valve is not marked at all,
-    so declaring it must draw exactly what leaving it out draws."""
+    """Check that the position defaults to open and open is not marked."""
     plain = units.Valve("HV-1", variant="gate")
     stated = units.Valve("HV-2", variant="gate", normal_position="open")
     assert plain.normal_position == "open"
@@ -64,8 +51,7 @@ def test_a_position_that_is_not_a_position_is_refused_by_name():
 
 
 def test_the_position_can_be_set_after_construction():
-    """Same validation either way: the setter is where the rule lives, and the
-    constructor goes through it."""
+    """Check that the position can be set after construction."""
     valve = units.Valve("HV-1", variant="gate")
     valve.normal_position = "closed"
     assert BODY_FILL in registry.for_unit(valve).svg
@@ -89,8 +75,7 @@ def test_an_ordinary_valve_renders_with_an_open_body():
 
 
 def test_the_two_are_separate_definitions_on_one_sheet():
-    """A darkened body is a different drawing, so it needs a ``<defs>`` entry of
-    its own; sharing one would draw both valves the same way."""
+    """Check that the two are separate definitions on one sheet."""
     svg = _line(
         units.Valve("HV-1", variant="gate", normal_position="closed"),
         units.Valve("HV-2", variant="gate"),
@@ -102,9 +87,7 @@ def test_the_two_are_separate_definitions_on_one_sheet():
 
 
 def test_darkening_leaves_the_nozzles_exactly_where_they_were():
-    """The fill is a statement about the valve's position, not about its size or
-    its connections: a line already drawn must not move because the valve was
-    declared closed."""
+    """Check that darkening leaves the nozzles exactly where they were."""
     for variant in sorted(NC_DARKENS):
         plain = registry.for_unit(units.Valve("HV-1", variant=variant))
         closed = registry.for_unit(units.Valve("HV-1", variant=variant, normal_position="closed"))
@@ -115,14 +98,10 @@ def test_darkening_leaves_the_nozzles_exactly_where_they_were():
 
 
 def test_a_darkened_globe_is_not_confusable_with_an_ordinary_one():
-    """The globe's seat is a device marker and the fill is a position marker,
-    and the two must not be read for each other. They are held apart by the
-    triangles, which are the largest part of the symbol: white on a globe in
-    any position, black once the body is darkened."""
+    """Check that a darkened globe is not confusable with an ordinary one."""
     globe = registry.get("valve", "globe")
     closed = registry.for_unit(units.Valve("HV-1", variant="globe", normal_position="closed"))
-    # The seat is one filled element inside an outline left on the paper; the
-    # darkened body is that outline itself inked.
+    # The globe's seat is one filled element; the darkened body fills the outline too.
     assert globe.svg.count(BODY_FILL) == 1
     assert PAPER_FILL in globe.svg
     assert closed.svg.count(BODY_FILL) == 2
@@ -134,10 +113,7 @@ def test_a_darkened_globe_is_not_confusable_with_an_ordinary_one():
 
 @pytest.mark.parametrize("variant", sorted(NC_FORBIDDEN))
 def test_a_control_or_relief_valve_refuses_the_mark(variant):
-    """PIP PIC001 4.2.2.10 bars a control valve and a relief valve from being
-    shown NC. A darkened control valve on an issued sheet reads as a block valve
-    someone has closed, so this is a drafting error and is refused rather than
-    warned about."""
+    """Check that a control or relief valve refuses the mark (PIP PIC001 4.2.2.10)."""
     with pytest.raises(ValueError) as excinfo:
         units.Valve("FV-1", variant=variant, normal_position="closed")
     message = str(excinfo.value)
@@ -146,8 +122,7 @@ def test_a_control_or_relief_valve_refuses_the_mark(variant):
 
 
 def test_a_control_valve_may_still_be_declared_open():
-    """The prohibition is on showing one *closed*; a control valve is a valve
-    like any other otherwise."""
+    """Check that a control valve may still be declared open."""
     valve = units.Valve("FV-1", variant="control", normal_position="open")
     assert valve.normal_position == "open"
 
@@ -157,9 +132,7 @@ def test_a_control_valve_may_still_be_declared_open():
 
 @pytest.mark.parametrize("variant", ["butterfly", "butterfly_pneumatic", "check", "knife"])
 def test_a_body_that_cannot_be_darkened_says_so_in_letters(variant):
-    """ISO 15519-1 §11.4.5. The failure this guards against is silence: a valve
-    declared closed whose symbol cannot carry the fill would otherwise draw
-    exactly the open valve and say nothing at all."""
+    """Check that a body that cannot be darkened says so in letters (ISO 15519-1 §11.4.5)."""
     assert variant not in NC_DARKENS
     valve = units.Valve("HV-1", variant=variant, normal_position="closed")
     assert closed_marking(valve) == "NC"
@@ -169,11 +142,7 @@ def test_a_body_that_cannot_be_darkened_says_so_in_letters(variant):
 
 
 def test_the_letters_go_above_the_valve_and_to_the_right():
-    """ISO 15519-1 §11.4.5 puts the abbreviation above the symbol and to its
-    right, as Figure 28 draws it. The corner is fixed rather than chosen from
-    the valve's quarter turn, so a valve in a vertical run is marked in the same
-    corner as one in a horizontal run and a reader scans a sheet for one thing.
-    """
+    """Check that the letters go above the valve and to the right (ISO 15519-1 §11.4.5)."""
     from pandid.render.svg import SvgRenderer
 
     flat = units.Valve("HV-1", variant="butterfly", normal_position="closed")
@@ -200,11 +169,7 @@ def test_the_letters_go_above_the_valve_and_to_the_right():
 
 
 def test_the_letters_step_past_a_tag_already_in_that_corner():
-    """Both are drawn on opaque halos in one final pass, so an abbreviation
-    landing on the tag would simply erase it. A valve's tag sits centred above
-    it by default, and a valve body is narrower than its own tag, so the two
-    reach for the same corner on an ordinary sheet rather than a contrived one.
-    """
+    """Check that the letters step past a tag already in that corner."""
     from pandid.render.svg import SvgRenderer, _unit_label_box
 
     valve = units.Valve("HV-101", variant="butterfly", normal_position="closed")
@@ -230,12 +195,7 @@ def test_the_letters_step_past_a_tag_already_in_that_corner():
 
 
 def _discs(sym):
-    """Every disc the symbol draws: centre height in symbol space -> its fill.
-
-    The artwork is drawn in the stencil's own units inside one uniform
-    ``scale()``, so the factor is undone here to compare a disc's centre with a
-    port, which is authored in the symbol's coordinates.
-    """
+    """Return every disc the symbol draws: centre height in symbol space -> its fill."""
     scale = float(re.search(r"scale\(([\d.]+)\)", sym.svg).group(1))
     return {
         round(float(cy) * scale, 1): fill
@@ -244,8 +204,7 @@ def _discs(sym):
 
 
 def test_a_blind_carries_the_same_attribute_a_valve_does():
-    """One vocabulary, held in one place: the shared base is what keeps the
-    valve's names and the blind's from drifting into two spellings of one idea."""
+    """Check that a blind carries the same attribute a valve does."""
     blind = units.Fitting("SB-1", variant="blind")
     assert blind.normal_position == "open"
     assert blind.NORMAL_POSITIONS == units.Valve.NORMAL_POSITIONS
@@ -255,10 +214,7 @@ def test_a_blind_carries_the_same_attribute_a_valve_does():
 
 
 def test_the_two_states_are_two_stencils_and_not_a_mark():
-    """The blind's position is *which shape*, not something added to one. Both
-    are drawn upstream, so the closed state is a registered symbol rather than a
-    derived one -- and everything except the ink has to be identical, or
-    declaring the position would move a line already drawn."""
+    """Check that the two states are two stencils and not a mark."""
     open_blind = registry.for_unit(units.Fitting("SB-1", variant="blind"))
     shut = registry.for_unit(units.Fitting("SB-2", variant="blind", normal_position="closed"))
     assert open_blind is registry.get("fitting", "blind")
@@ -274,10 +230,7 @@ def test_the_two_states_are_two_stencils_and_not_a_mark():
 
 
 def test_the_disc_in_the_line_is_bored_when_open_and_solid_when_closed():
-    """The whole of what the symbol says. The run enters at the inlet's height,
-    so the disc centred there is the one in the line: a ring lets the line
-    through, a solid plate blanks it, and the other disc is parked off the run
-    carrying the opposite fill."""
+    """Check that the disc in the line is bored when open and solid when closed."""
     open_blind = registry.for_unit(units.Fitting("SB-1", variant="blind"))
     shut = registry.for_unit(units.Fitting("SB-2", variant="blind", normal_position="closed"))
     line = open_blind.ports["inlet"][1]
@@ -305,18 +258,14 @@ def test_the_two_blinds_are_separate_definitions_on_one_sheet():
 
 
 def test_a_closed_blind_is_not_lettered_nc():
-    """PIP PIC001's abbreviation is the *valve* fallback, for a body that cannot
-    carry a fill. A blind's position is drawn, so lettering it would say the
-    same thing twice -- and the letters are what a reader looks for on a valve."""
+    """Check that a closed blind is not lettered NC."""
     svg = _line(units.Fitting("SB-1", variant="blind", normal_position="closed"))
     assert ">NC</text>" not in svg
 
 
 @pytest.mark.parametrize("variant", ["default", "strainer", "venturi", "spool"])
 def test_a_fitting_drawn_one_way_has_no_position_to_state(variant):
-    """A strainer is a strainer whatever the plant is doing. Declaring one
-    closed would set an attribute nothing on the sheet draws, which is the
-    silence that makes a wrong drawing plausible."""
+    """Check that a fitting drawn one way has no position to state."""
     with pytest.raises(ValueError) as excinfo:
         units.Fitting("ST-1", variant=variant, normal_position="closed")
     assert "blind" in str(excinfo.value), "the message names the fittings that do"
@@ -324,10 +273,7 @@ def test_a_fitting_drawn_one_way_has_no_position_to_state(variant):
 
 
 def test_a_blind_retyped_after_it_was_closed_stops_the_sheet():
-    """The refusal is at construction, and ``variant`` is a plain attribute, so
-    it can still be assigned past it. Drawing the open symbol then would be the
-    silent failure this whole feature exists to avoid: a sheet issued showing a
-    line open when the model says it is blanked."""
+    """Check that a blind retyped after it was closed stops the sheet."""
     blind = units.Fitting("SB-1", variant="blind", normal_position="closed")
     blind.variant = "strainer"
     with pytest.raises(ValueError, match="drawn one way"):
@@ -335,21 +281,15 @@ def test_a_blind_retyped_after_it_was_closed_stops_the_sheet():
 
 
 def test_a_blanked_blind_is_not_confusable_with_a_darkened_valve():
-    """Both say "closed" with ink, so the two must not be read for each other.
-    A valve fills its whole body, which is a bowtie lying along the run; a blind
-    fills one small disc, straddling the run with its companion and its handle
-    clear of it. Different shape, different axis, different share of the box."""
+    """Check that a blanked blind is not confusable with a darkened valve."""
     shut_valve = registry.for_unit(units.Valve("HV-1", variant="gate", normal_position="closed"))
     shut_blind = registry.for_unit(units.Fitting("SB-1", variant="blind", normal_position="closed"))
-    # The valve's ink is its body: a filled <path>, running the length of a box
-    # wider than it is tall. The blind draws no filled path at all.
+    # The valve's ink is a filled body path; the blind draws no filled path.
     assert re.search(r'<path[^>]*fill="#111"', shut_valve.svg)
     assert not re.search(r'<path[^>]*fill="#111"', shut_blind.svg)
     assert shut_valve.width > shut_valve.height
     assert shut_blind.height > shut_blind.width
-    # ...and the blind's solid disc covers a small part of its box, where the
-    # valve's darkened body is the box. _FEATURE_AREA in the invariant suite is
-    # the same 0.5 boundary, from the other side.
+    # The blind's solid disc covers under half its box; the darkened valve fills its box.
     solid = float(re.search(r'<ellipse[^>]*rx="([\d.]+)"[^>]*fill="#111"', shut_blind.svg).group(1))
     scale = float(re.search(r"scale\(([\d.]+)\)", shut_blind.svg).group(1))
     covered = (2 * solid * scale) ** 2 / (shut_blind.width * shut_blind.height)
@@ -376,8 +316,7 @@ def test_the_position_round_trips_through_a_spec():
 
 
 def test_a_blind_position_round_trips_through_a_spec():
-    """Both directions, and both states: the position is the only thing that
-    tells the two drawings apart, so a spec that loses it loses the drawing."""
+    """Check that a blind position round trips through a spec."""
     fs = Flowsheet("round trip")
     fs.add(units.Fitting("SB-1", variant="blind", normal_position="closed"))
     fs.add(units.Fitting("SB-2", variant="blind"))

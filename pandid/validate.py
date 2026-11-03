@@ -82,21 +82,6 @@ def _overlap_cure(a, b) -> str:
     """
     from pandid.streams import Stream
 
-    def attached(u) -> bool:
-        """Return whether a unit hangs off a host.
-
-        Parameters
-        ----------
-        u : Unit
-            Unit to test.
-
-        Returns
-        -------
-        bool
-            Whether ``u`` has a host.
-        """
-        return getattr(u, "host", None) is not None
-
     def pinned(u) -> bool:
         """Return whether a unit is pinned on an axis that places it.
 
@@ -111,7 +96,7 @@ def _overlap_cure(a, b) -> str:
             Whether ``u`` has a pin that places it.
         """
         pin = u.pin_
-        axes = ("x", "y") if attached(u) else ("col", "row", "x", "y")
+        axes = ("x", "y") if getattr(u, "host", None) is not None else ("col", "row", "x", "y")
         return pin is not None and any(getattr(pin, f) is not None for f in axes)
 
     def how(u) -> str:
@@ -128,7 +113,7 @@ def _overlap_cure(a, b) -> str:
             Call text, naming the port each axis is pinned by.
         """
         pin = u.pin_
-        if not attached(u) and pin is not None and pin.x is None and pin.y is None:
+        if getattr(u, "host", None) is None and pin is not None and pin.x is None and pin.y is None:
             return f"call .pin(col=..., row=...) on {u.name}"
         # Name the port each axis is pinned by.
         ports = getattr(u, "_pin_ports", None) or {}
@@ -190,22 +175,6 @@ def _is_control_function(letters: str, i: int) -> bool:
                 and letters[i - 1].upper() == "S")
 
 
-def _control_functions(letters: str) -> list[str]:
-    """Return the sequenced letters of a tag, in the order written.
-
-    Parameters
-    ----------
-    letters : str
-        Functional letters of a tag.
-
-    Returns
-    -------
-    list[str]
-        Control-function letters.
-    """
-    return [c for i, c in enumerate(letters) if _is_control_function(letters, i)]
-
-
 def _in_sequence(letters: str) -> str:
     """Return a tag with its control-function letters reordered.
 
@@ -219,7 +188,7 @@ def _in_sequence(letters: str) -> str:
     str
         Letters with the control functions in sequence.
     """
-    ordered = iter(sorted(_control_functions(letters),
+    ordered = iter(sorted((c for i, c in enumerate(letters) if _is_control_function(letters, i)),
                           key=lambda c: CONTROL_FUNCTION_SEQUENCE.index(c.upper())))
     return "".join(
         next(ordered) if _is_control_function(letters, i) else c
@@ -258,24 +227,6 @@ def _and(names: list[str]) -> str:
         Joined names.
     """
     return " and ".join(filter(None, [", ".join(names[:-1]), *names[-1:]]))
-
-
-def _square(x1, y1, x2, y2) -> bool:
-    """Return whether a segment lies along an axis.
-
-    Parameters
-    ----------
-    x1, y1 : float
-        Start point.
-    x2, y2 : float
-        End point.
-
-    Returns
-    -------
-    bool
-        Whether it is horizontal or vertical within ``_SQUARE_TOL``.
-    """
-    return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
 def _corners(pts):
@@ -335,23 +286,6 @@ def _pierced_end(path, ends):
             if k not in clear and segment_crosses_box(path[k], path[k + 1], end[2]):
                 return end
     return None
-
-
-def _pinned_y(unit) -> bool:
-    """Return whether a unit has an explicit pixel ``y`` pin.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit to test.
-
-    Returns
-    -------
-    bool
-        Whether ``unit`` is pinned in ``y``.
-    """
-    pin = getattr(unit, "pin_", None)
-    return pin is not None and getattr(pin, "y", None) is not None
 
 
 def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
@@ -982,7 +916,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # grossly indirect routes.
         hosted = [(u, box, getattr(u, "host", None)) for u, box in boxes]
         for s in drawn:
-            # Skip a stream with no route.
             if s.route is None:
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
@@ -1021,7 +954,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a segment drawn on the slant (ISO 15519-1 12.1). One
             # finding per stream.
-            slopes = [(a, b) for a, b in zip(pts, pts[1:]) if not _square(*a, *b)]
+            slopes = [(a, b) for a, b in zip(pts, pts[1:])
+                      if not (abs(a[0] - b[0]) < _SQUARE_TOL or abs(a[1] - b[1]) < _SQUARE_TOL)]
             if slopes:
                 (x1, y1), (x2, y2) = slopes[0]
                 more = ("" if len(slopes) == 1 else
@@ -1057,12 +991,11 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
         # Soft: a horizontal run whose ends nearly share an elevation.
         for s in drawn:
-            # Skip signal lines.
             if s.kind in SIGNAL_KINDS:
                 continue
             su, du = s.source.owner, s.dest.owner
             # Only where an elevation was pinned by hand.
-            if not (_pinned_y(su) or _pinned_y(du)):
+            if not any(getattr(u.pin_, "y", None) is not None for u in (su, du)):
                 continue
             src = resolve_port(su, su.frame, s.source.name)
             dst = resolve_port(du, du.frame, s.dest.name)

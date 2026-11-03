@@ -1,18 +1,4 @@
-"""Where an actuated valve goes when its motive power is lost.
-
-A different property from ``normal_position``, from a different clause, drawn in
-a different place, and the pair is the easiest thing on a P&ID to run together:
-normal position is where the valve sits with the plant running, fail position is
-where it goes when the air or the power is lost. A valve can be normally open
-and fail closed, and both marks belong on the sheet.
-
-The letters are ANSI/ISA-5.1-2009 Table 5.4.4 Method B rather than the same
-table's Method A stem arrows, because PIP PIC001 4.5.3.2 chooses between them:
-it calls for an automated valve's fail action in text, FC/FO/FL/FI after
-ISA-5.1, and comments against ISA's stem arrows. PIP PIC001 4.2.4.6(1) then
-places them, below a valve on a horizontal run and to the right of one on a
-vertical run.
-"""
+"""Test valve fail positions (ISA-5.1 Table 5.4.4 Method B, PIP PIC001 4.2.4.6)."""
 
 from __future__ import annotations
 
@@ -21,35 +7,18 @@ import pytest
 from pandid import Flowsheet, spec, units
 from pandid.render.symbols import FAIL_ACTUATED, FAIL_POSITIONS, fail_marking
 from pandid.render.symbols import default_registry as registry
+from test_normally_closed import _line
 
 # Every valve variant the package draws, split by whether it has an actuator.
 ALL_VARIANTS = sorted({v for k, v in registry._symbols if k == "valve"})
 UNACTUATED = sorted(set(ALL_VARIANTS) - FAIL_ACTUATED)
 
 
-def _line(*valves):
-    """A feed -> valves -> product run, laid out and rendered."""
-    fs = Flowsheet("fail positions")
-    feed = fs.add(units.Feed("FEED"))
-    prev = feed.outlet
-    for valve in valves:
-        fs.add(valve)
-        fs.connect(prev, valve.inlet)
-        prev = valve.outlet
-    product = fs.add(units.Product("PROD"))
-    fs.connect(prev, product.inlet)
-    fs.layout()
-    return fs.to_svg()
-
-
 # --------------------------------------------------------------------- the API
 
 
 def test_a_valve_declares_no_fail_position_by_default():
-    """Silence is the absence of a declaration, not a state. There is no
-    default fail position to leave unwritten the way ``normal_position="open"``
-    is left unwritten, because an unmarked valve does not fail anywhere in
-    particular -- the sheet simply has not said."""
+    """Check that a valve declares no fail position by default."""
     valve = units.Valve("FV-1", variant="control")
     assert valve.fail == ""
     assert fail_marking(valve) == ""
@@ -66,8 +35,7 @@ def test_a_position_that_is_not_one_is_refused_by_name():
 
 
 def test_the_position_can_be_set_and_cleared_after_construction():
-    """Same validation either way: the setter is where the rule lives, and the
-    constructor goes through it."""
+    """Check that the position can be set and cleared after construction."""
     valve = units.Valve("FV-1", variant="control")
     valve.fail = "closed"
     assert fail_marking(valve) == "FC"
@@ -81,8 +49,7 @@ def test_the_position_can_be_set_and_cleared_after_construction():
 
 @pytest.mark.parametrize("position,letters", sorted(FAIL_POSITIONS.items()))
 def test_each_position_draws_its_own_letters(position, letters):
-    """ANSI/ISA-5.1-2009 Table 5.4.4 Method B, plus ``FI`` from ISA-5.1-1984
-    §6.7, which PIP PIC001 4.5.3.2 keeps in its own list of four."""
+    """Check that each position draws its own letters (ISA-5.1 Table 5.4.4)."""
     valve = units.Valve("FV-1", variant="control", fail=position)
     assert fail_marking(valve) == letters
     assert f">{letters}</text>" in _line(valve)
@@ -100,8 +67,7 @@ def test_the_six_letter_codes_are_the_ones_the_standards_write():
 
 
 def test_the_letters_are_the_whole_of_the_mark():
-    """Unlike a darkened body, a fail position changes no artwork at all, so
-    declaring one can never move a line that is already drawn."""
+    """Check that the letters are the whole of the mark."""
     for variant in sorted(FAIL_ACTUATED):
         plain = registry.for_unit(units.Valve("FV-1", variant=variant))
         failing = registry.for_unit(units.Valve("FV-2", variant=variant, fail="closed"))
@@ -115,11 +81,7 @@ def test_the_letters_are_the_whole_of_the_mark():
 
 @pytest.mark.parametrize("variant", UNACTUATED)
 def test_a_valve_with_no_actuator_is_refused(variant):
-    """ANSI/ISA-5.1 note 5.3.4(10) scopes the failure symbols to every type of
-    control valve and actuator. A handwheel loses no air, and a regulator or
-    a relief valve is worked by the process it sits in, so there is no supply
-    whose failure is the question. Declaring one would set an attribute about
-    equipment the valve does not have."""
+    """Check that a valve with no actuator is refused (ISA-5.1 note 5.3.4(10))."""
     with pytest.raises(ValueError) as excinfo:
         units.Valve("HV-1", variant=variant, fail="closed")
     message = str(excinfo.value)
@@ -129,9 +91,7 @@ def test_a_valve_with_no_actuator_is_refused(variant):
 
 
 def test_the_hand_operated_and_the_self_acting_valves_are_both_refused():
-    """Two different reasons, one refusal. ``manual`` and ``knife`` draw an
-    *operator* -- a handwheel -- which is not an actuator; ``regulator``,
-    ``relief`` and ``psv`` are driven by the process itself."""
+    """Check that the hand-operated and the self-acting valves are both refused."""
     for variant in ("manual", "knife", "regulator", "relief", "psv"):
         assert variant not in FAIL_ACTUATED
         with pytest.raises(ValueError, match="no actuator"):
@@ -144,10 +104,7 @@ def test_every_actuated_variant_takes_one(variant):
 
 
 def test_a_valve_retyped_after_it_declared_one_stops_the_sheet():
-    """The refusal is at construction, and ``variant`` is a plain attribute, so
-    it can still be assigned past it. Drawing nothing then would be the silent
-    failure: a sheet issued with a trip valve whose fail position is in the
-    model and nowhere on the paper."""
+    """Check that a valve retyped after it declared one stops the sheet."""
     valve = units.Valve("FV-1", variant="control", fail="closed")
     valve.variant = "gate"
     with pytest.raises(ValueError, match="no actuator"):
@@ -158,17 +115,14 @@ def test_a_valve_retyped_after_it_declared_one_stops_the_sheet():
 
 
 def test_the_two_positions_are_independent():
-    """A control valve may say where it fails without any claim about a normal
-    position, and nothing infers one from the other."""
+    """Check that the two positions are independent."""
     valve = units.Valve("FV-1", variant="control", fail="closed")
     assert valve.normal_position == "open", "the default, not a consequence of failing shut"
     assert units.Valve("HV-1", variant="gate", normal_position="closed").fail == ""
 
 
 def test_a_darkened_valve_can_also_say_where_it_fails():
-    """A solenoid held shut in service and driven open on a trip. The body is
-    darkened for the normal position (PIP PIC001 4.2.2.7) and lettered for the
-    fail position (ISA-5.1 Table 5.4.4): two marks, two clauses, one valve."""
+    """Check that a darkened valve can also say where it fails."""
     valve = units.Valve("XV-1", variant="solenoid", normal_position="closed", fail="open")
     svg = _line(valve)
     assert 'fill="#111"' in svg, "the darkened body states the normal position"
@@ -176,12 +130,7 @@ def test_a_darkened_valve_can_also_say_where_it_fails():
 
 
 def test_the_nc_letters_and_the_fail_letters_do_not_collide():
-    """The hardest case: both marks are *letters* on one valve, because a
-    butterfly disc cannot carry the fill. They go in two places that cannot
-    overlap -- ``NC`` above and to the right (ISO 15519-1 §11.4.5), the fail
-    letters below (PIP PIC001 4.2.4.6) -- and the boxes are checked rather than
-    assumed, since both are drawn on opaque halos in one pass and the second
-    one down would erase the first."""
+    """Check that the NC letters and the fail letters do not collide."""
     from pandid.render.svg import SvgRenderer, _unit_label_box
 
     valve = units.Valve(
@@ -210,8 +159,7 @@ def test_the_nc_letters_and_the_fail_letters_do_not_collide():
 
 
 def test_the_letters_go_below_a_valve_on_a_horizontal_run():
-    """PIP PIC001 4.2.4.6(1) puts them directly below the control valve on a
-    horizontal line."""
+    """Check that the letters go below a valve on a horizontal run (PIP PIC001 4.2.4.6(1))."""
     from pandid.render.svg import SvgRenderer
 
     valve = units.Valve("FV-1", variant="control", fail="closed")
@@ -226,10 +174,7 @@ def test_the_letters_go_below_a_valve_on_a_horizontal_run():
 
 
 def test_the_letters_go_to_the_right_of_a_valve_on_a_riser():
-    """PIP PIC001 4.2.4.6(1) puts them to the right of the control valve on a
-    vertical line. Unlike the fixed ``NC`` corner, this one moves with the quarter
-    turn, because it has to: the face below a valve on a riser is its outlet
-    nozzle, with the line running out of it."""
+    """Check that the letters go to the right of a valve on a riser (PIP PIC001 4.2.4.6(1))."""
     from pandid.render.svg import SvgRenderer
 
     flat = units.Valve("FV-1", variant="control", fail="closed")
@@ -254,10 +199,7 @@ def test_the_letters_go_to_the_right_of_a_valve_on_a_riser():
 
 
 def test_the_letters_step_past_a_tag_already_on_that_side():
-    """Both are drawn on opaque halos in one final pass, so letters landing on
-    the tag would simply erase it. ``label_pos="bottom"`` is the ordinary way
-    to reach this: it puts the tag on exactly the side PIP asks the letters
-    for."""
+    """Check that the letters step past a tag already on that side."""
     from pandid.render.svg import SvgRenderer, _unit_label_box
 
     valve = units.Valve("FV-101", variant="control", fail="closed", label_pos="bottom")
@@ -273,10 +215,7 @@ def test_the_letters_step_past_a_tag_already_on_that_side():
 
 
 def test_the_letters_step_past_a_tag_on_the_riser_side_too():
-    """The same collision on the other side. A valve on a riser wants the
-    right-hand face, and that is a side the engine picks for a tag freely, so
-    the step is along the axis that side runs off rather than always downwards.
-    """
+    """Check that the letters step past a tag on the riser side too."""
     from pandid.render.svg import SvgRenderer, _unit_label_box
 
     valve = units.Valve("FV-102", variant="control", fail="closed", label_pos="right")
@@ -302,17 +241,7 @@ def test_the_letters_step_past_a_tag_on_the_riser_side_too():
 
 
 def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
-    """Issue #223, and the geometry is ``examples/14``'s receipt trip valves.
-
-    A trip square hung below a valve is joined to it by a line leaving the same
-    face PIP PIC001 4.2.4.6(1) puts the letters on, and the letters are drawn on
-    an opaque plate in the last pass of all, so ``FC`` deleted the only mark on
-    the sheet joining the trip to the valve it strokes. The example shipped with
-    the fail position taken off and a note in words instead.
-
-    The step is *sideways*, along the face: stepping further out -- which is
-    what clears a tag -- follows the line down instead of getting off it.
-    """
+    """Check that the letters step off an impulse line leaving the same face."""
     from pandid.portgeom import unit_box
     from pandid.layout.conflicts import boxes_overlap
     from pandid.render.svg import SvgRenderer, _ink, _unit_label_box
@@ -370,8 +299,7 @@ def test_the_position_round_trips_through_a_spec():
 
 
 def test_both_positions_round_trip_together():
-    """The pair is what a spec most easily loses, since one is written only when
-    closed and the other only when declared."""
+    """Check that both positions round trip together."""
     fs = Flowsheet("round trip")
     fs.add(units.Valve("XV-1", variant="solenoid", normal_position="closed", fail="open"))
 
@@ -407,8 +335,7 @@ def test_a_spec_position_that_is_not_one_names_the_entry():
 
 
 def test_only_a_valve_takes_a_fail_position_in_a_spec():
-    """A blind has a position but no actuator, so ``normal_position`` is shared
-    with ``Fitting`` and this is not."""
+    """Check that only a valve takes a fail position in a spec."""
     with pytest.raises(spec.SpecError, match="only a Valve takes 'fail'"):
         Flowsheet.from_dict(
             {

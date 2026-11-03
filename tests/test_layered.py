@@ -24,11 +24,6 @@ def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     ----------
     stem : str
         Example laid out with its placement stripped.
-
-    Returns
-    -------
-    None
-        Routing again, laying out again, and constructing anew agree.
     """
     fs, _ = layout_quality.build(stem, True)
     fs.layout()
@@ -54,11 +49,6 @@ def test_route_report_uses_the_published_graph(stem: str) -> None:
     ----------
     stem : str
         Corpus drawing with its placement stripped.
-
-    Returns
-    -------
-    None
-        Reported excess bends agree with the published route geometry.
     """
     fs, _ = layout_quality.build(stem, True)
     report = route_quality.measure_sheet(fs, stem)
@@ -71,13 +61,7 @@ def test_route_report_uses_the_published_graph(stem: str) -> None:
 
 
 def test_route_report_accepts_manual_intermediate_waypoints() -> None:
-    """Count a manual route with one waypoint as drawn.
-
-    Returns
-    -------
-    None
-        The final route report does not count manual waypoints as undrawn.
-    """
+    """Count a manual route with one waypoint as drawn."""
     fs, _ = layout_quality.build("11_ethanol_pid", False)
     report = route_quality.measure_sheet(fs, "11_ethanol_pid")
     assert report.undrawn == []
@@ -85,9 +69,6 @@ def test_route_report_accepts_manual_intermediate_waypoints() -> None:
 
 def _sealed_by_alignment(pinned: bool = False) -> tuple[Flowsheet, Frame, Frame, Route]:
     """Lay out a sheet where lining up S-2's feed with R-1's outlet can seal S-1's exit.
-
-    Pinned at the sealed pixel positions, S-2 sits 9 px below S-1, inside
-    the stub of S-1's connected underflow.
 
     Parameters
     ----------
@@ -122,14 +103,7 @@ def _sealed_by_alignment(pinned: bool = False) -> tuple[Flowsheet, Frame, Frame,
 
 
 def test_grid_pins_keep_a_connected_exit_clear() -> None:
-    """Keep a separator's connected exit clear on a sheet pinned by grid rank.
-
-    Returns
-    -------
-    None
-        The underflow is routed clear, grid ranks hold, and a second route
-        and a fresh build draw the same sheet.
-    """
+    """Keep a separator's connected exit clear on a sheet pinned by grid rank."""
     fs, upper, lower, underflow = _sealed_by_alignment()
     assert not underflow.used_fallback
     assert not measure_final(fs).hard_conflicts
@@ -144,13 +118,7 @@ def test_grid_pins_keep_a_connected_exit_clear() -> None:
 
 
 def test_pixel_pins_hold_when_an_exit_is_sealed() -> None:
-    """Keep pinned units where the author put them when an exit is sealed.
-
-    Returns
-    -------
-    None
-        Both separators stay on their pins and the blocked route is reported.
-    """
+    """Keep pinned units where the author put them when an exit is sealed."""
     fs, upper, lower, underflow = _sealed_by_alignment(pinned=True)
     assert (upper.x, upper.y, lower.x, lower.y) == (232, 56, 232, 185)
     assert underflow.used_fallback
@@ -158,13 +126,7 @@ def test_pixel_pins_hold_when_an_exit_is_sealed() -> None:
 
 
 def test_default_route_clears_the_unpinned_biodiesel_sheet() -> None:
-    """Route the unpinned biodiesel sheet without a line through equipment.
-
-    Returns
-    -------
-    None
-        No stream uses the fallback and no hard conflict remains.
-    """
+    """Route the unpinned biodiesel sheet without a line through equipment."""
     fs, _ = build_biodiesel(pinned=False)
     fs.route()
 
@@ -178,17 +140,10 @@ def test_default_route_clears_the_unpinned_biodiesel_sheet() -> None:
 def test_a_valve_on_an_upright_leg_runs_along_it(mirror: str | bool | None) -> None:
     """Turn an in-line valve to run along an upright pipe, mirror or not.
 
-    A mirror states no turn, so it does not hold the valve level.
-
     Parameters
     ----------
     mirror : str or bool or None
         The valve's stated mirror, if any.
-
-    Returns
-    -------
-    None
-        Both nozzles sit on the pipe and neither segment jogs.
     """
     fs = Flowsheet("Upright valve")
     top = fs.add(U.Tank("T-1"))
@@ -231,14 +186,7 @@ def _upright_line(valve: U.Valve) -> tuple[Flowsheet, U.Valve]:
 
 
 def test_a_stated_level_turn_holds_and_round_trips() -> None:
-    """Keep a valve level on an upright pipe when its author stated a 0 turn.
-
-    Returns
-    -------
-    None
-        The stated 0 is drawn and written to a spec; an unstated turn is not
-        written.
-    """
+    """Keep a valve level on an upright pipe when its author stated a 0 turn."""
     fs, valve = _upright_line(U.Valve("HV-1").pin(orientation=0))
     fs.route()
     assert valve.frame is not None and valve.frame.orientation == 0
@@ -257,42 +205,14 @@ def test_a_stated_level_turn_holds_and_round_trips() -> None:
     assert free.frame is not None and free.frame.orientation in (90, 270)
 
 
-def test_a_valve_with_a_stated_inlet_face_is_set_on_its_line() -> None:
-    """Set a valve whose inlet face its author stated, skipping poses that lose it.
-
-    Returns
-    -------
-    None
-        The line routes and the valve's inlet is on the stated face.
-    """
-    fs = Flowsheet("Stated face")
-    feed = fs.add(Feed("Feed"))
-    product = fs.add(Product("Product"))
-    line = fs.connect(feed.outlet, product.inlet)
-    valve = fs.add(U.Valve("HV-1").nozzle("inlet", "W"), on=line)
-    fs.route()
-
-    assert valve.frame is not None
-    assert resolve_port(valve, valve.frame, "inlet").face == "W"
-    assert not any(measure_final(fs).hard)
-
-
 @pytest.mark.parametrize("pins", [((0, None), (1, None)), ((0, 1), (0, 0))])
 def test_grid_pins_win_over_a_stack(pins: tuple[tuple[int, int | None], ...]) -> None:
     """Keep two blocks where their grid pins put them, though their pipe would stack them.
-
-    A pipe from A's bottom to B's top stacks B under A, unless the author
-    pinned them to different columns or B to a row above A's.
 
     Parameters
     ----------
     pins : tuple[tuple[int, int or None], ...]
         ``(col, row)`` pinned on A, then on B.
-
-    Returns
-    -------
-    None
-        B is drawn east of A, or above it, as pinned, and nothing is reported.
     """
     fs = Flowsheet("Pinned stack")
     a = fs.add(Block("A", outputs=["S"]))
@@ -311,13 +231,7 @@ def test_grid_pins_win_over_a_stack(pins: tuple[tuple[int, int | None], ...]) ->
 
 
 def test_a_grid_pin_drawn_out_of_order_is_reported() -> None:
-    """Report two units drawn in the other order from their column pins.
-
-    Returns
-    -------
-    None
-        ``pin-not-honored`` names the pin the drawing does not keep.
-    """
+    """Report two units drawn in the other order from their column pins."""
     fs = Flowsheet("Swapped")
     a = fs.add(Block("A")).pin(col=0)
     b = fs.add(Block("B")).pin(col=1)
@@ -345,13 +259,7 @@ def _line() -> tuple[Flowsheet, Stream]:
 
 
 def test_a_stated_mirror_holds_on_a_line() -> None:
-    """Keep the mirror its author stated on a control valve set on a line.
-
-    Returns
-    -------
-    None
-        The frame keeps the mirror and nothing is reported.
-    """
+    """Keep the mirror its author stated on a control valve set on a line."""
     fs, line = _line()
     valve = fs.add(D.ControlValve("CV-1").pin(orientation=0, mirrored=True), on=line)
     fs.route()
@@ -361,13 +269,7 @@ def test_a_stated_mirror_holds_on_a_line() -> None:
 
 
 def test_a_station_member_keeps_its_stated_turn() -> None:
-    """Keep the turn its author stated on a station's control valve.
-
-    Returns
-    -------
-    None
-        The control valve is drawn at its stated turn and nothing is reported.
-    """
+    """Keep the turn its author stated on a station's control valve."""
     fs, line = _line()
     station = fs.add_valve_station("CV-101", on=line)
     assert station.control is not None
@@ -378,37 +280,33 @@ def test_a_station_member_keeps_its_stated_turn() -> None:
     assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
 
 
-@pytest.mark.parametrize("port, face", [("outlet", "E"), ("inlet", "W")])
-def test_a_stated_nozzle_face_is_kept_in_every_pose(port: str, face: str) -> None:
-    """Set a control valve with a stated nozzle face on a line without raising.
+@pytest.mark.parametrize(
+    "kind, port, face",
+    [(U.Valve, "inlet", "W"), (D.ControlValve, "outlet", "E"), (D.ControlValve, "inlet", "W")],
+)
+def test_a_stated_nozzle_face_is_kept_in_every_pose(
+    kind: type[U.Valve], port: str, face: str
+) -> None:
+    """Set a valve with a stated nozzle face on a line, skipping poses that lose it.
 
     Parameters
     ----------
+    kind : type[Valve]
+        Valve class set on the line.
     port, face : str
         The nozzle and the face its author stated.
-
-    Returns
-    -------
-    None
-        The line routes and the nozzle is on its stated face.
     """
     fs, line = _line()
-    valve = fs.add(D.ControlValve("CV-1").nozzle(port, face), on=line)
+    valve = fs.add(kind("V-1").nozzle(port, face), on=line)
     fs.route()
 
     assert valve.frame is not None
     assert resolve_port(valve, valve.frame, port).face == face
+    assert not any(measure_final(fs).hard)
 
 
 def test_row_pins_order_a_whole_stack() -> None:
-    """Keep row pins in order down a stack of three, not only between neighbours.
-
-    Returns
-    -------
-    None
-        C, pinned to row 0, is drawn above A, pinned to row 2, and nothing is
-        reported.
-    """
+    """Keep row pins in order down a stack of three, not only between neighbours."""
     fs = Flowsheet("Three")
     a = fs.add(Block("A", outputs=["S"])).pin(col=0, row=2)
     b = fs.add(Block("B", inputs=["N"], outputs=["S"]))
@@ -423,13 +321,7 @@ def test_row_pins_order_a_whole_stack() -> None:
 
 
 def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
-    """Report a unit drawn in another turn or mirror than its author stated.
-
-    Returns
-    -------
-    None
-        ``pin-not-honored`` names the turn and the mirror.
-    """
+    """Report a unit drawn in another turn or mirror than its author stated."""
     fs, line = _line()
     valve = fs.add(D.ControlValve("CV-1").pin(orientation=0, mirrored=True), on=line)
     fs.layout()
@@ -441,13 +333,7 @@ def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
 
 
 def test_a_turned_device_with_a_stated_face_is_set_on_its_line() -> None:
-    """Set a turned control valve whose inlet face is stated for that turn.
-
-    Returns
-    -------
-    None
-        The line routes, the valve keeps its turn and its inlet is on N.
-    """
+    """Set a turned control valve whose inlet face is stated for that turn."""
     fs, line = _line()
     valve = fs.add(D.ControlValve("CV-1").pin(orientation=90).nozzle("inlet", "N"), on=line)
     fs.route()
@@ -458,17 +344,12 @@ def test_a_turned_device_with_a_stated_face_is_set_on_its_line() -> None:
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_side_draw_peers_follow_their_nozzle_heights(reverse: bool) -> None:
-    """Draw the stripper on the higher side draw above the other (#460).
+    """Draw the stripper on the higher side draw above the other.
 
     Parameters
     ----------
     reverse : bool
         Add the lower draw's stripper first.
-
-    Returns
-    -------
-    None
-        The stripper on ``draw_1`` is drawn above the one on ``draw_2``.
     """
     fs = Flowsheet("Crude")
     tower = fs.add(

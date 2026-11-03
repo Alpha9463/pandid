@@ -15,7 +15,7 @@ SPACING = 6.0
 
 
 def _compute_offsets(
-    streams: "Sequence[Stream]", spacing: float
+    streams: "Sequence[Stream]",
 ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
     """Return the offsets for horizontal and vertical segments.
 
@@ -23,8 +23,6 @@ def _compute_offsets(
     ----------
     streams : Sequence[Stream]
         Routed streams.
-    spacing : float
-        Grid step between the tracks runs are moved onto.
 
     Returns
     -------
@@ -131,7 +129,7 @@ def _compute_offsets(
         component of several streams, fixed runs keep their track, a
         free run joins its stream's nearest fixed track clear of its end
         units, and any other run takes the nearest free slot on a
-        ``spacing`` grid around the fixed runs' mean track, or all
+        :data:`SPACING` grid around the fixed runs' mean track, or all
         runs' if none is fixed.
 
         Parameters
@@ -188,8 +186,8 @@ def _compute_offsets(
                     continue
                 k = 0
                 while "target" not in run:
-                    for cand in ((base,) if k == 0 else (base + k * spacing, base - k * spacing)):
-                        if (all(abs(cand - o) >= spacing - 1e-9 for o in occupied)
+                    for cand in ((base,) if k == 0 else (base + k * SPACING, base - k * SPACING)):
+                        if (all(abs(cand - o) >= SPACING - 1e-9 for o in occupied)
                                 and not enters(run, cand)):
                             run["target"] = cand
                             occupied.append(cand)
@@ -231,11 +229,10 @@ def _compute_offsets(
             groups.append(current)
         return groups
 
-    window = spacing
-    for group in group_by_track(h_runs, window):
+    for group in group_by_track(h_runs, SPACING):
         resolve_track(group, h_offsets)
 
-    for group in group_by_track(v_runs, window):
+    for group in group_by_track(v_runs, SPACING):
         resolve_track(group, v_offsets)
 
     return h_offsets, v_offsets
@@ -272,24 +269,12 @@ def _apply_offsets(
         new_pts = []
 
         for i, pt in enumerate(pts):
-            dx = 0.0
-            dy = 0.0
-
-            if i > 0:
-                seg_idx = i - 1
-                if (id(s), seg_idx) in h_offsets:
-                    dy = h_offsets[(id(s), seg_idx)]
-                if (id(s), seg_idx) in v_offsets:
-                    dx = v_offsets[(id(s), seg_idx)]
-
+            dx = dy = 0.0
             # A waypoint's own segment wins over the one before it.
-            if i < n_segs:
-                seg_idx = i
-                if (id(s), seg_idx) in h_offsets:
-                    dy = h_offsets[(id(s), seg_idx)]
-                if (id(s), seg_idx) in v_offsets:
-                    dx = v_offsets[(id(s), seg_idx)]
-
+            for seg_idx in (i - 1, i):
+                if 0 <= seg_idx < n_segs:
+                    dy = h_offsets.get((id(s), seg_idx), dy)
+                    dx = v_offsets.get((id(s), seg_idx), dx)
             new_pts.append((pt[0] + dx, pt[1] + dy))
 
         result[id(s)] = new_pts
@@ -304,8 +289,7 @@ def separate_streams(fs: "Flowsheet") -> None:
     fs : Flowsheet
         Sheet with routed streams.
     """
-    h_offsets, v_offsets = _compute_offsets(fs.streams, SPACING)
-    new_waypoints = _apply_offsets(fs.streams, h_offsets, v_offsets)
+    new_waypoints = preview_separated_waypoints(fs.streams)
     for s in fs.streams:
         if id(s) in new_waypoints and not s.route.manual:  # type: ignore[union-attr]
             s.route.waypoints = new_waypoints[id(s)]  # type: ignore[union-attr]
@@ -326,5 +310,4 @@ def preview_separated_waypoints(
     dict[int, list[tuple[float, float]]]
         Separated waypoints by ``id(stream)``, for each routed stream.
     """
-    h_offsets, v_offsets = _compute_offsets(streams, SPACING)
-    return _apply_offsets(streams, h_offsets, v_offsets)
+    return _apply_offsets(streams, *_compute_offsets(streams))

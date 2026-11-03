@@ -69,6 +69,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
 from decimal import Decimal
+from functools import cache
 from pathlib import Path
 from typing import Any, Literal, cast
 from math import isfinite
@@ -113,9 +114,7 @@ class SpecError(ValueError):
     """Error for a flowsheet spec that cannot be read or written."""
 
 
-# ----------------------------------------------------------------
 # Primitive validation
-# ----------------------------------------------------------------
 
 
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
@@ -554,28 +553,7 @@ def _read_fields(data: Mapping[str, Any], where: str,
             for keys, read in readers for key in keys if key in data}
 
 
-# --------------------------------------------------------------
 # The equipment registry
-# --------------------------------------------------------------
-
-
-def _snake(name: str) -> str:
-    """Return a CamelCase name in snake_case.
-
-    Parameters
-    ----------
-    name : str
-        CamelCase name.
-
-    Returns
-    -------
-    str
-        The snake_case name.
-    """
-    out = [name[0].lower()]
-    for char in name[1:]:
-        out.append(f"_{char.lower()}" if char.isupper() else char)
-    return "".join(out)
 
 
 # Every class a spec may name, from units and devices.
@@ -587,7 +565,7 @@ _CLASSES.update({name: getattr(device_types, name) for name in device_types.__al
 # Accept the class name (HeatExchanger) and its snake_case spelling.
 _ALIASES: dict[str, str] = {}
 for _name, _cls in _CLASSES.items():
-    for _alias in (_name, _snake(_name)):
+    for _alias in (_name, re.sub(r"(?<=.)([A-Z])", r"_\1", _name)):
         _ALIASES[_alias.lower()] = _name
 # Also accept Unit.kind (hex), resolved to its base class in units.
 for _name in unit_types.__all__:
@@ -630,9 +608,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     return _CLASSES[name]
 
 
-# --------------------------------------------------------------
 # Reading: spec -> Flowsheet
-# --------------------------------------------------------------
 
 _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
@@ -1473,7 +1449,6 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
         minted = unit._mint_port(name)
         if minted is not None:
             return minted
-    # Resolve an alias to its port name.
     if isinstance(name, str):
         name = unit._canonical_port_name(name)
     if not isinstance(name, str) or name not in unit.ports:
@@ -2101,9 +2076,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         raise _fail_from(e, where) from None  # e.g. a bad align=
 
 
-# --------------------------------------------------------------
 # Writing: Flowsheet -> spec
-# --------------------------------------------------------------
 
 _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
 
@@ -2130,25 +2103,15 @@ def to_dict(fs: Flowsheet) -> dict:
     ValueError
         If the stream-label enclosure is unknown.
     """
-    if not isinstance(fs.stream_naming_scheme, str):
-        raise SpecError(
-            "a callable stream_naming_scheme cannot be written to a spec; use a format "
-            "string such as 'S{n}'"
-        )
-    if not isinstance(fs.line_numbering_scheme, str):
-        raise SpecError(
-            "a callable line_numbering_scheme cannot be written to a spec; use a format "
-            f"string such as {DEFAULT_LINE_NUMBERING_SCHEME!r}"
-        )
-    if not isinstance(fs.valve_station_tag_scheme, str):
-        raise SpecError(
-            "a callable valve_station_tag_scheme cannot be written to a spec; use a format "
-            f"string such as {DEFAULT_VALVE_STATION_TAG_SCHEME!r}"
-        )
     spec: dict[str, Any] = {"name": fs.name}
-    for key, default, _ in _SHEET_SETTINGS:
-        if getattr(fs, key) != default:
-            spec[key] = getattr(fs, key)
+    for key, default, read in _SHEET_SETTINGS:
+        value = getattr(fs, key)
+        # The schemes are the text settings; only a format string is written.
+        if read is _text and not isinstance(value, str):
+            raise SpecError(f"a callable {key} cannot be written to a spec; use a format "
+                            f"string such as {default!r}")
+        if value != default:
+            spec[key] = value
     if not fs.auto_faces:
         spec["auto_faces"] = False
     if fs.components:
@@ -2182,11 +2145,12 @@ def to_dict(fs: Flowsheet) -> dict:
               for f in dataclass_fields(StreamLabelOptions)
               if getattr(fs.stream_labels, f.name) != f.default}
     if labels:
-        # Raise ValueError for an unknown enclosure.
         _resolve_enclosure(fs.stream_labels.enclosure)
         spec["stream_labels"] = labels
     if fs.title_block is not None:
-        spec["title_block"] = _write_title_block(fs.title_block)
+        block = spec["title_block"] = _stated_text(fs.title_block)
+        if fs.title_block.revisions:
+            block["revisions"] = [_stated_text(rev) for rev in fs.title_block.revisions]
     if fs.annotations:
         spec["annotations"] = [_write_annotation(a) for a in fs.annotations]
     return spec
@@ -2523,7 +2487,6 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["draw_as_recycle"] = True
     for key in LINE_NUMBER_FIELDS:
         value = getattr(stream, key)
-        # Skip an auto-assigned sequence.
         if value is not None and not (key == "sequence" and value == stream._auto_sequence):
             entry[key] = value
     for key in ("color", "dasharray"):
@@ -2561,25 +2524,6 @@ def _stated_text(obj: TitleBlock | Revision) -> dict[str, Any]:
     text = _drawn_text_fields(type(obj))
     return {f.name: getattr(obj, f.name) for f in dataclass_fields(type(obj))
             if f.name in text and getattr(obj, f.name) != f.default}
-
-
-def _write_title_block(block: TitleBlock) -> dict[str, Any]:
-    """Write ``title_block:``.
-
-    Parameters
-    ----------
-    block : TitleBlock
-        Title block to write.
-
-    Returns
-    -------
-    dict[str, Any]
-        The entry.
-    """
-    entry: dict[str, Any] = _stated_text(block)
-    if block.revisions:
-        entry["revisions"] = [_stated_text(rev) for rev in block.revisions]
-    return entry
 
 
 def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
@@ -2620,9 +2564,7 @@ def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
     return entry
 
 
-# --------------------------------------------------------------
 # File loaders
-# --------------------------------------------------------------
 
 
 def from_json(path: str | Path) -> Flowsheet:
@@ -2707,10 +2649,8 @@ def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return data
 
 
-_YAML_LOADER: Any = None
-
-
-def _core_schema_loader(yaml_module) -> Any:
+@cache
+def _core_schema_loader() -> Any:
     """Return the cached safe YAML loader for spec files.
 
     Untagged booleans are ``true`` or ``false`` in lower, title or
@@ -2718,82 +2658,76 @@ def _core_schema_loader(yaml_module) -> Any:
     and floats follow the YAML 1.2 core schema; ``0101`` and
     ``0x1F`` stay text.
 
-    Parameters
-    ----------
-    yaml_module : module
-        The imported ``yaml`` module.
-
     Returns
     -------
     type
         The ``SafeLoader`` subclass.
     """
-    global _YAML_LOADER
-    if _YAML_LOADER is None:
-        dropped = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:timestamp",
-                   "tag:yaml.org,2002:int", "tag:yaml.org,2002:float"}
+    import yaml
 
-        class Loader(yaml_module.SafeLoader):
-            """Safe loader with YAML 1.2 booleans and numbers."""
+    dropped = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:timestamp",
+               "tag:yaml.org,2002:int", "tag:yaml.org,2002:float"}
 
-            def flatten_mapping(self, node):
-                """Refuse a repeated key but ``<<``, then merge.
+    class Loader(yaml.SafeLoader):
+        """Safe loader with YAML 1.2 booleans and numbers."""
 
-                Parameters
-                ----------
-                node : yaml.MappingNode
-                    Mapping node to check.
+        def flatten_mapping(self, node):
+            """Refuse a repeated key but ``<<``, then merge.
 
-                Raises
-                ------
-                SpecError
-                    If a key other than ``<<`` is written twice.
-                """
-                checked = self.__dict__.setdefault("_checked", set())
-                # Check each node once, before merging rewrites it.
-                if node not in checked:
-                    checked.add(node)
-                    seen = set()
-                    for key_node, _value in node.value:
-                        if key_node.tag == "tag:yaml.org,2002:merge":
-                            continue
-                        key = self.construct_object(key_node)
-                        try:
-                            repeated = key in seen
-                        except TypeError:
-                            # Leave an unhashable key to the base class.
-                            continue
-                        if repeated:
-                            raise _written_twice(key, key_node.start_mark.line + 1)
-                        seen.add(key)
-                super().flatten_mapping(node)
+            Parameters
+            ----------
+            node : yaml.MappingNode
+                Mapping node to check.
 
-        Loader.yaml_implicit_resolvers = {
-            char: [(tag, pattern) for tag, pattern in resolvers if tag not in dropped]
-            for char, resolvers in yaml_module.SafeLoader.yaml_implicit_resolvers.items()
-        }
-        Loader.add_implicit_resolver(
-            "tag:yaml.org,2002:bool",
-            re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
-            list("tTfF"),
-        )
-        # Decimal integers only.
-        Loader.add_implicit_resolver(
-            "tag:yaml.org,2002:int",
-            re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$"),
-            list("-+0123456789"),
-        )
-        # YAML 1.2 core-schema floats, less bare digit strings: ``0101``
-        # stays text; ``1e3`` and ``.5`` are floats.
-        Loader.add_implicit_resolver(
-            "tag:yaml.org,2002:float",
-            re.compile(r"^(?:(?![-+]?[0-9]+$)[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)"
-                       r"(?:[eE][-+]?[0-9]+)?"
-                       r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"),
-            list("-+0123456789."),
-        )
-        _YAML_LOADER = Loader
-    return _YAML_LOADER
+            Raises
+            ------
+            SpecError
+                If a key other than ``<<`` is written twice.
+            """
+            checked = self.__dict__.setdefault("_checked", set())
+            # Check each node once, before merging rewrites it.
+            if node not in checked:
+                checked.add(node)
+                seen = set()
+                for key_node, _value in node.value:
+                    if key_node.tag == "tag:yaml.org,2002:merge":
+                        continue
+                    key = self.construct_object(key_node)
+                    try:
+                        repeated = key in seen
+                    except TypeError:
+                        # Leave an unhashable key to the base class.
+                        continue
+                    if repeated:
+                        raise _written_twice(key, key_node.start_mark.line + 1)
+                    seen.add(key)
+            super().flatten_mapping(node)
+
+    Loader.yaml_implicit_resolvers = {
+        char: [(tag, pattern) for tag, pattern in resolvers if tag not in dropped]
+        for char, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+    }
+    Loader.add_implicit_resolver(
+        "tag:yaml.org,2002:bool",
+        re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
+        list("tTfF"),
+    )
+    # Decimal integers only.
+    Loader.add_implicit_resolver(
+        "tag:yaml.org,2002:int",
+        re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$"),
+        list("-+0123456789"),
+    )
+    # YAML 1.2 core-schema floats, less bare digit strings: ``0101``
+    # stays text; ``1e3`` and ``.5`` are floats.
+    Loader.add_implicit_resolver(
+        "tag:yaml.org,2002:float",
+        re.compile(r"^(?:(?![-+]?[0-9]+$)[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)"
+                   r"(?:[eE][-+]?[0-9]+)?"
+                   r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"),
+        list("-+0123456789."),
+    )
+    return Loader
 
 
 def from_yaml(path: str | Path) -> Flowsheet:
@@ -2832,7 +2766,7 @@ def from_yaml(path: str | Path) -> Flowsheet:
         ) from e
     text = Path(path).read_text(encoding="utf-8")
     try:
-        data = yaml.load(text, Loader=_core_schema_loader(yaml))
+        data = yaml.load(text, Loader=_core_schema_loader())
     except yaml.YAMLError as e:
         raise SpecError(f"{path}: not valid YAML, {e}") from None
     except SpecError as e:

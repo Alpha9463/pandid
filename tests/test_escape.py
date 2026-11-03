@@ -238,11 +238,6 @@ def _carries_no_injected_markup(root: ET.Element) -> None:
     ----------
     root : xml.etree.ElementTree.Element
         Parsed XML root element.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     for element in root.iter():
         for name in element.attrib:
@@ -257,11 +252,6 @@ def _every_reference_resolves(root: ET.Element) -> None:
     ----------
     root : xml.etree.ElementTree.Element
         Parsed SVG root element.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     ids = {element.get("id") for element in root.iter() if element.get("id") is not None}
     for element in root.iter():
@@ -281,11 +271,6 @@ def test_a_hostile_value_cannot_break_the_svg_document(field: str) -> None:
     ----------
     field : str
         SVG renderer context containing the injection probe.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     svg = _svg_document(RENDER_PROBE, field)
     root = _parsed(svg)
@@ -301,11 +286,6 @@ def test_a_hostile_value_cannot_break_the_drawio_document(field: str) -> None:
     ----------
     field : str
         Draw.io renderer context containing the injection probe.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     root = _parsed(_drawio_document(RENDER_PROBE, field))
     _carries_no_injected_markup(root)
@@ -319,11 +299,6 @@ def _carries_no_html_beyond_br(root: ET.Element) -> None:
     ----------
     root : xml.etree.ElementTree.Element
         Parsed Draw.io XML root element.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     for element in root.iter():
         value = element.get("value")
@@ -344,11 +319,6 @@ def test_escaped_hostile_content_is_safe_in_text_and_attributes(payload: str) ->
     ----------
     payload : str
         Hostile string accepted by the escaping primitive.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     content = escaped(payload)
     text = _parsed(f"<value>{content}</value>")
@@ -365,11 +335,6 @@ def test_no_file_path_reaches_the_sheet(tmp_path):
     ----------
     tmp_path : pathlib.Path
         Temporary output directory supplied by pytest.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     out = tmp_path / f"{INJECTED}.svg"
     _plant("ordinary", "flowsheet name").render(str(out))
@@ -398,11 +363,6 @@ def test_a_paint_that_is_not_a_paint_is_refused(field, payload):
         Paint attribute under validation.
     payload : str
         Invalid paint value.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = _plant("ordinary", "flowsheet name")
     with pytest.raises(ValueError) as raised:
@@ -426,11 +386,6 @@ def test_a_colour_that_is_a_colour_is_accepted(color):
     ----------
     color : str
         Valid CSS colour.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     check_color(color)
 
@@ -443,23 +398,12 @@ def test_a_dash_that_is_a_dash_is_accepted(dash):
     ----------
     dash : str
         Valid dash-array value.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     check_dasharray(dash)
 
 
 def test_a_stream_keeps_the_paint_it_was_given():
-    """Verify valid paint values are retained in SVG output.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify valid paint values are retained in SVG output."""
     fs = _plant("ordinary", "flowsheet name")
     fs.streams[0].color = "#0a7"
     fs.streams[0].dasharray = "6,3"
@@ -473,13 +417,7 @@ def test_a_stream_keeps_the_paint_it_was_given():
 
 
 def test_a_marker_id_is_a_name_however_the_colour_is_spelled():
-    """Verify colour-derived marker identifiers are valid XML names.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify colour-derived marker identifiers are valid XML names."""
     fs = _plant("ordinary", "flowsheet name")
     fs.streams[0].color = "rgb(0, 170, 119)"
     root = _parsed(fs.to_svg(check=False))
@@ -490,58 +428,28 @@ def test_a_marker_id_is_a_name_however_the_colour_is_spelled():
 
 
 def test_two_colours_never_share_one_marker():
-    """Verify distinct colours use distinct marker identifiers.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify distinct colours use distinct marker identifiers."""
     assert arrow_marker_id("rgb(1,2,3)") != arrow_marker_id("rgb(1, 2, 3)")
 
 
 def test_an_ordinary_colour_keeps_the_id_it_always_had():
-    """Verify ordinary colour identifiers remain stable.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify ordinary colour identifiers remain stable."""
     assert arrow_marker_id("black") == "arrow_black"
     assert arrow_marker_id("#0a7") == "arrow_0a7"
 
 
 def test_ident_leaves_a_name_alone():
-    """Verify identifier generation preserves valid names.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify identifier generation preserves valid names."""
     assert ident("sym", "valve_control_s62.5x40") == "sym_valve_control_s62.5x40"
 
 
 def test_ident_is_a_function_of_its_input_alone():
-    """Verify identifier generation is deterministic.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify identifier generation is deterministic."""
     assert ident("arrow", "rgb(1, 2, 3)") == ident("arrow", "rgb(1, 2, 3)")
 
 
 def test_the_two_spellings_of_a_name_character_agree():
-    """Verify identifier character definitions agree.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify identifier character definitions agree."""
     for code in range(0x80):
         char = chr(code)
         assert (char in _NAME_CHARS) is not bool(_UNSAFE_RUN.fullmatch(char)), repr(char)
@@ -558,50 +466,24 @@ def test_escaping_ordinary_content_changes_nothing(value):
     ----------
     value : str
         Safe text value.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     assert escaped(value) == value
 
 
 def test_escaping_writes_the_five_and_drops_the_unwritable():
-    """Verify XML characters are escaped and control bytes are removed.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify XML characters are escaped and control bytes are removed."""
     assert escaped('A&B<C>"D"') == "A&amp;B&lt;C&gt;&quot;D&quot;"
     assert escaped("a\x00b\x08c") == "abc"
     assert writable("a\tb\nc\rd") == "a\tb\nc\rd"
 
 
 def test_an_inch_mark_is_escaped_and_stays_escaped():
-    """Verify inch marks remain escaped in line numbers.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Verify inch marks remain escaped in line numbers."""
     assert escaped('6"-P-1001-A1A') == "6&quot;-P-1001-A1A"
 
 
 def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
-    """Measure ``R&D`` as the three characters drawn, in both backends.
-
-    The halo is the drawn text's width plus 8, so 33.3 wide; measured
-    on ``R&amp;D`` it would be wider by the escape's four characters.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Measure ``R&D`` as the three characters drawn, in both backends."""
     from pandid.render.drawio import _tag_pass
     from pandid.render.symbols import default_registry
 
@@ -630,11 +512,6 @@ def test_a_number_is_written_fixed_point_without_a_negative_zero(value, places, 
         Decimal places.
     written : str
         Expected text.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     from pandid.render.escape import fmt
 

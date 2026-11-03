@@ -41,7 +41,6 @@ LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
 
 # --- line weights -----------------------------------------------------
 
-# Dash pattern per signal kind.
 _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
                 "capillary": "3,3"}
 
@@ -385,7 +384,6 @@ def quadrant_labels(fs, direction: str) -> list:
         return []
     ink = _ink(fs, direction)
     symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    symbols += [_obstacle(b) for b in flange_boxes(fs, None)]
 
     out: list = []
     for u in annotated:
@@ -1732,26 +1730,6 @@ class Flange(NamedTuple):
     along: float
 
 
-def _draws_its_own_flange(u) -> bool:
-    """Return whether a unit's own symbol is the flange stencil.
-
-    Parameters
-    ----------
-    u : Unit
-        In-line unit.
-
-    Returns
-    -------
-    bool
-        Whether its artwork is the flange stencil.
-    """
-    from pandid.render.symbols import default_registry
-
-    own = default_registry.get(u.kind, getattr(u, "variant", "default"))
-    return (own.drawio_shape is not None
-            and own.drawio_shape == default_registry.get("fitting", "flange").drawio_shape)
-
-
 def flanged_joint(port, want: str) -> bool:
     """Return whether a joint setting marks this end of a stream.
 
@@ -1772,13 +1750,16 @@ def flanged_joint(port, want: str) -> bool:
         Whether this end gets a flange mark.
     """
     from pandid.flowsheet import INLINE_KINDS
+    from pandid.render.symbols import default_registry
 
     kind = port.owner.kind
     if kind in {"feed", "product", "instrument"}:
         return False
     if kind in INLINE_KINDS:
-        return (want == "flanged" and kind in _INLINE_BODIES
-                and not _draws_its_own_flange(port.owner))
+        if want != "flanged" or kind not in _INLINE_BODIES:
+            return False
+        own = default_registry.get(kind, getattr(port.owner, "variant", "default")).drawio_shape
+        return own is None or own != default_registry.get("fitting", "flange").drawio_shape
     return True
 
 
@@ -2170,24 +2151,6 @@ def _at_pen_scale(svg: str, scale: float) -> str:
 # The artwork is rewritten at the placed size, one definition per
 # size (ISO 15519-1 11.1.3).
 
-def _nominal(width: float, gx: float, gy: float) -> float:
-    """Return the sheet weight of ``width`` under ``scale(gx, gy)``.
-
-    Parameters
-    ----------
-    width : float
-        Stroke width in artwork units.
-    gx, gy : float
-        Enclosing scale.
-
-    Returns
-    -------
-    float
-        ``width`` times the geometric mean of the scale magnitudes.
-    """
-    return width * math.sqrt(abs(gx * gy))
-
-
 # A point takes scale and translation; a length takes the unsigned scale
 # only. ``r`` is handled separately.
 _X_POINTS = {"x", "x1", "x2", "cx"}
@@ -2375,7 +2338,8 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
     out: list[tuple[str, str]] = []
     for key, value in attrs:
         if key == "stroke-width":
-            out.append(("stroke-width", fmt(_nominal(float(value), gx, gy), 6)))
+            # The geometric mean of the scale keeps the sheet weight.
+            out.append(("stroke-width", fmt(float(value) * math.sqrt(abs(gx * gy)), 6)))
         elif key == "d":
             out.append((key, _scaled_path(value, m)))
         elif key == "points":
@@ -2643,28 +2607,9 @@ def _page(page_size: "str | None") -> "_Sheet | None":
     return _Sheet(page_size.upper(), *dims)
 
 
-# Border frames.
 _BORDERS = ("none", "zone")
-# Diagram kinds (ISO 10628-1 4.2 to 4.4).
-_DIAGRAMS = ("pfd", "p&id", "bfd")
-# Accepted spellings of each diagram kind.
+# Accepted spellings of each diagram kind (ISO 10628-1 4.2 to 4.4).
 _ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd", "bfd": "bfd"}
-
-
-def _canon(value: str) -> str:
-    """Return a diagram name in canonical spelling.
-
-    Parameters
-    ----------
-    value : str
-        Diagram name; case is folded and ``"pid"`` reads as ``"p&id"``.
-
-    Returns
-    -------
-    str
-        Canonical name, or ``value`` unchanged if unknown.
-    """
-    return _ALIASES.get(value.strip().lower(), value)
 
 
 def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, str]":
@@ -2675,8 +2620,8 @@ def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, s
     border : str or None
         ``"none"`` or ``"zone"``; ``None`` means ``"none"``.
     diagram : str or None
-        ``"pfd"``, ``"p&id"``, ``"pid"`` or ``"bfd"``; ``None`` is
-        ``"pfd"``.
+        ``"pfd"``, ``"p&id"``, ``"pid"`` or ``"bfd"``, in any case;
+        ``None`` is ``"pfd"``.
 
     Returns
     -------
@@ -2697,8 +2642,8 @@ def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, s
 
     if diagram is None:
         return border, "pfd"
-    kind = _canon(diagram)
-    if kind not in _DIAGRAMS:
+    kind = _ALIASES.get(diagram.strip().lower())
+    if kind is None:
         raise ValueError(
             f"Unknown diagram {diagram!r}; use 'pfd', "
             f"'p&id' (also spelled 'pid') or 'bfd'."
@@ -3116,27 +3061,6 @@ def _sheet_title(fs: "Flowsheet") -> str:
     return title or str(fs.name or "").strip()
 
 
-def _table_sheet_title(fs: "Flowsheet", options) -> str:
-    """Return the stream-table sheet's title and subtitle.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet.
-    options : StreamTableOptions
-        Table options carrying ``sheet_subtitle``.
-
-    Returns
-    -------
-    str
-        Title parts joined with ``" - "``.
-    """
-    from pandid.document import _drawn_text
-
-    parts = [p for p in (_sheet_title(fs), _drawn_text(options.sheet_subtitle)) if p]
-    return " - ".join(parts)
-
-
 def _provenance(fs: "Flowsheet", title: "str | None" = None) -> list[str]:
     """Return the ``<title>`` and provenance lines of an SVG document.
 
@@ -3309,7 +3233,8 @@ def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
             raise _too_small(page, page.width - fw + table.w,
                              page.height - fh + table.h, "the stream table")
     _obj, sx, sy, sw, sh = placed[0]
-    left, top = F.table_sheet_origin(table, free)
+    # Centre the block stack across the region a fixed page leaves.
+    left, top = (0.0, 0.0) if free is None else (free[0] + (free[2] - table.w) / 2, free[1])
     date = block.date or datetime.now().strftime("%Y-%m-%d")
     findings = []
     if not block.drawing_number:
@@ -3525,14 +3450,7 @@ class SvgRenderer:
         Symbols drawn with.
     """
 
-    def __init__(self, registry=None):
-        """Store the symbol registry.
-
-        Parameters
-        ----------
-        registry : SymbolRegistry, optional
-            Symbols to draw with; ``default_registry`` when omitted.
-        """
+    def __init__(self, registry=None):  # numpydoc ignore=GL08
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
 
@@ -3609,25 +3527,8 @@ class SvgRenderer:
         fit_issues: list[Issue] = []
         # Findings from the label passes.
         self._findings: list[Issue] = []
-
-        def report(field: str, text: str, drawn: str,
-                   room: float, need: float) -> None:
-            """Record a title-block or annotation cell that overflowed.
-
-            Parameters
-            ----------
-            field : str
-                Field name.
-            text : str
-                Value given.
-            drawn : str
-                Value drawn.
-            room, need : float
-                Cell width and text width, in drawing units.
-            """
-            fit_issues.append(fit_issue(field, text, drawn, room, need))
-
-        furniture, canvas = self._place_furniture(fs, plan, border, report)
+        furniture, canvas = self._place_furniture(
+            fs, plan, border, lambda *cell: fit_issues.append(fit_issue(*cell)))
 
         # Replace render findings from earlier renders.
         render_issues = fit_issues + _crossing_issues(fs, jump_direction,
@@ -3722,11 +3623,8 @@ class SvgRenderer:
 
         # --- border around the frame, then the sheet edge -------------
         if border == "zone":
-            frame_lines, outer = F.zone_frame(*plan.frame)
-            furniture[:0] = frame_lines  # border sits behind the boxes
-        else:
-            outer = F.sheet_rect(*plan.frame)
-        ox, oy, ow, oh = outer
+            furniture[:0] = F.zone_frame(*plan.frame)  # border sits behind the boxes
+        ox, oy, ow, oh = F.sheet_rect(*plan.frame)
         OUT = F.OUTER_MARGIN
         return furniture, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT)
 
@@ -3747,47 +3645,30 @@ class SvgRenderer:
         str
             SVG document.
         """
+        from pandid.document import _drawn_text
+
         fit_issues: list[Issue] = []
-
-        def report(field: str, text: str, drawn: str,
-                   room: float, need: float) -> None:
-            """Record a title-block cell that overflowed.
-
-            Parameters
-            ----------
-            field : str
-                Field name.
-            text : str
-                Value given.
-            drawn : str
-                Value drawn.
-            room, need : float
-                Cell width and text width, in drawing units.
-            """
-            fit_issues.append(fit_issue(field, text, drawn, room, need))
-
         plan = table_sheet_plan(fs, sheet)
         furniture: list[str] = []
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
             furniture.extend(F.draw_stream_table(
                 part, bx, by, group=f"stream_table_{i + 1}"))
         sx, sy, sw, sh = plan.strip
-        furniture.extend(F.draw_title_strip(plan.block, plan.name, plan.date,
-                                            sx + sw, sy + sh, report=report))
+        furniture.extend(F.draw_title_strip(
+            plan.block, plan.name, plan.date, sx + sw, sy + sh,
+            report=lambda *cell: fit_issues.append(fit_issue(*cell))))
         if border == "zone":
-            frame_lines, outer = F.zone_frame(*plan.frame)
-            furniture[:0] = frame_lines  # the border sits behind the rest
-        else:
-            outer = F.sheet_rect(*plan.frame)
-        ox, oy, ow, oh = outer
+            furniture[:0] = F.zone_frame(*plan.frame)  # the border sits behind the rest
+        ox, oy, ow, oh = F.sheet_rect(*plan.frame)
         OUT = F.OUTER_MARGIN
         fs.warnings = ([w for w in fs.warnings
                         if getattr(w, "code", "") not in _RENDER_CODES]
                        + plan.findings + fit_issues)
+        subtitle = _drawn_text(F._options(fs).sheet_subtitle)
         return _document(
             fs, sheet, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT),
             ["    " + item for item in furniture],
-            title=_table_sheet_title(fs, F._options(fs)))
+            title=" - ".join(p for p in (_sheet_title(fs), subtitle) if p))
 
     # --- defs ---------------------------------------------------------
 
@@ -4345,23 +4226,6 @@ class SvgRenderer:
 
     # --- streams ------------------------------------------------------
 
-    def _tipped(self, s, arrows: bool) -> bool:
-        """Return whether this render draws an arrowhead on ``s``.
-
-        Parameters
-        ----------
-        s : Stream
-            Stream.
-        arrows : bool
-            Whether the sheet draws arrowheads.
-
-        Returns
-        -------
-        bool
-            Whether to add the marker.
-        """
-        return arrows and wears_arrowhead(s, self.registry)
-
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True,
                       plates=None, joints=None, crossing_style="arc"):
         """Return the ``streams`` group: runs, joint marks and numbers.
@@ -4395,25 +4259,9 @@ class SvgRenderer:
             for hop in stream_hops(fs, jump_direction):
                 hops.setdefault((hop.stream, hop.seg), []).append(hop)
 
-        # A gap is an ``M`` subpath in the same ``d``.
-
-        def cross(far: str) -> str:
-            """Return the path command crossing to ``far``.
-
-            Parameters
-            ----------
-            far : str
-                Far side of the crossing, as ``"x,y"``.
-
-            Returns
-            -------
-            str
-                Arc command for ``"arc"``, else a move.
-            """
-            if crossing_style == "arc":
-                return f"A {HOP_R:g} {HOP_R:g} 0 0 1 {far}"
-            return f"M {far}"
-
+        # The command crossing to the far side: an arc, or a gap as an
+        # ``M`` subpath in the same ``d``.
+        cross = f"A {HOP_R:g} {HOP_R:g} 0 0 1 " if crossing_style == "arc" else "M "
         lines = ['  <g id="streams">']
         for n, (s, points) in enumerate(stream_geoms):
             paint = s.color or "black"
@@ -4436,16 +4284,17 @@ class SvgRenderer:
                         foot = HOP_R if y1 < y2 else -HOP_R
                         d_parts.extend([
                             f"L {x1},{hop.y - foot:g}",
-                            cross(f"{x1},{hop.y + foot:g}")])
+                            f"{cross}{x1},{hop.y + foot:g}"])
                     else:
                         foot = HOP_R if x1 < x2 else -HOP_R
                         d_parts.extend([
                             f"L {hop.x - foot:g},{y1}",
-                            cross(f"{hop.x + foot:g},{y1}")])
+                            f"{cross}{hop.x + foot:g},{y1}"])
                 d_parts.append(f"L {x2},{y2}")
             d_str = " ".join(d_parts)
 
-            marker = f' marker-end="url(#{marker_id})"' if self._tipped(s, arrows) else ""
+            marker = (f' marker-end="url(#{marker_id})"'
+                      if arrows and wears_arrowhead(s, self.registry) else "")
             width = _stream_rung(is_signal).width
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
