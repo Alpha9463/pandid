@@ -16,6 +16,7 @@ from pandid.inline import _INLINE_KINDS
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.portgeom import port_point, resolve_size, unit_box
+from pandid.routing.metrics import path_length
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -377,22 +378,6 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
                 [stream_polyline(other) for other in others if other.route is not None])
 
 
-def _size(leg: Leg) -> float:
-    """Return a leg's length.
-
-    Parameters
-    ----------
-    leg : Leg
-        Straight leg.
-
-    Returns
-    -------
-    float
-        Length.
-    """
-    return abs(leg[1][0] - leg[0][0]) + abs(leg[1][1] - leg[0][1])
-
-
 def _level(leg: Leg) -> bool:
     """Return whether a leg is horizontal.
 
@@ -613,7 +598,7 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
     from pandid.stations import StationAssembly
 
     (ax, ay), (bx, by) = leg
-    total = _size(leg)
+    total = path_length(leg)
     t = centre / total if total else 0.5
     point = (ax + t * (bx - ax), ay + t * (by - ay))
     if isinstance(element, StationAssembly):
@@ -753,7 +738,7 @@ def _along(legs: list[Leg], point: Point) -> float:
     travelled = 0.0
     for index, leg in enumerate(legs):
         (ax, ay), (bx, by) = leg
-        size = _size(leg)
+        size = path_length(leg)
         level = _level(leg)
         ahead = (point[0] - ax) * (1 if bx >= ax else -1) if level else             (point[1] - ay) * (1 if by >= ay else -1)
         across = abs(point[1] - ay) if level else abs(point[0] - ax)
@@ -785,7 +770,7 @@ def _point_at(legs: list[Leg], distance: float) -> tuple[Point, bool]:
     """
     for leg in legs:
         (ax, ay), (bx, by) = leg
-        size = _size(leg)
+        size = path_length(leg)
         if distance <= size:
             t = max(distance, 0.0) / size if size else 0.0
             return (ax + t * (bx - ax), ay + t * (by - ay)), _level(leg)
@@ -903,13 +888,13 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     list[list[int]]
         Plans, each giving every element's leg index.
     """
-    room = [_size(leg) - sum(_margins(index, len(legs))) + ALONG
+    room = [path_length(leg) - sum(_margins(index, len(legs))) + ALONG
             for index, leg in enumerate(legs)]
     need = [[_length(element, leg) + ALONG for leg in legs] for element in run.elements]
     starts, travelled = [], 0.0
     for leg in legs:
         starts.append(travelled)
-        travelled += _size(leg)
+        travelled += path_length(leg)
     middle = sum(wanted) / len(wanted)
 
     def distance(index: int) -> float:
@@ -925,7 +910,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
         float
             Distance along the pipe.
         """
-        return abs(starts[index] + _size(legs[index]) / 2 - middle)
+        return abs(starts[index] + path_length(legs[index]) / 2 - middle)
 
     whole = sorted((index for index in range(len(legs))
                     if sum(row[index] for row in need) <= room[index]),
@@ -937,7 +922,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
                        if used[index] + row[index] <= room[index]), None)
         if choice is None:
             usable = [index for index in range(cursor, len(legs)) if row[index] != float("inf")]
-            choice = max(usable or [max(range(len(legs)), key=lambda index: _size(legs[index]))],
+            choice = max(usable or [max(range(len(legs)), key=lambda index: path_length(legs[index]))],
                          key=lambda index: room[index] - used[index])
         if row[choice] != float("inf"):
             used[choice] += row[choice]
@@ -1022,7 +1007,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         b = port_point(dest, dest.frame, run.dest.name)
         legs = [(a, (b[0], a[1])) if abs(b[0] - a[0]) >= abs(b[1] - a[1]) else (a, (a[0], b[1]))]
     count = len(run.elements)
-    want = _wanted(run, sum(_size(leg) for leg in legs),
+    want = _wanted(run, sum(path_length(leg) for leg in legs),
                    lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)),
                    run.taps)
     # Keep a balloon's reach clear around its tap on an upright leg.
@@ -1035,7 +1020,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     starts, travelled = [], 0.0
     for leg in legs:
         starts.append(travelled)
-        travelled += _size(leg)
+        travelled += path_length(leg)
     # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
 
@@ -1057,7 +1042,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         placed: list[dict[Unit, Frame]] = []
         mine = [*zones, *tap_zones]
         for index in sorted(set(assigned)):
-            leg, size, level = legs[index], _size(legs[index]), _level(legs[index])
+            leg, size, level = legs[index], path_length(legs[index]), _level(legs[index])
             head, tail = _margins(index, len(legs))
             group = [i for i, a in enumerate(assigned) if a == index]
             lengths = [min(_length(run.elements[i], leg), size) for i in group]

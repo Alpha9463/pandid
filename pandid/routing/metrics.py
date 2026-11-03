@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence
 
 from pandid.routing.astar import OPPOSITE
 from pandid.routing.visibility import TRAVEL
@@ -100,12 +100,12 @@ def real_bends(waypoints: list[Point]) -> int:
     return sum(1 for a, b in zip(dirs, dirs[1:]) if a != b)
 
 
-def path_length(points: list[Point]) -> float:
+def path_length(points: Sequence[Point]) -> float:
     """Return the Manhattan length of a waypoint path.
 
     Parameters
     ----------
-    points : list[Point]
+    points : Sequence[Point]
         Path waypoints.
 
     Returns
