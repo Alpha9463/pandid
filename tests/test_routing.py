@@ -17,6 +17,7 @@ from pandid.route_geometry import stream_polyline
 from pandid.routing import DefaultRouter, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
+from pandid.routing.separation import SPACING
 from pandid.routing.visibility import TAG_CLEAR, Rect, VisibilityGraph, clear_gaps
 
 
@@ -604,6 +605,55 @@ def test_a_route_that_crosses_two_streams_costs_twice():
 
     assert crossing_one == pytest.approx(clear + astar.CROSSING_PENALTY)
     assert crossing_two == pytest.approx(clear + 2 * astar.CROSSING_PENALTY)
+
+
+def _one_edge_graph() -> VisibilityGraph:
+    """Build a graph with one edge from (0, 0) to (40, 0).
+
+    Returns
+    -------
+    VisibilityGraph
+        Stand-in carrying the ``nodes``, ``edges``, and ``recycle_y`` that
+        ``find_path`` reads.
+    """
+    nodes = {(0.0, 0.0), (40.0, 0.0)}
+    edges: dict = {(0.0, 0.0): [(40.0, 0.0)], (40.0, 0.0): [(0.0, 0.0)]}
+    return cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+
+
+def test_a_run_beside_a_drawn_line_costs_one_crossing():
+    """Charge a run within ``SPACING`` of a drawn line on its axis.
+
+    Returns
+    -------
+    None
+        A collinear or near run costs one penalty; a farther run costs none.
+    """
+    graph = _one_edge_graph()
+    clear = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, None)
+    for y, charges in ((0.0, 1), (SPACING, 1), (SPACING + 1.0, 0)):
+        index = CrossingIndex()
+        index.h[y] = [(10.0, 30.0)]
+        cost = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, None, crossing_index=index)
+        assert cost == pytest.approx(clear + charges * astar.CROSSING_PENALTY), y
+
+
+def test_a_run_meeting_a_drawn_lines_end_costs_one_crossing():
+    """Charge a run that a drawn line ends on, and a crossing only once.
+
+    Returns
+    -------
+    None
+        A line ending on the run from either side, or crossing it, costs
+        one penalty.
+    """
+    graph = _one_edge_graph()
+    clear = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, None)
+    for span in ((0.0, 10.0), (-10.0, 0.0), (-10.0, 10.0)):
+        index = CrossingIndex()
+        index.v[20.0] = [span]
+        cost = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, None, crossing_index=index)
+        assert cost == pytest.approx(clear + astar.CROSSING_PENALTY), span
 
 
 def test_crossing_index_protects_a_stubs_whole_span_not_just_its_ends():

@@ -5,6 +5,7 @@ import heapq
 import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Optional, Tuple
+from pandid.routing.separation import SPACING
 from pandid.routing.visibility import VisibilityGraph
 
 BEND_PENALTY = 500.0
@@ -13,7 +14,7 @@ BEND_PENALTY = 500.0
 Axis = Literal["h", "v"]
 
 
-CROSSING_PENALTY = 500.0
+CROSSING_PENALTY = 10.0
 
 
 #: Crossing queries before a search caches the sorted tracks locally.
@@ -138,6 +139,55 @@ class CrossingIndex:
                 return 0
             return sum(1 for y in keys[i0:i1] for lo, hi in self.h[y] if lo < x < hi)
         return 0
+
+    def contacts_along(self, p1: Tuple[float, float], p2: Tuple[float, float], straight: bool) -> int:
+        """Count segments that run p1-p2 passes beside or meets end-on.
+
+        A same-axis segment within :data:`SPACING` counts where its overlap
+        with the run begins past ``p1``, or at ``p1`` after a turn. A
+        perpendicular segment counts where its end lies on the run past
+        ``p1``.
+
+        Parameters
+        ----------
+        p1, p2 : tuple[float, float]
+            Ends of the run, in travel order.
+        straight : bool
+            Whether the route reaches ``p1`` on the axis of the run.
+
+        Returns
+        -------
+        int
+            Number of contacts, 0 for a diagonal or empty run.
+        """
+        if p1[1] == p2[1] and p1[0] != p2[0]:
+            same, across, f, t1, t2 = self.h, self.v, p1[1], p1[0], p2[0]
+            same_keys, across_keys = self._sorted_keys("h"), self._sorted_keys("v")
+        elif p1[0] == p2[0] and p1[1] != p2[1]:
+            same, across, f, t1, t2 = self.v, self.h, p1[0], p1[1], p2[1]
+            same_keys, across_keys = self._sorted_keys("v"), self._sorted_keys("h")
+        else:
+            return 0
+        forward = t2 > t1
+        lo_t, hi_t = (t1, t2) if forward else (t2, t1)
+        count = 0
+        i0 = bisect.bisect_left(same_keys, f - SPACING)
+        i1 = bisect.bisect_right(same_keys, f + SPACING)
+        for k in same_keys[i0:i1]:
+            for lo, hi in same[k]:
+                a, b = max(lo, lo_t), min(hi, hi_t)
+                if a > b:
+                    continue
+                entry = a if forward else b
+                if (a < b and (entry != t1 or not straight)) or (a == b and entry == t2):
+                    count += 1
+        if forward:
+            i0, i1 = bisect.bisect_right(across_keys, t1), bisect.bisect_right(across_keys, t2)
+        else:
+            i0, i1 = bisect.bisect_left(across_keys, t2), bisect.bisect_left(across_keys, t1)
+        for g in across_keys[i0:i1]:
+            count += sum(1 for lo, hi in across[g] if f in (lo, hi))
+        return count
 
 
 def committed_segments(path: List[Tuple[float, float]]) -> List[Tuple[Axis, float, float, float]]:
@@ -391,6 +441,9 @@ def find_path(
                                 for lo, hi in crossing_index.h[y]
                                 if lo < x < hi
                             )
+                cost += CROSSING_PENALTY * crossing_index.contacts_along(
+                    current, neighbor, cur_dir == ndir
+                )
 
             bend_cost = BEND_PENALTY
             if is_recycle:
