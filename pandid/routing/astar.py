@@ -109,7 +109,7 @@ class CrossingIndex:
         return sum(1 for lo, hi in self.v.get(x, ()) if lo < y < hi)
 
     def crossings_along(self, p1: Tuple[float, float], p2: Tuple[float, float]) -> int:
-        """Count perpendicular segments strictly inside run p1-p2.
+        """Count perpendicular segments crossing inside run p1-p2.
 
         Parameters
         ----------
@@ -213,7 +213,7 @@ OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
 
 
 def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
-    """Return the compass direction from p1 to p2.
+    """Return the compass direction from p1 to p2, x first.
 
     Parameters
     ----------
@@ -223,7 +223,7 @@ def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
     Returns
     -------
     str or None
-        ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or None for equal points.
+        ``"E"`` or ``"W"``, else ``"S"`` or ``"N"``; None if equal.
     """
     if p1[0] < p2[0]:
         return "E"
@@ -284,8 +284,8 @@ def find_path(
     edge_penalties : dict, optional
         Penalties on directed edges used by earlier routes.
     is_recycle : bool, default=False
-        Apply recycle-lane costs.
-    crossing_index : CrossingIndex, optional
+        Favour recycle lanes and halve the bend cost.
+    crossing_index : CrossingIndex or None, optional
         Routes drawn before this one.
 
     Returns

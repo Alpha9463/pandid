@@ -91,7 +91,7 @@ def _fallback_path(
     goal : tuple[float, float]
         Destination port anchor.
     obstacles : list
-        Unit boxes to avoid.
+        Obstacles whose hits are counted.
     crossing_index : CrossingIndex or None, optional
         Routes already drawn in this pass.
 
@@ -111,7 +111,7 @@ def _fallback_path(
         Returns
         -------
         list[tuple[float, float]]
-            Route waypoints without repeated points.
+            Route waypoints, consecutive repeats dropped.
         """
         pts = [start]
         for point in (start_proj, corner, goal_proj, goal):
@@ -120,7 +120,7 @@ def _fallback_path(
         return pts
 
     def score(pts: list[tuple[float, float]]) -> tuple[int, int]:
-        """Count obstacle hits, then recorded-line crossings.
+        """Return a route's obstacle hits and line crossings.
 
         Parameters
         ----------
@@ -130,7 +130,7 @@ def _fallback_path(
         Returns
         -------
         tuple[int, int]
-            Obstacle hits and line crossings.
+            Segments hitting an obstacle, and recorded-line crossings.
         """
         obstacle_hits = sum(
             any(o.intersects_segment(a[0], a[1], b[0], b[1]) for o in obstacles)
@@ -162,6 +162,11 @@ def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, 
         Route waypoints.
     manual : bool
         Whether the route was set by hand.
+
+    Raises
+    ------
+    ValueError
+        If ``manual`` is false and a segment is diagonal.
     """
     if not manual:
         crossing_index.record(waypoints)
@@ -210,8 +215,8 @@ class DefaultRouter:
 
     Parameters
     ----------
-    recover_exits : bool, optional
-        Swap a blocked escape node for a reachable one on the stub.
+    recover_exits : bool, default=True
+        Use the furthest reachable node on each stub, else an L route.
 
     Attributes
     ----------
@@ -223,7 +228,7 @@ class DefaultRouter:
         self.recover_exits = recover_exits
 
     def route(self, fs: "Flowsheet") -> None:
-        """Route and separate every automatic stream on the sheet.
+        """Route and separate the sheet's automatic streams.
 
         Parameters
         ----------
@@ -233,7 +238,15 @@ class DefaultRouter:
         Raises
         ------
         ValueError
-            If a frame is non-finite or a stream's port has no owner.
+            If a frame is non-finite, a port has no owner, or a face is
+            unreachable.
+        RuntimeError
+            If a path search exceeds its expansion budget.
+
+        Warns
+        -----
+        UserWarning
+            If an end has no frame or anchor; the stream stays unrouted.
         """
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path

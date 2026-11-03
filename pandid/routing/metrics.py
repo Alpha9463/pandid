@@ -20,11 +20,11 @@ def min_bends(a: Point, dir_a: Optional[str], b: Point, dir_b: Optional[str]) ->
     a : Point
         Source port anchor.
     dir_a : str or None
-        Outward direction of the source port.
+        Source port's outward direction: N, S, E, W or None.
     b : Point
         Destination port anchor.
     dir_b : str or None
-        Outward direction of the destination port.
+        Destination port's outward direction: N, S, E, W or None.
 
     Returns
     -------

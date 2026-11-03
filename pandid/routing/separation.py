@@ -1,7 +1,7 @@
 """Separate routed streams that share a track.
 
-Overlapping runs of different streams on nearly the same track move onto
-tracks at least :data:`SPACING` apart.
+Overlapping runs of different streams on tracks within :data:`SPACING`
+move apart; end runs and manual routes keep their track.
 """
 
 from typing import Any, Sequence, TYPE_CHECKING
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
 
-#: Minimum distance between separated tracks.
+#: Track grid step, and the least gap a moved run keeps.
 SPACING = 6.0
 
 
@@ -24,7 +24,7 @@ def _compute_offsets(
     streams : Sequence[Stream]
         Routed streams.
     spacing : float
-        Minimum distance between separated tracks.
+        Track grid step, and the least gap a moved run keeps.
 
     Returns
     -------
@@ -128,9 +128,9 @@ def _compute_offsets(
 
         Runs that overlap along their length form a component. In a
         component of several streams, fixed runs keep their track, a
-        free run joins its stream's nearer fixed track, and any other
+        free run joins its stream's nearest fixed track, and any other
         run takes the nearest free slot on a ``spacing`` grid around
-        the mean track.
+        the fixed runs' mean track, or all runs' if none is fixed.
 
         Parameters
         ----------
@@ -258,7 +258,7 @@ def _apply_offsets(
     Returns
     -------
     dict[int, list[tuple[float, float]]]
-        Offset waypoints by ``id(stream)``.
+        Offset waypoints by ``id(stream)``, for each routed stream.
     """
     result: dict[int, list[tuple[float, float]]] = {}
     for s in streams:
@@ -295,7 +295,7 @@ def _apply_offsets(
 
 
 def separate_streams(fs: "Flowsheet") -> None:
-    """Separate overlapping parallel runs and write the waypoints.
+    """Separate overlapping runs and rewrite every automatic route.
 
     Parameters
     ----------
@@ -322,7 +322,7 @@ def preview_separated_waypoints(
     Returns
     -------
     dict[int, list[tuple[float, float]]]
-        Separated waypoints by ``id(stream)``.
+        Separated waypoints by ``id(stream)``, for each routed stream.
     """
     h_offsets, v_offsets = _compute_offsets(streams, SPACING)
     return _apply_offsets(streams, h_offsets, v_offsets)

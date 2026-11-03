@@ -30,7 +30,7 @@ class Rect:
     y_max: float
 
     def intersects_segment(self, x1: float, y1: float, x2: float, y2: float) -> bool:
-        """Return whether an orthogonal segment enters the rectangle.
+        """Return whether an orthogonal segment meets the rectangle.
 
         Parameters
         ----------
@@ -42,7 +42,7 @@ class Rect:
         Returns
         -------
         bool
-            Whether the segment enters; False for a diagonal.
+            Whether it enters or runs along a side; False if diagonal.
         """
         if x1 == x2:
             return (
@@ -92,7 +92,7 @@ TRAVEL: Dict[str, Tuple[int, float]] = {
 
 
 def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
-    """Return the maximum outward distance of a port's escape node.
+    """Return how far a port's escape node sits outside its anchor.
 
     Parameters
     ----------
@@ -185,7 +185,7 @@ class VisibilityGraph:
     Attributes
     ----------
     obstacles : list[Rect]
-        Unit bodies and tag halos.
+        Unit bodies, except inline balloons, and tag halos.
     body_obstacles : list[tuple[Unit, Rect]]
         Unit bodies with their units.
     port_anchors : dict[tuple[str, str], tuple[float, float]]
@@ -199,9 +199,14 @@ class VisibilityGraph:
     xs, ys : list[float]
         Sorted lane coordinates.
     nodes : set[tuple[float, float]]
-        Lane intersections outside every obstacle.
+        Lane intersections outside every obstacle's interior.
     edges : dict[tuple[float, float], list[tuple[float, float]]]
         Clear neighbours of each node.
+
+    Raises
+    ------
+    ValueError
+        If a port's face cannot be reached under its placement.
     """
 
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
@@ -401,7 +406,7 @@ class VisibilityGraph:
         Returns
         -------
         tuple[float, float] or None
-            Reachable node, or None if the whole stub is blocked.
+            Furthest clear node, ``projection`` if not outward, or None.
         """
         axis, sign = TRAVEL[direction]
         distance = sign * (projection[axis] - anchor[axis])
