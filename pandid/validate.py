@@ -756,7 +756,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                               f"{(u.frame.mirrored, u.frame.mirror_y)}")
             # Compare pinned col/row with the frame's, skipping an axis
             # with an absolute pin.
-            pin = u.pin_
             for axis, absolute in (("col", "x"), ("row", "y")) if pin is not None else ():
                 want, rank = getattr(pin, axis), getattr(u.frame, axis)
                 if want is None or rank == want or getattr(pin, absolute) is not None:
@@ -780,11 +779,12 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
         # Grid pins in order: a lower col is drawn further west, and a
         # lower row higher up its column.
-        graded = [u for u in placed if u.kind != "instrument" and u.pin_ is not None]
-        for a in graded:
-            for b in graded:
-                pa, pb, fa, fb = a.pin_, b.pin_, a.frame, b.frame
-                assert pa is not None and pb is not None and fa is not None and fb is not None
+        graded = [(u, pin) for u in placed
+                  if u.kind != "instrument" and (pin := u.pin_) is not None]
+        for a, pa in graded:
+            for b, pb in graded:
+                fa, fb = a.frame, b.frame
+                assert fa is not None and fb is not None
                 if (pa.col is not None and pb.col is not None and pa.x is None and pb.x is None
                         and pa.col < pb.col and fa.cx >= fb.cx):
                     said = f"{a.name} was pinned col={pa.col}, west of {b.name}'s col={pb.col}"
