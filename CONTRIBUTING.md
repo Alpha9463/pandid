@@ -40,9 +40,6 @@ python -m mypy pandid               # type check the package
 python -m pyright pandid            # second type check of the package
 ```
 
-CI also installs `.[dev,pdf]` from binary wheels and runs public render and CLI
-smoke checks on Python 3.12 and 3.13.
-
 `ruff format` is enforced on `tests/` only. The rest of the tree is linted but
 not auto-formatted, so don't reformat `pandid/` in a feature PR.
 
