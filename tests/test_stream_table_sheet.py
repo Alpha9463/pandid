@@ -547,40 +547,17 @@ def test_the_raster_paths_produce_the_table_sheet_too(tmp_path, ext):
     assert out.stat().st_size > 1000
 
 
-def test_the_option_reaches_the_drafting_call(monkeypatch):
+def test_the_option_reaches_the_drafting_call(caught):
     """Verify that table-sheet options reach the drafting call.
 
     Parameters
     ----------
-    monkeypatch : pytest.MonkeyPatch
-        Patching helper supplied by pytest.
+    caught : dict[str, str]
+        What ``show()`` handed the preview.
     """
-    from pandid.render import preview as P
-
-    seen: dict = {}
-
-    def fake(svg: str, *, title: str = "") -> str:
-        """Capture preview SVG without opening a window.
-
-        Parameters
-        ----------
-        svg : str
-            SVG document submitted to the preview backend.
-        title : str, default=""
-            Preview window title.
-
-        Returns
-        -------
-        str
-            Placeholder preview-window handle.
-        """
-        seen["svg"] = svg
-        return "window"
-
-    monkeypatch.setattr(P, "preview", fake)
     fs = _sheet(streams=21)
     fs.show(show_stream_table="sheet", page_size="A4")
-    assert seen["svg"] == _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
+    assert caught["svg"] == _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
 
 
 # --- one number apiece -------------------------------------------------------
