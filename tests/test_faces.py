@@ -10,9 +10,6 @@ from pandid.routing import DefaultRouter
 def _drum_fed_from(x, y, *, fs=None, **drum_pin):
     """Build a horizontal separator fed by one boundary flag.
 
-    The drum's ``feed`` has west, north, and east placements, so the flag
-    position alone decides the face.
-
     Parameters
     ----------
     x, y : float

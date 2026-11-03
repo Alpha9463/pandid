@@ -1,14 +1,4 @@
-"""#413: the cycle-breaking walk must not recurse to the depth of the
-longest unbranched chain, and the iterative rewrite must mark exactly
-the edges the recursive walk it replaced would have.
-
-The second half is the one a golden corpus cannot promise on its own
--- the goldens exercise the shapes this project happens to draw, not
-every shape a feedback-arc walk can be handed. So this file also
-carries a small, self-contained copy of the *pre-fix* recursive walk
-(``_reference_recursive_marks``) and compares its marking against the
-real, current ``break_cycles`` over many generated topologies.
-"""
+"""Check that cycle breaking does not recurse per unit and marks what a recursive walk does."""
 
 from __future__ import annotations
 
@@ -67,11 +57,7 @@ def test_long_chain_lays_out_without_recursion_error():
 
 
 def test_long_chain_with_a_recycle_still_marks_it():
-    """The walk still finds the one back edge on a long chain, not just
-    surviving one with none. Built with a mixer at the head so the
-    recycle has a nozzle of its own, and a splitter partway down so the
-    tap feeding it back is a fresh outlet, not one the forward chain is
-    already using."""
+    """Check that the walk marks the one back edge on a long chain."""
     fs2 = Flowsheet("chain-with-recycle")
     feed = fs2.add(U.Feed("F"))
     head = fs2.add(U.Mixer("M", n_inlets=2))
@@ -105,13 +91,7 @@ def test_long_chain_with_a_recycle_still_marks_it():
 
 
 def _reference_recursive_marks(fs: Flowsheet) -> set[int]:
-    """A frozen copy of ``break_cycles``'s walk exactly as it stood
-    before #413 -- genuinely recursive, marking into a side set instead
-    of ``Stream._is_recycle`` so it can run beside the real one without
-    disturbing it.
-
-    Returns the set of ``id(stream)`` marked as a recycle back-edge.
-    """
+    """Return the ids of the streams a recursive depth-first walk marks as back edges."""
     units = process_units(fs)
     marks: set[int] = set()
     if not units:
@@ -157,10 +137,7 @@ def _reference_recursive_marks(fs: Flowsheet) -> set[int]:
 
 
 def _random_flowsheet(rng: random.Random, n_nodes: int) -> Flowsheet:
-    """A random flowsheet of pumps, mixers, splitters, feeds and
-    products, connected by a random matching of outlets to inlets --
-    dense enough to fold back on itself into cycles, self-loops and
-    disconnected islands, all of which the walk must handle."""
+    """Return a random flowsheet of pumps, mixers, splitters, feeds and products."""
     fs = Flowsheet("prop")
     out_slots = []
     in_slots = []
@@ -218,9 +195,7 @@ def test_iterative_marking_matches_recursive_reference_over_random_topologies():
 
 
 def test_iterative_marking_matches_recursive_reference_on_fixed_shapes():
-    """A handful of hand-picked shapes the random corpus might miss:
-    a self-loop, a diamond with a cross-back edge, several disconnected
-    loops, and a sheet with no feed at all."""
+    """Check that both walks agree on a self-loop, a diamond, a feedless loop and islands."""
 
     def _self_loop() -> Flowsheet:
         fs = Flowsheet("self-loop")

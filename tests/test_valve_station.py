@@ -1,19 +1,4 @@
-"""Check the control valve station: its assembly, tags, placement and refusals.
-
-The arrangement follows the CHEE4001/7103 P&ID guidelines (p.4, drawn on
-p.5 of ``professional_examples/``, which is gitignored). Along the run it is:
-
-    bypass takeoff, isolation valve, drain tee, reduction, control valve,
-    expansion, drain tee, isolation valve, bypass rejoin
-
-The bypass is carried on one throttling valve and tapped outside both
-isolation valves. The drain and bypass valves are drawn solid (normally
-closed); the two in-line isolation valves are left open.
-
-The issued sheet ``professional_examples/P&ID_301.pdf`` agrees with this
-geometry but tags none of a station's hand valves or reducers, so member tags
-come from a configurable scheme rather than a fixed rule.
-"""
+"""Check the control valve station: its assembly, tags, placement and refusals."""
 
 from __future__ import annotations
 
@@ -471,11 +456,7 @@ def test_mirrored_false_is_named_like_any_other_stated_run_option():
 
 @pytest.mark.parametrize("word", list(RUN_WORDS))
 def test_the_same_word_is_taken_the_moment_the_station_has_a_run(word):
-    """Check that each run option moves a pinned station.
-
-    Both stations are pinned at the same point, so only the option can
-    make them differ.
-    """
+    """Check that each run option moves a pinned station."""
     fs = Flowsheet("placed")
     plain = fs.add_valve_station("CV-1", x=300, y=RUN_Y)
     stated = fs.add_valve_station("CV-2", x=300, y=RUN_Y, **{word: RUN_WORDS[word]})
@@ -484,11 +465,7 @@ def test_the_same_word_is_taken_the_moment_the_station_has_a_run(word):
 
 
 def test_a_word_left_unsaid_is_the_default_it_always_was():
-    """Check that unstated run options take their defaults once the run is drawn.
-
-    An unplaced station given none of them is accepted, and a pinned station
-    draws ``mirrored=False`` exactly as it draws the option left out.
-    """
+    """Check that unstated run options take their defaults once the run is drawn."""
     fs = Flowsheet("mixed")
     unplaced = fs.add_valve_station("CV-1")
     assert all(u.pin_ is None for u in unplaced.members)

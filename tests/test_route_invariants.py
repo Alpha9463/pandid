@@ -1,9 +1,4 @@
-"""Check endpoint and orthogonality invariants for routed flowsheets.
-
-The corpus contains the gallery examples, author-built ethanol examples, and a
-synthetic control-layout case. Stream paths and impulse lines must begin and
-end at their intended ports and use orthogonal segments.
-"""
+"""Check endpoint and orthogonality invariants for routed flowsheets."""
 
 import math
 
@@ -56,9 +51,6 @@ CORPUS["crowded_taps"] = _crowded_taps
 @pytest.fixture(scope="module")
 def routed(settled_gallery):
     """Return isolated routed sheets for the invariant corpus.
-
-    The shared cache supplies the gallery examples; the synthetic
-    control-layout fixture is built fresh.
 
     Returns
     -------

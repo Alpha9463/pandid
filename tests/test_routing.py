@@ -90,13 +90,7 @@ def test_clear_gaps_closes_the_run_a_span_reaches_into():
 
 
 def test_the_obstacle_index_sees_what_an_exhaustive_scan_sees():
-    """Match the indexed graph to an exhaustive obstacle scan.
-
-    Nodes, edges, and neighbour order must all agree, because the search
-    breaks cost ties by neighbour order. Units are pinned with labels on all
-    four sides so lanes fall on obstacle edges, where strict containment and
-    segment contact differ.
-    """
+    """Match the indexed graph to an exhaustive obstacle scan."""
     fs = Flowsheet("obstacle index")
     feed = fs.add(Feed("Raw Feed")).pin(x=40, y=200)
     pump = fs.add(Pump("P-101", label_pos="bottom")).pin(x=180, y=180)
@@ -268,7 +262,7 @@ def test_the_fallback_l_also_breaks_an_obstacle_tie_on_a_drawn_crossing():
 
 
 def test_the_fallback_drops_a_corner_that_repeats_the_projection():
-    """Omit a corner that coincides with an escape node (#282)."""
+    """Omit a corner that coincides with an escape node."""
     start, start_proj = (0.0, 0.0), (25.0, 0.0)
     goal_proj, goal = (25.0, 100.0), (25.0, 125.0)
     path = _fallback_path(start, start_proj, goal_proj, goal, [])
@@ -303,9 +297,6 @@ def _straight_run(bad=None):
 def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
     """Reject a non-finite coordinate before the path search starts.
 
-    ``pin()`` refuses one where it is written (#574). A frame set another
-    way, such as by a custom layout engine, is refused by the router.
-
     Parameters
     ----------
     bad : float
@@ -323,14 +314,7 @@ def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
 
 
 def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
-    """Block the halo drawn behind a tag and a pen beside it, and nothing for no tag.
-
-    The router measured the unit's name at 7.5 px a character, capped at
-    150 px, where the renderer draws the tag at 6.6 px a character plus 8
-    with no cap; and an element whose tag its balloon carries still blocked
-    a box (#574). A line that grazed the halo had it drawn over the line
-    (#564).
-    """
+    """Block the halo drawn behind a tag and a pen beside it, and nothing for no tag."""
     fs = Flowsheet("tag-obstacle")
     name = "V-101-FEED-SURGE-DRUM-FIRST-STAGE"
     fs.add(Vessel(name, label_pos="top")).pin(x=300, y=200)
@@ -379,7 +363,7 @@ def test_find_path_names_the_endpoint_it_cannot_search_from():
 
 
 # ---------------------------------------------------------------------------
-# Pricing drawn crossings (#425).
+# Pricing drawn crossings.
 # ---------------------------------------------------------------------------
 
 
@@ -494,11 +478,7 @@ def test_a_bend_and_length_tie_breaks_towards_the_route_that_does_not_cross():
 
 
 def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
-    """Accept a crossing rather than add two bends to avoid it.
-
-    The north route has 3 bends and one crossing. The south route is clear
-    but has 5 bends. ``CROSSING_PENALTY`` is far below ``BEND_PENALTY``.
-    """
+    """Accept a crossing rather than add two bends to avoid it."""
     graph = _graph(
         [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)],
         [(0, 0), (0, -10), (20, -10), (20, -30), (40, -30), (40, 0)],
@@ -512,10 +492,6 @@ def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
 
 def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
     """Return the cost of the state ``find_path`` stops on.
-
-    A graph with one route returns the same path whether or not a crossing
-    is charged, so the charge is read from the cost of the last popped
-    state.
 
     Parameters
     ----------
@@ -563,12 +539,7 @@ def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
 
 
 def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
-    """Price the bend a side arrival makes with the goal stub.
-
-    Two routes reach the goal with equal length and counted bends. One
-    arrives in line with the stub and crosses a recorded line; the other
-    arrives from the side, which adds a bend at the stub.
-    """
+    """Price the bend a side arrival makes with the goal stub."""
     graph = _graph(
         [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],  # Arrive in line with the stub.
         [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],  # Arrive from the side.
@@ -590,13 +561,7 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
 
 
 def test_a_recycle_search_returns_the_cheapest_path():
-    """Estimate a recycle's remaining bend at the recycle's own bend cost.
-
-    A recycle bend costs ``BEND_PENALTY / 2``. The heuristic used to add the
-    full ``BEND_PENALTY``, so the node on the cheap west route, which still
-    needs a bend, looked 250 dearer than it is, and the search settled the
-    goal through the penalised east route first (#574).
-    """
+    """Estimate a recycle's remaining bend at the recycle's own bend cost."""
     west = [(0.0, 0.0), (0.0, 50.0), (0.0, 100.0), (100.0, 100.0)]
     east = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]
     graph = _graph(west, east)
@@ -622,9 +587,6 @@ def test_crossing_index_crosses_refuses_an_invalid_axis():
 def _obstacle_bypass_tie(fs):
     """Add a stream whose north and south bypasses are exactly tied.
 
-    ``label_pos="center"`` keeps the vessel symmetric; a label above it
-    would make the north bypass longer.
-
     Parameters
     ----------
     fs : Flowsheet
@@ -642,12 +604,7 @@ def _obstacle_bypass_tie(fs):
 
 
 def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
-    """Never move a ``via()`` route to separate it from another line.
-
-    Both runs lie on y=200 and overlap. Separation used to offset the
-    interior run of each and write it back, so every ``route()`` moved them
-    another 3 px (#574).
-    """
+    """Never move a ``via()`` route to separate it from another line."""
     fs = Flowsheet("via-shared-track")
     f1 = fs.add(Feed("F1")).pin(x=40, y=90)
     p1 = fs.add(Product("P1")).pin(x=560, y=90)
@@ -666,11 +623,6 @@ def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
 @pytest.mark.parametrize("x", [175.0, 176.0], ids=["on-a-lane", "off-every-lane"])
 def test_a_manual_routes_geometry_is_recorded_for_later_streams(x: float):
     """Record a manual route so a later stream avoids crossing it.
-
-    The manual stream is drawn across the north bypass at x=175, a lane the
-    graph carries, or at x=176, which only the whole-edge crossing check can
-    price. The test checks the later route, because a call to ``record`` does
-    not prove that it had an effect.
 
     Parameters
     ----------
@@ -693,11 +645,7 @@ def test_a_manual_routes_geometry_is_recorded_for_later_streams(x: float):
 
 
 def test_a_diagonal_manual_route_is_recorded_around_its_own_slant():
-    """Record the orthogonal legs of a manual route that has a diagonal leg.
-
-    The manual route crosses the north bypass with an orthogonal leg and
-    then runs diagonally away from it.
-    """
+    """Record the orthogonal legs of a manual route that has a diagonal leg."""
     fs = Flowsheet("diagonal-manual")
     f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
     p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
@@ -721,12 +669,7 @@ def test_a_diagonal_manual_route_is_recorded_around_its_own_slant():
 
 
 def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
-    """Record a fallback route so a later stream avoids crossing it.
-
-    F1 -> P1 is forced onto the fallback across the north bypass. The
-    fixture units near the bypass shift the tie by about 10 px, so
-    ``CROSSING_PENALTY`` is raised for this test.
-    """
+    """Record a fallback route so a later stream avoids crossing it."""
     fs = Flowsheet("fallback-recorded")
     f1 = fs.add(Feed("F1")).pin(x=175, y=100)
     p1 = fs.add(Product("P1")).pin(x=175, y=170)
@@ -813,12 +756,7 @@ def test_find_path_prices_a_crossing_strictly_inside_a_long_edge_not_just_at_a_n
 
 
 def test_separation_keeps_a_run_out_of_the_unit_its_stream_joins() -> None:
-    """Move a run off a shared track without passing it through its own end unit (#468).
-
-    The run to the tee sits just above the tee's box and shares a track
-    with another stream's nozzle run. The nearer free slot lies across the
-    tee, so the run must take the other one.
-    """
+    """Move a run off a shared track without passing it through its own end unit."""
     from pandid.geometry import Frame
     from pandid.routing.visibility import Rect
     from pandid.routing.separation import separate_streams
@@ -862,11 +800,7 @@ def test_separation_keeps_a_run_out_of_the_unit_its_stream_joins() -> None:
 
 
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
-    """Preview separation without changing routes, and match the real pass.
-
-    The routes are automatic ones, set directly: a ``via()`` route is
-    never separated (#574).
-    """
+    """Preview separation without changing routes, and match the real pass."""
     from pandid.routing.separation import preview_separated_waypoints, separate_streams
 
     fs = Flowsheet("preview-vs-real")
@@ -897,10 +831,6 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
 
 def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     """Record the separated route so later streams price its drawn path.
-
-    The crossing index is rebuilt from the separation preview (#509). A
-    ``via()`` route is never separated (#574), so the preview is replaced by
-    one that lowers every route 6 px, and the recording must follow it.
 
     Parameters
     ----------

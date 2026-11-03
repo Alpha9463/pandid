@@ -1,24 +1,4 @@
-"""The pipe tee: a line branching, and what a sheet draws for it.
-
-The reference is the CV-303 station of the issued sheet the package reproduces
-(``professional_examples/P&ID_301.pdf``, gitignored). Measured off its vector
-geometry, that station is:
-
-* a main run drawn as **one unbroken stroke**, ``(703.78, 233.29)`` to
-  ``(471.34, 233.29)``, straight through every junction on it;
-* a bypass leaving it at ``(569.14, 233.29)``, standing 15.87 pt clear over the
-  top through a darkened (normally closed) valve, and rejoining at
-  ``(676.85, 233.29)``;
-* two drain legs dropping 9.64 pt from ``(598.90, 233.29)`` and
-  ``(648.51, 233.29)`` into darkened valves, and ending there;
-* every one of those strokes 0.75 pt, the same weight as the run;
-* and **nothing drawn at any of the four junctions**: the sheet contains no
-  filled shape smaller than 6 pt anywhere on it.
-
-So the tests below hold three things: the run does not kink through a tee, the
-tee puts no tag and no symbol on the sheet, and nothing about it reaches the
-equipment list.
-"""
+"""Check the pipe tee: its model, drawing, numbering and spec entry."""
 
 from __future__ import annotations
 
@@ -41,14 +21,7 @@ def on_run(unit, x, run_y, port="inlet", mirrored=False):
 
 
 def station():
-    """The CV-303 station: isolation valves, a bypass over the top, two drains.
-
-    Laid out by hand, exactly as a valve station is drawn: every device pinned
-    on the run's centreline, the tees among them. Spacings are the tightest the
-    router's 25-unit escape stand-off leaves clean: a facing pair closer than
-    that makes the run double back on itself, which is true of two valves with
-    no tee between them and has nothing to do with the junction.
-    """
+    """Return the CV-303 station laid out by hand: isolation valves, a bypass, two drains."""
     fs = Flowsheet(
         "CV-303 Station",
         line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
@@ -159,12 +132,7 @@ def test_tees_share_one_name_and_are_told_apart_by_the_flowsheet():
 
 
 def test_a_tee_may_not_take_a_name_that_already_means_something_else():
-    """The repeat is between tees, not between a tee and anything on the sheet.
-
-    A tee has no tag, so two of them are not two things a reader could confuse.
-    The name is still the handle a stream and a spec entry reach it by, and a
-    tee answering to ``P-101`` would make that handle mean two things.
-    """
+    """Check that a tee may not take a name another unit holds."""
     fs = Flowsheet("t")
     fs.add(units.Pump("P-101"))
     with pytest.raises(ValueError, match="already exists"):
@@ -221,12 +189,7 @@ def test_no_tag_is_drawn_for_a_tee(cv303):
 
 
 def test_the_junction_is_bare_pipe(cv303):
-    """The tee's whole artwork: the run across, and the branch stub off it.
-
-    The reference draws three lines meeting and nothing else -- no dot, no
-    circle, no fitting outline -- so the symbol is two path segments at the
-    2-unit weight the process lines are drawn in, and no fill anywhere.
-    """
+    """Check that the tee's symbol is one unfilled path at the run's weight."""
     from pandid.render.symbols import default_registry
 
     svg = default_registry.get("tee").svg
@@ -237,13 +200,7 @@ def test_the_junction_is_bare_pipe(cv303):
 
 
 def heads_by_destination(fs, **kwargs):
-    """Every stream on the sheet, keyed by where it ends, paired with whether
-    it was drawn with an arrowhead.
-
-    Read back out of the SVG rather than off the model, because the arrowhead
-    is a rendering decision and the point is what a reader sees. A line's last
-    ``L`` is its far end, which is the nozzle its ``dest`` port resolves to.
-    """
+    """Return whether each stream, keyed by its destination port, is drawn tipped."""
     svg = fs.to_svg(**kwargs)
     tipped = {}
     for d, rest in re.findall(r'<path d="([^"]*)"([^>]*)/>', svg):
@@ -257,12 +214,7 @@ def heads_by_destination(fs, **kwargs):
 
 
 def tee_on_a_pfd():
-    """One run with a junction in the middle of it, and a branch off it.
-
-    Every line but the one into the tee ends somewhere a reader can point at: a
-    boundary flag, a belt, a valve. The tee is the only thing on the sheet that
-    is a point on a line rather than a place.
-    """
+    """Return a run with a tee in the middle and a branch off it to a belt."""
     fs = Flowsheet("Tee on a PFD")
     source = fs.add(units.Feed("Source"))
     hand_valve = fs.add(units.Valve("HV-1"))
@@ -293,12 +245,7 @@ def test_only_the_line_into_the_junction_loses_its_arrowhead():
 
 
 def test_a_leg_rejoining_the_run_is_not_tipped_either(cv303):
-    """A bypass coming back is still arriving at a point on a line.
-
-    The station has five lines ending at a junction: four on the run, plus the
-    bypass returning onto the fifth through a tee whose branch is an inlet.
-    Drawn as a PFD, which is the sheet that carries arrowheads at all.
-    """
+    """Check that no line ending at a station tee is tipped, the bypass return included."""
     heads = heads_by_destination(cv303, diagram="pfd")
     junctions = {end: head for end, head in heads.items() if end[0].startswith("TEE")}
     assert len(junctions) == 5
@@ -308,9 +255,7 @@ def test_a_leg_rejoining_the_run_is_not_tipped_either(cv303):
 
 
 def test_the_junction_is_the_only_symbol_drawn_as_bare_pipe():
-    """The rule is keyed on what the symbol draws, not on the ``Tee`` class, so
-    this is what says how far it reaches. Every other in-line device -- a valve,
-    a reducer, a fitting -- draws a body the arrowhead lands against."""
+    """Check that the tee is the only symbol drawn as bare pipe."""
     from pandid.render.symbols import default_registry
 
     bare = sorted(key for key, symbol in default_registry._symbols.items() if symbol.bare_run)
@@ -343,8 +288,7 @@ def test_a_tee_is_not_equipment(cv303):
 
 
 def test_a_tee_still_has_a_name_for_an_explicit_schedule(cv303):
-    """``include=`` takes whatever it names, which is how a piping schedule is
-    built from the same flowsheet."""
+    """Check that ``include=`` puts named tees on an equipment schedule."""
     rows = equipment_list(cv303, include=["TEE", "TEE (2)"]).rows
     assert rows == [("TEE", "Pipe Tee"), ("TEE (2)", "Pipe Tee")]
 
@@ -406,7 +350,7 @@ def test_the_spec_writes_the_branch_direction_only_when_it_is_a_return(cv303):
 
 
 # ---------------------------------------------------------------------------
-# branch_direction is the port's own (#292)
+# branch_direction is the port's own
 # ---------------------------------------------------------------------------
 
 
@@ -417,12 +361,7 @@ def test_the_branch_direction_is_read_off_the_nozzle(branch):
 
 
 def test_the_branch_direction_cannot_be_assigned():
-    """It was a plain attribute until #292, and assigning it moved the word.
-
-    The nozzle stayed where it was, so the tee reported a return while its
-    branch went on taking flow off the run -- and :mod:`pandid.spec` wrote the
-    word rather than the nozzle, so the file said the same wrong thing.
-    """
+    """Check that ``branch_direction`` is read-only and follows the branch nozzle."""
     tee = units.Tee("T-1")
     with pytest.raises(AttributeError, match="read-only"):
         tee.branch_direction = "inlet"
@@ -430,13 +369,7 @@ def test_the_branch_direction_cannot_be_assigned():
 
 
 def test_the_branch_direction_is_derived_and_so_cannot_shadow_the_nozzle():
-    """One fact, read in both places.
-
-    Reaching into ``ports`` is not an API this class offers -- it is how the
-    test says there is nothing kept beside the nozzle to fall out of step with
-    it. The serialiser is asked in the same breath, because #292 was as much
-    about what went into the file as about what the object reported.
-    """
+    """Check that ``branch_direction`` and the spec read the branch nozzle's direction."""
     fs = Flowsheet("s")
     tee = fs.add(units.Tee("T-1"))
     tee.ports["branch"].direction = "inlet"
@@ -447,12 +380,7 @@ def test_the_branch_direction_is_derived_and_so_cannot_shadow_the_nozzle():
 
 @pytest.mark.parametrize("branch", ["outlet", "inlet"])
 def test_a_tee_comes_back_from_the_spec_branching_the_way_it_went_in(branch):
-    """Asserted on the rebuilt tee, not on its dict.
-
-    A dict comparison is satisfied by a value the writer drops and the reader
-    never sees, which is exactly the shape of #276 and #316. The question here
-    is what the *object* on the far side does, so that is what is asked.
-    """
+    """Check that a tee read back from the spec branches the way it was written."""
     fs = Flowsheet("s")
     fs.add(units.Tee("T-1", branch=branch))
     (rebuilt,) = Flowsheet.from_dict(fs.to_dict()).units

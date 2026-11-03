@@ -168,11 +168,11 @@ def test_a_pipe_from_a_north_nozzle_to_a_south_nozzle_stacks_its_units() -> None
     )
 
 
-# --- north and south faces (#168) ---------------------------------------------
+# --- north and south faces ---------------------------------------------------
 
 
 def _syngas_block() -> tuple[Flowsheet, U.Feed, U.Feed, U.Feed, U.Block]:
-    """Return the sheet from issue #168: two north inlets on one block.
+    """Return a sheet with two north inlets on one block.
 
     Returns
     -------
@@ -193,11 +193,7 @@ def _syngas_block() -> tuple[Flowsheet, U.Feed, U.Feed, U.Feed, U.Block]:
 
 
 def test_a_feed_on_a_north_nozzle_is_drawn_above_it() -> None:
-    """Check that feeds onto a block's roof sit above it, one each, and a side feed stays level.
-
-    Issue #168: ranked only as a flow step, ``Air`` landed at the bottom of
-    the sheet and climbed its full height to reach a nozzle on the roof.
-    """
+    """Check that feeds onto a block's roof sit above it, one each, and a side feed stays level."""
     fs, ng, air, steam, sec = _syngas_block()
     fs.layout()
 
@@ -242,11 +238,7 @@ def _legs(path: list[tuple[float, float]]) -> list[tuple[float, float]]:
 
 
 def test_a_north_face_peer_reaches_its_nozzle_in_one_turn() -> None:
-    """Check that a feed onto a roof nozzle leaves east and drops onto it.
-
-    Without the feed aimed short of its own nozzle the run leaves east,
-    drops, and comes back west: three turns to cross ten pixels.
-    """
+    """Check that a feed onto a roof nozzle leaves east and drops onto it."""
     fs, _, air, steam, _ = _syngas_block()
     fs.layout()
     fs.route()
@@ -280,11 +272,7 @@ def test_a_south_nozzles_peer_is_drawn_below_it() -> None:
 
 
 def test_an_equipment_nozzle_on_the_north_is_not_a_stacking_constraint() -> None:
-    """Check that a compressor fed off a drum's top nozzle is still the next unit along.
-
-    Vapour leaves the top because vapour does; that says nothing about
-    where the compressor goes.
-    """
+    """Check that a compressor fed off a drum's top nozzle is still the next unit along."""
     fs = Flowsheet("equipment")
     feed = fs.add(U.Feed("Feed"))
     sep = fs.add(U.Separator("V-1"))
@@ -300,10 +288,7 @@ def test_an_equipment_nozzle_on_the_north_is_not_a_stacking_constraint() -> None
 
 
 def test_a_named_north_nozzle_is_not_a_stacking_constraint_either() -> None:
-    """Check that moving a drum's inlet to its top leaves the pump beside it.
-
-    ``examples/08`` feeds its deaerator over the top tray.
-    """
+    """Check that moving a drum's inlet to its top leaves the pump beside it."""
     fs = Flowsheet("named")
     pump = fs.add(U.Pump("P-1"))
     drum = fs.add(U.Vessel("V-1", variant="horizontal"))
@@ -352,11 +337,7 @@ def test_a_recycle_into_a_south_face_does_not_drag_its_source_back() -> None:
 
 
 def test_a_branch_ranks_beside_the_spine_it_joins() -> None:
-    """Check that a blower feeding a tower far along the train sits one column from it.
-
-    Longest path from the left edge would start it beside the first unit
-    of the train and run its line the width of the page.
-    """
+    """Check that a blower feeding a tower far along the train sits one column from it."""
     fs = Flowsheet("slack")
     water = fs.add(U.Feed("Water"))
     a = fs.add(U.Filter("F-1"))
@@ -381,12 +362,7 @@ def test_a_branch_ranks_beside_the_spine_it_joins() -> None:
 
 
 def test_a_relief_valve_is_drawn_over_the_vessel_it_protects() -> None:
-    """Check that a relief valve on a vessel's top nozzle sits up at that vessel.
-
-    Issue #430: the valve landed at the bottom right of the sheet and the
-    relief line was drawn round the outside of everything to reach it. It
-    now sits above the vessel, on the first level leg of its line.
-    """
+    """Check that a relief valve on a vessel's top nozzle sits up at that vessel."""
     fs = Flowsheet("relief")
     feed = fs.add(U.Feed("Feed"))
     drum = fs.add(U.Vessel("V-101"))
@@ -406,11 +382,7 @@ def test_a_relief_valve_is_drawn_over_the_vessel_it_protects() -> None:
 
 
 def test_one_fixed_nozzle_places_an_edge_whose_far_end_can_move() -> None:
-    """Check that a pump's one-face discharge puts the drum it feeds east of it.
-
-    A horizontal drum's inlet is authored on three faces, so nothing about
-    it says where the drum goes; the pump's discharge is enough.
-    """
+    """Check that a pump's one-face discharge puts the drum it feeds east of it."""
     fs = Flowsheet("one fixed end")
     pump = fs.add(U.Pump("P-1"))
     drum = fs.add(U.Vessel("V-1", variant="horizontal"))
@@ -424,11 +396,7 @@ def test_one_fixed_nozzle_places_an_edge_whose_far_end_can_move() -> None:
 
 
 def test_a_signal_run_states_no_order_along_the_sheet() -> None:
-    """Check that a control loop neither tears the process nor puts balloons on the grid.
-
-    Issue #430: read as a step along the process, a wire pushed the
-    controller a column east and made the loop a cycle to break.
-    """
+    """Check that a control loop neither tears the process nor puts balloons on the grid."""
     fs = Flowsheet("loop")
     feed = fs.add(U.Feed("Feed"))
     valve = fs.add(D.ControlValve("FV-101"))
@@ -471,11 +439,7 @@ def test_two_units_fed_by_one_take_two_rows_of_the_next_column() -> None:
 
 
 def test_crossing_reduction_runs_left_of_column_zero() -> None:
-    """Check that a layer pinned left of column 0 still orders the next one.
-
-    The old barycentre swept ``range(1, max_col + 1)``, which is empty when
-    every pin is left of column 0.
-    """
+    """Check that a layer pinned left of column 0 still orders the next one."""
     fs = Flowsheet("negative column")
     a, b, c = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "ABC")
     x, y, z = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "XYZ")
@@ -493,11 +457,7 @@ def test_crossing_reduction_runs_left_of_column_zero() -> None:
 
 
 def test_a_pipe_runs_level_onto_a_resized_unit() -> None:
-    """Check that a feed lines up with a resized drum's inlet, not its symbol's.
-
-    A drum resized past its symbol's height carries its inlet
-    proportionally lower.
-    """
+    """Check that a feed lines up with a resized drum's inlet, not its symbol's."""
     fs = Flowsheet("straighten")
     feed = fs.add(U.Feed("Feed"))
     drum = fs.add(U.Vessel("V-1", variant="horizontal", height=42))
@@ -582,11 +542,7 @@ def test_a_unit_between_two_pins_is_drawn_between_them() -> None:
 
 
 def test_two_pins_that_contradict_hold_and_the_derived_one_gives() -> None:
-    """Check that ``P-1`` east of ``P-3`` holds with the flow running the other way.
-
-    Both pins hold exactly; what gives is the position nobody stated,
-    which settles between the two.
-    """
+    """Check that ``P-1`` east of ``P-3`` holds with the flow running the other way."""
     fs = Flowsheet("conflicting pins")
     a = fs.add(U.Pump("P-1"))
     b = fs.add(U.Pump("P-2"))
@@ -616,10 +572,7 @@ def test_grid_pins_are_recorded_and_a_lone_unit_starts_at_the_margin() -> None:
 
 
 def test_a_row_pinned_above_row_zero_draws() -> None:
-    """Check that ``pin(row=-1)`` is recorded and drawn on the page.
-
-    A pass that counted bands up from zero once raised ``KeyError`` here.
-    """
+    """Check that ``pin(row=-1)`` is recorded and drawn on the page."""
     fs = Flowsheet("negative row")
     top = fs.add(U.Feed("Top"))
     bottom = fs.add(U.Feed("Bottom"))
@@ -639,9 +592,6 @@ def test_a_row_pinned_above_row_zero_draws() -> None:
 @pytest.mark.parametrize("pin_row", [None, 0, 1, 2, -1])
 def test_pinning_a_row_does_not_flip_a_north_feed(pin_row: int | None) -> None:
     """Check that a block's row pin leaves its roof feed above it.
-
-    Issue #311: ``pin(row=0)``, which moves nothing, put the north feed on
-    the south side of the block.
 
     Parameters
     ----------
@@ -854,12 +804,7 @@ def test_a_free_axis_keeps_clear_of_a_pinned_unit() -> None:
 
 
 def test_a_pinned_feed_flag_is_kept_clear_where_it_is_drawn() -> None:
-    """Check that a pump pinned in y keeps clear of the flag a long feed tag draws.
-
-    An unmirrored flag keeps its nozzle at ``frame.x + 50`` and is drawn
-    leftward from it, so a long tag reaches far left of its frame (#574).
-    A turned and mirrored pump keeps the size it was given.
-    """
+    """Check that a pump pinned in y keeps clear of the flag a long feed tag draws."""
     fs = Flowsheet("Drawn extent clearance")
     feed = fs.add(U.Feed("Long feed label that extends far to the left")).pin(x=300, y=100)
     pump = fs.add(U.Pump("Rotated", width=140, height=90)).pin(y=75, orientation=90, mirrored="x")
@@ -915,14 +860,11 @@ def test_the_pinned_biodiesel_sheet_draws_without_an_overlap() -> None:
     assert _unit_overlaps(fs) == []
 
 
-# --- bands (#429) -------------------------------------------------------------------
+# --- bands -------------------------------------------------------------------------
 
 
 def test_a_ribbon_wider_than_the_paper_is_folded_into_bands() -> None:
-    """Check that a train too wide for the paper is folded, not squashed.
-
-    Issue #429: nothing wrapped, so a big plant became one long run.
-    """
+    """Check that a train too wide for the paper is folded, not squashed."""
     fs = _long_train(30)
     fs.layout()
 
@@ -982,10 +924,7 @@ def test_the_drawing_and_its_balloon_halos_start_at_the_margin() -> None:
 
 
 def test_no_two_units_overlap_judged_by_the_boxes_they_draw() -> None:
-    """Check a folded sheet of roof-fed blocks with long feed tags for overlaps.
-
-    A feed flag is drawn left of its frame, so each box is the one drawn.
-    """
+    """Check a folded sheet of roof-fed blocks with long feed tags for overlaps."""
     fs = Flowsheet("Stacked")
     port = fs.add(U.Feed("F")).outlet
     for i in range(30):
@@ -1014,10 +953,6 @@ def test_laying_out_twice_gives_identical_frames() -> None:
 def _interlock_on_a_signal() -> tuple[Flowsheet, U.Unit]:
     """Return ``examples/04_control_loop.py``'s shape: a balloon on a balloon's line.
 
-    ``LT`` reads the drum, ``LIC`` sits under it, and the interlock hangs
-    off the signal between the two, so where it is drawn depends on faces
-    chosen after the boxes are placed.
-
     Returns
     -------
     tuple[Flowsheet, Unit]
@@ -1039,11 +974,7 @@ def _interlock_on_a_signal() -> tuple[Flowsheet, U.Unit]:
 
 
 def test_laying_a_sheet_out_twice_puts_every_box_in_the_same_place() -> None:
-    """Check that a balloon hung on a signal is placed the same on every layout.
-
-    Issue #294: it was placed from default faces the first time and from
-    the first run's faces the second, so it moved 16px.
-    """
+    """Check that a balloon hung on a signal is placed the same on every layout."""
     fs, interlock = _interlock_on_a_signal()
     fs.layout()
     first = {unit.name: unit.frame for unit in fs.units}
@@ -1055,10 +986,7 @@ def test_laying_a_sheet_out_twice_puts_every_box_in_the_same_place() -> None:
 
 
 def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed() -> None:
-    """Check that layout ends on a face selection no further balloon pass changes.
-
-    A label dodges the faces nozzles leave from, so it is placed last.
-    """
+    """Check that layout ends on a face selection no further balloon pass changes."""
     fs, _ = _interlock_on_a_signal()
     fs.layout()
 
@@ -1138,7 +1066,7 @@ def test_a_free_standing_balloon_is_placed_near_what_it_is_wired_to() -> None:
 
 
 def test_a_free_standing_balloon_stays_off_a_feed_flag_where_it_is_drawn() -> None:
-    """Check that a balloon keeps clear of the flag drawn, not of the flag's frame (#574)."""
+    """Check that a balloon keeps clear of the flag drawn, not of the flag's frame."""
     fs = Flowsheet("panel")
     valve = fs.add(D.ControlValve("FV-101")).pin(x=500, y=300)
     feed = fs.add(U.Feed("FEED FROM UNIT 100 STORAGE AREA")).pin(x=880, y=290)

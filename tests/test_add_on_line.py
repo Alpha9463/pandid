@@ -98,9 +98,6 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
 def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> None:
     """Place inline valves on the leg that reaches the receiver.
 
-    The reactor's outlet may leave south or east; either way the valves sit
-    level with the receiver's inlet, with at most one bend in the line.
-
     Parameters
     ----------
     pinned_origin : bool

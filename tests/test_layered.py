@@ -70,9 +70,6 @@ def test_route_report_accepts_manual_intermediate_waypoints() -> None:
 def _sealed_by_alignment(pinned: bool = False) -> tuple[Flowsheet, Frame, Frame, Route]:
     """Lay out a sheet where lining up S-2's feed with R-1's outlet can seal S-1's exit.
 
-    Pinned at the sealed pixel positions, S-2 sits 9 px below S-1, inside
-    the stub of S-1's connected underflow.
-
     Parameters
     ----------
     pinned : bool, optional
@@ -143,8 +140,6 @@ def test_default_route_clears_the_unpinned_biodiesel_sheet() -> None:
 def test_a_valve_on_an_upright_leg_runs_along_it(mirror: str | bool | None) -> None:
     """Turn an in-line valve to run along an upright pipe, mirror or not.
 
-    A mirror states no turn, so it does not hold the valve level.
-
     Parameters
     ----------
     mirror : str or bool or None
@@ -213,9 +208,6 @@ def test_a_stated_level_turn_holds_and_round_trips() -> None:
 @pytest.mark.parametrize("pins", [((0, None), (1, None)), ((0, 1), (0, 0))])
 def test_grid_pins_win_over_a_stack(pins: tuple[tuple[int, int | None], ...]) -> None:
     """Keep two blocks where their grid pins put them, though their pipe would stack them.
-
-    A pipe from A's bottom to B's top stacks B under A, unless the author
-    pinned them to different columns or B to a row above A's.
 
     Parameters
     ----------
@@ -352,7 +344,7 @@ def test_a_turned_device_with_a_stated_face_is_set_on_its_line() -> None:
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_side_draw_peers_follow_their_nozzle_heights(reverse: bool) -> None:
-    """Draw the stripper on the higher side draw above the other (#460).
+    """Draw the stripper on the higher side draw above the other.
 
     Parameters
     ----------
