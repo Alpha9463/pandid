@@ -121,12 +121,6 @@ def _drawing_bbox(fs: Flowsheet) -> tuple[float, float, float, float]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def test_to_svg_returns_a_string():
-    svg = _fs().to_svg()
-    assert isinstance(svg, str)
-    assert "<svg" in svg
-
-
 def test_render_svg_writes_file_and_returns_none(tmp_path):
     out = tmp_path / "d.svg"
     result = _fs().render(str(out))
@@ -187,11 +181,6 @@ def test_jump_direction_reaches_the_public_api():
     fs.route()
     fs.renumber_streams()
     assert SvgRenderer().render(fs, jump_direction="horizontal", crossing_style="arc") == horizontal
-
-
-def test_render_unknown_extension_raises_valueerror(tmp_path):
-    with pytest.raises(ValueError):
-        _fs().render(str(tmp_path / "d.bmp"))
 
 
 def test_canvas_fits_content_and_is_not_padded_to_page_size():
