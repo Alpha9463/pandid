@@ -78,17 +78,49 @@ def _class_weight(sym) -> LineWeight:
 
     Trim symbols use the detail rung and equipment the equipment rung
     (ISO 10628-1 5.3.1).
+
+    Parameters
+    ----------
+    sym : Symbol
+        Registered symbol.
+
+    Returns
+    -------
+    LineWeight
+        Outline rung.
     """
     return LineWeight.DETAIL if sym.trim else LineWeight.EQUIPMENT
 
 
 def _stream_rung(signal: bool) -> LineWeight:
-    """Return the line weight of a stream (ISO 10628-1 5.3.1)."""
+    """Return the line weight of a stream (ISO 10628-1 5.3.1).
+
+    Parameters
+    ----------
+    signal : bool
+        Whether the stream is a signal line.
+
+    Returns
+    -------
+    LineWeight
+        Detail rung for a signal line, else main flow.
+    """
     return LineWeight.DETAIL if signal else LineWeight.MAIN_FLOW
 
 
 def _ink_pad(rung: LineWeight) -> float:
-    """Return how far an opaque plate stays from a line on ``rung``."""
+    """Return how far an opaque plate stays from a line on ``rung``.
+
+    Parameters
+    ----------
+    rung : LineWeight
+        Line weight.
+
+    Returns
+    -------
+    float
+        Half the pen plus one unit of paper.
+    """
     return rung.width / 2 + LineWeight.DETAIL.width
 
 
@@ -97,7 +129,18 @@ _PLATE_CLEARANCE = 2.0
 
 
 def _obstacle(box) -> "tuple[float, float, float, float]":
-    """Return a symbol box grown to the area a label must keep off."""
+    """Return a symbol box grown to the area a label must keep off.
+
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Drawn box ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Grown box.
+    """
     pad = LineWeight.EQUIPMENT.width / 2 + _PLATE_CLEARANCE
     return (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
 
@@ -107,8 +150,17 @@ def _along(box, vertical: bool, lo: float, hi: float) -> bool:
 
     Parameters
     ----------
+    box : tuple[float, float, float, float]
+        Label box.
+    vertical : bool
+        Whether the run is vertical.
     lo, hi : float
         Run extent along its axis.
+
+    Returns
+    -------
+    bool
+        Whether over half the label is alongside the run.
     """
     a, b = (box[1], box[3]) if vertical else (box[0], box[2])
     return min(b, hi) - max(a, lo) > (b - a) / 2
@@ -119,8 +171,17 @@ def _slide(x: float, y: float, room: float, vertical: bool):
 
     Parameters
     ----------
+    x, y : float
+        Centre anchor.
     room : float
         Distance available either way of ``(x, y)``.
+    vertical : bool
+        Whether the run is vertical.
+
+    Yields
+    ------
+    tuple[float, float]
+        Anchor point.
     """
     yield x, y
     for k in range(1, int(room // _LABEL_STEP) + 1):
@@ -137,12 +198,14 @@ class _Ink(NamedTuple):
 
     Attributes
     ----------
+    x0, y0, x1, y1 : float
+        Covered rectangle.
     axis : str
         ``"h"`` or ``"v"``.
     at : float
         The ``y`` of a horizontal line or ``x`` of a vertical one.
     kind : str
-        ``"pipe"`` or ``"tap"``.
+        ``"pipe"``, ``"tap"`` or ``"hop"``.
     line : str
         Stream number of the run, or ``""`` for an impulse line.
     """
@@ -157,12 +220,32 @@ class _Ink(NamedTuple):
 
     @property
     def box(self) -> "tuple[float, float, float, float]":
-        """Return the covered rectangle ``(x0, y0, x1, y1)``."""
+        """Return the covered rectangle.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``(x0, y0, x1, y1)``.
+        """
         return (self.x0, self.y0, self.x1, self.y1)
 
 
 def tap_lines(fs):
-    """Return every drawn tap line as ``(instrument, tap, centre)``."""
+    """Return every drawn tap line.
+
+    Skip balloons placed ``"near"`` their host, those a stream already
+    joins to it, and those sitting on the tap point.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[Instrument, tuple[float, float], tuple[float, float]]]
+        Instrument, tap point and balloon centre for each line.
+    """
     from pandid.layout.attach import is_attached
 
     wired = {(id(s.source.owner), id(s.dest.owner)) for s in fs.streams}
@@ -188,6 +271,16 @@ def impulse_tap(inst) -> bool:
 
     It is when the host holds fluid, the relation is ``"sensing"`` and
     the balloon is a field device.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    bool
+        Whether the tap line is drawn solid.
     """
     host = getattr(inst, "host", None)
     host_kind = getattr(host, "kind", "")
@@ -221,6 +314,13 @@ _QUADRANT_REACH = 60.0
 
 def quadrant_labels(fs, direction: str) -> list:
     """Return every letter code written outside a symbol, placed.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
 
     Returns
     -------
@@ -266,10 +366,17 @@ def _quadrant_block(box, codes, side: int) -> list:
 
     Parameters
     ----------
+    box : tuple[float, float, float, float]
+        Symbol box.
     codes : dict[str, tuple[str, ...]]
         Codes keyed by quadrant letter.
     side : int
         ``1`` for right, ``-1`` for left.
+
+    Returns
+    -------
+    list
+        Label items ``(x, y, anchor, baseline, lpos, text)``.
     """
     cy = (box[1] + box[3]) / 2
     lx = (box[2] if side > 0 else box[0]) + side * _QUADRANT_GAP
@@ -287,6 +394,17 @@ def _quadrant_block(box, codes, side: int) -> list:
 def _quadrant_stand_off(block, side: int, ink, symbols):
     """Return the outward shift for a pair of codes and its damage.
 
+    Parameters
+    ----------
+    block : list
+        Label items from :func:`_quadrant_block`.
+    side : int
+        ``1`` for right, ``-1`` for left.
+    ink : list[_Ink]
+        Drawn lines.
+    symbols : list[tuple[float, float, float, float]]
+        Obstacle boxes.
+
     Returns
     -------
     tuple[float, tuple[int, int, int]]
@@ -297,7 +415,18 @@ def _quadrant_stand_off(block, side: int, ink, symbols):
         return 0.0, (0, 0, 0)
 
     def damage(m: float) -> tuple[int, int, int]:
-        """Return the damage with the block moved ``m``."""
+        """Return the :func:`_erases` total with the block moved ``m``.
+
+        Parameters
+        ----------
+        m : float
+            Outward shift.
+
+        Returns
+        -------
+        tuple[int, int, int]
+            Symbols, impulse lines and pipe pieces hit.
+        """
         hits = taps = pipes = 0
         for b in boxes:
             moved = (b[0] + side * m, b[1], b[2] + side * m, b[3])
@@ -326,15 +455,34 @@ def _ink(fs, direction: str) -> "list[_Ink]":
 
     Parameters
     ----------
+    fs : Flowsheet
+        Routed sheet.
     direction : str
-        The sheet's ``jump_direction``.
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+
+    Returns
+    -------
+    list[_Ink]
+        Pipe, tap and hop rectangles.
     """
     from pandid.layout.attach import stream_path
 
     out: list[_Ink] = []
 
     def add(a, b, pad: float, kind: str, line: str = "") -> None:
-        """Append the padded rectangle of segment ``a``-``b``."""
+        """Append the padded rectangle of segment ``a``-``b``.
+
+        Parameters
+        ----------
+        a, b : tuple[float, float]
+            Segment end points.
+        pad : float
+            Padding each side.
+        kind : str
+            ``"pipe"`` or ``"tap"``.
+        line : str, default=""
+            Stream number of the run.
+        """
         (ax, ay), (bx, by) = a, b
         if abs(ax - bx) < 0.5 and abs(ay - by) < 0.5:
             return
@@ -360,7 +508,18 @@ def _ink(fs, direction: str) -> "list[_Ink]":
 
 
 def _meets(box, region) -> bool:
-    """Return whether two rectangles share area."""
+    """Return whether two rectangles share area.
+
+    Parameters
+    ----------
+    box, region : tuple[float, float, float, float]
+        Rectangles ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    bool
+        Whether they overlap; touching edges do not count.
+    """
     return (box[2] > region[0] and box[0] < region[2]
             and box[3] > region[1] and box[1] < region[3])
 
@@ -368,7 +527,19 @@ def _meets(box, region) -> bool:
 def _erases(box, ink, symbols=()) -> "tuple[int, int, int]":
     """Return the symbols, taps and pipes a halo at ``box`` would erase.
 
-    The tuple is ordered by cost and compared as a whole.
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Halo box.
+    ink : list[_Ink]
+        Drawn lines.
+    symbols : Sequence[tuple[float, float, float, float]], optional
+        Obstacle boxes.
+
+    Returns
+    -------
+    tuple[int, int, int]
+        Symbols, impulse lines and pipe pieces hit, ordered by cost.
     """
     hits = sum(1 for b in symbols if _meets(box, b))
     taps = pipes = 0
@@ -386,8 +557,19 @@ def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
 
     Parameters
     ----------
+    box : tuple[float, float, float, float]
+        Halo box.
+    occupied : Iterable[tuple[float, float, float, float]]
+        Other occupied boxes.
+    symbols : Sequence[tuple[float, float, float, float]], optional
+        Obstacle boxes.
     limit : tuple[int, int], optional
         Best score so far; counting stops once the score exceeds it.
+
+    Returns
+    -------
+    tuple[int, int]
+        Symbols covered and other boxes covered.
     """
     hits = sum(1 for b in symbols if _meets(box, b))
     n = 0
@@ -410,6 +592,15 @@ def _step_aside(item, room: float, ink=(), others=()):
         Label item ``(x, y, anchor, baseline, lpos, text)``.
     room : float
         Furthest the mark may move.
+    ink : list[_Ink], optional
+        Drawn lines.
+    others : Sequence[tuple[float, float, float, float]], optional
+        Other obstacle boxes.
+
+    Returns
+    -------
+    tuple
+        The moved item, or ``item`` if no shift is better.
     """
     box = _unit_label_box(item)
     if box is None or not (ink or others):
@@ -451,6 +642,10 @@ def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float,
         Run midpoint.
     span : float
         Run length.
+    hw, hh : float
+        Label width and height.
+    vertical : bool
+        Whether the run is vertical.
     on_run : bool
         Keep the label on the run, with no side bands.
     plate : float
@@ -502,9 +697,9 @@ def crossings(polylines: dict, direction: str):
     Yields
     ------
     tuple
-        ``(key, seg, other, x, y, room)``: the marked run, its segment
-        index, the crossed run, the crossing point, and whether the
-        segment has :data:`HOP_R` either side for the mark.
+        ``(key, seg, other, x, y, room)``: marked run, segment index,
+        crossed run, crossing point, and whether the segment has
+        :data:`HOP_R` either side for the mark.
 
     Raises
     ------
@@ -537,6 +732,15 @@ def unmarked_crossings(fs, jump_direction: str = "vertical",
                        crossing_style: str = "gap") -> list:
     """Return every crossing drawn without its mark for lack of room.
 
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    jump_direction : str, default="vertical"
+        ``"vertical"`` or ``"horizontal"``: which run carries the mark.
+    crossing_style : str, default="gap"
+        Crossing mark style; ``"plain"`` returns nothing.
+
     Returns
     -------
     list[tuple[Stream, Stream, float, float]]
@@ -553,7 +757,22 @@ def unmarked_crossings(fs, jump_direction: str = "vertical",
 
 def _crossing_issues(fs, jump_direction: str = "vertical",
                      crossing_style: str = "gap") -> list:
-    """Return a :data:`CROSSING_UNMARKED` warning per bare crossing."""
+    """Return a :data:`CROSSING_UNMARKED` warning per bare crossing.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    jump_direction : str, default="vertical"
+        ``"vertical"`` or ``"horizontal"``: which run carries the mark.
+    crossing_style : str, default="gap"
+        Crossing mark style.
+
+    Returns
+    -------
+    list[Issue]
+        One warning per crossing drawn without its mark.
+    """
     mark = "arc" if crossing_style == "arc" else "interruption"
     issues = []
     for marked, crossed, x, y in unmarked_crossings(fs, jump_direction,
@@ -576,7 +795,17 @@ def _crossing_issues(fs, jump_direction: str = "vertical",
 def _crosses(start, end, region) -> bool:
     """Return whether a segment passes through a rectangle's interior.
 
-    Uses Liang-Barsky clipping.
+    Parameters
+    ----------
+    start, end : tuple[float, float]
+        Segment end points.
+    region : tuple[float, float, float, float]
+        Rectangle ``(x0, y0, x1, y1)``.
+
+    Returns
+    -------
+    bool
+        Whether the segment enters the interior.
     """
     (x0, y0), (x1, y1) = start, end
     dx, dy = x1 - x0, y1 - y0
@@ -600,7 +829,22 @@ def _crosses(start, end, region) -> bool:
 
 
 def _cutting(leader, occupied, limit: int) -> int:
-    """Return how many occupied boxes a leader cuts, up to ``limit``."""
+    """Return how many occupied boxes a leader cuts, up to ``limit``.
+
+    Parameters
+    ----------
+    leader : tuple[tuple[float, float], tuple[float, float]]
+        Leader end points.
+    occupied : Iterable[tuple[float, float, float, float]]
+        Occupied boxes.
+    limit : int
+        Count at which to stop.
+
+    Returns
+    -------
+    int
+        Boxes cut, at most ``limit``.
+    """
     n = 0
     for p in occupied:
         if _crosses(leader[0], leader[1], p):
@@ -611,7 +855,20 @@ def _cutting(leader, occupied, limit: int) -> int:
 
 
 def _near_segment(p, a, b) -> bool:
-    """Return whether ``p`` lies on segment ``a``-``b`` within 0.5."""
+    """Return whether ``p`` lies on segment ``a``-``b`` within 0.5.
+
+    Parameters
+    ----------
+    p : tuple[float, float]
+        Point.
+    a, b : tuple[float, float]
+        Segment end points.
+
+    Returns
+    -------
+    bool
+        Whether the point is on the segment.
+    """
     dx, dy = b[0] - a[0], b[1] - a[1]
     span = dx * dx + dy * dy
     if not span:
@@ -629,14 +886,19 @@ def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
 
     Parameters
     ----------
+    box : tuple[float, float, float, float]
+        Label halo.
+    seg : tuple[tuple[float, float], tuple[float, float]]
+        The run's segment.
+    occupied : Sequence[tuple[float, float, float, float]]
+        Occupied boxes.
     keep_out : float, default=0.0
         Extra clearance from the run's ends, for drawn flanges.
 
     Returns
     -------
     tuple[tuple, int]
-        ``((start, end), crossings)``: the leader and how many occupied
-        boxes it cuts.
+        ``((start, end), crossings)``: the leader and the boxes it cuts.
     """
     (sx1, sy1), (sx2, sy2) = seg
     vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
@@ -654,7 +916,18 @@ def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
     near, far = lo + inset, hi - inset
 
     def route(s: float):
-        """Return the leader from face position ``s``."""
+        """Return the leader from face position ``s``.
+
+        Parameters
+        ----------
+        s : float
+            Start position along the halo's face.
+
+        Returns
+        -------
+        tuple[tuple[float, float], tuple[float, float]]
+            Leader start and end.
+        """
         u = max((min(max(s + d * gap, near), far) for d in (1.0, -1.0)),
                 key=lambda c: abs(c - s))
         return ((v, s), (at, u)) if vertical else ((s, v), (u, at))
@@ -666,7 +939,20 @@ def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
               for k in range(int((last - first) // _LABEL_STEP) + 1)] + [last]
 
     def scored(s: float, limit: int):
-        """Return the leader from ``s`` and its ranking key."""
+        """Return the leader from ``s`` and its ranking key.
+
+        Parameters
+        ----------
+        s : float
+            Start position along the halo's face.
+        limit : int
+            Count at which :func:`_cutting` stops.
+
+        Returns
+        -------
+        tuple[tuple, tuple[int, float, float]]
+            Leader and its ranking key.
+        """
         lead = route(s)
         u = lead[1][1] if vertical else lead[1][0]
         return lead, (_cutting(lead, occupied, limit), abs(abs(u - s) - gap),
@@ -713,6 +999,18 @@ def stream_hops(fs, direction: str) -> "list[_Hop]":
     An arc bulges by SVG's clockwise sweep: a run drawn downward bulges
     right, upward left, rightward up, leftward down.
 
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+
+    Returns
+    -------
+    list[_Hop]
+        Crossing marks that have room to be drawn.
+
     Raises
     ------
     ValueError
@@ -730,7 +1028,20 @@ def stream_hops(fs, direction: str) -> "list[_Hop]":
 
 
 def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
-    """Return the padded box of a crossing arc on its bulging side."""
+    """Return the padded box of a crossing arc on its bulging side.
+
+    Parameters
+    ----------
+    hop : _Hop
+        Crossing mark.
+    pad : float
+        Padding each side.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Box ``(x0, y0, x1, y1)``.
+    """
     if hop.vertical:
         lo, hi = sorted((hop.x, hop.x + hop.side * HOP_R))
         return (lo - pad, hop.y - HOP_R - pad, hi + pad, hop.y + HOP_R + pad)
@@ -758,6 +1069,11 @@ UPRIGHT_ENCLOSURES = ("diamond", "circle")
 def enclosure_shape(fs) -> str:
     """Return the sheet's stream-label enclosure shape.
 
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
     Returns
     -------
     str
@@ -781,7 +1097,12 @@ def enclosure_box(shape: str, hw: float, hh: float) -> "tuple[float, float]":
     * ``circle`` -- the circumscribed circle.
     * ``box`` -- the halo plus :data:`_ENCLOSURE_PAD` each side.
 
-    Any other shape returns the halo size.
+    Parameters
+    ----------
+    shape : str
+        Enclosure shape; any other value returns the halo size.
+    hw, hh : float
+        Halo width and height.
 
     Returns
     -------
@@ -806,10 +1127,19 @@ def _enclosure_svg(shape: str, box, words, color: str, fill: bool = False) -> li
     ----------
     shape : str
         Enclosure shape; ``"none"`` returns the plate alone.
+    box : tuple[float, float, float, float]
+        Enclosure box.
     words : tuple[float, float, float, float] or None
         Plate under the words, or ``None`` for no plate.
+    color : str
+        Outline colour.
     fill : bool, default=False
         Fill the outline white.
+
+    Returns
+    -------
+    list[str]
+        SVG elements: plate, then outline.
     """
     plate = []
     if words is not None:
@@ -836,10 +1166,14 @@ def _enclosure_svg(shape: str, box, words, color: str, fill: bool = False) -> li
 
 
 class StreamNumber(NamedTuple):
-    """One placed line number, read by both backends.
+    """Placement of one line number, read by both backends.
 
     Attributes
     ----------
+    name : str
+        Line number.
+    color : str
+        Text colour.
     seg : tuple
         The run's longest segment, which the number names.
     x, y : float
@@ -878,10 +1212,19 @@ def stream_numbers(fs, placed: list, joints: "str | None",
 
     Parameters
     ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
     placed : list
         Occupied label boxes; chosen boxes are appended.
     joints : str or None
         Sheet-wide connection style.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+
+    Returns
+    -------
+    list[StreamNumber]
+        One placement per named material run.
     """
     from pandid.portgeom import unit_box
 
@@ -1022,7 +1365,22 @@ _LABEL_CODES = ("label-over-line", "enclosure-over-unit",
 
 
 def _shape_hits(shape: str, box, rect) -> bool:
-    """Return whether an enclosure filling ``box`` meets ``rect``."""
+    """Return whether an enclosure filling ``box`` meets ``rect``.
+
+    Parameters
+    ----------
+    shape : str
+        ``"box"``, ``"circle"`` or ``"diamond"``.
+    box : tuple[float, float, float, float]
+        Enclosure box.
+    rect : tuple[float, float, float, float]
+        Rectangle to test.
+
+    Returns
+    -------
+    bool
+        Whether the shape and the rectangle share area.
+    """
     if not _meets(box, rect):
         return False
     x0, y0, x1, y1 = box
@@ -1040,8 +1398,17 @@ def _shape_hits(shape: str, box, rect) -> bool:
 def _shapes_meet(shape: str, box, other) -> bool:
     """Return whether two enclosures of one shape share area.
 
-    Rhombi use the separating-axis theorem over both shapes' edge
-    normals.
+    Parameters
+    ----------
+    shape : str
+        ``"box"``, ``"circle"`` or ``"diamond"``.
+    box, other : tuple[float, float, float, float]
+        The two enclosure boxes.
+
+    Returns
+    -------
+    bool
+        Whether the shapes share area.
     """
     if not _meets(box, other):
         return False
@@ -1067,6 +1434,22 @@ def fillable_enclosures(fs, shape: str, numbers: "list[StreamNumber]",
 
     A shape is filled only when it reaches no symbol, no other run's ink
     and no other enclosure.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    shape : str
+        Enclosure shape; ``"none"`` fills nothing.
+    numbers : list[StreamNumber]
+        Placed numbers.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+
+    Returns
+    -------
+    list[bool]
+        Whether each enclosure may be filled.
     """
     from pandid.portgeom import unit_box
 
@@ -1097,6 +1480,22 @@ def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
     * ``enclosure-over-line`` -- the shape crosses another run's ink.
     * ``enclosure-over-label`` -- two enclosures overlap, reported once
       per pair.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    shape : str
+        Enclosure shape; ``"none"`` returns only ``label-over-line``.
+    numbers : list[StreamNumber]
+        Placed numbers.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+
+    Returns
+    -------
+    list[Issue]
+        Warnings.
     """
     from pandid.portgeom import unit_box
 
@@ -1179,6 +1578,18 @@ def boundary_flag(u, frame) -> Pennant:
 
     The pennant points east, or west when mirrored. It spans the unit
     box's width and is inset from its top and bottom.
+
+    Parameters
+    ----------
+    u : Unit
+        Feed or Product.
+    frame : Frame
+        The unit's placed frame.
+
+    Returns
+    -------
+    Pennant
+        Flag geometry.
     """
     from pandid.portgeom import _flag_reference
 
@@ -1219,8 +1630,19 @@ class Hatch(NamedTuple):
 def pneumatic_marks(points) -> "list[Hatch]":
     """Return the double cross-hatches marking a pneumatic line.
 
-    Marks are spaced every 45 px, and a segment of 16 px or more gets
-    at least one.
+    Each segment gets one mark per whole 45 px of its Manhattan length,
+    or one mark if it is 16 px or longer; the marks divide the segment
+    into equal parts.
+
+    Parameters
+    ----------
+    points : sequence of tuple[float, float]
+        Line polyline.
+
+    Returns
+    -------
+    list[Hatch]
+        Marks in drawing order.
     """
     out: list[Hatch] = []
     walked = 0.0
@@ -1242,13 +1664,13 @@ def pneumatic_marks(points) -> "list[Hatch]":
 #: Joint markings where lines meet what they serve.
 #:
 #: * ``"none"`` -- no marks.
-#: * ``"flanged"`` -- every joint the sheet can mark, including both
-#:   sides of valves and in-line fittings.
+#: * ``"flanged"`` -- equipment nozzles and both sides of valves and
+#:   fittings, except a fitting whose symbol is a flange.
 #: * ``"flanged-at-nozzles"`` -- only where a line meets an equipment
 #:   nozzle.
 CONNECTIONS = ("none", "flanged", "flanged-at-nozzles")
 
-# In-line kinds that ``"flanged"`` marks on both sides.
+# In-line kinds ``"flanged"`` can mark on both sides.
 _INLINE_BODIES = frozenset({"valve", "fitting"})
 
 #: Flanged-connection mark: two bars this long and this far apart.
@@ -1278,7 +1700,18 @@ class Flange(NamedTuple):
 
 
 def _draws_its_own_flange(u) -> bool:
-    """Return whether a unit's own symbol is the flange stencil."""
+    """Return whether a unit's own symbol is the flange stencil.
+
+    Parameters
+    ----------
+    u : Unit
+        In-line unit.
+
+    Returns
+    -------
+    bool
+        Whether its artwork is the flange stencil.
+    """
     from pandid.render.symbols import default_registry
 
     own = default_registry.get(u.kind, getattr(u, "variant", "default"))
@@ -1289,9 +1722,9 @@ def _draws_its_own_flange(u) -> bool:
 def flanged_joint(port, want: str) -> bool:
     """Return whether a joint setting marks this end of a stream.
 
-    Boundary flags and instruments never take a mark. ``"flanged"``
-    marks every equipment nozzle and both sides of every valve and
-    fitting; ``"flanged-at-nozzles"`` marks equipment nozzles only.
+    Boundary flags and instruments take no mark and equipment nozzles
+    always take one. An in-line unit takes one only under ``"flanged"``,
+    when it is a valve or fitting whose own symbol is not a flange.
 
     Parameters
     ----------
@@ -1299,6 +1732,11 @@ def flanged_joint(port, want: str) -> bool:
         Stream end.
     want : str
         One of :data:`CONNECTIONS`, resolved for this stream.
+
+    Returns
+    -------
+    bool
+        Whether this end gets a flange mark.
     """
     from pandid.flowsheet import INLINE_KINDS
 
@@ -1316,8 +1754,17 @@ def flange_marks(s, points, ends) -> "list[Flange]":
 
     Parameters
     ----------
+    s : Stream
+        Stream; a signal line carries no marks.
+    points : sequence of tuple[float, float]
+        The stream's drawn polyline, source end first.
     ends : tuple[str, str]
         Resolved ``(source, dest)`` settings from :data:`CONNECTIONS`.
+
+    Returns
+    -------
+    list[Flange]
+        Marks in drawing order.
     """
     if len(points) < 2 or s.kind in _SIGNAL_KINDS:
         return []
@@ -1353,8 +1800,15 @@ def flange_boxes(fs, joints) -> "list[tuple[float, float, float, float]]":
 
     Parameters
     ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
     joints : str or None
         :func:`sheet_connections` result.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        One box per mark.
     """
     half = max(FLANGE_TICK, FLANGE_GAP) / 2
     return [
@@ -1365,7 +1819,18 @@ def flange_boxes(fs, joints) -> "list[tuple[float, float, float, float]]":
 
 
 def _arrowhead(start, end) -> str:
-    """Return path data for the arrowhead ending a leader at ``end``."""
+    """Return path data for the arrowhead ending a leader at ``end``.
+
+    Parameters
+    ----------
+    start, end : tuple[float, float]
+        Last leader segment.
+
+    Returns
+    -------
+    str
+        SVG path data.
+    """
     dx, dy = end[0] - start[0], end[1] - start[1]
     length = math.hypot(dx, dy) or 1.0
     ux, uy = dx / length, dy / length
@@ -1376,7 +1841,18 @@ def _arrowhead(start, end) -> str:
 
 
 def arrow_marker_id(color: str) -> str:
-    """Return the ``<marker>`` id for an arrowhead in ``color``."""
+    """Return the ``<marker>`` id for an arrowhead in ``color``.
+
+    Parameters
+    ----------
+    color : str
+        Stroke colour; a leading ``#`` is dropped.
+
+    Returns
+    -------
+    str
+        Valid XML id.
+    """
     return ident("arrow", color.lstrip("#"))
 
 
@@ -1404,16 +1880,37 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
 
 
 def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
-    """Return the id suffix naming a placement transform, or ``''``."""
+    """Return the id suffix naming a placement transform.
+
+    Parameters
+    ----------
+    rot : int
+        Rotation in degrees.
+    mirror_x, mirror_y : bool
+        Mirrors applied by the placement.
+
+    Returns
+    -------
+    str
+        Suffix, or ``""`` for the identity.
+    """
     if not (rot or mirror_x or mirror_y):
         return ""
     return "_t" + (f"r{rot}" if rot else "") + ("x" if mirror_x else "") + ("y" if mirror_y else "")
 
 
 def _placed_box(u) -> "tuple[float, float] | None":
-    """Return the ``(width, height)`` a unit's artwork is drawn into.
+    """Return the size a unit's artwork is drawn into, before rotation.
 
-    The size is taken before rotation; ``None`` if the unit is unplaced.
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        ``(width, height)``, or ``None`` if unplaced.
     """
     f = getattr(u, "frame", None)
     if f is None:
@@ -1423,7 +1920,20 @@ def _placed_box(u) -> "tuple[float, float] | None":
 
 
 def _reshapes(sym, u) -> bool:
-    """Return whether a unit's box and symbol differ in aspect."""
+    """Return whether a unit's box and symbol differ in aspect.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    bool
+        Whether the aspects differ.
+    """
     box = _placed_box(u)
     if box is None:
         return False
@@ -1437,7 +1947,20 @@ def _reshapes(sym, u) -> bool:
 
 
 def _placement_scale(sym, u) -> "tuple[float, float]":
-    """Return the ``(sx, sy)`` a unit's ``<use>`` box applies."""
+    """Return the ``(sx, sy)`` a unit's ``<use>`` box applies.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(sx, sy)``; ``(1, 1)`` if unplaced or the symbol has no size.
+    """
     box = _placed_box(u)
     if box is None or not (sym.width and sym.height):
         return (1.0, 1.0)
@@ -1445,7 +1968,21 @@ def _placement_scale(sym, u) -> "tuple[float, float]":
 
 
 def _stretch_scale(sym, u) -> "tuple[float, float]":
-    """Return the scale stretching a reshaped stretchable symbol."""
+    """Return the scale stretching a reshaped stretchable symbol.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(sx, sy)``; ``(1, 1)`` unless a stretchable symbol
+        is reshaped.
+    """
     if sym.stretchable and _reshapes(sym, u):
         return _placement_scale(sym, u)
     return (1.0, 1.0)
@@ -1455,15 +1992,40 @@ def _stretch_scale(sym, u) -> "tuple[float, float]":
 def _uneven(svg: str, fx: float, fy: float) -> bool:
     """Return whether any stroke in ``svg`` is scaled unevenly.
 
-    The placement scale ``(fx, fy)`` multiplies the artwork's own group
-    transforms. A mirror is not uneven.
+    The placement scale multiplies the artwork's own group transforms.
+    A mirror is not uneven.
+
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    fx, fy : float
+        Placement scale.
+
+    Returns
+    -------
+    bool
+        Whether some stroke's x and y scales differ.
     """
     return any(not math.isclose(ax, ay, rel_tol=1e-9)
                for ax, ay in _stroke_scales(svg, fx, fy))
 
 
 def _stroke_scales(svg: str, fx: float, fy: float) -> "list[tuple[float, float]]":
-    """Return ``(|sx|, |sy|)`` for each stroked element in ``svg``."""
+    """Return ``(|sx|, |sy|)`` for each stroked element in ``svg``.
+
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    fx, fy : float
+        Outer scale.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Scale magnitudes per element carrying a stroke width.
+    """
     out: list[tuple[float, float]] = []
     scales = [(fx, fy)]
     for m in _TAG.finditer(svg):
@@ -1487,7 +2049,17 @@ def _stroke_scales(svg: str, fx: float, fy: float) -> "list[tuple[float, float]]
 def _fold(sym, u) -> "tuple[float, float]":
     """Return the scale to bake into a definition's coordinates.
 
-    It is ``(1, 1)`` unless the placement would scale a stroke unevenly.
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(1, 1)`` unless the placement would scale a stroke unevenly.
     """
     fx, fy = _stretch_scale(sym, u)
     return (fx, fy) if _uneven(sym.svg, fx, fy) else (1.0, 1.0)
@@ -1496,7 +2068,17 @@ def _fold(sym, u) -> "tuple[float, float]":
 def _pen_scale(sym, u) -> float:
     """Return the factor a placement scales a symbol's line weights by.
 
-    It is 1 when the definition is baked.
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    float
+        Pen scale; 1 when the definition is baked.
     """
     if _fold(sym, u) != (1.0, 1.0):
         return 1.0
@@ -1509,6 +2091,13 @@ def _pen_scale(sym, u) -> float:
 
 def _size_tag(sym, u) -> str:
     """Return the id suffix naming the box a symbol is drawn for.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Unit's symbol.
+    u : Unit
+        Placed unit.
 
     Returns
     -------
@@ -1524,7 +2113,20 @@ def _size_tag(sym, u) -> str:
 
 
 def _at_pen_scale(svg: str, scale: float) -> str:
-    """Return ``svg`` with every line weight divided by ``scale``."""
+    """Return ``svg`` with every line weight divided by ``scale``.
+
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    scale : float
+        Pen scale from :func:`_pen_scale`.
+
+    Returns
+    -------
+    str
+        Rewritten artwork.
+    """
     if scale == 1.0:
         return svg
     return _STROKE.sub(
@@ -1532,13 +2134,23 @@ def _at_pen_scale(svg: str, scale: float) -> str:
 
 
 # --- baking an uneven scale into the drawing --------------------------
-# The artwork is rewritten at the placed size, one definition per size,
-# so a resized symbol keeps a round pen (ISO 15519-1 11.1.3).
+# The artwork is rewritten at the placed size, one definition per
+# size (ISO 15519-1 11.1.3).
 
 def _nominal(width: float, gx: float, gy: float) -> float:
     """Return the sheet weight of ``width`` under ``scale(gx, gy)``.
 
-    Uses the geometric mean of the scale magnitudes.
+    Parameters
+    ----------
+    width : float
+        Stroke width in artwork units.
+    gx, gy : float
+        Enclosing scale.
+
+    Returns
+    -------
+    float
+        ``width`` times the geometric mean of the scale magnitudes.
     """
     return width * math.sqrt(abs(gx * gy))
 
@@ -1559,6 +2171,16 @@ _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 def _affine(transform: str) -> "tuple[float, float, float, float]":
     """Return a symbol transform as the map ``(sx, sy, tx, ty)``.
+
+    Parameters
+    ----------
+    transform : str
+        SVG ``transform`` attribute.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Scale and translation.
 
     Raises
     ------
@@ -1588,6 +2210,20 @@ def _scaled_ellipse(rx: float, ry: float, rot: float,
 
     Uses the singular value decomposition of
     ``diag(ax, ay) R(rot) diag(rx, ry)``.
+
+    Parameters
+    ----------
+    rx, ry : float
+        Radii.
+    rot : float
+        Tilt in degrees.
+    ax, ay : float
+        Scale.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        New radii and tilt.
     """
     if ax == ay:
         return rx * ax, ry * ay, rot
@@ -1603,6 +2239,18 @@ def _scaled_ellipse(rx: float, ry: float, rot: float,
 
 def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
     """Return path data ``d`` with the map ``(sx, sy, tx, ty)`` applied.
+
+    Parameters
+    ----------
+    d : str
+        Path data using commands from ``_PATH_ARITY``.
+    m : tuple[float, float, float, float]
+        ``(sx, sy, tx, ty)``.
+
+    Returns
+    -------
+    str
+        Mapped path data.
 
     Raises
     ------
@@ -1636,7 +2284,20 @@ def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
 
 
 def _scaled_points(points: str, m: "tuple[float, float, float, float]") -> str:
-    """Return ``points`` with the map ``(sx, sy, tx, ty)`` applied."""
+    """Return ``points`` with the map ``(sx, sy, tx, ty)`` applied.
+
+    Parameters
+    ----------
+    points : str
+        Polyline or polygon points.
+    m : tuple[float, float, float, float]
+        ``(sx, sy, tx, ty)``.
+
+    Returns
+    -------
+    str
+        Mapped points.
+    """
     ax, ay, ex, ey = m
     v = [float(t) for t in points.replace(",", " ").split()]
     return " ".join(
@@ -1650,16 +2311,25 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
     """Return one drawn element rewritten under the map ``m``.
 
     A circle becomes an ellipse. Stroke widths keep their nominal
-    weight.
+    weight (ISO 15519-1 11.1.3).
 
     Parameters
     ----------
+    name : str
+        Element name.
+    attrs : list[tuple[str, str]]
+        Attributes in source order.
     m : tuple[float, float, float, float]
         Accumulated ``(sx, sy, tx, ty)``.
     gx, gy : float
         Artwork's own share of the scale.
     self_closing : str
         Non-empty if the tag self-closes.
+
+    Returns
+    -------
+    str
+        Rewritten tag.
     """
     ax, ay, ex, ey = m
     src = dict(attrs)
@@ -1703,7 +2373,17 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
 def _baked(svg: str, fx: float, fy: float) -> str:
     """Return ``svg`` redrawn at ``scale(fx, fy)``, groups flattened.
 
-    An even scale returns ``svg`` unchanged.
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    fx, fy : float
+        Placement scale.
+
+    Returns
+    -------
+    str
+        Flattened artwork, or ``svg`` unchanged for an even scale.
     """
     if not _uneven(svg, fx, fy):
         return svg
@@ -1750,12 +2430,37 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
 
     Each text element is wrapped in the inverse transform about its own
     centre.
+
+    Parameters
+    ----------
+    svg : str
+        Symbol artwork.
+    rot : int
+        Rotation in degrees.
+    mirror_x, mirror_y : bool
+        Mirrors applied by the placement.
+
+    Returns
+    -------
+    str
+        Artwork with each text element wrapped.
     """
     if not (rot or mirror_x or mirror_y):
         return svg
 
     def wrap(match: "re.Match[str]") -> str:
-        """Return one text element wrapped in the inverse transform."""
+        """Return one text element wrapped in the inverse transform.
+
+        Parameters
+        ----------
+        match : re.Match[str]
+            Text element and its ``x`` and ``y``.
+
+        Returns
+        -------
+        str
+            Wrapped element.
+        """
         tx, ty = float(match.group(1)), float(match.group(2))
         # Pivot on the glyph centre, about 0.35 em above the baseline.
         size = re.search(r'font-size="(-?[\d.]+)"', match.group(0))
@@ -1776,7 +2481,19 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
 def _reflections(rot: int, mirror_x: bool, mirror_y: bool) -> "tuple[bool, bool]":
     """Return a placement's net x and y flips.
 
-    A half turn counts as both mirrors.
+    A half turn counts as both mirrors; quarter turns add none.
+
+    Parameters
+    ----------
+    rot : int
+        Rotation in degrees.
+    mirror_x, mirror_y : bool
+        Mirrors applied.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        Net x and y flips.
     """
     half = rot == 180
     return (mirror_x != half, mirror_y != half)
@@ -1793,8 +2510,15 @@ def _upright_artwork(svg: str, w: float, h: float,
     ----------
     svg : str
         Symbol artwork, wrapped in an outer ``<g>``.
+    w, h : float
+        Symbol size.
     mirror_x, mirror_y : bool
         Net flips from :func:`_reflections`.
+
+    Returns
+    -------
+    str
+        Artwork with an inner counter-flip group.
     """
     if not (mirror_x or mirror_y) or not svg.startswith("<g"):
         return svg
@@ -1836,17 +2560,39 @@ class _Sheet(NamedTuple):
 
     @property
     def width(self) -> float:
-        """Return the sheet width in layout units (CSS px)."""
+        """Return the sheet width.
+
+        Returns
+        -------
+        float
+            Width in layout units (CSS px).
+        """
         return self.width_mm * _PX_PER_MM
 
     @property
     def height(self) -> float:
-        """Return the sheet height in layout units (CSS px)."""
+        """Return the sheet height.
+
+        Returns
+        -------
+        float
+            Height in layout units (CSS px).
+        """
         return self.height_mm * _PX_PER_MM
 
 
 def _page(page_size: "str | None") -> "_Sheet | None":
-    """Return the fixed sheet for an A-size name, or ``None`` to fit.
+    """Return the fixed sheet for a page size.
+
+    Parameters
+    ----------
+    page_size : str or None
+        ISO A-size name, any case; ``None`` fits the drawing.
+
+    Returns
+    -------
+    _Sheet or None
+        Sheet, or ``None`` to fit.
 
     Raises
     ------
@@ -1873,15 +2619,36 @@ _ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd", "bfd": "bfd"}
 
 
 def _canon(value: str) -> str:
-    """Return a diagram name in canonical spelling."""
+    """Return a diagram name in canonical spelling.
+
+    Parameters
+    ----------
+    value : str
+        Diagram name; case is folded and ``"pid"`` reads as ``"p&id"``.
+
+    Returns
+    -------
+    str
+        Canonical name, or ``value`` unchanged if unknown.
+    """
     return _ALIASES.get(value.strip().lower(), value)
 
 
 def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, str]":
     """Return the validated ``(border, diagram)``.
 
-    ``None`` means ``"none"`` for the border and ``"pfd"`` for the
-    diagram.
+    Parameters
+    ----------
+    border : str or None
+        ``"none"`` or ``"zone"``; ``None`` means ``"none"``.
+    diagram : str or None
+        ``"pfd"``, ``"p&id"``, ``"pid"`` or ``"bfd"``; ``None`` is
+        ``"pfd"``.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(border, diagram)``.
 
     Raises
     ------
@@ -1913,6 +2680,16 @@ TABLE_SHEET = "sheet"
 def wants_table_sheet(show_stream_table) -> bool:
     """Return whether ``show_stream_table`` is ``"sheet"``.
 
+    Parameters
+    ----------
+    show_stream_table : bool, str or None
+        ``False``, ``True`` or ``"sheet"``.
+
+    Returns
+    -------
+    bool
+        True for ``"sheet"``.
+
     Raises
     ------
     ValueError
@@ -1930,7 +2707,17 @@ def wants_table_sheet(show_stream_table) -> bool:
 
 
 def draws_arrowheads(diagram: "str | None") -> bool:
-    """Return whether a diagram kind draws arrowheads; False for a P&ID.
+    """Return whether a diagram kind draws arrowheads on process lines.
+
+    Parameters
+    ----------
+    diagram : str or None
+        ``"pfd"`` (or ``None``), ``"p&id"``, ``"pid"`` or ``"bfd"``.
+
+    Returns
+    -------
+    bool
+        False only for a P&ID.
 
     Raises
     ------
@@ -1943,7 +2730,15 @@ def draws_arrowheads(diagram: "str | None") -> bool:
 def tabulates_boundary_flows(diagram: "str | None") -> bool:
     """Return whether a diagram must state boundary flow rates.
 
-    True only for a PFD (ISO 10628-1 4.3.2 d)).
+    Parameters
+    ----------
+    diagram : str or None
+        ``"pfd"`` (or ``None``), ``"p&id"``, ``"pid"`` or ``"bfd"``.
+
+    Returns
+    -------
+    bool
+        True only for a PFD (ISO 10628-1 4.3.2 d)).
 
     Raises
     ------
@@ -1981,6 +2776,11 @@ JUMP_DIRECTIONS = ("vertical", "horizontal")
 def check_jump_direction(value) -> None:
     """Check a ``jump_direction`` value against :data:`JUMP_DIRECTIONS`.
 
+    Parameters
+    ----------
+    value : str
+        ``"vertical"`` or ``"horizontal"``.
+
     Raises
     ------
     ValueError
@@ -1995,6 +2795,11 @@ def check_jump_direction(value) -> None:
 
 def check_crossing_style(value) -> None:
     """Check a ``crossing_style`` value against :data:`CROSSING_STYLES`.
+
+    Parameters
+    ----------
+    value : str
+        ``"arc"``, ``"gap"`` or ``"plain"``.
 
     Raises
     ------
@@ -2014,10 +2819,17 @@ def sheet_connections(diagram: "str | None",
 
     Only a P&ID marks joints (ISO 15519-2 Table 5).
 
+    Parameters
+    ----------
+    diagram : str or None
+        ``"pfd"`` (or ``None``), ``"p&id"``, ``"pid"`` or ``"bfd"``.
+    connections : str or None
+        One of :data:`CONNECTIONS`; ``None`` means ``"none"``.
+
     Returns
     -------
     str or None
-        Default setting, or ``None`` when the diagram is not a P&ID.
+        ``connections`` or ``"none"`` on a P&ID, else ``None``.
 
     Raises
     ------
@@ -2034,7 +2846,18 @@ def sheet_connections(diagram: "str | None",
 def resolve_connections(s, default: "str | None") -> "tuple[str, str]":
     """Return a stream's joint settings as ``(source, dest)``.
 
-    A set ``Stream.ends`` wins over the sheet ``default``.
+    Parameters
+    ----------
+    s : Stream
+        Stream; a set ``ends`` wins over ``default``.
+    default : str or None
+        :func:`sheet_connections` result; ``None`` gives
+        ``("none", "none")`` whatever ``s.ends`` says.
+
+    Returns
+    -------
+    tuple[str, str]
+        Settings for the source and destination ends.
     """
     if default is None:
         return ("none", "none")
@@ -2043,13 +2866,26 @@ def resolve_connections(s, default: "str | None") -> "tuple[str, str]":
 
 
 def _fit_scale(dw: float, dh: float, free) -> float:
-    """Return the scale, at most 1, fitting a drawing into ``free``."""
+    """Return the scale, at most 1, fitting a drawing into ``free``.
+
+    Parameters
+    ----------
+    dw, dh : float
+        Drawing size.
+    free : tuple[float, float, float, float]
+        Free area ``(x, y, w, h)``.
+
+    Returns
+    -------
+    float
+        Uniform scale, at most 1.
+    """
     _, _, fw, fh = free
     return min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
 
 
 def _fitted(inner, free) -> "tuple[float, float, float]":
-    """Return ``(scale, offset_x, offset_y)`` centring a drawing.
+    """Return the scale and offset centring a drawing in ``free``.
 
     Parameters
     ----------
@@ -2057,6 +2893,11 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
         Drawing bounds ``(x0, y0, x1, y1)``.
     free : tuple[float, float, float, float]
         Region ``(x, y, w, h)`` left for the drawing.
+
+    Returns
+    -------
+    tuple[float, float, float]
+        ``(scale, offset_x, offset_y)``.
     """
     dx0, dy0, dx1, dy1 = inner
     fx, fy, fw, fh = free
@@ -2067,6 +2908,16 @@ def _fitted(inner, free) -> "tuple[float, float, float]":
 
 def drawing_bounds(fs) -> "tuple[float, float, float, float]":
     """Return the bounding box of every unit box and route waypoint.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x0, y0, x1, y1)``; zeros for an empty flowsheet.
 
     Raises
     ------
@@ -2094,7 +2945,18 @@ def drawing_bounds(fs) -> "tuple[float, float, float, float]":
 
 
 def _scale_text(s: float) -> str:
-    """Return a fit scale as a ratio, such as ``"1:2.5"``."""
+    """Return a fit scale as a ratio, such as ``"1:2.5"``.
+
+    Parameters
+    ----------
+    s : float
+        Drawing scale.
+
+    Returns
+    -------
+    str
+        Ratio text.
+    """
     return "1:1" if s >= 1.0 else f"1:{1 / s:.3g}"
 
 
@@ -2115,6 +2977,12 @@ def fit_issue(field: str, text: str, drawn: str,
 
     Parameters
     ----------
+    field : str
+        Field name.
+    text : str
+        Value given.
+    drawn : str
+        Value drawn.
     room, need : float
         Cell width and text width, in drawing units.
 
@@ -2142,8 +3010,17 @@ def _too_small(sheet: _Sheet, need_w: float, need_h: float,
 
     Parameters
     ----------
+    sheet : _Sheet
+        Fixed sheet.
+    need_w, need_h : float
+        Space the furniture needs, in px.
     cause : str, default=""
         Name of the widest piece.
+
+    Returns
+    -------
+    ValueError
+        Error naming the sheet and the space needed.
     """
     blame = f" The widest piece is {cause}." if cause else ""
     return ValueError(
@@ -2160,7 +3037,18 @@ _FURNITURE_NAMES = {TITLE: "the title strip"}
 
 
 def _furniture_name(obj) -> str:
-    """Return a readable name for a piece of furniture, for errors."""
+    """Return a readable name for a piece of furniture, for errors.
+
+    Parameters
+    ----------
+    obj : object
+        Title sentinel, stream table or annotation box.
+
+    Returns
+    -------
+    str
+        Name such as ``"the stream table"``.
+    """
     if isinstance(obj, str):
         return _FURNITURE_NAMES.get(obj, obj)
     if isinstance(obj, F.StreamTable):
@@ -2178,14 +3066,38 @@ _DC_NS = "http://purl.org/dc/elements/1.1/"
 
 
 def _sheet_title(fs: "Flowsheet") -> str:
-    """Return the title block's title, else the flowsheet name."""
+    """Return the title block's title, else the flowsheet name.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+
+    Returns
+    -------
+    str
+        Stripped title; empty when neither is stated.
+    """
     tb = fs.title_block
     title = F._field(tb, "title") if tb is not None else ""
     return title or str(fs.name or "").strip()
 
 
 def _table_sheet_title(fs: "Flowsheet", options) -> str:
-    """Return the stream-table sheet's title and subtitle."""
+    """Return the stream-table sheet's title and subtitle.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet.
+    options : StreamTableOptions
+        Table options carrying ``sheet_subtitle``.
+
+    Returns
+    -------
+    str
+        Title parts joined with ``" - "``.
+    """
     from pandid.document import _drawn_text
 
     parts = [p for p in (_sheet_title(fs), _drawn_text(options.sheet_subtitle)) if p]
@@ -2200,8 +3112,15 @@ def _provenance(fs: "Flowsheet", title: "str | None" = None) -> list[str]:
 
     Parameters
     ----------
+    fs : Flowsheet
+        Sheet.
     title : str, optional
         Title to use instead of :func:`_sheet_title`.
+
+    Returns
+    -------
+    list[str]
+        Indented SVG lines.
     """
     from pandid.render import HOMEPAGE, generator
     who = generator()
@@ -2236,10 +3155,21 @@ def _document(fs: "Flowsheet", sheet: "_Sheet | None",
 
     Parameters
     ----------
+    fs : Flowsheet
+        Sheet.
     sheet : _Sheet or None
         Fixed page, or ``None`` when fitted to the drawing.
     viewbox : tuple[float, float, float, float]
         Canvas rectangle in drawing units.
+    body : list[str]
+        Ink lines.
+    title : str, optional
+        Title passed to :func:`_provenance`.
+
+    Returns
+    -------
+    str
+        SVG source.
     """
     x, y, w, h = viewbox
     if sheet is not None:
@@ -2295,12 +3225,19 @@ class TableSheetPlan(NamedTuple):
 def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
     """Lay out the stream table's own sheet.
 
-    Wraps the table to the page, docks the title strip and frames both.
+    Wrap the table to the page, dock the title strip and frame both.
 
     Parameters
     ----------
+    fs : Flowsheet
+        Sheet.
     sheet : _Sheet or None
-        Fixed page, or ``None`` to fit.
+        Fixed page, or ``None`` to fit the sheet to the table.
+
+    Returns
+    -------
+    TableSheetPlan
+        Layout and findings.
 
     Raises
     ------
@@ -2390,6 +3327,22 @@ def diagram_plan(fs, sheet: "_Sheet | None", border: str,
     Furniture is the annotation boxes, a title strip for a title block
     or zone border, and the stream table.
 
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+    sheet : _Sheet or None
+        Fixed page, or ``None`` to fit the sheet to the drawing.
+    border : str
+        ``"none"`` or ``"zone"``.
+    show_stream_table : bool
+        Whether to dock the stream table.
+
+    Returns
+    -------
+    DiagramPlan
+        Layout.
+
     Raises
     ------
     ValueError
@@ -2444,6 +3397,8 @@ def reject_unknown_options(where: str, opts: dict) -> None:
     ----------
     where : str
         Backend name, for the message.
+    opts : dict
+        Unrecognised keyword arguments.
 
     Raises
     ------
@@ -2478,7 +3433,7 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
     border : str, optional
         ``"none"`` or ``"zone"``.
     diagram : str, optional
-        ``"pfd"``, ``"p&id"`` or ``"bfd"``.
+        ``"pfd"``, ``"p&id"`` (or ``"pid"``) or ``"bfd"``.
     page_size : str, optional
         ISO A-size.
     connections : str, optional
@@ -2524,16 +3479,27 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
 
 
 class SvgRenderer:
-    """Render a laid-out Flowsheet to SVG.
+    """Renderer of a laid-out Flowsheet to SVG.
 
     Parameters
     ----------
     registry : SymbolRegistry, optional
         Symbols to draw with; ``default_registry`` when omitted.
+
+    Attributes
+    ----------
+    registry : SymbolRegistry
+        Symbols drawn with.
     """
 
     def __init__(self, registry=None):
-        """Store the symbol registry."""
+        """Store the symbol registry.
+
+        Parameters
+        ----------
+        registry : SymbolRegistry, optional
+            Symbols to draw with; ``default_registry`` when omitted.
+        """
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
 
@@ -2554,21 +3520,21 @@ class SvgRenderer:
         fs : Flowsheet
             Laid-out and routed flowsheet.
         jump_direction : str, default="vertical"
-            Which crossing line carries the mark.
+            Line carrying the mark: ``"vertical"`` or ``"horizontal"``.
         crossing_style : str, default="gap"
             ``"gap"``, ``"arc"`` or ``"plain"``.
         show_stream_table : bool or str, default=False
             ``True`` docks the stream table on the diagram; ``"sheet"``
             draws it as its own sheet.
         border : str, optional
-            ``"none"`` or ``"zone"``; a table sheet defaults to
-            ``"zone"``.
+            ``"none"`` or ``"zone"``, the default on a table sheet.
         diagram : str, optional
-            ``"pfd"`` (default), ``"p&id"`` or ``"bfd"``.
+            ``"pfd"`` (default), ``"p&id"`` (or ``"pid"``) or ``"bfd"``.
         page_size : str, optional
             ``"A4"`` to ``"A0"``, or ``None`` to fit the drawing.
         connections : str, optional
-            Default joint marking on a P&ID.
+            P&ID joint default: ``"none"``, ``"flanged"`` or
+            ``"flanged-at-nozzles"``.
         debug : bool or float, default=False
             Draw the coordinate overlay, optionally at a grid spacing.
         **opts
@@ -2613,7 +3579,19 @@ class SvgRenderer:
 
         def report(field: str, text: str, drawn: str,
                    room: float, need: float) -> None:
-            """Record a cell that overflowed."""
+            """Record a title-block or annotation cell that overflowed.
+
+            Parameters
+            ----------
+            field : str
+                Field name.
+            text : str
+                Value given.
+            drawn : str
+                Value drawn.
+            room, need : float
+                Cell width and text width, in drawing units.
+            """
             fit_issues.append(fit_issue(field, text, drawn, room, need))
 
         furniture, canvas = self._place_furniture(fs, plan, border, report)
@@ -2675,6 +3653,12 @@ class SvgRenderer:
 
         Parameters
         ----------
+        fs : Flowsheet
+            Flowsheet whose name the title strip falls back to.
+        plan : DiagramPlan
+            Sheet layout.
+        border : str
+            ``"none"`` or ``"zone"``.
         report : callable, optional
             Receives title and annotation fit findings.
 
@@ -2714,12 +3698,39 @@ class SvgRenderer:
         return furniture, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT)
 
     def _table_sheet(self, fs, sheet, border) -> str:
-        """Return the stream table drawn as a sheet of its own."""
+        """Return the stream table drawn as a sheet of its own.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose streams are tabulated.
+        sheet : _Sheet or None
+            Fixed page, or ``None`` to size to the table.
+        border : str
+            ``"none"`` or ``"zone"``.
+
+        Returns
+        -------
+        str
+            SVG document.
+        """
         fit_issues: list[Issue] = []
 
         def report(field: str, text: str, drawn: str,
                    room: float, need: float) -> None:
-            """Record a cell that overflowed."""
+            """Record a title-block cell that overflowed.
+
+            Parameters
+            ----------
+            field : str
+                Field name.
+            text : str
+                Value given.
+            drawn : str
+                Value drawn.
+            room, need : float
+                Cell width and text width, in drawing units.
+            """
             fit_issues.append(fit_issue(field, text, drawn, room, need))
 
         plan = table_sheet_plan(fs, sheet)
@@ -2750,9 +3761,18 @@ class SvgRenderer:
     def _baked_xform(self, u) -> tuple[int, bool, bool]:
         """Return the placement baked into a symbol definition.
 
-        Returns ``(rotation, mirror_x, mirror_y)``. Symbols with
-        lettering bake the whole placement, directional symbols its
-        reflections, and others the identity.
+        Symbols with lettering bake the whole placement, directional
+        symbols its reflections, and others the identity.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+
+        Returns
+        -------
+        tuple[int, bool, bool]
+            ``(rotation, mirror_x, mirror_y)``.
         """
         sym = self.registry.for_unit(u)
         f = getattr(u, "frame", None)
@@ -2771,6 +3791,16 @@ class SvgRenderer:
 
         The id names the kind and variant, suffixed for any size, pen
         scale or transform baked into the definition.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+
+        Returns
+        -------
+        str
+            Definition id.
         """
         variant = getattr(u, 'variant', 'default')
         sym = self.registry.for_unit(u)
@@ -2783,8 +3813,15 @@ class SvgRenderer:
 
         Parameters
         ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
         arrows : bool, default=True
             Whether to define arrowhead markers.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         lines = []
         used_colors = sorted({s.color or "black" for s in fs.streams})
@@ -2848,6 +3885,8 @@ class SvgRenderer:
 
         Parameters
         ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
         label_items : list
             Receives tag, ``NC`` and fail-position label items.
         balloons : list[str]
@@ -2858,6 +3897,11 @@ class SvgRenderer:
             Sheet joint default, for flange marks to avoid.
         quadrants : sequence, optional
             Quadrant label items for tags to avoid.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         from pandid.portgeom import unit_box
 
@@ -2927,8 +3971,17 @@ class SvgRenderer:
     def _draw_taps(self, fs):
         """Return the lines from tap points to their balloons.
 
-        Impulse lines are solid and signal lines dashed, on the detail
-        rung.
+        Draw impulse lines solid and signal lines dashed.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+
+        Returns
+        -------
+        list[str]
+            SVG lines, empty when there are no taps.
         """
         out = []
         for u, (tx, ty), (cx, cy) in tap_lines(fs):
@@ -2942,6 +3995,20 @@ class SvgRenderer:
         """Return a Feed or Product off-page flag.
 
         A ``reference`` adds a second line naming the connected drawing.
+
+        Parameters
+        ----------
+        u : Unit
+            Feed or Product.
+        f : Frame
+            Its frame.
+        safe_name : str
+            Escaped tag.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         from pandid.portgeom import _flag_reference
 
@@ -2970,6 +4037,18 @@ class SvgRenderer:
         """Return the balloon lettering: letters over loop number.
 
         A diamond carries the number alone.
+
+        Parameters
+        ----------
+        u : Instrument
+            Balloon.
+        x, y, u_width, u_height : float
+            Drawn box.
+
+        Returns
+        -------
+        list[str]
+            SVG ``<text>`` lines.
         """
         from pandid.units import split_tag
 
@@ -3004,8 +4083,9 @@ class SvgRenderer:
         Parameters
         ----------
         lpos : str
-            One of :data:`LABEL_POSITIONS`, or ``"top_right"`` for
-            the NC marking.
+            A :data:`LABEL_POSITIONS` value, or ``"top_right"`` for NC.
+        x, y, u_width, u_height : float
+            Unit box.
 
         Returns
         -------
@@ -3027,6 +4107,17 @@ class SvgRenderer:
     def _unit_label_item(self, u, f, x, y, u_width, u_height, tag):
         """Return a unit label item on its layout-chosen side.
 
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
+        tag : str
+            Tag as drawn, unescaped.
+
         Returns
         -------
         tuple
@@ -3044,8 +4135,23 @@ class SvgRenderer:
 
         Parameters
         ----------
+        u : Unit
+            Unit.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
+        tag : str
+            Tag as drawn, unescaped.
+        ink : sequence of _Ink
+            Drawn lines.
         symbols : sequence of tuple, optional
             ``(unit, box)`` for every symbol and owner-less mark.
+
+        Returns
+        -------
+        tuple
+            Label item.
         """
         from pandid.layout.labels import free_label_sides
 
@@ -3089,8 +4195,19 @@ class SvgRenderer:
 
         Parameters
         ----------
+        u : Unit
+            Valve or fitting.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
         tag_box : tuple, optional
             Where the tag landed; resolved from the frame when omitted.
+
+        Returns
+        -------
+        tuple
+            Label item.
         """
         item = (*self._label_place("top_right", x, y, u_width, u_height), "top_right", "NC")
         tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
@@ -3112,10 +4229,25 @@ class SvgRenderer:
 
         Parameters
         ----------
+        u : Unit
+            Valve.
+        f : Frame
+            Its frame.
+        x, y, u_width, u_height : float
+            Unit box.
+        letters : str
+            Fail-position letters.
         tag_box : tuple, optional
             Where the tag landed; resolved from the frame when omitted.
+        ink : sequence of _Ink, optional
+            Drawn lines.
         symbols : sequence of tuple, optional
             ``(unit, box)`` for every symbol.
+
+        Returns
+        -------
+        tuple
+            Label item.
         """
         upright = int(getattr(f, "orientation", 0) or 0) in (90, 270)
         lpos = "right" if upright else "bottom"
@@ -3146,6 +4278,16 @@ class SvgRenderer:
         """Return the label pass: tags on white halos over the lines.
 
         A ``center`` label gets no halo.
+
+        Parameters
+        ----------
+        items : list[tuple]
+            Label items.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         out = ['  <g id="unit_labels">']
         for item in items:
@@ -3164,7 +4306,20 @@ class SvgRenderer:
     # --- streams ------------------------------------------------------
 
     def _tipped(self, s, arrows: bool) -> bool:
-        """Return whether this render draws an arrowhead on ``s``."""
+        """Return whether this render draws an arrowhead on ``s``.
+
+        Parameters
+        ----------
+        s : Stream
+            Stream.
+        arrows : bool
+            Whether the sheet draws arrowheads.
+
+        Returns
+        -------
+        bool
+            Whether to add the marker.
+        """
         return arrows and wears_arrowhead(s, self.registry)
 
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True,
@@ -3173,12 +4328,25 @@ class SvgRenderer:
 
         Parameters
         ----------
+        fs : Flowsheet
+            Flowsheet being drawn.
+        jump_direction : str
+            Line carrying the mark: ``"vertical"`` or ``"horizontal"``.
         unit_labels : list
             Tag items already placed, for numbers to avoid.
+        arrows : bool, default=True
+            Whether process lines get arrowheads.
         plates : list, optional
             Receives every opaque box the label passes reserve.
         joints : str, optional
             Sheet joint default, or ``None``.
+        crossing_style : str, default="arc"
+            ``"gap"``, ``"arc"`` or ``"plain"``.
+
+        Returns
+        -------
+        list[str]
+            SVG lines.
         """
         stream_geoms = [(s, stream_polyline(s)) for s in fs.streams]
         # Hops keyed by (stream, segment), in drawing order.
@@ -3190,7 +4358,18 @@ class SvgRenderer:
         # A gap is an ``M`` subpath in the same ``d``.
 
         def cross(far: str) -> str:
-            """Return the path command crossing to ``far``."""
+            """Return the path command crossing to ``far``.
+
+            Parameters
+            ----------
+            far : str
+                Far side of the crossing, as ``"x,y"``.
+
+            Returns
+            -------
+            str
+                Arc command for ``"arc"``, else a move.
+            """
             if crossing_style == "arc":
                 return f"A {HOP_R:g} {HOP_R:g} 0 0 1 {far}"
             return f"M {far}"
