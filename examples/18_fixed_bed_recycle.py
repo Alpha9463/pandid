@@ -124,13 +124,11 @@ def main():
                spec="CS")
     fs.connect(fehe.tube_out, heater.inlet, size=350, service="LG",
                sequence=314, spec="CS")
-    # A number of its own either side of the heater: the coil is where
-    # the metal changes, and 304 is the run that is above the carbon
-    # steel's limit.
+    # The hot lines either side of R-301 are alloy steel.
     inlet_line = fs.connect(heater.outlet, rx.feed, size=350, service="LG",
-                            sequence=304, spec="LT")
+                            sequence=304, spec="AS")
     fs.connect(rx.outlet, fehe.shell_in, size=350, service="LG", sequence=305,
-               spec="LT")
+               spec="AS")
     fs.connect(fehe.shell_out, cooler.tube_in, size=350, service="LG",
                sequence=306, spec="CS")
     fs.connect(cooler.tube_out, sep.feed, size=350, service="LG",
@@ -279,7 +277,7 @@ def main():
     ], title="GENERAL NOTES", numbered=False, align="bottom-left"))
     fs.add_annotation(legend({
         "CS": "Carbon Steel A106-B",
-        "LT": "Low Temperature Carbon Steel A333-6",
+        "AS": "Alloy Steel A335 P11",
         "SS": "Stainless Steel 316L",
         "SG": "Make-up Synthesis Gas",
         "LG": "Loop Gas",
