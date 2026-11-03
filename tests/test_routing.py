@@ -18,74 +18,47 @@ from pandid.routing.astar import CrossingIndex, committed_segments, find_path
 from pandid.routing.visibility import TAG_CLEAR, Rect, VisibilityGraph, clear_gaps
 
 
-def test_router_uses_a_reachable_lane_before_a_blocked_projection() -> None:
-    """Reach the graph before an obstacle blocks the nominal nozzle stub."""
-    fs = Flowsheet("reachable escape")
+#: Blocker width, height, label side and corner; whether the router recovers
+#: exits; whether the blocker hides the feed's nominal projection from the
+#: graph; and whether the line is drawn as a fallback through the blocker.
+_BLOCKED_NOZZLES = {
+    "reachable-lane": ((44, 44, "bottom"), (83, 78), True, True, False),
+    "no-recovery": ((44, 44, "bottom"), (83, 78), False, True, True),
+    "sealed-nozzle": ((44, 44, "bottom"), (60, 78), True, True, True),
+    "blocked-stub": ((12, 40, "center"), (68, 80), True, False, True),
+}
+
+
+@pytest.mark.parametrize("case", list(_BLOCKED_NOZZLES))
+def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(case: str) -> None:
+    """Check that a blocked nozzle stub routes clear or draws a reported fallback.
+
+    Parameters
+    ----------
+    case : str
+        Key in ``_BLOCKED_NOZZLES``.
+    """
+    (width, height, side), corner, recover, hidden, blocked = _BLOCKED_NOZZLES[case]
+    fs = Flowsheet(case)
     feed = fs.add(Feed("F")).pin(x=60, y=100)
     product = fs.add(Product("P")).pin(x=400, y=100)
-    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=83, y=78)
+    blocker = fs.add(Pump("Blocker", width=width, height=height, label_pos=side))
+    blocker.pin(x=corner[0], y=corner[1])
     stream = fs.connect(feed.outlet, product.inlet)
     fs.layout()
     graph = VisibilityGraph(fs)
-    assert graph.port_projs[("F", "outlet")] not in graph.nodes
+    assert (graph.port_projs[("F", "outlet")] not in graph.nodes) is hidden
 
-    fs.route(DefaultRouter())
+    fs.route(DefaultRouter(recover_exits=recover))
 
-    assert stream.route is not None and not stream.route.used_fallback
+    assert stream.route is not None and stream.route.used_fallback is blocked
     assert feed.frame is not None and product.frame is not None and blocker.frame is not None
-    assert [
-        (feed.frame.x, feed.frame.y),
-        (product.frame.x, product.frame.y),
-        (blocker.frame.x, blocker.frame.y),
-    ] == [(10.0, 75.0), (400.0, 75.0), (83, 78)]
-    assert not any(issue.code == "route-crosses-unit" for issue in fs.validate())
-
-
-def test_router_without_recovery_searches_only_the_nominal_projection() -> None:
-    """Keep the nominal-projection search available as an opt-out."""
-    fs = Flowsheet("nominal escape")
-    feed = fs.add(Feed("F")).pin(x=60, y=100)
-    product = fs.add(Product("P")).pin(x=400, y=100)
-    fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=83, y=78)
-    stream = fs.connect(feed.outlet, product.inlet)
-    fs.layout()
-    fs.route(DefaultRouter(recover_exits=False))
-
-    assert stream.route is not None and stream.route.used_fallback
-
-
-def test_router_reports_a_sealed_fixed_nozzle() -> None:
-    """Keep a fully blocked outward nozzle unresolved."""
-    fs = Flowsheet("sealed escape")
-    feed = fs.add(Feed("F")).pin(x=60, y=100)
-    product = fs.add(Product("P")).pin(x=400, y=100)
-    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=60, y=78)
-    stream = fs.connect(feed.outlet, product.inlet)
-    fs.layout()
-    fs.route(DefaultRouter())
-
-    assert stream.route is not None and stream.route.used_fallback
-    assert feed.frame is not None and product.frame is not None and blocker.frame is not None
-    assert [
-        (feed.frame.x, feed.frame.y),
-        (product.frame.x, product.frame.y),
-        (blocker.frame.x, blocker.frame.y),
-    ] == [(10.0, 75.0), (400.0, 75.0), (60, 78)]
-    assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
-
-
-def test_router_does_not_call_a_blocked_stub_successful() -> None:
-    """Reject a graph path whose anchor lead crosses another body."""
-    fs = Flowsheet("blocked stub")
-    feed = fs.add(Feed("F")).pin(x=60, y=100)
-    product = fs.add(Product("P")).pin(x=400, y=100)
-    fs.add(Pump("Blocker", width=12, height=40, label_pos="center")).pin(x=68, y=80)
-    stream = fs.connect(feed.outlet, product.inlet)
-    fs.layout()
-    fs.route(DefaultRouter())
-
-    assert stream.route is not None and stream.route.used_fallback
-    assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
+    assert [(f.x, f.y) for f in (feed.frame, product.frame, blocker.frame)] == [
+        (10.0, 75.0),
+        (400.0, 75.0),
+        corner,
+    ]
+    assert any(issue.code == "route-crosses-unit" for issue in fs.validate()) is blocked
 
 
 def test_rect_intersection():
@@ -690,17 +663,24 @@ def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
         assert s2.route is not None and s2.route.waypoints == lower
 
 
-def test_a_manual_routes_geometry_is_recorded_for_later_streams():
+@pytest.mark.parametrize("x", [175.0, 176.0], ids=["on-a-lane", "off-every-lane"])
+def test_a_manual_routes_geometry_is_recorded_for_later_streams(x: float):
     """Record a manual route so a later stream avoids crossing it.
 
     The manual stream is drawn across the north bypass at x=175, a lane the
-    graph carries. The test checks the later route, because a call to
-    ``record`` does not prove that it had an effect.
+    graph carries, or at x=176, which only the whole-edge crossing check can
+    price. The test checks the later route, because a call to ``record`` does
+    not prove that it had an effect.
+
+    Parameters
+    ----------
+    x : float
+        Column the manual route is drawn down.
     """
     fs = Flowsheet("manual-recorded")
     f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
     p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
-    fs.connect(f1.outlet, p1.inlet).via([(175.0, 100.0), (175.0, 170.0)])
+    fs.connect(f1.outlet, p1.inlet).via([(x, 100.0), (x, 170.0)])
     stream = _obstacle_bypass_tie(fs)
 
     fs.layout()
@@ -830,27 +810,6 @@ def test_find_path_prices_a_crossing_strictly_inside_a_long_edge_not_just_at_a_n
     crossed = _final_g(graph, (0.0, 0.0), (100.0, 0.0), None, "W", crossing_index=index)
 
     assert crossed == pytest.approx(clear + astar.CROSSING_PENALTY)
-
-
-def test_a_manual_route_off_lane_still_breaks_the_tie():
-    """Avoid a manual route drawn off every graph lane.
-
-    The manual stream runs at x=176, which is not a lane coordinate, so
-    only the whole-edge crossing check can price it.
-    """
-    fs = Flowsheet("manual-recorded-off-lane")
-    f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
-    p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
-    fs.connect(f1.outlet, p1.inlet).via([(176.0, 100.0), (176.0, 170.0)])
-    stream = _obstacle_bypass_tie(fs)
-
-    fs.layout()
-    fs.route()
-
-    assert stream.route is not None
-    wp = stream.route.waypoints
-    assert 135.0 not in {y for _, y in wp}, f"F -> P crossed the manual route's line: {wp}"
-    assert 265.0 in {y for _, y in wp}, f"F -> P did not take the clear (south) bypass: {wp}"
 
 
 def test_separation_keeps_a_run_out_of_the_unit_its_stream_joins() -> None:
