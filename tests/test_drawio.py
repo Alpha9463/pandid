@@ -3481,6 +3481,7 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     """
     path = ROOT / "scripts" / "drawio_samples.py"
     spec = importlib.util.spec_from_file_location("_pandid_script_drawio_samples", path)
+    assert spec is not None and spec.loader is not None
     samples = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(samples)
     current, _dropped = samples.sample("04_control_loop")
