@@ -1438,43 +1438,13 @@ class _MultiPortVessel(_FaceFamilies):
 
 
 class Vessel(_MultiPortVessel):
-    """Pressure vessel for holdup rather than phase separation.
+    """Pressure vessel for holdup.
 
     ``"default"`` and ``"dished"`` stand upright; ``"horizontal"`` is a
-    lying drum (reflux drum, accumulator, knock-out pot). Use that variant
-    rather than turning an upright vessel: supports and shell bands do not
-    survive a quarter turn, and :meth:`~pandid.flowsheet.Flowsheet.validate`
-    reports a turned vessel as ``gravity-turned`` (ISO 15519-1 11.4.2). Use
-    :class:`Separator` when the vessel separates phases into named
-    products.
-
-    Besides its inlets and outlets, a vessel has ``vent`` (top head),
-    ``relief`` (where the protective device sits, at the top per CHEE4001
-    p.7) and ``drain`` (low point). These are named rather than counted
-    because each has its own duty. Every vessel and tank variant anchors
-    all five (``scripts/vendor_symbols.py``), so a second relief needs new
-    artwork. ``nozzle-unconnected`` checks only numbered nozzles, so these
-    three are never reported. :class:`Tank` has the same five ports.
-
-    ``inputs`` and ``outputs`` make families as on :class:`Block`: a count
-    (all on the default face) or one face per port, such as
-    ``inputs=["W", "W", "N"]``. With one of each, ``inlet`` and ``outlet``
-    name them; above one, use ``in_1``, ``in_2``, ... or :attr:`inlets`.
-    See :class:`_MultiPortVessel` for face defaults and
-    :meth:`~_MultiPortVessel.nozzle` for moving a port.
-
-    ``supports`` draws an ISO 10628-2 group-26 support under or against
-    the shell::
-
-        Vessel("D-301", supports="skirt")     # 26.3 C2007
-        Vessel("D-302", supports="leg")       # 26.1 C2005, a pair
-        Vessel("D-303", supports="bracket")   # 26.2 C2006, a pair
-        Vessel("D-304", supports="ring")      # 26.4 C2008, a pair
-
-    Not every variant can carry every support: a bracket or ring against a
-    horizontal drum's wall, or any support under ``"electrical_heating"``,
-    would move a nozzle onto another face. Such a pair raises
-    ``ValueError`` naming the variants that can.
+    lying drum. Besides its inlets and outlets, a vessel has ``vent``
+    (top head), ``relief`` (top) and ``drain`` (low point). With one
+    inlet and one outlet, ``inlet`` and ``outlet`` name them; otherwise
+    use ``in_1``, ``in_2``, ... or :attr:`inlets`.
 
     Parameters
     ----------
@@ -1485,8 +1455,8 @@ class Vessel(_MultiPortVessel):
     variant : str, default="default"
         Shell drawing.
     supports : str, optional
-        ``"skirt"``, ``"leg"``, ``"bracket"`` or ``"ring"``. Fixed at
-        construction.
+        ISO 10628-2 group-26 support: ``"skirt"`` (26.3), or a pair of
+        ``"leg"`` (26.1), ``"bracket"`` (26.2) or ``"ring"`` (26.4).
     width, height, label_pos, description, reference
         As for :class:`Unit`.
 
@@ -1502,17 +1472,11 @@ class Vessel(_MultiPortVessel):
     inlet: Port
     outlet: Port
     vent: Port
-    # Where the relief device sits, so the relief path is drawn from the
-    # vessel. Role "process": a relief passes whatever the vessel holds.
     relief: Port
-    # Low-point liquid draw; most variants put outlet on the shell wall.
     drain: Port
 
-    # A literal inputs= count, or a tuple of faces, returns a typed view
-    # declaring in_1 to in_n (Vessel1 to Vessel8), so a type checker
-    # accepts ``Vessel("V-1", inputs=3).in_3``. A computed count or a list
-    # gets Vessel; use ``inlets[i]`` or ``port(...)``. outputs= has no
-    # typed family; use ``outlets[i]``.
+    # A literal inputs= count or tuple of faces returns a typed view
+    # (Vessel1 to Vessel8) declaring in_1 to in_n.
     if TYPE_CHECKING:
 
         @overload
@@ -1594,10 +1558,7 @@ class Vessel(_MultiPortVessel):
         ("drain", "outlet", "liquid"),
     ]
 
-    # No support unless ``supports`` names one; __init__ refuses one the
-    # variant cannot carry.
     COMPOSITION = {"supports": None}
-    # The supports overlay is composed in __init__.
     _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
 
     def __init__(
@@ -1630,8 +1591,6 @@ class Vessel(_MultiPortVessel):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above, written out so a checker can
-    # read them; never built at run time.
 
     class Vessel1(Vessel):
         """Vessel declaring ``in_1`` for type checkers."""
@@ -1707,29 +1666,12 @@ class Tank(_MultiPortVessel):
 
     Variants are ``"default"`` (dished roof), ``"conical"``,
     ``"floating_roof"``, ``"sphere"``, ``"conical_bottom"``,
-    ``"conical_ends"`` and ``"dished_roof_conical_bottom"``.
+    ``"conical_ends"`` and ``"dished_roof_conical_bottom"``. A tank has
+    :class:`Vessel`'s ports and ``inputs``/``outputs`` families.
 
-    A tank has :class:`Vessel`'s five ports. ``vent`` is the conservation
-    vent a fixed-roof tank breathes through. ``relief`` is the fire-case
-    relief (CHEE4001 p.8), separate from the vent because it passes nothing
-    until the design case. A declared port need not be piped.
-
-    The inlet face is a menu. Flat-floored variants (``default``,
-    ``conical``, ``floating_roof``, ``sphere``) fill low on the shell, since
-    splash filling a flammable liquid generates static; hopper-bottomed
-    variants fill at the crown. Every variant except ``floating_roof``,
-    whose roof rides on the liquid, offers both::
-
-        tk = Tank("TK-602")          # fills low on the shell
-        tk.nozzle("inlet", "N")      # ...through a crown downcomer
-
-    Without a ``nozzle()`` call, layout chooses the face from where the peer
-    lands (:mod:`pandid.layout.faces`).
-
-    Several feeds use ``inputs``, as on :class:`Vessel`::
-
-        tk = Tank("TK-901", inputs=["W", "W", "N"])
-        tk.in_1, tk.in_2, tk.in_3   # west, west, crown; in declared order
+    Flat-floored variants fill low on the shell and hopper-bottomed
+    ones at the crown; every variant but ``floating_roof`` also offers
+    the other face to :meth:`nozzle`.
 
     Parameters
     ----------
@@ -1747,7 +1689,6 @@ class Tank(_MultiPortVessel):
     outlets: tuple[Port, ...]
     inlet: Port
     outlet: Port
-    # As on Vessel.
     vent: Port
     relief: Port
     drain: Port
@@ -1828,10 +1769,6 @@ class Tank(_MultiPortVessel):
                     outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
 
     kind = "tank"
-    # Keep the inherited ``out: "E"`` claim although the artwork puts the
-    # outlet on the floor: the outlet pipe turns toward a peer drawn
-    # alongside. Claiming S or SE measured worse on the example corpus.
-
     PORTS = [
         ("vent", "outlet", "vapor"),
         ("relief", "outlet", "process"),
@@ -1863,7 +1800,6 @@ class Tank(_MultiPortVessel):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above; never built at run time.
 
     class Tank1(Tank):
         """Tank declaring ``in_1`` for type checkers."""
@@ -1943,33 +1879,11 @@ class Blower(_FluidMover):
 class Reducer(Unit):
     """Reducer or expander: the fitting that changes a line's size.
 
-    ``"concentric"`` (also ``"default"``) is symmetric about the run's
-    centreline. ``"eccentric"`` is drawn flat on top, the pump suction
-    arrangement that leaves no vapour pocket; ``pin(mirrored="y")`` puts
-    the flat side at the bottom for a line that must drain, with both
-    ports kept on their faces.
-
-    ``large_end`` names the port on the wide face:
-
-    =====================  ========================================
-    ``large_end``          what the fitting does
-    =====================  ========================================
-    ``"inlet"`` (default)  a **reduction**: the run enters wide
-                           and leaves narrow, going into a valve
-    ``"outlet"``           an **expansion**: the run enters narrow
-                           and leaves wide, coming back out of one
-    =====================  ========================================
-
-    The run always goes ``inlet`` to ``outlet``, so a station reads
-
-    .. code-block:: python
-
-        fs.connect(hv.outlet, rd.inlet)   # Reducer("RD-306A")
-        fs.connect(rd.outlet, cv.inlet)   # the control valve
-        fs.connect(cv.outlet, ex.inlet)   # ...large_end="outlet"
-
-    ``pin(mirrored="x")`` is different: it turns the drawing and its ports
-    together, so the line runs backwards through the fitting.
+    ``"concentric"`` (also ``"default"``) is symmetric about the run;
+    ``"eccentric"`` is flat on top, and ``pin(mirrored="y")`` puts the
+    flat side at the bottom. The run goes ``inlet`` to ``outlet``;
+    ``large_end="inlet"`` draws a reduction and ``"outlet"`` an
+    expansion.
 
     Parameters
     ----------
@@ -2031,18 +1945,7 @@ class Reducer(Unit):
 
     @large_end.setter
     def large_end(self, value: str) -> None:
-        """Set the port on the wide face.
-
-        Parameters
-        ----------
-        value : {"inlet", "outlet"}
-            Port name.
-
-        Raises
-        ------
-        ValueError
-            If ``value`` is not in :attr:`LARGE_ENDS`.
-        """
+        """Set the port on the wide face, one of :attr:`LARGE_ENDS`."""
         if value not in self.LARGE_ENDS:
             raise ValueError(
                 f"{self.name}: large_end names the nozzle on the wide face and is "
@@ -2054,35 +1957,14 @@ class Reducer(Unit):
 class Tee(Unit):
     """Pipe tee: the junction where a line branches.
 
-    Used for a bypass leg, drain, vent, sample point or PSV takeoff. It is a
-    piping fitting, not a unit operation such as :class:`Mixer` or
-    :class:`Splitter`.
-
-    A tee is drawn as three lines meeting: the run passes straight through
-    with ``inlet`` and ``outlet`` on one centreline, and the branch leaves
-    at a right angle. A line ending at a tee has no arrowhead, so none lands
-    mid-run.
-
-    A tee has no tag and is not in the equipment list. ``name`` defaults to
-    :data:`DEFAULT_NAME`, tees may share it (:meth:`repeats`), and
+    The run passes straight through ``inlet`` and ``outlet``; the branch
+    leaves the south face at a right angle. ``pin(mirrored="y")`` turns
+    the branch north, ``orientation=90`` runs N to S with the branch W
+    and ``orientation=270`` runs S to N with the branch E. A tee has no
+    tag. Tees may share a name, and
     :meth:`~pandid.flowsheet.Flowsheet.add` renames them ``TEE (2)``,
-    ``TEE (3)``.
-
-    The branch leaves the south face as drawn; place it with
-    :meth:`~Unit.pin`:
-
-    ===================  ================
-    ``pin(...)``         run, branch
-    ===================  ================
-    (nothing)            W to E, branch S
-    ``mirrored="y"``     W to E, branch N
-    ``orientation=90``   N to S, branch W
-    ``orientation=270``  S to N, branch E
-    ===================  ================
-
-    The run keeps its line number through the tee and the branch starts its
-    own. Set ``new_line_number`` to break the run's number where the piping
-    class changes.
+    ``TEE (3)``. The run keeps its line number through the tee unless
+    ``new_line_number`` is set; the branch starts its own.
 
     Parameters
     ----------
@@ -2110,7 +1992,7 @@ class Tee(Unit):
 
     inlet: Port
     outlet: Port
-    # Added in __init__, since its direction is the branch= argument.
+    # Added in __init__, in the direction given by branch=.
     branch: Port
 
     kind = "tee"
@@ -2149,22 +2031,12 @@ class Tee(Unit):
 
     @property
     def branch_direction(self) -> str:
-        """Return ``"outlet"`` for a takeoff or ``"inlet"`` for a return.
-
-        Read from the branch port, so the spec writer and the router see
-        one fact.
-        """
+        """Return ``"outlet"`` (takeoff) or ``"inlet"`` (return)."""
         return self.ports["branch"].direction
 
     @branch_direction.setter
     def branch_direction(self, value: str) -> None:
-        """Refuse to change the branch direction after construction.
-
-        Raises
-        ------
-        AttributeError
-            Always; build a new tee with the wanted ``branch``.
-        """
+        """Raise AttributeError: the branch direction is read-only."""
         raise AttributeError(
             f"{self.name}: branch_direction is read-only. The branch nozzle is "
             f"already built and may already have a line on it, so turning one "
@@ -2179,18 +2051,7 @@ class Tee(Unit):
         return ""
 
     def repeats(self, other: "Unit") -> bool:
-        """Return whether ``other`` is a tee, which may share this name.
-
-        Parameters
-        ----------
-        other : Unit
-            Unit with the same name.
-
-        Returns
-        -------
-        bool
-            True for another tee.
-        """
+        """Return whether ``other``, of the same name, is a tee."""
         return isinstance(other, Tee)
 
 
@@ -2211,21 +2072,13 @@ class Fitting(_NormallyPositioned):
     Primary flow elements are variants too: ``venturi``, ``flow_nozzle``,
     ``coriolis``, ``vortex``, ``ultrasonic``, ``turbine_meter``,
     ``positive_displacement``, ``v_cone``, ``wedge``, ``target``,
-    ``pitot`` and ``averaging_pitot``. Attach the FE balloon with
-    :meth:`~pandid.flowsheet.Flowsheet.add_instrument`.
+    ``pitot`` and ``averaging_pitot``.
 
     A stream keeps its line number through a fitting unless
-    ``new_line_number`` is set.
-
-    ``blind`` is the spectacle (figure-8) blind and the only fitting with a
-    ``normal_position``:
-
-    - ``"open"`` (the default) draws the bored disc in the line: the line
-      is through.
-    - ``"closed"`` draws the solid disc in the line: the line is blanked.
-
-    Every other variant raises :class:`ValueError` for ``"closed"``.
-    Parameters are those of :class:`_NormallyPositioned`.
+    ``new_line_number`` is set. ``blind`` (spectacle blind) is the only
+    variant with a ``normal_position``: ``"open"`` (default) draws the
+    bored disc, ``"closed"`` the solid disc. Parameters are those of
+    :class:`_NormallyPositioned`.
     """
 
     inlet: Port
@@ -2235,13 +2088,7 @@ class Fitting(_NormallyPositioned):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     def _refuse_closed(self) -> None:
-        """Raise unless this variant has a normally closed drawing.
-
-        Raises
-        ------
-        ValueError
-            If the variant is drawn in one position only.
-        """
+        """Raise ValueError unless this variant has a closed drawing."""
         from pandid.render.symbols import default_registry
 
         if default_registry.closed_symbol(self.kind, self.variant) is None:
@@ -2274,13 +2121,11 @@ class Ejector(Unit):
 
 
 class Vent(Unit):
-    """Open end to atmosphere.
+    """Open end to atmosphere, such as a PSV tailpipe or tank breather.
 
-    A boundary like :class:`Product`, drawn as piping rather than an
-    off-page flag, for a PSV tailpipe or tank breather. Variants are
-    ``"default"`` (stack with a weather cap), ``"exhaust_head"`` (silencing
-    hood) and ``"breather"`` (tank conservation vent); each has one inlet
-    piped from below.
+    Variants: ``"default"`` (stack with a weather cap),
+    ``"exhaust_head"`` (silencing hood) and ``"breather"`` (tank
+    conservation vent). Each has one inlet, piped from below.
     """
 
     inlet: Port
@@ -2290,11 +2135,7 @@ class Vent(Unit):
 
 
 class Funnel(Unit):
-    """Open charging funnel: a manual addition point feeding a line.
-
-    Its single port is an outlet: the cone is open to the room and the stem
-    feeds the process.
-    """
+    """Open charging funnel whose one port, ``outlet``, feeds a line."""
 
     outlet: Port
 
@@ -2318,11 +2159,10 @@ class Furnace(Unit):
 
 
 class Boiler(Unit):
-    """Steam boiler: feedwater in, steam out. ISO 10628-2 item 4.1, 2532.
+    """Steam boiler, ISO 10628-2 item 4.1, 2532.
 
-    ``feedwater`` is on the west wall and ``steam`` leaves the dome's apex.
-    ISO draws no fuel or flue connection, so a separately fired boiler is a
-    :class:`Furnace` upstream on the sheet.
+    ``feedwater`` enters the west wall and ``steam`` leaves the dome's
+    apex.
     """
 
     feedwater: Port
@@ -2333,10 +2173,9 @@ class Boiler(Unit):
 
 
 class Stack(Unit):
-    """Exhaust stack or chimney. ISO 10628-2 item 4.7, 2041.
+    """Exhaust stack or chimney, ISO 10628-2 item 4.7, 2041.
 
-    Tagged equipment for furnace or boiler flue gas, unlike :class:`Vent`,
-    which is bulk piping. One inlet low on the shaft; nothing leaves it.
+    One inlet low on the shaft; nothing leaves it.
     """
 
     inlet: Port
@@ -2346,10 +2185,9 @@ class Stack(Unit):
 
 
 class Flare(Unit):
-    """Flare stack: waste gas burned off at the tip. ISO 10628-2 item 4.8, 2591.
+    """Flare stack, ISO 10628-2 item 4.8, 2591.
 
-    One inlet low on the shaft, as on :class:`Stack`. To name a flare header
-    without drawing the stack, use ``Product(header=True)``.
+    One inlet low on the shaft.
     """
 
     inlet: Port
@@ -2369,11 +2207,7 @@ class Turbine(Unit):
 
 
 class _VariantPorted(Unit):
-    """Base class for units whose ports all come from their variant.
-
-    :class:`Filter` and :class:`HeatExchanger` add :meth:`_variant_ports`
-    after :attr:`PORTS`.
-    """
+    """Base class for units whose ports come from their variant."""
 
     def __init__(
         self,
@@ -2402,66 +2236,36 @@ class _VariantPorted(Unit):
 class Filter(_VariantPorted):
     """Liquid or gas filter, with one of three port sets.
 
-    **Clarifying** (one in, one out) holds the solids in the medium, which
-    is cleaned offline. Variants: ``default`` (bag, candle or cartridge),
-    ``fixed_bed``, ``gas``, ``gas_fixed_bed`` and ``gas_belt``.
-
-    **Cake-forming** separates a slurry into filtrate and cake, with a
-    displacement wash that pushes mother liquor out of the cake. Variants:
-    ``press``, ``belt``, ``rotary`` and ``rotary_scraper``::
-
-        Filter("F-101", variant="press")
-          .inlet      slurry in
-          .wash_in    wash water in
-          .outlet     filtrate out
-          .cake       cake out
-
-    **Regenerated** (``ion_exchange``) has ``regenerant_in`` (acid, caustic
-    or brine) and ``spent_regenerant`` instead, so the line list names the
-    right fluid.
-
-    The extra ports are optional to pipe;
-    :meth:`~pandid.flowsheet.Flowsheet.validate` reports only numbered
-    ports left unconnected.
-
-    Parameters
-    ----------
-    name, variant, width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    - Clarifying (``inlet``, ``outlet``): ``default``, ``fixed_bed``,
+      ``gas``, ``gas_fixed_bed`` and ``gas_belt``.
+    - Cake-forming (adds ``wash_in`` and ``cake``): ``press``,
+      ``belt``, ``rotary`` and ``rotary_scraper``.
+    - Regenerated (adds ``regenerant_in`` and ``spent_regenerant``):
+      ``ion_exchange``.
     """
 
-    # Only the ports every variant has, so ``f.cake`` does not type-check
-    # on a bag filter. The generated device classes
-    # (:class:`~pandid.devices.FilterPress` and others) declare the rest;
-    # otherwise use ``f.port("cake")``.
+    # Only the ports every variant has; device classes declare the rest.
     inlet: Port
     outlet: Port
 
     kind = "filter"
-    # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
-    # One in, one out; the default.
     _DEFAULT_PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
     ]
-    # The wash is a utility supplied to the machine; it stays a material
-    # stream, since a line is an energy stream only when both ends are.
-    # Cake is wet solids, which has no role of its own, so it is process.
     _CAKE_FORMING = [
         ("inlet", "inlet", "process"),
         ("wash_in", "inlet", "utility"),
         ("outlet", "outlet", "process"),
         ("cake", "outlet", "process"),
     ]
-    # Named for the fluid, not the side: regenerant is acid, caustic or brine.
     _REGENERATED = [
         ("inlet", "inlet", "process"),
         ("regenerant_in", "inlet", "utility"),
         ("outlet", "outlet", "process"),
         ("spent_regenerant", "outlet", "process"),
     ]
-    # Variant -> port set; absent variants clarify.
     _VARIANT_PORTS = {
         "press": _CAKE_FORMING,
         "belt": _CAKE_FORMING,
@@ -2474,25 +2278,12 @@ class Filter(_VariantPorted):
 class Centrifuge(Unit):
     """Centrifuge, ISO 10628-2 group 9.
 
-    ``overflow`` is drawn high on the shell and ``underflow`` low, where
-    the solids discharge. The ports are named by position, as on
-    :class:`Separator`, because either may be the product::
-
-        Centrifuge("CF-101")                             # 9.6  X8082  decanter
-        Centrifuge("CF-102", variant="disc")              # 9.4  X8036
-        Centrifuge("CF-103", variant="high_speed")        # 9.1  X2619
-        Centrifuge("CF-104", variant="perforated_shell")  # 9.2  X2614
-        Centrifuge("CF-105", variant="solid_shell")       # 9.3  X8035
-        Centrifuge("CF-106", variant="screw_perforated")  # 9.5  X8037
-        Centrifuge("CF-107", variant="pusher")            # 9.7  X8038
-        Centrifuge("CF-108", variant="skimmer")           # 9.8  X8039
-
-    The default is the decanter (9.6 X8082): group 9 has no general
-    centrifuge, and the decanter is the commonest solid-liquid duty. Every
-    variant has the same three ports.
-
-    Separation is by rotation, not gravity, so a centrifuge may be turned
-    or mirrored (ISO 15519-1 11.4.2).
+    ``overflow`` is drawn high on the shell and ``underflow`` low.
+    Variants, by ISO item: ``"default"`` (decanter, 9.6), ``"disc"``
+    (9.4), ``"high_speed"`` (9.1), ``"perforated_shell"`` (9.2),
+    ``"solid_shell"`` (9.3), ``"screw_perforated"`` (9.5), ``"pusher"``
+    (9.7) and ``"skimmer"`` (9.8). Every variant may be turned or
+    mirrored.
     """
 
     feed: Port
@@ -2510,15 +2301,8 @@ class Centrifuge(Unit):
 class Dryer(Unit):
     """Dryer: removes moisture from a solid or slurry.
 
-    ``feed`` and ``product`` carry the solid; ``heating_in`` and ``vent``
-    carry the drying gas in and out. ISO 10628-2 group 10 draws only the
-    solid pair, so the gas ports are this library's addition, on the
-    casing wall.
-
-    Parameters
-    ----------
-    name, variant, width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    ``feed`` and ``product`` carry the solid; ``heating_in`` and
+    ``vent``, on the casing wall, carry the drying gas in and out.
     """
 
     feed: Port
@@ -2536,27 +2320,13 @@ class Dryer(Unit):
 
 
 class Kiln(Unit):
-    """Kiln or calciner: solids heated and reacted in the combustion chamber.
+    """Kiln or calciner, where solids are heated and reacted.
 
-    Unlike :class:`Furnace`, the solids meet the fire and the off-gas is a
-    plant stream; unlike :class:`Dryer`, the solids react. The ports are::
-
-        kiln.feed      the raw solids
-        kiln.product   the calcined solids
-        kiln.offgas    the spent combustion gas
-        kiln.fuel      fuel to the burner
-        kiln.air       combustion or fluidising air
-
-    Variants::
-
-        Kiln("K-101")                            # rotary kiln
-        Kiln("CA-901", variant="fluidized_bed")  # fluidised-bed calciner
-        Kiln("K-301", variant="shaft")           # vertical shaft kiln
-
-    Riding rings, drive and hood are part of each body, not overlays.
-    Every variant is gravity-fixed and reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    Ports: ``feed`` (raw solids), ``product`` (calcined solids),
+    ``offgas`` (spent combustion gas), ``fuel`` and ``air``. Variants:
+    ``"default"`` (rotary kiln), ``"fluidized_bed"`` (calciner) and
+    ``"shaft"`` (vertical shaft kiln). Drawn one way up; ``validate``
+    reports a turned kiln as ``gravity-turned``.
     """
 
     feed: Port
@@ -2578,18 +2348,11 @@ class Kiln(Unit):
 class Feeder(Unit):
     """Proportional or metering feeder, ISO 10628-2 group 19.
 
-    Solids enter at ``feed`` and leave metered at ``discharge``::
-
-        Feeder("FD-101")                          # 19.1  C2056  general
-        Feeder("FD-102", variant="rotary_valve")  # 19.2  X8067
-        Feeder("FD-103", variant="rotary_table")  # 19.3  C0074
-        Feeder("FD-104", variant="metering")      # 19.4  C0035
-
-    The default is the general feeder (19.1), for a duty sized before its
-    mechanism is chosen. A rotary valve feeds solids into a pressurised
-    system; a metering feeder is drawn as a balance. Every variant is
-    gravity-fixed and reported as ``gravity-turned`` if turned (ISO
-    15519-1 11.4.2).
+    Solids enter at ``feed`` and leave metered at ``discharge``.
+    Variants, by ISO item: ``"default"`` (general, 19.1),
+    ``"rotary_valve"`` (19.2), ``"rotary_table"`` (19.3) and
+    ``"metering"`` (19.4). Drawn one way up; ``validate`` reports a
+    turned feeder as ``gravity-turned``.
     """
 
     feed: Port
@@ -2602,9 +2365,8 @@ class Feeder(Unit):
 class SprayNozzle(Unit):
     """Spray nozzle, ISO 10628-2 item 19.5 2037.
 
-    A terminal fitting drawn as a fan opening downward. Its one port,
-    ``inlet``, is offered on the west and east faces, since ISO draws the
-    header passing through the apex.
+    Drawn as a fan opening downward, with one ``inlet`` offered on the
+    west and east faces.
     """
 
     inlet: Port
@@ -2616,32 +2378,19 @@ class SprayNozzle(Unit):
 class ScreeningDevice(Unit):
     """Screening device: sieve, strainer or rake, ISO 10628-2 group 7.
 
-    Named for the ISO group; :class:`~pandid.devices.Screen` is the
-    separate ``Separator(variant="sifter")`` drawing. Feed enters from
-    above, ``oversize`` leaves a side wall and ``undersize`` leaves the apex
-    below. The ports are named by position, as on :class:`Separator`,
-    because either may be the product::
-
-        ScreeningDevice("SC-101")                             # 7.1  X8123  general
-        ScreeningDevice("SC-102", variant="coarse_rake")      # 7.2  X8026
-        ScreeningDevice("SC-103", variant="fine_rake")        # 7.3  X8027
-        ScreeningDevice("SC-104", variant="coarse_and_fine")  # 7.4  X8028
-        ScreeningDevice("SC-105", variant="vibrating")        # 7.5  X2605
-        ScreeningDevice("SC-106", variant="rotating_drum")    # 7.6  X8029
-        ScreeningDevice("SC-107", variant="basket_reel")      # 7.7  X8030
-
-    Every variant has the same three ports. Drawn one way up and
-    reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    ``feed`` enters from above, ``oversize`` leaves a side wall and
+    ``undersize`` the apex below. Variants, by ISO item: ``"default"``
+    (general, 7.1), ``"coarse_rake"`` (7.2), ``"fine_rake"`` (7.3),
+    ``"coarse_and_fine"`` (7.4), ``"vibrating"`` (7.5),
+    ``"rotating_drum"`` (7.6) and ``"basket_reel"`` (7.7). Drawn one
+    way up; ``validate`` reports a turned device as ``gravity-turned``.
     """
 
     feed: Port
     oversize: Port
     undersize: Port
 
-    # Not "screen": pandid.spec aliases class names and kinds in one table,
-    # and "screen" would collide with the Screen device class.
+    # "screen" is the Screen device class's name in pandid.spec.
     kind = "screening_device"
     PORTS = [
         ("feed", "inlet", "feed"),
@@ -2653,11 +2402,8 @@ class ScreeningDevice(Unit):
 class Kneader(Unit):
     """Kneader for paste, dough or rubber, ISO 10628-2 item 12.4 X8134.
 
-    Tagged equipment, unlike the in-line ``rotary_mixer`` and
-    ``mixing_path`` :class:`Fitting` variants. Drawn one way up and
-    reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    Drawn one way up; ``validate`` reports a turned kneader as
+    ``gravity-turned``.
     """
 
     inlet: Port
@@ -2668,22 +2414,12 @@ class Kneader(Unit):
 
 
 class CrushingMachine(Unit):
-    """Size-reduction machine, type not yet chosen: ISO 10628-2 item 11.1 X8084.
+    """General size-reduction machine, ISO 10628-2 item 11.1 X8084.
 
-    For an early PFD that has sized a crushing or grinding duty before
-    choosing the machine::
-
-        CrushingMachine("SZ-101")            # 11.1  X8084  general
-
-    Use :class:`Crusher` or :class:`Mill` once the machine is chosen; both
-    take the same arguments.
-
-    ``feed`` enters the top and ``discharge`` leaves the bottom, using
-    :class:`Conveyor`'s names. There is no ``drive`` port because ISO draws
-    none for group 11; draw the motor as its own unit if needed.
-    Drawn one way up and reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    ``feed`` enters the top and ``discharge`` leaves the bottom.
+    :class:`Crusher` and :class:`Mill` take the same arguments. Drawn
+    one way up; ``validate`` reports a turned machine as
+    ``gravity-turned``.
     """
 
     feed: Port
@@ -2694,74 +2430,46 @@ class CrushingMachine(Unit):
 
 
 class Crusher(CrushingMachine):
-    """Crusher: coarse size reduction, ISO 10628-2 item 11.2 X8085.
+    """Crusher for coarse size reduction, ISO 10628-2 item 11.2 X8085.
 
-    ``variant`` names the ISO group-29 characteristic::
-
-        Crusher("CR-101")                    # 11.2  X8085  general
-        Crusher("CR-102", variant="jaw")     # 11.5  X8047
-        Crusher("CR-103", variant="cone")    # 11.7  X8049
-        Crusher("CR-104", variant="hammer")  # 11.3  X8045
-        Crusher("CR-105", variant="impact")  # 11.4  X8046
-        Crusher("CR-106", variant="roller")  # 11.6  X8048
-
-    ``vibration`` is a mill characteristic (11.12) and is refused.
-    Drawn one way up and reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    Variants, by ISO item: ``"default"`` (general, 11.2), ``"jaw"``
+    (11.5), ``"cone"`` (11.7), ``"hammer"`` (11.3), ``"impact"`` (11.4)
+    and ``"roller"`` (11.6); ``"vibration"`` is refused. Drawn one way
+    up; ``validate`` reports a turned crusher as ``gravity-turned``.
     """
 
     kind = "crusher"
 
 
 class Mill(CrushingMachine):
-    """Mill or pulveriser: fine grinding, ISO 10628-2 item 11.8 X8086.
+    """Mill for fine grinding, ISO 10628-2 item 11.8 X8086.
 
-    ``variant`` names the ISO group-29 characteristic::
-
-        Mill("ML-101")                       # 11.8   X8086  general
-        Mill("ML-102", variant="hammer")     # 11.9   X8050
-        Mill("ML-103", variant="impact")     # 11.10  X8051
-        Mill("ML-104", variant="roller")     # 11.11  X8053
-        Mill("ML-105", variant="vibration")  # 11.12  X8054
-
-    ISO has no ball or rod mill, so draw one as the general mill and say
-    so in ``description``. ``jaw`` and ``cone`` are crusher
-    characteristics and are refused. Drawn one way up and reported as
-    ``gravity-turned`` by :meth:`~pandid.flowsheet.Flowsheet.validate`
-    if turned (ISO 15519-1 11.4.2).
+    Variants, by ISO item: ``"default"`` (general, 11.8), ``"hammer"``
+    (11.9), ``"impact"`` (11.10), ``"roller"`` (11.11) and
+    ``"vibration"`` (11.12); ``"jaw"`` and ``"cone"`` are refused.
+    Drawn one way up; ``validate`` reports a turned mill as
+    ``gravity-turned``.
     """
 
     kind = "mill"
 
 
 class Conveyor(Unit):
-    """Conveyor: bulk solids carried from tail end to head end.
+    """Conveyor carrying bulk solids from tail end to head end.
 
     ``"default"`` is the belt (ISO 10628-2 item 18.2, 3821) and
-    ``"screw"`` the enclosed screw (item 18.5 X8063)::
-
-        Conveyor("CV-101")                                # belt
-        Conveyor("CV-102", variant="screw", length=140)   # screw
-        Conveyor("CV-103", length=300, diameter=40)       # big rollers
-
-    The symbol is built to ``length`` and ``diameter`` rather than scaled,
-    so rollers stay round and a longer screw gets more turns at the same
-    pitch. ``width`` and ``height`` are refused because a quarter turn
-    swaps them.
-
-    A belt's ``feed`` is the tail roller and ``discharge`` the head, each
-    also offered on the chute face. A screw is fed through a top spout near
-    the tail and discharges through a bottom spout near the head, with the
-    ends offered instead.
+    ``"screw"`` the enclosed screw (item 18.5 X8063). The symbol is
+    built to ``length`` and ``diameter``. A belt's ``feed`` is the tail
+    roller and ``discharge`` the head; a screw is fed through a top
+    spout near the tail and discharges through a bottom spout near the
+    head.
 
     Parameters
     ----------
     name : str
         Tag.
     length : float, optional
-        Run from tail to head, in drawn units; the symbol default when
-        omitted.
+        Run from tail to head; the symbol default when omitted.
     diameter : float, optional
         Belt roller or screw bore; :meth:`default_diameter` when omitted.
     variant : str, default="default"
@@ -2816,7 +2524,7 @@ class Conveyor(Unit):
         super().__init__(
             name, variant=variant, label_pos=label_pos, description=description, reference=reference
         )
-        # Set diameter first: the minimum length depends on it.
+        # The length check reads the diameter.
         self.diameter = self.default_diameter() if diameter is None else diameter
         self.length = CONVEYOR_LENGTH if length is None else length
 
@@ -2839,19 +2547,7 @@ class Conveyor(Unit):
 
     @length.setter
     def length(self, value: float) -> None:
-        """Set the run length.
-
-        Parameters
-        ----------
-        value : float
-            Length in drawn units.
-
-        Raises
-        ------
-        ValueError
-            If a belt is shorter than its two rollers, or a screw shorter
-            than one flight turn.
-        """
+        """Set the run length, checked against the variant's minimum."""
         from pandid.render.symbols import (
             SCREW_MIN_LENGTH,
             conveyor_min_length,
@@ -2868,27 +2564,12 @@ class Conveyor(Unit):
 
     @property
     def diameter(self) -> float:
-        """Return the belt roller or screw bore, in drawn units.
-
-        It is also the drawn depth of the symbol.
-        """
+        """Return the belt roller or screw bore, in drawn units."""
         return self._diameter
 
     @diameter.setter
     def diameter(self, value: float) -> None:
-        """Set the roller or bore diameter.
-
-        Parameters
-        ----------
-        value : float
-            Diameter in drawn units.
-
-        Raises
-        ------
-        ValueError
-            If ``value`` is not positive, or a belt's current length is too
-            short for rollers of this size.
-        """
+        """Set the roller or bore diameter, checked against length."""
         from pandid.render.symbols import (
             conveyor_bad_diameter,
             conveyor_min_length,
@@ -2908,20 +2589,13 @@ class Conveyor(Unit):
 
 
 class Elevator(Unit):
-    """Bucket elevator: solids lifted in buckets on a belt.
+    """Bucket elevator, ISO 10628-2 item 18.7 X8065.
 
-    ISO 10628-2 item 18.7 X8065; ``"z_form"`` is item 18.8 X8066, with a
-    horizontal run at each end::
-
-        Elevator("BE-301")
-        Elevator("BE-302", variant="z_form")
-
-    ``feed`` is the boot (low) and ``discharge`` the head (high). The
-    straight elevator also offers north and south chute faces. There is no
-    ``length``: the lift follows from the elevations it connects.
-    Drawn one way up and reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    ``"z_form"`` (item 18.8 X8066) adds a horizontal run at each end.
+    ``feed`` is the boot (low) and ``discharge`` the head (high); the
+    straight elevator also offers north and south chute faces. Drawn
+    one way up; ``validate`` reports a turned elevator as
+    ``gravity-turned``.
     """
 
     feed: Port
