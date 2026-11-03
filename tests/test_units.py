@@ -398,40 +398,51 @@ def test_absorber_and_stripper_never_answer_to_the_nozzles_they_refused():
 # --- feed_stages: a feed lands on the stage it enters ------------------------
 
 
-def test_a_feed_stage_moves_the_nozzle_off_the_even_spread():
-    """The whole point: two feeds asked for different stages land at
-    different, specific elevations rather than the two points the even
-    spread would have put them at."""
+@pytest.mark.parametrize(
+    ("build", "stages"),
+    [
+        (
+            lambda: U.Column(
+                "T-1", internals="valve_tray", trays=30, n_feeds=2, feed_stages=[12, 22]
+            ),
+            {"feed_1": 12, "feed_2": 22},
+        ),
+        (lambda: U.Column("T-1", internals="tray", trays=8, feed_stages=[4]), {"feed": 4}),
+        (
+            lambda: U.Column(
+                "T-1", internals="valve_tray", trays=30, n_draws=2, draw_stages=[8, 20]
+            ),
+            {"draw_1": 8, "draw_2": 20},
+        ),
+        (
+            lambda: U.Column("T-1", internals="tray", trays=8, n_draws=1, draw_stages=[4]),
+            {"draw": 4},
+        ),
+        (
+            lambda: U.Column(
+                "T-1",
+                internals="valve_tray",
+                trays=30,
+                feed_stages=[12],
+                n_draws=1,
+                draw_stages=[22],
+            ),
+            {"feed": 12, "draw": 22},
+        ),
+    ],
+    ids=["two feeds", "one feed", "two draws", "one draw", "a feed and a draw"],
+)
+def test_a_stage_moves_its_nozzle_off_the_even_spread_onto_that_tray(build, stages):
+    """``feed_stages=`` and ``draw_stages=`` each pin a nozzle to its tray, singly
+    or together, and neither keyword shadows the other's nozzle."""
     from pandid.portgeom import port_point
 
-    fs = _flowsheet_with(
-        U.Column("T-101", internals="valve_tray", trays=30, n_feeds=2, feed_stages=[12, 22]).pin(
-            x=300, y=0
-        )
-    )
-    col = fs.units[0]
-    fs.layout()
-    _, y1 = port_point(col, col.frame, "feed_1")
-    _, y2 = port_point(col, col.frame, "feed_2")
-    top = col.frame.y
-    height = col.frame.h
-    assert (y1 - top) / height == pytest.approx(0.11 + 11.5 * 0.78 / 30)
-    assert (y2 - top) / height == pytest.approx(0.11 + 21.5 * 0.78 / 30)
-
-
-def test_a_single_feed_column_can_pin_its_lone_nozzle_too():
-    """``feed_stages=`` is not only for a multi-feed tower: a one-feed
-    column's ``feed`` is a family of one, and pinning it is the same
-    keyword rather than a second one for the singular case."""
-    from pandid.portgeom import port_point
-
-    fs = _flowsheet_with(
-        U.Column("T-1", internals="tray", trays=8, feed_stages=[4]).pin(x=300, y=0)
-    )
-    col = fs.units[0]
-    fs.layout()
-    _, y = port_point(col, col.frame, "feed")
-    assert (y - col.frame.y) / col.frame.h == pytest.approx(0.11 + 3.5 * 0.78 / 8)
+    col = build().pin(x=300, y=0)
+    _flowsheet_with(col).layout()
+    for port, stage in stages.items():
+        _, y = port_point(col, col.frame, port)
+        expected = 0.11 + (stage - 0.5) * 0.78 / col.trays
+        assert (y - col.frame.y) / col.frame.h == pytest.approx(expected), port
 
 
 def test_a_stage_left_null_keeps_the_even_spread():
@@ -544,38 +555,6 @@ def test_a_draw_lands_on_the_east_face_a_feed_never_reaches():
 # --- draw_stages: a draw lands on the stage it actually leaves from ------
 
 
-def test_a_draw_stage_moves_the_nozzle_off_the_even_spread():
-    from pandid.portgeom import port_point
-
-    fs = _flowsheet_with(
-        U.Column("T-301", internals="valve_tray", trays=30, n_draws=2, draw_stages=[8, 20]).pin(
-            x=300, y=0
-        )
-    )
-    col = fs.units[0]
-    fs.layout()
-    _, y1 = port_point(col, col.frame, "draw_1")
-    _, y2 = port_point(col, col.frame, "draw_2")
-    top = col.frame.y
-    height = col.frame.h
-    assert (y1 - top) / height == pytest.approx(0.11 + 7.5 * 0.78 / 30)
-    assert (y2 - top) / height == pytest.approx(0.11 + 19.5 * 0.78 / 30)
-
-
-def test_a_single_draw_column_can_pin_its_lone_nozzle_too():
-    """``draw_stages=`` on a one-draw tower pins the singular ``draw``,
-    the same shape ``feed_stages=`` takes on a one-feed tower."""
-    from pandid.portgeom import port_point
-
-    fs = _flowsheet_with(
-        U.Column("T-1", internals="tray", trays=8, n_draws=1, draw_stages=[4]).pin(x=300, y=0)
-    )
-    col = fs.units[0]
-    fs.layout()
-    _, y = port_point(col, col.frame, "draw")
-    assert (y - col.frame.y) / col.frame.h == pytest.approx(0.11 + 3.5 * 0.78 / 8)
-
-
 def test_draw_stages_length_must_match_the_draws():
     with pytest.raises(
         ValueError,
@@ -597,31 +576,6 @@ def test_draw_stages_on_a_bare_shell_is_refused():
 def test_draw_stages_is_none_by_default_and_unwritten():
     col = U.Column("T-1", n_draws=2)
     assert col.draw_stages is None
-
-
-def test_a_feed_stage_and_a_draw_stage_pin_independently():
-    """The two stage lists are read into one merged fraction table; this
-    is the check that neither keyword shadows the other's nozzle."""
-    from pandid.portgeom import port_point
-
-    fs = _flowsheet_with(
-        U.Column(
-            "T-101",
-            internals="valve_tray",
-            trays=30,
-            n_feeds=1,
-            feed_stages=[12],
-            n_draws=1,
-            draw_stages=[22],
-        ).pin(x=300, y=0)
-    )
-    col = fs.units[0]
-    fs.layout()
-    _, feed_y = port_point(col, col.frame, "feed")
-    _, draw_y = port_point(col, col.frame, "draw")
-    top, height = col.frame.y, col.frame.h
-    assert (feed_y - top) / height == pytest.approx(0.11 + 11.5 * 0.78 / 30)
-    assert (draw_y - top) / height == pytest.approx(0.11 + 21.5 * 0.78 / 30)
 
 
 def _flowsheet_with(unit):
