@@ -1016,7 +1016,7 @@ class _Boundary(Unit):
 
     ONE_NOZZLE_MANY_RUNS = True
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -1042,16 +1042,39 @@ class _Boundary(Unit):
 
     @property
     def tag(self) -> str:
-        """Return the label drawn on the flag, such as ``"CWSH"``."""
+        """Return the label drawn on the flag.
+
+        Returns
+        -------
+        str
+            Label, such as ``"CWSH"``.
+        """
         return self._tag
 
     @property
     def connection(self) -> Port:
-        """Return the flag's port: ``outlet`` or ``inlet``."""
+        """Return the flag's port.
+
+        Returns
+        -------
+        Port
+            ``outlet`` on a Feed, ``inlet`` on a Product.
+        """
         return next(iter(self.ports.values()))
 
     def _pool_of(self, port_name: str) -> str | None:
-        """Return the pool a port name is in, or ``None``."""
+        """Return the pool a port name is in.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name, such as ``outlet_2``.
+
+        Returns
+        -------
+        str or None
+            The flag's port name, or ``None`` outside its pool.
+        """
         base = self.connection.name
         if port_name == base:
             return base
@@ -1088,7 +1111,8 @@ class _Boundary(Unit):
 class Feed(_Boundary):
     """Off-page flag where material enters the sheet.
 
-    With ``header=True`` it is a utility supply header.
+    Parameters are those of :class:`Unit`, plus ``header``; with
+    ``header=True`` it is a utility supply header.
     """
 
     outlet: Port
@@ -1100,7 +1124,8 @@ class Feed(_Boundary):
 class Product(_Boundary):
     """Off-page flag where material leaves the sheet.
 
-    With ``header=True`` it is a return or collection header.
+    Parameters are those of :class:`Unit`, plus ``header``; with
+    ``header=True`` it is a return or collection header.
     """
 
     inlet: Port
@@ -1119,13 +1144,19 @@ class _FluidMover(Unit):
 
 
 class Pump(_FluidMover):
-    """Centrifugal or positive-displacement pump."""
+    """Centrifugal or positive-displacement pump.
+
+    Parameters are those of :class:`Unit`.
+    """
 
     kind = "pump"
 
 
 class Compressor(_FluidMover):
-    """Gas compressor."""
+    """Gas compressor.
+
+    Parameters are those of :class:`Unit`.
+    """
 
     kind = "compressor"
 
@@ -1145,7 +1176,7 @@ class _NormallyPositioned(Unit):
     #: Normal positions a device may declare.
     NORMAL_POSITIONS = ("open", "closed")
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -1170,12 +1201,29 @@ class _NormallyPositioned(Unit):
 
     @property
     def normal_position(self) -> str:
-        """Return the normal position: ``"open"`` or ``"closed"``."""
+        """Return the normal position.
+
+        Returns
+        -------
+        str
+            ``"open"`` or ``"closed"``.
+        """
         return self._normal_position
 
     @normal_position.setter
     def normal_position(self, value: str) -> None:
-        """Set the normal position, checking it can be drawn."""
+        """Set the normal position, checking it can be drawn.
+
+        Parameters
+        ----------
+        value : str
+            ``"open"`` or ``"closed"``.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is neither, or the variant cannot be closed.
+        """
         if value not in self.NORMAL_POSITIONS:
             raise ValueError(
                 f"{self.name}: normal_position is "
@@ -1186,7 +1234,7 @@ class _NormallyPositioned(Unit):
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
-        """Raise ValueError if this variant cannot be shown closed."""
+        """Check that this variant may be shown closed."""
 
 
 class Valve(_NormallyPositioned):
@@ -1236,7 +1284,7 @@ class Valve(_NormallyPositioned):
     #: Ports by variant, defaulting to :data:`_DEFAULT_PORTS`.
     _VARIANT_PORTS = {"three_way": [*_DEFAULT_PORTS, ("branch", "outlet", "process")]}
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -1268,7 +1316,27 @@ class Valve(_NormallyPositioned):
         self.fail = fail
 
     def _resolve(self, name: str, variant: str, actuator: str) -> str:
-        """Return the variant that draws a body with an actuator."""
+        """Return the variant that draws a body with an actuator.
+
+        Parameters
+        ----------
+        name : str
+            Tag, for messages.
+        variant : str
+            Body or pairing variant.
+        actuator : str
+            Actuator, or empty.
+
+        Returns
+        -------
+        str
+            Resolved variant.
+
+        Raises
+        ------
+        ValueError
+            If the actuator is unknown or contradicts the variant.
+        """
         from pandid.render.symbols import ACTUATED, ACTUATORS, actuated_variant
 
         if not actuator:
@@ -1299,16 +1367,32 @@ class Valve(_NormallyPositioned):
     def fail(self) -> str:
         """Return where the valve goes on loss of actuating energy.
 
-        One of ``"open"`` (FO), ``"closed"`` (FC), ``"last"`` (FL),
-        ``"drift_open"`` (FL/DO), ``"drift_closed"`` (FL/DC) and
-        ``"indeterminate"`` (FI), or ``""`` when unset. Only actuated
-        variants take one.
+        The positions ``"open"``, ``"closed"``, ``"last"``,
+        ``"drift_open"``, ``"drift_closed"`` and ``"indeterminate"`` are
+        drawn as FO, FC, FL, FL/DO, FL/DC and FI.
+
+        Returns
+        -------
+        str
+            Fail position, or ``""`` when unset.
         """
         return self._fail
 
     @fail.setter
     def fail(self, value: str) -> None:
-        """Set the fail position, or clear it with ``""``."""
+        """Set the fail position, or clear it with ``""``.
+
+        Parameters
+        ----------
+        value : str
+            Fail position, or ``""``.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is not a fail position, or the variant is
+            not in :data:`pandid.render.symbols.FAIL_ACTUATED`.
+        """
         from pandid.render.symbols import FAIL_ACTUATED, FAIL_POSITIONS
 
         if not value:
@@ -1334,7 +1418,14 @@ class Valve(_NormallyPositioned):
         self._fail = value
 
     def _refuse_closed(self) -> None:
-        """Refuse a closed control, regulator or relief valve."""
+        """Refuse a closed control, regulator or relief valve.
+
+        Raises
+        ------
+        ValueError
+            If the variant is in
+            :data:`pandid.render.symbols.NC_FORBIDDEN`.
+        """
         from pandid.render.symbols import NC_FORBIDDEN
 
         if self.variant in NC_FORBIDDEN:
@@ -1355,12 +1446,40 @@ _Part = tuple[str, "str | None", "Callable[[str, str], tuple]"]
 
 def _placed(parts: "Sequence[tuple[str, str, Callable[[str, str], tuple]]]",
             variant: str) -> tuple:
-    """Return the overlays that draw the stated parts on one body."""
+    """Return the overlays that draw the stated parts on one body.
+
+    Parameters
+    ----------
+    parts : Sequence[tuple[str, str, Callable[[str, str], tuple]]]
+        Stated ``(keyword, value, place)`` parts.
+    variant : str
+        Body variant.
+
+    Returns
+    -------
+    tuple
+        Overlays in part order.
+    """
     return tuple(overlay for _, value, place in parts for overlay in place(value, variant))
 
 
 def _carries(kind: str, variant: str, overlays: tuple) -> bool:
-    """Return whether a body can be drawn with these overlays."""
+    """Return whether a body can be drawn with these overlays.
+
+    Parameters
+    ----------
+    kind : str
+        Unit kind.
+    variant : str
+        Body variant.
+    overlays : tuple
+        Overlays to draw on the body.
+
+    Returns
+    -------
+    bool
+        Whether the registry composes them.
+    """
     from pandid.render.symbols import default_registry
 
     try:
@@ -1375,8 +1494,15 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
 
     Parameters
     ----------
+    unit : Unit
+        Unit to draw the parts on.
     *parts : _Part
         Parts in drawing order; a ``None`` value draws nothing.
+
+    Raises
+    ------
+    ValueError
+        If the variant is unregistered or cannot carry the parts.
     """
     from pandid.render.symbols import default_registry
 
@@ -1421,12 +1547,24 @@ class _FaceFamilies(Unit):
 
     @property
     def input_faces(self) -> tuple[str, ...]:
-        """Return each inlet's face, in port order."""
+        """Return each inlet's face, in port order.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Compass face per inlet.
+        """
         return tuple(self._faces[port.name] for port in self.inlets)
 
     @property
     def output_faces(self) -> tuple[str, ...]:
-        """Return each outlet's face, in port order."""
+        """Return each outlet's face, in port order.
+
+        Returns
+        -------
+        tuple[str, ...]
+            Compass face per outlet.
+        """
         return tuple(self._faces[port.name] for port in self.outlets)
 
     def face(self, port_name: str) -> str:
@@ -1570,11 +1708,28 @@ class _MultiPortVessel(_FaceFamilies):
 
 
     def _symbol_anchor(self, port_name: str) -> str:
-        """Return the symbol anchor, resolving ``inlet``/``outlet``."""
+        """Return the symbol anchor, resolving ``inlet``/``outlet``.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name or alias.
+
+        Returns
+        -------
+        str
+            Anchor name in the symbol.
+        """
         return super()._symbol_anchor(self._canonical_port_name(port_name))
 
     def _registry_symbol(self):
-        """Return the variant's registered symbol, or None."""
+        """Return the variant's registered symbol.
+
+        Returns
+        -------
+        Symbol or None
+            The symbol, or ``None`` for an unregistered variant.
+        """
         from pandid.render.symbols import default_registry
 
         try:
@@ -1583,7 +1738,18 @@ class _MultiPortVessel(_FaceFamilies):
             return None
 
     def _home_face(self, role: str) -> str:
-        """Return the face the artwork draws a role's port on."""
+        """Return the face the artwork draws a role's port on.
+
+        Parameters
+        ----------
+        role : str
+            ``"inlet"`` or ``"outlet"``.
+
+        Returns
+        -------
+        str
+            Compass face; ``"W"`` or ``"E"`` without a symbol.
+        """
         sym = self._registry_symbol()
         if sym is None:
             return "W" if role == "inlet" else "E"
@@ -1593,14 +1759,40 @@ class _MultiPortVessel(_FaceFamilies):
         return outward_dir(x, y, sym.width, sym.height)
 
     def _legal_faces(self, role: str) -> "dict[str, tuple[float, float]] | None":
-        """Return a role's allowed faces and their symbol points."""
+        """Return a role's allowed faces and their symbol points.
+
+        Parameters
+        ----------
+        role : str
+            ``"inlet"`` or ``"outlet"``.
+
+        Returns
+        -------
+        dict[str, tuple[float, float]] or None
+            Point per face, or ``None`` without a symbol.
+        """
         sym = self._registry_symbol()
         if sym is None:
             return None
         return dict(sym.port_faces.get(role, {}))
 
     def _validate_face(self, role: str, port_name: str, face: str) -> None:
-        """Check that a family port may be drawn on a face."""
+        """Check that a family port may be drawn on a face.
+
+        Parameters
+        ----------
+        role : str
+            ``"inlet"`` or ``"outlet"``.
+        port_name : str
+            Family port name.
+        face : str
+            Compass face.
+
+        Raises
+        ------
+        ValueError
+            If the artwork offers no such face, or the face has no room.
+        """
         options = self._legal_faces(role)
         if options is None:
             # Unknown variant: leave the error to render time.
@@ -1612,7 +1804,22 @@ class _MultiPortVessel(_FaceFamilies):
         self._check_face_room(role, port_name, face)
 
     def _check_face_room(self, role: str, port_name: str, face: str) -> None:
-        """Refuse a second port on a zero-length face."""
+        """Refuse a second port on a zero-length face.
+
+        Parameters
+        ----------
+        role : str
+            ``"inlet"`` or ``"outlet"``.
+        port_name : str
+            Family port name.
+        face : str
+            Compass face.
+
+        Raises
+        ------
+        ValueError
+            If another family port is already on a zero-length face.
+        """
         from pandid.render.symbols import bandless_face, walled_faces
 
         sym = self._registry_symbol()
@@ -1676,7 +1883,22 @@ class _MultiPortVessel(_FaceFamilies):
             self.outlet = self.outlets[0]
 
     def _connect(self, name: str, direction: str, face: str) -> Port:
-        """Check a family port's face, then create the port."""
+        """Check a family port's face, then create the port.
+
+        Parameters
+        ----------
+        name : str
+            Port name, such as ``in_1``.
+        direction : str
+            ``"inlet"`` or ``"outlet"``.
+        face : str
+            Compass face.
+
+        Returns
+        -------
+        Port
+            The new port.
+        """
         self._validate_face(direction, name, face)
         port = self._add_port(name, direction, "process")
         self._faces[name] = face
@@ -1751,6 +1973,8 @@ class Vessel(_MultiPortVessel):
     supports : str, optional
         ISO 10628-2 group-26 support: ``"skirt"`` (26.3), or a pair of
         ``"leg"`` (26.1), ``"bracket"`` (26.2) or ``"ring"`` (26.4).
+        Set at construction only; assigning it later raises
+        ``AttributeError``.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
 
@@ -1855,7 +2079,7 @@ class Vessel(_MultiPortVessel):
     COMPOSITION = {"supports": None}
     _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         inputs: "int | Sequence[str]" = 1,
@@ -2069,7 +2293,7 @@ class Tank(_MultiPortVessel):
         ("drain", "outlet", "liquid"),
     ]
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         inputs: "int | Sequence[str]" = 1,
@@ -2165,7 +2389,10 @@ if TYPE_CHECKING:
 
 
 class Blower(_FluidMover):
-    """Fan or blower."""
+    """Fan or blower.
+
+    Parameters are those of :class:`Unit`.
+    """
 
     kind = "blower"
 
@@ -2209,7 +2436,7 @@ class Reducer(Unit):
 
     LARGE_ENDS = ("inlet", "outlet")
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -2234,12 +2461,29 @@ class Reducer(Unit):
 
     @property
     def large_end(self) -> str:
-        """Return ``"inlet"`` for a reduction, else ``"outlet"``."""
+        """Return the port on the wide face.
+
+        Returns
+        -------
+        str
+            ``"inlet"`` for a reduction, ``"outlet"`` for an expansion.
+        """
         return self._large_end
 
     @large_end.setter
     def large_end(self, value: str) -> None:
-        """Set the port on the wide face, one of :attr:`LARGE_ENDS`."""
+        """Set the port on the wide face.
+
+        Parameters
+        ----------
+        value : str
+            One of :attr:`LARGE_ENDS`.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is not in :attr:`LARGE_ENDS`.
+        """
         if value not in self.LARGE_ENDS:
             raise ValueError(
                 f"{self.name}: large_end names the nozzle on the wide face and is "
@@ -2296,7 +2540,7 @@ class Tee(Unit):
 
     BRANCH_DIRECTIONS = ("outlet", "inlet")
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str = "",
         branch: str = "outlet",
@@ -2325,12 +2569,29 @@ class Tee(Unit):
 
     @property
     def branch_direction(self) -> str:
-        """Return ``"outlet"`` (takeoff) or ``"inlet"`` (return)."""
+        """Return the branch port's direction.
+
+        Returns
+        -------
+        str
+            ``"outlet"`` (takeoff) or ``"inlet"`` (return).
+        """
         return self.ports["branch"].direction
 
     @branch_direction.setter
     def branch_direction(self, value: str) -> None:
-        """Raise AttributeError: the branch direction is read-only."""
+        """Refuse to change the branch direction.
+
+        Parameters
+        ----------
+        value : str
+            Requested direction.
+
+        Raises
+        ------
+        AttributeError
+            Always; the branch direction is read-only.
+        """
         raise AttributeError(
             f"{self.name}: branch_direction is read-only. The branch nozzle is "
             f"already built and may already have a line on it, so turning one "
@@ -2341,11 +2602,28 @@ class Tee(Unit):
 
     @property
     def tag(self) -> str:
-        """Return ``""``; a tee is never labelled."""
+        """Return ``""``; a tee is never labelled.
+
+        Returns
+        -------
+        str
+            Empty string.
+        """
         return ""
 
     def repeats(self, other: "Unit") -> bool:
-        """Return whether ``other``, of the same name, is a tee."""
+        """Return whether ``other``, of the same name, is a tee.
+
+        Parameters
+        ----------
+        other : Unit
+            Unit with the same name.
+
+        Returns
+        -------
+        bool
+            Whether ``other`` is a :class:`Tee`.
+        """
         return isinstance(other, Tee)
 
 
@@ -2383,7 +2661,13 @@ class Fitting(_NormallyPositioned):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     def _refuse_closed(self) -> None:
-        """Raise ValueError unless this variant has a closed drawing."""
+        """Refuse a closed position on a variant drawn one way only.
+
+        Raises
+        ------
+        ValueError
+            If the variant has no closed drawing.
+        """
         from pandid.render.symbols import default_registry
 
         if default_registry.closed_symbol(self.kind, self.variant) is None:
@@ -2400,7 +2684,8 @@ class Ejector(Unit):
     """Steam or gas ejector, or eductor.
 
     ``motive`` drives the nozzle, ``suction`` is the entrained stream
-    and ``discharge`` leaves the diffuser.
+    and ``discharge`` leaves the diffuser. Parameters are those of
+    :class:`Unit`.
     """
 
     motive: Port
@@ -2421,6 +2706,7 @@ class Vent(Unit):
     Variants: ``"default"`` (stack with a weather cap),
     ``"exhaust_head"`` (silencing hood) and ``"breather"`` (tank
     conservation vent). Each has one inlet, piped from below.
+    Parameters are those of :class:`Unit`.
     """
 
     inlet: Port
@@ -2430,7 +2716,10 @@ class Vent(Unit):
 
 
 class Funnel(Unit):
-    """Open charging funnel whose one port, ``outlet``, feeds a line."""
+    """Open charging funnel whose one port, ``outlet``, feeds a line.
+
+    Parameters are those of :class:`Unit`.
+    """
 
     outlet: Port
 
@@ -2439,7 +2728,10 @@ class Funnel(Unit):
 
 
 class Furnace(Unit):
-    """Fired heater or furnace: a stream heated by burning fuel."""
+    """Fired heater or furnace: a stream heated by burning fuel.
+
+    Parameters are those of :class:`Unit`.
+    """
 
     inlet: Port
     outlet: Port
@@ -2457,7 +2749,7 @@ class Boiler(Unit):
     """Steam boiler, ISO 10628-2 item 4.1, 2532.
 
     ``feedwater`` enters the west wall and ``steam`` leaves the dome's
-    apex.
+    apex. Parameters are those of :class:`Unit`.
     """
 
     feedwater: Port
@@ -2470,7 +2762,8 @@ class Boiler(Unit):
 class Stack(Unit):
     """Exhaust stack or chimney, ISO 10628-2 item 4.7, 2041.
 
-    One inlet low on the shaft; nothing leaves it.
+    One inlet low on the shaft; nothing leaves it. Parameters are those
+    of :class:`Unit`.
     """
 
     inlet: Port
@@ -2482,7 +2775,7 @@ class Stack(Unit):
 class Flare(Unit):
     """Flare stack, ISO 10628-2 item 4.8, 2591.
 
-    One inlet low on the shaft.
+    One inlet low on the shaft. Parameters are those of :class:`Unit`.
     """
 
     inlet: Port
@@ -2492,7 +2785,10 @@ class Flare(Unit):
 
 
 class Turbine(Unit):
-    """Steam or gas turbine, or expander."""
+    """Steam or gas turbine, or expander.
+
+    Parameters are those of :class:`Unit`.
+    """
 
     inlet: Port
     outlet: Port
@@ -2502,9 +2798,15 @@ class Turbine(Unit):
 
 
 class _VariantPorted(Unit):
-    """Base class for units whose ports come from their variant."""
+    """Base class for units whose ports come from their variant.
 
-    def __init__(
+    Parameters
+    ----------
+    name, variant, width, height, label_pos, description, reference
+        As for :class:`Unit`.
+    """
+
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -2537,6 +2839,8 @@ class Filter(_VariantPorted):
       ``belt``, ``rotary`` and ``rotary_scraper``.
     - Regenerated (adds ``regenerant_in`` and ``spent_regenerant``):
       ``ion_exchange``.
+
+    Parameters are those of :class:`Unit`.
     """
 
     # Only the ports every variant has; device classes declare the rest.
@@ -2578,7 +2882,7 @@ class Centrifuge(Unit):
     (9.4), ``"high_speed"`` (9.1), ``"perforated_shell"`` (9.2),
     ``"solid_shell"`` (9.3), ``"screw_perforated"`` (9.5), ``"pusher"``
     (9.7) and ``"skimmer"`` (9.8). Every variant may be turned or
-    mirrored.
+    mirrored. Parameters are those of :class:`Unit`.
     """
 
     feed: Port
@@ -2598,6 +2902,7 @@ class Dryer(Unit):
 
     ``feed`` and ``product`` carry the solid; ``heating_in`` and
     ``vent``, on the casing wall, carry the drying gas in and out.
+    Parameters are those of :class:`Unit`.
     """
 
     feed: Port
@@ -2621,7 +2926,8 @@ class Kiln(Unit):
     ``offgas`` (spent combustion gas), ``fuel`` and ``air``. Variants:
     ``"default"`` (rotary kiln), ``"fluidized_bed"`` (calciner) and
     ``"shaft"`` (vertical shaft kiln). Drawn one way up; ``validate``
-    reports a turned kiln as ``gravity-turned``.
+    reports a turned kiln as ``gravity-turned``. Parameters are those
+    of :class:`Unit`.
     """
 
     feed: Port
@@ -2647,7 +2953,8 @@ class Feeder(Unit):
     Variants, by ISO item: ``"default"`` (general, 19.1),
     ``"rotary_valve"`` (19.2), ``"rotary_table"`` (19.3) and
     ``"metering"`` (19.4). Drawn one way up; ``validate`` reports a
-    turned feeder as ``gravity-turned``.
+    turned feeder as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
     """
 
     feed: Port
@@ -2661,7 +2968,7 @@ class SprayNozzle(Unit):
     """Spray nozzle, ISO 10628-2 item 19.5 2037.
 
     Drawn as a fan opening downward, with one ``inlet`` offered on the
-    west and east faces.
+    west and east faces. Parameters are those of :class:`Unit`.
     """
 
     inlet: Port
@@ -2679,6 +2986,7 @@ class ScreeningDevice(Unit):
     ``"coarse_and_fine"`` (7.4), ``"vibrating"`` (7.5),
     ``"rotating_drum"`` (7.6) and ``"basket_reel"`` (7.7). Drawn one
     way up; ``validate`` reports a turned device as ``gravity-turned``.
+    Parameters are those of :class:`Unit`.
     """
 
     feed: Port
@@ -2698,7 +3006,7 @@ class Kneader(Unit):
     """Kneader for paste, dough or rubber, ISO 10628-2 item 12.4 X8134.
 
     Drawn one way up; ``validate`` reports a turned kneader as
-    ``gravity-turned``.
+    ``gravity-turned``. Parameters are those of :class:`Unit`.
     """
 
     inlet: Port
@@ -2711,10 +3019,9 @@ class Kneader(Unit):
 class CrushingMachine(Unit):
     """General size-reduction machine, ISO 10628-2 item 11.1 X8084.
 
-    ``feed`` enters the top and ``discharge`` leaves the bottom.
-    :class:`Crusher` and :class:`Mill` take the same arguments. Drawn
+    ``feed`` enters the top and ``discharge`` leaves the bottom. Drawn
     one way up; ``validate`` reports a turned machine as
-    ``gravity-turned``.
+    ``gravity-turned``. Parameters are those of :class:`Unit`.
     """
 
     feed: Port
@@ -2731,6 +3038,7 @@ class Crusher(CrushingMachine):
     (11.5), ``"cone"`` (11.7), ``"hammer"`` (11.3), ``"impact"`` (11.4)
     and ``"roller"`` (11.6); ``"vibration"`` is refused. Drawn one way
     up; ``validate`` reports a turned crusher as ``gravity-turned``.
+    Parameters are those of :class:`Unit`.
     """
 
     kind = "crusher"
@@ -2743,7 +3051,7 @@ class Mill(CrushingMachine):
     (11.9), ``"impact"`` (11.10), ``"roller"`` (11.11) and
     ``"vibration"`` (11.12); ``"jaw"`` and ``"cone"`` are refused.
     Drawn one way up; ``validate`` reports a turned mill as
-    ``gravity-turned``.
+    ``gravity-turned``. Parameters are those of :class:`Unit`.
     """
 
     kind = "mill"
@@ -2790,7 +3098,7 @@ class Conveyor(Unit):
     _length: float
     _diameter: float
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         length: float | None = None,
@@ -2837,12 +3145,30 @@ class Conveyor(Unit):
 
     @property
     def length(self) -> float:
-        """Return the run from tail to head, in drawn units."""
+        """Return the run from tail to head.
+
+        Returns
+        -------
+        float
+            Length in drawn units.
+        """
         return self._length
 
     @length.setter
     def length(self, value: float) -> None:
-        """Set the run length, checked against the variant's minimum."""
+        """Set the run length.
+
+        Parameters
+        ----------
+        value : float
+            Length in drawn units.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is below the variant's minimum length; a belt's
+            minimum depends on its diameter.
+        """
         from pandid.render.symbols import (
             SCREW_MIN_LENGTH,
             conveyor_min_length,
@@ -2859,12 +3185,30 @@ class Conveyor(Unit):
 
     @property
     def diameter(self) -> float:
-        """Return the belt roller or screw bore, in drawn units."""
+        """Return the belt roller or screw bore.
+
+        Returns
+        -------
+        float
+            Diameter in drawn units.
+        """
         return self._diameter
 
     @diameter.setter
     def diameter(self, value: float) -> None:
-        """Set the roller or bore diameter, checked against length."""
+        """Set the roller or bore diameter.
+
+        Parameters
+        ----------
+        value : float
+            Diameter in drawn units.
+
+        Raises
+        ------
+        ValueError
+            If ``value`` is not positive, or, on a belt, the current
+            length is below the minimum for the new diameter.
+        """
         from pandid.render.symbols import (
             conveyor_bad_diameter,
             conveyor_min_length,
@@ -2890,7 +3234,7 @@ class Elevator(Unit):
     ``feed`` is the boot (low) and ``discharge`` the head (high); the
     straight elevator also offers north and south chute faces. Drawn
     one way up; ``validate`` reports a turned elevator as
-    ``gravity-turned``.
+    ``gravity-turned``. Parameters are those of :class:`Unit`.
     """
 
     feed: Port
