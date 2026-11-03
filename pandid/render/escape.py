@@ -1,23 +1,4 @@
-"""Write user strings into SVG and draw.io XML without creating markup.
-
-Both backends build documents by concatenation, so user values must:
-
-* escape ``&``, ``<``, ``>``, ``"`` and ``'``, or a value can end the
-  document or an attribute and inject script into an SVG opened in a
-  browser. :func:`escaped` escapes all five in text and attributes alike;
-* drop characters XML 1.0 2.2 cannot represent (controls other than tab,
-  newline and carriage return), which even numeric references cannot
-  spell. They have no glyph, so nothing visible is lost. Wrong values,
-  such as a bad colour, are refused where set
-  (:func:`pandid.streams.check_color`).
-
-Ids are the third case: a ``<marker>`` id pasted from a colour, such as
-``arrow_rgb(1,2,3)``, is not an XML name, and a browser silently drops the
-arrowheads. :func:`ident` always returns a valid name; use it for both the
-definition and the ``url(#...)`` reference.
-
-Numbers go through :func:`fmt`, so both backends write them alike.
-"""
+"""Escape user strings, ids and numbers for SVG and draw.io XML."""
 
 from __future__ import annotations
 
@@ -26,8 +7,8 @@ import html
 import re
 import string
 
-# Characters XML 1.0 2.2 cannot represent, even as references: C0 controls
-# except tab, newline and carriage return, surrogates, and U+FFFE/U+FFFF.
+# Characters XML 1.0 cannot represent: C0 controls other than tab,
+# newline and carriage return, surrogates, and U+FFFE/U+FFFF.
 _UNWRITABLE = re.compile(
     "[^"
     "\t\n\r"
@@ -37,23 +18,18 @@ _UNWRITABLE = re.compile(
     "]"
 )
 
-# ASCII subset of the NCName characters allowed after the first (XML
-# Namespaces 3), enough for ids from colours and symbol keys.
+# ASCII characters allowed in an XML name after the first.
 _NAME_CHARS = frozenset(string.ascii_letters + string.digits + "_.-")
 
-# Runs outside _NAME_CHARS, which ident collapses; tests/test_escape.py
-# keeps the two in step.
+# Runs of characters outside _NAME_CHARS.
 _UNSAFE_RUN = re.compile(r"[^A-Za-z0-9_.-]+")
 
-# Hex digits of digest that separate values sanitising alike (32 bits).
+# Hex digits of the digest appended by ident.
 _DIGEST = 8
 
 
 def writable(value) -> str:
-    """Return ``value`` as text with XML-unwritable characters removed.
-
-    Used alone by the draw.io export, which escapes HTML cell values
-    itself so that ``<br>`` survives.
+    """Return ``str(value)`` with XML-unwritable characters removed.
 
     Parameters
     ----------
@@ -63,45 +39,41 @@ def writable(value) -> str:
     Returns
     -------
     str
-        ``str(value)`` without unwritable characters.
+        Text without unwritable characters.
     """
     return _UNWRITABLE.sub("", str(value))
 
 
 def escaped(value) -> str:
-    """Return ``value`` escaped for an XML text node or attribute.
+    """Return ``str(value)`` escaped for an XML text node or attribute.
 
     Parameters
     ----------
     value : object
-        Value to write; converted with ``str``.
+        Value to write.
 
     Returns
     -------
     str
-        Text with the five metacharacters escaped and unwritable
-        characters removed.
+        Text with the five XML metacharacters escaped.
     """
     return html.escape(writable(value))
 
 
 def fmt(value: float, places: int) -> str:
-    """Return a number for SVG or draw.io, to ``places`` decimals.
-
-    Fixed-point, since ``:g`` writes 1234567 as ``1.23457e+06``; trailing
-    zeros are dropped and ``-0`` is written ``0``.
+    """Return ``value`` in fixed point to at most ``places`` decimals.
 
     Parameters
     ----------
     value : float
-        Number.
+        Number to write.
     places : int
-        Decimal places.
+        Maximum decimal places; trailing zeros are dropped.
 
     Returns
     -------
     str
-        Formatted number.
+        Number text, with ``-0`` written as ``0``.
     """
     s = f"{value:.{places}f}"
     if "." in s:
@@ -112,24 +84,17 @@ def fmt(value: float, places: int) -> str:
 def ident(prefix: str, value) -> str:
     """Return a valid XML name for ``value``, prefixed with ``prefix``.
 
-    A value made only of name characters is kept readable
-    (``ident("arrow", "black")`` is ``arrow_black``). Otherwise runs of
-    other characters become one underscore and a digest of the original
-    is appended, so ``rgb(1, 2, 3)`` and ``rgb(1,2,3)`` stay distinct. Use
-    it for both the definition and the reference.
-
     Parameters
     ----------
     prefix : str
-        Leading word naming the id's kind, such as ``"arrow"``; it makes
-        the name start with a letter.
+        Word naming the id's kind; it must start with a letter.
     value : object
         Value the id is derived from.
 
     Returns
     -------
     str
-        XML name.
+        ``prefix_value``, or a cleaned name with a digest appended.
     """
     text = str(value)
     if text and all(c in _NAME_CHARS for c in text):
