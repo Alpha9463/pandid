@@ -2093,31 +2093,33 @@ class Flowsheet:
         try:
             router.route(self)
             place()
+            # Route again as if chained balloons could sit on the tapped line.
+            if not self.route_converged and self._kept_clear:
+                self._keep_clear = False
+                self._put_geometry(start, keep_manual=False)
+                router.route(self)
+                place()
+            # Hang each controller it can off its actuator, and keep that
+            # only if the sheet stays clean. The check assumes the default
+            # router.
+            if (type(router) is DefaultRouter and not self._laying_out
+                    and any(_hangable(self, u) for u in self.units)):
+                unhung = self._geometry()
+                before = _flaws(self)
+                self._may_hang, self._hung = True, set()
+                try:
+                    place()
+                    clash = any(n > before[k] for k, n in _flaws(self).items())
+                except Exception:
+                    clash = True
+                finally:
+                    self._may_hang = False
+                if clash or not self._hung:
+                    self._put_geometry(unhung, keep_manual=False)
+                else:
+                    self._unhung = unhung
         finally:
             self._keep_clear = False
-        # Route again as if chained balloons could sit on the tapped line.
-        if not self.route_converged and self._kept_clear:
-            self._put_geometry(start, keep_manual=False)
-            router.route(self)
-            place()
-        # Hang each controller it can off its actuator, and keep that only
-        # if the sheet stays clean. The check assumes the default router.
-        if (type(router) is DefaultRouter and not self._laying_out
-                and any(_hangable(self, u) for u in self.units)):
-            unhung = self._geometry()
-            before = _flaws(self)
-            self._may_hang, self._hung = True, set()
-            try:
-                place()
-                clash = any(n > before[k] for k, n in _flaws(self).items())
-            except Exception:
-                clash = True
-            finally:
-                self._may_hang = False
-            if clash or not self._hung:
-                self._put_geometry(unhung, keep_manual=False)
-            else:
-                self._unhung = unhung
         # Mark the routes current.
         self._route_stale = False
 
