@@ -100,7 +100,7 @@
     <text x="269.2" y="92.5" font-family="sans-serif" font-size="7.50" text-anchor="start" fill="#1550c8">shell_in 240,100</text>
     <text x="251.2" y="172" font-family="sans-serif" font-size="7.50" text-anchor="start" fill="#1550c8">shell_out 240,160</text>
     <text x="206.2" y="161.1" font-family="sans-serif" font-size="7.50" text-anchor="end" fill="#1550c8">tube_in 210,130</text>
-    <text x="273.8" y="146.5" font-family="sans-serif" font-size="7.50" text-anchor="start" fill="#1550c8">tube_out 270,130</text>
+    <text x="273.8" y="125.5" font-family="sans-serif" font-size="7.50" text-anchor="start" fill="#1550c8">tube_out 270,130</text>
     <text x="426.2" y="140.1" font-family="sans-serif" font-size="7.50" text-anchor="end" fill="#1550c8">inlet 430,130</text>
     <text x="113.8" y="304.5" font-family="sans-serif" font-size="7.50" text-anchor="start" fill="#1550c8">outlet 110,330</text>
     <text x="269.2" y="292.5" font-family="sans-serif" font-size="7.50" text-anchor="start" fill="#1550c8">shell_in 240,300</text>
@@ -136,9 +136,9 @@
     <text x="315.0" y="330.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
   </g>
   <g id="unit_labels">
-    <rect x="226.1" y="78.0" width="27.8" height="15.0" fill="white" />
+    <rect x="226.7" y="78.0" width="26.7" height="15.0" fill="white" />
     <text x="240.0" y="90" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-1</text>
-    <rect x="226.1" y="278.0" width="27.8" height="15.0" fill="white" />
+    <rect x="226.7" y="278.0" width="26.7" height="15.0" fill="white" />
     <text x="240.0" y="290.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-2</text>
   </g>
 </svg>
