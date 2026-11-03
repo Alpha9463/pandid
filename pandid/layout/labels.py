@@ -1,4 +1,4 @@
-"""Choose each unit's label side, away from its connected nozzles."""
+"""Choose label sides for placed units."""
 
 from __future__ import annotations
 

@@ -26,7 +26,7 @@ def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, 
     unit : Unit
         Unit owning the port.
     port_name : str
-        Port to test.
+        Canonical port name.
 
     Returns
     -------

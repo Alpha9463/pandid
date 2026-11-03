@@ -56,7 +56,7 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
     assembly : StationAssembly
         Station to lay out.
     left : float
-        Footprint left edge.
+        Main run's left edge.
     y : float
         Centerline.
     mirrored : bool
@@ -128,7 +128,8 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
     Returns
     -------
     bool
-        True if every frame keeps its pin and clears obstacles by 8.
+        True if no member has a grid pin, each frame keeps its
+        member's pin, and every box clears obstacles by 8.
     """
     for unit, frame in frames.items():
         pin = unit.pin_
@@ -172,7 +173,8 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
     Returns
     -------
     tuple[float, float] or None
-        Left edge and centerline, or None if the pins cannot all hold.
+        Left edge and centerline, or None for a grid pin or pins
+        that cannot all hold.
 
     Raises
     ------
@@ -292,7 +294,7 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
 
 
 def _fraction(assembly: StationAssembly) -> float:
-    """Return a station's fraction along its line, 0.5 by default.
+    """Return a station's fraction along its line.
 
     Parameters
     ----------

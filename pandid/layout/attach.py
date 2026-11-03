@@ -32,11 +32,10 @@ SWEEP_STEP = 15.0
 #: reference line.
 MIN_BRANCH = 20.0
 
-#: Clearance a balloon keeps once a collision forces a new standoff.
+#: Clearance tested around a standoff other than the asked one.
 RESOLVED_CLEARANCE = 6.0
 
-#: Length of the strip a moved balloon keeps clear in front of a
-#: connected nozzle.
+#: Length of the escape strip in front of a connected nozzle.
 ESCAPE_ROOM = 25.0
 
 #: Overlap two boxes may share before they count as colliding.
@@ -84,7 +83,7 @@ def _rotate_ccw(vx: float, vy: float, degrees: float) -> Point:
 
 
 def stream_path(stream: "Stream") -> list[Point]:
-    """Return the polyline a stream is drawn along, or ``[]``.
+    """Return a stream's nozzles and waypoints as a polyline, or ``[]``.
 
     Parameters
     ----------
@@ -164,7 +163,7 @@ def _along(points: list[Point], fraction: float) -> tuple[Point, Point]:
     Returns
     -------
     tuple[Point, Point]
-        The point and the unit heading of its segment.
+        The point and its segment's unit heading, else ``(1, 0)``.
     """
     lengths = [math.dist(points[i], points[i + 1]) for i in range(len(points) - 1)]
     total = sum(lengths)
@@ -340,9 +339,9 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     h : float
         Balloon height.
     obstacles : list[Box]
-        Boxes every candidate must clear.
+        Boxes each candidate is tested against.
     keepouts : list[Box]
-        Boxes a moved balloon must also clear.
+        Boxes a moved candidate is also tested against.
 
     Returns
     -------
@@ -388,7 +387,7 @@ def place_attached(fs: "Flowsheet") -> bool:
     Returns
     -------
     bool
-        True if any balloon is newly placed or moved.
+        True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
     from pandid.portgeom import resolve_size, unit_box

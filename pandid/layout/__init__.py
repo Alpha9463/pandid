@@ -53,7 +53,7 @@ class ConstraintLayoutEngine:
     """Place units with the default automatic layout."""
 
     def layout(self, fs: "Flowsheet") -> None:
-        """Set each unit's frame, port faces and label side.
+        """Set unit frames, port faces and label sides.
 
         Parameters
         ----------

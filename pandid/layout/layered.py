@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 #: Least gap between layers, added to their balloon room.
 COL_GAP = 120.0
-#: Least clear height between units in a layer or stack.
+#: Least clear height in a stack, or beside equipment in a layer.
 ROW_GAP = 70.0
 #: Gap between neighbours of only flags or pipes; pin clearance.
 LANE = 25.0
@@ -962,7 +962,7 @@ def _isotonic(targets: list[list[tuple[float, float]]], steps: list[float]) -> l
     """Return the tops nearest their weighted targets, in order.
 
     Each top is at least its step below the last; adjacent violators
-    pool at the weighted median of their targets.
+    share the weighted median of their targets less each top's offset.
 
     Parameters
     ----------

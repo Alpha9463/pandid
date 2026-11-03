@@ -35,11 +35,11 @@ class Quality:
     crossings : int
         Proper crossings between routed paths.
     bends : int
-        Direction changes on all routed paths.
+        Direction changes between orthogonal runs of routed paths.
     excess_bends : int
         Bends beyond each automatic route's minimum.
     length : float
-        Total route length.
+        Total Manhattan route length.
     area : float
         Bounding-box area of the unit frames.
     hard_conflicts : frozenset[Conflict]

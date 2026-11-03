@@ -29,7 +29,7 @@ def slot(unit: "Unit") -> "_Slot":
 
     Raises
     ------
-    AssertionError
+    AttributeError
         If layout has not seeded the slot.
     """
     assert unit._slot is not None, f"{unit.name} has no slot; layout ran out of order"

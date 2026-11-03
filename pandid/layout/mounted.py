@@ -611,7 +611,7 @@ def _length(element: Element, leg: Leg) -> float:
     Returns
     -------
     float
-        Length, or infinity if the element cannot pipe along the leg.
+        Length, or infinity if the element cannot lie in line with it.
     """
     from pandid.stations import StationAssembly
 
@@ -792,7 +792,7 @@ def _margins(index: int, count: int) -> tuple[float, float]:
 
 
 def _along(legs: list[Leg], point: Point) -> float:
-    """Return the distance along a pipe of a point's nearest projection.
+    """Return the distance along a pipe of a point's projection.
 
     Parameters
     ----------
@@ -939,7 +939,7 @@ def _room(run: MountedRun) -> float:
 
 
 def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[int]]:
-    """Return ways to put elements on legs in flow order, best first.
+    """Return ways to put elements on legs, best first.
 
     Single legs that hold the whole chain come first, level before
     upright, then nearest the wanted middle. The last way deals each
@@ -1005,7 +1005,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
 
 def _centres(wanted: list[float], lengths: list[float], size: float,
              head: float, tail: float) -> list[float]:
-    """Return ordered, spaced centres on the leg near the wanted ones.
+    """Return ordered, spaced centres near the wanted ones.
 
     Space them evenly when they do not fit.
 

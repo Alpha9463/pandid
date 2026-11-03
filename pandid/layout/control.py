@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 #: A drawn box, ``(x_min, y_min, x_max, y_max)``.
 _Box = tuple[float, float, float, float]
 
-#: Clearance between a free-standing balloon and anything drawn.
+#: Clearance the free-spot search tests around placed unit boxes.
 CLEARANCE = 30.0
 
 #: Lattice spacing of the free-spot search, in drawing units.
@@ -24,7 +24,7 @@ REACH = 40
 
 
 def place_control(fs: "Flowsheet") -> bool:
-    """Place every balloon and return whether any moved.
+    """Place balloons and return whether any moved.
 
     Parameters
     ----------
@@ -34,7 +34,7 @@ def place_control(fs: "Flowsheet") -> bool:
     Returns
     -------
     bool
-        True if any balloon is newly placed or moved.
+        True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.layout.attach import place_attached
 
@@ -53,7 +53,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     Returns
     -------
     bool
-        True if any balloon is newly placed or moved.
+        True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
     from pandid.layout.stages import is_control
@@ -94,8 +94,8 @@ def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
           taken: list[_Box]) -> tuple[float, float]:
     """Return a free-standing balloon's top-left corner.
 
-    A pinned axis is fixed; an unpinned axis is searched outward from
-    the centre of the units the balloon is wired to.
+    An x or y pin, or a grid pin on a non-empty grid, fixes its axis;
+    a free axis is searched outward from :func:`_centroid`.
 
     Parameters
     ----------
@@ -234,7 +234,7 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
 
 def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
                   free_x: bool, free_y: bool) -> tuple[float, float]:
-    """Return the clear corner nearest ``(x, y)``, else ``(x, y)``.
+    """Return the first clear corner on rings out from ``(x, y)``.
 
     Parameters
     ----------
@@ -256,7 +256,7 @@ def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
     Returns
     -------
     tuple[float, float]
-        Top-left corner.
+        Top-left corner, else ``(x, y)``.
     """
     if not (free_x or free_y):
         return x, y

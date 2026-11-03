@@ -72,7 +72,7 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
     Parameters
     ----------
     fs : Flowsheet
-        Sheet with attached balloons.
+        Sheet with seeded slots, whose ranks give a stream's direction.
 
     Returns
     -------

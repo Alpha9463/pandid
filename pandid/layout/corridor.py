@@ -37,12 +37,13 @@ def horizontal_centerline(
     end : tuple[float, float]
         Destination nozzle point.
     require_clear_exit : bool, optional
-        Require facing level ends, or a vertical nozzle 25 off the leg.
+        Require a vertical nozzle facing the leg from 25 or more away,
+        or two level ends facing each other.
 
     Returns
     -------
     float or None
-        The leg's y, or None if no single horizontal leg fits.
+        The leg's y, at one nozzle's level, or None.
     """
     assert source.frame is not None and dest.frame is not None
     source_face = resolve_port(source, source.frame, source_port).face
