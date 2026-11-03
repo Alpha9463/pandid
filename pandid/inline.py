@@ -85,7 +85,8 @@ def position(segment: Stream) -> float | None:
     Returns
     -------
     float or None
-        Fraction of the whole line, or ``None`` off a split line.
+        The segment's stated ``at``; else its spread fraction on a
+        split line; else ``None``.
     """
     if segment._inline_at is not None:
         return segment._inline_at

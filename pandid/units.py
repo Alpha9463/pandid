@@ -1272,8 +1272,10 @@ class Valve(_NormallyPositioned):
     ------
     ValueError
         If the actuator is unknown or contradicts the variant, the
-        pairing is not drawn, or ``normal_position`` or ``fail`` is
-        invalid.
+        pairing is not drawn, ``normal_position`` is invalid or
+        ``"closed"`` on a control, regulator, relief or psv variant,
+        or ``fail`` is invalid or set on a variant outside
+        :data:`~pandid.render.symbols.FAIL_ACTUATED`.
     """
 
     inlet: Port
@@ -2008,8 +2010,8 @@ class Vessel(_MultiPortVessel):
     Raises
     ------
     ValueError
-        If a count or face is invalid, the support is unknown, or the
-        variant cannot carry it.
+        If a count or face is invalid, a face is absent or full on the
+        artwork, the support is unknown, or the variant cannot carry it.
     """
 
     inlets: tuple[Port, ...]
@@ -2234,7 +2236,8 @@ class Tank(_MultiPortVessel):
     Raises
     ------
     ValueError
-        If a count or face is invalid.
+        If a count or face is invalid, or a face is absent or full on
+        the variant's artwork.
     """
 
     inlets: tuple[Port, ...]
@@ -2802,7 +2805,7 @@ class Boiler(Unit):
 class Stack(Unit):
     """Exhaust stack or chimney, ISO 10628-2 item 4.7, 2041.
 
-    One inlet low on the shaft; nothing leaves it. Parameters are those
+    Its one port is ``inlet``, low on the shaft. Parameters are those
     of :class:`Unit`.
     """
 
@@ -3723,8 +3726,8 @@ class Instrument(Unit):
         TypeError
             If ``on`` is not a Stream or Unit.
         ValueError
-            If ``on`` is this balloon, or ``at``, ``offset`` or
-            ``relation`` is invalid.
+            If ``on`` is this balloon, ``at`` does not suit the host,
+            ``offset`` is negative or ``relation`` is unknown.
         """
         from pandid.streams import Stream
 
@@ -4233,7 +4236,7 @@ class Reactor(Unit):
     ------
     ValueError
         If ``n_feeds`` is less than 1, a part is unknown, or the body
-        cannot carry the parts.
+        cannot carry a part, such as ``agitator`` on ``"tubular"``.
     """
 
     outlet: Port
