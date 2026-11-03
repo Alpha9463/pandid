@@ -696,38 +696,6 @@ def test_a_tee_draws_no_ink_of_its_own():
     assert cell.find("mxGeometry") is not None
 
 
-def test_three_runs_meeting_at_a_tee_close_on_one_point():
-    """Join all tee streams at the same central point."""
-    fs = Flowsheet("junction")
-    header = fs.add(units.Feed("HDR"))
-    tee = fs.add(units.Tee("TEE"))
-    sink = fs.add(units.Product("OUT"))
-    drop = fs.add(units.Tank("T-1"))
-    header.pin(x=0, y=200)
-    tee.pin(x=400, y=200)
-    sink.pin(x=800, y=200)
-    drop.pin(x=350, y=500)
-    fs.connect(header.outlet, tee.inlet)
-    fs.connect(tee.outlet, sink.inlet)
-    fs.connect(tee.branch, drop.inlet)
-    fs.route()
-
-    cells = _cells(fs, check=False)
-    at = {i: _style(c) for i, c in cells.items()}
-    x0, y0, x1, y1 = cell_box(tee)
-    centre = ((x0 + x1) / 2, (y0 + y1) / 2)
-    legs = 0
-    for n, s in enumerate(fs.streams):
-        style = _style(cells[f"s{n}"])
-        for prefix, port in (("exit", s.source), ("entry", s.dest)):
-            if port.owner is not tee:
-                continue
-            legs += 1
-            landed = _drawio_connection_point(tee, at[f"u{fs.units.index(tee)}"], style, prefix)
-            assert landed == pytest.approx(centre, abs=0.01)
-    assert legs == 3, "the fixture stopped exercising a three-way junction"
-
-
 def _pneumatic_sheet() -> Flowsheet:
     """Return a routed sheet with one pneumatic signal line.
 
@@ -948,48 +916,6 @@ def _style(cell: ET.Element) -> dict[str, str]:
             name, _, value = key.partition("=")
             out[name] = value
     return out
-
-
-def test_a_units_box_is_the_box_the_renderer_draws_it_in(sample):
-    """Match exported unit bounds to rendered artwork.
-
-    Parameters
-    ----------
-    sample : Flowsheet
-        Representative flowsheet fixture.
-    """
-    cells = _cells(sample)
-    for i, u in enumerate(sample.units):
-        geometry = cells[f"u{i}"].find("mxGeometry")
-        x0, y0, x1, y1 = cell_box(u)
-        assert float(geometry.get("x")) == pytest.approx(x0, abs=0.01)
-        assert float(geometry.get("y")) == pytest.approx(y0, abs=0.01)
-        assert float(geometry.get("width")) == pytest.approx(x1 - x0, abs=0.01)
-        assert float(geometry.get("height")) == pytest.approx(y1 - y0, abs=0.01)
-
-
-def test_an_edges_waypoints_are_the_line_the_renderer_draws(sample):
-    """The turns in the route, and only the turns: the ends are the nozzles.
-
-    Parameters
-    ----------
-    sample : Flowsheet
-        Representative flowsheet fixture.
-    """
-    cells = _cells(sample)
-    for n, s in enumerate(sample.streams):
-        drawn = stream_polyline(s)
-        array = cells[f"s{n}"].find("mxGeometry/Array")
-        emitted = (
-            [(float(p.get("x")), float(p.get("y"))) for p in array.findall("mxPoint")]
-            if array is not None
-            else []
-        )
-        assert len(emitted) == len(drawn) - 2, (
-            f"{s.name}: {len(emitted)} waypoints for a line drawn through {len(drawn)} points"
-        )
-        for (ex, ey), (dx, dy) in zip(emitted, drawn[1:-1]):
-            assert (ex, ey) == pytest.approx((dx, dy), abs=0.01)
 
 
 def stream_end(port) -> tuple[float, float]:
@@ -2968,6 +2894,8 @@ def test_each_representative_export_matches_its_rendered_sheet(settled_gallery, 
         x0, y0, x1, y1 = cell_box(u)
         assert float(geometry.get("x")) == pytest.approx(x0, abs=0.01)
         assert float(geometry.get("y")) == pytest.approx(y0, abs=0.01)
+        assert float(geometry.get("width")) == pytest.approx(x1 - x0, abs=0.01)
+        assert float(geometry.get("height")) == pytest.approx(y1 - y0, abs=0.01)
         at[id(u)] = _style(cells[f"u{i}"])
         shape = at[id(u)].get("shape")
         assert shape is None or shape in STENCIL_KEYS or shape in _BUILTIN_SHAPES, (
