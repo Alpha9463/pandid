@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import functools
 import math
-import pathlib
 import re
 import xml.etree.ElementTree as ET
 from typing import Any, NamedTuple
@@ -23,6 +21,8 @@ from pandid.render.symbols import (
     default_registry,
     spread,
 )
+
+from _render_cases import _script
 
 _AGITATORS = {name for group, name in default_registry._parts if group == 28}
 
@@ -1922,30 +1922,6 @@ def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
 
 
 # Stencil-generation invariants
-
-
-@functools.lru_cache(maxsize=None)
-def _script(name: str) -> Any:
-    """Import a generator script by name.
-
-    Parameters
-    ----------
-    name : str
-        Script stem.
-
-    Returns
-    -------
-    module
-        Imported script module.
-    """
-    import importlib.util
-
-    path = pathlib.Path(__file__).resolve().parent.parent / "scripts" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(f"_pandid_script_{name}", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _clip(line: str, column: int, width: int = 90) -> str:
