@@ -46,7 +46,7 @@ Automatically placed reactor train with a purge and recycle branch.
 
 ## 06 · Column reflux and reboiler
 
-Column reflux and kettle-reboiler returns with nozzle-based placement.
+Column reflux and kettle-reboiler returns and two side draws, with nozzle-based placement.
 
 [`06_column_reflux.py`](../../examples/06_column_reflux.py) · [SVG](06_column_reflux.svg)
 

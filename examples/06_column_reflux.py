@@ -36,8 +36,12 @@ def main():
     # coke-forming feed, and a shed deck is what goes in there because
     # it has no perforation to plug and no valve to stick. They are
     # inefficient, so the tower is few decks and tall sections.
+    # n_draws=2 adds two side draws on the east wall, here on trays 6 and 8.
     col = fs.add(DistillationColumn("T-701", internals="baffle_tray", trays=10,
+                                    n_draws=2, draw_stages=[6, 8],
                                     description="Main Fractionator"))
+    light = fs.add(Product("Light Side Draw", reference="PFD-400"))
+    heavy = fs.add(Product("Heavy Side Draw", reference="PFD-500"))
 
     # width/height stay close to each symbol's native proportions:
     # scaling one far past its drawn aspect is what makes a sheet look
@@ -65,6 +69,8 @@ def main():
     # measured, and the flag is pinned by its own tip, so the two meet
     # without any arithmetic in between.
     feed.pin(x=140, y=col_y + port_offset(col, "feed")[1])
+    light.pin(x=900, y=430)
+    heavy.pin(x=900, y=500)
 
     # Mirrored so vapour enters the top shell nozzle at x + 0.25w and
     # the condensate leaves the bottom one at x + 0.75w, over the drum.
@@ -106,12 +112,16 @@ def main():
     fs.connect(col.bottoms, reb.shell_in)
     fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
     bot_out = fs.connect(reb.bottoms, bot.inlet)
+    light_out = fs.connect(col.draws[0], light.inlet)
+    heavy_out = fs.connect(col.draws[1], heavy.inlet)
 
-    # A coherent split of one feed: the overhead vent, the distillate
-    # and the bottoms add back up to it.
+    # A coherent split of one feed: the overhead vent, the distillate,
+    # the two side draws and the bottoms add back up to it.
     feed_in.properties = {"Flow (kg/h)": "10000"}
     vent_out.properties = {"Flow (kg/h)": "200"}
-    dist_out.properties = {"Flow (kg/h)": "6000"}
+    dist_out.properties = {"Flow (kg/h)": "4000"}
+    light_out.properties = {"Flow (kg/h)": "1200"}
+    heavy_out.properties = {"Flow (kg/h)": "800"}
     bot_out.properties = {"Flow (kg/h)": "3800"}
 
     fs.render(out("column_reflux.svg"), show_stream_table=True)
