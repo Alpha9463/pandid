@@ -66,6 +66,7 @@ import pytest
 
 from pandid import devices, units
 from pandid.ports import Port
+from test_placement import _shipped_unit_classes
 
 # A nozzle whose name ends in an underscore and a number is one member of a
 # family sized at construction (Mixer(n_inlets=...), Splitter(n_outlets=...),
@@ -132,25 +133,6 @@ _DECLARED_FAMILIES = {
     units.Tank: {"inlets", "outlets"},
     units.Vessel: {"inlets", "outlets"},
 }
-
-
-def _unit_classes():
-    """Every ``Unit`` subclass the package defines, transitively.
-
-    Filtered to ``pandid``'s own modules, because a test module that subclasses
-    ``Unit`` to exercise the custom-unit workflow (``tests/test_custom_units.py``
-    does, and the docs tell users to) is a fixture, not part of the shipped API,
-    and pytest has already imported it by the time this runs.
-    """
-    found: dict[type, None] = {}
-    pending = [units.Unit]
-    while pending:
-        cls = pending.pop()
-        if cls in found or not cls.__module__.startswith("pandid."):
-            continue
-        found[cls] = None
-        pending.extend(cls.__subclasses__())
-    return list(found)
 
 
 def _annotated(cls):
@@ -250,7 +232,7 @@ def _family_aliases(cls):
     absent from ``.ports`` -- present on the object, annotated on the
     class, and never *built* in :func:`_built`'s sense.
 
-    Found rather than listed, the way :func:`_unit_classes` is: a name
+    Found rather than listed, the way :func:`_shipped_unit_classes` is: a name
     counts only if it really is a live attribute pointing at a real
     member of a family the class declares, so a class that does this
     trick tomorrow needs no entry added here, and an annotation with no
@@ -277,7 +259,7 @@ def _built(cls):
     return set(cls("X-1").ports)
 
 
-@pytest.mark.parametrize("cls", _unit_classes(), ids=lambda c: c.__name__)
+@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
 def test_every_port_built_is_annotated(cls):
     """A nozzle the class creates is a nozzle a type checker can see.
 
@@ -297,7 +279,7 @@ def test_every_port_built_is_annotated(cls):
     )
 
 
-@pytest.mark.parametrize("cls", _unit_classes(), ids=lambda c: c.__name__)
+@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
 def test_a_family_only_excuses_a_numbered_nozzle(cls):
     """A family is not a way out of declaring a fixed nozzle.
 
@@ -318,7 +300,7 @@ def test_a_family_only_excuses_a_numbered_nozzle(cls):
     )
 
 
-@pytest.mark.parametrize("cls", _unit_classes(), ids=lambda c: c.__name__)
+@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
 def test_every_annotation_is_a_port_that_is_built(cls):
     """A declared nozzle is one default construction really produces.
 
@@ -606,7 +588,7 @@ def test_only_these_classes_declare_a_family():
     to read first. Keyed on the annotation a class *writes*, so a generated
     subclass inheriting ``Reactor``'s ``feeds`` is not a sixth decision.
     """
-    declared = {cls: _own_families(cls) for cls in _unit_classes() if _own_families(cls)}
+    declared = {cls: _own_families(cls) for cls in _shipped_unit_classes() if _own_families(cls)}
     assert declared == _DECLARED_FAMILIES
 
 
@@ -663,7 +645,9 @@ def test_only_these_classes_supersede_a_declaration():
     not a vocabulary somebody replaced.
     """
     superseded = {
-        cls.__name__: sorted(_superseded(cls)) for cls in _unit_classes() if _superseded(cls)
+        cls.__name__: sorted(_superseded(cls))
+        for cls in _shipped_unit_classes()
+        if _superseded(cls)
     }
     assert superseded == {
         "Cyclone": ["liquid", "vapor"],
@@ -717,7 +701,7 @@ def test_variant_nozzles_exist_but_are_not_declared_on_the_base(cls, variant, no
     assert nozzle not in _annotated(cls)
 
 
-@pytest.mark.parametrize("cls", _unit_classes(), ids=lambda c: c.__name__)
+@pytest.mark.parametrize("cls", _shipped_unit_classes(), ids=lambda c: c.__name__)
 def test_annotations_bind_nothing(cls):
     """The declarations are annotations, never assignments.
 
