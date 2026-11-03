@@ -1,7 +1,7 @@
 """Separate routed streams that share a track.
 
 Overlapping runs of different streams on tracks within :data:`SPACING`
-move apart; end runs and manual routes keep their track.
+are assigned tracks; end runs and manual routes keep their track.
 """
 
 from typing import Any, Sequence, TYPE_CHECKING
@@ -129,9 +129,10 @@ def _compute_offsets(
 
         Runs that overlap along their length form a component. In a
         component of several streams, fixed runs keep their track, a
-        free run joins its stream's nearest fixed track, and any other
-        run takes the nearest free slot on a ``spacing`` grid around
-        the fixed runs' mean track, or all runs' if none is fixed.
+        free run joins its stream's nearest fixed track clear of its end
+        units, and any other run takes the nearest free slot on a
+        ``spacing`` grid around the fixed runs' mean track, or all
+        runs' if none is fixed.
 
         Parameters
         ----------

@@ -42,7 +42,7 @@ class CrossingIndex:
     _v_sorted: Optional[Tuple[int, List[float]]] = field(default=None, repr=False, compare=False)
 
     def record(self, path: List[Tuple[float, float]]) -> None:
-        """Record the merged segments of an orthogonal route.
+        """Record each same-axis run of a route by its two ends.
 
         Parameters
         ----------
@@ -141,7 +141,7 @@ class CrossingIndex:
 
 
 def committed_segments(path: List[Tuple[float, float]]) -> List[Tuple[Axis, float, float, float]]:
-    """Return a route's merged segments.
+    """Return each same-axis run of a route as a span between its ends.
 
     Parameters
     ----------

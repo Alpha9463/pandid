@@ -77,8 +77,8 @@ def _fallback_path(
 ) -> list[tuple[float, float]]:
     """Return the L-shaped route drawn when no path is found.
 
-    Of the two corner orders, pick the one crossing fewer obstacles,
-    then fewer recorded lines, then the across-first one.
+    Of the two corner orders, pick the one with fewer segments hitting
+    an obstacle, then fewer recorded-line crossings, then across-first.
 
     Parameters
     ----------
@@ -246,8 +246,7 @@ class DefaultRouter:
         Warns
         -----
         UserWarning
-            If an end has no frame or anchor; the stream is skipped
-            and keeps any route it already had.
+            If an end has no frame or anchor; the stream is skipped.
         """
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path

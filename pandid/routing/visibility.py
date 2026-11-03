@@ -30,7 +30,7 @@ class Rect:
     y_max: float
 
     def intersects_segment(self, x1: float, y1: float, x2: float, y2: float) -> bool:
-        """Return whether an orthogonal segment meets the rectangle.
+        """Return whether an orthogonal segment enters the rectangle.
 
         Parameters
         ----------
@@ -92,7 +92,7 @@ TRAVEL: Dict[str, Tuple[int, float]] = {
 
 
 def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
-    """Return how far a port's escape node sits outside its anchor.
+    """Return a port's nominal escape distance from its anchor.
 
     Parameters
     ----------
@@ -390,7 +390,7 @@ class VisibilityGraph:
         direction: str,
         owner: "Unit",
     ) -> Tuple[float, float] | None:
-        """Return the furthest reachable node on a port's stub.
+        """Return the furthest stub node clear of other units' bodies.
 
         Parameters
         ----------
@@ -406,7 +406,7 @@ class VisibilityGraph:
         Returns
         -------
         tuple[float, float] or None
-            Furthest clear node, ``projection`` if not outward, or None.
+            Furthest such node, ``projection`` if not outward, or None.
         """
         axis, sign = TRAVEL[direction]
         distance = sign * (projection[axis] - anchor[axis])

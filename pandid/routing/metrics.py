@@ -11,9 +11,7 @@ Point = tuple[float, float]
 
 
 def min_bends(a: Point, dir_a: Optional[str], b: Point, dir_b: Optional[str]) -> Optional[int]:
-    """Return the fewest bends between two directed ports.
-
-    Ignore obstacles.
+    """Return the fewest bends between two ports, aligned within 1e-6.
 
     Parameters
     ----------
@@ -81,7 +79,7 @@ def waypoint_segments(waypoints: list[Point]) -> list[tuple[Point, Point, str]]:
 
 
 def real_bends(waypoints: list[Point]) -> int:
-    """Count direction changes between consecutive route segments.
+    """Count direction changes between a route's orthogonal segments.
 
     Parameters
     ----------
@@ -119,7 +117,7 @@ def path_length(points: list[Point]) -> float:
 
 
 def crossing_point(h: tuple[Point, Point], v: tuple[Point, Point]) -> Optional[Point]:
-    """Return where two segments cross inside both.
+    """Return where two segments cross more than 1e-6 inside both.
 
     Parameters
     ----------
@@ -144,7 +142,7 @@ def crossing_point(h: tuple[Point, Point], v: tuple[Point, Point]) -> Optional[P
 
 
 def crossing_count(paths: list[list[Point]]) -> int:
-    """Count interior crossings between different paths.
+    """Count :func:`crossing_point` crossings between different paths.
 
     Parameters
     ----------
@@ -172,7 +170,7 @@ def crossing_count(paths: list[list[Point]]) -> int:
 
 
 def crossing_pairs(paths: list[list[Point] | None]) -> frozenset[tuple[int, int]]:
-    """Return the index pairs of paths that cross.
+    """Return the path pairs that :func:`crossing_point` finds crossing.
 
     Parameters
     ----------
