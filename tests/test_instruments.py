@@ -1587,15 +1587,15 @@ def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) 
     if case == "pipe":
         fs.add_instrument("PI", 101, at=0.5, offset=60, angle=45, sensing=line)
     elif case == "face":
-        fs.add_instrument("LX", 101, at="S", offset=70, angle=45, sensing=drum)
+        fs.add_instrument("LX", 101, face="S", offset=70, angle=45, sensing=drum)
     elif case == "behind":
-        fs.add_instrument("LX", 101, at="S", sensing=drum).pin(x=420, y=150)
+        fs.add_instrument("LX", 101, face="S", sensing=drum).pin(x=420, y=150)
     elif case == "level":
-        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=120, y=150)
+        fs.add_instrument("LX", 101, face="E", sensing=drum).pin(x=120, y=150)
     elif case == "near":
-        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=420, y=168.25)
+        fs.add_instrument("LX", 101, face="E", sensing=drum).pin(x=420, y=168.25)
     else:
-        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=120, y=168)
+        fs.add_instrument("LX", 101, face="E", sensing=drum).pin(x=120, y=168)
     fs.route()
     ((_, tap, centre),) = tap_lines(fs)
     group = fs.to_svg().split('<g id="instrument_taps">', 1)[1].split("</g>", 1)[0]
