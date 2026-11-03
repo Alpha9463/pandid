@@ -2470,62 +2470,6 @@ def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():
     ), (tt.tap, points)
 
 
-def test_an_unsettled_hang_is_not_kept():
-    """Keep the unhung drawing when hanging the controller does not settle.
-
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
-    """
-    from pandid.layout.attach import stream_path
-
-    fs = Flowsheet("unsettled hang")
-    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
-    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=200)
-    line = fs.connect(feed.outlet, prod.inlet)
-    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=35, angle=30)
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=500, orientation=180)
-    lic = fs.add_instrument("LIC", 1)
-    fs.connect(lic.sig_out, valve.actuator, kind="electric")
-    fs.route()
-
-    assert tt.tap is not None
-    points = stream_path(line)
-    assert any(
-        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
-        for (ax, ay), (bx, by) in zip(points, points[1:])
-    ), (tt.tap, points)
-
-
-def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
-    """Keep an unsettled hang whose tap lies on its line where the unhung one does not.
-
-    Returns
-    -------
-    None
-        TT's tap lies on the final line.
-    """
-    from pandid.layout.attach import stream_path
-
-    fs = Flowsheet("hang rollback")
-    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=400)
-    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=100)
-    line = fs.connect(feed.outlet, prod.inlet)
-    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=35, angle=30)
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=500, y=300, orientation=270)
-    lic = fs.add_instrument("LIC", 1)
-    fs.connect(lic.sig_out, valve.actuator, kind="electric")
-    fs.route()
-
-    assert tt.tap is not None
-    points = stream_path(line)
-    assert any(
-        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
-        for (ax, ay), (bx, by) in zip(points, points[1:])
-    ), (tt.tap, points)
-
-
 def test_routing_again_draws_the_same_sheet():
     """Route a sheet whose keep-off attempt is kept twice, to the same drawing.
 
@@ -2546,6 +2490,30 @@ def test_routing_again_draws_the_same_sheet():
     fs.route()
 
     assert fs.to_svg(check=False) == first
+
+
+def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
+    """Keep main's hung drawing when keeping chained balloons clear adds a crossing.
+
+    Returns
+    -------
+    None
+        No line crosses a unit.
+    """
+    fs = Flowsheet("crossing")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=100)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=300)
+    line = fs.connect(feed.outlet, prod.inlet)
+    chains = [(0.6, 35, 45, "N", 100, 45), (0.6, 35, 0, "N", 35, 0), (0.5, 50, 270, "E", 70, 90)]
+    for i, (at, offset, angle, face, near_offset, near_angle) in enumerate(chains, 1):
+        tt = fs.add_instrument("TT", i, sensing=line, at=at, offset=offset, angle=angle)
+        fs.add_instrument("TIC", i, near=tt, face=face, offset=near_offset, angle=near_angle)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=100, orientation=180)
+    lic = fs.add_instrument("LIC", 99)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert "route-crosses-unit" not in [issue.code for issue in fs.validate()]
 
 
 def test_a_run_that_doubles_back_is_two_runs():

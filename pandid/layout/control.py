@@ -223,21 +223,24 @@ def _halos(fs: "Flowsheet") -> list[_Box]:
             if id(r) not in bodies]
 
 
-def _flaws(fs: "Flowsheet") -> "Counter[str]":
+def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     """Count the routed sheet's findings and drawn clashes.
 
     Parameters
     ----------
     fs : Flowsheet
         Routed sheet.
+    full : bool, default=False
+        Count shared runs per straight run rather than per segment, and
+        count taps off their host's drawn line or face.
 
     Returns
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, tap lines through units or tag halos, runs two
-        lines or tap lines share, and taps off their host's drawn line or
-        face.
+        through tag halos, tap lines through units or tag halos, and runs
+        two lines or tap lines share; with ``full``, also taps off their
+        line.
     """
     from collections import Counter
 
@@ -277,11 +280,11 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
                                          if u is not inst and u is not inst.host)
         flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
     runs = [(k, a, b) for k, points in enumerate(lines + [route for _, route in taps])
-            for a, b in _straight_runs(points)]
+            for a, b in (_straight_runs(points) if full else zip(points, points[1:]))]
     flaws["line-on-line"] = sum(
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
-    for u in fs.units:
+    for u in fs.units if full else ():
         tap = getattr(u, "tap", None)
         if tap is None or not is_attached(u):
             continue

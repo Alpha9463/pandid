@@ -2098,12 +2098,12 @@ class Flowsheet:
         # above, and keep that only if the sheet stays as clean.
         if attempt and any(_chained(u) for u in self.units):
             prior = self._geometry()
-            before = _flaws(self)
+            before = _flaws(self, full=True)
             self._may_hang = self._unhung is not None
             self._keep_clear, self._kept_clear = True, False
             try:
                 place()
-                clash = any(n > before[k] for k, n in _flaws(self).items())
+                clash = any(n > before[k] for k, n in _flaws(self, full=True).items())
             except Exception:
                 clash = True
             finally:
