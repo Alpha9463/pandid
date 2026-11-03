@@ -1558,6 +1558,30 @@ def test_hanging_lays_no_line_along_another() -> None:
     assert not any(_shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(pp, pp[1:]))
 
 
+def test_hanging_lays_no_line_along_a_tap_line() -> None:
+    """PI-1's tap rises past the actuator; LIC-1 is not hung where its
+    line would lie along that tap."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("tap overlap")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="S")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=270)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=270)
+    pipe = fs.connect(feed.outlet, prod.inlet)
+    fs.add_instrument("PI", 1, sensing=pipe, at=0.4244, offset=140, angle=10)
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    sp = stream_path(signal)
+    for inst, tap, centre in tap_lines(fs):
+        tp = tap_route(inst, tap, centre)
+        assert not any(_shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(tp, tp[1:]))
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

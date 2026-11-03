@@ -231,8 +231,8 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, runs two lines share, and tap lines through
-        units or tag halos.
+        through tag halos, tap lines through units or tag halos, and runs
+        two lines or tap lines share.
     """
     from collections import Counter
 
@@ -265,15 +265,16 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
                                for _, box in boxes for h in halos)
     lines = [stream_path(s) for s in fs.streams if s.route is not None]
     flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
-    runs = [(k, a, b) for k, points in enumerate(lines) for a, b in zip(points, points[1:])]
-    flaws["line-on-line"] = sum(
-        _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
-        for m, c, d in runs[i + 1:] if m != k)
-    for inst, tap, centre in tap_lines(fs):
-        route = tap_route(inst, tap, centre)
+    taps = [(inst, tap_route(inst, tap, centre)) for inst, tap, centre in tap_lines(fs)]
+    for inst, route in taps:
         flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
                                          if u is not inst and u is not inst.host)
         flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
+    runs = [(k, a, b) for k, points in enumerate(lines + [route for _, route in taps])
+            for a, b in zip(points, points[1:])]
+    flaws["line-on-line"] = sum(
+        _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
+        for m, c, d in runs[i + 1:] if m != k)
     return flaws
 
 
