@@ -2067,7 +2067,7 @@ class Flowsheet:
             Runs in order of their first segment.
         """
         material = [s for s in self.streams if s.kind == "material"]
-        # Key by id; a Stream is unhashable.
+        # Key streams by id.
         pos = {id(s): i for i, s in enumerate(material)}
         parent = list(range(len(material)))
 
