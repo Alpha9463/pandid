@@ -3305,7 +3305,7 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     Raises
     ------
     TypeError
-        If ``number`` is neither text nor a whole number.
+        If ``number`` is not ``None``, text or a whole number.
     """
     if number is not None and not (isinstance(number, str) or is_whole(number)):
         raise TypeError(
@@ -3392,6 +3392,8 @@ class Instrument(Unit):
 
     Raises
     ------
+    TypeError
+        If ``number`` is not ``None``, text or a whole number.
     ValueError
         If ``display`` is unknown, ``variant`` is a display spelling, or
         the pair has no drawing.
@@ -3564,7 +3566,7 @@ class Instrument(Unit):
             return None
 
     def _pool_of(self, port_name: str) -> str | None:
-        """Return the port's pool, or ``None`` for ``pv``.
+        """Return the port's signal pool, or ``None`` outside the pools.
 
         Parameters
         ----------
@@ -3702,10 +3704,11 @@ class Instrument(Unit):
             Fraction along a stream (default 0.5), or a unit face
             ``"N"``, ``"S"``, ``"E"`` or ``"W"`` (default ``"E"``).
         offset : float, default=45.0
-            Tap to balloon centre in pixels; 0 draws it on the line.
+            Requested tap-to-centre distance in pixels; 0 on a stream
+            draws the balloon in the line.
         angle : float, default=90.0
-            Degrees counter-clockwise from the flow on a stream, or
-            from the face tangent on a unit.
+            Requested degrees counter-clockwise from the flow on a
+            stream, or from the face tangent on a unit.
         relation : str, default="sensing"
             One of :data:`RELATIONS`.
 
@@ -3941,6 +3944,11 @@ class Evaporator(Unit):
     ----------
     supports : str or None
         Support drawn under the body.
+
+    Raises
+    ------
+    ValueError
+        If ``supports`` is unknown or the variant cannot carry it.
     """
 
     feed: Port
@@ -4012,6 +4020,11 @@ class Thickener(Unit):
     ----------
     rake : str or None
         Stirrer drawn on the shaft.
+
+    Raises
+    ------
+    ValueError
+        If ``rake`` is unknown or the variant cannot carry it.
     """
 
     feed: Port
@@ -4141,8 +4154,8 @@ def _stage_fractions(
     Raises
     ------
     ValueError
-        If ``stages`` has the wrong length, names a stage with no
-        internals, or names a stage outside the column.
+        If ``stages`` has the wrong length, names a stage when
+        ``internals`` is ``None``, or names a stage outside the column.
     """
     if stages is None:
         return {}
@@ -4182,8 +4195,8 @@ class Reactor(Unit):
     ``internals="packing"`` a packed bed and
     ``internals="fluidised_bed"`` a fluidised bed. The agitator is
     drawn with its motor, which carries the ``drive`` port. ``vent``
-    is the off-gas port on a stirred body; ``duty`` is the jacket or
-    coil connection.
+    is the off-gas port, absent on ``"tubular"``; ``duty`` is the
+    jacket or coil connection.
 
     Parameters
     ----------
@@ -4212,8 +4225,8 @@ class Reactor(Unit):
     Raises
     ------
     ValueError
-        If ``n_feeds`` is less than 1, or the body cannot carry the
-        agitator.
+        If ``n_feeds`` is less than 1, a part is unknown, or the body
+        cannot carry the parts.
     """
 
     outlet: Port
@@ -4446,10 +4459,10 @@ class Separator(Unit):
     """Flash drum or other separator.
 
     The phase separators (``"default"``, ``"horizontal"``,
-    ``"knockout"``, ``"scrubber"``) have ``vapor`` and ``liquid``
-    draws. The mechanical separators and dust collectors have
-    ``overflow`` (high) and ``underflow`` (apex). ``validate`` reports
-    a turned separator as ``gravity-turned``.
+    ``"knockout"``, ``"scrubber"``, ``"venturi_scrubber"``) have
+    ``vapor`` and ``liquid`` draws. The mechanical separators and dust
+    collectors have ``overflow`` (high) and ``underflow`` (apex).
+    ``validate`` reports a turned separator as ``gravity-turned``.
 
     Parameters
     ----------
@@ -4754,7 +4767,7 @@ class Column(Unit):
     name : str
         Tag.
     n_feeds : int, default=1
-        Number of feeds, ``feed_1`` to ``feed_n`` down the west side;
+        Number of feeds, ``feed_1`` to ``feed_n`` on the west side;
         with one, ``feed`` is an alias for ``feed_1``.
     variant : str, default="default"
         Shell drawing.
@@ -4782,24 +4795,25 @@ class Column(Unit):
     trays : int
         Drawn count of decks or beds.
     feeds, draws : tuple[Port, ...]
-        Feed and side-draw ports, highest first.
+        Feed and side-draw ports, in declaration order.
     feed_stages, draw_stages : list[int or None] or None
         Stages as given.
 
     Raises
     ------
     ValueError
-        If a count is out of range, a stage list has the wrong length,
-        a stage is outside the column, or a stage has no internals.
+        If a count is out of range, an internal is unknown or the shell
+        cannot carry it, a stage list has the wrong length, a stage is
+        outside the column, or a stage is given with no internals.
     """
 
     overhead: Port
     bottoms: Port
-    # feed_1 to feed_n, highest first.
+    # feed_1 to feed_n, in declaration order.
     feeds: tuple[Port, ...]
     # Alias for feed_1 when there is one feed.
     feed: Port
-    # Side draws, highest first; ColumnDraw1 declares ``draw``.
+    # Side draws in declaration order; ColumnDraw1 declares ``draw``.
     draws: tuple[Port, ...]
 
     # A literal n_feeds with n_draws=0 returns Column1 to Column8;
@@ -5271,7 +5285,7 @@ if TYPE_CHECKING:
 
 
 class Absorber(Column):
-    """Absorption or scrubbing tower with no distillation ports.
+    """Absorption or scrubbing tower with :class:`Column`'s ports.
 
     ``internals`` defaults to ``"packing"``; every other argument is
     :class:`Column`'s. Lean liquid and gas are two feeds::
@@ -5404,7 +5418,7 @@ if TYPE_CHECKING:
 
 
 class Stripper(Column):
-    """Stripping column: a reboiled tower with no condenser or reflux.
+    """Stripping column: a tower with boil-up and reboiler ports.
 
     Ports are ``overhead``, ``bottoms``, ``boilup_in`` and
     ``reboiler_duty``. Every argument is :class:`Column`'s.
@@ -6006,8 +6020,9 @@ class Block(_FaceFamilies):
     Raises
     ------
     ValueError
-        If there are no connections, a face is invalid, or the box is
-        too small for its connections.
+        If there are no connections, ``inputs`` or ``outputs`` is not a
+        count or a face list, a count is negative, a face is invalid,
+        or the box is too small for its connections.
     """
 
     # Only the families; their sizes are the caller's.
@@ -6112,8 +6127,11 @@ class Block(_FaceFamilies):
 
         Raises
         ------
+        TypeError
+            If ``value`` is neither ``None`` nor a real number.
         ValueError
-            If the box is too small for its connections.
+            If ``value`` is not positive and finite, or the box is too
+            small for its connections.
         """
         self._resize("_width", value)
 
@@ -6139,8 +6157,11 @@ class Block(_FaceFamilies):
 
         Raises
         ------
+        TypeError
+            If ``value`` is neither ``None`` nor a real number.
         ValueError
-            If the box is too small for its connections.
+            If ``value`` is not positive and finite, or the box is too
+            small for its connections.
         """
         self._resize("_height", value)
 
@@ -6195,9 +6216,14 @@ class Block(_FaceFamilies):
 
         Raises
         ------
+        KeyError
+            As for :meth:`Unit.pin`.
+        TypeError
+            As for :meth:`Unit.pin`.
         ValueError
-            If the placement leaves too little room for a face's
-            connections; the previous placement is kept.
+            As for :meth:`Unit.pin`, or if the placement leaves too
+            little room for a face's connections; the previous
+            placement is kept.
         """
         # Keep the stated pin to restore on refusal.
         was, was_ports = self._pin, dict(self._pin_ports)
@@ -6269,7 +6295,14 @@ class Block(_FaceFamilies):
         return block_symbol(tuple(self._faces.items()), "" if self.width is not None else self.tag)
 
     def _check_box(self) -> None:
-        """Raise if the placed box crowds a face's connections."""
+        """Raise if the placed box crowds a face's connections.
+
+        Raises
+        ------
+        ValueError
+            If a face with two or more connections is shorter than
+            they need.
+        """
         from pandid.portgeom import resolve_size
         from pandid.render.symbols import block_box_too_small
 
