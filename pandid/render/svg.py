@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 from functools import lru_cache
 
-from pandid.portgeom import tag_width
+from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
 from pandid.render.symbols import (ARROWHEAD, _STROKE, closed_marking, fail_marking,
@@ -273,7 +273,8 @@ def tap_route(inst, tap, centre):
     line leaves the tap square to its host, out of a unit's face or
     across a pipe toward the balloon, and turns once onto the balloon
     centre (ISO 15519-1 12.4). A balloon behind a unit's face is reached
-    with a second turn, one module out from the face.
+    one module out from the face, and around the unit's box when level
+    with it.
 
     Parameters
     ----------
@@ -292,7 +293,7 @@ def tap_route(inst, tap, centre):
 
     (tx, ty), (cx, cy) = tap, centre
     anchor = _anchor(inst)
-    if anchor is None or abs(cx - tx) < 0.5 or abs(cy - ty) < 0.5:
+    if anchor is None or abs(cx - tx) < 0.01 or abs(cy - ty) < 0.01:
         return [tap, centre]
     # A unit's reference runs along its face; turned, it is the outward normal.
     rx, ry = anchor[1]
@@ -305,7 +306,14 @@ def tap_route(inst, tap, centre):
     if ahead > 0:
         return [tap, (cx, ty) if across else (tx, cy), centre]
     sx, sy = tx + nx * M, ty + ny * M
-    return [tap, (sx, sy), (sx, cy) if across else (cx, sy), centre]
+    x0, y0, x1, y1 = unit_box(inst.host, inst.host.frame)
+    if across:
+        y = cy if not y0 < cy < y1 else (y0 - M if cy - y0 < y1 - cy else y1 + M)
+        bends = [(sx, sy), (sx, y), (cx, y)]
+    else:
+        x = cx if not x0 < cx < x1 else (x0 - M if cx - x0 < x1 - cx else x1 + M)
+        bends = [(sx, sy), (x, sy), (x, cy)]
+    return [tap, *bends] if bends[-1] == centre else [tap, *bends, centre]
 
 
 def impulse_tap(inst) -> bool:

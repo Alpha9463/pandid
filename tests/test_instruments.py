@@ -1424,15 +1424,23 @@ def test_a_placement_draws_nothing_where_a_reading_draws_a_line():
     assert '<g id="instrument_taps">' not in stood.to_svg()
 
 
-@pytest.mark.parametrize(("case", "corners"), [("pipe", 1), ("face", 1), ("behind", 2)])
+@pytest.mark.parametrize(
+    ("case", "corners"),
+    [("pipe", 1), ("face", 1), ("behind", 2), ("level", 3), ("near", 1)],
+)
 def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) -> None:
     """An off-axis balloon gets an L, or a Z behind a face, never a slope (#170).
+
+    A balloon behind the face and level with the unit is reached around
+    the unit's box, and one a fraction off the tap's axis still gets a
+    square turn.
 
     The line leaves the tap square to its host, so a balloon at 45 degrees
     or pinned anywhere is still drawn orthogonally (ISO 15519-1 12.4).
     """
     import xml.etree.ElementTree as ET
 
+    from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines
 
     fs = Flowsheet("dogleg")
@@ -1445,8 +1453,12 @@ def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) 
         fs.add_instrument("PI", 101, at=0.5, offset=60, angle=45, sensing=line)
     elif case == "face":
         fs.add_instrument("LX", 101, at="S", offset=70, angle=45, sensing=drum)
-    else:
+    elif case == "behind":
         fs.add_instrument("LX", 101, at="S", sensing=drum).pin(x=420, y=150)
+    elif case == "level":
+        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=120, y=150)
+    else:
+        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=420, y=168.25)
     fs.route()
     ((_, tap, centre),) = tap_lines(fs)
     group = fs.to_svg().split('<g id="instrument_taps">', 1)[1].split("</g>", 1)[0]
@@ -1454,8 +1466,13 @@ def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) 
     d = drawn.get("d") or "M {x1},{y1} L {x2},{y2}".format(**drawn.attrib)
     points = [tuple(float(v) for v in p.split(",")) for p in d[2:].split(" L ")]
     assert len(points) == corners + 2, f"{case}: drawn {points}"
+    left, top, right, bottom = unit_box(drum, drum.frame)
     for (x1, y1), (x2, y2) in zip(points, points[1:]):
         assert x1 == x2 or y1 == y2, f"{case}: drawn {points}"
+        inside = min(x1, x2) < right and max(x1, x2) > left
+        assert not (inside and min(y1, y2) < bottom and max(y1, y2) > top), (
+            f"{case}: drawn {points}"
+        )
     assert points[0] == pytest.approx(tap, abs=0.01)
     assert points[-1] == pytest.approx(centre, abs=0.01)
     # draw.io gets the same corners as waypoints.
