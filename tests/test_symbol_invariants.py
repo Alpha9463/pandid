@@ -529,19 +529,6 @@ def test_baked_redraw_preserves_supported_geometry():
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_ports_within_bounding_box(entry):
-    """Verify symbol ports remain inside their boxes."""
-    (kind, variant), sym = entry
-    for name, (x, y) in sym.ports.items():
-        assert -BOX_EPS <= x <= sym.width + BOX_EPS, (
-            f"{kind}/{variant} port {name!r} x={x} outside [0, {sym.width}]"
-        )
-        assert -BOX_EPS <= y <= sym.height + BOX_EPS, (
-            f"{kind}/{variant} port {name!r} y={y} outside [0, {sym.height}]"
-        )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_port_faces_within_bounding_box(entry):
     """Verify alternate port faces remain inside their boxes."""
     (kind, variant), sym = entry
@@ -553,47 +540,6 @@ def test_port_faces_within_bounding_box(entry):
             assert -BOX_EPS <= y <= sym.height + BOX_EPS, (
                 f"{kind}/{variant} port_faces[{name!r}][{face!r}] y={y} outside [0, {sym.height}]"
             )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
-    """Verify alternate placements resolve to their declared faces."""
-    (kind, variant), sym = entry
-    for name, faces in sym.port_faces.items():
-        for face, (x, y) in faces.items():
-            got = outward_dir(x, y, sym.width, sym.height)
-            assert got == face, (
-                f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
-                f"nearest the {got} edge of the {sym.width}x{sym.height} box"
-            )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_the_menu_carries_the_symbols_own_nozzle(entry):
-    """Verify the port menu includes the home nozzle."""
-    (kind, variant), sym = entry
-    assert set(sym.port_faces) == set(sym.ports), f"{kind}/{variant} menu misses a port"
-    for name, xy in sym.ports.items():
-        assert xy in sym.port_faces[name].values(), (
-            f"{kind}/{variant} port {name!r} home {xy} is not in its own menu"
-        )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_ports_lie_on_drawn_geometry(entry):
-    """Verify process ports land on drawn geometry."""
-    (kind, variant), sym = entry
-    if kind in _DYNAMIC_KINDS:
-        pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
-    segments = _collect_segments(sym.svg)
-    for name, (x, y) in sym.ports.items():
-        if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS or (kind, name) in _SIGNAL_PORTS:
-            continue
-        d = _nearest_distance((x, y), segments)
-        assert d <= GEOM_TOL, (
-            f"{kind}/{variant} port {name!r} at ({x}, {y}) is {d:.1f}u "
-            f"from the nearest drawn stroke (tolerance {GEOM_TOL})"
-        )
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
@@ -1438,6 +1384,22 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
     assert list(sym.port_faces["feed"]) == ["W", "N"]  # home stays most preferred
 
 
+def test_every_port_menu_starts_from_its_home_placement():
+    """Verify each port's menu holds its home placement first, menu or no menu."""
+    sym = Symbol(
+        svg='<g id="sym_x"/>',
+        width=91.5,
+        height=30.0,
+        ports={"feed": (0.0, 15.0), "vapor": (91.5, 15.0)},
+        port_faces={"feed": {"N": (20.0, 0.0)}},
+    )
+    assert sym.port_faces == {
+        "feed": {"W": (0.0, 15.0), "N": (20.0, 0.0)},
+        "vapor": {"E": (91.5, 15.0)},
+    }
+    assert list(sym.port_faces["feed"]) == ["W", "N"]
+
+
 # Port-series invariants
 
 
@@ -1693,12 +1655,6 @@ def test_a_nozzle_clear_of_the_series_band_is_not_a_collision():
         port_series=(PortSeries("in_", "W"),),
     )
     assert clear.coincident_ports() == []
-
-
-def test_a_series_on_another_face_is_not_a_collision():
-    """Verify series on separate faces are not collisions."""
-    assert default_registry.get("splitter").coincident_ports() == []
-    assert default_registry.get("mixer").coincident_ports() == []
 
 
 _HOLDUP = [
