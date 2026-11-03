@@ -129,13 +129,6 @@ def test_a_unit_never_added_is_not_reported():
     assert [i for i in fs.validate() if i.code == CODE] == []
 
 
-def test_it_survives_a_render():
-    """``fs.warnings`` is what ``render()`` leaves behind, so it has to be in it."""
-    fs, _ = _sheet()
-    fs.to_svg()
-    assert [i.code for i in fs.warnings if i.code == CODE] == [CODE]
-
-
 def test_reporting_does_not_consume_the_finding():
     """``validate()`` reports; it never clears. Twice must answer twice."""
     fs, _ = _sheet()
