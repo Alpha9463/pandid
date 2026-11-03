@@ -339,6 +339,7 @@ def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
             valve, frame, frame.x, frame.y, frame.w, frame.h, "FC", None, ink, symbols
         )
     )
+    assert plate is not None
     assert not boxes_overlap(plate, taps[0].box), "and the plate is clear of it"
     assert plate[1] > frame.y + frame.h, "still below the valve"
     assert plate[0] < frame.x + frame.w, "and still lying against its body"
