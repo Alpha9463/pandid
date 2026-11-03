@@ -3701,8 +3701,9 @@ class Instrument(Unit):
         on : Stream or Unit
             Host line or equipment.
         at : float or str, optional
-            Fraction along a stream (default 0.5), or a unit face
-            ``"N"``, ``"S"``, ``"E"`` or ``"W"`` (default ``"E"``).
+            Fraction from 0 to 1 inclusive along a stream (default 0.5),
+            or a unit face ``"N"``, ``"S"``, ``"E"`` or ``"W"`` (default
+            ``"E"``).
         offset : float, default=45.0
             Requested tap-to-centre distance in pixels; 0 on a stream
             draws the balloon in the line.
@@ -4011,8 +4012,8 @@ class Thickener(Unit):
     variant : str, default="default"
         Body drawing.
     rake : str or None, default=DEFAULT_RAKE
-        Group-28 stirrer on the shaft, or ``None``. Fixed at
-        construction.
+        Stirrer on the shaft, one of :class:`Reactor`'s ``agitator``
+        names, or ``None``. Fixed at construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
 
@@ -4208,10 +4209,16 @@ class Reactor(Unit):
     variant : str, default="default"
         Body: ``"default"``, ``"jacketed"`` or ``"tubular"``.
     agitator : str or None, optional
-        Group-28 stirrer, or ``None``. Defaults to ``"agitator"`` on a
-        stirred body without internals. Fixed at construction.
+        ``"agitator"``, ``"flat_blade"``, ``"gate_paddle"``,
+        ``"cross_beam"``, ``"anchor"``, ``"helical"``, ``"impeller"``,
+        ``"propeller"``, ``"disc"``, ``"turbine"`` or ``None``. Defaults
+        to ``"agitator"`` on a stirred body without internals. Fixed at
+        construction.
     internals : str or None, default=None
-        Group-27 internals. Fixed at construction.
+        ``"tray"``, ``"baffle_tray"``, ``"bubble_cap_tray"``,
+        ``"valve_tray"``, ``"sieve_tray"``, ``"filter_insert"``,
+        ``"fluidised_bed"``, ``"packing"`` or ``None``. Fixed at
+        construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
 
@@ -4772,8 +4779,10 @@ class Column(Unit):
     variant : str, default="default"
         Shell drawing.
     internals : str or None, optional
-        Group-27 internal, such as ``"tray"`` or ``"packing"``; none
-        when omitted. Fixed at construction.
+        ``"tray"``, ``"baffle_tray"``, ``"bubble_cap_tray"``,
+        ``"valve_tray"``, ``"sieve_tray"``, ``"filter_insert"``,
+        ``"fluidised_bed"``, ``"packing"`` or ``None`` (the default).
+        Fixed at construction.
     trays : int, default=DEFAULT_TRAYS
         Drawn count of decks or beds. Fixed at construction.
     feed_stages : list[int or None], optional

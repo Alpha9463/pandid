@@ -54,7 +54,13 @@ class Deprecation:
     note: str = ""
 
     def __post_init__(self) -> None:
-        """Raise if a required field is empty or blank."""
+        """Raise if a required field is empty or blank.
+
+        Raises
+        ------
+        ValueError
+            If ``what``, ``instead`` or ``removed_in`` is blank.
+        """
         for field, value in (("what", self.what), ("instead", self.instead),
                              ("removed_in", self.removed_in)):
             if not str(value).strip():

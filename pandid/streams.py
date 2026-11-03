@@ -136,7 +136,8 @@ class Stream:
     color, dasharray : str or None
         Line colour and dash pattern, validated when set.
     ends : str, tuple[str, str], or None
-        Joint style at both ends or ``(source, dest)``, or ``None``.
+        Joint style at both ends or ``(source, dest)``; ``None``
+        inherits the sheet's ``connections``, unlike ``"none"``.
     auto_named : bool
         Whether the flowsheet assigns the name.
     size, schedule, service, sequence, spec, insulation : str or float
