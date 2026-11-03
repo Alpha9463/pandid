@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.corridor import horizontal_centerline
-from pandid.layout.stages import process_units, slot
+from pandid.layout.stages import process_units
 from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
 from pandid.stations import StationAssembly, member_mirror
@@ -305,6 +305,8 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
     int
         Number of stations placed.
     """
+    from pandid.layout.mounted import _commit, _main_width
+
     chosen = fs._station_assemblies if assemblies is None else assemblies
     if not chosen:
         return 0
@@ -350,11 +352,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
         for assembly in group:
             if assembly.mirrored and not mirrored:
                 break
-            station = assembly.station
-            branch = {station.bypass, station.upstream_drain, station.downstream_drain}
-            main = [unit for unit in station.members if unit not in branch]
-            width = sum(resolve_size(unit)[0] for unit in main)
-            width += assembly.gap * (len(main) - 1)
+            width = _main_width(assembly)
             if high - low < width + 16:
                 break
             fraction = _fraction(assembly)
@@ -385,11 +383,5 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
             continue
         placed_count += len(proposed)
         for frames in proposed:
-            for unit, frame in frames.items():
-                unit.frame = frame
-                placed = slot(unit)
-                placed.x, placed.y = frame.x, frame.y
-                placed.w, placed.h = frame.w, frame.h
-                placed.orientation = frame.orientation
-                placed.mirrored, placed.mirror_y = frame.mirrored, frame.mirror_y
+            _commit(frames, obstacles)
     return placed_count
