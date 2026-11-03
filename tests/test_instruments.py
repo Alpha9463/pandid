@@ -1462,6 +1462,34 @@ def test_a_balloon_moved_by_hanging_keeps_out_of_a_tag_halo() -> None:
             assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
 
 
+def test_a_route_drawn_by_hand_and_then_cleared_stays_cleared() -> None:
+    """Clearing a hand-drawn route after a hung route() is not undone by
+    the next route()."""
+    fs, _, _ = _hung_controller()
+    feed = fs.add(U.Feed("Feed")).pin(x=100, y=700)
+    prod = fs.add(U.Product("Product")).pin(x=600, y=700)
+    pipe = fs.connect(feed.outlet, prod.inlet).via([(200, 700), (200, 600), (500, 600), (500, 700)])
+    fs.route()
+    pipe.route = None
+    fs.route()
+
+    assert "via" not in fs.to_dict()["streams"][-1]
+
+
+def test_a_copied_sheet_routes_from_its_own_unhung_state() -> None:
+    """A deep copy of a hung sheet restores its own frames, so a line then
+    drawn by hand stays square."""
+    import copy
+
+    fs, _, _ = _hung_controller()
+    fs.route()
+    fs = copy.deepcopy(fs)
+    fs.streams[0].via([(284.25, 234.9), (312.2, 234.9), (312.2, 275)])
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

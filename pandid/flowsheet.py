@@ -2074,14 +2074,16 @@ class Flowsheet:
                 router.route(self)
 
         def save() -> tuple:
-            """Return the frames, taps, routes and settled flag."""
-            return (copy.deepcopy({id(u): (u.frame, getattr(u, "tap", None))
-                                   for u in self.units}),
-                    copy.deepcopy({id(st): st.route for st in self.streams}),
+            """Return each unit's frame and tap, each automatic route, and
+            the settled flag."""
+            return ([(u, copy.deepcopy(u.frame), copy.deepcopy(getattr(u, "tap", None)))
+                     for u in self.units],
+                    [(st, copy.deepcopy(st.route)) for st in self.streams
+                     if st.route is None or not st.route.manual],
                     self.route_converged)
 
         def restore(state: tuple, keep_manual: bool) -> None:
-            """Put back what save() returned.
+            """Put back what save() returned, for units and streams still here.
 
             Parameters
             ----------
@@ -2091,15 +2093,17 @@ class Flowsheet:
                 Keep a route now drawn by hand rather than the saved one.
             """
             frames, routes, converged = state
-            for u in self.units:
-                if id(u) in frames:
-                    u.frame, tap = frames[id(u)]
+            units = {id(u) for u in self.units}
+            streams = {id(st) for st in self.streams}
+            for u, frame, tap in frames:
+                if id(u) in units:
+                    u.frame = frame
                     if hasattr(u, "tap"):
                         u.tap = tap
-            for st in self.streams:
+            for st, route in routes:
                 manual = st.route is not None and st.route.manual
-                if id(st) in routes and not (keep_manual and manual):
-                    st.route = routes[id(st)]
+                if id(st) in streams and not (keep_manual and manual):
+                    st.route = route
             self.route_converged = converged
 
         # Start from the sheet as routed without hanging, not from a hung
