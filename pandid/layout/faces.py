@@ -224,8 +224,8 @@ def _best(unit: "Unit", frame, port_name: str, menu: list[str],
             continue
         normal = face_point(unit, frame, landed)[1]
         # Order by cost, then aim, then symbol preference.
-        scored.append((_cost(anchor, normal, target), -_aim(centre, normal, target),
-                       rank, face))
+        aim = (target[0] - centre[0]) * normal[0] + (target[1] - centre[1]) * normal[1]
+        scored.append((_cost(anchor, normal, target), -aim, rank, face))
     frame.port_faces.pop(port_name, None)
     return min(scored)[-1] if scored else None
 
@@ -252,23 +252,3 @@ def _cost(anchor: tuple[float, float], normal: tuple[float, float],
     reach = (tx - ax) * nx + (ty - ay) * ny
     return abs(tx - ax) + abs(ty - ay) + (0.0 if reach >= 0.0 else 2.0 * MIN_ESCAPE)
 
-
-def _aim(centre: tuple[float, float], normal: tuple[float, float],
-         target: tuple[float, float]) -> float:
-    """Return the centre-to-target vector projected on a face normal.
-
-    Parameters
-    ----------
-    centre : tuple[float, float]
-        Centre of the unit box.
-    normal : tuple[float, float]
-        Outward face normal.
-    target : tuple[float, float]
-        Point the port should face.
-
-    Returns
-    -------
-    float
-        Projection length.
-    """
-    return (target[0] - centre[0]) * normal[0] + (target[1] - centre[1]) * normal[1]
