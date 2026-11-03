@@ -12,6 +12,8 @@ from pandid.geometry import Route
 from pandid.streams import Stream
 from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.portgeom import outward_dir
+from pandid.render.svg import crossings
+from pandid.route_geometry import stream_polyline
 from pandid.routing import DefaultRouter, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
@@ -683,7 +685,7 @@ def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
     """Accept a crossing rather than add two bends to avoid it.
 
     The north route has 3 bends and one crossing. The south route is clear
-    but has 5 bends. ``CROSSING_PENALTY`` is far below ``BEND_PENALTY``.
+    but has 5 bends. One crossing costs less than two bends.
 
     Returns
     -------
@@ -763,6 +765,32 @@ def test_a_forced_crossing_still_routes():
     index.v[20] = [(0.0, 20.0)]
     routed = find_path(graph, (0, 0), (40, 0), "E", None, crossing_index=index)
     assert routed == [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)]
+
+
+def test_a_short_detour_round_a_lines_end_beats_crossing_it():
+    """Route round the end of a drawn line rather than across it.
+
+    F2 -> P2 turns back on itself past F1 -> P1. Its shortest lane crosses
+    F1 -> P1; the lane past P1 is 240 px longer with the same bends.
+
+    Returns
+    -------
+    None
+        F2 -> P2 crosses nothing and runs past P1.
+    """
+    fs = Flowsheet("detour")
+    f1 = fs.add(Feed("F1")).pin(port="outlet", x=160, y=200)
+    p1 = fs.add(Product("P1")).pin(port="inlet", x=250, y=200)
+    f2 = fs.add(Feed("F2")).pin(port="outlet", x=200, y=100)
+    p2 = fs.add(Product("P2")).pin(mirrored="x").pin(port="inlet", x=160, y=300)
+    fs.connect(f1.outlet, p1.inlet)
+    stream = fs.connect(f2.outlet, p2.inlet)
+    fs.route()
+
+    polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
+    assert not list(crossings(polylines, "vertical")), polylines
+    assert p1.frame is not None
+    assert max(x for x, _ in stream_polyline(stream)) > p1.frame.x + p1.frame.w
 
 
 def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
@@ -880,8 +908,8 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
     index.v[20.0] = [(-30.0, 30.0)]  # Place the goal strictly inside the span.
 
     routed = find_path(graph, (0.0, -20.0), (20.0, 0.0), None, "W", crossing_index=index)
-    assert (0.0, 0.0) in routed, f"bought a bend to dodge a 10px crossing: {routed}"
-    assert (20.0, -20.0) not in routed, f"bought a bend to dodge a 10px crossing: {routed}"
+    assert (0.0, 0.0) in routed, f"bought a bend to dodge a crossing: {routed}"
+    assert (20.0, -20.0) not in routed, f"bought a bend to dodge a crossing: {routed}"
 
     # Confirm the graph is unbiased: either route may win without the index.
     tied = find_path(graph, (0.0, -20.0), (20.0, 0.0), None, "W")
@@ -1076,9 +1104,7 @@ def test_a_diagonal_manual_route_is_recorded_around_its_own_slant():
 def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
     """Record a fallback route so a later stream avoids crossing it.
 
-    F1 -> P1 is forced onto the fallback across the north bypass. The
-    fixture units near the bypass shift the tie by about 10 px, so
-    ``CROSSING_PENALTY`` is raised for this test.
+    F1 -> P1 is forced onto the fallback across the north bypass.
 
     Returns
     -------
@@ -1092,7 +1118,6 @@ def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
     stream = _obstacle_bypass_tie(fs)
 
     original_find_path = astar.find_path
-    original_penalty = astar.CROSSING_PENALTY
 
     def forced_empty_for_first(graph, start, *args, **kwargs):
         """Return no path for a search that starts on F1's outlet row.
@@ -1116,13 +1141,11 @@ def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
         return original_find_path(graph, start, *args, **kwargs)
 
     astar.find_path = forced_empty_for_first
-    astar.CROSSING_PENALTY = 100.0
     try:
         fs.layout()
         fs.route()
     finally:
         astar.find_path = original_find_path
-        astar.CROSSING_PENALTY = original_penalty
 
     fallback_route = fs.streams[0].route
     assert fallback_route is not None and len(fallback_route.waypoints) > 2, (

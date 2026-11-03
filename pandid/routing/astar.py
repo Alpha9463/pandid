@@ -13,7 +13,7 @@ BEND_PENALTY = 500.0
 Axis = Literal["h", "v"]
 
 
-CROSSING_PENALTY = 10.0
+CROSSING_PENALTY = 500.0
 
 
 #: Crossing queries before a search caches the sorted tracks locally.
