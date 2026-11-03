@@ -14,37 +14,16 @@ the artwork from the same numbers the artwork was built from proves only
 that Python arithmetic is deterministic.
 """
 
-import importlib.util
 import math
-import pathlib
 import re
 import xml.etree.ElementTree as ET
-from typing import Any
 
 import pytest
+from test_symbol_invariants import _script
 
 from pandid import Feed, Fitting, Flowsheet, Product, SteamTrap
 from pandid.render.drawio import _APPROXIMATIONS
 from pandid.render.symbols import default_registry
-
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-
-
-def _script(name: str) -> Any:
-    """One of the dev-only generator scripts, imported by path.
-
-    ``scripts/`` is not a package, and importing from it by putting the
-    directory on ``sys.path`` at run time leaves a name no type checker
-    can resolve. Same approach as ``tests/test_symbol_invariants``.
-    """
-    spec = importlib.util.spec_from_file_location(
-        f"_pandid_script_{name}", ROOT / "scripts" / f"{name}.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
 
 #: The drawing, resolved once. ``get`` raises for an unregistered variant,
 #: so on a checkout without this change every test in the file errors here
@@ -256,12 +235,7 @@ def test_the_svg_backend_draws_it_on_a_sheet(tmp_path):
     """End to end: a trap in a run reaches the sheet as its own definition,
     with the run drawn to both of its faces.
     """
-    fs = Flowsheet("Trap")
-    steam = fs.add(Feed("Steam"))
-    trap = fs.add(SteamTrap("T-701"))
-    drain = fs.add(Product("Condensate"))
-    fs.connect(steam.outlet, trap.inlet)
-    fs.connect(trap.outlet, drain.inlet)
+    fs, _steam, _trap, _drain = _trap_sheet()
     path = tmp_path / "trap.svg"
     fs.render(str(path))
 
@@ -271,14 +245,14 @@ def test_the_svg_backend_draws_it_on_a_sheet(tmp_path):
 
 
 def _trap_sheet(**kwargs):
-    """A trap in a run, as a rendered draw.io document and its warnings."""
+    """A steam feed, a trap and a condensate product in one run."""
     fs = Flowsheet("Trap")
     steam = fs.add(Feed("Steam"))
     trap = fs.add(SteamTrap("T-701", **kwargs))
     drain = fs.add(Product("Condensate"))
     fs.connect(steam.outlet, trap.inlet)
     fs.connect(trap.outlet, drain.inlet)
-    return fs.to_drawio(), fs
+    return fs, steam, trap, drain
 
 
 def _cells(document):
@@ -314,7 +288,7 @@ def test_the_drawio_backend_draws_the_body_and_both_leads():
     ellipse has to cover exactly the circle's span, and each lead exactly
     the run drawn beside it.
     """
-    document, _fs = _trap_sheet()
+    document = _trap_sheet()[0].to_drawio()
     cells = _cells(document)
     parent = next(cid for cid, (style, _g) in cells.items() if style.get("strokeColor") == "none")
     pieces = [cells[cid] for cid in sorted(cells) if cid.startswith(f"{parent}-s")]
@@ -352,7 +326,8 @@ def test_the_drawio_backend_reports_the_mark_it_cannot_draw():
     """
     approximation = _APPROXIMATIONS[("fitting", "steam_trap")]
     assert approximation.lost, "a stand-in has to say what it loses"
-    _document, fs = _trap_sheet()
+    fs = _trap_sheet()[0]
+    fs.to_drawio()
     reports = [
         issue
         for issue in fs.warnings
@@ -383,10 +358,12 @@ def test_the_drawio_backend_reports_a_body_it_will_reproportion():
             if issue.code == "drawio-approximated" and "reproportioned" in issue.message
         ]
 
-    _plain, plain = _trap_sheet()
+    plain = _trap_sheet()[0]
+    plain.to_drawio()
     assert reshape_reports(plain) == [], "a trap at its own shape has nothing to report"
 
-    _wide, wide = _trap_sheet(width=TRAP.width * 2, height=TRAP.height)
+    wide = _trap_sheet(width=TRAP.width * 2, height=TRAP.height)[0]
+    wide.to_drawio()
     reports = reshape_reports(wide)
     assert len(reports) == 1, "a reshaped trap is reported once"
     assert "T-701" in reports[0].message
@@ -408,12 +385,7 @@ def test_every_nozzle_lands_on_drawn_ink_however_the_trap_is_turned(rot):
     checked to land on a **lead**: not merely inside the cell, and not on
     the body, but on the piece that is drawn out to the box edge for it.
     """
-    fs = Flowsheet("Trap")
-    steam = fs.add(Feed("Steam"))
-    trap = fs.add(SteamTrap("T-701"))
-    drain = fs.add(Product("Condensate"))
-    fs.connect(steam.outlet, trap.inlet)
-    fs.connect(trap.outlet, drain.inlet)
+    fs, steam, trap, drain = _trap_sheet()
     # All three pinned, and well apart: the trap has to be turned by hand
     # and its neighbours must not be laid on top of the box that turning
     # it produces.
