@@ -114,13 +114,30 @@ class SpecError(ValueError):
 
 
 # ----------------------------------------------------------------
-# Primitive validation. Each helper takes the spec path of the
-# value it checks, for its error message.
+# Primitive validation
 # ----------------------------------------------------------------
 
 
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
-    """Check that a value is a mapping with text keys."""
+    """Check that a value is a mapping with text keys.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Mapping[str, Any]
+        The value.
+
+    Raises
+    ------
+    SpecError
+        If it is not a mapping or a key is not text.
+    """
     if not isinstance(value, Mapping):
         raise SpecError(
             f"{where} must be a mapping of field -> value, "
@@ -133,14 +150,47 @@ def _mapping(value: Any, where: str) -> Mapping[str, Any]:
 
 
 def _sequence(value: Any, where: str) -> list:
-    """Return a non-text sequence as a list."""
+    """Return a non-text sequence as a list.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    list
+        The items.
+
+    Raises
+    ------
+    SpecError
+        If it is text or not a sequence.
+    """
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise SpecError(f"{where} must be a list, got {type(value).__name__}: {value!r}")
     return list(value)
 
 
 def _check_keys(data: Mapping[str, Any], allowed, where: str) -> None:
-    """Refuse keys outside an allowed set."""
+    """Refuse keys outside an allowed set.
+
+    Parameters
+    ----------
+    data : Mapping[str, Any]
+        Entry to check.
+    allowed : Collection[str]
+        Keys the entry may carry.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        On the first unknown key.
+    """
     for key in data:
         if key not in allowed:
             raise SpecError(
@@ -150,26 +200,91 @@ def _check_keys(data: Mapping[str, Any], allowed, where: str) -> None:
 
 
 def _text(value: Any, where: str) -> str:
-    """Check that a value is text."""
+    """Check that a value is text.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    str
+        The value.
+
+    Raises
+    ------
+    SpecError
+        If it is not a string.
+    """
     if not isinstance(value, str):
         raise SpecError(f"{where} must be text, got {value!r} (quote it if it is a number)")
     return value
 
 
 def _shown(value: Any) -> bool:
-    """Return whether a value is text, a real number or a Decimal."""
+    """Return whether a value is text or a number.
+
+    Parameters
+    ----------
+    value : Any
+        Value to test.
+
+    Returns
+    -------
+    bool
+        True for text, a real number or a Decimal.
+    """
     return isinstance(value, (str, Decimal)) or _is_real(value)
 
 
 def _drawn(value: Any, where: str) -> str:
-    """Return a scalar field as the text it draws; ``None`` is blank."""
+    """Return a scalar field as the text it draws.
+
+    Parameters
+    ----------
+    value : Any
+        Field value.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    str
+        The text; ``None`` is blank.
+
+    Raises
+    ------
+    SpecError
+        If it is a list, tuple, set or mapping.
+    """
     if isinstance(value, (Mapping, list, tuple, set)):
         raise SpecError(f"{where} must be text, got {value!r}")
     return _drawn_text(value)
 
 
 def _number(value: Any, where: str) -> float:
-    """Check that a value is a finite real number, as given."""
+    """Check that a value is a finite real number.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    float
+        The value, as given.
+
+    Raises
+    ------
+    SpecError
+        If it is not a finite real number.
+    """
     if not _is_real(value):
         raise SpecError(f"{where} must be a number, got {value!r}")
     if not isfinite(value):
@@ -178,7 +293,25 @@ def _number(value: Any, where: str) -> float:
 
 
 def _column_width(value: Any, where: str) -> float | Literal["auto"]:
-    """Check a stream-table column width: a number or ``"auto"``."""
+    """Check a stream-table column width: a number or ``"auto"``.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    float or {"auto"}
+        The value.
+
+    Raises
+    ------
+    SpecError
+        If it is neither a finite number nor ``"auto"``.
+    """
     if value == "auto":
         return "auto"
     if not _is_real(value):
@@ -187,21 +320,75 @@ def _column_width(value: Any, where: str) -> float | Literal["auto"]:
 
 
 def _integer(value: Any, where: str) -> int:
-    """Check that a value is a whole number."""
+    """Check that a value is a whole number.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    int
+        The value.
+
+    Raises
+    ------
+    SpecError
+        If it is not a whole number, or is a bool.
+    """
     if not _is_integral(value):
         raise SpecError(f"{where} must be a whole number, got {value!r}")
     return value
 
 
 def _flag(value: Any, where: str) -> bool:
-    """Check that a value is true or false."""
+    """Check that a value is true or false.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    bool
+        The value.
+
+    Raises
+    ------
+    SpecError
+        If it is not a bool.
+    """
     if not isinstance(value, bool):
         raise SpecError(f"{where} must be true or false, got {value!r}")
     return value
 
 
 def _faces(value: Any, where: str) -> int | list[str]:
-    """Check a connection count, or a list of one face each."""
+    """Check a connection count, or a list of one face each.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    int or list[str]
+        The count, or the faces.
+
+    Raises
+    ------
+    SpecError
+        If it is neither a whole number nor a list of text.
+    """
     if isinstance(value, bool) or _is_integral(value):
         return _integer(value, where)
     return [_text(face, f"{where}[{i}]") for i, face in enumerate(_sequence(value, where))]
@@ -212,8 +399,22 @@ def _composed(value: Any, default: Any, where: str) -> Any:
 
     Parameters
     ----------
+    value : Any
+        Value to check.
     default : Any
         Class default; an int means the value is a count.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    int, str or None
+        The value.
+
+    Raises
+    ------
+    SpecError
+        If the value has the wrong type.
     """
     if isinstance(default, int) and not isinstance(default, bool):
         return _integer(value, where)
@@ -227,13 +428,49 @@ def _composed(value: Any, default: Any, where: str) -> Any:
 
 
 def _stages(value: Any, where: str) -> list[int | None]:
-    """Check a ``feed_stages`` or ``draw_stages`` list."""
+    """Check a ``feed_stages`` or ``draw_stages`` list.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    list[int or None]
+        One stage per item; ``None`` where none is given.
+
+    Raises
+    ------
+    SpecError
+        If it is not a list of whole numbers and nulls.
+    """
     return [None if item is None else _integer(item, f"{where}[{i}]")
             for i, item in enumerate(_sequence(value, where))]
 
 
 def _component(value: Any, where: str) -> str | float:
-    """Check a line-number component: text or a number."""
+    """Check a line-number component: text or a number.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    str or float
+        The value.
+
+    Raises
+    ------
+    SpecError
+        If it is neither text nor a number.
+    """
     if not _shown(value):
         raise SpecError(
             f"{where} must be text or a number (an imperial size carries its own "
@@ -243,14 +480,40 @@ def _component(value: Any, where: str) -> str | float:
 
 
 def _fail_from(error: Exception, where: str) -> SpecError:
-    """Return a library error as a SpecError naming ``where``."""
+    """Return a library error as a SpecError naming ``where``.
+
+    Parameters
+    ----------
+    error : Exception
+        Library error.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    SpecError
+        Error with the message after ``where``.
+    """
     message = error.args[0] if error.args else str(error)
     return SpecError(f"{where}: {message}")
 
 
 @contextmanager
 def _blame(where: str, errors: tuple[type[Exception], ...] = (ValueError,)) -> Iterator[None]:
-    """Re-raise library errors in the block as SpecErrors."""
+    """Re-raise library errors in the block as SpecErrors.
+
+    Parameters
+    ----------
+    where : str
+        Entry path for error messages.
+    errors : tuple[type[Exception], ...], default=(ValueError,)
+        Exception types to convert.
+
+    Raises
+    ------
+    SpecError
+        If the block raises one of ``errors``.
+    """
     try:
         yield
     except errors as e:
@@ -260,7 +523,27 @@ def _blame(where: str, errors: tuple[type[Exception], ...] = (ValueError,)) -> I
 def _read_fields(data: Mapping[str, Any], where: str,
                  readers: Sequence[tuple[Iterable[str], Callable[[Any, str], Any]]]
                  ) -> dict[str, Any]:
-    """Read each key in ``data`` with its reader, in table order."""
+    """Read each key in ``data`` with its reader, in table order.
+
+    Parameters
+    ----------
+    data : Mapping[str, Any]
+        Entry to read.
+    where : str
+        Entry path for error messages.
+    readers : Sequence[tuple[Iterable[str], Callable]]
+        Pairs of keys and the reader for them.
+
+    Returns
+    -------
+    dict[str, Any]
+        Read value per key present.
+
+    Raises
+    ------
+    SpecError
+        If a reader refuses a value.
+    """
     return {key: read(data[key], f"{where}.{key}")
             for keys, read in readers for key in keys if key in data}
 
@@ -271,7 +554,18 @@ def _read_fields(data: Mapping[str, Any], where: str,
 
 
 def _snake(name: str) -> str:
-    """Return a CamelCase name in snake_case."""
+    """Return a CamelCase name in snake_case.
+
+    Parameters
+    ----------
+    name : str
+        CamelCase name.
+
+    Returns
+    -------
+    str
+        The snake_case name.
+    """
     out = [name[0].lower()]
     for char in name[1:]:
         out.append(f"_{char.lower()}" if char.isupper() else char)
@@ -296,7 +590,25 @@ for _name in unit_types.__all__:
 
 
 def _resolve_kind(value: Any, where: str) -> type[Unit]:
-    """Return the unit class a ``kind`` value names."""
+    """Return the unit class a ``kind`` value names.
+
+    Parameters
+    ----------
+    value : Any
+        The entry's ``kind``.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    type[Unit]
+        The named class.
+
+    Raises
+    ------
+    SpecError
+        If the kind is unknown or is Instrument.
+    """
     name = _ALIASES.get(_text(value, f"{where}.kind").strip().lower())
     if name is None:
         raise SpecError(
@@ -526,7 +838,25 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
 
 
 def _read_component(entry: Any, where: str) -> Component:
-    """Read one ``components:`` entry: a name or a mapping."""
+    """Read one ``components:`` entry: a name or a mapping.
+
+    Parameters
+    ----------
+    entry : Any
+        Name, or mapping with ``name`` and ``formula``.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Component
+        The component.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed.
+    """
     if isinstance(entry, str):
         return Component(entry)
     data = _mapping(entry, where)
@@ -541,12 +871,45 @@ def _read_component(entry: Any, where: str) -> Component:
 
 
 def _takes(cls: type[Unit], owners: tuple[str, ...]) -> bool:
-    """Return whether ``cls`` is or subclasses one of ``owners``."""
+    """Return whether ``cls`` is or subclasses one of ``owners``.
+
+    Parameters
+    ----------
+    cls : type[Unit]
+        Class to test.
+    owners : tuple[str, ...]
+        Class names in ``_CLASSES``.
+
+    Returns
+    -------
+    bool
+        True if it is or subclasses one of them.
+    """
     return any(issubclass(cls, _CLASSES[owner]) for owner in owners)
 
 
 def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
-    """Read one ``units:`` entry and add the unit to the sheet."""
+    """Read one ``units:`` entry and add the unit to the sheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    entry : Any
+        The ``units:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Unit
+        The added unit.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed or the class refuses a value.
+    """
     data = _mapping(entry, where)
     if "kind" not in data:
         raise SpecError(
@@ -609,7 +972,22 @@ _STATION_KEYS = {
 
 
 def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
-    """Read one ``stations:`` entry and register the station."""
+    """Read one ``stations:`` entry and register the station.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    entry : Any
+        The ``stations:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If a member, port or placement option is invalid.
+    """
     from pandid.stations import BYPASS_ANCHORS, StationAssembly, ValveStation
     from pandid.units import Reducer, Tee, Valve
 
@@ -697,7 +1075,27 @@ def _read_station_assembly(fs: Flowsheet, entry: Any, where: str) -> None:
 
 
 def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
-    """Read one ``loops:`` entry and declare the loop."""
+    """Read one ``loops:`` entry and declare the loop.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    entry : Any
+        The ``loops:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Loop
+        The declared loop.
+
+    Raises
+    ------
+    SpecError
+        If a field is missing or invalid, or the loop is refused.
+    """
     data = _mapping(entry, where)
     _check_keys(data, _LOOP_KEYS, where)
     if "variable" not in data:
@@ -715,7 +1113,27 @@ def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
 
 
 def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
-    """Read one ``instruments:`` entry and add it, unattached."""
+    """Read one ``instruments:`` entry and add it, unattached.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    entry : Any
+        The ``instruments:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Instrument
+        The added instrument.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed or a value is refused.
+    """
     data = _mapping(entry, where)
     _check_keys(data, _INSTRUMENT_KEYS, where)
     if "type" not in data:
@@ -740,7 +1158,22 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
 
 
 def _annotate_instrument(inst: Instrument, entry: Any, where: str) -> None:
-    """Apply an instrument entry's ``quadrants:`` mapping."""
+    """Apply an instrument entry's ``quadrants:`` mapping.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Instrument to annotate.
+    entry : Any
+        The ``quadrants:`` mapping.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If the mapping is malformed or a code is refused.
+    """
     data = _mapping(entry, where)
     _check_keys(data, set(_QUADRANT_KEYS), where)
     codes: dict[str, Any] = {}
@@ -753,7 +1186,24 @@ def _annotate_instrument(inst: Instrument, entry: Any, where: str) -> None:
 
 
 def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str) -> None:
-    """Apply the shared unit fields and add the unit to the sheet."""
+    """Apply the shared unit fields and add the unit to the sheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    unit : Unit
+        Unit to set up and add.
+    data : Mapping[str, Any]
+        The unit's entry.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If a field is malformed or the unit is refused.
+    """
     if "label_pos" in data:
         unit.label_pos = _text(data["label_pos"], f"{where}.label_pos")
     if "new_line_number" in data:
@@ -767,7 +1217,27 @@ def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str)
 
 
 def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instrument:
-    """Read a ``balloon_of`` entry and add the element's balloon."""
+    """Read a ``balloon_of`` entry and add the element's balloon.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    entry : Mapping[str, Any]
+        The ``balloon_of`` entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Instrument
+        The added balloon.
+
+    Raises
+    ------
+    SpecError
+        If the element is not on the sheet or a value is refused.
+    """
     _check_keys(entry, _BALLOON_KEYS, where)
     name = _text(entry["balloon_of"], f"{where}.balloon_of")
     element = next((u for u in fs.units if u.name == name), None)
@@ -799,7 +1269,22 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
 
 
 def _read_pin(unit: Unit, entry: Any, where: str) -> None:
-    """Apply a ``pin:`` mapping to a unit."""
+    """Apply a ``pin:`` mapping to a unit.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to pin.
+    entry : Any
+        The ``pin:`` mapping.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If the mapping is malformed or the pin is refused.
+    """
     data = _mapping(entry, where)
     _check_keys(data, _PIN_KEYS, where)
     kwargs = _read_fields(data, where, ((("x", "y"), _number), (("col", "row"), _integer)))
@@ -828,12 +1313,26 @@ def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
 
     Parameters
     ----------
+    unit : Unit
+        Unit that owns the ports.
     entry : Any
-        ``None``, one port for every stated axis, or ``{axis: port}``.
+        ``None``, one port for every stated axis, or a mapping.
     stated : set[str]
         Pixel axes the pin states.
     ranks : set[str]
         Grid keys (``col``, ``row``) the pin states.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    dict[str, str]
+        Port name per pixel axis.
+
+    Raises
+    ------
+    SpecError
+        If the key is malformed, names an unknown port, or is refused.
     """
     key = where.rsplit(".", 1)[-1]
     if entry is None:
@@ -863,13 +1362,41 @@ def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
 
 
 def _refuse_port(complaint: str | None, where: str) -> None:
-    """Raise a ``port_refusal`` complaint, if any."""
+    """Raise a ``port_refusal`` complaint, if any.
+
+    Parameters
+    ----------
+    complaint : str or None
+        Message from ``port_refusal``, or ``None``.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If ``complaint`` is not ``None``.
+    """
     if complaint is not None:
         raise SpecError(f"{where}: {complaint}")
 
 
 def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
-    """Apply a ``port_faces:`` mapping of port name to face."""
+    """Apply a ``port_faces:`` mapping of port name to face.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit whose ports move.
+    entry : Any
+        The ``port_faces:`` mapping.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If a port is unknown or a face is refused.
+    """
     for port_name, face in _mapping(entry, where).items():
         _find_port(unit, port_name, where)
         with _blame(f"{where}.{port_name}"):
@@ -879,7 +1406,22 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
 def _read_port_order(
     unit: "unit_types.Block | unit_types.Tank | unit_types.Vessel", entry: Any, where: str
 ) -> None:
-    """Apply a ``port_order:`` mapping, one ``order_on`` per face."""
+    """Apply a ``port_order:`` mapping, one ``order_on`` per face.
+
+    Parameters
+    ----------
+    unit : Block, Tank or Vessel
+        Unit whose ports are ordered.
+    entry : Any
+        The ``port_order:`` mapping of face to port names.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If a port is unknown or an order is refused.
+    """
     for face, names in _mapping(entry, where).items():
         at = f"{where}.{face}"
         ports = [_find_port(unit, name, at)
@@ -889,7 +1431,27 @@ def _read_port_order(
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
-    """Return a unit's port by name or alias, creating pooled ports."""
+    """Return a unit's port by name or alias, creating pooled ports.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to search.
+    name : Any
+        Port name or alias.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Port
+        The port.
+
+    Raises
+    ------
+    SpecError
+        If the unit has no such port.
+    """
     if isinstance(name, str) and name not in unit.ports:
         minted = unit._mint_port(name)
         if minted is not None:
@@ -906,7 +1468,27 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
 
 
 def _find_unit(fs: Flowsheet, name: str, where: str) -> Unit:
-    """Return the unit with a given name."""
+    """Return the unit with a given name.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to search.
+    name : str
+        Unit name.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Unit
+        The unit.
+
+    Raises
+    ------
+    SpecError
+        If no unit has that name.
+    """
     for unit in fs.units:
         if unit.name == name:
             return unit
@@ -918,7 +1500,27 @@ def _find_unit(fs: Flowsheet, name: str, where: str) -> Unit:
 
 
 def _read_endpoint(fs: Flowsheet, entry: Any, where: str) -> Port:
-    """Read a stream endpoint, ``[unit, port]`` or ``{unit, port}``."""
+    """Read a stream endpoint, ``[unit, port]`` or ``{unit, port}``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to search.
+    entry : Any
+        The endpoint.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Port
+        The named port.
+
+    Raises
+    ------
+    SpecError
+        If it is malformed or names an unknown unit or port.
+    """
     if isinstance(entry, Mapping):
         _check_keys(entry, {"unit", "port"}, where)
         missing = [key for key in ("unit", "port") if key not in entry]
@@ -941,7 +1543,27 @@ def _read_endpoint(fs: Flowsheet, entry: Any, where: str) -> Port:
 
 
 def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
-    """Read one ``streams:`` entry and connect it."""
+    """Read one ``streams:`` entry and connect it.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to read into.
+    entry : Any
+        The ``streams:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Stream
+        The connected stream.
+
+    Raises
+    ------
+    SpecError
+        If the entry is malformed or the connection is refused.
+    """
     data = _mapping(entry, where)
     _check_keys(data, _STREAM_KEYS, where)
     for key in ("from", "to"):
@@ -978,7 +1600,25 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
 
 
 def _read_ends(entry: Any, where: str) -> "str | tuple[str, str]":
-    """Read a stream's ``ends``: one connection name or a pair."""
+    """Read a stream's ``ends``: one connection name or a pair.
+
+    Parameters
+    ----------
+    entry : Any
+        Connection name, or ``[source, dest]``.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    str or tuple[str, str]
+        The connection name or pair.
+
+    Raises
+    ------
+    SpecError
+        If the value has the wrong shape.
+    """
     if isinstance(entry, str):
         return entry
     if isinstance(entry, (list, tuple)) and len(entry) == 2:
@@ -990,7 +1630,25 @@ def _read_ends(entry: Any, where: str) -> "str | tuple[str, str]":
 
 
 def _read_properties(entry: Any, where: str) -> dict[str, str | float]:
-    """Read a stream's ``properties`` mapping."""
+    """Read a stream's ``properties`` mapping.
+
+    Parameters
+    ----------
+    entry : Any
+        The ``properties`` mapping.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    dict[str, str or float]
+        Value per property name.
+
+    Raises
+    ------
+    SpecError
+        If a value is neither text nor a number.
+    """
     out: dict[str, str | float] = {}
     for key, value in _mapping(entry, where).items():
         if not _shown(value):
@@ -1003,7 +1661,25 @@ def _read_properties(entry: Any, where: str) -> dict[str, str | float]:
 
 
 def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
-    """Read a stream's ``via`` list of ``[x, y]`` waypoints."""
+    """Read a stream's ``via`` list of ``[x, y]`` waypoints.
+
+    Parameters
+    ----------
+    entry : Any
+        The ``via`` list.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        The waypoints.
+
+    Raises
+    ------
+    SpecError
+        If an item is not a pair of numbers.
+    """
     points = []
     for i, item in enumerate(_sequence(entry, where)):
         pair = _sequence(item, f"{where}[{i}]")
@@ -1014,7 +1690,27 @@ def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
 
 
 def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
-    """Return the unit or stream an instrument entry names."""
+    """Return the unit or stream an instrument entry names.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to search.
+    entry : Any
+        Unit or stream name, or a ``[unit, port]`` endpoint.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Stream or Unit
+        The host.
+
+    Raises
+    ------
+    SpecError
+        If the name is ambiguous or unknown, or has no stream.
+    """
     if isinstance(entry, str):
         unit = next((u for u in fs.units if u.name == entry), None)
         stream = next((s for s in fs.streams if s.name == entry), None)
@@ -1043,7 +1739,24 @@ def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
 
 def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
                        where: str) -> None:
-    """Attach an instrument to the host its entry names, if any."""
+    """Attach an instrument to the host its entry names, if any.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to search.
+    inst : Instrument
+        Instrument to attach.
+    data : Mapping[str, Any]
+        The instrument's entry.
+    where : str
+        Entry path for error messages.
+
+    Raises
+    ------
+    SpecError
+        If the anchor keys are invalid or the attach is refused.
+    """
     where = f"{where} {inst.name!r}"
     named = [key for key in _ANCHOR_KEYS if key in data]
     if len(named) > 1:
@@ -1074,7 +1787,25 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
 
 
 def _read_section(entry: Any, where: str) -> tuple[str, str]:
-    """Read a stream-table section, ``[before_key, heading]``."""
+    """Read a stream-table section, ``[before_key, heading]``.
+
+    Parameters
+    ----------
+    entry : Any
+        The section.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    tuple[str, str]
+        The property key and the heading.
+
+    Raises
+    ------
+    SpecError
+        If it is not two text items.
+    """
     pair = _sequence(entry, where)
     if len(pair) != 2:
         raise SpecError(
@@ -1086,7 +1817,25 @@ def _read_section(entry: Any, where: str) -> tuple[str, str]:
 
 
 def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
-    """Read ``stream_table:``, the table's drawing options."""
+    """Read ``stream_table:``, the table's drawing options.
+
+    Parameters
+    ----------
+    entry : Any
+        The ``stream_table:`` mapping.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    StreamTableOptions
+        The options.
+
+    Raises
+    ------
+    SpecError
+        If a key is unknown or a value has the wrong type.
+    """
     data = _mapping(entry, where)
     _check_keys(data, {f.name for f in dataclass_fields(StreamTableOptions)}, where)
     options = StreamTableOptions()
@@ -1103,7 +1852,25 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
 
 
 def _read_stream_labels(entry: Any, where: str) -> StreamLabelOptions:
-    """Read ``stream_labels:``, how stream numbers are drawn."""
+    """Read ``stream_labels:``, how stream numbers are drawn.
+
+    Parameters
+    ----------
+    entry : Any
+        The ``stream_labels:`` mapping.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    StreamLabelOptions
+        The options.
+
+    Raises
+    ------
+    SpecError
+        If a key is unknown or the enclosure is refused.
+    """
     data = _mapping(entry, where)
     _check_keys(data, {f.name for f in dataclass_fields(StreamLabelOptions)}, where)
     if "enclosure" not in data:
@@ -1116,7 +1883,25 @@ def _read_stream_labels(entry: Any, where: str) -> StreamLabelOptions:
 
 
 def _read_title_block(entry: Any, where: str) -> TitleBlock:
-    """Read ``title_block:``."""
+    """Read ``title_block:``.
+
+    Parameters
+    ----------
+    entry : Any
+        The ``title_block:`` mapping.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    TitleBlock
+        The title block.
+
+    Raises
+    ------
+    SpecError
+        If a key is unknown or the revisions are malformed.
+    """
     data = _mapping(entry, where)
     text_fields = _drawn_text_fields(TitleBlock)
     _check_keys(data, text_fields | {"revisions"}, where)
@@ -1143,7 +1928,25 @@ _ANNOTATION_KEYS = {
 
 
 def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
-    """Read the placement and size keys shared by every box."""
+    """Read the placement and size keys shared by every box.
+
+    Parameters
+    ----------
+    data : Mapping[str, Any]
+        The box's entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    dict[str, Any]
+        Box keyword arguments for the keys present.
+
+    Raises
+    ------
+    SpecError
+        If a value has the wrong type.
+    """
     out: dict[str, Any] = {}
     if "align" in data:
         out["align"] = _text(data["align"], f"{where}.align")
@@ -1161,7 +1964,25 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
 
 
 def _read_rows(entry: Any, where: str) -> list:
-    """Read annotation rows: text lines, or lists of cells."""
+    """Read annotation rows: text lines, or lists of cells.
+
+    Parameters
+    ----------
+    entry : Any
+        The ``rows`` list.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    list
+        Each row as text or a tuple of cells.
+
+    Raises
+    ------
+    SpecError
+        If a row is malformed.
+    """
     rows: list = []
     for i, row in enumerate(_sequence(entry, where)):
         if isinstance(row, (list, tuple)):
@@ -1173,7 +1994,27 @@ def _read_rows(entry: Any, where: str) -> list:
 
 
 def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | TableBox:
-    """Read one ``annotations:`` entry."""
+    """Read one ``annotations:`` entry.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet an equipment list reads.
+    entry : Any
+        The ``annotations:`` entry.
+    where : str
+        Entry path for error messages.
+
+    Returns
+    -------
+    Annotation or TableBox
+        The box.
+
+    Raises
+    ------
+    SpecError
+        If the type or a key is unknown, or a value is refused.
+    """
     data = _mapping(entry, where)
     kind = data.get("type", "annotation")
     if kind not in _ANNOTATION_KEYS:
@@ -1331,7 +2172,20 @@ def to_dict(fs: Flowsheet) -> dict:
 
 
 def _write_common(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
-    """Write the shared unit fields that differ from their defaults."""
+    """Write the shared unit fields that differ from their defaults.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to write.
+    entry : dict[str, Any]
+        Entry to add the fields to.
+
+    Returns
+    -------
+    dict[str, Any]
+        The same entry.
+    """
     if unit.variant != "default":
         entry["variant"] = unit.variant
     if unit.description:
@@ -1347,7 +2201,20 @@ def _write_common(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
-    """Write composition parts that differ from their defaults."""
+    """Write composition parts that differ from their defaults.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to write.
+    entry : dict[str, Any]
+        Entry to add the parts to.
+
+    Returns
+    -------
+    dict[str, Any]
+        The same entry.
+    """
     cls = type(unit)
     stated = {key: getattr(unit, key) for key in cls.COMPOSITION}
     for key, default in cls.composition_defaults(unit.variant, stated).items():
@@ -1362,7 +2229,20 @@ def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
-    """Write a unit's pin and port faces."""
+    """Write a unit's pin and port faces.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to write.
+    entry : dict[str, Any]
+        Entry to add the pin and faces to.
+
+    Returns
+    -------
+    dict[str, Any]
+        The same entry.
+    """
     if unit.pin_ is not None:
         pin: dict[str, Any] = {}
         # Write each stated coordinate and the port it was measured to.
@@ -1399,6 +2279,14 @@ def _write_connection_faces(unit, entry: dict[str, Any],
 
     Parameters
     ----------
+    unit : Block, Tank or Vessel
+        Unit to write.
+    entry : dict[str, Any]
+        Entry to add the keys to.
+    default_input : str
+        Default face of an input.
+    default_output : str
+        Default face of an output.
     omit_bare_single : bool, default=False
         Omit a key for a single connection on the default face.
     """
@@ -1423,7 +2311,23 @@ def _write_connection_faces(unit, entry: dict[str, Any],
 
 
 def _write_unit(unit: Unit) -> dict[str, Any]:
-    """Write one ``units:`` entry."""
+    """Write one ``units:`` entry.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        The entry.
+
+    Raises
+    ------
+    SpecError
+        If the unit's class is not built in.
+    """
     kind = type(unit).__name__
     if kind not in _CLASSES:
         raise SpecError(
@@ -1478,7 +2382,18 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
 
 
 def _write_instrument(inst: Instrument) -> dict[str, Any]:
-    """Write one ``instruments:`` entry."""
+    """Write one ``instruments:`` entry.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Instrument or balloon to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        The entry.
+    """
     entry: dict[str, Any] = (
         {"balloon_of": inst._marks.name} if inst._marks is not None
         else {"type": inst.type, "number": inst.number}
@@ -1517,7 +2432,20 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
 
 
 def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
-    """Write one ``stations:`` entry."""
+    """Write one ``stations:`` entry.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose streams index the run.
+    assembly : StationAssembly
+        Station to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        The entry.
+    """
     station = assembly.station
     entry: dict[str, Any] = {
         "members": [unit.name for unit in station.members],
@@ -1546,7 +2474,18 @@ def _write_station_assembly(fs: Flowsheet, assembly) -> dict[str, Any]:
 
 
 def _write_stream(stream: Stream) -> dict[str, Any]:
-    """Write one ``streams:`` entry."""
+    """Write one ``streams:`` entry.
+
+    Parameters
+    ----------
+    stream : Stream
+        Stream to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        The entry.
+    """
     entry: dict[str, Any] = {
         "from": [stream.source.owner.name, stream.source.name],
         "to": [stream.dest.owner.name, stream.dest.name],
@@ -1583,14 +2522,36 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
 
 
 def _stated_text(obj: TitleBlock | Revision) -> dict[str, Any]:
-    """Return the drawn-text fields that differ from their defaults."""
+    """Return the drawn-text fields that differ from their defaults.
+
+    Parameters
+    ----------
+    obj : TitleBlock or Revision
+        Object to read.
+
+    Returns
+    -------
+    dict[str, Any]
+        Value per changed field.
+    """
     text = _drawn_text_fields(type(obj))
     return {f.name: getattr(obj, f.name) for f in dataclass_fields(type(obj))
             if f.name in text and getattr(obj, f.name) != f.default}
 
 
 def _write_title_block(block: TitleBlock) -> dict[str, Any]:
-    """Write ``title_block:``."""
+    """Write ``title_block:``.
+
+    Parameters
+    ----------
+    block : TitleBlock
+        Title block to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        The entry.
+    """
     entry: dict[str, Any] = _stated_text(block)
     if block.revisions:
         entry["revisions"] = [_stated_text(rev) for rev in block.revisions]
@@ -1598,7 +2559,18 @@ def _write_title_block(block: TitleBlock) -> dict[str, Any]:
 
 
 def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
-    """Write one ``annotations:`` entry, as a table or annotation."""
+    """Write one ``annotations:`` entry, as a table or annotation.
+
+    Parameters
+    ----------
+    box : Annotation or TableBox
+        Box to write.
+
+    Returns
+    -------
+    dict[str, Any]
+        The entry.
+    """
     entry: dict[str, Any] = {"type": "table" if isinstance(box, TableBox) else "annotation"}
     # Write any title but the default, falsy ones included.
     if box.title != "":
@@ -1658,7 +2630,20 @@ def from_json(path: str | Path) -> Flowsheet:
 
 
 def _written_twice(key: Any, line: int | None = None) -> SpecError:
-    """Return the error for a key written twice in one mapping."""
+    """Return the error for a key written twice in one mapping.
+
+    Parameters
+    ----------
+    key : Any
+        Repeated key.
+    line : int or None, optional
+        Line of the repeat.
+
+    Returns
+    -------
+    SpecError
+        The error naming the key.
+    """
     at = "" if line is None else f" (line {line})"
     return SpecError(
         f"{key!r} is written twice in one mapping{at}; only one value can be "
@@ -1667,7 +2652,23 @@ def _written_twice(key: Any, line: int | None = None) -> SpecError:
 
 
 def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    """Build a JSON object from its pairs, refusing a repeated key."""
+    """Build a JSON object from its pairs, refusing a repeated key.
+
+    Parameters
+    ----------
+    pairs : list[tuple[str, Any]]
+        Key-value pairs of one object.
+
+    Returns
+    -------
+    dict[str, Any]
+        The object.
+
+    Raises
+    ------
+    SpecError
+        If a key appears twice.
+    """
     data: dict[str, Any] = {}
     for key, value in pairs:
         if key in data:
@@ -1680,7 +2681,18 @@ _YAML_LOADER: Any = None
 
 
 def _core_schema_loader(yaml_module) -> Any:
-    """Return the cached safe YAML loader with YAML 1.2 scalars."""
+    """Return the cached safe YAML loader with YAML 1.2 scalars.
+
+    Parameters
+    ----------
+    yaml_module : module
+        The imported ``yaml`` module.
+
+    Returns
+    -------
+    type
+        The ``SafeLoader`` subclass.
+    """
     global _YAML_LOADER
     if _YAML_LOADER is None:
         dropped = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:timestamp",
@@ -1690,7 +2702,18 @@ def _core_schema_loader(yaml_module) -> Any:
             """Safe loader with YAML 1.2 booleans and numbers."""
 
             def flatten_mapping(self, node):
-                """Refuse a repeated key, then merge the mapping."""
+                """Refuse a repeated key, then merge the mapping.
+
+                Parameters
+                ----------
+                node : yaml.MappingNode
+                    Mapping node to check.
+
+                Raises
+                ------
+                SpecError
+                    If a key is written twice.
+                """
                 checked = self.__dict__.setdefault("_checked", set())
                 # Check each node once, before merging rewrites it.
                 if node not in checked:
