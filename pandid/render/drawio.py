@@ -67,8 +67,17 @@ _NO_HOP = "noJump=1;"
 def _jump_size(radius: float, weight: float) -> int:
     """Return draw.io's ``jumpSize`` for a hop on a line of ``weight``.
 
-    The hop's half-extent is ``(jumpSize - 2) / 2 + weight``; the result
-    is at least 1.
+    Parameters
+    ----------
+    radius : float
+        Hop radius in drawing units.
+    weight : float
+        Edge stroke width.
+
+    Returns
+    -------
+    int
+        ``jumpSize``, at least 1.
     """
     return max(1, round(2.0 * (radius - weight) + 2.0))
 
@@ -77,18 +86,18 @@ def _hops(polylines: dict, direction: str,
           style: str = "arc") -> "tuple[list, set, set]":
     """Return the stream edge order, the hopping edges and lost hops.
 
-    Each hopping edge is written after every edge it crosses. An edge
-    that would hop the wrong line, or hop where the sheet does not,
-    carries no ``jumpStyle``.
+    Write each hopping edge after the edges it hops, unless they form a
+    cycle. A hopping edge keeps ``jumpStyle`` only when every edge that
+    hops it, or that it crosses flat, is written after it.
 
     Parameters
     ----------
     polylines : dict
         ``{key: points}`` for every stream, in write order.
     direction : str
-        ``jump_direction``.
+        ``"vertical"`` or ``"horizontal"``; other values hop nothing.
     style : str, default="arc"
-        ``crossing_style``.
+        ``crossing_style``; ``"plain"`` hops nothing.
 
     Returns
     -------
@@ -97,8 +106,7 @@ def _hops(polylines: dict, direction: str,
     kept : set
         Keys that carry ``jumpStyle``.
     lost : set
-        ``(hopper, crossed, x, y)`` for each crossing the sheet hops and
-        the export draws flat.
+        ``(hopper, crossed, x, y)`` for each sheet hop drawn flat.
     """
     keys = list(polylines)
     if style not in _JUMP_STYLES or direction not in ("vertical", "horizontal"):
@@ -160,6 +168,24 @@ def _placed_rect(frame, x: float, y: float, w: float, h: float
     """Return a rectangle in symbol fractions as cell fractions.
 
     The rectangle turns and mirrors with the parent ``frame``.
+
+    Parameters
+    ----------
+    frame : Frame
+        Parent unit's frame.
+    x : float
+        Left edge in symbol fractions.
+    y : float
+        Top edge in symbol fractions.
+    w : float
+        Width in symbol fractions.
+    h : float
+        Height in symbol fractions.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x, y, w, h)`` in cell fractions.
     """
     rot, mirror_x, mirror_y = _xform(frame)
     corners = [symbol_to_box(px, py, 1.0, 1.0, rot, mirror_x, mirror_y)[:2]
@@ -172,7 +198,15 @@ def _placed_rect(frame, x: float, y: float, w: float, h: float
 def _turn_keys(frame) -> list[str]:
     """Return the ``direction`` key turning a child with its parent.
 
-    The list is empty when the parent is not turned.
+    Parameters
+    ----------
+    frame : Frame
+        Parent unit's frame.
+
+    Returns
+    -------
+    list[str]
+        The key, or an empty list when the parent is not turned.
     """
     rot, _mirror_x, _mirror_y = _xform(frame)
     return [] if rot not in _DIRECTION else [f"direction={_DIRECTION[rot]}"]
@@ -181,7 +215,14 @@ def _turn_keys(frame) -> list[str]:
 class _Fit(NamedTuple):
     """Map drawing coordinates onto the page.
 
-    A point is scaled by ``scale`` and moved by ``(dx, dy)``.
+    Attributes
+    ----------
+    scale : float
+        Drawing units to page units.
+    dx : float
+        Horizontal offset after scaling.
+    dy : float
+        Vertical offset after scaling.
     """
     scale: float
     dx: float
@@ -189,27 +230,78 @@ class _Fit(NamedTuple):
 
     @classmethod
     def identity(cls) -> "_Fit":
-        """Return the identity fit."""
+        """Return the identity fit.
+
+        Returns
+        -------
+        _Fit
+            A fit that leaves points unchanged.
+        """
         return cls(1.0, 0.0, 0.0)
 
     def at(self, x: float, y: float) -> "tuple[float, float]":
-        """Return a drawing point on the page."""
+        """Return a drawing point on the page.
+
+        Parameters
+        ----------
+        x : float
+            Drawing x.
+        y : float
+            Drawing y.
+
+        Returns
+        -------
+        tuple[float, float]
+            Page point.
+        """
         return (self.dx + self.scale * x, self.dy + self.scale * y)
 
     def box(self, b) -> "tuple[float, float, float, float]":
-        """Return a drawing box ``(x0, y0, x1, y1)`` on the page."""
+        """Return a drawing box on the page.
+
+        Parameters
+        ----------
+        b : tuple
+            Drawing box ``(x0, y0, x1, y1)``.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Page box ``(x0, y0, x1, y1)``.
+        """
         return (*self.at(b[0], b[1]), *self.at(b[2], b[3]))
 
     def length(self, v: float) -> float:
-        """Return a length scaled to the page."""
+        """Return a length scaled to the page.
+
+        Parameters
+        ----------
+        v : float
+            Length in drawing units.
+
+        Returns
+        -------
+        float
+            Length in page units.
+        """
         return self.scale * v
 
 
 class _Piece(NamedTuple):
     """A draw.io built-in shape placed inside a stand-in's cell.
 
-    ``x, y, w, h`` are fractions of the cell. A ``shape`` of ``None`` is
-    the rectangle.
+    Attributes
+    ----------
+    shape : str or None
+        Built-in shape name; ``None`` is the rectangle.
+    x : float
+        Left edge as a fraction of the cell.
+    y : float
+        Top edge as a fraction of the cell.
+    w : float
+        Width as a fraction of the cell.
+    h : float
+        Height as a fraction of the cell.
     """
 
     shape: "str | None"
@@ -274,7 +366,7 @@ _BALLOON_FILL = "#ffffff"
 # The built-in drawn for each symbol with no draw.io stencil, and what
 # it loses.
 _APPROXIMATIONS = {
-    # ISA balloons, at the detail weight (ISO 10628-1 5.3.1 c)).
+    # Instrument balloons, at the detail weight (ISO 10628-1 5.3.1 c)).
     ("instrument", "default"): _Approximation(
         "ellipse", "", fill=_BALLOON_FILL, weight=LineWeight.DETAIL.width),
     ("instrument", "panel"): _Approximation(
@@ -519,8 +611,7 @@ class _Tags(NamedTuple):
     Attributes
     ----------
     at : dict
-        ``id(unit)`` -> ``(side, dx, dy)``: the tag's side and its
-        offset from that side's default spot.
+        ``id(unit)`` -> ``(side, dx, dy)``, offset from the side's spot.
     plates : list
         Opaque boxes of tags and ``NC``/fail letters.
     codes : list
@@ -536,10 +627,19 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
 
     Parameters
     ----------
+    fs : Flowsheet
+        Laid-out flowsheet.
+    registry : SymbolRegistry
+        Symbol registry.
     joints : str or None
         Sheet joint default, whose flange marks tags avoid.
     direction : str
         ``jump_direction``.
+
+    Returns
+    -------
+    _Tags
+        Tag placements, plates and quadrant codes.
     """
     from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
                                    flange_boxes, quadrant_labels)
@@ -578,7 +678,22 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
-    """Return a balloon's quadrant letter code as a haloed text cell."""
+    """Return a balloon's quadrant letter code as a haloed text cell.
+
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    item : tuple
+        Quadrant label item.
+    fit : _Fit
+        Page fit.
+
+    Returns
+    -------
+    list[str]
+        ``mxCell`` XML lines.
+    """
     lx, ly, anchor, _baseline, _lpos, text = item
     size = fit.length(_TAG_TYPE)
     x, y = fit.at(lx, ly)
@@ -595,7 +710,21 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
 def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
     """Return the ``fontSize`` key for lettering in the drawing.
 
-    With a ``box``, the size is capped so ``lines`` lines fit its depth.
+    Parameters
+    ----------
+    nominal : float
+        Unscaled size.
+    fit : _Fit
+        Page fit.
+    lines : int, default=1
+        Lines of text inside ``box``.
+    box : tuple, optional
+        Cell box in drawing units; caps the size so ``lines`` fit.
+
+    Returns
+    -------
+    str
+        ``fontSize=...``.
     """
     size = nominal
     if box is not None and lines > 0:
@@ -607,21 +736,47 @@ def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str
 def _attr(value) -> str:
     """Return an XML attribute value, quoted and escaped.
 
-    Characters XML cannot represent are removed first.
+    Parameters
+    ----------
+    value : object
+        Value to write; XML-unwritable characters are removed.
+
+    Returns
+    -------
+    str
+        Quoted attribute value.
     """
     return '"' + escape(writable(value), {'"': "&quot;", "'": "&apos;"}) + '"'
 
 
 def _html_text(value) -> str:
-    """Return author text escaped for an HTML draw.io ``value``."""
+    """Return author text escaped for an HTML draw.io ``value``.
+
+    Parameters
+    ----------
+    value : object
+        Text to write.
+
+    Returns
+    -------
+    str
+        Escaped text.
+    """
     return html.escape(writable(value), quote=False)
 
 
 def _dash(pattern: str) -> list[str]:
     """Return draw.io dash style keys for an SVG dash pattern.
 
-    The lengths are joined by single spaces and stay in drawing units.
-    The list is empty for a solid line.
+    Parameters
+    ----------
+    pattern : str
+        SVG dash pattern in drawing units; empty or ``"none"`` is solid.
+
+    Returns
+    -------
+    list[str]
+        Style keys, or an empty list for a solid line.
     """
     if not pattern or pattern == "none":
         return []
@@ -636,10 +791,21 @@ class DrawioRenderer:
     ----------
     registry : SymbolRegistry, optional
         Symbols to draw with; ``default_registry`` when omitted.
+
+    Attributes
+    ----------
+    registry : SymbolRegistry
+        Symbols drawn with.
     """
 
     def __init__(self, registry=None):
-        """Store the registry and start an empty findings list."""
+        """Store the registry and start an empty findings list.
+
+        Parameters
+        ----------
+        registry : SymbolRegistry, optional
+            Symbols to draw with; ``default_registry`` when omitted.
+        """
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
         # Findings put on fs.warnings at the end of render().
@@ -647,7 +813,21 @@ class DrawioRenderer:
 
     def _report(self, field: str, text: str, drawn: str,
                 room: float, need: float) -> None:
-        """Record a cell that could not hold its text."""
+        """Record a cell that could not hold its text.
+
+        Parameters
+        ----------
+        field : str
+            Field name.
+        text : str
+            Text supplied.
+        drawn : str
+            Text drawn.
+        room : float
+            Width available.
+        need : float
+            Width needed.
+        """
         self._findings.append(fit_issue(field, text, drawn, room, need))
 
     # --------------------------------------------------- document
@@ -660,8 +840,7 @@ class DrawioRenderer:
                show_stream_table: "bool | str" = False, **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
-        Export findings replace those of any earlier export on
-        ``fs.warnings``.
+        Replace this backend's earlier findings on ``fs.warnings``.
 
         Parameters
         ----------
@@ -670,21 +849,17 @@ class DrawioRenderer:
         diagram : str, optional
             ``"pfd"`` (default), ``"p&id"`` (or ``"pid"``) or ``"bfd"``.
         page_size : str, optional
-            ``"A4"`` to ``"A0"``, or ``None`` to fit the page to the
-            drawing.
+            ``"A4"`` to ``"A0"``, or ``None`` to fit the drawing.
         border : str, optional
-            ``"zone"`` or ``"none"``; ``"zone"`` by default for a table
-            sheet.
+            ``"zone"`` or ``"none"``; ``"zone"`` for a table sheet.
         connections : str, optional
-            Joint drawn on P&ID streams that state none: ``"flanged"``
-            or ``"none"``.
+            Default P&ID joint: ``"flanged"`` or ``"none"``.
         jump_direction : str, default="vertical"
-            Which of two crossing lines carries the crossing mark.
+            ``"vertical"`` or ``"horizontal"``: the line that hops.
         crossing_style : str, default="gap"
             ``"gap"``, ``"arc"`` or ``"plain"``.
         show_stream_table : bool or str, default=False
-            ``True`` docks the stream table on the sheet; ``"sheet"``
-            exports it as its own sheet.
+            ``True`` docks the table; ``"sheet"`` gives it a sheet.
         **opts
             Refused, including ``debug``.
 
@@ -696,8 +871,7 @@ class DrawioRenderer:
         Raises
         ------
         ValueError
-            If an argument is invalid, the page is too small, or a unit
-            has no frame.
+            For a bad argument, too small a page or an unframed unit.
         """
         from pandid.render.svg import (
             _page, _resolve_sheet, check_render_arguments,
@@ -745,7 +919,22 @@ class DrawioRenderer:
         return self._document(fs, sheet, frame, body)
 
     def _table_sheet(self, fs, sheet, border) -> str:
-        """Return the stream table's own sheet as a draw.io document."""
+        """Return the stream table's own sheet as a draw.io document.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose streams are tabulated.
+        sheet : _Sheet or None
+            Fixed page, or ``None``.
+        border : str
+            ``"none"`` or ``"zone"``.
+
+        Returns
+        -------
+        str
+            ``mxfile`` XML document.
+        """
         from pandid.render.svg import table_sheet_plan
 
         plan = table_sheet_plan(fs, sheet)
@@ -762,7 +951,23 @@ class DrawioRenderer:
     def _document(self, fs, sheet, frame, body: list[str]) -> str:
         """Return the draw.io file around a sheet's cells.
 
-        Also replace this backend's findings on ``fs.warnings``.
+        Replace this backend's findings on ``fs.warnings``.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet, for the name, page id and warnings.
+        sheet : _Sheet or None
+            Fixed page, or ``None``.
+        frame : tuple[float, float, float, float]
+            Frame the cells are placed against.
+        body : list[str]
+            Cell XML lines.
+
+        Returns
+        -------
+        str
+            ``mxfile`` XML document.
         """
         # The page size is always stated; page view is on only for a
         # fixed page.
@@ -794,14 +999,35 @@ class DrawioRenderer:
 
     @staticmethod
     def _id(index: int) -> str:
-        """Return the cell id for the unit at ``index``."""
+        """Return the cell id for the unit at ``index``.
+
+        Parameters
+        ----------
+        index : int
+            Unit index.
+
+        Returns
+        -------
+        str
+            Cell id.
+        """
         return f"u{index}"
 
     @staticmethod
     def _approximation(u, sym) -> "_Approximation | None":
         """Return the built-in stand-in for a symbol without a stencil.
 
-        Return ``None`` for a symbol with a stencil or with no stand-in.
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        sym : Symbol
+            Its symbol.
+
+        Returns
+        -------
+        _Approximation or None
+            Stand-in, or ``None`` with a stencil or no stand-in.
         """
         if sym.drawio_shape or sym.drawio_body_shape:
             return None
@@ -810,7 +1036,15 @@ class DrawioRenderer:
     def _placement(self, u, sym) -> "tuple[list[str], bool, bool]":
         """Return the style keys placing a symbol, and its net flips.
 
-        A directional symbol is never flipped.
+        Mirror a non-directional symbol as its frame is mirrored, then
+        add the flip of a stencil or stand-in drawn the other way.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
 
         Returns
         -------
@@ -841,7 +1075,22 @@ class DrawioRenderer:
         return keys, flip_h, flip_v
 
     def _shape(self, u, sym, fit: "_Fit") -> list[str]:
-        """Return the style keys naming the shape drawn for a unit."""
+        """Return the style keys naming the shape drawn for a unit.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        sym : Symbol
+            Its symbol.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Style keys.
+        """
         weight = (f"strokeWidth="
                   f"{fit.length(_svg._class_weight(sym).width):g}")
         if u.kind in ("feed", "product"):
@@ -872,6 +1121,18 @@ class DrawioRenderer:
 
         The flag is draw.io's ``offPageConnector``, turned north to
         point east and south to point west.
+
+        Parameters
+        ----------
+        u : Unit
+            Feed or Product.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Style keys.
         """
         (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
         width = x1 - x0
@@ -889,6 +1150,15 @@ class DrawioRenderer:
         An instrument's tag goes inside its balloon; other tags go on
         the side from ``tags``. ``NC`` and fail-position letters follow
         the tag.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit.
+        fit : _Fit
+            Drawing fit.
+        tags : _Tags
+            Tag placements from the tag pass.
 
         Returns
         -------
@@ -936,16 +1206,41 @@ class DrawioRenderer:
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
-        """Return the cell box ``(x0, y0, x1, y1)`` for a unit.
+        """Return the cell box for a unit.
 
-        An off-page flag uses its pennant box.
+        Parameters
+        ----------
+        u : Unit
+            Placed unit; an off-page flag uses its pennant box.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            ``(x0, y0, x1, y1)``.
         """
         if u.kind in ("feed", "product"):
             return boundary_flag(u, u.frame).box
         return unit_box(u, u.frame)
 
     def _vertex(self, u, index: int, fit: "_Fit", tags: "_Tags") -> list[str]:
-        """Return one unit as a draw.io vertex and its child cells."""
+        """Return one unit as a draw.io vertex and its child cells.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        index : int
+            Unit index, for the cell id.
+        fit : _Fit
+            Drawing fit.
+        tags : _Tags
+            Tag placements.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
+        """
         sym = self.registry.for_unit(u)
         approx = self._approximation(u, sym)
         if approx is not None and approx.lost:
@@ -976,7 +1271,17 @@ class DrawioRenderer:
         ]
 
     def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
-        """Report a stand-in stretched to a different aspect."""
+        """Report a stand-in stretched to a different aspect.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+        approx : _Approximation or None
+            Its stand-in.
+        """
         if approx is None or sym.stretchable:
             return
         x0, y0, x1, y1 = self._cell_box(u)
@@ -1000,6 +1305,26 @@ class DrawioRenderer:
         """Return a multi-piece stand-in as one child cell per built-in.
 
         Each piece turns and mirrors with the parent.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        approx : _Approximation or None
+            Its stand-in.
+        cid : str
+            Parent cell id.
+        w : float
+            Parent cell width.
+        h : float
+            Parent cell height.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty without pieces.
         """
         if approx is None or not approx.pieces:
             return []
@@ -1024,10 +1349,23 @@ class DrawioRenderer:
         ----------
         cid : str
             Parent cell id.
-        w, h : float
-            Parent cell size.
+        sym : Symbol
+            Composed symbol.
+        w : float
+            Parent cell width.
+        h : float
+            Parent cell height.
+        fit : _Fit
+            Drawing fit.
+        frame : Frame
+            Unit placement.
         name : str
             Unit name, for findings.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty without overlays.
         """
         if not sym.overlays:
             return []
@@ -1061,7 +1399,26 @@ class DrawioRenderer:
     @staticmethod
     def _inscribed(cid: str, approx: "_Approximation | None",
                    w: float, h: float, fit: "_Fit") -> list[str]:
-        """Return a stand-in's second outline as a child cell."""
+        """Return a stand-in's second outline as a child cell.
+
+        Parameters
+        ----------
+        cid : str
+            Parent cell id.
+        approx : _Approximation or None
+            Stand-in.
+        w : float
+            Parent cell width.
+        h : float
+            Parent cell height.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty without an inscribed shape.
+        """
         if approx is None or approx.inscribed is None:
             return []
         style = ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
@@ -1076,6 +1433,20 @@ class DrawioRenderer:
         """Return a point on a unit as a draw.io connection fraction.
 
         The fraction is reflected through the cell's flips.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+        point : tuple[float, float]
+            Absolute point.
+
+        Returns
+        -------
+        tuple[float, float]
+            Fractions of the cell box.
         """
         px, py = point
         x0, y0, x1, y1 = self._cell_box(u)
@@ -1086,7 +1457,22 @@ class DrawioRenderer:
         return (1.0 - fx if flip_h else fx, 1.0 - fy if flip_v else fy)
 
     def _constraint(self, u, sym, port_name: str) -> "tuple[float, float]":
-        """Return where a stream meets a port, as a cell fraction."""
+        """Return where a stream meets a port, as a cell fraction.
+
+        Parameters
+        ----------
+        u : Unit
+            Placed unit.
+        sym : Symbol
+            Its symbol.
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        tuple[float, float]
+            Fractions of the cell box.
+        """
         if u.kind == "tee":
             # Every leg of a tee runs to its centre.
             x0, y0, x1, y1 = self._cell_box(u)
@@ -1099,9 +1485,15 @@ class DrawioRenderer:
 
         Parameters
         ----------
-        exit_at, entry_at : tuple[float, float] or None
-            Fractions on the source and target cells; ``None`` for a
-            floating end.
+        exit_at : tuple[float, float] or None
+            Fraction on the source cell; ``None`` for a floating end.
+        entry_at : tuple[float, float] or None
+            Fraction on the target cell; ``None`` for a floating end.
+
+        Returns
+        -------
+        list[str]
+            Style keys.
         """
         keys = []
         for prefix, at in (("exit", exit_at), ("entry", entry_at)):
@@ -1117,20 +1509,27 @@ class DrawioRenderer:
                crossing_style: str = "gap") -> list[str]:
         """Return every stream as a draw.io edge between its two ports.
 
-        Edges are written in hop order, then number enclosures.
-
         Parameters
         ----------
+        fs : Flowsheet
+            Flowsheet being exported.
         arrows : bool
             Whether process lines get arrowheads.
+        fit : _Fit
+            Drawing fit.
         tags : _Tags
             Tag placements, whose plates the numbers avoid.
         direction : str, default="vertical"
-            ``jump_direction``.
+            ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
         joints : str, optional
             Sheet joint default.
         crossing_style : str, default="gap"
-            ``crossing_style``.
+            ``"gap"``, ``"arc"`` or ``"plain"``.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines: edges in hop order, then number enclosures.
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
         placed = stream_numbers(fs, list(tags.plates), joints, direction)
@@ -1141,7 +1540,18 @@ class DrawioRenderer:
         order, hops, lost = _hops(polylines, direction, crossing_style)
 
         def _run(key):
-            """Return a stream's name for a message."""
+            """Return a stream's name for a message.
+
+            Parameters
+            ----------
+            key : int
+                Stream index.
+
+            Returns
+            -------
+            str
+                Stream name, or ``"stream <n>"``.
+            """
             return fs.streams[key].name or f"stream {key + 1}"
 
         for hop_key, cross_key, x, y in sorted(lost):
@@ -1251,6 +1661,18 @@ class DrawioRenderer:
 
         The balloon end is pinned to the balloon's centre. The other end
         is pinned to the host unit, or is a free point on a host stream.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet being exported.
+        fit : _Fit
+            Drawing fit.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
         out: list[str] = []
@@ -1291,10 +1713,19 @@ class DrawioRenderer:
 
     @staticmethod
     def _page_box(sheet, frame) -> "tuple[float, float]":
-        """Return the page ``(width, height)`` the file states.
+        """Return the page size the file states.
 
-        Without a fixed ``sheet``, the page is the furniture ``frame``
-        plus the border band and outer margin.
+        Parameters
+        ----------
+        sheet : _Sheet or None
+            Fixed page, or ``None`` to size the page from ``frame``.
+        frame : tuple[float, float, float, float]
+            Furniture frame.
+
+        Returns
+        -------
+        tuple[float, float]
+            ``(width, height)``.
         """
         if sheet is not None:
             return (sheet.width, sheet.height)
@@ -1307,6 +1738,17 @@ class DrawioRenderer:
 
         With a fixed ``sheet`` the drawing is fitted into the space the
         furniture leaves.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Flowsheet whose title block and annotations are drawn.
+        sheet : _Sheet, optional
+            Fixed page.
+        show_stream_table : bool, default=False
+            Whether to dock the stream table.
+        border : str, default="none"
+            ``"none"`` or ``"zone"``.
 
         Returns
         -------
@@ -1335,7 +1777,17 @@ class DrawioRenderer:
     def _border(frame, border: str) -> list[str]:
         """Return the zone-ruled drawing frame as cells.
 
-        The list is empty unless ``border`` is ``"zone"``.
+        Parameters
+        ----------
+        frame : tuple[float, float, float, float]
+            Inner frame.
+        border : str
+            ``"none"`` or ``"zone"``.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines; empty unless ``border`` is ``"zone"``.
         """
         if border != "zone":
             return []
@@ -1366,8 +1818,17 @@ class DrawioRenderer:
         ----------
         cid : str
             Cell id prefix.
+        obj : TitleBlock, StreamTable, TableBox or Annotation
+            The furniture.
+        x, y, w, h : float
+            Docked box.
         name, date, scale : str, default=""
             Title-strip fallbacks.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
         """
         from pandid.document import TableBox, TitleBlock
 
@@ -1424,8 +1885,17 @@ class DrawioRenderer:
         ----------
         cid : str
             Cell id prefix.
+        block : TitleBlock
+            Title block.
+        x, y, w, h : float
+            Docked strip box.
         name, date, scale : str
             Fallbacks for the name, date and scale cells.
+
+        Returns
+        -------
+        list[str]
+            Cell XML lines.
         """
         strip = F.title_strip_layout(block, name, date, x + w, y + h, scale,
                                      report=self._report)
@@ -1454,13 +1924,21 @@ def _number_geometry(number, points, fit: "_Fit"):
     """Return a line number's position on its edge as draw.io states it.
 
     ``x`` runs -1 to +1 along the polyline; ``(dx, dy)`` is the offset
-    from the run in drawing units.
+    from the run.
+
+    Parameters
+    ----------
+    number : StreamNumber or None
+        Placed number.
+    points : list[tuple[float, float]]
+        Stream polyline.
+    fit : _Fit
+        Drawing fit.
 
     Returns
     -------
     tuple
-        ``(x, (dx, dy))``, ``(None, (dx, dy))`` if the number's segment
-        is not on this edge, or ``(None, None)`` for no number.
+        ``(x, (dx, dy))``, with ``None`` for what does not apply.
     """
     if number is None:
         return None, None
@@ -1495,6 +1973,22 @@ def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
     """Return the leader joining a displaced line number to its run.
 
     The leader is a free edge with an arrowhead on the run.
+
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    number : StreamNumber
+        Placed number with a leader.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Drawing fit.
+
+    Returns
+    -------
+    list[str]
+        XML lines for the leader cell.
     """
     (ax, ay), (bx, by) = number.leader
     return _segment(f"{edge_id}-lead", *fit.at(ax, ay), *fit.at(bx, by), ink,
@@ -1508,7 +2002,23 @@ _ENCLOSURE_SHAPE = {"diamond": "rhombus", "circle": "ellipse", "box": "rounded=0
 def _enclosure(edge_id: str, number, shape: str, ink: str, fit: "_Fit") -> list[str]:
     """Return a stream label's enclosure as an unfilled cell holding it.
 
-    ``shape`` is ``"diamond"``, ``"circle"`` or ``"box"``.
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    number : StreamNumber
+        Placed number.
+    shape : str
+        ``"diamond"``, ``"circle"`` or ``"box"``.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Drawing fit.
+
+    Returns
+    -------
+    list[str]
+        XML lines for the enclosure cell.
     """
     x0, y0, x1, y1 = number.box
     x, y = fit.at(x0, y0)
@@ -1550,6 +2060,22 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
 
     Each stroke is a ``line`` child vertex of the edge, placed by arc
     length.
+
+    Parameters
+    ----------
+    edge_id : str
+        Id of the stream's edge.
+    points : list[tuple[float, float]]
+        Stream polyline.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Drawing fit.
+
+    Returns
+    -------
+    list[str]
+        XML lines for the hatch cells.
     """
     from pandid.render.svg import pneumatic_marks
 
@@ -1593,8 +2119,23 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
 
     Parameters
     ----------
+    edge_id : str
+        Id of the stream's edge.
+    s : Stream
+        Stream.
+    points : list[tuple[float, float]]
+        Stream polyline.
     ends : str or None
         Joint for the stream's ends.
+    ink : str
+        Line colour.
+    fit : _Fit
+        Drawing fit.
+
+    Returns
+    -------
+    list[str]
+        XML lines for the flange cells.
     """
     total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
                 for (ax, ay), (bx, by) in zip(points, points[1:]))
@@ -1656,7 +2197,18 @@ def _distribute(weights, total: float) -> list[float]:
     """Return ``total`` split in proportion to ``weights``.
 
     Parts are rounded to two decimals and the last takes the remainder.
-    Negative weights count as 0.
+
+    Parameters
+    ----------
+    weights : iterable of float
+        Relative widths; negative values count as 0.
+    total : float
+        Width to split.
+
+    Returns
+    -------
+    list[float]
+        Parts summing to ``total``.
     """
     ws = [max(float(w), 0.0) for w in weights] or [1.0]
     span = sum(ws)
@@ -1677,7 +2229,18 @@ _LINE_BOX = 1.2
 
 
 def _line_box(size: float) -> float:
-    """Return the line box height for a font size."""
+    """Return the line box height for a font size.
+
+    Parameters
+    ----------
+    size : float
+        Font size.
+
+    Returns
+    -------
+    float
+        Line height.
+    """
     return size * _LINE_BOX
 
 # Style keys for TableBox column alignment.
@@ -1694,8 +2257,17 @@ _TEXT_INSET = 2.0
 def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
     """Return the alignment style keys for each column.
 
-    ``col_align`` holds ``"l"``, ``"c"`` or ``"r"`` per column; missing
-    columns are centred.
+    Parameters
+    ----------
+    col_align : sequence of str or None
+        ``"l"``, ``"c"`` or ``"r"`` per column; default ``"c"``.
+    ncol : int
+        Number of columns.
+
+    Returns
+    -------
+    list[str]
+        Style fragment per column.
     """
     align = list(col_align or [])
     return [_ALIGN_KEY.get(align[c] if c < len(align) else "c", "align=center;")
@@ -1741,6 +2313,11 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
         Cell widths per row, for a row with merged cells.
     cell_keys : list[list[str]], optional
         Style per cell, replacing the heading and body styles.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     body = [row for row in rows]
     if headers:
@@ -1797,7 +2374,18 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
 
 
 def _fill(colour: str) -> str:
-    """Return ``"white"`` or a three-digit hex colour as ``#rrggbb``."""
+    """Return ``"white"`` or a three-digit hex colour as ``#rrggbb``.
+
+    Parameters
+    ----------
+    colour : str
+        CSS colour such as ``"white"`` or ``"#eee"``.
+
+    Returns
+    -------
+    str
+        The colour as ``#rrggbb``, or unchanged.
+    """
     if colour == "white":
         return "#ffffff"
     if len(colour) == 4 and colour.startswith("#"):
@@ -1806,7 +2394,18 @@ def _fill(colour: str) -> str:
 
 
 def _stream_cell(cell) -> str:
-    """Return the style for one stream-table cell."""
+    """Return the style for one stream-table cell.
+
+    Parameters
+    ----------
+    cell : StreamCell
+        Laid-out cell.
+
+    Returns
+    -------
+    str
+        Style fragment.
+    """
     if cell.anchor == "start":
         align = f"align=left;spacingLeft={fmt(F._STREAM_PAD - _TEXT_INSET, 2)};"
     else:
@@ -1820,6 +2419,20 @@ def _stream_table(cid: str, table, x, y) -> list[str]:
 
     Every cell is ruled. A section heading is a row with one full-width
     cell.
+
+    Parameters
+    ----------
+    cid : str
+        Container cell id.
+    table : StreamTable
+        Laid-out table.
+    x, y : float
+        Top-left corner.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     values = [[c.text for c in row] for row in table.rows]
     widths = [[c.w for c in row] for row in table.rows]
@@ -1837,6 +2450,26 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
 
     The box has a ruled title band and the lines in one left-aligned
     cell.
+
+    Parameters
+    ----------
+    cid : str
+        Base cell id.
+    title : str
+        Title, or empty.
+    rows : list[str]
+        Lines of text.
+    x, y, w, h : float
+        Box rectangle.
+    font : float, default=11.0
+        Body font size.
+    title_h : float, default=0.0
+        Title band height.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     box = ("rounded=0;whiteSpace=wrap;html=1;movable=1;"
            f"strokeColor={_INK};fillColor={_NO_FILL};"
@@ -1867,7 +2500,23 @@ def _rect(cid: str, x, y, w, h, style: str, value: str = "",
           parent: str = "1") -> list[str]:
     """Return a vertex cell with a rectangular geometry.
 
-    ``value`` is already escaped for HTML.
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    x, y, w, h : float
+        Rectangle, relative to ``parent``.
+    style : str
+        Cell style.
+    value : str, default=""
+        Label, already escaped for HTML.
+    parent : str, default="1"
+        Parent cell id.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     return [
         f'        <mxCell id="{cid}" value={_attr(value)} style={_attr(style)} '
@@ -1882,8 +2531,23 @@ def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float,
              head: "float | None" = None) -> list[str]:
     """Return a free line between two points as an edge.
 
-    ``head`` is the arrowhead size at the second point; ``None`` draws
-    no head.
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    x1, y1, x2, y2 : float
+        End points.
+    ink : str
+        Stroke colour.
+    weight : float
+        Stroke width.
+    head : float, optional
+        Arrowhead size at the second point; no head when omitted.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     arrows = ("endArrow=none;startArrow=none;" if head is None
               else f"startArrow=none;endArrow=block;endFill=1;endSize={head:g};")
@@ -1905,7 +2569,24 @@ _LABEL_HALF = 8.0
 
 
 def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
-    """Return bold lettering centred on a point."""
+    """Return bold lettering centred on a point.
+
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    cx, cy : float
+        Centre.
+    text : str
+        Text.
+    size : float
+        Font size.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
+    """
     style = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
              f"align=center;verticalAlign=middle;fontStyle=1;fontSize={size:g};"
              f"fontColor={_LINE_INK};")
@@ -1916,7 +2597,17 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
 def _strip_rule(cid: str, part) -> list[str]:
     """Return a title-strip rule as an edge.
 
-    ``part`` is ``(kind, x1, y1, x2, y2, weight)``.
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    part : tuple
+        ``(kind, x1, y1, x2, y2, weight)``.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     _kind, x1, y1, x2, y2, weight = part
     return _segment(cid, x1, y1, x2, y2, _LINE_INK, weight)
@@ -1925,8 +2616,19 @@ def _strip_rule(cid: str, part) -> list[str]:
 def _strip_label(cid: str, part) -> list[str]:
     """Return one piece of title-strip lettering as a text cell.
 
-    ``part`` is ``(kind, x, y, text, size, anchor, bold, ink)``, with
-    ``y`` the baseline. The list is empty for empty text.
+    The text's baseline is at the part's ``y``.
+
+    Parameters
+    ----------
+    cid : str
+        Cell id.
+    part : tuple
+        ``(kind, x, y, text, size, anchor, bold, ink)``.
+
+    Returns
+    -------
+    list[str]
+        XML lines; empty for empty text.
     """
     _kind, tx, ty, text, size, anchor, bold, ink = part
     if not text:
@@ -1952,6 +2654,18 @@ def _rev_table(cid: str, grid) -> list[str]:
 
     The table has column lines only and a rule above the heading row at
     the foot. The space above the oldest revision becomes blank rows.
+
+    Parameters
+    ----------
+    cid : str
+        Container cell id.
+    grid : RevGrid
+        Laid-out revision grid.
+
+    Returns
+    -------
+    list[str]
+        XML lines.
     """
     headings = [heading for heading, _cw in grid.cols]
     rows = [row for row in grid.rows]
