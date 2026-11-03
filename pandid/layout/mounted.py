@@ -8,6 +8,7 @@ members state no position, turn, mirror or nozzle face.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from itertools import accumulate
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Callable, Iterator, Union
 
@@ -891,10 +892,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     room = [path_length(leg) - sum(_margins(index, len(legs))) + ALONG
             for index, leg in enumerate(legs)]
     need = [[_length(element, leg) + ALONG for leg in legs] for element in run.elements]
-    starts, travelled = [], 0.0
-    for leg in legs:
-        starts.append(travelled)
-        travelled += path_length(leg)
+    starts = [0.0, *accumulate(map(path_length, legs))]
     middle = sum(wanted) / len(wanted)
 
     def distance(index: int) -> float:
@@ -1017,10 +1015,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         if not level:
             tap_zones.append((x - 1.0, y - TAP, x + 1.0, y + TAP))
     want = want[:count]
-    starts, travelled = [], 0.0
-    for leg in legs:
-        starts.append(travelled)
-        travelled += path_length(leg)
+    starts = [0.0, *accumulate(map(path_length, legs))]
     # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
 
