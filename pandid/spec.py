@@ -463,7 +463,7 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     for i, entry in enumerate(_sequence(data.get("instruments", []), "instruments")):
         where_i = f"instruments[{i}]"
         mapping = _mapping(entry, where_i)
-        # A balloon is attached to its element now.
+        # Attach a balloon to its element at once.
         if "balloon_of" in mapping:
             _read_balloon(fs, mapping, where_i)
             continue
