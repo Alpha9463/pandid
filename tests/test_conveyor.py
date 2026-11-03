@@ -96,67 +96,6 @@ def _belt_runs(el):
 
 
 # ---------------------------------------------------------------------------
-# The hard requirement: the rollers are true circles at every length.
-# ---------------------------------------------------------------------------
-
-LENGTHS = [CONVEYOR_MIN_LENGTH, 80.0, 160.0, 300.0]
-
-
-def test_the_rollers_are_the_same_circle_at_every_length():
-    """Not "the box got wider": the roller *geometry* has to be identical, and
-    the only thing free to differ is where the head roller sits."""
-    _, root = _sheet(LENGTHS)
-    defs = _defs(root)
-    for length in LENGTHS:
-        rollers = _ellipses(defs[f"sym_conveyor_L{length:g}"])
-        assert rollers == [(R, R, R, R), (length - R, R, R, R)], f"length {length:g}"
-
-
-def test_only_the_belt_run_grows():
-    """The straight run between the rollers is the whole of what a longer
-    conveyor adds, so belt + two roller radii accounts for the length exactly."""
-    _, root = _sheet(LENGTHS)
-    defs = _defs(root)
-    for length in LENGTHS:
-        runs = _belt_runs(defs[f"sym_conveyor_L{length:g}"])
-        assert runs == [length - 2 * R, length - 2 * R], f"length {length:g}"
-
-
-def test_the_placed_box_is_the_box_the_artwork_was_drawn_in():
-    """The assertion the roundness actually rests on. ``<use>`` maps the
-    definition's viewBox onto its own width/height, so equal width and height
-    mean a scale of exactly 1 on both axes and a circle stays a circle on the
-    page. A definition shared between two lengths would fail here."""
-    _, root = _sheet(LENGTHS)
-    defs, uses = _defs(root), _uses(root)
-    for length in LENGTHS:
-        sym_id = f"sym_conveyor_L{length:g}"
-        _, _, vb_w, vb_h = (float(v) for v in defs[sym_id].get("viewBox").split())
-        use = uses[f"#{sym_id}"]
-        assert (float(use.get("width")), float(use.get("height"))) == (vb_w, vb_h)
-
-
-def test_a_long_conveyor_and_a_short_one_draw_the_same_roller_ink():
-    """Byte-for-byte, at the tail end: the two definitions differ only where the
-    head roller and the far end of the belt are."""
-    short, long = conveyor_symbol(CONVEYOR_MIN_LENGTH), conveyor_symbol(400.0)
-    tail = f'<ellipse cx="{R:g}" cy="{R:g}" rx="{R:g}" ry="{R:g}"'
-    assert tail in short.svg and tail in long.svg
-    assert short.height == long.height == 2 * R
-
-
-def test_every_port_lands_on_drawn_ink_at_every_legal_length():
-    """Including on the roller circles, which is where three of the four sit."""
-    for length in [*LENGTHS, 41.0, 1000.0]:
-        sym = conveyor_symbol(length)
-        segments = _collect_segments(sym.svg)
-        for name, faces in sym.port_faces.items():
-            for face, point in faces.items():
-                distance = _nearest_distance(point, segments)
-                assert distance <= GEOM_TOL, f"{name}/{face} at length {length:g}"
-
-
-# ---------------------------------------------------------------------------
 # The second dimension: the roller, set independently of the run.
 #
 # The run and the roller are two dimensions of the machine and neither is
@@ -167,8 +106,11 @@ def test_every_port_lands_on_drawn_ink_at_every_legal_length():
 
 DIAMETERS = [8.0, 2 * R, 45.0, 120.0]
 #: Long enough for the widest roller above, so the sweep is a rectangle rather
-#: than a triangle: every length pairs with every diameter.
-COMBOS = [(length, d) for length in (240.0, 400.0) for d in DIAMETERS]
+#: than a triangle: every length pairs with every diameter. The default roller
+#: is also swept over every legal length from the shortest belt up.
+COMBOS = [(length, d) for length in (240.0, 400.0) for d in DIAMETERS] + [
+    (length, 2 * R) for length in (CONVEYOR_MIN_LENGTH, 41.0, 80.0, 160.0, 300.0, 1000.0)
+]
 
 
 def _sym_id(length, diameter=None):
@@ -195,6 +137,7 @@ def test_the_rollers_are_true_circles_at_every_run_and_roller(length, diameter):
     use = _uses(root)[f"#{_sym_id(length, diameter)}"]
     assert (float(use.get("width")), float(use.get("height"))) == (vb_w, vb_h)
     assert (vb_w, vb_h) == (length, diameter)
+    assert _belt_runs(definition) == [length - diameter] * 2
 
 
 @pytest.mark.parametrize("length,diameter", COMBOS)
