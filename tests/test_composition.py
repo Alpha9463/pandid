@@ -1195,3 +1195,14 @@ def test_a_class_with_one_composition_keyword_has_nothing_to_suppress():
     assert drawn(units.Column("T-104", internals="packing", trays=2)) == [(27, "packing")] * 2
     assert drawn(units.Vessel("D-301", supports="skirt")) == [(26, "skirt")]
     assert drawn(units.Separator("V-201", characteristic="gravity")) == [(29, "gravity")]
+
+
+def test_an_overlays_property_that_raises_falls_back_to_the_bare_body():
+    """Check that an ``overlays`` lookup that raises AttributeError draws the plain body."""
+
+    class Odd(units.Pump):
+        @property
+        def overlays(self) -> tuple:
+            raise AttributeError("overlays")
+
+    assert default_registry.for_unit(Odd("P-1")) is default_registry.get("pump", "default")

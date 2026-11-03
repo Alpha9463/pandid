@@ -21,6 +21,7 @@ from pandid._checks import suggest
 from pandid.portgeom import outward_dir
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS
+from pandid.units import Unit
 
 # Placements closer than this are the same point.
 _COINCIDENT = 0.5
@@ -1370,8 +1371,15 @@ _FIRST_PATH = re.compile(r"<path\b[^>]*>")
 _BODY_PAPER = 'fill="white"'
 
 
+#: ``Unit.__getattr__``, which raises for every name it is asked for.
+_UNIT_GETATTR = vars(Unit)["__getattr__"]
+
+
 def _attr(unit, name: str, default):
-    """Return ``getattr(unit, name, default)``, reading a missing name without raising.
+    """Return ``getattr(unit, name, default)``.
+
+    A unit whose class looks names up only as :class:`Unit` does, and has no
+    class attribute ``name``, is read from its instance dict.
 
     Parameters
     ----------
@@ -1380,14 +1388,18 @@ def _attr(unit, name: str, default):
     name : str
         Attribute name.
     default : object
-        Value when neither the unit nor its class has ``name``.
+        Value when the unit has no ``name``.
 
     Returns
     -------
     object
         The attribute, or ``default``.
     """
-    return getattr(unit, name) if hasattr(type(unit), name) else vars(unit).get(name, default)
+    cls = type(unit)
+    if (getattr(cls, "__getattr__", None) is _UNIT_GETATTR
+            and cls.__getattribute__ is object.__getattribute__ and not hasattr(cls, name)):
+        return vars(unit).get(name, default)
+    return getattr(unit, name, default)
 
 
 def closed_marking(unit, registry=None) -> str:

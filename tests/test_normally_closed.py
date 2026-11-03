@@ -386,3 +386,18 @@ def test_a_spec_may_not_close_a_control_valve():
                 ],
             }
         )
+
+
+def test_a_closed_position_supplied_by_a_subclass_lookup_is_drawn_closed():
+    """Check that a position a subclass's ``__getattr__`` supplies is read."""
+
+    class Supplied(units.Unit):
+        kind = "fitting"
+        PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+        def __getattr__(self, name: str) -> str:
+            if name == "normal_position":
+                return "closed"
+            raise AttributeError(name)
+
+    assert closed_marking(Supplied("X-1", variant="blind")) == "stencil"
