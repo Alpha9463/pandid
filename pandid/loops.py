@@ -41,7 +41,7 @@ class Loop:
         If ``variable`` is not one letter or ``number`` is empty.
     """
 
-    def __init__(self, variable: str, number: str | int):
+    def __init__(self, variable: str, number: str | int):  # numpydoc ignore=GL08
         variable = str(variable).strip()
         if len(variable) != 1 or not variable.isalpha():
             raise ValueError(
@@ -66,13 +66,17 @@ class Loop:
 
     @property
     def name(self) -> str:
-        """Return the loop's identity, such as ``"F-303"``."""
+        """Return the loop's identity, such as ``"F-303"``.
+
+        Returns
+        -------
+        str
+            Variable and number.
+        """
         return f"{self.variable}-{self.number}"
 
     def tag(self, letters: str) -> str:
         """Return a final control element's tag, such as ``"CV-303"``.
-
-        The letters are not checked against the measured variable.
 
         Parameters
         ----------
@@ -163,7 +167,13 @@ class Loop:
             )
 
     def __repr__(self) -> str:
-        """Return a constructor-style representation."""
+        """Return a constructor-style representation.
+
+        Returns
+        -------
+        str
+            ``Loop(<variable>, <number>)``.
+        """
         return f"Loop({self.variable!r}, {self.number!r})"
 
 
@@ -191,7 +201,7 @@ class ControlLoop:
         The parameters above.
     """
 
-    def __init__(self, loop: Loop, transmitter: "Instrument",
+    def __init__(self, loop: Loop, transmitter: "Instrument",  # numpydoc ignore=GL08
                  controller: "Instrument", final_element: "Unit",
                  measurement: "Stream", output: "Stream"):
         self.loop = loop
@@ -202,6 +212,12 @@ class ControlLoop:
         self.output = output
 
     def __repr__(self) -> str:
-        """Return a representation naming the loop and its members."""
+        """Return a representation naming the loop and its members.
+
+        Returns
+        -------
+        str
+            The loop name and member tags, in signal order.
+        """
         return (f"ControlLoop({self.loop.name!r}, {self.transmitter.name!r} -> "
                 f"{self.controller.name!r} -> {self.final_element.name!r})")

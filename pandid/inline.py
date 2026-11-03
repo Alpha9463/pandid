@@ -75,8 +75,17 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
 def position(segment: Stream) -> float | None:
     """Return the line fraction of the item a segment enters.
 
-    An item without ``at`` is spread evenly between its stated
-    neighbours. Returns ``None`` for a segment not on a split line.
+    An item without ``at`` is spread evenly between its neighbours.
+
+    Parameters
+    ----------
+    segment : Stream
+        Physical segment entering a device or station.
+
+    Returns
+    -------
+    float or None
+        Fraction of the whole line, or ``None`` off a split line.
     """
     if segment._inline_at is not None:
         return segment._inline_at
@@ -94,7 +103,23 @@ def position(segment: Stream) -> float | None:
 
 def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
             inlet: Port, outlet: Port, at: float | None) -> None:
-    """Route a segment into ``inlet`` and a new one from ``outlet``."""
+    """Route a segment into ``inlet`` and a new one from ``outlet``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet that owns the line.
+    line : Stream
+        Line handle.
+    segments : list[Stream]
+        The line's physical segments in flow order.
+    index : int
+        Segment to split, from :func:`split_point`.
+    inlet, outlet : Port
+        Where the line enters and leaves the new item.
+    at : float or None
+        The item's stated fraction.
+    """
     selected = segments[index]
     old_dest = selected.dest
     successor = Stream(name="", source=outlet, dest=old_dest, kind="material",

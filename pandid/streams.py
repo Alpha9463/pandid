@@ -1,8 +1,9 @@
 """Streams: connections from one port to another.
 
-A stream's ``name`` is its stream number, or a line number built by
-the flowsheet's ``line_numbering_scheme`` once any of ``size``,
-``schedule``, ``service``, ``spec`` or ``insulation`` is set.
+An automatically named stream takes its stream number, or a line
+number from the flowsheet's ``line_numbering_scheme`` once any of
+``size``, ``schedule``, ``service``, ``spec`` or ``insulation`` is
+set. A name given to ``connect()`` is kept.
 """
 
 from __future__ import annotations
@@ -49,13 +50,37 @@ _DASHARRAY = re.compile(rf"\A(?:none|{_DASH_NUMBER}(?:[, ]+{_DASH_NUMBER})*)\Z")
 
 
 def _names(stream: "Stream | None") -> str:
-    """Return ``"<name>: "`` for a named stream, else ``""``."""
+    """Return ``"<name>: "`` for a named stream, else ``""``.
+
+    Parameters
+    ----------
+    stream : Stream or None
+        Stream being checked.
+
+    Returns
+    -------
+    str
+        Message prefix.
+    """
     name = getattr(stream, "name", "") if stream is not None else ""
     return f"{name}: " if name else ""
 
 
 def check_color(value: str, stream: "Stream | None" = None) -> None:
-    """Raise ``ValueError`` unless ``value`` is shaped like a colour."""
+    """Raise ``ValueError`` unless ``value`` is shaped like a colour.
+
+    Parameters
+    ----------
+    value : str
+        Proposed colour.
+    stream : Stream or None, optional
+        Stream named in the error message.
+
+    Raises
+    ------
+    ValueError
+        If the value is not a keyword, hex colour or colour function.
+    """
     if _COLOR.match(value):
         return
     raise ValueError(
@@ -68,7 +93,20 @@ def check_color(value: str, stream: "Stream | None" = None) -> None:
 
 
 def check_dasharray(value: str, stream: "Stream | None" = None) -> None:
-    """Raise ``ValueError`` unless ``value`` is a dash pattern."""
+    """Raise ``ValueError`` unless ``value`` is a dash pattern.
+
+    Parameters
+    ----------
+    value : str
+        Proposed dash pattern.
+    stream : Stream or None, optional
+        Stream named in the error message.
+
+    Raises
+    ------
+    ValueError
+        If the value is not ``none`` or a list of lengths.
+    """
     if _DASHARRAY.match(value):
         return
     raise ValueError(
@@ -83,34 +121,31 @@ def check_dasharray(value: str, stream: "Stream | None" = None) -> None:
 class Stream:
     """One physical connection between two ports.
 
-    Parameters
+    Attributes
     ----------
     name : str
         Stream number or line number.
     source, dest : Port
         Connected source and destination ports.
-    kind : str, default="material"
+    kind : str
         Connection type, one of :data:`STREAM_KINDS`.
-    draw_as_recycle : bool, default=False
+    draw_as_recycle : bool
         Prefer this stream as the return line of a cycle.
-    route : Route or None, default=None
+    route : Route or None
         Resolved or manually supplied route.
-    color, dasharray : str or None, default=None
+    color, dasharray : str or None
         Line colour and dash pattern, validated when set.
-    ends : str, tuple[str, str], or None, default=None
-        Joint style at both ends, or at ``(source, dest)``; ``None``
-        inherits the sheet's ``connections``.
-    auto_named : bool, default=True
+    ends : str, tuple[str, str], or None
+        Joint style at both ends or ``(source, dest)``, or ``None``.
+    auto_named : bool
         Whether the flowsheet assigns the name.
-    size, schedule, service, sequence, spec, insulation : optional
-        Line-number components, as text or numbers. ``schedule`` is a
-        number or ``STD``/``XS``/``XXS``.
-    properties : dict[str, str | float], optional
+    size, schedule, service, sequence, spec, insulation : str or float
+        Line-number components, or ``None`` when unset.
+    properties : dict[str, str | float]
         Values shown in the stream table.
-    tabulate : bool, default=False
-        Report this segment in the stream-table column of a run drawn
-        through inline devices.
-    state : State or None, default=None
+    tabulate : bool
+        Report this segment in a split run's stream-table column.
+    state : State or None
         Stream conditions.
     """
 
@@ -145,7 +180,22 @@ class Stream:
     _CHECKED = {"color": check_color, "dasharray": check_dasharray}
 
     def __setattr__(self, name: str, value) -> None:
-        """Set an attribute, validating ``color`` and ``dasharray``."""
+        """Set an attribute, validating ``color`` and ``dasharray``.
+
+        Parameters
+        ----------
+        name : str
+            Attribute name.
+        value : object
+            New value.
+
+        Raises
+        ------
+        TypeError
+            If ``color`` or ``dasharray`` is not text or ``None``.
+        ValueError
+            If ``color`` or ``dasharray`` has the wrong shape.
+        """
         check = self._CHECKED.get(name)
         if check is not None and value is not None:
             if not isinstance(value, str):
@@ -158,28 +208,49 @@ class Stream:
 
     @property
     def is_recycle(self) -> bool:
-        """Return whether layout made this a cycle's return line."""
+        """Return whether layout made this a cycle's return line.
+
+        Returns
+        -------
+        bool
+            Result of cycle breaking.
+        """
         return self._is_recycle
 
     @property
     def has_line_number(self) -> bool:
         """Return whether a line number, not a stream number, names it.
 
-        True when ``size``, ``schedule``, ``service``, ``spec`` or
-        ``insulation`` is set.
+        Returns
+        -------
+        bool
+            Whether ``size``, ``schedule``, ``service``, ``spec`` or
+            ``insulation`` is set.
         """
         return any((self.size, self.schedule, self.service, self.spec, self.insulation))
 
     @property
     def at_boundary(self) -> bool:
-        """Return whether this segment ends at a Feed or Product."""
+        """Return whether this segment ends at a Feed or Product.
+
+        Returns
+        -------
+        bool
+            Whether either end's unit is a boundary flag.
+        """
         from pandid.units import _Boundary
 
         return (isinstance(self.source.owner, _Boundary)
                 or isinstance(self.dest.owner, _Boundary))
 
     def line_components(self) -> dict[str, str]:
-        """Return the line-number fields as text, empty where unset."""
+        """Return the line-number fields as text, empty where unset.
+
+        Returns
+        -------
+        dict[str, str]
+            Value per field in :data:`LINE_NUMBER_FIELDS`.
+        """
         return {f: "" if getattr(self, f) is None else str(getattr(self, f))
                 for f in LINE_NUMBER_FIELDS}
 

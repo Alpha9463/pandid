@@ -94,7 +94,13 @@ class ValveStation:
     outlet: "Port"
 
     def __repr__(self) -> str:
-        """Return a short representation naming the control valve."""
+        """Return a short representation naming the control valve.
+
+        Returns
+        -------
+        str
+            ``ValveStation(<control tag>, members=<count>)``.
+        """
         return f"ValveStation({self.control.name!r}, members={len(self.members)})"
 
 
@@ -143,6 +149,11 @@ def member_tag(scheme: "str | Callable[[str, str], str]", role: str,
     number : str
         Number taken from the control tag.
 
+    Returns
+    -------
+    str
+        Member tag.
+
     Raises
     ------
     ValueError
@@ -171,6 +182,11 @@ def member_mirror(mirrored: bool, branch_north: bool) -> bool | str:
         Whether the station is piped east to west.
     branch_north : bool
         Whether the member is a bypass tee.
+
+    Returns
+    -------
+    bool or str
+        Mirror setting for :meth:`pandid.units.Unit.pin`.
     """
     if mirrored:
         return "xy" if branch_north else "x"
@@ -178,7 +194,18 @@ def member_mirror(mirrored: bool, branch_north: bool) -> bool | str:
 
 
 def station_number(control_tag: str) -> str:
-    """Return the control tag's number, or the whole tag if none."""
+    """Return the control tag's number, or the whole tag if none.
+
+    Parameters
+    ----------
+    control_tag : str
+        Control valve's tag, such as ``"CV-303"``.
+
+    Returns
+    -------
+    str
+        Its number, such as ``"303"``, or the whole tag.
+    """
     from pandid.units import split_tag
 
     _, number = split_tag(control_tag)
