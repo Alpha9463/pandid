@@ -1294,6 +1294,43 @@ def test_a_router_that_freezes_its_routes_still_gets_the_fallback() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
+def test_the_fallback_lays_out_with_an_engine_that_wraps_the_default() -> None:
+    """An engine that lays out through ``fs.layout()`` and then moves a
+    unit is the one the fallback runs again."""
+
+    class WrappedEngine:
+        def layout(self, fs: Flowsheet) -> None:
+            fs.layout()
+            assert marker.frame is not None
+            marker.frame.x = marker.frame.y = 1200
+
+    fs = _close_transmitter()
+    marker = fs.add(U.Vessel("marker"))
+    fs.layout(WrappedEngine())
+    fs.route()
+
+    assert marker.frame is not None
+    assert (marker.frame.x, marker.frame.y) == (1200, 1200)
+
+
+def test_a_router_that_refuses_the_hung_sheet_gets_the_fallback() -> None:
+    """A router that raises on a line through a unit routes the sheet laid
+    out without hanging instead."""
+    from pandid.routing import DefaultRouter
+
+    class CheckingRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for issue in fs.validate():
+                if issue.code == "route-crosses-unit":
+                    raise ValueError(issue.message)
+
+    fs = _close_transmitter()
+    fs.route(CheckingRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

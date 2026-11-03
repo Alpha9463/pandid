@@ -2032,9 +2032,10 @@ class Flowsheet:
         self._mounted_layout = False
         if engine is None:
             engine = default_layout_engine
-        self._layout_engine = engine
         self._hung = set()
         engine.layout(self)
+        # Set after the engine, which may lay out through this method.
+        self._layout_engine = engine
         self._layout_stale = False
         self._route_stale = True
 
@@ -2076,10 +2077,16 @@ class Flowsheet:
                     break
                 router.route(self)
 
-        settle()
-        # A controller hung off its actuator that leaves a clash: lay out
-        # and route again without hanging.
-        if self._hung and _clashes(self):
+        # A controller hung off its actuator that leaves a clash, or that
+        # the router refuses: lay out and route again without hanging.
+        try:
+            settle()
+            clash = bool(self._hung) and _clashes(self)
+        except Exception:
+            if not self._hung:
+                raise
+            clash = True
+        if clash:
             from pandid.layout.stages import is_control
 
             self._hang_refused = True
