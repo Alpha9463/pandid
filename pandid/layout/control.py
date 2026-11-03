@@ -67,6 +67,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
         return False
+    fs._hung = set()
 
     # Use each unit's drawn box, which may reach outside its frame.
     taken = [unit_box(u, u.frame) for u in fs.units
@@ -81,13 +82,15 @@ def _place_free(fs: "Flowsheet") -> bool:
     segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
                 for ends, points in lines for a, b in zip(points, points[1:])]
     moved = False
-    # Place pinned balloons first, then the rest in flowsheet order, each
-    # against what is already placed.
-    for inst in sorted(pending, key=lambda u: u.pin_ is None):
+    # Place in flowsheet order, each against what is already placed.
+    for inst in pending:
         w, h = resolve_size(inst)
         crossed = [box for ends, box in segments if inst not in ends]
-        x, y = (_actuator_spot(fs, inst, w, h, taken + clear + crossed, taken)
-                or _spot(fs, inst, w, h, taken))
+        hung = (None if fs._hang_refused
+                else _actuator_spot(fs, inst, w, h, taken + clear + crossed))
+        if hung is not None:
+            fs._hung.add(id(inst))
+        x, y = hung or _spot(fs, inst, w, h, taken)
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
             moved = True
@@ -108,17 +111,14 @@ def _place_free(fs: "Flowsheet") -> bool:
 
 
 def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
-                   blocked: list[_Box], solid: list[_Box]) -> tuple[float, float] | None:
+                   blocked: list[_Box]) -> tuple[float, float] | None:
     """Return the corner of a balloon hung off the one actuator it drives.
 
     An unpinned balloon that, with its lines, carries no attached
-    balloon, has no hand-routed line, and whose signal lines drive
-    exactly one placed valve's actuator, with every other placed unit it
-    is wired to on the actuator's side of the valve, stands
-    :data:`ACTUATOR_OFFSET` out from that actuator, square to its face.
-    It steps out and swings as an attached balloon does until it clears
-    every blocked box, and the line from the actuator to it crosses no
-    solid box.
+    balloon, and whose signal lines drive exactly one placed valve's
+    actuator, stands :data:`ACTUATOR_OFFSET` out from that actuator,
+    square to its face. It steps out and swings as an attached balloon
+    does until it clears every blocked box.
 
     Parameters
     ----------
@@ -132,8 +132,6 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
         Balloon height.
     blocked : list[_Box]
         Boxes the balloon must clear.
-    solid : list[_Box]
-        Unit and balloon boxes its line must not cross.
 
     Returns
     -------
@@ -144,8 +142,7 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     from pandid.layout.attach import (
         RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
         _standoff_box)
-    from pandid.layout.conflicts import segment_crosses_box
-    from pandid.portgeom import face_point, port_anchor, unit_box
+    from pandid.portgeom import face_point, port_anchor
 
     if inst.pin_ is not None:
         return None
@@ -153,33 +150,58 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     hosts = {id(inst), *(id(s) for _, s in wired)}
     if any(id(getattr(u, "host", None)) in hosts for u in fs.units):
         return None
-    if any(s.route is not None and s.route.manual for _, s in wired):
-        return None
     driven = [s.dest.owner for p, s in wired if s.source is p and s.dest.name == "actuator"]
     if len(driven) != 1 or driven[0].frame is None:
         return None
     valve = driven[0]
     ax, ay, face = port_anchor(valve, valve.frame, "actuator")
     _, (nx, ny) = face_point(valve, valve.frame, face)
-    ends = [u for _, s in wired for u in (s.source.owner, s.dest.owner)]
-    if any((u.frame.cx - ax) * nx + (u.frame.cy - ay) * ny < 0
-           for u in ends if u not in (inst, valve) and u.frame is not None):
-        return None
-    others = [b for b in solid if b != unit_box(valve, valve.frame)]
     for ring in range(STANDOFF_STEPS + 1):
         for angle in _branch_angles(90.0):
             box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
                                 angle, w, h)
-            if any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
-                continue
-            # The line leaves the actuator square, then turns onto the balloon.
-            cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-            corner = (ax, cy) if abs(ny) > abs(nx) else (cx, ay)
-            path = [(ax, ay), corner, (cx, cy)]
-            if not any(segment_crosses_box(a, b, o)
-                       for a, b in zip(path, path[1:]) if a != b for o in others):
+            if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
                 return box[0], box[1]
     return None
+
+
+def _clashes(fs: "Flowsheet") -> bool:
+    """Return whether two units overlap or a line crosses a unit.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    bool
+        True if any unit boxes overlap, or any routed line crosses a unit
+        other than the balloons on it, counting its end units only away
+        from their nozzles.
+    """
+    from itertools import combinations
+
+    from pandid.layout.attach import stream_path
+    from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
+    from pandid.portgeom import unit_box
+
+    boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    if any(boxes_overlap(a, b, -_BODY_TOL) for (_, a), (_, b) in combinations(boxes, 2)):
+        return True
+    for s in fs.streams:
+        if s.route is None:
+            continue
+        points = stream_path(s)
+        last = len(points) - 2
+        for k, (a, b) in enumerate(zip(points, points[1:])):
+            # The first and last legs meet their own unit at the nozzle.
+            ends = {s.source.owner} if k == 0 else set()
+            ends |= {s.dest.owner} if k == last else set()
+            if any(segment_crosses_box(a, b, box) for u, box in boxes
+                   if u not in ends and getattr(u, "host", None) is not s):
+                return True
+    return False
 
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,

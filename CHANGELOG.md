@@ -48,8 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A controller with no anchor is drawn beyond the valve it drives (#443).**
   A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives
   exactly one valve's `actuator` stands 100 out from it, on its axis, or at
-  the nearest clear standoff. With no clear standoff it is placed from its
-  wiring.
+  the nearest clear standoff. It is placed from its wiring instead if no
+  standoff is clear, or if the routed sheet then has a line through a unit
+  or two units overlapping.
 
 ### Deprecated
 

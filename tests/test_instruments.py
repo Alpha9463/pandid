@@ -3,6 +3,7 @@
 import math
 import os
 import warnings
+from collections.abc import Callable
 
 import pytest
 
@@ -936,7 +937,7 @@ def test_a_controller_driving_no_actuator_is_not_hung():
     fs.connect(ly.sig_out, lv.actuator, kind="pneumatic")
     fs.route()
 
-    assert _actuator_spot(fs, lic, 44.0, 44.0, [], []) is None
+    assert _actuator_spot(fs, lic, 44.0, 44.0, []) is None
 
 
 def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
@@ -1143,6 +1144,55 @@ def test_a_controller_wired_from_behind_its_valve_is_not_hung() -> None:
     fs.route()
 
     assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def _close_transmitter() -> Flowsheet:
+    """LT-1 is pinned close by a turned valve, its line leaving north."""
+    fs = Flowsheet("close")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=90)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=450, y=275)
+    lt.nozzle("sig_out", face="N")
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    return fs
+
+
+def _two_transmitters() -> Flowsheet:
+    """LIC-1 drives no actuator and reads two pinned transmitters."""
+    fs = Flowsheet("no-actuator")
+    fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lt1 = fs.add_instrument("LT", 1).pin(x=325, y=275)
+    lt2 = fs.add_instrument("LT", 2).pin(x=325, y=325)
+    fs.connect(lt1.sig_out, lic.sig_in, kind="electric")
+    fs.connect(lt2.sig_out, lic.signal_port("sig_in_2"), kind="electric")
+    return fs
+
+
+def _cascade() -> Flowsheet:
+    """LIC-1 and FIC-1 drive valves 50 apart and are wired to each other."""
+    fs = Flowsheet("cascade")
+    va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=300)
+    vb = fs.add(U.Valve("VB", variant="control")).pin(x=300, y=350)
+    lic = fs.add_instrument("LIC", 1)
+    fic = fs.add_instrument("FIC", 1)
+    fs.connect(lic.sig_out, va.actuator, kind="electric")
+    fs.connect(fic.sig_out, vb.actuator, kind="electric")
+    fs.connect(lic, fic, kind="electric")
+    return fs
+
+
+@pytest.mark.parametrize("build", [_close_transmitter, _two_transmitters, _cascade])
+def test_a_hung_controller_that_leaves_a_clash_is_placed_from_its_wiring(
+    build: Callable[[], Flowsheet],
+) -> None:
+    """Hanging that leaves a line through a unit, or two units overlapping,
+    gives way to the placement from the controller's wiring."""
+    fs = build()
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code in ("route-crosses-unit", "unit-overlap")] == []
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():

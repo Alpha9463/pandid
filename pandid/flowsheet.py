@@ -547,6 +547,10 @@ class Flowsheet:
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
+        # Controllers hung off an actuator by the last placement, and
+        # whether hanging is refused while route() places again.
+        self._hung: set[int] = set()
+        self._hang_refused = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2054,16 +2058,32 @@ class Flowsheet:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
-        from pandid.layout.control import place_control
-        router.route(self)
-        # Place balloons and re-route until nothing moves; end on a
-        # route.
-        self.route_converged = False
-        for _ in range(MAX_PLACEMENT_PASSES):
-            if not place_control(self):
-                self.route_converged = True
-                break
+        from pandid.layout.control import _clashes, place_control
+        from pandid.layout.faces import select_faces
+
+        def settle() -> None:
+            """Route, then place balloons and re-route until nothing moves."""
             router.route(self)
+            self.route_converged = False
+            for _ in range(MAX_PLACEMENT_PASSES):
+                if not place_control(self):
+                    self.route_converged = True
+                    break
+                router.route(self)
+
+        settle()
+        # A controller hung off its actuator that leaves a clash is placed
+        # from its wiring, with faces chosen again, as layout() would.
+        if self._hung and _clashes(self):
+            self._hang_refused = True
+            try:
+                for _ in range(MAX_PLACEMENT_PASSES):
+                    select_faces(self)
+                    if not place_control(self):
+                        break
+                settle()
+            finally:
+                self._hang_refused = False
         # Mark the routes current.
         self._route_stale = False
 
