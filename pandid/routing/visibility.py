@@ -2,7 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Collection, Dict, List, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Set, Tuple
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -184,8 +184,6 @@ class VisibilityGraph:
     ----------
     fs : Flowsheet
         Sheet with unit frames and port faces.
-    skip : Collection[Unit], optional
-        Units to leave out.
 
     Attributes
     ----------
@@ -214,7 +212,7 @@ class VisibilityGraph:
         If a port's face cannot be reached under its placement.
     """
 
-    def __init__(self, fs: "Flowsheet", skip: "Collection[Unit]" = ()):  # numpydoc ignore=GL08
+    def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
         from pandid.portgeom import COMPASS, port_anchor, tag_width, unit_box
 
@@ -231,7 +229,7 @@ class VisibilityGraph:
 
         for u in fs.units:
             f = u.frame
-            if f is None or u in skip:
+            if f is None:
                 continue
             u_width, u_height = f.w, f.h
 

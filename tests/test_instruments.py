@@ -2045,34 +2045,6 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
 
 
-def test_a_line_routes_past_a_balloon_chained_from_its_own_balloon():
-    """Settle a line whose chained balloon would otherwise add the lane it takes.
-
-    Returns
-    -------
-    None
-        Routing settles with TIC clear of every run of the line.
-    """
-    from pandid.layout.attach import stream_path
-
-    fs = Flowsheet("chained lane")
-    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=500)
-    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=400)
-    line = fs.connect(feed.outlet, prod.inlet)
-    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=70, angle=-90)
-    tic = fs.add_instrument("TIC", 1, near=tt, face="N", offset=90, angle=90)
-    fs.route()
-
-    assert fs.route_converged
-    assert tic.frame is not None
-    x0, y0 = tic.frame.x, tic.frame.y
-    x1, y1 = x0 + tic.frame.w, y0 + tic.frame.h
-    points = stream_path(line)
-    for (ax, ay), (bx, by) in zip(points, points[1:]):
-        on = min(ax, bx) <= x1 and max(ax, bx) >= x0 and min(ay, by) <= y1 and max(ay, by) >= y0
-        assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
-
-
 def test_a_tap_balloon_on_a_bent_line_settles_with_its_tap_on_the_line():
     """Settle a slanted tap balloon whose lanes lie across its own line.
 
@@ -2125,3 +2097,49 @@ def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
     asked = _standoff_box(tap, ref, tic.offset, tic.angle, w, h)
     assert tic.frame.x == pytest.approx(asked[0])
     assert tic.frame.y == pytest.approx(500)
+
+
+def test_a_line_keeps_out_of_a_pinned_balloon_hung_from_its_own_balloon():
+    """Route a line round a chained balloon pinned across it.
+
+    Returns
+    -------
+    None
+        No run of the line passes through TIC's box.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("pinned chain")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, offset=70)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=70).pin(x=330, y=280)
+    fs.route()
+
+    assert tic.frame is not None
+    x0, y0 = tic.frame.x, tic.frame.y
+    x1, y1 = x0 + tic.frame.w, y0 + tic.frame.h
+    points = stream_path(line)
+    for (ax, ay), (bx, by) in zip(points, points[1:]):
+        through = min(ax, bx) < x1 and max(ax, bx) > x0 and min(ay, by) < y1 and max(ay, by) > y0
+        assert not through, ((ax, ay), (bx, by), (x0, y0, x1, y1))
+
+
+def test_a_slanted_chain_on_a_bent_line_settles():
+    """Settle a 45 degree chain of balloons on a line with two bends.
+
+    Returns
+    -------
+    None
+        Routing settles.
+    """
+    fs = Flowsheet("slanted chain")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.65, offset=35, angle=45)
+    fs.add_instrument("TIC", 1, near=tt, face="N", offset=45, angle=45)
+    fs.route()
+
+    assert fs.route_converged

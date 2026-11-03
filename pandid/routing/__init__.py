@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.routing.astar import CrossingIndex
     from pandid.streams import Stream
-    from pandid.units import Unit
 
 __all__ = ["Router", "DefaultRouter"]
 
@@ -249,20 +248,12 @@ class DefaultRouter:
         UserWarning
             If an end has no frame or anchor; the stream is skipped.
         """
-        from pandid.layout.attach import tapped_stream
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
-        # A line routes past the balloons hung from its own balloons.
-        chained: dict[int, list["Unit"]] = {}
-        for u in fs.units:
-            tapped = tapped_stream(u)
-            if tapped is not None and getattr(u, "host", None) is not tapped:
-                chained.setdefault(id(tapped), []).append(u)
-        graphs = {key: VisibilityGraph(fs, skip=units) for key, units in chained.items()}
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
         crossing_index = CrossingIndex()
         routed: list["Stream"] = []
@@ -312,9 +303,8 @@ class DefaultRouter:
                 )
                 continue
 
-            g = graphs.get(id(stream), graph)
-            start = g.port_anchors.get((src_u.name, stream.source.name))
-            goal = g.port_anchors.get((dst_u.name, stream.dest.name))
+            start = graph.port_anchors.get((src_u.name, stream.source.name))
+            goal = graph.port_anchors.get((dst_u.name, stream.dest.name))
             if start is None or goal is None:
                 missing = (f"{src_u.name}.{stream.source.name}" if start is None
                            else f"{dst_u.name}.{stream.dest.name}")
@@ -325,24 +315,24 @@ class DefaultRouter:
                 )
                 continue
 
-            start_dir = g.port_dirs[(src_u.name, stream.source.name)]
-            goal_dir = g.port_dirs[(dst_u.name, stream.dest.name)]
+            start_dir = graph.port_dirs[(src_u.name, stream.source.name)]
+            goal_dir = graph.port_dirs[(dst_u.name, stream.dest.name)]
 
-            start_proj = g.port_projs[(src_u.name, stream.source.name)]
-            goal_proj = g.port_projs[(dst_u.name, stream.dest.name)]
+            start_proj = graph.port_projs[(src_u.name, stream.source.name)]
+            goal_proj = graph.port_projs[(dst_u.name, stream.dest.name)]
 
             # Clamp each stand-off to the peer's lane, then share the
             # room between two facing ports.
-            start_proj = _clamp_projection(start, start_proj, start_dir, goal_proj, g.nodes)
-            goal_proj = _clamp_projection(goal, goal_proj, goal_dir, start_proj, g.nodes)
+            start_proj = _clamp_projection(start, start_proj, start_dir, goal_proj, graph.nodes)
+            goal_proj = _clamp_projection(goal, goal_proj, goal_dir, start_proj, graph.nodes)
             start_proj, goal_proj = share_escape_room(
-                start, start_dir, start_proj, goal, goal_dir, goal_proj, g.obstacles
+                start, start_dir, start_proj, goal, goal_dir, goal_proj, graph.obstacles
             )
 
             clear_stubs = True
             if self.recover_exits:
-                clear_start = g.reachable_projection(start, start_proj, start_dir, src_u)
-                clear_goal = g.reachable_projection(goal, goal_proj, goal_dir, dst_u)
+                clear_start = graph.reachable_projection(start, start_proj, start_dir, src_u)
+                clear_goal = graph.reachable_projection(goal, goal_proj, goal_dir, dst_u)
                 if clear_start is not None and clear_goal is not None:
                     start_proj, goal_proj = clear_start, clear_goal
                 else:
@@ -352,7 +342,7 @@ class DefaultRouter:
             path = []
             if clear_stubs:
                 path = find_path(
-                    g, start_proj, goal_proj, start_dir, goal_dir,
+                    graph, start_proj, goal_proj, start_dir, goal_dir,
                     edge_penalties, is_recycle, crossing_index,
                 )
             path_found = bool(path)
@@ -366,7 +356,7 @@ class DefaultRouter:
                     edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + 2000.0
             else:
                 path = _fallback_path(
-                    start, start_proj, goal_proj, goal, g.obstacles, crossing_index
+                    start, start_proj, goal_proj, goal, graph.obstacles, crossing_index
                 )
 
             # Remove collinear points but keep both escape nodes.

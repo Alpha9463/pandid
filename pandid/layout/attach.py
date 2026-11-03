@@ -383,7 +383,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     return fallback
 
 
-def tapped_stream(unit: "Unit") -> "Stream | None":
+def _tapped_stream(unit: "Unit") -> "Stream | None":
     """Return the stream at the end of a balloon's chain of hosts.
 
     Parameters
@@ -421,7 +421,7 @@ def _tapped_runs(inst: "Instrument") -> tuple[Box, ...]:
     """
     from pandid.routing.astar import committed_segments
 
-    stream = tapped_stream(inst)
+    stream = _tapped_stream(inst)
     if stream is None or inst.host is stream:
         return ()
     try:
