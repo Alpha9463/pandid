@@ -177,27 +177,6 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     )
 
 
-def _on_face(face: str, t: float, width: float, height: float) -> tuple[float, float]:
-    """Return the symbol-space point ``t`` along a face.
-
-    Parameters
-    ----------
-    face : str
-        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
-    t : float
-        Distance along the face, top-down or left-to-right.
-    width, height : float
-        Symbol box.
-
-    Returns
-    -------
-    tuple[float, float]
-        Point in symbol coordinates.
-    """
-    return {"W": (0.0, t), "E": (width, t),
-            "N": (t, 0.0), "S": (t, height)}[face]
-
-
 @dataclass(frozen=True)
 class PortSeries:
     """A family of like ports spread along one face of a symbol.
@@ -275,7 +254,7 @@ class PortSeries:
         else:
             t = spread(index, count, along, self.pitch, self.extent, self.at,
                        self.align, band)
-        return _on_face(self.face, t, width, height)
+        return _face_point(self.face, t, 0.0, width, height)
 
     def reach(self, width: float, height: float,
               band: "tuple[float, float] | None" = None
@@ -1095,7 +1074,7 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
         for i, port_name in enumerate(members):
             # The box always fits the full pitch.
             t = spread(i, len(members), along, BLOCK_PITCH, 1.0)
-            ports[port_name] = _on_face(face, t, width, height)
+            ports[port_name] = _face_point(face, t, 0.0, width, height)
     svg = (
         f'<g id="sym_block">'
         f'<rect x="0" y="0" width="{width:g}" height="{height:g}" fill="none" '
