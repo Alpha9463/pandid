@@ -37,11 +37,6 @@ def test_title_block_draws_without_a_border():
     # A title block may render without a P&ID border.
     """
     Verify title block draws without a border.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -57,11 +52,6 @@ def test_title_block_draws_without_a_border():
 def test_annotations_draw_without_a_border():
     """
     Verify annotations draw without a border.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.document import equipment_list, notes
 
@@ -78,11 +68,6 @@ def test_border_and_furniture_are_independent():
     # Border choice does not change furniture placement.
     """
     Verify border and furniture are independent.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
 
     def build():
@@ -111,11 +96,6 @@ def test_border_and_furniture_are_independent():
 def test_a_border_nobody_asked_for_is_not_drawn():
     """
     Verify a border nobody asked for is not drawn.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     svg = _sheet().to_svg()
     assert "S1" in svg  # the sheet still renders
@@ -139,11 +119,6 @@ def test_a_frame_the_renderer_cannot_draw_raises(kwargs):
     ----------
     kwargs : object
         Additional keyword arguments forwarded by the helper.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     with pytest.raises(ValueError):
         _sheet().to_svg(**kwargs)
@@ -152,11 +127,6 @@ def test_a_frame_the_renderer_cannot_draw_raises(kwargs):
 def test_client_and_project_are_drawn():
     """
     Verify client and project are drawn.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -170,11 +140,6 @@ def test_client_and_project_are_drawn():
 def test_the_strip_grows_a_row_for_each_of_them():
     """
     Verify the strip grows a row for each of them.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.furniture import measure_title_strip
 
@@ -188,11 +153,6 @@ def test_the_strip_grows_a_row_for_each_of_them():
 def test_scale_is_drawn():
     """
     Verify scale is drawn.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo Sheet", scale="1:100")
@@ -203,11 +163,6 @@ def test_scale_is_drawn():
 def test_a_sheet_with_no_scale_to_state_still_rules_the_scale_cell():
     """
     Verify a sheet with no scale to state still rules the scale cell.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo Sheet")
@@ -220,11 +175,6 @@ def test_a_sheet_with_no_scale_to_state_still_rules_the_scale_cell():
 def test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for():
     """
     Verify the drawing number has one budget however the sheet is asked for.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     number = "PFD-A100-0001-REV"
 
@@ -269,11 +219,6 @@ def test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for():
 def test_scale_reports_the_ratio_the_drawing_was_fitted_at():
     """
     Verify scale reports the ratio the drawing was fitted at.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet(span=4000.0)
     fs.title_block = TitleBlock(title="Demo Sheet")
@@ -288,11 +233,6 @@ def test_scale_reports_the_ratio_the_drawing_was_fitted_at():
 def test_a_stated_scale_beats_the_computed_one():
     """
     Verify a stated scale beats the computed one.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet(span=4000.0)
     fs.title_block = TitleBlock(title="Demo Sheet", scale="NTS")
@@ -304,11 +244,6 @@ def test_a_stated_scale_beats_the_computed_one():
 def test_title_block_fields_rendered():
     """
     Verify title block fields rendered.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Demo Unit")
     fs.add(U.Feed("F"))
@@ -332,11 +267,6 @@ def test_title_block_fields_rendered():
 def test_no_title_block_still_renders_pid():
     """
     Verify no title block still renders pid.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Bare")
     fs.add(U.Feed("F"))
@@ -349,11 +279,6 @@ def test_no_title_block_still_renders_pid():
 def test_title_block_fits_narrow_sheet():
     """
     Verify title block fits narrow sheet.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     import re
     from pandid.render.furniture import measure_title_strip
@@ -382,11 +307,6 @@ def test_title_block_fits_narrow_sheet():
 def test_furniture_boxes_rendered():
     """
     Verify furniture boxes rendered.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.document import equipment_list, notes, legend
 
@@ -417,11 +337,6 @@ def test_furniture_boxes_rendered():
 def test_align_nine_point():
     """
     Verify align nine point.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     import pytest
     from pandid.document import Annotation
@@ -436,11 +351,6 @@ def test_align_nine_point():
 def test_annotation_docks_flush_to_frame():
     """
     Verify annotation docks flush to frame.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     import re
     from pandid.document import Annotation
@@ -472,11 +382,6 @@ def test_annotation_docks_flush_to_frame():
 def test_annotation_absolute_position():
     """
     Verify annotation absolute position.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     import re
     from pandid.document import Annotation
@@ -517,11 +422,6 @@ def _schedule(fs: Flowsheet, **kwargs: object) -> list[tuple[str, str]]:
 def test_bulk_items_and_junctions_are_not_scheduled():
     """
     Verify bulk items and junctions are not scheduled.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Bulk")
     fs.add(U.Pump("P-101", description="Feed Pump"))
@@ -541,11 +441,6 @@ def test_bulk_items_and_junctions_are_not_scheduled():
 def test_major_equipment_is_scheduled_whatever_it_is():
     """
     Verify major equipment is scheduled whatever it is.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Plant")
     for unit in (
@@ -573,11 +468,6 @@ def test_major_equipment_is_scheduled_whatever_it_is():
 def test_the_description_is_words_not_the_kind_key():
     """
     Verify the description is words not the kind key.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Named")
     fs.add(U.HeatExchanger("E-101"))
@@ -591,11 +481,6 @@ def test_the_description_is_words_not_the_kind_key():
 def test_every_registered_kind_names_itself():
     """
     Verify every registered kind names itself.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.document import _KIND_LABELS
 
@@ -607,11 +492,6 @@ def test_every_registered_kind_names_itself():
 def test_include_builds_a_schedule_of_its_own():
     """
     Verify include builds a schedule of its own.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Valves")
     fs.add(U.Pump("P-101", description="Feed Pump"))
@@ -626,11 +506,6 @@ def test_include_builds_a_schedule_of_its_own():
 def test_include_refuses_a_tag_the_flowsheet_does_not_have():
     """
     Verify include refuses a tag the flowsheet does not have.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Valves")
     fs.add(U.Pump("P-101", description="Feed Pump"))
@@ -646,11 +521,6 @@ def test_include_refuses_a_tag_the_flowsheet_does_not_have():
 def test_stream_table_section_header():
     """
     Verify stream table section header.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Tabled")
     feed = fs.add(U.Feed("F"))
@@ -666,11 +536,6 @@ def test_stream_table_section_header():
 def test_a_stream_table_section_keyed_to_nothing_warns_instead_of_vanishing():
     """
     Verify a stream table section keyed to nothing warns instead of vanishing.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("Tabled")
     feed = fs.add(U.Feed("F"))
@@ -755,11 +620,6 @@ def _two_and_two() -> Flowsheet:
 def test_an_internal_column_with_nothing_in_it_is_dropped():
     """
     Verify an internal column with nothing in it is dropped.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     assert _columns(fs) == ["S1", "S2", "S4"]
@@ -769,11 +629,6 @@ def test_an_internal_column_with_nothing_in_it_is_dropped():
 def test_a_boundary_column_with_nothing_in_it_is_kept():
     """
     Verify a boundary column with nothing in it is kept.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     assert "S4" in _columns(fs)
@@ -783,11 +638,6 @@ def test_a_boundary_column_with_nothing_in_it_is_kept():
 def test_a_value_present_and_blank_keeps_the_column():
     """
     Verify a value present and blank keeps the column.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     internal = fs.streams[2]
@@ -845,11 +695,6 @@ def _wide(n: int) -> Flowsheet:
 def test_the_table_is_set_at_the_size_the_sheet_asks_for():
     """
     Verify the table is set at the size the sheet asks for.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     fs.stream_table.font_size = 8.0
@@ -860,11 +705,6 @@ def test_the_table_is_set_at_the_size_the_sheet_asks_for():
 def test_the_size_rules_the_table_and_not_only_its_lettering():
     """
     Verify the size rules the table and not only its lettering.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs, small = _two_and_two(), _two_and_two()
     small.stream_table.font_size = 7.0
@@ -880,11 +720,6 @@ def test_the_size_rules_the_table_and_not_only_its_lettering():
 def test_a_table_left_alone_is_drawn_exactly_as_it_always_was():
     """
     Verify a table left alone is drawn exactly as it always was.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     narrow, wide, widest = _layout(_two_and_two()), _layout(_wide(20)), _layout(_wide(40))
     assert (narrow.size, narrow.row_h) == (10.5, 20.0)
@@ -902,11 +737,6 @@ def test_a_size_that_is_not_a_size_is_refused(size):
     ----------
     size : float
         Text size supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     fs.stream_table.font_size = size
@@ -917,11 +747,6 @@ def test_a_size_that_is_not_a_size_is_refused(size):
 def test_an_option_set_after_a_render_reaches_the_next_one():
     """
     Verify an option set after a render reaches the next one.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     first = _table(fs)
@@ -933,11 +758,6 @@ def test_an_option_set_after_a_render_reaches_the_next_one():
 def test_the_stated_size_reaches_the_drawio_export_too():
     """
     Verify the stated size reaches the drawio export too.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     fs.stream_table.font_size = 8.0
@@ -1031,11 +851,6 @@ def _one_long_value() -> Flowsheet:
 def test_the_floors_are_where_they_always_were():
     """
     Verify the floors are where they always were.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     assert (fs.stream_table.label_width, fs.stream_table.column_width) == (122.0, 52.0)
@@ -1045,11 +860,6 @@ def test_the_floors_are_where_they_always_were():
 def test_auto_drops_the_floor_and_rules_the_column_to_its_content():
     """
     Verify auto drops the floor and rules the column to its content.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     fs.stream_table.label_width = "auto"
@@ -1064,11 +874,6 @@ def test_auto_drops_the_floor_and_rules_the_column_to_its_content():
 def test_each_floor_is_dropped_on_its_own():
     """
     Verify each floor is dropped on its own.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     label_only, name_only = _two_and_two(), _two_and_two()
     label_only.stream_table.label_width = "auto"
@@ -1080,11 +885,6 @@ def test_each_floor_is_dropped_on_its_own():
 def test_a_number_is_a_floor_and_not_a_width():
     """
     Verify a number is a floor and not a width.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _two_and_two()
     fs.stream_table.label_width = 10.0
@@ -1097,11 +897,6 @@ def test_a_number_is_a_floor_and_not_a_width():
 def test_auto_rules_every_stream_column_at_the_widest_cell_in_the_table():
     """
     Verify auto rules every stream column at the widest cell in the table.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _with(_one_long_value(), column_width="auto")
     table = _layout(fs)
@@ -1113,11 +908,6 @@ def test_auto_rules_every_stream_column_at_the_widest_cell_in_the_table():
 def test_a_column_is_never_ruled_narrower_than_its_own_heading():
     """
     Verify a column is never ruled narrower than its own heading.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _one_long_value()
     for stream, name in zip(fs.streams, ("HPS-308-100-80-CS", "S2", "S3")):
@@ -1130,11 +920,6 @@ def test_a_column_is_never_ruled_narrower_than_its_own_heading():
 def test_a_section_heading_still_widens_the_row_label_column_under_auto():
     """
     Verify a section heading still widens the row label column under auto.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _with(_two_and_two(), label_width="auto", column_width="auto")
     plain = _layout(fs).w
@@ -1151,11 +936,6 @@ def test_a_section_heading_still_widens_the_row_label_column_under_auto():
 def test_a_stated_floor_follows_the_stated_type_size():
     """
     Verify a stated floor follows the stated type size.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     by_hand = _with(_two_and_two(), label_width=122.0, column_width=52.0, font_size=7.0)
     left_alone = _with(_two_and_two(), font_size=7.0)
@@ -1166,11 +946,6 @@ def test_a_stated_floor_follows_the_stated_type_size():
 def test_auto_composes_with_the_stated_type_size():
     """
     Verify auto composes with the stated type size.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     big = _with(_two_and_two(), column_width="auto")
     small = _with(_two_and_two(), column_width="auto", font_size=7.0)
@@ -1190,11 +965,6 @@ def test_a_width_that_is_not_one_is_refused(field, value):
         Title-block or revision field supplied by pytest.
     value : object
         Value supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _with(_two_and_two(), **{field: value})
     with pytest.raises(ValueError, match=field):
@@ -1204,11 +974,6 @@ def test_a_width_that_is_not_one_is_refused(field, value):
 def test_the_widths_reach_the_drawio_export_too():
     """
     Verify the widths reach the drawio export too.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.escape import fmt
 
@@ -1223,11 +988,6 @@ def test_the_widths_reach_the_drawio_export_too():
 def test_a_content_ruled_cell_still_clears_the_drawio_text_inset():
     """
     Verify a content ruled cell still clears the drawio text inset.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.drawio import _TEXT_INSET
     from pandid.render.furniture import _STREAM_PAD, _STREAM_GUTTER
@@ -1238,11 +998,6 @@ def test_a_content_ruled_cell_still_clears_the_drawio_text_inset():
 def test_a_sheet_that_states_no_property_draws_no_table():
     """
     Verify a sheet that states no property draws no table.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     assert _columns(fs) == []
@@ -1252,11 +1007,6 @@ def test_a_sheet_that_states_no_property_draws_no_table():
 def test_a_run_is_judged_over_every_segment_it_is_drawn_in():
     """
     Verify a run is judged over every segment it is drawn in.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("segments")
     feed = fs.add(U.Feed("F"))
@@ -1324,11 +1074,6 @@ def _across_a_valve():
 def test_an_unmarked_run_reports_the_conditions_it_is_drawn_from():
     """
     Verify an unmarked run reports the conditions it is drawn from.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs, _up, _down = _across_a_valve()
     assert _row(fs, "Pressure") == ["11.6 barg"]
@@ -1337,11 +1082,6 @@ def test_an_unmarked_run_reports_the_conditions_it_is_drawn_from():
 def test_the_marked_segment_is_the_one_the_column_reports():
     """
     Verify the marked segment is the one the column reports.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs, _up, down = _across_a_valve()
     down.tabulate = True
@@ -1351,11 +1091,6 @@ def test_the_marked_segment_is_the_one_the_column_reports():
 def test_the_mark_moves_the_values_and_not_the_heading():
     """
     Verify the mark moves the values and not the heading.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("heading")
     feed = fs.add(U.Feed("F"))
@@ -1373,11 +1108,6 @@ def test_the_mark_moves_the_values_and_not_the_heading():
 def test_the_mark_fills_only_the_rows_it_states():
     """
     Verify the mark fills only the rows it states.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs, up, down = _across_a_valve()
     up.properties["Benzene"] = "0.90"
@@ -1389,11 +1119,6 @@ def test_the_mark_fills_only_the_rows_it_states():
 def test_two_marks_on_one_run_name_the_run_and_the_way_out():
     """
     Verify two marks on one run name the run and the way out.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs, up, down = _across_a_valve()
     up.tabulate = down.tabulate = True
@@ -1407,11 +1132,6 @@ def test_two_marks_on_one_run_name_the_run_and_the_way_out():
 def test_a_mark_on_a_run_of_one_segment_changes_nothing():
     """
     Verify a mark on a run of one segment changes nothing.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = Flowsheet("one")
     feed = fs.add(U.Feed("F"))
@@ -1425,11 +1145,6 @@ def test_a_mark_on_a_run_of_one_segment_changes_nothing():
 def test_the_mark_survives_the_spec_round_trip():
     """
     Verify the mark survives the spec round trip.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs, _up, down = _across_a_valve()
     down.tabulate = True
@@ -1500,11 +1215,6 @@ def _wide_table_sheet() -> Flowsheet:
 def test_stream_table_columns_are_ruled_wide_enough_for_their_values():
     """
     Verify stream table columns are ruled wide enough for their values.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     svg = _wide_table_sheet().to_svg(show_stream_table=True)
     assert "Vapour Fraction (mass)" in svg and "0.0441 kg/kg total" in svg
@@ -1517,11 +1227,6 @@ def test_stream_table_columns_are_ruled_wide_enough_for_their_values():
 def test_a_page_too_small_for_the_stream_table_says_so():
     """
     Verify a page too small for the stream table says so.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.streams[0].properties = {
@@ -1534,11 +1239,6 @@ def test_a_page_too_small_for_the_stream_table_says_so():
 def test_an_abbreviated_title_names_the_field_and_the_text_it_cut():
     """
     Verify an abbreviated title names the field and the text it cut.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     long_title = "Ethanol Purification and Dehydration Area A300"
     fs = _sheet()
@@ -1556,11 +1256,6 @@ def test_an_abbreviated_title_names_the_field_and_the_text_it_cut():
 def test_what_survives_an_abbreviation_fits_the_cell_it_was_cut_for():
     """
     Verify what survives an abbreviation fits the cell it was cut for.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.furniture import _TITLE_TYPE, _TITLE_W, clip, text_width
 
@@ -1579,11 +1274,6 @@ def test_what_survives_an_abbreviation_fits_the_cell_it_was_cut_for():
 def test_a_title_that_fits_says_nothing():
     """
     Verify a title that fits says nothing.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(drawing_number="PFD-1", title="Ethanol A300")
@@ -1595,11 +1285,6 @@ def test_a_title_that_fits_says_nothing():
 def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
     """
     Verify how much of a title survives does not depend on the sheet count.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
 
     def drawn_title(of_sheets):
@@ -1632,11 +1317,6 @@ def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
 def test_a_status_too_long_for_its_cell_is_reported():
     """
     Verify a status too long for its cell is reported.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
@@ -1647,11 +1327,6 @@ def test_a_status_too_long_for_its_cell_is_reported():
 def test_a_revision_description_too_long_for_its_column_is_reported():
     """
     Verify a revision description too long for its column is reported.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -1676,11 +1351,6 @@ def test_a_revision_description_too_long_for_its_column_is_reported():
 def test_the_revision_date_column_holds_a_full_date():
     """
     Verify the revision date column holds a full date.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     # A stream property suppresses unrelated table warnings.
@@ -1696,11 +1366,6 @@ def test_the_revision_date_column_holds_a_full_date():
 def test_a_box_narrower_than_its_own_rows_is_reported():
     """
     Verify a box narrower than its own rows is reported.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.document import Annotation
 
@@ -1715,11 +1380,6 @@ def test_a_box_narrower_than_its_own_rows_is_reported():
 def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():
     """
     Verify a finding from an earlier render does not survive the fix.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Ethanol Purification and Dehydration Area A300")
@@ -1736,11 +1396,6 @@ def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():
 def test_a_long_title_is_lettered_smaller_rather_than_abbreviated():
     """
     Verify a long title is lettered smaller rather than abbreviated.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     for title, drawn_at in (
         ("Propylene Glycol Reaction U200", "12.1"),
@@ -1762,11 +1417,6 @@ def test_a_long_title_is_lettered_smaller_rather_than_abbreviated():
 def test_the_title_is_never_lettered_under_its_subtitle():
     """
     Verify the title is never lettered under its subtitle.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -1782,11 +1432,6 @@ def test_the_title_is_never_lettered_under_its_subtitle():
 def test_validate_reports_an_over_long_field_with_nothing_rendered():
     """
     Verify validate reports an over long field with nothing rendered.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -1802,11 +1447,6 @@ def test_validate_reports_an_over_long_field_with_nothing_rendered():
 def test_a_render_reports_an_over_long_field_once():
     """
     Verify a render reports an over long field once.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
@@ -1817,11 +1457,6 @@ def test_a_render_reports_an_over_long_field_once():
 def test_the_sheet_count_names_both_the_fields_that_fill_it():
     """
     Verify the sheet count names both the fields that fill it.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", sheet="1", of_sheets="1 of the 128 issued")
@@ -1834,11 +1469,6 @@ def test_the_sheet_count_names_both_the_fields_that_fill_it():
 def test_a_signatory_with_no_revision_row_to_sign_is_reported():
     """
     Verify a signatory with no revision row to sign is reported.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", drawn_by="A. Anderson", approved_by="R. Lee")
@@ -1854,11 +1484,6 @@ def test_a_signatory_with_no_revision_row_to_sign_is_reported():
 def test_a_signatory_with_a_revision_row_is_drawn_and_silent():
     """
     Verify a signatory with a revision row is drawn and silent.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -2047,11 +1672,6 @@ _REV_UNANSWERED = [name for name in _REV_FIELDS if name not in _REV_ANSWERS]
 def test_the_sweep_answers_for_every_field_the_block_has():
     """
     Verify the sweep answers for every field the block has.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     assert _UNANSWERED == [], "title-block fields with no answer in _ANSWERS"
     assert _REV_UNANSWERED == [], "revision fields with no answer in _REV_ANSWERS"
@@ -2091,11 +1711,6 @@ def test_every_title_block_field_reports_a_value_it_cannot_hold(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     answer = _ANSWERS[field]
     fs = _sheet()
@@ -2187,11 +1802,6 @@ def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     answer = _ANSWERS[field]
     _drawn_in(answer, _block(**_kw(field, answer.fits)), "to_svg", field)
@@ -2207,11 +1817,6 @@ def test_every_revision_field_a_cell_can_hold_is_drawn_and_silent(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     answer = _REV_ANSWERS[field]
     kw = {"title": "Demo", "revisions": [Revision(**{field: answer.fits})]}
@@ -2231,11 +1836,6 @@ def test_each_title_block_field_is_drawn_by_drawio(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     answer = _ANSWERS[field]
     _drawn_in(answer, _block(**_kw(field, answer.fits)), "to_drawio", field)
@@ -2250,11 +1850,6 @@ def test_each_revision_field_is_drawn_by_drawio(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     answer = _REV_ANSWERS[field]
     kw = {"title": "Demo", "revisions": [Revision(**{field: answer.fits})]}
@@ -2264,11 +1859,6 @@ def test_each_revision_field_is_drawn_by_drawio(field):
 def test_a_company_name_that_wraps_past_the_strip_is_reported():
     """
     Verify a company name that wraps past the strip is reported.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", company="Wollongong " * 12)
@@ -2282,11 +1872,6 @@ def test_a_company_name_that_wraps_past_the_strip_is_reported():
 def test_a_company_name_the_strip_is_deep_enough_for_is_silent():
     """
     Verify a company name the strip is deep enough for is silent.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", company="PANDID Engineering Pty Ltd")
@@ -2303,11 +1888,6 @@ def test_every_revision_field_reports_a_value_it_cannot_hold(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -2332,11 +1912,6 @@ def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
     ----------
     page : str
         Page size supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.furniture import _TITLE_W, text_width
 
@@ -2357,11 +1932,6 @@ def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
 def test_a_latin_title_is_cut_where_the_face_says_and_not_where_a_mean_said():
     """
     Verify a latin title is cut where the face says and not where a mean said.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.furniture import _TITLE_W, _SUBTITLE_TYPE, text_width
 
@@ -2378,11 +1948,6 @@ def test_a_latin_title_is_cut_where_the_face_says_and_not_where_a_mean_said():
 def test_a_word_the_company_cell_cannot_break_is_reported_once():
     """
     Verify a word the company cell cannot break is reported once.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     word = "Wollongong-Warrawong-Woonona"
     fs = _sheet()
@@ -2395,11 +1960,6 @@ def test_a_word_the_company_cell_cannot_break_is_reported_once():
 def test_two_revisions_abbreviating_the_same_initials_are_two_findings():
     """
     Verify two revisions abbreviating the same initials are two findings.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -2419,11 +1979,6 @@ def test_two_revisions_abbreviating_the_same_initials_are_two_findings():
 def test_a_blank_title_reports_the_flowsheet_name_that_filled_it():
     """
     Verify a blank title reports the flowsheet name that filled it.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet(name="A Flowsheet Name Far Too Long For The Title Cell To Hold")
     fs.title_block = TitleBlock()
@@ -2435,11 +1990,6 @@ def test_a_blank_title_reports_the_flowsheet_name_that_filled_it():
 def test_a_backfilled_signatory_reports_the_block_field_that_supplied_it():
     """
     Verify a backfilled signatory reports the block field that supplied it.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -2455,11 +2005,6 @@ def test_a_backfilled_signatory_reports_the_block_field_that_supplied_it():
 def test_a_signatory_the_newest_revision_overrides_is_reported():
     """
     Verify a signatory the newest revision overrides is reported.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -2491,11 +2036,6 @@ def test_a_signatory_the_sheet_does_draw_is_silent(revision):
     ----------
     revision : Revision
         Revision value supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", drawn_by="AA", revisions=[revision])
@@ -2531,11 +2071,6 @@ def test_a_cut_string_fits_its_cell_and_one_more_character_would_not(glyph, bold
         Whether the clipped text uses bold lettering.
     size : float
         Text size supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.furniture import clip, text_width
 
@@ -2604,11 +2139,6 @@ def test_a_finding_names_the_field_that_supplied_the_value(kw, named):
         Title-block keyword arguments supplied by pytest.
     named : str
         Expected source name in a validation message.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     assert any(m.startswith(f"{named} ") for m in _fit_messages(**kw)), (named, _fit_messages(**kw))
 
@@ -2616,11 +2146,6 @@ def test_a_finding_names_the_field_that_supplied_the_value(kw, named):
 def test_a_fitted_scale_is_not_reported_as_the_scale_field():
     """
     Verify a fitted scale is not reported as the scale field.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.furniture import title_strip_fit
 
@@ -2633,11 +2158,6 @@ def test_a_fitted_scale_is_not_reported_as_the_scale_field():
 def test_a_stamped_date_is_not_reported_as_the_date_field():
     """
     Verify a stamped date is not reported as the date field.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.render.furniture import title_strip_fit
 
@@ -2686,11 +2206,6 @@ def test_an_ordinary_whitespace_field_draws_as_unset(assigned):
     ----------
     assigned : bool
         Whether the value is assigned after construction.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     unset = _drawn_sheet("to_svg", "project", None)
     assert unset == _drawn_sheet("to_svg", "project", "  \t ", assigned=assigned)
@@ -2713,11 +2228,6 @@ def test_a_stated_title_block_value_is_drawn_as_stated_however_it_is_typed(state
         Value supplied by pytest.
     how : str
         Renderer method supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     assert _drawn_sheet(how, "project", stated) == _drawn_sheet(how, "project", str(stated))
 
@@ -2736,11 +2246,6 @@ def test_a_stated_sheet_number_is_never_replaced_by_the_default(half, ink, how):
         Expected rendered text.
     how : str
         Renderer method supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", **{half: 0})
@@ -2836,11 +2341,6 @@ def test_each_title_block_text_field_round_trips(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     tb = _stating(field, "Ethanol A300")
     assert getattr(_through_a_spec(tb), field) == "Ethanol A300"
@@ -2855,11 +2355,6 @@ def test_each_revision_text_field_round_trips(field):
     ----------
     field : str
         Title-block or revision field supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     tb = TitleBlock(title="Demo", revisions=[_revising(field, "Ethanol A300")])
     assert getattr(_through_a_spec(tb).revisions[0], field) == "Ethanol A300"
@@ -2887,11 +2382,6 @@ def test_a_falsey_title_block_value_draws_the_same_sheet_after_a_spec_round_trip
         Title block supplied by pytest.
     how : str
         Renderer method supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     assert _file(_through_a_spec(tb), how) == _file(tb, how)
 
@@ -2910,11 +2400,6 @@ def test_a_sheet_number_read_back_from_a_document_is_still_the_stated_one(half, 
         Expected rendered text.
     how : str
         Renderer method supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     tb = _through_a_spec(_stating(half, 0))
     assert _cells_drawing(_sheet_with(tb), how, ink)
@@ -2923,11 +2408,6 @@ def test_a_sheet_number_read_back_from_a_document_is_still_the_stated_one(half, 
 def test_spec_coerces_representative_title_block_scalars():
     """
     Verify specification reading coerces representative title-block scalar values.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     tb = _through_a_spec(
         TitleBlock(title=0, project=False, date=None, revisions=[Revision(by=7.5)])
@@ -2938,11 +2418,6 @@ def test_spec_coerces_representative_title_block_scalars():
 def test_the_reader_and_the_writer_cover_every_field_the_block_has():
     """
     Verify the reader and the writer cover every field the block has.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     from pandid.document import _drawn_text_fields
 
@@ -2954,11 +2429,6 @@ def test_the_reader_and_the_writer_cover_every_field_the_block_has():
 def test_a_whitespace_revision_field_is_the_blank_it_means():
     """
     Verify a whitespace revision field is the blank it means.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(
@@ -2981,11 +2451,6 @@ def test_the_date_cell_is_never_blank_on_an_issued_sheet(stated):
     ----------
     stated : object
         Value supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     import datetime
 
@@ -3000,11 +2465,6 @@ def test_the_date_cell_is_never_blank_on_an_issued_sheet(stated):
 def test_a_whitespace_date_does_not_issue_a_visually_blank_cell():
     """
     Verify a whitespace date does not issue a visually blank cell.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     import datetime
 
@@ -3048,11 +2508,6 @@ def test_a_blank_half_of_the_sheet_count_does_not_issue_half_a_count(half):
     ----------
     half : str
         Selected half of the sheet count.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     tb = TitleBlock(title="Demo", **{half: "   "})
     assert getattr(tb, half) == "   "
@@ -3068,11 +2523,6 @@ def test_a_blank_half_of_the_sheet_count_does_not_issue_half_a_count(half):
 def test_a_stated_date_still_wins_the_cell():
     """
     Verify a stated date still wins the cell.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", date="2026-01-02")
@@ -3084,11 +2534,6 @@ def test_a_stated_date_still_wins_the_cell():
 def test_a_whitespace_title_is_a_truncation_validate_reports():
     """
     Verify a whitespace title is a truncation validate reports.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     long_name = "A Flowsheet Name Far Too Long For The Title Cell To Hold"
     fs = _sheet(name=long_name)
@@ -3155,11 +2600,6 @@ def test_representative_title_block_states_report_expected_findings(case, kw, ex
         Title-block keyword arguments supplied by pytest.
     expected : list
         Expected validation findings supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     got = _findings(_block(**kw))
     assert [c for c, _m in got] == [c for c, _n in expected], got
@@ -3180,11 +2620,6 @@ def test_representative_validation_matches_both_backends(case, kw, expected):
         Title-block keyword arguments supplied by pytest.
     expected : list
         Expected validation findings supplied by pytest.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     predicted = _findings(_block(**kw))
     assert predicted == _rendered(_block(**kw), "to_svg")
@@ -3194,11 +2629,6 @@ def test_representative_validation_matches_both_backends(case, kw, expected):
 def test_a_page_sized_drawio_title_block_reports_the_model_findings():
     """
     Verify a page sized drawio title block reports the model findings.
-
-    Returns
-    -------
-    None
-        This test does not return a value.
     """
     kw = _kw("drawing_number", _ANSWERS["drawing_number"].overlong)
     assert _findings(_block(**kw)) == _rendered(_block(**kw), "to_drawio", page_size="A3")

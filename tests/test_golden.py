@@ -31,11 +31,6 @@ def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Settled gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     source, source_options = settled_gallery["11_ethanol_pid"]
     copied, copied_options = copy_settled_case(settled_gallery, "11_ethanol_pid")
@@ -120,11 +115,6 @@ def test_golden_svg(settled_gallery, name):
         Settled gallery flowsheets and render options.
     name : str
         Scenario or stream identifier under test.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = copy_settled_case(settled_gallery, name)
     svg = fs.to_svg(**kwargs)
@@ -139,11 +129,6 @@ def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
     ----------
     monkeypatch : pytest.MonkeyPatch
         Fixture used to replace runtime state.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     import pandid
 
@@ -193,11 +178,6 @@ def test_representative_sheets_draw_nozzles_on_their_own_bodies(settled_gallery,
         Settled gallery flowsheets and render options.
     name : str
         Scenario or stream identifier under test.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     from pandid.portgeom import resolve_port, unit_box
 
@@ -230,24 +210,12 @@ def test_representative_sheets_draw_nozzles_on_their_own_bodies(settled_gallery,
 
 
 def test_only_representative_examples_have_golden_fixtures():
-    """Store SVG fixtures only for representative renderer scenarios.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Store SVG fixtures only for representative renderer scenarios."""
     assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(GOLDEN_SCENARIOS)
 
 
 def test_the_fractionator_schedules_only_equipment_that_exists():
-    """Keep the fractionator schedule aligned with its process topology.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Keep the fractionator schedule aligned with its process topology."""
     fs = SCENARIOS["06_column_reflux"][0]()
     col = next(u for u in fs.units if u.name == "T-701")
     reb = next(u for u in fs.units if u.name == "E-702")

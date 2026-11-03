@@ -221,11 +221,6 @@ def test_naming_the_default_draws_what_not_naming_it_draws(
         Session-scoped routed gallery source.
     stem : str
         Representative gallery example name.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     default = fs.to_svg(**kwargs)
@@ -244,13 +239,7 @@ def test_naming_the_default_draws_what_not_naming_it_draws(
 
 
 def test_each_style_draws_its_own_mark_and_nothing_else():
-    """Check each style against an equivalent uncrossed stream.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check each style against an equivalent uncrossed stream."""
     arc = _svg(_pair(ROOMY), crossing_style="arc")
     gap = _svg(_pair(ROOMY), crossing_style="gap")
     plain = _svg(_pair(ROOMY), crossing_style="plain")
@@ -267,13 +256,7 @@ def test_each_style_draws_its_own_mark_and_nothing_else():
 
 
 def test_the_mark_takes_the_same_run_whichever_mark_it_is():
-    """Check that arcs and interruptions use the same stream extent.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check that arcs and interruptions use the same stream extent."""
     arc_run = [d for d in _paths(_svg(_pair(ROOMY), crossing_style="arc")) if _ARC in d][0]
     gap_run = [d for d in _paths(_svg(_pair(ROOMY), crossing_style="gap")) if d.count("M ") > 1][0]
     point = re.compile(r"[LMA][^LMA]*?([\d.]+),([\d.]+)")
@@ -288,13 +271,7 @@ def test_the_mark_takes_the_same_run_whichever_mark_it_is():
 
 
 def test_the_interruption_leaves_one_line_and_not_two():
-    """Check that an interruption remains one SVG path.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check that an interruption remains one SVG path."""
     fs = _pair(ROOMY)
     gap = _svg(fs, crossing_style="gap")
     assert len(_paths(gap)) == len(_paths(_svg(_pair(ROOMY))))
@@ -322,11 +299,6 @@ def test_the_export_marks_the_runs_the_sheet_marks_and_marks_them_alike(
         Representative gallery example name.
     style : str
         Requested crossing style.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     paths = _paths(fs.to_svg(**kwargs, crossing_style=style))
@@ -358,13 +330,7 @@ def test_the_export_marks_the_runs_the_sheet_marks_and_marks_them_alike(
 
 
 def test_the_export_writes_one_jump_size_for_either_mark():
-    """Check Draw.io jump-size consistency across marked styles.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check Draw.io jump-size consistency across marked styles."""
     fs = _pair(ROOMY)
     arc = _drawio(fs, crossing_style="arc")
     gap = _drawio(fs, crossing_style="gap")
@@ -383,11 +349,6 @@ def test_an_unknown_crossing_style_is_refused_and_names_what_is_accepted(bad: st
     ----------
     bad : str
         Invalid crossing-style value.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     with pytest.raises(ValueError) as raised:
         check_crossing_style(bad)
@@ -452,11 +413,6 @@ def test_every_call_that_takes_the_word_refuses_a_word_it_cannot_draw(
         Temporary output directory.
     shown : dict[str, str]
         Captured preview documents.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = _pair(ROOMY)
     out = tmp_path / "sheet.svg"
@@ -480,11 +436,6 @@ def test_every_entry_point_hands_the_word_on(tmp_path: pathlib.Path, shown: dict
         Temporary output directory.
     shown : dict[str, str]
         Captured preview documents.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     svg = tmp_path / "sheet.svg"
     drawio = tmp_path / "sheet.drawio"
@@ -502,13 +453,7 @@ def test_every_entry_point_hands_the_word_on(tmp_path: pathlib.Path, shown: dict
 
 
 def test_both_renderers_refuse_it_too():
-    """Check direct renderers reject invalid crossing styles.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check direct renderers reject invalid crossing styles."""
     fs = _pair(ROOMY)
     for renderer in (SvgRenderer(), DrawioRenderer()):
         with pytest.raises(ValueError, match="crossing_style"):
@@ -536,11 +481,6 @@ def test_the_shell_offers_exactly_the_three_the_api_offers(
         Temporary output directory.
     capsys : pytest.CaptureFixture[str]
         Captured CLI output fixture.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     spec_file = tmp_path / "sheet.json"
     spec_file.write_text(_SPEC, encoding="utf-8")
@@ -553,13 +493,7 @@ def test_the_shell_offers_exactly_the_three_the_api_offers(
 
 
 def test_the_model_does_not_carry_the_crossing_style():
-    """Check crossing style remains a rendering option.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check crossing style remains a rendering option."""
     fs = _pair(ROOMY)
     before = fs.to_dict()
     fs.to_svg(crossing_style="gap", check=False)
@@ -578,11 +512,6 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
     ----------
     style : str
         Requested crossing style.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = _pair(TIGHT)
     svg = _svg(fs, crossing_style=style)
@@ -604,13 +533,7 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
 
 
 def test_a_plain_sheet_reports_nothing_because_it_promised_nothing():
-    """Check plain crossings suppress unmarked-crossing warnings.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check plain crossings suppress unmarked-crossing warnings."""
     fs = _pair(TIGHT)
     _svg(fs)
     assert _found(fs), (
@@ -622,13 +545,7 @@ def test_a_plain_sheet_reports_nothing_because_it_promised_nothing():
 
 
 def test_the_finding_counts_the_crossings_the_sheet_left_bare():
-    """Check warnings equal the rendered model's unmarked crossings.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check warnings equal the rendered model's unmarked crossings."""
     for bend, marks in ((ROOMY, 2), (TIGHT, 0)):
         fs = _pair(bend)
         svg = _svg(fs)
@@ -667,13 +584,7 @@ def _crossings(fs: Flowsheet) -> int:
 
 
 def test_a_crossing_moved_clear_stops_being_reported():
-    """Check rerendering removes resolved crossing warnings.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check rerendering removes resolved crossing warnings."""
     fs = _pair(TIGHT)
     _svg(fs)
     assert _found(fs)
@@ -693,11 +604,6 @@ def test_the_settled_gallery_has_no_unmarked_crossings(
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
         Session-scoped routed gallery source.
-
-    Returns
-    -------
-    None
-        Assertion result for default crossing clearance.
     """
     crossings = 0
     for stem, (flowsheet, options) in settled_gallery.items():
@@ -708,13 +614,7 @@ def test_the_settled_gallery_has_no_unmarked_crossings(
 
 
 def test_every_crossing_style_default_is_the_package_default():
-    """Check public parameters use the package crossing-style default.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check public parameters use the package crossing-style default."""
     import inspect
     import pkgutil
     import importlib

@@ -569,24 +569,12 @@ def inside(shape: str, box, point) -> bool:
 
 
 def test_a_new_flowsheet_rules_nothing_around_its_labels():
-    """Test that a new flowsheet rules nothing around its labels.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a new flowsheet rules nothing around its labels."""
     assert Flowsheet("x").stream_labels.enclosure == "none"
 
 
 def test_stating_the_default_draws_the_sheet_the_default_draws():
-    """Test that stating the default draws the sheet the default draws.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that stating the default draws the sheet the default draws."""
     plain = sheet().to_svg()
     stated = sheet()
     stated.stream_labels.enclosure = "none"
@@ -594,13 +582,7 @@ def test_stating_the_default_draws_the_sheet_the_default_draws():
 
 
 def test_the_export_is_unchanged_where_no_enclosure_is_asked_for():
-    """Test that the export is unchanged where no enclosure is asked for.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that the export is unchanged where no enclosure is asked for."""
     fs = sheet()
     plain = fs.to_drawio()
     fs.stream_labels.enclosure = "none"
@@ -619,11 +601,6 @@ def test_the_shape_is_ruled_round_the_box_reserved_and_fills_none_of_it(shape):
     ----------
     shape : str
         Enclosure shape under test.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = sheet()
     fs.stream_labels.enclosure = shape
@@ -655,11 +632,6 @@ def test_the_words_fit_inside_the_shape_ruled_around_them(shape):
     ----------
     shape : str
         Enclosure shape under test.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = sheet(scheme=lambda n: str(n) if n % 2 else str(1000 + n))
     fs.stream_labels.enclosure = shape
@@ -686,11 +658,6 @@ def test_one_size_rules_every_label_however_long_its_own_name_is(shape):
     ----------
     shape : str
         Enclosure shape under test.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = sheet(scheme=lambda n: str(n) if n % 2 else str(1000 + n))
     fs.stream_labels.enclosure = shape
@@ -718,11 +685,6 @@ def test_a_label_on_a_vertical_run_turns_its_shape_with_it(shape, settled_galler
         Enclosure shape under test.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = shape
@@ -798,11 +760,6 @@ def test_an_enclosed_label_is_written_on_its_run_and_never_beside_it(shape, stem
         Gallery example identifier.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, stem)
     fs.stream_labels.enclosure = shape
@@ -818,13 +775,7 @@ def test_an_enclosed_label_is_written_on_its_run_and_never_beside_it(shape, stem
 
 
 def test_a_shape_too_big_for_its_run_stays_on_the_line_anyway():
-    """Test that a shape too big for its run stays on the line anyway.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a shape too big for its run stays on the line anyway."""
     fs = sheet(scheme="VERY-LONG-STREAM-{n}00")
     fs.stream_labels.enclosure = "diamond"
     placed = numbers(fs)
@@ -844,11 +795,6 @@ def test_a_bare_label_still_leaves_the_line_where_it_always_did(settled_gallery)
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     assert any(not _on_its_run(n)[0] for n in numbers(fs, **kwargs)), (
@@ -863,11 +809,6 @@ def test_the_crowded_sheet_keeps_its_leaders_bare_and_drops_them_when_ruled(sett
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     assert [n for n in numbers(fs, **kwargs) if n.leader is not None], (
@@ -889,11 +830,6 @@ def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     svg = fs.to_svg(**kwargs)
@@ -942,11 +878,6 @@ def test_no_label_paints_out_a_line_that_is_not_its_own(shape, stem, settled_gal
         Gallery example identifier.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, stem)
     fs.stream_labels.enclosure = shape
@@ -996,13 +927,7 @@ def crossing_sheet() -> "tuple[Flowsheet, str]":
 
 
 def test_the_hop_the_sheet_draws_is_the_hop_the_search_is_told_about():
-    """Test that the hop the sheet draws is the hop the search is told about.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that the hop the sheet draws is the hop the search is told about."""
     fs, _ = crossing_sheet()
     # The hopping stream is drawn as an arc.
     svg = fs.to_svg(crossing_style="arc")
@@ -1046,13 +971,7 @@ def test_the_hop_the_sheet_draws_is_the_hop_the_search_is_told_about():
 
 
 def test_a_hop_belongs_to_the_run_that_draws_it_and_to_no_other():
-    """Test that a hop belongs to the run that draws it and to no other.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a hop belongs to the run that draws it and to no other."""
     fs, _svg = crossing_sheet()
     hop = stream_hops(fs, "vertical")[0]
     vertical = next(s for s in fs.streams if s.source.owner.name == "North")
@@ -1075,11 +994,6 @@ def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape, settled_galle
         Enclosure shape under test.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
@@ -1113,11 +1027,6 @@ def test_the_author_is_told_when_the_number_itself_is_written_across_a_run(shape
         Enclosure shape under test.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
@@ -1165,11 +1074,6 @@ def test_the_default_says_so_when_a_label_gives_up_its_plate(dense_default_rende
     ----------
     dense_default_render : tuple[tuple, tuple, tuple]
         Cached placements and findings for the dense default-label fixture.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     placements, sheet_said, _export_said = dense_default_render
     plateless = [n.name for n in placements if n.words is None]
@@ -1193,11 +1097,6 @@ def test_both_backends_say_it_at_the_default_too(dense_default_render):
     ----------
     dense_default_render : tuple[tuple, tuple, tuple]
         Cached placements and findings for the dense default-label fixture.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     _placements, sheet_findings, export_findings = dense_default_render
     sheet_said = [(i.code, i.message) for i in sheet_findings]
@@ -1212,11 +1111,6 @@ def test_a_bare_label_on_the_same_sheet_keeps_every_plate(settled_gallery):
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     placed = numbers(fs, **kwargs)
@@ -1228,25 +1122,13 @@ def test_a_bare_label_on_the_same_sheet_keeps_every_plate(settled_gallery):
 
 
 def test_a_shape_nobody_draws_is_refused_at_the_constructor():
-    """Test that a shape nobody draws is refused at the constructor.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a shape nobody draws is refused at the constructor."""
     with pytest.raises(ValueError, match="enclosure must be one of"):
         StreamLabelOptions(enclosure="rhombus")  # type: ignore[arg-type]
 
 
 def test_a_shape_nobody_draws_is_refused_at_the_render():
-    """Test that a shape nobody draws is refused at the render.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a shape nobody draws is refused at the render."""
     fs = sheet()
     fs.stream_labels.enclosure = "rhombus"  # type: ignore[assignment]
     with pytest.raises(ValueError, match="enclosure must be one of"):
@@ -1266,11 +1148,6 @@ def test_a_refused_shape_leaves_the_sheet_exactly_as_it_found_it(draw, check):
         Renderer method under test.
     check : bool
         Whether the test expects the operation to fail.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = sheet()
     fs.stream_labels.enclosure = "rhombus"  # type: ignore[assignment]
@@ -1308,11 +1185,6 @@ def test_a_jump_direction_nobody_draws_is_refused(draw, spelling, settled_galler
         Configured jump-direction spelling.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     allowed = _DRAWIO_KWARGS if draw == "to_drawio" else kwargs
@@ -1331,11 +1203,6 @@ def test_both_spellings_the_sheet_draws_are_taken(spelling, settled_gallery):
         Configured jump-direction spelling.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROSSED)
     drawn = fs.to_svg(jump_direction=spelling, **kwargs)
@@ -1389,11 +1256,6 @@ def test_a_bare_sheet_is_told_nothing_about_enclosures(settled_gallery):
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.to_svg(**kwargs)
@@ -1407,11 +1269,6 @@ def test_the_author_is_told_which_unit_a_diamond_was_drawn_over(settled_gallery)
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
@@ -1432,11 +1289,6 @@ def test_the_author_is_told_which_line_a_diamond_was_drawn_over(settled_gallery)
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, "11_ethanol_pid")
     fs.stream_labels.enclosure = "diamond"
@@ -1490,13 +1342,7 @@ def reported_pairs(fs, shape: str) -> set:
 
 
 def test_two_shapes_that_do_not_touch_are_not_called_a_collision():
-    """Test that two shapes that do not touch are not called a collision.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that two shapes that do not touch are not called a collision."""
     a = (753.6273224043716, 647.0, 976.4273224043716, 673.0)
     b = (533.6382513661202, 642.0, 756.4382513661202, 668.0)
     assert boxes_overlap(a, b), "the boxes do overlap, which is what made this hard"
@@ -1516,11 +1362,6 @@ def test_every_pair_the_sheet_calls_crossed_really_crosses(shape, settled_galler
         Enclosure shape under test.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     reported = 0
     for stem in LABEL_CASES:
@@ -1547,11 +1388,6 @@ def test_two_shapes_crossing_are_reported_once(settled_gallery):
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
@@ -1566,11 +1402,6 @@ def test_a_second_render_replaces_the_findings_rather_than_repeating_them(settle
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
@@ -1591,11 +1422,6 @@ def test_both_backends_report_the_same_findings_and_both_report_some(settled_gal
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
@@ -1608,37 +1434,19 @@ def test_both_backends_report_the_same_findings_and_both_report_some(settled_gal
 
 
 def test_a_shape_nobody_draws_is_refused_in_a_spec():
-    """Test that a shape nobody draws is refused in a spec.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a shape nobody draws is refused in a spec."""
     with pytest.raises(SpecError, match=r"stream_labels\.enclosure"):
         from_dict({"name": "x", "stream_labels": {"enclosure": "hexagon"}})
 
 
 def test_an_unknown_key_under_stream_labels_is_refused():
-    """Test that an unknown key under stream labels is refused.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that an unknown key under stream labels is refused."""
     with pytest.raises(SpecError, match="stream_labels"):
         from_dict({"name": "x", "stream_labels": {"shape": "diamond"}})
 
 
 def test_the_enclosure_comes_through_a_spec_round_trip():
-    """Test that the enclosure comes through a spec round trip.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that the enclosure comes through a spec round trip."""
     fs = sheet()
     fs.stream_labels.enclosure = "diamond"
     assert to_dict(fs)["stream_labels"] == {"enclosure": "diamond"}
@@ -1646,13 +1454,7 @@ def test_the_enclosure_comes_through_a_spec_round_trip():
 
 
 def test_a_shape_nobody_draws_is_refused_on_the_way_out_to_a_spec():
-    """Test that a shape nobody draws is refused on the way out to a spec.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a shape nobody draws is refused on the way out to a spec."""
     fs = sheet()
     fs.stream_labels.enclosure = "rhombus"  # type: ignore[assignment]
     with pytest.raises(ValueError, match="enclosure must be one of"):
@@ -1672,37 +1474,20 @@ def test_the_refusal_names_the_shape_the_author_probably_meant(typed, meant):
         Unsupported enclosure name supplied by the user.
     meant : str
         Suggested supported enclosure shape.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     with pytest.raises(ValueError, match=f"spells that one '{meant}'"):
         StreamLabelOptions(enclosure=typed)
 
 
 def test_a_shape_nobody_has_a_name_for_is_refused_without_a_guess():
-    """Test that a shape nobody has a name for is refused without a guess.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a shape nobody has a name for is refused without a guess."""
     with pytest.raises(ValueError) as raised:
         StreamLabelOptions(enclosure="hexagon")  # type: ignore[arg-type]
     assert "spells that one" not in str(raised.value)
 
 
 def test_a_sheet_that_left_the_labels_alone_writes_the_spec_it_always_wrote():
-    """Test that a sheet that left the labels alone writes the spec it always wrote.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Test that a sheet that left the labels alone writes the spec it always wrote."""
     assert "stream_labels" not in to_dict(sheet())
 
 
@@ -1762,11 +1547,6 @@ def test_the_export_draws_the_enclosure_the_sheet_draws(shape):
     ----------
     shape : str
         Enclosure shape under test.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = sheet()
     fs.stream_labels.enclosure = shape
@@ -1801,11 +1581,6 @@ def test_the_export_writes_every_enclosure_after_every_run(settled_gallery):
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
@@ -1823,11 +1598,6 @@ def test_the_export_writes_no_leader_beside_an_enclosure(settled_gallery):
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     plain = [c.get("id") or "" for c in cells(fs, **kwargs)]
@@ -1847,11 +1617,6 @@ def test_the_export_lays_down_no_plate_where_the_sheet_lays_none(settled_gallery
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = "diamond"
@@ -1882,11 +1647,6 @@ def test_the_export_turns_exactly_the_numbers_the_sheet_turns(shape, any_turned,
         Expected presence of vertically oriented labels.
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = gallery_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = shape

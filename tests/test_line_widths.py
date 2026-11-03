@@ -122,13 +122,7 @@ def _two_unit_sheet() -> Flowsheet:
 
 
 def test_the_ladder_stands_in_the_ratio_6_2_states() -> None:
-    """Check the configured line-weight ladder ratios.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check the configured line-weight ladder ratios."""
     from pandid.render.weights import LineWeight
 
     main = LineWeight.MAIN_FLOW.width
@@ -144,13 +138,7 @@ def test_the_ladder_stands_in_the_ratio_6_2_states() -> None:
 
 
 def test_each_rung_is_its_own_multiple_of_the_grid_module() -> None:
-    """Check that line weights derive from the grid module.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check that line weights derive from the grid module."""
     from pandid.render.weights import M, LineWeight
 
     assert M * UNIT_MM == pytest.approx(2.5)
@@ -162,13 +150,7 @@ def test_each_rung_is_its_own_multiple_of_the_grid_module() -> None:
 
 
 def test_every_width_survives_the_formatting_it_is_written_with() -> None:
-    """Check that formatted widths round-trip exactly.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check that formatted widths round-trip exactly."""
     from pandid.render.svg import HOP_R, _ink_pad
     from pandid.render.weights import LineWeight
 
@@ -183,13 +165,7 @@ def test_every_width_survives_the_formatting_it_is_written_with() -> None:
 
 
 def test_neither_backend_writes_a_stroke_width_as_a_literal() -> None:
-    """Check renderer source selects stroke widths from the ladder.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check renderer source selects stroke widths from the ladder."""
     bad: list[str] = []
     for name in ("svg.py", "drawio.py"):
         text = (ROOT / "pandid" / "render" / name).read_text(encoding="utf-8")
@@ -206,13 +182,7 @@ def test_neither_backend_writes_a_stroke_width_as_a_literal() -> None:
 
 
 def test_a_main_flow_line_is_drawn_at_the_weight_of_the_equipment_it_enters() -> None:
-    """Check material lines match equipment outline weight.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check material lines match equipment outline weight."""
     fs = _two_unit_sheet()
     svg = fs.to_svg()
     run = max(_stream_pens(svg))
@@ -223,13 +193,7 @@ def test_a_main_flow_line_is_drawn_at_the_weight_of_the_equipment_it_enters() ->
 
 
 def test_a_control_line_is_drawn_at_half_the_run_it_reads() -> None:
-    """Check signal lines use half the material-line weight.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check signal lines use half the material-line weight."""
     fs = _two_unit_sheet()
     svg = fs.to_svg()
     pens = sorted(_stream_pens(svg))
@@ -250,11 +214,6 @@ def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(
         Session-scoped routed gallery source.
     name : str
         Representative gallery example name.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = copy_settled_case(settled_gallery, name)
     widths = _renderer_widths(fs.to_svg(**kwargs))
@@ -283,11 +242,6 @@ def test_no_line_the_renderer_chooses_a_width_for_is_under_the_floor(
         Session-scoped routed gallery source.
     name : str
         Representative gallery example name.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = copy_settled_case(settled_gallery, name)
     for width in _renderer_widths(fs.to_svg(**kwargs)):
@@ -309,11 +263,6 @@ def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(
         Session-scoped routed gallery source.
     name : str
         Representative gallery example name.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     from test_drawio import _DRAWIO_KWARGS, _drawio_cells, _style
 
@@ -351,13 +300,7 @@ def test_the_export_puts_every_run_on_the_rung_the_sheet_puts_it_on(
 
 
 def test_a_flange_pair_leaves_the_paper_5_3_2_asks_between_two_parallel_lines() -> None:
-    """Check flange faces meet the required clearance.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check flange faces meet the required clearance."""
     fs = Flowsheet("flanges")
     vessel = fs.add(units.Vessel("V-1"))
     pump = fs.add(units.Pump("P-1"))
@@ -378,26 +321,14 @@ def test_a_flange_pair_leaves_the_paper_5_3_2_asks_between_two_parallel_lines() 
 
 
 def test_the_arrowhead_clearance_floor_is_twice_the_line_the_heads_end() -> None:
-    """Check arrowhead clearance tracks the material-line weight.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check arrowhead clearance tracks the material-line weight."""
     fs = _two_unit_sheet()
     run = max(_stream_pens(fs.to_svg()))
     assert MIN_HEAD_CLEARANCE == pytest.approx(2 * run)
 
 
 def test_a_leader_head_is_a_size_and_does_not_follow_a_rung() -> None:
-    """Check leader-head size remains independent of the ladder.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check leader-head size remains independent of the ladder."""
     from pandid.render.svg import _LEADER_HEAD
 
     fs = _two_unit_sheet()
