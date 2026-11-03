@@ -1,18 +1,7 @@
 """Set pipe furniture on its routed pipe after placing the equipment.
 
-Furniture is every unpinned valve, reducer or fitting on a material line,
-and every valve station none of whose members is pinned, however it was
-written: put in a line with ``on=`` or wired with ``connect()``. A pinned
-device is drawn where it is pinned, like equipment, and splits the line.
-
-:func:`place_mounted` lays out a sheet that has furniture:
-
-1. Equipment is placed with each furnished pipe contracted to one link
-   between its two end nozzles (:mod:`pandid.layout.layered`).
-2. The contracted pipes are routed on a view of the sheet that holds only
-   that equipment.
-3. Each pipe's devices and stations are set in flow order on straight legs
-   of its routed pipe, near their positions on the line, clear of other units.
+Furniture is every unpinned valve, reducer or fitting on a material
+line, and every valve station none of whose members is pinned.
 """
 
 from __future__ import annotations
@@ -34,7 +23,7 @@ if TYPE_CHECKING:
 
     Element = Union[Unit, StationAssembly]
 
-#: Length kept clear at a leg end that turns a corner, one nozzle stand-off.
+#: Length kept clear at a leg end that turns a corner.
 END = 25.0
 
 #: Length kept clear at a leg end that is the pipe's own end nozzle.
@@ -43,8 +32,7 @@ NOZZLE_END = 8.0
 #: Clearance kept across a pipe between an element and another unit.
 GAP = 8.0
 
-#: Clearance kept along a pipe between an element and anything else, its
-#: neighbours on the pipe included, so each keeps room for its tag.
+#: Clearance kept along a pipe between an element and anything else.
 ALONG = 25.0
 
 #: Reach of a balloon from the point where it taps a pipe.
@@ -64,18 +52,9 @@ Box = tuple[float, float, float, float]
 class MountedRun:
     """One pipe between two placed units and the furniture on it.
 
-    Attributes
-    ----------
-    segments : tuple[Stream, ...]
-        Physical segments in flow order.
-    elements : tuple[Unit or StationAssembly, ...]
-        Devices and station assemblies in flow order.
-    places : tuple[tuple[Port, Port, float] or None, ...]
-        Where each element sits on the author's line: the line's two end
-        nozzles and the fraction between them, or ``None`` for one wired in
-        with ``connect()``, which states no position.
-    taps : tuple[tuple[Port, Port, float], ...]
-        Where each balloon that senses the pipe taps it, placed the same way.
+    ``places`` holds each element's line end nozzles and fraction, or
+    ``None`` for one wired with ``connect()``; ``taps`` holds the same
+    for each balloon that senses the pipe.
     """
 
     segments: tuple[Stream, ...]
@@ -95,18 +74,7 @@ class MountedRun:
 
 
 def _position_pinned(unit: Unit) -> bool:
-    """Return whether a unit has a grid or pixel position pin.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit to inspect.
-
-    Returns
-    -------
-    bool
-        Whether ``col``, ``row``, ``x`` or ``y`` is pinned.
-    """
+    """Return whether a unit pins ``col``, ``row``, ``x`` or ``y``."""
     pin = unit.pin_
     return pin is not None and any(
         getattr(pin, axis) is not None for axis in ("col", "row", "x", "y")
@@ -114,20 +82,10 @@ def _position_pinned(unit: Unit) -> bool:
 
 
 def _device(unit: Unit | None) -> bool:
-    """Return whether a unit is an unpinned device carrying material through.
+    """Return whether a unit is an unpinned straight-through device.
 
-    Parameters
-    ----------
-    unit : Unit or None
-        Unit to inspect.
-
-    Returns
-    -------
-    bool
-        Whether it is an unpinned valve, reducer or fitting whose only
-        process ports, ``inlet`` and ``outlet``, both carry material and sit
-        on opposite faces. An angle valve turns the pipe, so it is placed
-        like equipment.
+    That is a valve, reducer or fitting whose only process ports,
+    ``inlet`` and ``outlet``, carry material on opposite faces.
     """
     from pandid.geometry import Pin
     from pandid.portgeom import port_offset
@@ -139,8 +97,7 @@ def _device(unit: Unit | None) -> bool:
         p.stream is not None and p.stream.kind == "material" for p in ports.values()
     ):
         return False
-    # Opposite faces stay opposite under any turn or mirror, so read the
-    # device as its author placed it, where any face it states is drawn.
+    # Read the device as its author placed it.
     placed = unit.pin_ or Pin()
     width, height = resolve_size(unit, placed)
     (ax, ay), (bx, by) = (port_offset(unit, name, placed) for name in ("inlet", "outlet"))
@@ -148,18 +105,7 @@ def _device(unit: Unit | None) -> bool:
 
 
 def _members(element: Element) -> list[Unit]:
-    """Return the units an element draws.
-
-    Parameters
-    ----------
-    element : Unit or StationAssembly
-        Mounted device or station.
-
-    Returns
-    -------
-    list[Unit]
-        The device, or every station member.
-    """
+    """Return the units an element draws."""
     from pandid.stations import StationAssembly
 
     if isinstance(element, StationAssembly):
@@ -168,21 +114,11 @@ def _members(element: Element) -> list[Unit]:
 
 
 def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
-    """Collect the pipes that carry furniture.
+    """Collect the pipes that carry furniture, in stream order.
 
-    A pipe runs from a unit that is not furniture, through furniture, to
-    the next unit that is not. A pipe that starts and ends on one unit, or
-    has a manual route, keeps its furniture in the grid.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet to inspect.
-
-    Returns
-    -------
-    list[MountedRun]
-        One entry per furnished pipe, in stream order.
+    A pipe runs from a unit that is not furniture, through furniture,
+    to the next unit that is not. A pipe that starts and ends on one
+    unit, or has a manual route, is skipped.
     """
     from pandid.inline import position
 
@@ -199,8 +135,8 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
         tap = (line.source, line._logical_to or line.dest, 0.5 if at is None else float(at))
         for segment in line._logical_segments or [line]:
             tapped.setdefault(id(segment), []).append(tap)
-    # A station whose members state a position, a transform or a nozzle face
-    # is drawn as equipment, so the station's own layout never overrides them.
+    # Skip a station whose members state a position, turn, mirror or
+    # nozzle face.
     stations = {id(a.station.inlet): a for a in fs._station_assemblies
                 if not any(_position_pinned(u) or u._turn_stated or u._mirror_stated
                            or u._port_faces for u in a.station.members)}
@@ -241,36 +177,12 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
 
 
 def _station_width(assemblies: list[StationAssembly]) -> float:
-    """Measure the main legs of stations sharing one host run.
-
-    Parameters
-    ----------
-    assemblies : list[StationAssembly]
-        Stations ordered along one logical run.
-
-    Returns
-    -------
-    float
-        Required horizontal room for the station members.
-    """
+    """Return the room the stations on one pipe take along it."""
     return 16.0 + sum(_main_width(assembly) + 16.0 for assembly in assemblies)
 
 
 def _chain_width(run: MountedRun) -> float:
-    """Return the level room a pipe's furniture takes, for the equipment solve.
-
-    Parameters
-    ----------
-    run : MountedRun
-        Pipe to measure.
-
-    Returns
-    -------
-    float
-        Station room as :func:`_station_width` gives
-        it, plus each device's width with :data:`ALONG` around each, or more
-        where the stated positions need a longer pipe (:func:`_room`).
-    """
+    """Return the level room a pipe's furniture needs."""
     from pandid.layout.layered import END_ROOM
     from pandid.stations import StationAssembly
 
@@ -283,19 +195,9 @@ def _chain_width(run: MountedRun) -> float:
 
 
 def _column_room(run: MountedRun) -> float:
-    """Return the vertical pipe a run's devices need between two stacked units.
+    """Return the upright pipe length a run's devices need.
 
-    Parameters
-    ----------
-    run : MountedRun
-        Pipe to measure.
-
-    Returns
-    -------
-    float
-        Devices end to end, :data:`ALONG` apart, with the margin kept at the
-        nozzle and at the corner; 0 for a pipe carrying a station, which is
-        set only on a level leg.
+    A run carrying a station returns 0.
     """
     from pandid.stations import StationAssembly
 
@@ -308,24 +210,7 @@ def _column_room(run: MountedRun) -> float:
 
 @contextmanager
 def _pipe_view(fs: Flowsheet, units: list[Unit], pipes: list[Stream]) -> Iterator[None]:
-    """Show the sheet as the given units joined by the given pipes.
-
-    Ports, routes and recycle marks touched by the view are restored on exit.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet to view.
-    units : list[Unit]
-        Units shown.
-    pipes : list[Stream]
-        Streams shown, temporary pipes included.
-
-    Yields
-    ------
-    None
-        The sheet shows the view until the block exits.
-    """
+    """Show the sheet as only the given units and pipes until exit."""
     saved_units, saved_streams = fs.units, fs.streams
     saved_ports = [(port, port.stream) for pipe in pipes for port in (pipe.source, pipe.dest)]
     saved_marks = [(stream, stream._is_recycle, stream.route) for stream in pipes]
@@ -348,20 +233,8 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
                   retained: list[Unit]) -> tuple[list[list[Point]], list[list[Point]]]:
     """Route each furnished pipe as one line between placed equipment.
 
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet whose retained units have frames.
-    runs : list[MountedRun]
-        Pipes to route.
-    retained : list[Unit]
-        Units placed by the equipment solve.
-
-    Returns
-    -------
-    tuple[list[list[Point]], list[list[Point]]]
-        Drawn polyline of each pipe, empty where routing failed, and of
-        every other process stream between retained units.
+    Return each pipe's polyline, empty where routing failed, and the
+    polylines of the other process streams between retained units.
     """
     from pandid.layout.cycles import break_cycles
     from pandid.layout.faces import select_faces
@@ -385,18 +258,7 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
 
 
 def _legs(points: list[Point]) -> list[Leg]:
-    """Merge a polyline into straight legs.
-
-    Parameters
-    ----------
-    points : list[Point]
-        Orthogonal polyline.
-
-    Returns
-    -------
-    list[Leg]
-        Start and end of each maximal straight leg, in order.
-    """
+    """Merge an orthogonal polyline into maximal straight legs."""
     legs: list[Leg] = []
     for a, b in zip(points, points[1:]):
         if a == b:
@@ -414,57 +276,18 @@ def _legs(points: list[Point]) -> list[Leg]:
 
 
 def _size(leg: Leg) -> float:
-    """Return a leg's length.
-
-    Parameters
-    ----------
-    leg : Leg
-        Straight leg.
-
-    Returns
-    -------
-    float
-        Length in pixels.
-    """
+    """Return a leg's length."""
     return abs(leg[1][0] - leg[0][0]) + abs(leg[1][1] - leg[0][1])
 
 
 def _level(leg: Leg) -> bool:
-    """Return whether a leg is horizontal.
-
-    Parameters
-    ----------
-    leg : Leg
-        Straight leg.
-
-    Returns
-    -------
-    bool
-        Whether both ends share a ``y``.
-    """
+    """Return whether a leg is horizontal."""
     return abs(leg[0][1] - leg[1][1]) < 1e-6
 
 
 def _candidate(unit: Unit, point: tuple[float, float], orientation: int,
                mirrored: bool) -> Frame:
-    """Center a device at a point in a given turn and mirror.
-
-    Parameters
-    ----------
-    unit : Unit
-        Inline device to position.
-    point : tuple[float, float]
-        Preferred center of the device.
-    orientation : int
-        Clockwise quarter-turn angle.
-    mirrored : bool
-        Whether the symbol is mirrored left to right before it is turned.
-
-    Returns
-    -------
-    Frame
-        Candidate frame with the existing top-to-bottom mirror.
-    """
+    """Return a device frame centred on a point in a turn and mirror."""
     original = unit.frame
     assert original is not None
     probe = replace(original, orientation=orientation, mirrored=mirrored)
@@ -478,23 +301,14 @@ def _candidate(unit: Unit, point: tuple[float, float], orientation: int,
 def _on_corridor(
     unit: Unit, candidate: Frame, direction: tuple[int, int], ordinate: float,
 ) -> bool:
-    """Require both nozzles to follow the straight host corridor.
+    """Return whether both nozzles lie on the leg, inlet upstream.
 
     Parameters
     ----------
-    unit : Unit
-        Device being placed.
-    candidate : Frame
-        Proposed geometry.
     direction : tuple[int, int]
-        Unit step of the material flow on the drawing.
+        Unit step of the flow on the drawing.
     ordinate : float
-        Fixed coordinate perpendicular to that flow.
-
-    Returns
-    -------
-    bool
-        Whether both ports align and face in material order.
+        Coordinate of the leg across the flow.
     """
     inlet = port_point(unit, candidate, "inlet")
     outlet = port_point(unit, candidate, "outlet")
@@ -507,28 +321,11 @@ def _on_corridor(
 
 
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
-    """Return a device frame centred on a leg point, piped in flow order.
+    """Return a device frame on a leg point, piped in flow order.
 
-    A device whose author stated a quarter turn keeps it, mirrored along the
-    pipe if the flow runs the other way. Otherwise the first quarter turn
-    and mirror that put both nozzles on the leg, inlet upstream, are used,
-    so a device on an upright leg is turned to run along it. A pose that
-    does is set with its nozzles on the leg, since they need not be at the
-    box centre; one that cannot is centred on the point.
-
-    Parameters
-    ----------
-    unit : Unit
-        Two-port device with a frame.
-    point : Point
-        Point on the leg.
-    leg : Leg
-        Leg the device sits on.
-
-    Returns
-    -------
-    Frame
-        Candidate frame.
+    Keep a stated turn or mirror, try the rest, and use the first pose
+    that puts both nozzles on the leg, inlet upstream. With none, centre
+    the device on the point.
     """
     (ax, ay), (bx, by) = leg
     level = _level(leg)
@@ -537,13 +334,10 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     ordinate = ay if level else ax
     assert unit.frame is not None
     turned = unit._turn_stated
-    # A stated turn or mirror is kept. A mirror before a half turn keeps an
-    # actuator on top of a pipe running west.
     first = 0 if level else 90
     turns = ([int(unit.frame.orientation)] if turned
              else [turn % 360 for turn in (first, first + 180, first + 90, first + 270)])
     flips = [bool(unit.frame.mirrored)] if unit._mirror_stated else [False, True]
-    # A pose in which a nozzle face its author stated cannot be reached is no pose.
     poses = [(turn, flip) for turn in turns for flip in flips
              if _reaches(unit, _candidate(unit, point, turn, flip))]
     if not poses:
@@ -561,27 +355,13 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         return _candidate(unit, point, *poses[0])
     if turned or level or "actuator" not in unit.ports:
         return fits[0]
-    # On an upright pipe the actuator goes to the left of the flow, where its
-    # balloons hang by default, so its signals need not cross the pipe.
+    # On an upright leg, put the actuator left of the flow.
     left = -forward
     return min(fits, key=lambda c: (port_point(unit, c, "actuator")[0] - ordinate) * left > 0)
 
 
 def _reaches(unit: Unit, frame: Frame) -> bool:
-    """Return whether every nozzle face a unit's author stated can be drawn in a pose.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit to check.
-    frame : Frame
-        Proposed pose.
-
-    Returns
-    -------
-    bool
-        Whether each port given a face with ``nozzle()`` resolves.
-    """
+    """Return whether each stated nozzle face resolves in a frame."""
     try:
         for name in unit._port_faces:
             port_point(unit, frame, name)
@@ -591,18 +371,7 @@ def _reaches(unit: Unit, frame: Frame) -> bool:
 
 
 def _main_width(assembly: StationAssembly) -> float:
-    """Return the length of a station's run, end nozzle to end nozzle.
-
-    Parameters
-    ----------
-    assembly : StationAssembly
-        Station to measure.
-
-    Returns
-    -------
-    float
-        Widths of the members on the run plus the gaps between them.
-    """
+    """Return a station's run length, end nozzle to end nozzle."""
     station = assembly.station
     branch = {station.bypass, station.upstream_drain, station.downstream_drain}
     main = [unit for unit in station.members if unit not in branch]
@@ -612,17 +381,8 @@ def _main_width(assembly: StationAssembly) -> float:
 def _length(element: Element, leg: Leg) -> float:
     """Return the room an element takes along a leg.
 
-    Parameters
-    ----------
-    element : Unit or StationAssembly
-        Device or station.
-    leg : Leg
-        Leg it would sit on.
-
-    Returns
-    -------
-    float
-        Length along the leg; infinite for a station on a vertical leg.
+    Return infinity for a station on an upright leg, or a device whose
+    stated turn runs across the leg.
     """
     from pandid.stations import StationAssembly
 
@@ -632,24 +392,12 @@ def _length(element: Element, leg: Leg) -> float:
     level = _level(leg)
     (ax, ay), (bx, by) = (port_point(element, frame, name) for name in ("inlet", "outlet"))
     if abs((ay - by) if level else (ax - bx)) > 1.0:
-        return float("inf")  # a stated turn that runs across this leg
+        return float("inf")
     return frame.w if level else frame.h
 
 
 def _level_length(element: Element) -> float:
-    """Return the room an element takes along its pipe, before it is set.
-
-    Parameters
-    ----------
-    element : Unit or StationAssembly
-        Device or station.
-
-    Returns
-    -------
-    float
-        Station run length, or the device's extent from inlet to outlet
-        side, whichever way its symbol is drawn.
-    """
+    """Return an element's length along its pipe before it is set."""
     from pandid.portgeom import port_offset
     from pandid.stations import StationAssembly
 
@@ -661,22 +409,7 @@ def _level_length(element: Element) -> float:
 
 
 def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
-    """Return the frames that set an element centred a distance along a leg.
-
-    Parameters
-    ----------
-    element : Unit or StationAssembly
-        Device or station.
-    centre : float
-        Distance of the element's centre from the leg start.
-    leg : Leg
-        Leg it sits on.
-
-    Returns
-    -------
-    dict[Unit, Frame]
-        Frame for each unit the element draws.
-    """
+    """Return frames centring an element a distance along a leg."""
     from pandid.layout.station import _station_frames
     from pandid.stations import StationAssembly
 
@@ -694,27 +427,16 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
            zones: list[Box], pipes: list[list[Point]], ends: tuple[Unit, ...] = ()) -> bool:
     """Return whether proposed frames keep clear of other units.
 
+    Each frame keeps :data:`ALONG` along the pipe and :data:`GAP` across
+    it from every obstacle and zone. Each signal exit stays off
+    obstacles, end units and pipes.
+
     Parameters
     ----------
-    frames : dict[Unit, Frame]
-        Proposed frames.
-    obstacles : list[Unit]
-        Units already drawn.
-    level : bool
-        Whether the leg is horizontal, which sets the along-pipe axis.
     zones : list[Box]
-        Ground other pipes' stations cover, bypass and drain legs included.
-    pipes : list[list[Point]]
-        Routed pipes, whose lines an actuator's signal must not have to cross.
+        Ground covered by other pipes' stations.
     ends : tuple[Unit, ...], optional
-        The pipe's own end units, which an actuator's signal must clear too.
-
-    Returns
-    -------
-    bool
-        Whether every frame keeps :data:`ALONG` along the pipe and
-        :data:`GAP` across it from every obstacle and zone, and each
-        connected signal port has a clear exit (:func:`_signal_exits`).
+        The pipe's own end units.
     """
     dx, dy = (ALONG, GAP) if level else (GAP, ALONG)
     boxes = [*(unit_box(other, other.frame) for other in obstacles if other.frame is not None),
@@ -737,21 +459,7 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
 
 
 def _signal_exits(frames: dict[Unit, Frame]) -> list[Box]:
-    """Return the router stand-off beyond each connected signal port.
-
-    A control valve's actuator takes its signal from beyond its face, so
-    that stretch must stay free of other units and pipes.
-
-    Parameters
-    ----------
-    frames : dict[Unit, Frame]
-        Proposed frames.
-
-    Returns
-    -------
-    list[Box]
-        One thin box per connected signal port, :data:`END` long.
-    """
+    """Return the stand-off box beyond each connected signal port."""
     from pandid.portgeom import port_anchor
 
     reach = {"N": (0.0, -END), "S": (0.0, END), "E": (END, 0.0), "W": (-END, 0.0)}
@@ -767,20 +475,7 @@ def _signal_exits(frames: dict[Unit, Frame]) -> list[Box]:
 
 
 def _commit(frames: dict[Unit, Frame], obstacles: list[Unit]) -> None:
-    """Install frames and make the units obstacles for later elements.
-
-    Parameters
-    ----------
-    frames : dict[Unit, Frame]
-        Frames to install.
-    obstacles : list[Unit]
-        Obstacle list, extended in place.
-
-    Returns
-    -------
-    None
-        Frames and solver slots are updated.
-    """
+    """Install frames and slots, and add the units to ``obstacles``."""
     for unit, frame in frames.items():
         unit.frame = frame
         placed = slot(unit)
@@ -791,40 +486,15 @@ def _commit(frames: dict[Unit, Frame], obstacles: list[Unit]) -> None:
 
 
 def _margins(index: int, count: int) -> tuple[float, float]:
-    """Return the length kept clear at each end of a leg.
-
-    Parameters
-    ----------
-    index : int
-        Leg position along the pipe.
-    count : int
-        Number of legs.
-
-    Returns
-    -------
-    tuple[float, float]
-        :data:`NOZZLE_END` where the leg ends at the pipe's own nozzle,
-        :data:`END` where it turns a corner.
-    """
+    """Return the length kept clear at the start and end of a leg."""
     return (NOZZLE_END if index == 0 else END,
             NOZZLE_END if index == count - 1 else END)
 
 
 def _along(legs: list[Leg], point: Point) -> float:
-    """Return how far along a pipe a point lies, measured past either end.
+    """Return the distance along a pipe of a point's nearest projection.
 
-    Parameters
-    ----------
-    legs : list[Leg]
-        Legs of the pipe.
-    point : Point
-        Point on or near it.
-
-    Returns
-    -------
-    float
-        Distance from the pipe's start to the point's nearest projection;
-        negative before the start, beyond the length after the end.
+    It is negative before the start and beyond the length after the end.
     """
     best: tuple[float, float] | None = None
     travelled = 0.0
@@ -846,19 +516,9 @@ def _along(legs: list[Leg], point: Point) -> float:
 
 
 def _point_at(legs: list[Leg], distance: float) -> tuple[Point, bool]:
-    """Return the point a distance along a pipe, clamped to its ends.
+    """Return the point at a distance along a pipe, clamped to its ends.
 
-    Parameters
-    ----------
-    legs : list[Leg]
-        Legs of the pipe.
-    distance : float
-        Distance from the pipe's start.
-
-    Returns
-    -------
-    tuple[Point, bool]
-        Point on the pipe, and whether its leg is level.
+    Also return whether the point's leg is level.
     """
     for leg in legs:
         (ax, ay), (bx, by) = leg
@@ -872,47 +532,29 @@ def _point_at(legs: list[Leg], distance: float) -> tuple[Point, bool]:
 
 def _wanted(run: MountedRun, total: float, along: Callable[[Port], float] | None = None,
             extra: tuple[tuple[Port, Port, float], ...] = ()) -> list[float]:
-    """Return where along the pipe each element's centre is wanted.
+    """Return the wanted centre distance along the pipe of each element.
 
-    An element with a place is put at its fraction of the author's line,
-    measured between that line's two end nozzles. An element wired in with
-    ``connect()``, or whose line ends off the pipe where ``along`` cannot
-    say how far, is spread evenly along the pipe.
+    An element with a place sits at its fraction of the author's line,
+    between that line's end nozzles; any other is spread evenly. Extra
+    places follow the elements.
 
     Parameters
     ----------
-    run : MountedRun
-        Pipe whose elements are placed.
-    total : float
-        Length of the pipe.
     along : callable or None, optional
         Distance along the pipe of a nozzle that is not on it.
     extra : tuple[tuple[Port, Port, float], ...], optional
         Further places to locate, such as balloon taps.
-
-    Returns
-    -------
-    list[float]
-        Wanted distance from the pipe's start for each element, then for
-        each extra place.
     """
     count = len(run.elements)
     even = [(k + 1) / (count + 1) * total for k in range(count)]
 
     def anchor(port: Port, side: float) -> float | None:
-        """Return how far along the pipe a line's end nozzle is.
+        """Return a line end nozzle's distance along the pipe, or None.
 
         Parameters
         ----------
-        port : Port
-            End nozzle of an author's line.
         side : float
-            +1 for the outlet a line leaves, -1 for the inlet it reaches.
-
-        Returns
-        -------
-        float or None
-            Distance along the pipe, or ``None`` where it is not known.
+            +1 for the outlet a line leaves, -1 for the inlet it enters.
         """
         if port is run.source:
             return 0.0
@@ -936,21 +578,7 @@ def _wanted(run: MountedRun, total: float, along: Callable[[Port], float] | None
 
 
 def _room(run: MountedRun) -> float:
-    """Return the shortest straight pipe that holds every element where wanted.
-
-    Wanted distances grow linearly with the pipe's length, so each spacing
-    rule gives a least length; the longest of them is returned.
-
-    Parameters
-    ----------
-    run : MountedRun
-        Pipe to measure.
-
-    Returns
-    -------
-    float
-        Pipe length, nozzle to nozzle.
-    """
+    """Return the shortest pipe that holds each element where wanted."""
     start, unit = _wanted(run, 0.0), _wanted(run, 1.0)
     slope = [b - a for a, b in zip(start, unit)]
     lengths = [_level_length(element) for element in run.elements]
@@ -964,26 +592,11 @@ def _room(run: MountedRun) -> float:
 
 
 def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[int]]:
-    """Return ways to put the elements on legs, best first, keeping flow order.
+    """Return ways to put elements on legs in flow order, best first.
 
-    The whole chain goes on one leg when one holds it: the legs nearest the
-    elements' positions come first, level legs before upright ones. Last,
-    elements are dealt onto legs in order, each on the first leg with room
-    left.
-
-    Parameters
-    ----------
-    run : MountedRun
-        Pipe whose elements are placed.
-    legs : list[Leg]
-        Legs of its routed pipe.
-    wanted : list[float]
-        Wanted distance along the pipe of each element, from :func:`_wanted`.
-
-    Returns
-    -------
-    list[list[int]]
-        For each way, the leg index of each element.
+    Single legs that hold the whole chain come first, level before
+    upright, then nearest the wanted positions. The last way deals
+    elements onto legs in order, each on the first leg with room.
     """
     room = [_size(leg) - sum(_margins(index, len(legs))) + ALONG
             for index, leg in enumerate(legs)]
@@ -995,18 +608,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     middle = sum(wanted) / len(wanted)
 
     def distance(index: int) -> float:
-        """Return how far a leg's middle is from the chain's wanted spot.
-
-        Parameters
-        ----------
-        index : int
-            Leg index.
-
-        Returns
-        -------
-        float
-            Distance along the pipe, in pixels.
-        """
+        """Return how far a leg's middle is from the wanted middle."""
         return abs(starts[index] + _size(legs[index]) / 2 - middle)
 
     whole = sorted((index for index in range(len(legs))
@@ -1030,23 +632,16 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
 
 def _centres(wanted: list[float], lengths: list[float], size: float,
              head: float, tail: float) -> list[float]:
-    """Return centres near the wanted ones, in order, apart and inside the leg.
+    """Return ordered, spaced centres on the leg near the wanted ones.
+
+    Space them evenly when they do not fit.
 
     Parameters
     ----------
     wanted : list[float]
-        Wanted centre distances from the leg start, in flow order.
-    lengths : list[float]
-        Length of each element along the leg.
-    size : float
-        Leg length.
+        Wanted centre distances from the leg start.
     head, tail : float
         Length kept clear at the leg's start and end.
-
-    Returns
-    -------
-    list[float]
-        Centre distances; spaced evenly when the elements do not fit.
     """
     if sum(lengths) + ALONG * (len(lengths) - 1) + head + tail > size:
         free = max(0.0, size - sum(lengths))
@@ -1072,23 +667,16 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
              zones: list[Box], pipes: list[list[Point]]) -> bool:
     """Set a pipe's elements on its routed polyline.
 
+    Return whether every element found clear room.
+
     Parameters
     ----------
-    run : MountedRun
-        Pipe to set.
-    points : list[Point]
-        Routed polyline of its contracted pipe.
     obstacles : list[Unit]
         Units already drawn; extended with the elements set.
     zones : list[Box]
-        Ground covered by stations already set; extended with this pipe's.
+        Ground covered by stations set so far; extended in place.
     pipes : list[list[Point]]
         Every routed pipe, this one included.
-
-    Returns
-    -------
-    bool
-        Whether every element found clear room.
     """
     source, dest = run.source.owner, run.dest.owner
     assert source is not None and dest is not None
@@ -1102,8 +690,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     want = _wanted(run, sum(_size(leg) for leg in legs),
                    lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)),
                    run.taps)
-    # On an upright pipe a balloon hangs level with the devices, so they keep
-    # its reach clear along the pipe from where it taps.
+    # Keep a balloon's reach clear around its tap on an upright leg.
     tap_zones = []
     for distance in want[count:]:
         (x, y), level = _point_at(legs, distance)
@@ -1114,24 +701,18 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     for leg in legs:
         starts.append(travelled)
         travelled += _size(leg)
-    # The pipe's own end units keep only the leg margin, not the ALONG clearance.
+    # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
 
     def attempt(assigned: list[int], strict: bool) -> list[dict[Unit, Frame]] | None:
-        """Return frames for each element on its leg, or ``None`` if one has no room.
+        """Return each element's frames on its assigned leg.
 
         Parameters
         ----------
-        assigned : list[int]
-            Leg index of each element.
         strict : bool
-            Give up when an element finds no clear spot, rather than set it
-            as near its wanted spot as the leg allows.
-
-        Returns
-        -------
-        list[dict[Unit, Frame]] or None
-            Frames for each element, in flow order.
+            Return ``None`` when an element finds no clear spot,
+            instead of setting it as near its wanted spot as the leg
+            allows.
         """
         placed: list[dict[Unit, Frame]] = []
         mine = [*zones, *tap_zones]
@@ -1148,7 +729,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                 low = max(length / 2 + head, floor + length / 2)
                 high = size - length / 2 - tail
                 chosen = None
-                reach = int(size / NUDGE_STEP) + 1  # anywhere on the leg, nearest first
+                # Search the whole leg, nearest spot first.
+                reach = int(size / NUDGE_STEP) + 1
                 for step in sorted(range(-reach, reach + 1), key=abs):
                     at = centre + step * NUDGE_STEP
                     if not low - 1e-6 <= at <= high + 1e-6:
@@ -1182,23 +764,17 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
 
 
 def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
-    """Lay out a sheet in two passes: equipment, then furniture on its routed pipes.
+    """Place the equipment, then set the furniture on its routed pipes.
 
-    Pass 1 places equipment and flags with each furnished pipe stating the
-    room its furniture needs (:class:`pandid.layout.layered.Link`), so pass
-    2 sets the furniture without moving equipment.
+    Each furnished pipe reserves its furniture's room in the equipment
+    solve (:class:`pandid.layout.layered.Link`).
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet with fresh solver slots and recycle marks.
     runs : list[MountedRun]
-        Its furnished pipes, from :func:`mounted_runs`; may be empty.
-
-    Returns
-    -------
-    None
-        Every process unit has a frame.
+        Furnished pipes from :func:`mounted_runs`; may be empty.
     """
     from pandid.layout.layered import Link, place_equipment
     from pandid.layout.station import place_stations
@@ -1226,6 +802,6 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     routes, lines = _routed_pipes(fs, runs, retained)
     obstacles = list(retained)
     zones: list[Box] = []
-    # The longest chains, stations first, are the hardest to fit.
+    # Set the longest chains first.
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
         _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes])
