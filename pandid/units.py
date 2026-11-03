@@ -1539,7 +1539,6 @@ def _compose_onto(unit: "Unit", *parts: _Part) -> None:
     unit.overlays = overlays
 
 
-# Self type for _FaceFamilies methods.
 _FaceFamiliesT = TypeVar("_FaceFamiliesT", bound="_FaceFamilies")
 
 
@@ -1707,7 +1706,6 @@ class _FaceFamilies(Unit):
         return self
 
 
-# Self type for _MultiPortVessel methods.
 _MultiPortVesselT = TypeVar("_MultiPortVesselT", bound="_MultiPortVessel")
 
 
@@ -4477,7 +4475,6 @@ class Reactor(Unit):
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
-            # An alias, not a second port.
             self.feed = self.feeds[0]
 
 
@@ -4679,7 +4676,6 @@ class Separator(Unit):
         "horizontal": {"feed_1": "feed"},
     }
 
-    # Values of ``characteristic``.
     _CHARACTERISTICS = ("gravity", "electrostatic", "electromagnetic")
 
     # Variant -> advice, for variants that take one feed.
@@ -4721,7 +4717,6 @@ class Separator(Unit):
         reference: str = "",
     ):
         names = _feed_names(n_feeds, "Separator")
-        # Refuse a characteristic given as the variant.
         if variant in self._CHARACTERISTICS:
             raise ValueError(
                 f"{name}: {variant!r} is a characteristic, not a variant; "
@@ -4768,7 +4763,6 @@ class Separator(Unit):
         # Feeds come before the draws.
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
-            # An alias, not a second port.
             self.feed = self.feeds[0]
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -5068,7 +5062,6 @@ class Column(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         self.draws = tuple(self._add_port(draw, "outlet", "draw") for draw in draw_names)
         if n_feeds == 1:
-            # An alias, not a second port.
             self.feed = self.feeds[0]
         self.feed_stages = feed_stages
         self.draw_stages = draw_stages

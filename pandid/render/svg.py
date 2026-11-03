@@ -41,7 +41,6 @@ LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
 
 # --- line weights -----------------------------------------------------
 
-# Dash pattern per signal kind.
 _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
                 "capillary": "3,3"}
 
@@ -2643,7 +2642,6 @@ def _page(page_size: "str | None") -> "_Sheet | None":
     return _Sheet(page_size.upper(), *dims)
 
 
-# Border frames.
 _BORDERS = ("none", "zone")
 # Diagram kinds (ISO 10628-1 4.2 to 4.4).
 _DIAGRAMS = ("pfd", "p&id", "bfd")

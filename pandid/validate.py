@@ -982,7 +982,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # grossly indirect routes.
         hosted = [(u, box, getattr(u, "host", None)) for u, box in boxes]
         for s in drawn:
-            # Skip a stream with no route.
             if s.route is None:
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
@@ -1057,7 +1056,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
         # Soft: a horizontal run whose ends nearly share an elevation.
         for s in drawn:
-            # Skip signal lines.
             if s.kind in SIGNAL_KINDS:
                 continue
             su, du = s.source.owner, s.dest.owner

@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
 
-# Stencil ink.
 _INK = _BODY_INK
 
 # Fill for shapes this module draws itself.
@@ -51,7 +50,6 @@ _PAPER = "#ffffff"
 # No stroke: draw.io drops a key set to ``none``.
 _NO_STROKE = "none"
 
-# Ink for lines.
 _LINE_INK = "#000000"
 
 # draw.io ``jumpStyle`` for an arc hop.
@@ -360,7 +358,6 @@ HOP_DROPPED = "drawio-hop-dropped"
 _EXPORT_CODES = (*_RENDER_CODES, *_LABEL_CODES, APPROXIMATED, HOP_DROPPED)
 
 
-# Opaque balloon fill.
 _BALLOON_FILL = "#ffffff"
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -1615,7 +1612,6 @@ class DrawioRenderer:
                             keys.append("horizontal=0")
 
             style = ";".join(keys) + ";"
-            # The points between the two ends.
             waypoints = points[1:-1]
             along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
@@ -1923,7 +1919,6 @@ class DrawioRenderer:
 # Opaque plate behind a line number.
 _NUMBER_PLATE = "labelBackgroundColor=#ffffff"
 
-# Line-number label keys.
 _NUMBER_KEYS = ["verticalAlign=middle", "align=center"]
 
 
