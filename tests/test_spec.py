@@ -9,6 +9,7 @@ feature. A bare ValueError is a bug report waiting to happen.
 
 import json
 import sys
+import warnings
 
 import pytest
 
@@ -1245,6 +1246,18 @@ def test_a_side_given_as_at_still_loads_and_is_reported(entry):
     found = [i.message for i in fs.validate() if i.code == "deprecated"]
     assert len(found) == 1 and found[0].startswith(f"{inst.name}: ")
     assert fs.to_dict()["instruments"][0]["face"] == "S"
+
+
+def test_a_balloon_entry_refused_after_its_old_face_warns_nothing():
+    """The deprecation is said once the entry is read, so a refusal later in
+    the same entry comes alone."""
+    entry = {"balloon_of": "FE-303", "at": "S", "port_faces": {"missing": "N"}}
+    spec = _spec(units=_WITH_ELEMENT, instruments=[entry])
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(SpecError, match="missing"):
+            Flowsheet.from_dict(spec)
+    assert caught == []
 
 
 @pytest.mark.parametrize(

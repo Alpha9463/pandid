@@ -3756,33 +3756,39 @@ class Instrument(Unit):
         DeprecationWarning
             If ``at`` names a face of a unit.
         """
-        self._attach(on, at, face, offset, angle, relation)
-        self._deprecate_at(at)
+        self._attach(on, at, face, offset, angle, relation, warn=True)
         return self
 
-    def _deprecate_at(self, at: object) -> None:
-        """Warn the caller's caller that ``at`` named a unit face, if it did.
+    def _deprecate_at(self, at: object, face: str | None, stacklevel: int = 4) -> None:
+        """Warn that ``at`` named the unit face ``face``, if it did.
 
         Parameters
         ----------
         at : object
-            The ``at`` this balloon was attached with.
+            The ``at`` this balloon is attached with.
+        face : str or None
+            The face that ``at`` resolved to.
+        stacklevel : int, default=4
+            Warning stack level; 4 names the caller of this method's caller.
         """
         from dataclasses import replace
 
         if isinstance(at, str):
             replace(_AT_FACE, what=f"at={at!r} (a unit face)",
-                    instead=f"face={self.face!r}, or face: {self.face} in a spec",
-                    ).warn(self, where=self.name, stacklevel=4)
+                    instead=f"face={face!r}, or face: {face} in a spec",
+                    ).warn(self, where=self.name, stacklevel=stacklevel)
 
     def _attach(self, on: "Stream | Unit", at: float | str | None, face: str | None,
-                offset: float, angle: float, relation: str) -> None:
-        """Anchor this balloon as :meth:`attach` does, without the warning.
+                offset: float, angle: float, relation: str, warn: bool = False) -> None:
+        """Anchor this balloon as :meth:`attach` does.
 
         Parameters
         ----------
         on, at, face, offset, angle, relation
             As for :meth:`attach`.
+        warn : bool, default=False
+            Warn the caller of :meth:`attach` for a face given as ``at``,
+            after every check and before any field changes.
 
         Raises
         ------
@@ -3846,6 +3852,8 @@ class Instrument(Unit):
                 f"{getattr(on, 'name', on)!r}, one of "
                 f"{', '.join(repr(r) for r in RELATIONS)}, got {relation!r}"
             )
+        if warn:
+            self._deprecate_at(at, side, stacklevel=5)
         self.host = on
         self.at = fraction
         self.face = side

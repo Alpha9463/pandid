@@ -1206,6 +1206,46 @@ def _same_file(path: str) -> str:
     return os.path.normcase(os.path.realpath(path))
 
 
+@pytest.mark.parametrize(
+    "old",
+    [
+        pytest.param(
+            lambda fs, drum, lv: fs.add_control_loop(
+                "L", 101, measuring=drum, acting_on=lv, at="S"
+            ),
+            id="at",
+        ),
+        pytest.param(
+            lambda fs, drum, lv: fs.add_control_loop(
+                "L", 101, measuring=drum, acting_on=lv, controller_at="S"
+            ),
+            id="controller_at",
+        ),
+    ],
+)
+def test_a_loop_deprecation_raised_as_an_error_changes_nothing(old):
+    fs, drum, lv = _feedback_sheet()
+    before = (_snapshot(fs), fs.to_dict())
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        with pytest.raises(DeprecationWarning):
+            old(fs, drum, lv)
+    assert (_snapshot(fs), fs.to_dict()) == before
+
+
+def test_a_loop_refused_at_its_second_line_leaves_the_sheet_whole():
+    """The second signal line is refused only when the sheet names it, after
+    the loop, both balloons and the first line are already on the sheet."""
+    fs = Flowsheet("short", stream_naming_scheme=lambda n: {1: "S1"}[n])
+    drum = fs.add(U.Vessel("V-101"))
+    lv = fs.add(U.Valve("LV-101", variant="control"))
+    before = _snapshot(fs)
+    with pytest.warns(DeprecationWarning), pytest.raises(KeyError):
+        fs.add_control_loop("L", measuring=drum, acting_on=lv, at="S")
+    assert _snapshot(fs) == before
+    assert [i for i in fs.validate() if i.code == "deprecated"] == []
+
+
 def test_a_refused_control_loop_burns_no_allocated_number():
     """The sharpest of them, because the damage outlives the error: the number
     is left to the sheet, the call is refused, and the retry used to come back

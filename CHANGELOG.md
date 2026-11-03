@@ -100,6 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   face no longer leaves the balloon on the sheet, and `add_instrument()`
   refuses `at=` or `face=` given with no `sensing=`, `acting_on=` or `near=`
   instead of dropping them.
+- **A control loop refused while it is added leaves the sheet as it was
+  (#438).** `add_control_loop()` refused at its second signal line, such as by
+  a `stream_naming_scheme` that cannot name it, used to leave the loop, both
+  balloons and the first line behind.
 - **An expander keeps every field of the reducer it is turned from (#508).**
   `large_end="outlet"` now draws at the reducer's trim weight, and its bands
   are mirrored with the artwork.

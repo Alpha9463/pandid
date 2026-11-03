@@ -1015,8 +1015,9 @@ class Flowsheet:
         inst = self._build_instrument(
             type, number, sensing=sensing, acting_on=acting_on, near=near,
             at=at, face=face, offset=offset, angle=angle, variant=variant, **kwargs)
-        self.add(inst)
-        inst._deprecate_at(at)
+        with self._unchanged_if_it_raises():
+            self.add(inst)
+            inst._deprecate_at(at, inst.face)
         return inst
 
     def _build_instrument(self, type: str,
@@ -1270,9 +1271,10 @@ class Flowsheet:
         inst._attach(element, at, face, offset, angle, "sensing")
         # Mark the element first; add() then allows the shared tag.
         inst._marks = element
-        self.add(inst)
-        element.balloon = inst
-        inst._deprecate_at(at)
+        with self._unchanged_if_it_raises():
+            self.add(inst)
+            element.balloon = inst
+            inst._deprecate_at(at, inst.face)
         return inst
 
     def add_control_loop(
@@ -1398,19 +1400,20 @@ class Flowsheet:
         self._resolve_connection(controller.sig_out, acting_on,
                                  kind=output_kind, pending=pending)
 
-        transmitter._deprecate_at(at)
+        transmitter._deprecate_at(at, transmitter.face)
         if controller_at is not None:
             replace(_CONTROLLER_AT, what=f"add_control_loop(controller_at={controller_at!r})",
                     instead=f"controller_face={controller.face!r}",
                     ).warn(controller, where=controller.name)
         # Commit.
-        if allocates is not None:
-            self._register_loop(loop, allocated=allocates)
-        self.add(transmitter)
-        self.add(controller)
-        measurement = self.connect(
-            transmitter.sig_out, controller.sig_in, kind=measurement_kind)
-        output = self.connect(controller.sig_out, acting_on, kind=output_kind)
+        with self._unchanged_if_it_raises():
+            if allocates is not None:
+                self._register_loop(loop, allocated=allocates)
+            self.add(transmitter)
+            self.add(controller)
+            measurement = self.connect(
+                transmitter.sig_out, controller.sig_in, kind=measurement_kind)
+            output = self.connect(controller.sig_out, acting_on, kind=output_kind)
         return ControlLoop(
             loop, transmitter, controller,
             acting_on.owner if isinstance(acting_on, Port) else acting_on,

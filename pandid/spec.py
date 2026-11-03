@@ -1266,6 +1266,10 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
                                               (("face", "variant", "display", "label_pos"),
                                                _text),
                                               (("description", "reference"), _drawn))))
+    # A text at: is a face, warned of once the entry is read.
+    old = kwargs.pop("at") if isinstance(kwargs.get("at"), str) and "face" not in kwargs else None
+    if old is not None:
+        kwargs["face"] = old
     with _blame(where, (TypeError, ValueError)):
         inst = fs.add_balloon(element, **kwargs)
     # add_balloon added the balloon; set the remaining fields here.
@@ -1277,6 +1281,7 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
         _read_pin(inst, entry["pin"], f"{where}.pin")
     if "port_faces" in entry:
         _read_port_faces(inst, entry["port_faces"], f"{where}.port_faces")
+    inst._deprecate_at(old, inst.face)
     return inst
 
 

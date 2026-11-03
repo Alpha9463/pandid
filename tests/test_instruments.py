@@ -531,6 +531,29 @@ def test_the_warning_names_the_face_that_was_typed(typed: str, side: str):
     assert lt.face == side
 
 
+_OLD_FACE = {
+    "add_instrument": lambda fs, lt, drum, fe: fs.add_instrument("LT", 1, sensing=drum, at="S"),
+    "add_balloon": lambda fs, lt, drum, fe: fs.add_balloon(fe, at="S"),
+    "attach": lambda fs, lt, drum, fe: lt.attach(drum, at="S"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_OLD_FACE))
+def test_a_deprecation_raised_as_an_error_changes_nothing(case: str):
+    """A warning filtered to an error refuses the call, so it must leave the
+    sheet, the balloon and the element as they were."""
+    fs, drum, fe, _ = _hosts()
+    lt = fs.add_instrument("LT", 100, sensing=drum, face="W")
+    fields = ("host", "at", "face", "offset", "angle", "relation")
+    before = (fs.to_dict(), [getattr(lt, name) for name in fields], fe.tag, fe.balloon)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        with pytest.raises(DeprecationWarning):
+            _OLD_FACE[case](fs, lt, drum, fe)
+    assert (fs.to_dict(), [getattr(lt, name) for name in fields], fe.tag, fe.balloon) == before
+    assert [i for i in fs.validate() if i.code == "deprecated"] == []
+
+
 # --- layout ------------------------------------------------------------------
 
 
