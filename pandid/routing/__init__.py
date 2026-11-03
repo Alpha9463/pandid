@@ -274,7 +274,6 @@ class DefaultRouter:
             preview = preview_separated_waypoints(routed)
             crossing_index = CrossingIndex()
             for s in routed:
-                # Every routed stream has a route.
                 assert s.route is not None
                 wp = preview.get(id(s), s.route.waypoints)
                 _record_route(crossing_index, wp, s.route.manual)

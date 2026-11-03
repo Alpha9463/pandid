@@ -64,7 +64,6 @@ def select_faces(
         frame = unit.frame
         if frame is None:
             continue
-        # Clear earlier choices.
         frame.port_faces.clear()
         if not fs.auto_faces:
             continue

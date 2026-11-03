@@ -488,9 +488,7 @@ class StreamLabelOptions:
         self.enclosure = _resolve_enclosure(self.enclosure)
 
 
-# --------------------------------------------------------------
 # Convenience constructors for the common boxes
-# --------------------------------------------------------------
 
 # Kinds an equipment list schedules by default.
 _MAJOR_EQUIPMENT = frozenset({

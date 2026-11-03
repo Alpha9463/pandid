@@ -1890,7 +1890,6 @@ class Flowsheet:
         src = _signal_end(src, kind, "source")
         dst = _signal_end(dst, kind, "destination")
 
-        # Refuse a port joined to itself.
         if src is dst:
             raise ValueError(
                 f"{src.owner.name}.{src.name} is both the source and the "
@@ -2102,7 +2101,6 @@ class Flowsheet:
                 self._put_geometry(unhung, keep_manual=False)
             else:
                 self._unhung = unhung
-        # Mark the routes current.
         self._route_stale = False
 
     def _geometry(self) -> tuple:
@@ -2225,7 +2223,6 @@ class Flowsheet:
                                        tabulates_boundary_flows)
         from pandid.validate import geometry_issues, model_issues
 
-        # Check the stream-label enclosure.
         _resolve_enclosure(self.stream_labels.enclosure)
         self.renumber_streams()
         check_render_arguments(self, diagram=diagram, **arguments)
@@ -2254,7 +2251,6 @@ class Flowsheet:
             Runs in order of their first segment.
         """
         material = [s for s in self.streams if s.kind == "material"]
-        # Key streams by id.
         pos = {id(s): i for i, s in enumerate(material)}
         parent = list(range(len(material)))
 

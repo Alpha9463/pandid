@@ -113,9 +113,7 @@ class SpecError(ValueError):
     """Error for a flowsheet spec that cannot be read or written."""
 
 
-# ----------------------------------------------------------------
 # Primitive validation
-# ----------------------------------------------------------------
 
 
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
@@ -554,9 +552,7 @@ def _read_fields(data: Mapping[str, Any], where: str,
             for keys, read in readers for key in keys if key in data}
 
 
-# --------------------------------------------------------------
 # The equipment registry
-# --------------------------------------------------------------
 
 
 def _snake(name: str) -> str:
@@ -630,9 +626,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     return _CLASSES[name]
 
 
-# --------------------------------------------------------------
 # Reading: spec -> Flowsheet
-# --------------------------------------------------------------
 
 _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
@@ -1473,7 +1467,6 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
         minted = unit._mint_port(name)
         if minted is not None:
             return minted
-    # Resolve an alias to its port name.
     if isinstance(name, str):
         name = unit._canonical_port_name(name)
     if not isinstance(name, str) or name not in unit.ports:
@@ -2101,9 +2094,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         raise _fail_from(e, where) from None  # e.g. a bad align=
 
 
-# --------------------------------------------------------------
 # Writing: Flowsheet -> spec
-# --------------------------------------------------------------
 
 _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
 
@@ -2182,7 +2173,6 @@ def to_dict(fs: Flowsheet) -> dict:
               for f in dataclass_fields(StreamLabelOptions)
               if getattr(fs.stream_labels, f.name) != f.default}
     if labels:
-        # Raise ValueError for an unknown enclosure.
         _resolve_enclosure(fs.stream_labels.enclosure)
         spec["stream_labels"] = labels
     if fs.title_block is not None:
@@ -2523,7 +2513,6 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["draw_as_recycle"] = True
     for key in LINE_NUMBER_FIELDS:
         value = getattr(stream, key)
-        # Skip an auto-assigned sequence.
         if value is not None and not (key == "sequence" and value == stream._auto_sequence):
             entry[key] = value
     for key in ("color", "dasharray"):
@@ -2620,9 +2609,7 @@ def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
     return entry
 
 
-# --------------------------------------------------------------
 # File loaders
-# --------------------------------------------------------------
 
 
 def from_json(path: str | Path) -> Flowsheet:
