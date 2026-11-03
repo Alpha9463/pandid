@@ -283,11 +283,11 @@ class DefaultRouter:
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
         crossing_index = CrossingIndex()
         routed: list["Stream"] = []
-        # Balloon names by the stream each one's chain of hosts taps.
+        # Balloons hung from another unit, by the stream their chain taps.
         balloons: dict[int, set[str]] = {}
         for u in fs.units:
             tapped = tapped_stream(u)
-            if tapped is not None:
+            if tapped is not None and getattr(u, "host", None) is not tapped:
                 balloons.setdefault(id(tapped), set()).add(u.name)
 
         def settle(stream: "Stream") -> None:

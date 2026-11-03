@@ -2029,7 +2029,7 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
     line = fs.connect(feed.outlet, prod.inlet)
     loop = fs.add_loop("T", 1)
     tt = fs.add_instrument("TT", loop, sensing=line, at=0.5, offset=70)
-    tic = fs.add_instrument("TIC", loop, near=tt, at="S", offset=70)
+    tic = fs.add_instrument("TIC", loop, near=tt, face="S", offset=70)
     fs.connect(tt.sig_out, tic.sig_in, kind="electric")
     router = _CountingRouter()
     fs.route(router)
@@ -2043,3 +2043,57 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
     for (ax, ay), (bx, by) in zip(points, points[1:]):
         on = min(ax, bx) <= x1 and max(ax, bx) >= x0 and min(ay, by) <= y1 and max(ay, by) >= y0
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
+
+
+def test_a_tap_balloon_on_a_bent_line_settles_with_its_tap_on_the_line():
+    """Settle a slanted tap balloon whose lanes lie across its own line.
+
+    Returns
+    -------
+    None
+        Routing settles and the tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("feedback")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=100, angle=45)
+    fs.route()
+
+    assert fs.route_converged
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)
+
+
+def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
+    """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
+
+    Returns
+    -------
+    None
+        TIC's free x is the one its asked offset and angle give.
+    """
+    from pandid.layout.attach import _anchor, _standoff_box
+    from pandid.portgeom import resolve_size
+
+    fs = Flowsheet("partial pin")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
+    fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=feed.outlet.stream, offset=70)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=50, angle=45).pin(y=500)
+    fs.route()
+
+    anchor = _anchor(tic)
+    assert anchor is not None and tic.frame is not None
+    tap, ref = anchor
+    w, h = resolve_size(tic)
+    asked = _standoff_box(tap, ref, tic.offset, tic.angle, w, h)
+    assert tic.frame.x == pytest.approx(asked[0])
+    assert tic.frame.y == pytest.approx(500)

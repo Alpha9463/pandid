@@ -206,6 +206,8 @@ class Call:
         Search effort and its limit.
     route_pass : int
         Router pass that made the search, counted from one.
+    own_lanes : tuple or None
+        Lanes the search charged the stream for.
     """
 
     sheet: Flowsheet
@@ -220,6 +222,7 @@ class Call:
     expansions: int
     budget: int
     route_pass: int
+    own_lanes: Optional[tuple] = None
 
 
 class Recorder:
@@ -346,7 +349,7 @@ class Recorder:
         self.calls.append(
             Call(self._active_sheet, graph, start, goal, start_dir, goal_dir,
                  dict(edge_penalties or {}), is_recycle, list(result), self._count, budget,
-                 self._active_pass)
+                 self._active_pass, own_lanes)
         )
         return result
 
@@ -636,7 +639,8 @@ def avoidable(call: Call, axis: str, coord: float) -> tuple[Optional[str], Optio
     banned = dict(call.edge_penalties)
     for edge in lane_edges(call.graph, axis, track):
         banned[edge] = banned.get(edge, 0.0) + 1e7
-    alt = find_path(call.graph, call.start, call.goal, call.start_dir, call.goal_dir, banned, call.is_recycle)
+    alt = find_path(call.graph, call.start, call.goal, call.start_dir, call.goal_dir, banned,
+                    call.is_recycle, own_lanes=call.own_lanes)
     if not alt:
         return "forced", None
     alt_len = path_length([call.start] + alt + [call.goal])

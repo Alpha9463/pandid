@@ -96,8 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **A balloon hung from another balloon no longer sits on the line it taps
-  (#619).** The line also stops routing along lanes that only its own
-  balloons add, so balloons and routes settle instead of chasing each other.
+  (#619).** The line also stops routing along lanes that only such balloons
+  add, so balloons and routes settle instead of chasing each other.
 - **A refused balloon placement changes nothing (#438).** `attach()` with a
   bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
   face no longer leaves the balloon on the sheet, and `add_instrument()`
