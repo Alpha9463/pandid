@@ -105,6 +105,11 @@ def _build() -> tuple:
         -------
         OverlayPart
             The part.
+
+        Raises
+        ------
+        ValueError
+            If the item, registration number or descriptor is invalid.
         """
         return OverlayPart(
             name=name, iso=IsoPart(27, item, reg, descriptor),
@@ -134,6 +139,11 @@ def _build() -> tuple:
         -------
         OverlayPart
             The part.
+
+        Raises
+        ------
+        ValueError
+            If the item, registration number or descriptor is invalid.
         """
         return OverlayPart(
             name=name, iso=IsoPart(28, item, reg, descriptor),
@@ -529,6 +539,11 @@ def _part(group: int, name: str, registry=None):
     -------
     OverlayPart
         The registered part.
+
+    Raises
+    ------
+    ValueError
+        If no part ``(group, name)`` is registered.
     """
     if registry is None:
         from pandid.render.symbols import default_registry as registry
@@ -559,6 +574,13 @@ def agitator_overlays(name: str, kind: str, variant: str) -> tuple:
     -------
     tuple[Overlay, Overlay]
         The agitator, then the motor.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a registered agitator.
+    ValueError
+        If ``kind`` has no variant ``variant``.
     """
     from pandid.render.symbols import Overlay, default_registry
     _part(28, name)
@@ -603,6 +625,8 @@ def internals_overlays(name: str, count: int = 1) -> tuple:
 
     Raises
     ------
+    ValueError
+        If ``name`` is not a registered group-27 part.
     ValueError
         If ``count`` is less than 1.
     """
@@ -650,6 +674,8 @@ def stage_fraction(name: str, stage: int, count: int) -> float:
     ------
     ValueError
         If ``stage`` is not between 1 and ``count``.
+    ValueError
+        If ``name`` is not a registered group-27 part.
     """
     if stage < 1 or stage > count:
         raise ValueError(
@@ -680,6 +706,11 @@ def support_overlays(name: str) -> tuple:
     -------
     tuple[Overlay, ...]
         A skirt, or a pair of legs, brackets or rings.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a registered group-26 part.
     """
     from pandid.render.symbols import Overlay
     _part(26, name)
@@ -710,6 +741,11 @@ def rake_overlays(name: str) -> tuple:
     -------
     tuple[Overlay]
         The stirrer.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a registered group-28 part.
     """
     from pandid.render.symbols import Overlay
     _part(28, name)
@@ -737,6 +773,11 @@ def crushing_overlays(name: str, registry=None) -> tuple:
     -------
     tuple[Overlay]
         The characteristic.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a registered group-29 part.
     """
     from pandid.render.symbols import Overlay
     part = _part(29, name, registry)
@@ -759,6 +800,11 @@ def characteristic_overlays(name: str, registry=None) -> tuple:
     -------
     tuple[Overlay]
         The characteristic.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a registered group-29 part.
     """
     from pandid.render.symbols import Overlay
     _part(29, name, registry)
