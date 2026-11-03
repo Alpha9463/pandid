@@ -1,22 +1,7 @@
 """Compute each unit's frame from the flowsheet topology.
 
-**Stage 1, process.** Units that carry material and streams of kind
-``"material"``:
-
-- cycle breaking, which identifies return lines;
-- placement (:mod:`pandid.layout.layered`): equipment and boundary flags
-  are drawn as a layered graph whose ports are the nozzles;
-- pipe furniture (:mod:`pandid.layout.mounted`): unpinned valves, reducers,
-  fittings and stations stay out of the graph and are set on their routed
-  pipe.
-
-**Stage 2, control.** Instruments and signal runs, placed against the
-stage 1 geometry (:mod:`pandid.layout.control`).
-
-Port-face selection and control placement then repeat until neither moves
-the other, because an attached balloon sits on a drawn path that depends on
-the selected faces. Labels are placed last, on faces no connected nozzle
-uses (:mod:`pandid.layout.labels`).
+Stage 1 places process units and pipe furniture; stage 2 places
+instruments and signal runs against that geometry.
 """
 
 from typing import Protocol, TYPE_CHECKING
@@ -26,39 +11,20 @@ if TYPE_CHECKING:
 
 
 class LayoutEngine(Protocol):
-    """Define the interface ``Flowsheet.layout`` requires of an engine."""
+    """Define the interface a layout engine implements."""
 
     def layout(self, fs: "Flowsheet") -> None:
-        """Compute a frame for each unit.
+        """Store a frame on each unit.
 
         Parameters
         ----------
         fs : Flowsheet
             Sheet to lay out.
-
-        Returns
-        -------
-        None
-            Frames are stored on the units.
         """
 
 
 def _seed_slots(fs: "Flowsheet") -> None:
-    """Seed each unit's solver slot from its pin.
-
-    Every run starts from author intent, never from earlier coordinates,
-    so layout is idempotent.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet whose units receive fresh slots.
-
-    Returns
-    -------
-    None
-        ``_slot`` is replaced on every unit.
-    """
+    """Replace each unit's solver slot with one seeded from its pin."""
     from pandid.geometry import _Slot
     from pandid.portgeom import resolve_size
 
@@ -78,24 +44,15 @@ def _seed_slots(fs: "Flowsheet") -> None:
 
 
 class ConstraintLayoutEngine:
-    """Place units with the default automatic layout.
-
-    Equipment and flags are drawn as a layered graph; furniture is set on
-    its routed pipe (:mod:`pandid.layout.mounted`).
-    """
+    """Place units with the default automatic layout."""
 
     def layout(self, fs: "Flowsheet") -> None:
-        """Resolve process and control geometry for a sheet.
+        """Set each unit's frame and port faces.
 
         Parameters
         ----------
         fs : Flowsheet
             Sheet to lay out.
-
-        Returns
-        -------
-        None
-            Unit frames and chosen faces are updated in place.
         """
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import place_control
@@ -109,8 +66,7 @@ class ConstraintLayoutEngine:
         runs = mounted_runs(fs)
         fs._mounted_layout = bool(runs)
         place_mounted(fs, runs)
-        # Repeat face selection and control placement until no balloon moves,
-        # up to the pass limit.
+        # Repeat until no balloon moves, up to the pass limit.
         for _ in range(MAX_PLACEMENT_PASSES):
             select_faces(fs)
             if not place_control(fs):

@@ -1,4 +1,4 @@
-"""Measure a laid-out and routed drawing: hard findings, crossings, bends and area."""
+"""Measure a routed drawing: findings, crossings, bends and area."""
 
 from __future__ import annotations
 
@@ -31,16 +31,7 @@ class Quality:
     Attributes
     ----------
     hard : tuple[int, ...]
-        Error count, fallback count, named geometric findings, and undrawn
-        stream count, in a stable order for pairwise comparison.
-    crossings, bends, excess_bends : int
-        Proper crossings and direction changes on final separated paths.
-    length, area : float
-        Total route length and frame bounding-box area in drawing pixels.
-    hard_conflicts : frozenset[Conflict]
-        Named automatic routing and placement defects.
-    crossing_pairs : frozenset[tuple[int, int]]
-        Crossing stream identities in global flowsheet order.
+        Error, fallback, finding-code and undrawn-stream counts.
     """
 
     hard: tuple[int, ...]
@@ -54,23 +45,7 @@ class Quality:
 
 
 def measure_final(fs: Flowsheet) -> Quality:
-    """Measure the final frames and separated routes of a settled sheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        A sheet whose layout and route stages have completed.
-
-    Returns
-    -------
-    Quality
-        Drawing findings and costs for candidate acceptance.
-
-    Raises
-    ------
-    ValueError
-        If the sheet has stale geometry.
-    """
+    """Measure the frames and routes of a laid-out and routed sheet."""
     if fs._layout_stale or fs._route_stale:
         raise ValueError("measure_final requires completed layout and routing")
     issues = fs.validate()

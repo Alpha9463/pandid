@@ -1,4 +1,4 @@
-"""Place registered valve stations as complete local assemblies."""
+"""Place valve stations as whole assemblies on their lines."""
 
 from __future__ import annotations
 
@@ -18,23 +18,12 @@ if TYPE_CHECKING:
 
 def _frame(unit: Unit, x: float, y: float, *, mirror: bool | str = False,
            orientation: float = 0) -> Frame:
-    """Move a unit while retaining its resolved grid rank.
+    """Return a unit's frame moved to ``(x, y)`` with a new transform.
 
     Parameters
     ----------
-    unit : Unit
-        Station member with an existing frame.
-    x, y : float
-        New top-left position.
     mirror : bool or str
-        Local station transform.
-    orientation : float
-        Rotation in degrees.
-
-    Returns
-    -------
-    Frame
-        Candidate member geometry.
+        ``True``, ``"x"``, ``"y"`` or ``"xy"`` mirrors on those axes.
     """
     old = unit.frame
     assert old is not None
@@ -47,21 +36,14 @@ def _frame(unit: Unit, x: float, y: float, *, mirror: bool | str = False,
 
 def _station_frames(assembly: StationAssembly, left: float, y: float,
                     mirrored: bool) -> dict[Unit, Frame]:
-    """Build main, bypass, and drain frames around one centerline.
+    """Return main, bypass and drain frames around one centerline.
 
     Parameters
     ----------
-    assembly : StationAssembly
-        Station and its local spacing options.
     left, y : float
-        Footprint left edge and material-run centerline.
+        Footprint left edge and centerline.
     mirrored : bool
-        Whether flow crosses the footprint from right to left.
-
-    Returns
-    -------
-    dict[Unit, Frame]
-        Candidate geometry for each station member.
+        Whether flow runs right to left.
     """
     station = assembly.station
     branch = {station.bypass, station.upstream_drain, station.downstream_drain}
@@ -107,20 +89,7 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
 
 
 def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
-    """Check assembly bodies against units outside the station.
-
-    Parameters
-    ----------
-    frames : dict[Unit, Frame]
-        Candidate geometry for the station.
-    obstacles : list[Unit]
-        Other process units on the sheet.
-
-    Returns
-    -------
-    bool
-        Whether all candidate bodies have external clearance.
-    """
+    """Return whether frames keep their pins and clear obstacles."""
     for unit, frame in frames.items():
         pin = unit.pin_
         if pin is not None and (
@@ -147,22 +116,7 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
 
 def _anchored_origin(assembly: StationAssembly, preferred_left: float,
                      centerline: float, mirrored: bool) -> tuple[float, float] | None:
-    """Derive a station origin from its exact member coordinates.
-
-    Parameters
-    ----------
-    assembly : StationAssembly
-        Station whose member pins constrain its footprint.
-    preferred_left, centerline : float
-        Unconstrained station origin on the host corridor.
-    mirrored : bool
-        Whether the station runs right to left.
-
-    Returns
-    -------
-    tuple[float, float] or None
-        Compatible footprint origin, or ``None`` for conflicting pins.
-    """
+    """Return a station origin that meets its members' pins, or None."""
     base = _station_frames(assembly, 0.0, 0.0, mirrored)
     left, y = preferred_left, centerline
     pinned_x: float | None = None
@@ -194,18 +148,7 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
 
 
 def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
-    """Check clearance between two proposed station footprints.
-
-    Parameters
-    ----------
-    first, second : dict[Unit, Frame]
-        Proposed member frames for distinct stations.
-
-    Returns
-    -------
-    bool
-        Whether their unit bodies remain separate.
-    """
+    """Return whether two stations' member boxes keep clear."""
     for unit, frame in first.items():
         left, top, right, bottom = unit_box(unit, frame)
         for other, other_frame in second.items():
@@ -218,22 +161,7 @@ def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
 def _station_centerline(source: Unit, source_port: str, dest: Unit,
                         dest_port: str, start: tuple[float, float],
                         end: tuple[float, float]) -> float | None:
-    """Find a horizontal station leg after the host nozzles can exit.
-
-    Parameters
-    ----------
-    source, dest : Unit
-        Equipment at the ends of the station's external run.
-    source_port, dest_port : str
-        Connected nozzle names.
-    start, end : tuple[float, float]
-        Resolved nozzle points.
-
-    Returns
-    -------
-    float or None
-        A reachable horizontal axis, or ``None`` without one.
-    """
+    """Return the y of a station's horizontal leg, or None."""
     axis = horizontal_centerline(source, source_port, dest, dest_port, start, end)
     if axis is not None:
         return axis
@@ -268,18 +196,7 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
 
 
 def _fraction(assembly: StationAssembly) -> float:
-    """Return where on its line a station sits.
-
-    Parameters
-    ----------
-    assembly : StationAssembly
-        Station to locate.
-
-    Returns
-    -------
-    float
-        Fraction of its line, or the midpoint for a station not put in one.
-    """
+    """Return a station's fraction along its line, 0.5 by default."""
     from pandid.inline import position
 
     incoming = assembly.station.inlet.stream
@@ -288,19 +205,12 @@ def _fraction(assembly: StationAssembly) -> float:
 
 
 def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = None) -> int:
-    """Move feasible stations together around their member pins.
+    """Place each station that fits on its line, and return the count.
 
     Parameters
     ----------
-    fs : Flowsheet
-        Sheet with ordinary process coordinates assigned.
     assemblies : list[StationAssembly] or None, optional
         Stations to place; every station on the sheet by default.
-
-    Returns
-    -------
-    int
-        Number of complete station assemblies placed.
     """
     chosen = fs._station_assemblies if assemblies is None else assemblies
     if not chosen:
@@ -363,7 +273,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
                     break
                 frames = _station_frames(assembly, *origin, mirrored)
             except ValueError:
-                break  # a member's stated nozzle face cannot be drawn in the station
+                break  # a member's stated nozzle face does not fit the station
             if not _fits(frames, obstacles) or any(
                 not _separated(frames, earlier) for earlier in proposed
             ):

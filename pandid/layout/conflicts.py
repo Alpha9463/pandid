@@ -1,4 +1,4 @@
-"""Named conflicts in completed unit and stream geometry."""
+"""Find named geometric conflicts in a placed and routed flowsheet."""
 
 from __future__ import annotations
 
@@ -15,9 +15,8 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
 
-# Tolerances in drawing units: how far a box or segment may reach into a
-# body before it counts, how far off an axis a segment may be and still be
-# orthogonal, and how close two points are to be the same point.
+# Tolerances in drawing units: body intrusion, off-axis drift and
+# point coincidence.
 _BODY_TOL = 1.0
 _SQUARE_TOL = 0.5
 _POINT_TOL = 0.05
@@ -27,19 +26,7 @@ _DIRECTION = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}
 
 @dataclass(frozen=True, order=True)
 class Conflict:
-    """Identify one geometric defect across copies of a flowsheet.
-
-    Attributes
-    ----------
-    kind : str
-        Stable category of the defect.
-    streams : tuple[int, ...]
-        Stream indices in global flowsheet order.
-    units : tuple[int, ...]
-        Unit indices in global flowsheet order.
-    port : str or None
-        Endpoint port name when the defect belongs to a nozzle.
-    """
+    """A geometric defect and the streams and units it involves."""
 
     kind: str
     streams: tuple[int, ...] = ()
@@ -50,18 +37,7 @@ class Conflict:
 def boxes_overlap(
     a: tuple[float, float, float, float], b: tuple[float, float, float, float]
 ) -> bool:
-    """Test whether two unit boxes overlap beyond edge tolerance.
-
-    Parameters
-    ----------
-    a, b : tuple[float, float, float, float]
-        Left, top, right, and bottom coordinates.
-
-    Returns
-    -------
-    bool
-        Whether the box interiors overlap.
-    """
+    """Return whether two boxes overlap beyond the edge tolerance."""
     return not (
         a[2] - _BODY_TOL <= b[0]
         or b[2] - _BODY_TOL <= a[0]
@@ -73,20 +49,7 @@ def boxes_overlap(
 def segment_crosses_box(
     a: tuple[float, float], b: tuple[float, float], box: tuple[float, float, float, float]
 ) -> bool:
-    """Test whether an orthogonal segment crosses a unit interior.
-
-    Parameters
-    ----------
-    a, b : tuple[float, float]
-        Segment endpoints.
-    box : tuple[float, float, float, float]
-        Left, top, right, and bottom unit coordinates.
-
-    Returns
-    -------
-    bool
-        Whether the segment enters the box interior.
-    """
+    """Return whether an orthogonal segment enters a box interior."""
     bx0, by0, bx1, by1 = box
     if abs(a[0] - b[0]) < _SQUARE_TOL:
         return (
@@ -104,36 +67,12 @@ def segment_crosses_box(
 
 
 def _same_point(a: tuple[float, float], b: tuple[float, float]) -> bool:
-    """Compare two route endpoints at pin-coordinate precision.
-
-    Parameters
-    ----------
-    a, b : tuple[float, float]
-        Points to compare.
-
-    Returns
-    -------
-    bool
-        Whether both coordinates match within tolerance.
-    """
+    """Return whether two points match within tolerance."""
     return abs(a[0] - b[0]) <= _POINT_TOL and abs(a[1] - b[1]) <= _POINT_TOL
 
 
 def _outward(a: tuple[float, float], b: tuple[float, float], face: str) -> bool:
-    """Check that the first nonzero leg follows a port's outward face.
-
-    Parameters
-    ----------
-    a, b : tuple[float, float]
-        Leg endpoints in outward travel order.
-    face : str
-        Port's outward compass direction.
-
-    Returns
-    -------
-    bool
-        Whether the leg is orthogonal and outward.
-    """
+    """Return whether a leg runs orthogonally out of a face."""
     direction = _DIRECTION.get(face)
     if direction is None:
         return False
@@ -152,29 +91,18 @@ def _exit_conflicts(
     points: list[tuple[float, float]],
     hosts: Sequence[object],
 ) -> set[Conflict]:
-    """Name a detached, inward, or obstructed automatic nozzle exit.
+    """Return a stream end's detached, inward or blocked nozzle exit.
 
     Parameters
     ----------
-    fs : Flowsheet
-        Completed drawing under inspection.
-    stream_index : int
-        Global index of the stream.
     boxes : list[tuple[int, tuple[float, float, float, float]]]
-        Placed unit boxes indexed by global unit order.
+        Placed unit boxes with their unit indices.
     index_by_id : dict[int, int]
-        Global unit indices keyed by object identity.
+        Unit indices keyed by object id.
     at_source : bool
-        Whether to inspect the source rather than the destination.
-    points : list[tuple[float, float]]
-        Final route waypoints.
+        Whether to inspect the source end.
     hosts : Sequence[object]
-        Each unit's ``host`` (``None`` when it has none), by global index.
-
-    Returns
-    -------
-    set[Conflict]
-        Defects found at the selected endpoint.
+        Each unit's ``host``, by unit index.
     """
     stream = fs.streams[stream_index]
     port = stream.source if at_source else stream.dest
@@ -205,21 +133,8 @@ def _exit_conflicts(
 
 
 def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
-    """Name geometric defects on final placed and routed objects.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Drawing with final frames and routes.
-
-    Returns
-    -------
-    tuple[Conflict, ...]
-        Deterministically ordered conflicts with global object indices.
-    """
+    """Return a flowsheet's geometric conflicts, sorted."""
     index_by_id = {id(unit): index for index, unit in enumerate(fs.units)}
-    # Read once: asking per segment misses the attribute on every unit
-    # that has none, which dominated this pass.
     hosts = [getattr(unit, "host", None) for unit in fs.units]
     boxes = [
         (index, unit_box(unit, unit.frame))
