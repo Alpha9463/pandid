@@ -251,4 +251,3 @@ def _cost(anchor: tuple[float, float], normal: tuple[float, float],
     (ax, ay), (nx, ny), (tx, ty) = anchor, normal, target
     reach = (tx - ax) * nx + (ty - ay) * ny
     return abs(tx - ax) + abs(ty - ay) + (0.0 if reach >= 0.0 else 2.0 * MIN_ESCAPE)
-

@@ -147,4 +147,3 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     ux, uy = _rotate_ccw(flow[0], flow[1], float(getattr(root, "angle", 90.0)))
     face = "E" if ux >= abs(uy) else ("W" if -ux >= abs(uy) else ("N" if uy < 0 else "S"))
     return reach, girth, face, hosts
-
