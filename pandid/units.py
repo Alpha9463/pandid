@@ -166,7 +166,8 @@ _PLACEMENT_HINTS = Deprecation(
 #: Deprecation of a vessel's default_input_face() and default_output_face().
 _DEFAULT_FACES = Deprecation(
     what="default_input_face() or default_output_face()",
-    instead="input_faces or output_faces, the face each inlet and outlet is drawn on",
+    instead=("inputs= and outputs= to choose the faces, and input_faces and "
+             "output_faces to read them"),
     removed_in="0.1.7",
 )
 
@@ -1865,8 +1866,16 @@ class _MultiPortVessel(_FaceFamilies):
         ValueError
             If a count or face is invalid, or a face has no room.
         """
-        in_faces = _block_faces(inputs, self._home_face("inlet"), self.name, "inputs")
-        out_faces = _block_faces(outputs, self._home_face("outlet"), self.name, "outputs")
+        cls = type(self)
+        own_in = cls.default_input_face is not _MultiPortVessel.default_input_face
+        own_out = cls.default_output_face is not _MultiPortVessel.default_output_face
+        if own_in or own_out:
+            # Honour an overriding subclass until the hooks are removed.
+            _DEFAULT_FACES.warn(self, where=self.name, stacklevel=4)
+        in_home = self.default_input_face() if own_in else self._home_face("inlet")
+        out_home = self.default_output_face() if own_out else self._home_face("outlet")
+        in_faces = _block_faces(inputs, in_home, self.name, "inputs")
+        out_faces = _block_faces(outputs, out_home, self.name, "outputs")
         self._faces = {}
         self.inlets = tuple(
             self._connect(f"in_{i}", "inlet", face)

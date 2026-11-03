@@ -63,7 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `add_instrument()`, `add_balloon()`, `add_control_loop()` and `attach()`,
   `face: N` in a spec, and `controller_face=` for `controller_at=`.
 - **`default_input_face()` and `default_output_face()` on `Tank` and
-  `Vessel` (#624).** Read the faces from `input_faces` and `output_faces`.
+  `Vessel` (#624).** Choose faces with `inputs=` and `outputs=`, and read
+  them from `input_faces` and `output_faces`. A subclass that overrides
+  either is still honoured, and reported, until 0.1.7.
 
 ### Removed
 

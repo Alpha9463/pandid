@@ -924,6 +924,38 @@ def test_building_and_writing_a_vessel_raises_no_deprecation(
         Flowsheet.from_dict(fs.to_dict())
 
 
+class _TopFed(U.Tank):
+    def default_input_face(self) -> str:
+        return "N"
+
+
+class _TopDrawn(U.Vessel):
+    def default_output_face(self) -> str:
+        return "N"
+
+
+def test_a_subclass_input_face_hook_is_honoured_and_reported() -> None:
+    """Check that an overriding input hook places the inlet and is reported at the build."""
+    from pandid import Flowsheet
+
+    with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
+        tank = _TopFed("T-1")
+    assert tank.input_faces == ("N",)
+    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
+        os.path.normcase(os.path.realpath(__file__))
+    }
+    fs = Flowsheet("hooks")
+    fs.add(tank)
+    assert [i.code for i in fs.validate() if i.code == "deprecated"] == ["deprecated"]
+
+
+def test_a_subclass_output_face_hook_is_consulted() -> None:
+    """Check that an overriding output hook's face reaches the face check."""
+    with pytest.warns(DeprecationWarning, match="default_output_face"):
+        with pytest.raises(ValueError, match="you asked for 'N'"):
+            _TopDrawn("V-1")
+
+
 def test_fitting_is_one_class_with_device_variants():
     st = U.Fitting("ST-1", variant="strainer")
     assert st.kind == "fitting"
