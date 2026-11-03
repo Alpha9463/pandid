@@ -52,12 +52,34 @@ _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 
 def _tag(name: str) -> str:
-    """Return an SVG-namespaced element tag."""
+    """Return an SVG-namespaced element tag.
+
+    Parameters
+    ----------
+    name : str
+        Element name.
+
+    Returns
+    -------
+    str
+        Tag in ``{namespace}name`` form.
+    """
     return f"{{{_SVG_NS}}}{name}"
 
 
 def _local(tag: object) -> str:
-    """Return the element name without its namespace."""
+    """Return an element tag without its namespace.
+
+    Parameters
+    ----------
+    tag : object
+        Element tag.
+
+    Returns
+    -------
+    str
+        Element name.
+    """
     return str(tag).rsplit("}", 1)[-1]
 
 
@@ -66,6 +88,16 @@ def _local(tag: object) -> str:
 
 def _viewbox(el: ET.Element) -> tuple[float, float, float, float]:
     """Return an element's viewBox.
+
+    Parameters
+    ----------
+    el : Element
+        Element with a ``viewBox`` attribute.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Minimum x, minimum y, width and height.
 
     Raises
     ------
@@ -79,10 +111,22 @@ def _viewbox(el: ET.Element) -> tuple[float, float, float, float]:
 
 
 def _placement(use: ET.Element, symbol: ET.Element) -> str:
-    """Return the transform placing ``symbol`` in the box ``use`` sets.
+    """Return the transform placing a symbol in a ``<use>``'s box.
 
-    Scale the viewBox to the reference's size, uniformly and centred
-    unless ``preserveAspectRatio="none"``.
+    The viewBox is scaled to the box, uniformly and centred unless
+    ``preserveAspectRatio="none"``.
+
+    Parameters
+    ----------
+    use : Element
+        ``<use>`` element.
+    symbol : Element
+        ``<symbol>`` it references.
+
+    Returns
+    -------
+    str
+        SVG transform.
     """
     vx, vy, vw, vh = _viewbox(symbol)
     x, y = float(use.get("x", 0)), float(use.get("y", 0))
@@ -101,6 +145,18 @@ def _placement(use: ET.Element, symbol: ET.Element) -> str:
 
 def _expand_use(use: ET.Element, symbols: dict[str, ET.Element]) -> ET.Element:
     """Return a ``<use>`` as a ``<g>`` holding a copy of its symbol.
+
+    Parameters
+    ----------
+    use : Element
+        ``<use>`` element.
+    symbols : dict[str, Element]
+        Symbols by id.
+
+    Returns
+    -------
+    Element
+        Group drawing the symbol.
 
     Raises
     ------
@@ -121,6 +177,16 @@ def _expand_use(use: ET.Element, symbols: dict[str, ET.Element]) -> ET.Element:
 
 def _path_tail(d: str) -> tuple[tuple[float, float], tuple[float, float]]:
     """Return a path's last two points.
+
+    Parameters
+    ----------
+    d : str
+        Path data of absolute ``M``, ``L`` and ``A`` commands.
+
+    Returns
+    -------
+    tuple[tuple[float, float], tuple[float, float]]
+        Second-last and last points.
 
     Raises
     ------
@@ -144,9 +210,19 @@ def _path_tail(d: str) -> tuple[tuple[float, float], tuple[float, float]]:
 
 
 def _arrowhead(el: ET.Element, markers: dict[str, ET.Element]) -> ET.Element | None:
-    """Pop ``el``'s ``marker-end`` and return it drawn as a group.
+    """Remove an element's ``marker-end`` and return it as geometry.
 
-    Return ``None`` when ``el`` has no end marker.
+    Parameters
+    ----------
+    el : Element
+        Element that may carry ``marker-end``.
+    markers : dict[str, Element]
+        Markers by id.
+
+    Returns
+    -------
+    Element or None
+        Group drawing the head, or ``None`` without an end marker.
 
     Raises
     ------
@@ -183,7 +259,17 @@ def _arrowhead(el: ET.Element, markers: dict[str, ET.Element]) -> ET.Element | N
 
 
 def _rewrite(parent: ET.Element, symbols: dict, markers: dict) -> None:
-    """Expand each ``<use>`` and end marker below ``parent``."""
+    """Expand each ``<use>`` and end marker below an element.
+
+    Parameters
+    ----------
+    parent : Element
+        Element whose descendants are rewritten in place.
+    symbols : dict
+        Symbols by id.
+    markers : dict
+        Markers by id.
+    """
     rewritten: list[ET.Element] = []
     for child in list(parent):
         if _local(child.tag) == "use":
@@ -218,7 +304,18 @@ _HELVETICA_EM = (0.718, -0.207)
 
 
 def _ascent_descent(bold: bool) -> tuple[float, float]:
-    """Return the face's ascent and (negative) descent, in ems."""
+    """Return the drawing face's ascent and descent, in ems.
+
+    Parameters
+    ----------
+    bold : bool
+        Whether the face is bold.
+
+    Returns
+    -------
+    tuple[float, float]
+        Ascent and (negative) descent.
+    """
     try:
         from reportlab.pdfbase import pdfmetrics
     except ImportError:
@@ -228,7 +325,19 @@ def _ascent_descent(bold: bool) -> tuple[float, float]:
 
 
 def _font_size(el: ET.Element, inherited: float | None) -> float | None:
-    """Return the font size ``el`` sets, or the inherited one.
+    """Return the font size an element sets, or the inherited one.
+
+    Parameters
+    ----------
+    el : Element
+        Element that may set ``font-size``.
+    inherited : float or None
+        Font size from its ancestors.
+
+    Returns
+    -------
+    float or None
+        Font size in user units, or ``None`` if none applies.
 
     Raises
     ------
@@ -246,6 +355,13 @@ def _font_size(el: ET.Element, inherited: float | None) -> float | None:
 
 def _set_baseline(text: ET.Element, size: float | None) -> None:
     """Fold one ``<text>``'s ``dominant-baseline`` into its ``y``.
+
+    Parameters
+    ----------
+    text : Element
+        ``<text>`` element, changed in place.
+    size : float or None
+        Font size that applies to it.
 
     Raises
     ------
@@ -273,7 +389,15 @@ def _set_baseline(text: ET.Element, size: float | None) -> None:
 
 
 def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
-    """Fold every ``dominant-baseline`` below ``el`` into its ``y``."""
+    """Fold every ``dominant-baseline`` below an element into ``y``.
+
+    Parameters
+    ----------
+    el : Element
+        Element to walk, changed in place.
+    size : float or None, default=None
+        Font size inherited from its ancestors.
+    """
     size = _font_size(el, size)
     if _local(el.tag) == "text":
         _set_baseline(el, size)
@@ -283,7 +407,12 @@ def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
 
 
 def _reject_unsupported(root: ET.Element) -> None:
-    """Raise if ``root`` still uses a construct svglib would drop.
+    """Raise if an SVG tree uses a construct svglib would drop.
+
+    Parameters
+    ----------
+    root : Element
+        SVG root.
 
     Raises
     ------
@@ -307,11 +436,21 @@ def _reject_unsupported(root: ET.Element) -> None:
 
 
 def flatten(svg: str) -> str:
-    """Return ``svg`` with ``<use>``, markers and baselines drawn out.
+    """Return SVG with ``<use>``, markers and baselines drawn out.
 
-    Expand each ``<use>`` into a copy of its symbol, draw each end
-    marker as geometry, fold each ``dominant-baseline`` into ``y`` and
-    remove ``<defs>``.
+    Each ``<use>`` becomes a copy of its symbol, each end marker
+    becomes geometry, each ``dominant-baseline`` is folded into
+    ``y`` and ``<defs>`` is removed.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG.
+
+    Returns
+    -------
+    str
+        Equivalent SVG svglib can draw.
 
     Raises
     ------
@@ -336,6 +475,20 @@ def flatten(svg: str) -> str:
 
 def _require(module: str, package: str, ext: str):
     """Import an optional backend module.
+
+    Parameters
+    ----------
+    module : str
+        Module to import.
+    package : str
+        Package name shown in the error.
+    ext : str
+        Output extension shown in the error.
+
+    Returns
+    -------
+    module
+        The imported module.
 
     Raises
     ------
@@ -365,7 +518,20 @@ _TYPE_PROBE = (
 
 
 def _leaves(node, scale: float = 1.0):
-    """Yield ``(shape, y_scale)`` for each shape below ``node``."""
+    """Yield every drawn shape below a node with its vertical scale.
+
+    Parameters
+    ----------
+    node : reportlab Group or shape
+        Drawing node.
+    scale : float, default=1.0
+        Vertical scale inherited from its ancestors.
+
+    Yields
+    ------
+    tuple
+        ``(shape, scale)``.
+    """
     contents = getattr(node, "contents", None)
     if contents is None:
         yield node, scale
@@ -377,6 +543,11 @@ def _leaves(node, scale: float = 1.0):
 @functools.cache
 def _type_scale() -> float:
     """Return the factor svglib's text size is off by.
+
+    Returns
+    -------
+    float
+        Ratio of a drawn rule's height to a drawn letter's size.
 
     Raises
     ------
@@ -399,16 +570,34 @@ def _type_scale() -> float:
 
 
 def _rescale_type(drawing, factor: float) -> None:
-    """Scale every ``fontSize`` in ``drawing`` by ``factor``."""
+    """Scale every string's font size in a drawing.
+
+    Parameters
+    ----------
+    drawing : reportlab Drawing
+        Drawing from svglib, changed in place.
+    factor : float
+        Scale factor.
+    """
     for shape, _ in _leaves(drawing):
         if hasattr(shape, "fontSize"):
             shape.fontSize *= factor
 
 
 def to_pdf(svg: str) -> bytes:
-    """Return ``svg`` as a one-page vector PDF at its own size.
+    """Return SVG as a one-page vector PDF at its own size.
 
-    Scale its text by :func:`_type_scale`.
+    Text is scaled by :func:`_type_scale`.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG.
+
+    Returns
+    -------
+    bytes
+        PDF document.
 
     Raises
     ------
@@ -427,7 +616,7 @@ def to_pdf(svg: str) -> bytes:
 
 
 def to_png(svg: str, scale: float = _PX_PER_PT) -> bytes:
-    """Return ``svg`` as a PNG rasterised from its PDF.
+    """Return SVG as a PNG rasterised from its PDF.
 
     Parameters
     ----------
@@ -435,6 +624,11 @@ def to_png(svg: str, scale: float = _PX_PER_PT) -> bytes:
         Rendered SVG.
     scale : float, default=_PX_PER_PT
         Pixels per PDF point; the default gives the SVG's pixel size.
+
+    Returns
+    -------
+    bytes
+        PNG image.
 
     Raises
     ------

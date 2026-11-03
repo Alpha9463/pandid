@@ -29,14 +29,33 @@ _DIGEST = 8
 
 
 def writable(value) -> str:
-    """Return ``str(value)`` with XML-unwritable characters removed."""
+    """Return ``str(value)`` with XML-unwritable characters removed.
+
+    Parameters
+    ----------
+    value : object
+        Value to write.
+
+    Returns
+    -------
+    str
+        Text without unwritable characters.
+    """
     return _UNWRITABLE.sub("", str(value))
 
 
 def escaped(value) -> str:
     """Return ``str(value)`` escaped for an XML text node or attribute.
 
-    Escape the five XML metacharacters and remove unwritable characters.
+    Parameters
+    ----------
+    value : object
+        Value to write.
+
+    Returns
+    -------
+    str
+        Text with the five XML metacharacters escaped.
     """
     return html.escape(writable(value))
 
@@ -44,7 +63,17 @@ def escaped(value) -> str:
 def fmt(value: float, places: int) -> str:
     """Return ``value`` in fixed point to at most ``places`` decimals.
 
-    Drop trailing zeros and write ``-0`` as ``0``.
+    Parameters
+    ----------
+    value : float
+        Number to write.
+    places : int
+        Maximum decimal places; trailing zeros are dropped.
+
+    Returns
+    -------
+    str
+        Number text, with ``-0`` written as ``0``.
     """
     s = f"{value:.{places}f}"
     if "." in s:
@@ -55,18 +84,17 @@ def fmt(value: float, places: int) -> str:
 def ident(prefix: str, value) -> str:
     """Return a valid XML name for ``value``, prefixed with ``prefix``.
 
-    A value made only of name characters is kept as is
-    (``ident("arrow", "black")`` is ``arrow_black``). Otherwise each run
-    of other characters becomes one underscore and a digest of the
-    value is appended.
-
     Parameters
     ----------
     prefix : str
-        Word naming the id's kind, such as ``"arrow"``. It must start
-        with a letter.
+        Word naming the id's kind; it must start with a letter.
     value : object
         Value the id is derived from.
+
+    Returns
+    -------
+    str
+        ``prefix_value``, or a cleaned name with a digest appended.
     """
     text = str(value)
     if text and all(c in _NAME_CHARS for c in text):

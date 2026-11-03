@@ -33,7 +33,13 @@ _grace_until = 0.0
 
 
 def _sweep(parent: Path) -> None:
-    """Remove stale preview directories under ``parent``."""
+    """Remove stale preview directories.
+
+    Parameters
+    ----------
+    parent : Path
+        Directory holding the preview directories.
+    """
     cutoff = time.time() - _STALE_S
     for entry in parent.glob(f"{_PREFIX}*"):
         try:
@@ -44,7 +50,13 @@ def _sweep(parent: Path) -> None:
 
 
 def _preview_dir() -> Path:
-    """Return the preview directory, creating it on first use."""
+    """Return the preview directory, creating it on first use.
+
+    Returns
+    -------
+    Path
+        This process's preview directory.
+    """
     global _dir
     if _dir is None:
         parent = Path(tempfile.gettempdir())
@@ -61,7 +73,13 @@ def _discard() -> None:
 
 
 def _macos_gui_session() -> bool:
-    """Return whether Quartz exposes a GUI session to this process."""
+    """Return whether Quartz exposes a GUI session to this process.
+
+    Returns
+    -------
+    bool
+        Whether a window server session exists.
+    """
     import ctypes
 
     try:
@@ -84,14 +102,26 @@ def _macos_gui_session() -> bool:
 
 
 def _close(root) -> None:
-    """Destroy a Tk root after running its pending idle tasks."""
+    """Destroy a Tk root after running its pending idle tasks.
+
+    Parameters
+    ----------
+    root : tkinter.Tk
+        Window to close.
+    """
     root.withdraw()
     root.update_idletasks()
     root.destroy()
 
 
 def _no_display() -> str:
-    """Return why Tk cannot open a window, or ``""`` when it can."""
+    """Return why Tk cannot open a window.
+
+    Returns
+    -------
+    str
+        The reason, or ``""`` when Tk can open a window.
+    """
     if sys.platform not in ("win32", "darwin") and not os.environ.get("DISPLAY"):
         return "no display ($DISPLAY is unset)"
     if sys.platform == "darwin" and not _macos_gui_session():
@@ -109,22 +139,53 @@ def _no_display() -> str:
 
 
 def _raster(svg: str) -> bytes:
-    """Return SVG markup as PNG bytes at its native size."""
+    """Return SVG markup as PNG bytes.
+
+    Parameters
+    ----------
+    svg : str
+        Rendered SVG markup.
+
+    Returns
+    -------
+    bytes
+        PNG image at the SVG's own size.
+    """
     from pandid.render import export
     return export.to_png(svg)
 
 
 def _fit(image: tuple[int, int], into: tuple[int, int]) -> tuple[int, int]:
-    """Return ``image`` (width, height) scaled to fit ``into``.
+    """Return an image size scaled to fit a box.
 
-    Keep the aspect ratio and at least one pixel on each side.
+    Parameters
+    ----------
+    image : tuple[int, int]
+        Image width and height.
+    into : tuple[int, int]
+        Box width and height.
+
+    Returns
+    -------
+    tuple[int, int]
+        Scaled width and height, same aspect, each at least 1.
     """
     scale = min(into[0] / image[0], into[1] / image[1])
     return max(1, round(image[0] * scale)), max(1, round(image[1] * scale))
 
 
 def _window(root, png: bytes, title: str) -> None:
-    """Set up ``root`` to show ``png`` scaled to the window size."""
+    """Set up a Tk window that shows a PNG scaled to its size.
+
+    Parameters
+    ----------
+    root : tkinter.Tk
+        Window to set up.
+    png : bytes
+        PNG image to show.
+    title : str
+        Flowsheet title for the window title bar.
+    """
     import tkinter
 
     from PIL import Image
@@ -162,7 +223,13 @@ def _window(root, png: bytes, title: str) -> None:
         canvas.create_image(cw // 2, ch // 2, image=photo, anchor="center")
 
     def on_configure(_event) -> None:
-        """Schedule a redraw after a resize event settles."""
+        """Schedule a redraw after a resize event settles.
+
+        Parameters
+        ----------
+        _event : tkinter.Event
+            Configure event from the canvas.
+        """
         if held["job"] is not None:
             canvas.after_cancel(held["job"])
         held["job"] = canvas.after(_SETTLE_MS, redraw)
@@ -194,7 +261,18 @@ def _browser(svg: str, title: str, why: str) -> None:
 
 
 def _slug(title: str) -> str:
-    """Return a portable file name stem of at most 60 characters."""
+    """Return a portable file name stem for a title.
+
+    Parameters
+    ----------
+    title : str
+        Flowsheet title.
+
+    Returns
+    -------
+    str
+        Stem of at most 60 characters, or ``"sheet"``.
+    """
     kept = "".join(c if c.isalnum() or c in "-_" else "-" for c in title).strip("-")
     return kept[:60] or "sheet"
 
