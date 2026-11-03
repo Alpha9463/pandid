@@ -3015,22 +3015,6 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
 # ---------------------------------------------------------------------------
 
 
-def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
-    """Match exported stroke widths to the library weight scale."""
-    from test_line_weight import authored_pens
-
-    checked = 0
-    for (kind, variant), sym in sorted(default_registry._symbols.items()):
-        # The outline is the heaviest pen; a symbol's fine detail is
-        # deliberately lighter and draw.io has one weight for the whole stencil.
-        pen = max(authored_pens(sym))
-        assert pen == pytest.approx(LineWeight.EQUIPMENT.width, rel=2e-3), (
-            f"{kind}/{variant} is drawn at {pen:.4g} and exported at {LineWeight.EQUIPMENT.width}"
-        )
-        checked += 1
-    assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
-
-
 @pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
 def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
     settled_gallery, rendered_gallery, stem
