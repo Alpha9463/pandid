@@ -41,44 +41,6 @@ def _fs() -> Flowsheet:
     return fs
 
 
-@pytest.fixture
-def caught(monkeypatch):
-    """Capture the SVG and title ``show()`` passes to the preview.
-
-    Parameters
-    ----------
-    monkeypatch : pytest.MonkeyPatch
-        Replaces ``preview`` with a recorder.
-
-    Returns
-    -------
-    dict
-        The ``svg`` and ``title`` of the last call.
-    """
-    seen: dict = {}
-
-    def fake(svg, *, title=""):
-        """Record one preview call without opening anything.
-
-        Parameters
-        ----------
-        svg : str
-            Rendered SVG markup.
-        title : str, optional
-            Flowsheet title.
-
-        Returns
-        -------
-        str
-            ``"window"``, as a successful preview returns.
-        """
-        seen["svg"], seen["title"] = svg, title
-        return "window"
-
-    monkeypatch.setattr(P, "preview", fake)
-    return seen
-
-
 # --- The signature ------------------------------------------------------------
 
 
