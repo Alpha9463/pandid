@@ -7,20 +7,12 @@ plus <rect>/<roundrect>/<ellipse>/<line>/<text>, painted by <fillstroke>/
 <stroke>/<fill>. Coordinates are already in the shape's ``w`` × ``h`` space, so
 they map straight onto an SVG ``viewBox="0 0 w h"``.
 
-A paint op names the operation, not the colour: what a fill comes out as is the
-canvas's current fill colour, which <fillcolor> sets and <save>/<restore>
-bracket. The pen is state in exactly the same way -- <dashed>, <dashpattern>,
-<strokewidth> and <linecap> set it, and <save>/<restore> bracket it too. That is
-how a stencil says a part of itself is solid (a damper's pivot, a flow arrow's
-head) or open (a filter's screen, a strainer's mesh) and, being state rather
-than a property of the op, it is also why a plain <fill> is a *background wash*
-in the shape's own fill colour rather than a request for black.
+A paint op paints with the canvas's current fill colour and pen, which
+<fillcolor>, <dashed>, <dashpattern>, <strokewidth> and <linecap> set and
+<save>/<restore> bracket.
 
-**Every directive is answered.** A directive this converter does not act on is
-named in :data:`DECLINED` with the reason; anything else stops the conversion.
-There is no falling off the end: a dropped directive is a drawing that says
-something other than the stencil said, and the drop is silent at every later
-stage (issue #291).
+A directive this converter does not act on is named in :data:`DECLINED` with
+the reason; any other unknown directive stops the conversion.
 
 `convert_shape(shape_el)` returns (inner_svg, width, height, constraints, aspect)
 where constraints is ``{name: (x_abs, y_abs)}`` from the stencil's <connections>
@@ -30,6 +22,7 @@ from __future__ import annotations
 
 import math
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
 
 
 def _endpoint_to_center(x1, y1, rx, ry, phi, fa, fs, x2, y2):
@@ -87,17 +80,8 @@ def _arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x, y):
         return f"A {rx} {ry} {phi_deg} {fa} {fs} {x} {y}"
 
     phi = math.radians(phi_deg)
-    # _endpoint_to_center applies the spec's own radius correction (F.6.6):
-    # radii too small to span the chord are scaled up until they exactly span
-    # it, which is the case this branch is reached in. ``rxx, ryy`` are that
-    # true ellipse, the one the points below are computed from, so they are also
-    # the radii each sub-arc has to be *emitted* with. Restating the originals
-    # instead hands every sub-arc radii too small for its own, shorter chord,
-    # and the renderer corrects them again -- independently, and by a different
-    # factor per segment, so the halves bulge differently. The endpoints stay
-    # exact either way, which is why the ports and the bounding box are right
-    # and only the curve between them is wrong: on the 40-wide vessel shells the
-    # two halves of a dished head met in a cusp instead of a crown.
+    # Emit every sub-arc with the radii corrected per SVG F.6.6, so all of them
+    # lie on the one ellipse the points are computed from.
     cx, cy, rxx, ryy, th1, dth = _endpoint_to_center(x0, y0, rx, ry, phi, fa, fs, x, y)
     n = max(2, math.ceil(abs(dth) / (math.pi / 2)))
     cosp, sinp = math.cos(phi), math.sin(phi)
@@ -107,12 +91,7 @@ def _arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x, y):
                 cy + rxx * math.cos(t) * sinp + ryy * math.sin(t) * cosp)
 
     seg = dth / n
-    # The other three parameters carry over unchanged, and are right to: every
-    # sub-arc rides the same ellipse (so the same ``phi_deg``) in the same
-    # direction (so the same sweep flag). The large-arc flag is the one that is
-    # genuinely per-segment, and ``n`` holds every segment to a quarter turn or
-    # less, so it is 0 for all of them -- stated as the general rule rather than
-    # the constant, so it stays true if ``n`` ever changes.
+    # Every sub-arc shares the rotation and sweep; only the large-arc flag is per segment.
     large = 1 if abs(seg) > math.pi else 0
     parts = []
     for i in range(1, n + 1):
@@ -121,23 +100,13 @@ def _arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x, y):
                      f"{round(ex, 4)} {round(ey, 4)}")
     return " ".join(parts)
 
-#: The one ink the sheet is drawn in. A P&ID is monochrome, so every stroke and
-#: every solid shape is this colour and nothing else is.
+#: The one ink every stroke and solid shape is drawn in.
 INK = "#111"
 
-#: What the fill colour starts at: the paper. No P&ID palette in
-#: draw.io's Sidebar-PID.js names a ``fillColor``, so each of these
-#: shapes takes ``fillColor=default`` from styles/default.xml, which
-#: ``Graph.replaceDefaultColors`` resolves to the page's own colour.
-#: The stencils are drawn expecting it: a body is the last
-#: <fillstroke> in the shape and covers the nozzles, legs and vanes
-#: behind it. A *state*, not a constant: <fillcolor> is how a stencil
-#: asks for something else.
+#: The fill colour a shape starts with: the paper, as draw.io resolves its default fill.
 DEFAULT_FILL = "white"
 
-# Which of the two the mxGraph paint ops apply, as (fills, strokes). What each
-# one is painted *with* is the current fill colour and the ink: a paint op
-# names the operation, not the colour.
+# The mxGraph paint ops, as (fills, strokes).
 _PAINT = {
     "fillstroke": (True, True),
     "stroke": (False, True),
@@ -148,17 +117,8 @@ _PAINT = {
 #: The numbers are multiples of the pen width, not lengths; see :func:`_pen`.
 DEFAULT_DASH_PATTERN = "3 3"
 
-#: Directives this converter reads and deliberately does not act on, with the
-#: reason it does not. A directive named here changes nothing about what the
-#: drawing says; one that is neither named here nor handled in
-#: :func:`convert_shape` stops the conversion.
-#:
-#: That is the whole point of the table. Until #291 the dispatch was an
-#: if/elif chain with no else, so seven directives fell off the end without a
-#: word: twelve shipped symbols lost the dashed screen that is the only thing
-#: telling a filter from a plain drum and a strainer from a plate, while the
-#: draw.io backend went on referencing the original stencil and drawing it
-#: dashed. One flowsheet, two drawings, disagreeing about the equipment.
+#: Directives read and not acted on, with the reason; a directive neither named
+#: here nor handled in :func:`convert_shape` stops the conversion.
 DECLINED = {
     "linejoin": (
         "how a corner is finished, not what the drawing says. The library holds "
@@ -179,12 +139,7 @@ DECLINED = {
 def _fill_colour(named):
     """The fill a stencil's ``<fillcolor color=...>`` asks for.
 
-    mxGraph takes a real colour here, plus the keywords ``"none"`` and
-    ``"stroke"``. The sheet has one ink, so the only distinction that survives
-    is transparent versus solid: every colour a stencil names for a fill is
-    naming the thing it wants drawn solid. ``"none"`` is a stencil turning
-    the fill off, which is not the same as never having set one, so it
-    comes out transparent rather than :data:`DEFAULT_FILL`.
+    ``"none"`` is transparent; any other colour is drawn solid in :data:`INK`.
     """
     return "none" if (named or "none").strip().lower() == "none" else INK
 
@@ -201,27 +156,15 @@ def _fmt(v):
 def _pen(state):
     """The SVG stroke properties the canvas state currently asks for.
 
-    ``stroke-width`` always, because every stroke in the library declares one;
-    the rest only where the stencil moved the pen off SVG's own default, so a
-    shape that never touches it comes out exactly as it did before any of this
-    existed.
-
-    A dash pattern is in **pen widths**, not in units: mxGraph multiplies each
-    number by the current stroke width, which is why one ``pattern="2 2"``
-    serves stencils drawn on a 40-unit module and on a 200-unit one alike. The
-    multiplication is done here for the same reason -- pandid draws these
-    symbols far smaller than draw.io does, and a dash measured in units would
-    come out as a grey smear on a strainer 10 units wide.
+    ``stroke-width`` always; the rest only where the stencil moved the pen off
+    SVG's default. A dash pattern is in pen widths, as mxGraph reads it.
     """
     sw = state["stroke_width"]
     out = f' stroke-width="{sw}"'
     if state["dashed"]:
         pattern = " ".join(_fmt(float(n) * sw) for n in state["dash_pattern"].split())
         out += f' stroke-dasharray="{pattern}"'
-    # A zero-length dash is a DOT, and only under a round cap: butt caps draw
-    # nothing at all for it. That is how "Strainer (Cone)" asks for its
-    # dash-dot screen ("6 3 0 3"), so the cap is load-bearing here rather than
-    # a nicety, which is why it is acted on where <linejoin> is declined.
+    # A zero-length dash is a dot only under a round cap, as in "Strainer (Cone)".
     if state["linecap"] != "butt":
         out += f' stroke-linecap="{state["linecap"]}"'
     return out
@@ -235,7 +178,7 @@ _TEXT_BASELINE = {"top": 0.8, "middle": 0.35, "bottom": -0.2}
 
 
 def _text_svg(el, size):
-    s = (el.get("str") or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    s = escape(el.get("str") or "")
     align = _TEXT_ANCHOR.get(el.get("align", "left"), "start")
     y = _num(el, "y") + _TEXT_BASELINE.get(el.get("valign", "top"), 0.8) * size
     common = (f'x="{_num(el, "x")}" y="{round(y, 3)}" font-family="sans-serif" '
@@ -279,9 +222,7 @@ def _path_d(path_el) -> str:
     return " ".join(parts)
 
 
-#: What mxGraph assumes when a <shape> names no ``aspect``: the shape may be
-#: resized along each axis independently. Only a shape that says otherwise is
-#: held to its proportions. (See mxStencil in the mxGraph source.)
+#: The ``aspect`` mxGraph assumes when a <shape> names none.
 DEFAULT_ASPECT = "variable"
 
 
@@ -295,11 +236,8 @@ def convert_shape(shape_el, stroke_width=2.0):
     <strokewidth> is held to, half of it the floor, and the unit a dash
     pattern is measured in.
 
-    ``aspect`` is the stencil author's own statement about resizing:
-    ``"variable"`` for a shape that may be stretched to fill whatever box it is
-    given, ``"fixed"`` for one whose proportions carry meaning. It is reported
-    rather than acted on here: this converts a shape at its native size, and
-    what a box of another shape does to it is the caller's business.
+    ``aspect`` is the stencil's own ``aspect`` attribute, reported rather than
+    acted on.
     """
     w = _num(shape_el, "w", 100)
     h = _num(shape_el, "h", 100)
@@ -335,9 +273,7 @@ def convert_shape(shape_el, stroke_width=2.0):
         paint = state["fill"] if fills else "none"
         stroke = INK if strokes else "none"
         if paint == "none" and stroke == "none":
-            # Neither filled nor stroked: mxGraph draws nothing, so nor does
-            # this. Emitting an invisible element would leave the geometry in
-            # the SVG for every later reader of it to mistake for ink.
+            # Neither filled nor stroked: draw nothing.
             pending = []
             return
         sw = _pen(state) if stroke != "none" else ""
@@ -393,22 +329,8 @@ def convert_shape(shape_el, stroke_width=2.0):
             elif t == "dashpattern":
                 state["dash_pattern"] = el.get("pattern") or DEFAULT_DASH_PATTERN
             elif t == "strokewidth":
-                # The stencil's number is in its own units, as every coordinate
-                # here is, so it lands in this SVG's user space unchanged.
-                #
-                # Capped at the sheet's own weight, which is what
-                # ``stroke_width`` is. A P&ID is drawn at one line weight and a
-                # symbol's own detail may be FINER than it (that is what these
-                # numbers are usually for, and the library holds every symbol to
-                # exactly that: the heaviest pen in a drawing is the sheet's).
-                # A stencil asking for a heavier line is asking for a second
-                # weight on a monochrome single-weight sheet, and ISO 15519-1
-                # 6.2 has no name for one -- draw.io's own base is 1px and
-                # pandid's is 2, so a stencil written to stand out against the
-                # thinner pen would come out heavier still against this one.
-                #
-                # Floored at half of it, 0,1 M, which ISO 10628-1 5.3.1 c) sets
-                # as the finest line on the sheet.
+                # In the stencil's own units, held between half the sheet's weight
+                # (the ISO 10628-1 5.3.1 c) floor) and the sheet's weight.
                 state["stroke_width"] = min(max(_num(el, "width", stroke_width),
                                                 stroke_width / 2), stroke_width)
             elif t == "linecap":
@@ -445,21 +367,7 @@ def shapes_in(xml_path):
 def stencil_namespace(xml_path):
     """The package draw.io files this stencil set's shapes under.
 
-    The set names itself on its own root element -- ``valves.xml`` opens
-    ``<shapes name="mxGraph.pid.valves">`` -- and that name is half of the key
-    draw.io's stencil registry answers to, the shape's own name being the other
-    half. Read here rather than written down anywhere, because a stencil file
-    that were re-vendored under a different package would then rename its shapes
-    with it, and a hard-coded package would go on naming shapes that no longer
-    exist. The failure that would cause is silent at the far end: draw.io falls
-    back to a plain rectangle for a name it cannot resolve, so the export would
-    still open and would simply have stopped being a P&ID.
-
-    The case is not normalised here. draw.io lowercases the whole key when it
-    registers a shape, and this library's own copies are inconsistent about it
-    (thirteen files say ``mxGraph.pid.*`` and ``agitators.xml`` says
-    ``mxgraph.pid.*``), so the fold belongs with the key that is built out of
-    this, not with the reading of it.
+    Read off the root element's ``name``, in the case the file writes it.
     """
     root = ET.fromstring(open(xml_path, encoding="utf-8").read())
     name = root.get("name")

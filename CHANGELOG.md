@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **The ammonia loop example (#624).** Example 05 draws the same loop with more
+  equipment. The other examples keep their numbers.
 - **Layout refinement and search after routing (#564).** `Flowsheet.route()`
   no longer moves units once it has routed them. `pandid.layout.search`,
   `trials`, `candidates` and `settle` are deleted, with the
@@ -80,6 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `pandid.layout.structure`, `_EVAP_CALANDRIA_PITCH`, and
   `scripts/ports_bench.py`, `renumber_bench.py` and `layout_bench.py` are
   deleted.
+- **Unused dev tools (#624).** `scripts/layout_compare.py`, `route_quality.py`
+  and the unused `instruments.xml` stencil file are deleted, and
+  `scripts/layout_quality.py` keeps only what the tests use.
 - **Unused code (#579).** `pandid.routing.get_outward_dir` is deleted; use
   `pandid.portgeom.outward_dir`. The `pandid.render.Renderer` protocol, which
   nothing used, is deleted.

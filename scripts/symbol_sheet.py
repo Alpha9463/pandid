@@ -23,6 +23,7 @@ through ``SymbolRegistry.for_unit``, so it is the drawing a sheet gets.
 """
 import sys
 import pathlib
+from xml.sax.saxutils import escape
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from pandid.render.symbols import default_registry as R  # noqa: E402
@@ -144,11 +145,6 @@ def demos():
 DEMO_COLS = 7
 DEMO_CELL_W, DEMO_CELL_H = 200, 300
 DEMO_FIT = 190.0
-
-
-def escape(text: str) -> str:
-    """The three characters a label may carry into SVG text."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def part_sheet(out: pathlib.Path):
