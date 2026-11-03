@@ -133,8 +133,10 @@ def walled_faces(sym: "Symbol", role: str) -> list[str]:
 
 
 def bandless_face(who: str, face: str, at: float, members: "list[str]",
-                  offered: "list[str]") -> ValueError:
+                  sym: "Symbol") -> ValueError:
     """Return the error for several nozzles on a one-point face.
+
+    The cure names only the walled faces every member's role may use.
 
     Parameters
     ----------
@@ -145,9 +147,9 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     at : float
         The face's single point.
     members : list[str]
-        Ports placed on the face.
-    offered : list[str]
-        Faces with a wall, from :func:`walled_faces`.
+        Ports placed on the face, ``in_*`` or ``out_*``.
+    sym : Symbol
+        Symbol the ports are drawn on.
 
     Returns
     -------
@@ -156,13 +158,16 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     """
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
+    menus = [walled_faces(sym, "inlet" if m.startswith("in_") else "outlet")
+             for m in members]
+    offered = [f for f in menus[0] if all(f in menu for menu in menus)]
     cure = (
         "Put them on "
         + " or ".join(filter(None, [", ".join(offered[:-1]), *offered[-1:]]))
         + ", or leave a single connection here"
         if offered else
-        "No face of this drawing has a wall to spread a family along, so it "
-        "carries one connection per face and no more"
+        "No face with a wall takes all of them, so leave a single "
+        "connection here"
     )
     return ValueError(
         f"{who}: {named} {verb} on the {face} face, whose artwork meets the box "
@@ -1247,9 +1252,7 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     for face, on_face in by_face.items():
         band = base.bands.get(face)
         if len(on_face) > 1 and band is not None and band[0] >= band[1]:
-            last = "inlet" if on_face[-1].startswith("in_") else "outlet"
-            raise bandless_face(f"{kind}/{variant}", face, band[0], on_face,
-                                walled_faces(base, last))
+            raise bandless_face(f"{kind}/{variant}", face, band[0], on_face, base)
     # A lone member keeps its whole face menu.
     for role, members in members_by_role.items():
         if len(members) == 1 and menus[role]:

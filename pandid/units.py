@@ -1820,15 +1820,13 @@ class _MultiPortVessel(_FaceFamilies):
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, list(options))
-        self._check_face_room(role, port_name, face)
+        self._check_face_room(port_name, face)
 
-    def _check_face_room(self, role: str, port_name: str, face: str) -> None:
+    def _check_face_room(self, port_name: str, face: str) -> None:
         """Refuse a second port on a zero-length face.
 
         Parameters
         ----------
-        role : str
-            ``"inlet"`` or ``"outlet"``.
         port_name : str
             Family port name.
         face : str
@@ -1839,7 +1837,7 @@ class _MultiPortVessel(_FaceFamilies):
         ValueError
             If another family port is already on a zero-length face.
         """
-        from pandid.render.symbols import bandless_face, walled_faces
+        from pandid.render.symbols import bandless_face
 
         sym = self._registry_symbol()
         if sym is None:
@@ -1851,8 +1849,7 @@ class _MultiPortVessel(_FaceFamilies):
                   if on == face and name != port_name]
         if not others:
             return
-        raise bandless_face(self.name, face, band[0], [*others, port_name],
-                            walled_faces(sym, role))
+        raise bandless_face(self.name, face, band[0], [*others, port_name], sym)
 
     def default_input_face(self) -> str:
         """Return the face an inlet uses when none is named.
