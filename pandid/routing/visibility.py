@@ -347,15 +347,6 @@ class VisibilityGraph:
             for i in range(i0, i1):
                 blocked_on_col[i].update(inside_y)
 
-        valid_x_on_row = [[x for x in xs if x not in blocked] for blocked in blocked_on_row]
-        self.nodes: Set[Tuple[float, float]] = {
-            (x, y) for y, valid_x in zip(ys, valid_x_on_row) for x in valid_x
-        }
-
-        self.edges: Dict[Tuple[float, float], List[Tuple[float, float]]] = {
-            n: [] for n in self.nodes
-        }
-
         row_spans: List[List[Tuple[float, float]]] = [[] for _ in ys]
         col_spans: List[List[Tuple[float, float]]] = [[] for _ in xs]
         for o in self.obstacles:
@@ -364,20 +355,23 @@ class VisibilityGraph:
             for i in range(bisect_left(xs, o.x_min), bisect_right(xs, o.x_max)):
                 col_spans[i].append((o.y_min, o.y_max))
 
-        for j, (y, valid_x) in enumerate(zip(ys, valid_x_on_row)):
-            for k, clear in enumerate(clear_gaps(valid_x, row_spans[j])):
+        self.edges: Dict[Tuple[float, float], List[Tuple[float, float]]] = {}
+        for y, blocked, spans in zip(ys, blocked_on_row, row_spans):
+            row = [(x, y) for x in xs if x not in blocked]
+            links: List[List[Tuple[float, float]]] = [[] for _ in row]
+            for k, clear in enumerate(clear_gaps([x for x, _ in row], spans)):
                 if clear:
-                    x1, x2 = valid_x[k], valid_x[k + 1]
-                    self.edges[(x1, y)].append((x2, y))
-                    self.edges[(x2, y)].append((x1, y))
+                    links[k].append(row[k + 1])
+                    links[k + 1].append(row[k])
+            self.edges.update(zip(row, links))
+        self.nodes: Set[Tuple[float, float]] = set(self.edges)
 
-        for i, x in enumerate(xs):
-            valid_y = [y for y in ys if y not in blocked_on_col[i]]
-            for k, clear in enumerate(clear_gaps(valid_y, col_spans[i])):
+        for x, blocked, spans in zip(xs, blocked_on_col, col_spans):
+            col = [(x, y) for y in ys if y not in blocked]
+            for k, clear in enumerate(clear_gaps([y for _, y in col], spans)):
                 if clear:
-                    y1, y2 = valid_y[k], valid_y[k + 1]
-                    self.edges[(x, y1)].append((x, y2))
-                    self.edges[(x, y2)].append((x, y1))
+                    self.edges[col[k]].append(col[k + 1])
+                    self.edges[col[k + 1]].append(col[k])
 
     def reachable_projection(
         self,

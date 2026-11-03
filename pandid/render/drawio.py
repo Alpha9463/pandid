@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
 
-# Stencil ink.
 _INK = _BODY_INK
 
 # Fill for shapes this module draws itself.
@@ -51,35 +50,13 @@ _PAPER = "#ffffff"
 # No stroke: draw.io drops a key set to ``none``.
 _NO_STROKE = "none"
 
-# Ink for lines.
 _LINE_INK = "#000000"
 
-# draw.io ``jumpStyle`` for an arc hop.
-_JUMP_STYLE = "arc"
-
 # draw.io ``jumpStyle`` for each crossing style; ``"plain"`` has none.
-_JUMP_STYLES = {"arc": _JUMP_STYLE, "gap": "gap"}
+_JUMP_STYLES = {"arc": "arc", "gap": "gap"}
 
 # Style for edges that are not streams: they never hop.
 _NO_HOP = "noJump=1;"
-
-
-def _jump_size(radius: float, weight: float) -> int:
-    """Return draw.io's ``jumpSize`` for a hop on a line of ``weight``.
-
-    Parameters
-    ----------
-    radius : float
-        Hop radius in drawing units.
-    weight : float
-        Edge stroke width.
-
-    Returns
-    -------
-    int
-        ``jumpSize``, at least 1.
-    """
-    return max(1, round(2.0 * (radius - weight) + 2.0))
 
 
 def _hops(polylines: dict, direction: str,
@@ -360,7 +337,6 @@ HOP_DROPPED = "drawio-hop-dropped"
 _EXPORT_CODES = (*_RENDER_CODES, *_LABEL_CODES, APPROXIMATED, HOP_DROPPED)
 
 
-# Opaque balloon fill.
 _BALLOON_FILL = "#ffffff"
 
 # The built-in drawn for each symbol with no draw.io stencil, and what
@@ -798,37 +774,11 @@ class DrawioRenderer:
         Symbols drawn with.
     """
 
-    def __init__(self, registry=None):
-        """Store the registry and start an empty findings list.
-
-        Parameters
-        ----------
-        registry : SymbolRegistry, optional
-            Symbols to draw with; ``default_registry`` when omitted.
-        """
+    def __init__(self, registry=None):  # numpydoc ignore=GL08
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
         # Findings put on fs.warnings at the end of render().
         self._findings: list = []
-
-    def _report(self, field: str, text: str, drawn: str,
-                room: float, need: float) -> None:
-        """Record a cell that could not hold its text.
-
-        Parameters
-        ----------
-        field : str
-            Field name.
-        text : str
-            Text supplied.
-        drawn : str
-            Text drawn.
-        room : float
-            Width available.
-        need : float
-            Width needed.
-        """
-        self._findings.append(fit_issue(field, text, drawn, room, need))
 
     # --------------------------------------------------- document
 
@@ -885,11 +835,6 @@ class DrawioRenderer:
             diagram=diagram, page_size=page_size, connections=connections,
             jump_direction=jump_direction, crossing_style=crossing_style)
         table_sheet = wants_table_sheet(show_stream_table)
-        if not table_sheet:
-            for u in fs.units:
-                if u.frame is None:
-                    raise ValueError(
-                        f"Unit '{u.name}' lacks a frame even after layout was run.")
         if table_sheet and border is None:
             border = "zone"
         border, _diagram = _resolve_sheet(border, diagram)
@@ -1538,30 +1483,16 @@ class DrawioRenderer:
         self._findings += label_findings(fs, shape, placed, direction)
         polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
         order, hops, lost = _hops(polylines, direction, crossing_style)
-
-        def _run(key):
-            """Return a stream's name for a message.
-
-            Parameters
-            ----------
-            key : int
-                Stream index.
-
-            Returns
-            -------
-            str
-                Stream name, or ``"stream <n>"``.
-            """
-            return fs.streams[key].name or f"stream {key + 1}"
-
         for hop_key, cross_key, x, y in sorted(lost):
             at = f"({fmt(x, 2)}, {fmt(y, 2)})"
+            hopper, crossed = (fs.streams[k].name or f"stream {k + 1}"
+                               for k in (hop_key, cross_key))
             self._findings.append(Issue(
                 "warning", HOP_DROPPED,
-                f"{_run(hop_key)} crosses itself at {at}, and draw.io hops a line "
+                f"{hopper} crosses itself at {at}, and draw.io hops a line "
                 f"only over the lines written before it, never over itself; the "
                 f"crossing is exported flat" if hop_key == cross_key else
-                f"{_run(hop_key)} hops {_run(cross_key)} at {at} "
+                f"{hopper} hops {crossed} at {at} "
                 f"on the sheet, and the two cross each other more than once, which "
                 f"draw.io cannot draw either way round; the crossing is exported "
                 f"flat"))
@@ -1584,9 +1515,10 @@ class DrawioRenderer:
                 f"strokeWidth={fit.length(_stream_rung(signal).width):g}",
             ]
             if n in hops:
+                # draw.io's jumpSize for a hop of HOP_R on this line, at least 1.
                 weight = fit.length(_stream_rung(signal).width)
-                keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}",
-                         f"jumpSize={_jump_size(fit.length(HOP_R), weight)}"]
+                size = max(1, round(2.0 * (fit.length(HOP_R) - weight) + 2.0))
+                keys += [f"jumpStyle={_JUMP_STYLES[crossing_style]}", f"jumpSize={size}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
                 keys += ["endArrow=block", "endFill=1",
@@ -1615,7 +1547,6 @@ class DrawioRenderer:
                             keys.append("horizontal=0")
 
             style = ";".join(keys) + ";"
-            # The points between the two ends.
             waypoints = points[1:-1]
             along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
@@ -1846,12 +1777,16 @@ class DrawioRenderer:
         title = getattr(obj, "title", "") or ""
         if isinstance(obj, TableBox):
             size, _ncol, col_w, _row_h = F._table_layout(obj)
+            # Columns without a stated alignment are centred.
+            align = list(obj.col_align or [])
             # The table container draws the border and every rule.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
                           x, y, w, h, col_w, (size + F._TABLE_TITLE) if title else 0.0,
                           font=size, keys=f"strokeWidth={F._CELL_RULE:g};",
-                          col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
+                          col_keys=[_ALIGN_KEY.get(align[c] if c < len(align) else "c",
+                                                   "align=center;")
+                                    for c in range(len(col_w))])
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar rows, at the sheet's column widths. The first
@@ -1904,8 +1839,9 @@ class DrawioRenderer:
         list[str]
             Cell XML lines.
         """
-        strip = F.title_strip_layout(block, name, date, x + w, y + h, scale,
-                                     report=self._report)
+        strip = F.title_strip_layout(
+            block, name, date, x + w, y + h, scale,
+            report=lambda *cell: self._findings.append(fit_issue(*cell)))
         bx, by, bw, bh = strip.box
         out = _rect(cid, bx, by, bw, bh,
                     "rounded=0;html=1;movable=1;"
@@ -1923,7 +1859,6 @@ class DrawioRenderer:
 # Opaque plate behind a line number.
 _NUMBER_PLATE = "labelBackgroundColor=#ffffff"
 
-# Line-number label keys.
 _NUMBER_KEYS = ["verticalAlign=middle", "align=center"]
 
 
@@ -2052,9 +1987,7 @@ _LABEL_SIDE = {
 }
 
 
-# ----------------------------------------------------------------
 # The pneumatic cross-hatch
-# ----------------------------------------------------------------
 
 # Hatch stroke angle on a horizontal run, in clockwise degrees, and
 # stroke length.
@@ -2176,9 +2109,7 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
     return out
 
 
-# ----------------------------------------------------------------
 # Furniture, as draw.io tables
-# ----------------------------------------------------------------
 
 # Table styles. The table rules its own row and column lines; rows and
 # cells draw no edges.
@@ -2260,26 +2191,6 @@ _TEXT_INSET = 2.0
 _ALIGN_KEY = {"l": f"align=left;spacingLeft={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
               "r": f"align=right;spacingRight={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
               "c": "align=center;"}
-
-
-def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
-    """Return the alignment style keys for each column.
-
-    Parameters
-    ----------
-    col_align : sequence of str or None
-        ``"l"``, ``"c"`` or ``"r"`` per column; default ``"c"``.
-    ncol : int
-        Number of columns.
-
-    Returns
-    -------
-    list[str]
-        Style fragment per column.
-    """
-    align = list(col_align or [])
-    return [_ALIGN_KEY.get(align[c] if c < len(align) else "c", "align=center;")
-            for c in range(ncol)]
 
 
 def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,

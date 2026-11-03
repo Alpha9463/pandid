@@ -10,13 +10,7 @@ from pandid.routing.metrics import crossing_pairs
 
 
 def test_a_conflict_names_the_unit_a_line_crosses() -> None:
-    """Tell apart two drawings whose counts match but whose blocking unit differs.
-
-    Returns
-    -------
-    None
-        The measured conflicts name the unit the line runs through.
-    """
+    """Tell apart two drawings whose counts match but whose blocking unit differs."""
     fs = Flowsheet("Swapped blocker")
     source = fs.add(Feed("Feed"))
     dest = fs.add(Product("Product"))
@@ -45,13 +39,7 @@ def test_a_conflict_names_the_unit_a_line_crosses() -> None:
 
 
 def test_fixed_blocker_names_the_sealed_source_exit() -> None:
-    """Identify the unit that seals a pinned nozzle's escape.
-
-    Returns
-    -------
-    None
-        The route and conflict retain the exact pinned geometry.
-    """
+    """Identify the unit that seals a pinned nozzle's escape."""
     fs = Flowsheet("Sealed exit")
     source = fs.add(Feed("Feed"))
     dest = fs.add(Product("Product"))
@@ -70,13 +58,7 @@ def test_fixed_blocker_names_the_sealed_source_exit() -> None:
 
 
 def test_detached_and_inward_stubs_are_named() -> None:
-    """Catch route defects even when the remaining path is clear.
-
-    Returns
-    -------
-    None
-        Both endpoint and exit checks produce stable conflict identities.
-    """
+    """Catch route defects even when the remaining path is clear."""
     fs = Flowsheet("Bad stubs")
     source = fs.add(Feed("Feed"))
     dest = fs.add(Product("Product"))
@@ -93,25 +75,13 @@ def test_detached_and_inward_stubs_are_named() -> None:
 
 
 def test_crossing_pairs_keep_indices_of_undrawn_streams() -> None:
-    """Do not renumber crossing pairs when an earlier route is missing.
-
-    Returns
-    -------
-    None
-        The pair refers to global stream indices.
-    """
+    """Do not renumber crossing pairs when an earlier route is missing."""
     paths = [None, [(0, 5), (10, 5)], [(5, 0), (5, 10)]]
     assert crossing_pairs(paths) == frozenset({(1, 2)})
 
 
 def test_manual_endpoint_legs_count_as_drawn_crossings() -> None:
-    """Measure crossings on the complete displayed manual paths.
-
-    Returns
-    -------
-    None
-        Crossing and length measurements match the rendered lines.
-    """
+    """Measure crossings on the complete displayed manual paths."""
     from pandid.render.svg import stream_polyline
     from pandid.routing.metrics import crossing_count, path_length
     from scripts.route_quality import find_crossings_and_overlaps
@@ -139,13 +109,7 @@ def test_manual_endpoint_legs_count_as_drawn_crossings() -> None:
 
 
 def test_manual_waypoints_remain_authored_routes() -> None:
-    """Keep a valid short manual path out of automatic conflicts.
-
-    Returns
-    -------
-    None
-        A manual line and its authored diagonal remain outside search rules.
-    """
+    """Keep a valid short manual path out of automatic conflicts."""
     fs = Flowsheet("Manual path")
     source = fs.add(Feed("Feed"))
     dest = fs.add(Product("Product"))

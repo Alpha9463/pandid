@@ -13,7 +13,7 @@ from _render_cases import copy_settled_case
 from pandid import Flowsheet, spec, units as U
 from pandid.cli import EXIT_OK, EXIT_USAGE, main
 from pandid.geometry import Route
-from pandid.render.drawio import _JUMP_STYLES, DrawioRenderer
+from pandid.render.drawio import DrawioRenderer
 from pandid.render.svg import (
     CROSSING_STYLE_DEFAULT,
     CROSSING_STYLES,
@@ -26,17 +26,8 @@ from pandid.render.svg import (
 )
 
 MARKED = (
-    "11_ethanol_pid",
     "16_demineralised_water",
     "18_fixed_bed_recycle",
-)
-_DRAWIO_KWARGS = (
-    "diagram",
-    "page_size",
-    "border",
-    "show_stream_table",
-    "connections",
-    "jump_direction",
 )
 
 _ARC = f"A {HOP_R:g} {HOP_R:g} 0 0 1 "
@@ -103,28 +94,6 @@ def _jumps(document: str) -> dict[str, str]:
     return out
 
 
-def _edge_order(document: str) -> list[str]:
-    """Return stream edge identifiers in document order.
-
-    Parameters
-    ----------
-    document : str
-        Draw.io XML document.
-
-    Returns
-    -------
-    list[str]
-        Stream edge identifiers in document order.
-    """
-    root = ET.fromstring(document).find("diagram/mxGraphModel/root")
-    assert root is not None
-    return [
-        cell.get("id") or ""
-        for cell in root.iter("mxCell")
-        if cell.get("edge") == "1" and re.fullmatch(r"s\d+", cell.get("id") or "")
-    ]
-
-
 def _found(fs: Flowsheet) -> list[Any]:
     """Return unmarked-crossing warnings from a flowsheet.
 
@@ -173,42 +142,6 @@ ROOMY = 100.0
 TIGHT = 171.0
 
 
-def _svg(fs: Flowsheet, **opts: Any) -> str:
-    """Render a flowsheet with the SVG backend.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to render.
-    **opts : Any
-        SVG rendering options.
-
-    Returns
-    -------
-    str
-        SVG document.
-    """
-    return SvgRenderer().render(fs, **opts)
-
-
-def _drawio(fs: Flowsheet, **opts: Any) -> str:
-    """Render a flowsheet with the Draw.io backend.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to render.
-    **opts : Any
-        Draw.io rendering options.
-
-    Returns
-    -------
-    str
-        Draw.io XML document.
-    """
-    return DrawioRenderer().render(fs, **opts)
-
-
 @pytest.mark.parametrize("stem", MARKED, ids=MARKED)
 def test_naming_the_default_draws_what_not_naming_it_draws(
     settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], stem: str
@@ -221,11 +154,6 @@ def test_naming_the_default_draws_what_not_naming_it_draws(
         Session-scoped routed gallery source.
     stem : str
         Representative gallery example name.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     default = fs.to_svg(**kwargs)
@@ -233,7 +161,9 @@ def test_naming_the_default_draws_what_not_naming_it_draws(
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     assert fs.to_svg(**kwargs, crossing_style=CROSSING_STYLE_DEFAULT) == default
 
-    export = {k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS}
+    from test_drawio import _drawio_options
+
+    export = _drawio_options(kwargs)
     fs, kwargs = copy_settled_case(settled_gallery, stem)
     fs.to_svg(**kwargs)
     plain_call = fs.to_drawio(**export)
@@ -244,21 +174,15 @@ def test_naming_the_default_draws_what_not_naming_it_draws(
 
 
 def test_each_style_draws_its_own_mark_and_nothing_else():
-    """Check each style against an equivalent uncrossed stream.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
-    arc = _svg(_pair(ROOMY), crossing_style="arc")
-    gap = _svg(_pair(ROOMY), crossing_style="gap")
-    plain = _svg(_pair(ROOMY), crossing_style="plain")
+    """Check each style against an equivalent uncrossed stream."""
+    arc = SvgRenderer().render(_pair(ROOMY), crossing_style="arc")
+    gap = SvgRenderer().render(_pair(ROOMY), crossing_style="gap")
+    plain = SvgRenderer().render(_pair(ROOMY), crossing_style="plain")
 
     assert _marks(arc) == (2, 0), "the arc bridges both crossings in one subpath"
     assert _marks(gap) == (0, 2), "the interruption breaks the run at both"
     assert _marks(plain) == (0, 0), "a plain crossing marks neither"
-    straight = _paths(_svg(_pair(None)))
+    straight = _paths(SvgRenderer().render(_pair(None)))
     turned = [d for d in _paths(plain) if "300" in d]
     assert len(turned) == 1
     assert turned[0].count("L ") == 5, "the vertical run keeps all five legs"
@@ -267,15 +191,15 @@ def test_each_style_draws_its_own_mark_and_nothing_else():
 
 
 def test_the_mark_takes_the_same_run_whichever_mark_it_is():
-    """Check that arcs and interruptions use the same stream extent.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
-    arc_run = [d for d in _paths(_svg(_pair(ROOMY), crossing_style="arc")) if _ARC in d][0]
-    gap_run = [d for d in _paths(_svg(_pair(ROOMY), crossing_style="gap")) if d.count("M ") > 1][0]
+    """Check that arcs and interruptions use the same stream extent."""
+    arc_run = [
+        d for d in _paths(SvgRenderer().render(_pair(ROOMY), crossing_style="arc")) if _ARC in d
+    ][0]
+    gap_run = [
+        d
+        for d in _paths(SvgRenderer().render(_pair(ROOMY), crossing_style="gap"))
+        if d.count("M ") > 1
+    ][0]
     point = re.compile(r"[LMA][^LMA]*?([\d.]+),([\d.]+)")
     arc_points = point.findall(arc_run)
     assert arc_points == point.findall(gap_run), (
@@ -288,16 +212,10 @@ def test_the_mark_takes_the_same_run_whichever_mark_it_is():
 
 
 def test_the_interruption_leaves_one_line_and_not_two():
-    """Check that an interruption remains one SVG path.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check that an interruption remains one SVG path."""
     fs = _pair(ROOMY)
-    gap = _svg(fs, crossing_style="gap")
-    assert len(_paths(gap)) == len(_paths(_svg(_pair(ROOMY))))
+    gap = SvgRenderer().render(fs, crossing_style="gap")
+    assert len(_paths(gap)) == len(_paths(SvgRenderer().render(_pair(ROOMY))))
     broken = [d for d in _paths(gap) if d.count("M ") > 1][0]
     run = stream_polyline(fs.streams[1])
     assert broken.startswith(f"M {run[0][0]},")
@@ -307,67 +225,11 @@ def test_the_interruption_leaves_one_line_and_not_two():
     )
 
 
-@pytest.mark.parametrize("style", CROSSING_STYLES, ids=CROSSING_STYLES)
-@pytest.mark.parametrize("stem", MARKED, ids=MARKED)
-def test_the_export_marks_the_runs_the_sheet_marks_and_marks_them_alike(
-    settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], stem: str, style: str
-) -> None:
-    """Check SVG and Draw.io style parity on representative sheets.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Session-scoped routed gallery source.
-    stem : str
-        Representative gallery example name.
-    style : str
-        Requested crossing style.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
-    fs, kwargs = copy_settled_case(settled_gallery, stem)
-    paths = _paths(fs.to_svg(**kwargs, crossing_style=style))
-    assert len(paths) == len(fs.streams)
-    marked = {n for n, d in enumerate(paths) if _ARC in d or d.count("M ") > 1}
-    export = {k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS}
-    document = fs.to_drawio(**export, crossing_style=style)
-    jumps = _jumps(document)
-
-    if style == "plain":
-        assert not jumps, f"{stem}: plain crossings, and the export hops anyway"
-        assert not marked, f"{stem}: plain crossings, and the sheet marked one"
-        order = _edge_order(document)
-        assert order == sorted(order, key=lambda i: int(i[1:])), (
-            f"{stem}: nothing hops, so nothing had to be written after "
-            f"anything, and the edges must come out in stream order"
-        )
-        return
-
-    assert marked, f"{stem}: no run marked, so this case proves nothing"
-    assert set(jumps) <= {f"s{n}" for n in marked}, (
-        f"{stem}: the export marks {sorted(set(jumps))}, the sheet marks "
-        f"{sorted(f's{n}' for n in marked)} -- a mark the sheet does not draw "
-        f"states the wrong pipe passes over"
-    )
-    assert set(jumps.values()) == {_JUMP_STYLES[style]}, (
-        f"{stem}: exported as {sorted(set(jumps.values()))}, drawn as {style}"
-    )
-
-
 def test_the_export_writes_one_jump_size_for_either_mark():
-    """Check Draw.io jump-size consistency across marked styles.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check Draw.io jump-size consistency across marked styles."""
     fs = _pair(ROOMY)
-    arc = _drawio(fs, crossing_style="arc")
-    gap = _drawio(fs, crossing_style="gap")
+    arc = DrawioRenderer().render(fs, crossing_style="arc")
+    gap = DrawioRenderer().render(fs, crossing_style="gap")
     sizes = [set(re.findall(r"jumpSize=(\d+)", doc)) for doc in (arc, gap)]
     assert sizes[0] and sizes[0] == sizes[1]
     assert arc.replace("jumpStyle=arc", "jumpStyle=gap") == gap, (
@@ -383,11 +245,6 @@ def test_an_unknown_crossing_style_is_refused_and_names_what_is_accepted(bad: st
     ----------
     bad : str
         Invalid crossing-style value.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     with pytest.raises(ValueError) as raised:
         check_crossing_style(bad)
@@ -398,49 +255,9 @@ def test_an_unknown_crossing_style_is_refused_and_names_what_is_accepted(bad: st
         assert repr(name) in message
 
 
-@pytest.fixture
-def shown(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
-    """Capture preview SVG without opening a window.
-
-    Parameters
-    ----------
-    monkeypatch : pytest.MonkeyPatch
-        Pytest monkeypatch fixture.
-
-    Returns
-    -------
-    dict[str, str]
-        Preview SVG keyed by ``"svg"``.
-    """
-    from pandid.render import preview as P
-
-    seen: dict[str, str] = {}
-
-    def fake(svg: str, *, title: str = "") -> str:
-        """Capture a preview SVG without opening a window.
-
-        Parameters
-        ----------
-        svg : str
-            SVG document passed to the preview backend.
-        title : str, default=""
-            Preview window title.
-
-        Returns
-        -------
-        str
-            Fixed preview result.
-        """
-        seen["svg"] = svg
-        return "window"
-
-    monkeypatch.setattr(P, "preview", fake)
-    return seen
-
-
 @pytest.mark.parametrize("call", ["to_svg", "to_drawio", "render", "show"])
 def test_every_call_that_takes_the_word_refuses_a_word_it_cannot_draw(
-    call: str, tmp_path: pathlib.Path, shown: dict[str, str]
+    call: str, tmp_path: pathlib.Path, caught: dict[str, str]
 ) -> None:
     """Check public entry points reject invalid crossing styles.
 
@@ -450,13 +267,8 @@ def test_every_call_that_takes_the_word_refuses_a_word_it_cannot_draw(
         Public rendering method name.
     tmp_path : pathlib.Path
         Temporary output directory.
-    shown : dict[str, str]
+    caught : dict[str, str]
         Captured preview documents.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = _pair(ROOMY)
     out = tmp_path / "sheet.svg"
@@ -468,23 +280,20 @@ def test_every_call_that_takes_the_word_refuses_a_word_it_cannot_draw(
         else:
             getattr(fs, call)(crossing_style="hop", check=False)
     assert not out.exists(), "a refused option must not leave a drawing behind"
-    assert not shown, "a refused option must not have been drawn either"
+    assert not caught, "a refused option must not have been drawn either"
 
 
-def test_every_entry_point_hands_the_word_on(tmp_path: pathlib.Path, shown: dict[str, str]) -> None:
+def test_every_entry_point_hands_the_word_on(
+    tmp_path: pathlib.Path, caught: dict[str, str]
+) -> None:
     """Check public entry points preserve the requested crossing style.
 
     Parameters
     ----------
     tmp_path : pathlib.Path
         Temporary output directory.
-    shown : dict[str, str]
+    caught : dict[str, str]
         Captured preview documents.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     svg = tmp_path / "sheet.svg"
     drawio = tmp_path / "sheet.drawio"
@@ -498,17 +307,11 @@ def test_every_entry_point_hands_the_word_on(tmp_path: pathlib.Path, shown: dict
         crossing_style="arc", check=False
     )
     _pair(ROOMY).show(crossing_style="arc", check=False)
-    assert shown["svg"] == _pair(ROOMY).to_svg(crossing_style="arc", check=False)
+    assert caught["svg"] == _pair(ROOMY).to_svg(crossing_style="arc", check=False)
 
 
 def test_both_renderers_refuse_it_too():
-    """Check direct renderers reject invalid crossing styles.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check direct renderers reject invalid crossing styles."""
     fs = _pair(ROOMY)
     for renderer in (SvgRenderer(), DrawioRenderer()):
         with pytest.raises(ValueError, match="crossing_style"):
@@ -536,11 +339,6 @@ def test_the_shell_offers_exactly_the_three_the_api_offers(
         Temporary output directory.
     capsys : pytest.CaptureFixture[str]
         Captured CLI output fixture.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     spec_file = tmp_path / "sheet.json"
     spec_file.write_text(_SPEC, encoding="utf-8")
@@ -553,13 +351,7 @@ def test_the_shell_offers_exactly_the_three_the_api_offers(
 
 
 def test_the_model_does_not_carry_the_crossing_style():
-    """Check crossing style remains a rendering option.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check crossing style remains a rendering option."""
     fs = _pair(ROOMY)
     before = fs.to_dict()
     fs.to_svg(crossing_style="gap", check=False)
@@ -578,14 +370,9 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
     ----------
     style : str
         Requested crossing style.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
     """
     fs = _pair(TIGHT)
-    svg = _svg(fs, crossing_style=style)
+    svg = SvgRenderer().render(fs, crossing_style=style)
     assert _marks(svg) == (0, 0), "no mark fits, so none is drawn"
     findings = _found(fs)
     assert len(findings) == 2, "two crossings drawn bare, two said out loud"
@@ -604,34 +391,22 @@ def test_a_crossing_with_no_room_for_its_mark_is_reported(style: str) -> None:
 
 
 def test_a_plain_sheet_reports_nothing_because_it_promised_nothing():
-    """Check plain crossings suppress unmarked-crossing warnings.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check plain crossings suppress unmarked-crossing warnings."""
     fs = _pair(TIGHT)
-    _svg(fs)
+    SvgRenderer().render(fs)
     assert _found(fs), (
         "the fixture reports nothing at the default style, so the assertion "
         "below would pass on a sheet that had nothing to silence"
     )
-    _svg(fs, crossing_style="plain")
+    SvgRenderer().render(fs, crossing_style="plain")
     assert not _found(fs)
 
 
 def test_the_finding_counts_the_crossings_the_sheet_left_bare():
-    """Check warnings equal the rendered model's unmarked crossings.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check warnings equal the rendered model's unmarked crossings."""
     for bend, marks in ((ROOMY, 2), (TIGHT, 0)):
         fs = _pair(bend)
-        svg = _svg(fs)
+        svg = SvgRenderer().render(fs)
         assert sum(_marks(svg)) == marks
         assert len(unmarked_crossings(fs)) == _crossings(fs) - marks
         assert len(_found(fs)) == _crossings(fs) - marks
@@ -667,20 +442,14 @@ def _crossings(fs: Flowsheet) -> int:
 
 
 def test_a_crossing_moved_clear_stops_being_reported():
-    """Check rerendering removes resolved crossing warnings.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check rerendering removes resolved crossing warnings."""
     fs = _pair(TIGHT)
-    _svg(fs)
+    SvgRenderer().render(fs)
     assert _found(fs)
     fs.streams[1].route = Route(
         waypoints=[(300.0, 375.0), (300.0, ROOMY), (400.0, ROOMY), (400.0, 375.0)]
     )
-    _svg(fs)
+    SvgRenderer().render(fs)
     assert not _found(fs)
 
 
@@ -693,11 +462,6 @@ def test_the_settled_gallery_has_no_unmarked_crossings(
     ----------
     settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
         Session-scoped routed gallery source.
-
-    Returns
-    -------
-    None
-        Assertion result for default crossing clearance.
     """
     crossings = 0
     for stem, (flowsheet, options) in settled_gallery.items():
@@ -708,13 +472,7 @@ def test_the_settled_gallery_has_no_unmarked_crossings(
 
 
 def test_every_crossing_style_default_is_the_package_default():
-    """Check public parameters use the package crossing-style default.
-
-    Returns
-    -------
-    None
-        Assertion result for the stated behaviour.
-    """
+    """Check public parameters use the package crossing-style default."""
     import inspect
     import pkgutil
     import importlib

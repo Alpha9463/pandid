@@ -18,108 +18,51 @@ from pandid.routing.astar import CrossingIndex, committed_segments, find_path
 from pandid.routing.visibility import TAG_CLEAR, Rect, VisibilityGraph, clear_gaps
 
 
-def test_router_uses_a_reachable_lane_before_a_blocked_projection() -> None:
-    """Reach the graph before an obstacle blocks the nominal nozzle stub.
+#: Blocker width, height, label side and corner; whether the router recovers
+#: exits; whether the blocker hides the feed's nominal projection from the
+#: graph; and whether the line is drawn as a fallback through the blocker.
+_BLOCKED_NOZZLES = {
+    "reachable-lane": ((44, 44, "bottom"), (83, 78), True, True, False),
+    "no-recovery": ((44, 44, "bottom"), (83, 78), False, True, True),
+    "sealed-nozzle": ((44, 44, "bottom"), (60, 78), True, True, True),
+    "blocked-stub": ((12, 40, "center"), (68, 80), True, False, True),
+}
 
-    Returns
-    -------
-    None
-        The automatic route clears the unrelated body without moving pins.
+
+@pytest.mark.parametrize("case", list(_BLOCKED_NOZZLES))
+def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(case: str) -> None:
+    """Check that a blocked nozzle stub routes clear or draws a reported fallback.
+
+    Parameters
+    ----------
+    case : str
+        Key in ``_BLOCKED_NOZZLES``.
     """
-    fs = Flowsheet("reachable escape")
+    (width, height, side), corner, recover, hidden, blocked = _BLOCKED_NOZZLES[case]
+    fs = Flowsheet(case)
     feed = fs.add(Feed("F")).pin(x=60, y=100)
     product = fs.add(Product("P")).pin(x=400, y=100)
-    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=83, y=78)
+    blocker = fs.add(Pump("Blocker", width=width, height=height, label_pos=side))
+    blocker.pin(x=corner[0], y=corner[1])
     stream = fs.connect(feed.outlet, product.inlet)
     fs.layout()
     graph = VisibilityGraph(fs)
-    assert graph.port_projs[("F", "outlet")] not in graph.nodes
+    assert (graph.port_projs[("F", "outlet")] not in graph.nodes) is hidden
 
-    fs.route(DefaultRouter())
+    fs.route(DefaultRouter(recover_exits=recover))
 
-    assert stream.route is not None and not stream.route.used_fallback
+    assert stream.route is not None and stream.route.used_fallback is blocked
     assert feed.frame is not None and product.frame is not None and blocker.frame is not None
-    assert [
-        (feed.frame.x, feed.frame.y),
-        (product.frame.x, product.frame.y),
-        (blocker.frame.x, blocker.frame.y),
-    ] == [(10.0, 75.0), (400.0, 75.0), (83, 78)]
-    assert not any(issue.code == "route-crosses-unit" for issue in fs.validate())
-
-
-def test_router_without_recovery_searches_only_the_nominal_projection() -> None:
-    """Keep the nominal-projection search available as an opt-out.
-
-    Returns
-    -------
-    None
-        The blocked projection draws the fallback when recovery is disabled.
-    """
-    fs = Flowsheet("nominal escape")
-    feed = fs.add(Feed("F")).pin(x=60, y=100)
-    product = fs.add(Product("P")).pin(x=400, y=100)
-    fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=83, y=78)
-    stream = fs.connect(feed.outlet, product.inlet)
-    fs.layout()
-    fs.route(DefaultRouter(recover_exits=False))
-
-    assert stream.route is not None and stream.route.used_fallback
-
-
-def test_router_reports_a_sealed_fixed_nozzle() -> None:
-    """Keep a fully blocked outward nozzle unresolved.
-
-    Returns
-    -------
-    None
-        Fixed equipment stays put and the route records fallback.
-    """
-    fs = Flowsheet("sealed escape")
-    feed = fs.add(Feed("F")).pin(x=60, y=100)
-    product = fs.add(Product("P")).pin(x=400, y=100)
-    blocker = fs.add(Pump("Blocker", width=44, height=44, label_pos="bottom")).pin(x=60, y=78)
-    stream = fs.connect(feed.outlet, product.inlet)
-    fs.layout()
-    fs.route(DefaultRouter())
-
-    assert stream.route is not None and stream.route.used_fallback
-    assert feed.frame is not None and product.frame is not None and blocker.frame is not None
-    assert [
-        (feed.frame.x, feed.frame.y),
-        (product.frame.x, product.frame.y),
-        (blocker.frame.x, blocker.frame.y),
-    ] == [(10.0, 75.0), (400.0, 75.0), (60, 78)]
-    assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
-
-
-def test_router_does_not_call_a_blocked_stub_successful() -> None:
-    """Reject a graph path whose anchor lead crosses another body.
-
-    Returns
-    -------
-    None
-        The drawn fallback remains explicitly unresolved.
-    """
-    fs = Flowsheet("blocked stub")
-    feed = fs.add(Feed("F")).pin(x=60, y=100)
-    product = fs.add(Product("P")).pin(x=400, y=100)
-    fs.add(Pump("Blocker", width=12, height=40, label_pos="center")).pin(x=68, y=80)
-    stream = fs.connect(feed.outlet, product.inlet)
-    fs.layout()
-    fs.route(DefaultRouter())
-
-    assert stream.route is not None and stream.route.used_fallback
-    assert any(issue.code == "route-crosses-unit" for issue in fs.validate())
+    assert [(f.x, f.y) for f in (feed.frame, product.frame, blocker.frame)] == [
+        (10.0, 75.0),
+        (400.0, 75.0),
+        corner,
+    ]
+    assert any(issue.code == "route-crosses-unit" for issue in fs.validate()) is blocked
 
 
 def test_rect_intersection():
-    """Count segment contact with the rectangle's edge.
-
-    Returns
-    -------
-    None
-        An edge segment intersects.
-    """
+    """Count segment contact with the rectangle's edge."""
     r = Rect(10, 20, 10, 20)
     # Intersect a segment that passes through.
     assert r.intersects_segment(5, 15, 25, 15)
@@ -130,13 +73,7 @@ def test_rect_intersection():
 
 
 def test_clear_gaps_closes_the_run_a_span_reaches_into():
-    """Close each lane gap that an obstacle span reaches into.
-
-    Returns
-    -------
-    None
-        Gap ``k`` lies between ``lane[k]`` and ``lane[k + 1]``.
-    """
+    """Close each lane gap that an obstacle span reaches into."""
     lane = [0.0, 10.0, 20.0, 30.0, 40.0]
     # Close both middle gaps for a span that reaches into them.
     assert clear_gaps(lane, [(15.0, 25.0)]) == [True, False, False, True]
@@ -153,18 +90,7 @@ def test_clear_gaps_closes_the_run_a_span_reaches_into():
 
 
 def test_the_obstacle_index_sees_what_an_exhaustive_scan_sees():
-    """Match the indexed graph to an exhaustive obstacle scan.
-
-    Nodes, edges, and neighbour order must all agree, because the search
-    breaks cost ties by neighbour order. Units are pinned with labels on all
-    four sides so lanes fall on obstacle edges, where strict containment and
-    segment contact differ.
-
-    Returns
-    -------
-    None
-        ``graph.nodes`` and ``graph.edges`` equal the scanned results.
-    """
+    """Match the indexed graph to an exhaustive obstacle scan."""
     fs = Flowsheet("obstacle index")
     feed = fs.add(Feed("Raw Feed")).pin(x=40, y=200)
     pump = fs.add(Pump("P-101", label_pos="bottom")).pin(x=180, y=180)
@@ -211,13 +137,7 @@ def test_the_obstacle_index_sees_what_an_exhaustive_scan_sees():
 
 
 def test_outward_dir():
-    """Name the box edge nearest a port coordinate.
-
-    Returns
-    -------
-    None
-        Each edge midpoint maps to its own face.
-    """
+    """Name the box edge nearest a port coordinate."""
     assert outward_dir(0, 50, 100, 100) == "W"
     assert outward_dir(100, 50, 100, 100) == "E"
     assert outward_dir(50, 0, 100, 100) == "N"
@@ -225,14 +145,7 @@ def test_outward_dir():
 
 
 def test_router_integration():
-    """Route around a vessel that blocks both fallback corners.
-
-    Returns
-    -------
-    None
-        The route joins both nozzles, is orthogonal, turns, and clears
-        every obstacle.
-    """
+    """Route around a vessel that blocks both fallback corners."""
     fs = Flowsheet("test")
     f = fs.add(Feed("F"))
     p = fs.add(Product("P"))
@@ -269,14 +182,7 @@ def test_router_integration():
 
 
 def test_no_obstacle_intersection():
-    """Route around a drum that blocks both fallback corners.
-
-    Returns
-    -------
-    None
-        No segment crosses an obstacle other than the end units' own
-        boxes and labels on the two nozzle stubs.
-    """
+    """Route around a drum that blocks both fallback corners."""
     from pandid.units import Separator, Compressor
 
     fs = Flowsheet("intersect_test")
@@ -317,13 +223,7 @@ def test_no_obstacle_intersection():
 
 
 def test_the_fallback_l_is_checked_against_the_obstacles():
-    """Choose the fallback corner that crosses fewer obstacles.
-
-    Returns
-    -------
-    None
-        A clear corner wins, and across-first wins when both are equal.
-    """
+    """Choose the fallback corner that crosses fewer obstacles."""
     start, start_proj = (0.0, 0.0), (25.0, 0.0)
     goal_proj, goal = (100.0, 100.0), (100.0, 125.0)
     across = [start, start_proj, (100.0, 0.0), goal_proj, goal]
@@ -342,13 +242,7 @@ def test_the_fallback_l_is_checked_against_the_obstacles():
 
 
 def test_the_fallback_l_also_breaks_an_obstacle_tie_on_a_drawn_crossing():
-    """Break an obstacle tie by the number of recorded lines crossed.
-
-    Returns
-    -------
-    None
-        The corner avoiding a recorded line wins unless an obstacle blocks it.
-    """
+    """Break an obstacle tie by the number of recorded lines crossed."""
     start, start_proj = (0.0, 0.0), (25.0, 0.0)
     goal_proj, goal = (100.0, 100.0), (100.0, 125.0)
     across = [start, start_proj, (100.0, 0.0), goal_proj, goal]
@@ -368,13 +262,7 @@ def test_the_fallback_l_also_breaks_an_obstacle_tie_on_a_drawn_crossing():
 
 
 def test_the_fallback_drops_a_corner_that_repeats_the_projection():
-    """Omit a corner that coincides with an escape node (#282).
-
-    Returns
-    -------
-    None
-        Two projections in one column give a path without repeated points.
-    """
+    """Omit a corner that coincides with an escape node."""
     start, start_proj = (0.0, 0.0), (25.0, 0.0)
     goal_proj, goal = (25.0, 100.0), (25.0, 125.0)
     path = _fallback_path(start, start_proj, goal_proj, goal, [])
@@ -409,18 +297,10 @@ def _straight_run(bad=None):
 def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
     """Reject a non-finite coordinate before the path search starts.
 
-    ``pin()`` refuses one where it is written (#574). A frame set another
-    way, such as by a custom layout engine, is refused by the router.
-
     Parameters
     ----------
     bad : float
         Non-finite x coordinate given to the heat exchanger.
-
-    Returns
-    -------
-    None
-        ``pin()`` and ``route()`` raise and name the unit.
     """
     with pytest.raises(ValueError, match="E-101: pin x must be a finite number"):
         _straight_run(bad)
@@ -434,19 +314,7 @@ def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
 
 
 def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
-    """Block the halo drawn behind a tag and a pen beside it, and nothing for no tag.
-
-    The router measured the unit's name at 7.5 px a character, capped at
-    150 px, where the renderer draws the tag at 6.6 px a character plus 8
-    with no cap; and an element whose tag its balloon carries still blocked
-    a box (#574). A line that grazed the halo had it drawn over the line
-    (#564).
-
-    Returns
-    -------
-    None
-        The one label obstacle is the drum's drawn halo plus the clearance.
-    """
+    """Block the halo drawn behind a tag and a pen beside it, and nothing for no tag."""
     fs = Flowsheet("tag-obstacle")
     name = "V-101-FEED-SURGE-DRUM-FIRST-STAGE"
     fs.add(Vessel(name, label_pos="top")).pin(x=300, y=200)
@@ -465,13 +333,7 @@ def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
 
 
 def test_the_search_is_bounded_by_the_size_of_the_graph():
-    """Stop a search that exceeds its expansion budget.
-
-    Returns
-    -------
-    None
-        A zero budget raises, and the default budget routes the same sheet.
-    """
+    """Stop a search that exceeds its expansion budget."""
     fs = _straight_run()
     fs.layout()
     original = (astar.MAX_EXPANSIONS_PER_NODE, astar.MIN_EXPANSION_BUDGET)
@@ -489,13 +351,7 @@ def test_the_search_is_bounded_by_the_size_of_the_graph():
 
 
 def test_find_path_names_the_endpoint_it_cannot_search_from():
-    """Reject a non-finite start or goal by name.
-
-    Returns
-    -------
-    None
-        Each endpoint raises its own ``ValueError``.
-    """
+    """Reject a non-finite start or goal by name."""
     fs = _straight_run()
     fs.layout()
     graph = VisibilityGraph(fs)
@@ -507,42 +363,24 @@ def test_find_path_names_the_endpoint_it_cannot_search_from():
 
 
 # ---------------------------------------------------------------------------
-# Pricing drawn crossings (#425).
+# Pricing drawn crossings.
 # ---------------------------------------------------------------------------
 
 
 def test_committed_segments_merges_a_straight_run_into_one_span():
-    """Merge collinear waypoints into one segment.
-
-    Returns
-    -------
-    None
-        Three points on one row give a single horizontal span.
-    """
+    """Merge collinear waypoints into one segment."""
     path = [(602.0, 450.0), (615.0, 450.0), (640.0, 450.0)]
     assert committed_segments(path) == [("h", 450.0, 602.0, 640.0)]
 
 
 def test_committed_segments_merges_across_a_repeated_point_on_the_same_axis():
-    """Merge two same-axis segments that meet at a repeated waypoint.
-
-    Returns
-    -------
-    None
-        The repeated point is interior to a single span.
-    """
+    """Merge two same-axis segments that meet at a repeated waypoint."""
     path = [(0.0, 0.0), (10.0, 0.0), (10.0, 0.0), (20.0, 0.0)]
     assert committed_segments(path) == [("h", 0.0, 0.0, 20.0)]
 
 
 def test_crossing_index_is_strict_interior_only():
-    """Count a crossing only strictly inside a recorded span.
-
-    Returns
-    -------
-    None
-        Endpoints, other lanes, and the wrong axis do not count.
-    """
+    """Count a crossing only strictly inside a recorded span."""
     index = CrossingIndex()
     index.record([(0.0, 0.0), (100.0, 0.0)])  # Record y=0 for x in [0, 100].
 
@@ -558,13 +396,7 @@ def test_crossing_index_is_strict_interior_only():
 
 
 def test_crossing_index_crosses_counts_rather_than_answers_yes_or_no():
-    """Return the number of recorded spans crossed at a point.
-
-    Returns
-    -------
-    None
-        Two streams on one line count as two crossings; none counts as zero.
-    """
+    """Return the number of recorded spans crossed at a point."""
     index = CrossingIndex()
     index.record([(0.0, 0.0), (100.0, 0.0)])
     assert index.crosses((50.0, 0.0), "v") == 1
@@ -576,19 +408,31 @@ def test_crossing_index_crosses_counts_rather_than_answers_yes_or_no():
     assert not index.crosses((50.0, 5.0), "v")
 
 
-def test_a_route_that_crosses_two_streams_costs_twice():
-    """Charge one crossing penalty per stream crossed.
+def _graph(*paths: list[tuple[float, float]]) -> VisibilityGraph:
+    """Build a stand-in search graph that joins consecutive points of each path.
+
+    Parameters
+    ----------
+    *paths : list[tuple[float, float]]
+        Point sequences; each consecutive pair becomes a two-way edge.
 
     Returns
     -------
-    None
-        The route cost rises by one penalty, then two.
+    VisibilityGraph
+        Stand-in carrying the ``nodes``, ``edges`` and ``recycle_y`` that
+        ``find_path`` reads.
     """
-    nodes = {(0.0, 0.0), (40.0, 0.0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0.0, 0.0)].append((40.0, 0.0))
-    edges[(40.0, 0.0)].append((0.0, 0.0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
+    for path in paths:
+        for a, b in zip(path, path[1:]):
+            edges.setdefault(a, []).append(b)
+            edges.setdefault(b, []).append(a)
+    return cast(VisibilityGraph, SimpleNamespace(nodes=set(edges), edges=edges, recycle_y=[]))
+
+
+def test_a_route_that_crosses_two_streams_costs_twice():
+    """Charge one crossing penalty per stream crossed."""
+    graph = _graph([(0.0, 0.0), (40.0, 0.0)])
 
     clear = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, "W")
 
@@ -605,64 +449,18 @@ def test_a_route_that_crosses_two_streams_costs_twice():
 
 
 def test_crossing_index_protects_a_stubs_whole_span_not_just_its_ends():
-    """Count a crossing anywhere inside a span recorded from two points.
-
-    Returns
-    -------
-    None
-        A lane inside the span crosses although it is not a recorded point.
-    """
+    """Count a crossing anywhere inside a span recorded from two points."""
     index = CrossingIndex()
     index.record([(602.0, 450.0), (640.0, 450.0)])
     assert index.crosses((617.0, 450.0), "v")
 
 
-def _tie_graph() -> VisibilityGraph:
-    """Build two routes from (0, 0) to (40, 0) tied on bends and length.
-
-    One route runs north through (20, 10) and one south through (20, -10).
-    No direct edge exists. The graph is built by hand so the tie is exact.
-
-    Returns
-    -------
-    VisibilityGraph
-        Stand-in carrying the ``nodes``, ``edges``, and ``recycle_y`` that
-        ``find_path`` reads.
-    """
-    nodes = {(0, 0), (40, 0), (0, 10), (20, 10), (40, 10), (0, -10), (20, -10), (40, -10)}
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0, 0), (0, 10))
-    link((0, 10), (20, 10))
-    link((20, 10), (40, 10))
-    link((40, 10), (40, 0))
-    link((0, 0), (0, -10))
-    link((0, -10), (20, -10))
-    link((20, -10), (40, -10))
-    link((40, -10), (40, 0))
-    return cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-
 def test_a_bend_and_length_tie_breaks_towards_the_route_that_does_not_cross():
-    """Prefer the tied route that crosses no recorded line.
-
-    Returns
-    -------
-    None
-        The search avoids whichever side carries the recorded span.
-    """
-    graph = _tie_graph()
+    """Prefer the tied route that crosses no recorded line."""
+    graph = _graph(
+        [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)],
+        [(0, 0), (0, -10), (20, -10), (40, -10), (40, 0)],
+    )
 
     # Record a vertical run that only the north route crosses.
     crosses_north = CrossingIndex()
@@ -680,50 +478,11 @@ def test_a_bend_and_length_tie_breaks_towards_the_route_that_does_not_cross():
 
 
 def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
-    """Accept a crossing rather than add two bends to avoid it.
-
-    The north route has 3 bends and one crossing. The south route is clear
-    but has 5 bends. ``CROSSING_PENALTY`` is far below ``BEND_PENALTY``.
-
-    Returns
-    -------
-    None
-        The search takes the north route.
-    """
-    nodes = {
-        (0, 0),
-        (40, 0),
-        (0, 10),
-        (20, 10),
-        (40, 10),
-        (0, -10),
-        (20, -10),
-        (20, -30),
-        (40, -30),
-    }
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0, 0), (0, 10))
-    link((0, 10), (20, 10))
-    link((20, 10), (40, 10))
-    link((40, 10), (40, 0))
-    link((0, 0), (0, -10))
-    link((0, -10), (20, -10))
-    link((20, -10), (20, -30))
-    link((20, -30), (40, -30))
-    link((40, -30), (40, 0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    """Accept a crossing rather than add two bends to avoid it."""
+    graph = _graph(
+        [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)],
+        [(0, 0), (0, -10), (20, -10), (20, -30), (40, -30), (40, 0)],
+    )
 
     index = CrossingIndex()
     index.v[20] = [(0.0, 20.0)]  # Cross the north route at (20, 10).
@@ -731,46 +490,8 @@ def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
     assert (20, 10) in routed, f"detoured two extra bends to dodge a crossing: {routed}"
 
 
-def test_a_forced_crossing_still_routes():
-    """Find the only route although it crosses a recorded line.
-
-    Returns
-    -------
-    None
-        The crossing charge never removes the single available route.
-    """
-    nodes = {(0, 0), (40, 0), (0, 10), (20, 10), (40, 10)}
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0, 0), (0, 10))
-    link((0, 10), (20, 10))
-    link((20, 10), (40, 10))
-    link((40, 10), (40, 0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-    index = CrossingIndex()
-    index.v[20] = [(0.0, 20.0)]
-    routed = find_path(graph, (0, 0), (40, 0), "E", None, crossing_index=index)
-    assert routed == [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)]
-
-
 def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
     """Return the cost of the state ``find_path`` stops on.
-
-    A graph with one route returns the same path whether or not a crossing
-    is charged, so the charge is read from the cost of the last popped
-    state.
 
     Parameters
     ----------
@@ -817,64 +538,12 @@ def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
     return popped[-1][1]
 
 
-def test_a_terminal_crossing_at_the_goal_itself_is_priced():
-    """Charge a crossing that lies on the goal node.
-
-    The search returns on reaching the goal without expanding it. An
-    arrival that continues into the fixed goal stub makes the goal an
-    interior point of the drawn line.
-
-    Returns
-    -------
-    None
-        The one-route graph costs one penalty more with the crossing.
-    """
-    nodes = {(0.0, 0.0), (40.0, 0.0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0.0, 0.0)].append((40.0, 0.0))
-    edges[(40.0, 0.0)].append((0.0, 0.0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-    g_clear = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, "W")
-
-    index = CrossingIndex()
-    index.v[40.0] = [(-10.0, 10.0)]  # Place the goal strictly inside the span.
-    g_crossed = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, "W", crossing_index=index)
-
-    assert g_crossed == pytest.approx(g_clear + astar.CROSSING_PENALTY)
-
-
 def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
-    """Price the bend a side arrival makes with the goal stub.
-
-    Two routes reach the goal with equal length and counted bends. One
-    arrives in line with the stub and crosses a recorded line; the other
-    arrives from the side, which adds a bend at the stub.
-
-    Returns
-    -------
-    None
-        The in-line arrival wins, and without the index both remain tied.
-    """
-    nodes = {(0.0, -20.0), (0.0, 0.0), (20.0, 0.0), (20.0, -20.0)}
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0.0, -20.0), (0.0, 0.0))
-    link((0.0, 0.0), (20.0, 0.0))  # Arrive heading east, in line with the stub.
-    link((0.0, -20.0), (20.0, -20.0))
-    link((20.0, -20.0), (20.0, 0.0))  # Arrive heading north, from the side.
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    """Price the bend a side arrival makes with the goal stub."""
+    graph = _graph(
+        [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],  # Arrive in line with the stub.
+        [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],  # Arrive from the side.
+    )
 
     index = CrossingIndex()
     index.v[20.0] = [(-30.0, 30.0)]  # Place the goal strictly inside the span.
@@ -892,72 +561,23 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
 
 
 def test_a_recycle_search_returns_the_cheapest_path():
-    """Estimate a recycle's remaining bend at the recycle's own bend cost.
-
-    A recycle bend costs ``BEND_PENALTY / 2``. The heuristic used to add the
-    full ``BEND_PENALTY``, so the node on the cheap west route, which still
-    needs a bend, looked 250 dearer than it is, and the search settled the
-    goal through the penalised east route first (#574).
-
-    Returns
-    -------
-    None
-        The west route, 450 against the east route's 550, is returned.
-    """
+    """Estimate a recycle's remaining bend at the recycle's own bend cost."""
     west = [(0.0, 0.0), (0.0, 50.0), (0.0, 100.0), (100.0, 100.0)]
     east = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]
-    nodes = set(west) | set(east)
-    edges: dict = {n: [] for n in nodes}
-    for path in (west, east):
-        for a, b in zip(path, path[1:]):
-            edges[a].append(b)
-            edges[b].append(a)
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    graph = _graph(west, east)
     penalties = {((0.0, 0.0), (100.0, 0.0)): 100.0}
     routed = find_path(graph, (0.0, 0.0), (100.0, 100.0), edge_penalties=penalties, is_recycle=True)
     assert routed == west, f"returned the dearer route: {routed}"
 
 
-def test_a_forced_terminal_crossing_still_routes():
-    """Find the only route although its goal lies on a recorded line.
-
-    Returns
-    -------
-    None
-        The direct route is returned.
-    """
-    nodes = {(0, 0), (40, 0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0, 0)].append((40, 0))
-    edges[(40, 0)].append((0, 0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-    index = CrossingIndex()
-    index.v[40] = [(-10.0, 10.0)]
-    routed = find_path(graph, (0, 0), (40, 0), None, "W", crossing_index=index)
-    assert routed == [(0, 0), (40, 0)]
-
-
 def test_committed_segments_refuses_a_diagonal_pair():
-    """Reject a diagonal segment instead of guessing its axis.
-
-    Returns
-    -------
-    None
-        ``committed_segments`` raises ``ValueError``.
-    """
+    """Reject a diagonal segment instead of guessing its axis."""
     with pytest.raises(ValueError, match="diagonal"):
         committed_segments([(0.0, 0.0), (10.0, 10.0)])
 
 
 def test_crossing_index_crosses_refuses_an_invalid_axis():
-    """Reject an axis other than ``"h"`` or ``"v"``.
-
-    Returns
-    -------
-    None
-        ``crosses`` raises ``ValueError``.
-    """
+    """Reject an axis other than ``"h"`` or ``"v"``."""
     index = CrossingIndex()
     index.record([(0.0, 0.0), (100.0, 0.0)])
     with pytest.raises(ValueError, match="axis"):
@@ -966,9 +586,6 @@ def test_crossing_index_crosses_refuses_an_invalid_axis():
 
 def _obstacle_bypass_tie(fs):
     """Add a stream whose north and south bypasses are exactly tied.
-
-    ``label_pos="center"`` keeps the vessel symmetric; a label above it
-    would make the north bypass longer.
 
     Parameters
     ----------
@@ -987,17 +604,7 @@ def _obstacle_bypass_tie(fs):
 
 
 def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
-    """Never move a ``via()`` route to separate it from another line.
-
-    Both runs lie on y=200 and overlap. Separation used to offset the
-    interior run of each and write it back, so every ``route()`` moved them
-    another 3 px (#574).
-
-    Returns
-    -------
-    None
-        Both routes keep their exact points over three routes.
-    """
+    """Never move a ``via()`` route to separate it from another line."""
     fs = Flowsheet("via-shared-track")
     f1 = fs.add(Feed("F1")).pin(x=40, y=90)
     p1 = fs.add(Product("P1")).pin(x=560, y=90)
@@ -1013,22 +620,19 @@ def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
         assert s2.route is not None and s2.route.waypoints == lower
 
 
-def test_a_manual_routes_geometry_is_recorded_for_later_streams():
+@pytest.mark.parametrize("x", [175.0, 176.0], ids=["on-a-lane", "off-every-lane"])
+def test_a_manual_routes_geometry_is_recorded_for_later_streams(x: float):
     """Record a manual route so a later stream avoids crossing it.
 
-    The manual stream is drawn across the north bypass at x=175, a lane the
-    graph carries. The test checks the later route, because a call to
-    ``record`` does not prove that it had an effect.
-
-    Returns
-    -------
-    None
-        F -> P takes the south bypass.
+    Parameters
+    ----------
+    x : float
+        Column the manual route is drawn down.
     """
     fs = Flowsheet("manual-recorded")
     f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
     p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
-    fs.connect(f1.outlet, p1.inlet).via([(175.0, 100.0), (175.0, 170.0)])
+    fs.connect(f1.outlet, p1.inlet).via([(x, 100.0), (x, 170.0)])
     stream = _obstacle_bypass_tie(fs)
 
     fs.layout()
@@ -1041,16 +645,7 @@ def test_a_manual_routes_geometry_is_recorded_for_later_streams():
 
 
 def test_a_diagonal_manual_route_is_recorded_around_its_own_slant():
-    """Record the orthogonal legs of a manual route that has a diagonal leg.
-
-    The manual route crosses the north bypass with an orthogonal leg and
-    then runs diagonally away from it.
-
-    Returns
-    -------
-    None
-        ``route-diagonal`` is reported and F -> P takes the south bypass.
-    """
+    """Record the orthogonal legs of a manual route that has a diagonal leg."""
     fs = Flowsheet("diagonal-manual")
     f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
     p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
@@ -1074,17 +669,7 @@ def test_a_diagonal_manual_route_is_recorded_around_its_own_slant():
 
 
 def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
-    """Record a fallback route so a later stream avoids crossing it.
-
-    F1 -> P1 is forced onto the fallback across the north bypass. The
-    fixture units near the bypass shift the tie by about 10 px, so
-    ``CROSSING_PENALTY`` is raised for this test.
-
-    Returns
-    -------
-    None
-        F1 -> P1 draws a fallback and F -> P takes the south bypass.
-    """
+    """Record a fallback route so a later stream avoids crossing it."""
     fs = Flowsheet("fallback-recorded")
     f1 = fs.add(Feed("F1")).pin(x=175, y=100)
     p1 = fs.add(Product("P1")).pin(x=175, y=170)
@@ -1135,14 +720,7 @@ def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
 
 
 def test_crossings_along_counts_a_crossing_strictly_inside_the_span_open_on_both_ends():
-    """Count recorded spans crossed strictly inside one edge.
-
-    Returns
-    -------
-    None
-        Interior spans count once each; a span at the edge's endpoint, a
-        diagonal, and a zero-length edge count as zero.
-    """
+    """Count recorded spans crossed strictly inside one edge."""
     index = CrossingIndex()
     index.v[50.0] = [(-10.0, 10.0)]
     index.v[100.0] = [(-10.0, 10.0)]  # Lie on the edge's endpoint, not inside it.
@@ -1155,13 +733,7 @@ def test_crossings_along_counts_a_crossing_strictly_inside_the_span_open_on_both
 
 
 def test_crossings_along_sees_a_track_added_after_its_own_sorted_cache_was_built():
-    """Refresh the sorted track cache when a new track is recorded.
-
-    Returns
-    -------
-    None
-        A track recorded after the first query is counted by the second.
-    """
+    """Refresh the sorted track cache when a new track is recorded."""
     index = CrossingIndex()
     index.v[10.0] = [(-10.0, 10.0)]
     assert index.crossings_along((0.0, 0.0), (20.0, 0.0)) == 1  # Build the cache.
@@ -1171,18 +743,8 @@ def test_crossings_along_sees_a_track_added_after_its_own_sorted_cache_was_built
 
 
 def test_find_path_prices_a_crossing_strictly_inside_a_long_edge_not_just_at_a_node():
-    """Charge a crossing that lies inside an edge and on no graph node.
-
-    Returns
-    -------
-    None
-        The one-route graph costs one penalty more with the crossing.
-    """
-    nodes = {(0.0, 0.0), (100.0, 0.0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0.0, 0.0)].append((100.0, 0.0))
-    edges[(100.0, 0.0)].append((0.0, 0.0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    """Charge a crossing that lies inside an edge and on no graph node."""
+    graph = _graph([(0.0, 0.0), (100.0, 0.0)])
 
     clear = _final_g(graph, (0.0, 0.0), (100.0, 0.0), None, "W")
 
@@ -1193,39 +755,8 @@ def test_find_path_prices_a_crossing_strictly_inside_a_long_edge_not_just_at_a_n
     assert crossed == pytest.approx(clear + astar.CROSSING_PENALTY)
 
 
-def test_a_manual_route_off_lane_still_breaks_the_tie():
-    """Avoid a manual route drawn off every graph lane.
-
-    The manual stream runs at x=176, which is not a lane coordinate, so
-    only the whole-edge crossing check can price it.
-
-    Returns
-    -------
-    None
-        F -> P takes the south bypass.
-    """
-    fs = Flowsheet("manual-recorded-off-lane")
-    f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
-    p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
-    fs.connect(f1.outlet, p1.inlet).via([(176.0, 100.0), (176.0, 170.0)])
-    stream = _obstacle_bypass_tie(fs)
-
-    fs.layout()
-    fs.route()
-
-    assert stream.route is not None
-    wp = stream.route.waypoints
-    assert 135.0 not in {y for _, y in wp}, f"F -> P crossed the manual route's line: {wp}"
-    assert 265.0 in {y for _, y in wp}, f"F -> P did not take the clear (south) bypass: {wp}"
-
-
 def test_separation_keeps_a_run_out_of_the_unit_its_stream_joins() -> None:
-    """Move a run off a shared track without passing it through its own end unit (#468).
-
-    The run to the tee sits just above the tee's box and shares a track
-    with another stream's nozzle run. The nearer free slot lies across the
-    tee, so the run must take the other one.
-    """
+    """Move a run off a shared track without passing it through its own end unit."""
     from pandid.geometry import Frame
     from pandid.routing.visibility import Rect
     from pandid.routing.separation import separate_streams
@@ -1269,17 +800,7 @@ def test_separation_keeps_a_run_out_of_the_unit_its_stream_joins() -> None:
 
 
 def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass():
-    """Preview separation without changing routes, and match the real pass.
-
-    The routes are automatic ones, set directly: a ``via()`` route is
-    never separated (#574).
-
-    Returns
-    -------
-    None
-        Routes are unchanged by the preview, equal it after separation,
-        and separation moves at least one of them.
-    """
+    """Preview separation without changing routes, and match the real pass."""
     from pandid.routing.separation import preview_separated_waypoints, separate_streams
 
     fs = Flowsheet("preview-vs-real")
@@ -1311,19 +832,10 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
 def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     """Record the separated route so later streams price its drawn path.
 
-    The crossing index is rebuilt from the separation preview (#509). A
-    ``via()`` route is never separated (#574), so the preview is replaced by
-    one that lowers every route 6 px, and the recording must follow it.
-
     Parameters
     ----------
     monkeypatch : pytest.MonkeyPatch
         Replaces the separation preview.
-
-    Returns
-    -------
-    None
-        The second manual route is recorded at its previewed y coordinate.
     """
     from pandid.routing import separation
 
@@ -1359,11 +871,6 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
             Index receiving the path.
         path : list[tuple[float, float]]
             Route waypoints.
-
-        Returns
-        -------
-        None
-            Result of the original ``record``.
         """
         recorded.append(list(path))
         return original_record(self, path)

@@ -1,9 +1,4 @@
-"""Verify rendered SVG stroke weights.
-
-The checks cover symbol strokes, direct sheet lines, flattened export input, and
-resized equipment. Each gallery sheet is rendered once for the three corpus
-checks so that the assertions share identical output.
-"""
+"""Verify rendered SVG stroke weights of symbols, sheet lines, and resized equipment."""
 
 import math
 import re
@@ -295,12 +290,7 @@ def test_every_symbol_declares_a_pen_centred_on_the_sheet_weight() -> None:
 
 
 def test_no_symbol_draws_ink_below_the_floor_once_its_class_is_applied() -> None:
-    """Verify every stencil's ink is drawn at 0,1 M or wider (#500).
-
-    ISO 10628-1 5.3.1 c) sets the floor. A trimmed symbol is drawn at the
-    detail rung, so its declared widths are scaled down by that ratio. A
-    white halo behind lettering is not ink.
-    """
+    """Verify every stencil's ink is drawn at 0,1 M or wider once its class is applied."""
     floor = LineWeight.DETAIL.width
     thin: list[str] = []
     for (kind, variant), symbol in sorted(default_registry._symbols.items()):

@@ -1,4 +1,4 @@
-"""Reusable flowsheets for layout regression tests."""
+"""Reusable flowsheets and drawn-geometry helpers for layout regression tests."""
 
 from pandid import (
     DistillationColumn,
@@ -8,6 +8,10 @@ from pandid import (
     Product,
     Reactor,
 )
+from pandid.geometry import Frame
+from pandid.portgeom import port_point
+from pandid.stations import ValveStation
+from pandid.units import Unit
 
 
 PINS = {
@@ -102,3 +106,73 @@ def build(pinned=True, skip=None):
     for source, source_port, dest, dest_port in EDGES:
         fs.connect(getattr(items[source], source_port), getattr(items[dest], dest_port))
     return fs, items
+
+
+def frame_of(unit: Unit | None) -> Frame:
+    """Return a unit's frame, which layout must have given it.
+
+    Parameters
+    ----------
+    unit : Unit or None
+        Laid-out unit; asserted to exist.
+
+    Returns
+    -------
+    Frame
+        Its frame.
+    """
+    assert unit is not None and unit.frame is not None, f"{unit} has no frame"
+    return unit.frame
+
+
+def nozzle_of(unit: Unit | None, port: str) -> tuple[float, float]:
+    """Return where a line attaches to one of a laid-out unit's nozzles.
+
+    Parameters
+    ----------
+    unit : Unit or None
+        Laid-out unit; asserted to exist.
+    port : str
+        Port name.
+
+    Returns
+    -------
+    tuple[float, float]
+        Drawn attachment point.
+    """
+    frame = frame_of(unit)
+    assert unit is not None
+    return port_point(unit, frame, port)
+
+
+def overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    """Return whether two drawn boxes overlap.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float, float, float]
+        ``(x_min, y_min, x_max, y_max)``.
+
+    Returns
+    -------
+    bool
+        Whether their interiors meet.
+    """
+    return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
+
+
+def on_the_run(station: ValveStation) -> list[Unit]:
+    """Return a valve station's members that sit on the run, in flow order.
+
+    Parameters
+    ----------
+    station : ValveStation
+        Station to read.
+
+    Returns
+    -------
+    list[Unit]
+        Every member but the bypass valve and the drain valves.
+    """
+    legs = (station.bypass, station.upstream_drain, station.downstream_drain)
+    return [unit for unit in station.members if unit not in legs]
