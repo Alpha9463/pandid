@@ -769,23 +769,15 @@ def test_the_hatch_stroke_is_the_same_in_both_backends():
         assert float(geo.get("width", "nan")) / scale == pytest.approx(length, abs=0.2)
 
 
-def test_a_dash_is_stated_in_drawing_units():
-    """Keep dash lengths independent of stroke width."""
-    fs = Flowsheet("dashes")
-    a = fs.add(units.Tank("T-1"))
-    b = fs.add(units.Tank("T-2"))
-    a.pin(x=100, y=100)
-    b.pin(x=500, y=100)
-    fs.connect(a.outlet, b.inlet).dasharray = "8,4"
-    fs.route()
-    style = _style(_cells(fs, check=False)["s0"])
-    assert style["dashPattern"] == "8 4", "a comma breaks mxGraph's pattern parser"
-    assert style["fixDash"] == "1"
-
-
 @pytest.mark.parametrize(
     ("dasharray", "pattern"),
-    [("7, 4", "7 4"), ("7 ,  4", "7 4"), ("9 3,2 3", "9 3 2 3"), ("none", None)],
+    [
+        ("8,4", "8 4"),
+        ("7, 4", "7 4"),
+        ("7 ,  4", "7 4"),
+        ("9 3,2 3", "9 3 2 3"),
+        ("none", None),
+    ],
 )
 def test_a_dash_draws_in_drawio_as_the_svg_draws_it(dasharray, pattern):
     """Read a dash as SVG does: any comma and space separate, ``none`` is solid.
@@ -810,6 +802,7 @@ def test_a_dash_draws_in_drawio_as_the_svg_draws_it(dasharray, pattern):
     style = _style(_cells(fs, check=False)["s0"])
     assert style.get("dashPattern") == pattern
     assert ("dashed" in style) == (pattern is not None)
+    assert style.get("fixDash") == ("1" if pattern else None)
 
 
 def test_a_turned_cell_pins_which_anchor_algorithm_reads_its_fractions():
@@ -1134,17 +1127,6 @@ def test_a_mirrored_expander_is_the_reducer_drawn_as_vendored():
     assert "flipH" not in style
 
 
-def test_a_diamond_balloon_carries_its_number_alone():
-    """Keep the interlock number inside a diamond balloon."""
-    fs = Flowsheet("interlock")
-    square = fs.add(units.Instrument("Z", 301, variant="interlock"))
-    square.pin(x=100, y=100)
-    fs.layout()
-    cell = _cells(fs, check=False)["u0"]
-    assert cell.get("value") == "301"
-    assert _style(cell)["shape"] == "rhombus"
-
-
 @pytest.mark.parametrize("variant", ["sis", "logic"])
 def test_a_trip_balloon_keeps_the_square_around_its_diamond(variant):
     """Retain the safety-system square around a trip balloon.
@@ -1189,6 +1171,7 @@ def test_a_trip_balloon_keeps_the_square_around_its_diamond(variant):
     plain.layout()
     bare = _cells(plain, check=False)
     assert _style(bare["u0"])["shape"] == "rhombus"
+    assert bare["u0"].get("value") == "302"
     assert "u0-in" not in bare
 
 
