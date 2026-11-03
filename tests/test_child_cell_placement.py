@@ -1,32 +1,4 @@
-"""A draw.io child cell is placed and turned with the symbol it is part of.
-
-Two mechanisms in :mod:`pandid.render.drawio` draw a symbol as a parent
-cell with children inside it, and both state the child's rectangle in the
-**symbol's** frame:
-
-* ``_APPROXIMATIONS[...].pieces`` -- a stand-in that is several built-ins,
-  such as the steam trap's body between its two leads;
-* ``Symbol.overlays`` -- a composed drawing's ISO supplementary parts,
-  such as a reactor's agitator on its shell.
-
-mxGraph carries neither the parent's ``direction`` nor its flips into a
-child's geometry: a child is positioned by its own numbers, relative to
-the parent's origin and nothing else. A child that is a shape *beside*
-its parent would not care. A child that is a piece **of the drawing**
-does, and the failure is quiet in the worst way -- the sheet still opens,
-every cell is present, and the symbol has come apart.
-
-It came apart exactly once, on a trap laid on its side: a 40 x 60 cell
-carrying three children still laid out along the *unturned* axis, so the
-body and both leads were drawn as tall slivers side by side and the ink
-met neither nozzle. The parts of a composed symbol had the same fault
-and had had it longer.
-
-So this file exports the same units upright and turned and asks what has
-to be true of the pair. It never restates the mapping -- that would only
-say the code computes what the code computes -- and instead asks for
-properties a correct turn must have and a missing one cannot fake.
-"""
+"""Check that a draw.io child cell is placed and turned with the symbol it is part of."""
 
 import xml.etree.ElementTree as ET
 
@@ -34,6 +6,8 @@ import pytest
 
 from pandid import Flowsheet, SteamTrap
 from pandid import units
+
+from test_drawio import _style
 
 #: The two quarter turns. A half turn leaves the axes alone, so it cannot
 #: tell a turned child from an unturned one and is no use here; it is
@@ -55,11 +29,8 @@ def _export(
         geometry = cell.find("mxGeometry")
         if geometry is None:
             continue
-        style = dict(
-            part.split("=", 1) for part in (cell.get("style") or "").split(";") if "=" in part
-        )
         out[cell.get("id") or ""] = (
-            style,
+            _style(cell),
             tuple(float(geometry.get(key, 0)) for key in ("x", "y", "width", "height")),
         )
     return out
@@ -100,16 +71,7 @@ MECHANISMS = [
 )
 @pytest.mark.parametrize("rot", QUARTERS)
 def test_a_child_turns_with_the_symbol_it_is_part_of(factory, marker, rot):
-    """A quarter turn swaps a child's width and height, as it swaps the
-    parent's.
-
-    This is the property a missing turn cannot fake. Left unturned, a
-    child's rectangle is still computed as fractions of the parent's box
-    -- and the parent's box *has* swapped -- so the child comes out with
-    a shape that is neither the upright one nor the turned one. Asserting
-    the swap therefore catches the real failure without restating how the
-    turn is worked out.
-    """
+    """Check that a quarter turn swaps a child's width and height as it swaps the parent's."""
     upright_parent, upright = _children(_export(factory, 0), marker)
     turned_parent, turned = _children(_export(factory, rot), marker)
 
@@ -133,14 +95,7 @@ def test_a_child_turns_with_the_symbol_it_is_part_of(factory, marker, rot):
 )
 @pytest.mark.parametrize("rot", QUARTERS)
 def test_a_turned_child_paints_the_way_its_parent_does(factory, marker, rot):
-    """Turning a child's *rectangle* is half the job; the other half is
-    how the shape paints inside it.
-
-    ``mxLine`` draws across its box horizontally and turns only for
-    ``direction`` north or south, and a stencil like an agitator has a top
-    and a bottom. So a child carries the parent's own direction -- not a
-    decision of its own, because the whole drawing turns together.
-    """
+    """Check that a turned child carries its parent's painting ``direction``."""
     cells = _export(factory, rot)
     parent, children = _children(cells, marker)
     direction = parent[0].get("direction")
@@ -158,15 +113,7 @@ def test_a_turned_child_paints_the_way_its_parent_does(factory, marker, rot):
 )
 @pytest.mark.parametrize("rot", [0, 90, 180, 270])
 def test_a_symbol_at_its_own_size_is_never_reported_as_reproportioned(factory, marker, rot):
-    """Laying a symbol on its side is not resizing it.
-
-    ``drawio-approximated`` reports a drawing draw.io will stretch because
-    no built-in can be told to keep its shape. A quarter turn swaps the
-    cell's width and height, and comparing that against the symbol's
-    *unturned* box made every upright drawing laid on its side report a
-    resize it never had -- a false warning, which costs a reader exactly
-    as much trust as a missing one.
-    """
+    """Check that turning a symbol is not reported as resizing it."""
     fs = Flowsheet("turned")
     unit = fs.add(factory())
     unit.pin(x=400.0, y=400.0, orientation=rot)

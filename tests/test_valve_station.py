@@ -1,19 +1,4 @@
-"""Check the control valve station: its assembly, tags, placement and refusals.
-
-The arrangement follows the CHEE4001/7103 P&ID guidelines (p.4, drawn on
-p.5 of ``professional_examples/``, which is gitignored). Along the run it is:
-
-    bypass takeoff, isolation valve, drain tee, reduction, control valve,
-    expansion, drain tee, isolation valve, bypass rejoin
-
-The bypass is carried on one throttling valve and tapped outside both
-isolation valves. The drain and bypass valves are drawn solid (normally
-closed); the two in-line isolation valves are left open.
-
-The issued sheet ``professional_examples/P&ID_301.pdf`` agrees with this
-geometry but tags none of a station's hand valves or reducers, so member tags
-come from a configurable scheme rather than a fixed rule.
-"""
+"""Check the control valve station: its assembly, tags, placement and refusals."""
 
 from __future__ import annotations
 
@@ -21,9 +6,10 @@ import pytest
 
 from pandid import Flowsheet, spec, units
 from pandid.document import equipment_list
-from pandid.geometry import Frame
 from pandid.portgeom import port_offset, port_point, resolve_size
 from pandid.stations import DEFAULT_GAP, ValveStation
+
+from _layout_cases import frame_of, nozzle_of, on_the_run
 
 RUN_Y = 400.0
 
@@ -78,16 +64,14 @@ def test_a_full_station_is_eight_devices_and_four_tees():
 def test_the_run_passes_through_the_devices_the_figure_draws_it_through():
     """Check the run order: isolation, drain, reduction, valve, expansion, drain, isolation."""
     _fs, st = _sheet()
-    on_the_run = [
-        u for u in st.members if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
-    ]
-    assert on_the_run[1:-1] == [
+    run = on_the_run(st)
+    assert run[1:-1] == [
         st.upstream_isolation,
-        on_the_run[2],  # upstream drain tee
+        run[2],  # upstream drain tee
         st.reduction,
         st.control,
         st.expansion,
-        on_the_run[6],  # downstream drain tee
+        run[6],  # downstream drain tee
         st.downstream_isolation,
     ]
 
@@ -252,41 +236,6 @@ def test_a_member_is_an_ordinary_unit_that_can_still_be_moved_and_instrumented()
 # --- Placement ---------------------------------------------------------------
 
 
-def _nozzle(unit, port):
-    """Return the drawn position of a port on a laid-out unit.
-
-    Parameters
-    ----------
-    unit : Unit
-        Laid-out unit.
-    port : str
-        Port name.
-
-    Returns
-    -------
-    tuple of (float, float)
-        Port position on the sheet.
-    """
-    return port_point(unit, unit.frame, port)
-
-
-def _box(unit: units.Unit) -> Frame:
-    """Return the frame layout resolved for a unit.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit on a laid-out sheet.
-
-    Returns
-    -------
-    Frame
-        The unit's frame; asserted to exist.
-    """
-    assert unit.frame is not None
-    return unit.frame
-
-
 def _drawn(station: ValveStation) -> list[tuple[float, float, bool, bool]]:
     """Return where each member is drawn and which way round.
 
@@ -300,30 +249,27 @@ def _drawn(station: ValveStation) -> list[tuple[float, float, bool, bool]]:
     list of tuple of (float, float, bool, bool)
         Each member's ``x``, ``y``, ``mirrored`` and ``mirror_y``.
     """
-    return [(_box(u).x, _box(u).y, _box(u).mirrored, _box(u).mirror_y) for u in station.members]
+    return [
+        (frame_of(u).x, frame_of(u).y, frame_of(u).mirrored, frame_of(u).mirror_y)
+        for u in station.members
+    ]
 
 
 def test_every_device_on_the_run_lands_on_the_run():
     """Check that every in-line member's nozzles lie on the run centreline."""
     fs, st = _sheet()
     fs.layout()
-    on_the_run = [
-        u for u in st.members if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
-    ]
-    for unit in on_the_run:
-        assert _nozzle(unit, "inlet")[1] == pytest.approx(RUN_Y)
-        assert _nozzle(unit, "outlet")[1] == pytest.approx(RUN_Y)
+    run = on_the_run(st)
+    for unit in run:
+        assert nozzle_of(unit, "inlet")[1] == pytest.approx(RUN_Y)
+        assert nozzle_of(unit, "outlet")[1] == pytest.approx(RUN_Y)
 
 
 def test_the_run_is_drawn_left_to_right_in_piping_order():
     """Check that in-line members are drawn west to east in flow order."""
     fs, st = _sheet()
     fs.layout()
-    xs = [
-        u.frame.x
-        for u in st.members
-        if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
-    ]
+    xs = [u.frame.x for u in on_the_run(st)]
     assert xs == sorted(xs)
 
 
@@ -331,34 +277,32 @@ def test_gap_is_edge_to_edge_between_one_device_and_the_next():
     """Check that ``gap`` is the clear distance between neighbouring in-line members."""
     fs, st = _sheet(gap=50)
     fs.layout()
-    on_the_run = [
-        u for u in st.members if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
-    ]
-    for before, after in zip(on_the_run, on_the_run[1:]):
-        assert _box(after).x - _box(before).x_max == pytest.approx(50)
+    run = on_the_run(st)
+    for before, after in zip(run, run[1:]):
+        assert frame_of(after).x - frame_of(before).x_max == pytest.approx(50)
 
 
 def test_a_mirrored_station_is_the_same_run_drawn_the_other_way_round():
     """Check that ``mirrored=True`` draws the run east to west."""
     fs, st = _sheet(mirrored=True)
     fs.layout()
-    on_the_run = [
-        u for u in st.members if u not in (st.bypass, st.upstream_drain, st.downstream_drain)
-    ]
-    xs = [u.frame.x for u in on_the_run]
+    run = on_the_run(st)
+    xs = [u.frame.x for u in run]
     assert xs == sorted(xs, reverse=True)
     # Flow still enters at the station inlet, now at its east end.
-    assert _nozzle(st.upstream_isolation, "inlet")[0] > _nozzle(st.upstream_isolation, "outlet")[0]
+    assert (
+        nozzle_of(st.upstream_isolation, "inlet")[0] > nozzle_of(st.upstream_isolation, "outlet")[0]
+    )
 
 
 def test_the_bypass_stands_over_the_run_and_the_drains_hang_under_it():
     """Check that ``bypass_rise`` and ``drain_drop`` set the leg offsets."""
     fs, st = _sheet(bypass_rise=45, drain_drop=36)
     fs.layout()
-    assert _nozzle(st.bypass, "inlet")[1] == pytest.approx(RUN_Y - 45)
+    assert nozzle_of(st.bypass, "inlet")[1] == pytest.approx(RUN_Y - 45)
     for drain in (st.upstream_drain, st.downstream_drain):
-        assert _nozzle(drain, "inlet")[1] == pytest.approx(RUN_Y + 36)
-        assert _nozzle(drain, "inlet")[0] == pytest.approx(_nozzle(drain, "outlet")[0])
+        assert nozzle_of(drain, "inlet")[1] == pytest.approx(RUN_Y + 36)
+        assert nozzle_of(drain, "inlet")[0] == pytest.approx(nozzle_of(drain, "outlet")[0])
 
 
 def test_a_drain_hangs_off_its_own_tee():
@@ -366,14 +310,14 @@ def test_a_drain_hangs_off_its_own_tee():
     fs, st = _sheet()
     fs.layout()
     for tee, drain in ((st.tees[1], st.upstream_drain), (st.tees[2], st.downstream_drain)):
-        assert _nozzle(drain, "inlet")[0] == pytest.approx(_nozzle(tee, "branch")[0])
+        assert nozzle_of(drain, "inlet")[0] == pytest.approx(nozzle_of(tee, "branch")[0])
 
 
 def test_the_bypass_valve_sits_in_the_middle_of_its_leg_by_default():
     """Check that the bypass valve is centred between the takeoff and rejoin."""
     fs, st = _sheet()
     fs.layout()
-    legs = [_nozzle(st.tees[0], "branch")[0], _nozzle(st.tees[-1], "branch")[0]]
+    legs = [nozzle_of(st.tees[0], "branch")[0], nozzle_of(st.tees[-1], "branch")[0]]
     centre = st.bypass.frame.x + resolve_size(st.bypass)[0] / 2
     assert centre == pytest.approx(sum(legs) / 2)
 
@@ -429,39 +373,43 @@ def test_a_branch_takes_the_number_the_station_was_given():
 # --- Refusals ----------------------------------------------------------------
 
 
-def test_a_bypass_with_no_isolation_valves_to_go_round_is_refused():
-    """Check that a bypass without isolation valves is refused."""
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        (dict(isolation=False, bypass=True), "no isolation valves to tap outside of"),
+        (dict(drains=3), "drains= is how many drain valves"),
+        (dict(x=300), "placed by"),
+        (dict(x=300, y=RUN_Y, reducers=False, bypass_over="reduction"), "told to leave out"),
+        (dict(x=300, y=RUN_Y, bypass_over="drain"), "bypass_over names the member"),
+        (dict(mirrored=True, gap=50), "mirrored=, gap="),
+        (dict(mirrored=False), "mirrored="),
+    ],
+    ids=[
+        "bypass_without_isolation",
+        "bad_drain_count",
+        "x_without_y",
+        "bypass_over_a_role_left_out",
+        "bypass_over_a_role_that_does_not_exist",
+        "a_word_about_a_run_that_is_not_drawn",
+        "mirrored_false_without_a_run",
+    ],
+)
+def test_a_refused_call_says_why_and_leaves_the_sheet_exactly_as_it_was(kwargs, match):
+    """Check that a refused call names its fault and adds no unit or stream to the sheet.
+
+    Parameters
+    ----------
+    kwargs : dict
+        Options passed to ``add_valve_station``.
+    match : str
+        Pattern the refusal must contain.
+    """
     fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="no isolation valves to tap outside of"):
-        fs.add_valve_station("CV-1", isolation=False, bypass=True)
-
-
-def test_a_drain_count_that_is_not_zero_one_or_two_is_refused():
-    """Check that a drain count other than 0, 1 or 2 is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="drains= is how many drain valves"):
-        fs.add_valve_station("CV-1", drains=3)
-
-
-def test_one_of_x_and_y_without_the_other_is_refused():
-    """Check that ``x`` without ``y`` is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="placed by"):
-        fs.add_valve_station("CV-1", x=300)
-
-
-def test_a_bypass_over_a_member_that_is_not_there_is_refused():
-    """Check that ``bypass_over`` naming an omitted member is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="told to leave out"):
-        fs.add_valve_station("CV-1", x=300, y=RUN_Y, reducers=False, bypass_over="reduction")
-
-
-def test_a_bypass_over_something_that_is_not_a_member_is_refused():
-    """Check that ``bypass_over`` naming an unknown role is refused."""
-    fs = Flowsheet("bad")
-    with pytest.raises(ValueError, match="bypass_over names the member"):
-        fs.add_valve_station("CV-1", x=300, y=RUN_Y, bypass_over="drain")
+    before_units, before_streams = list(fs.units), list(fs.streams)
+    with pytest.raises(ValueError, match=match):
+        fs.add_valve_station("CV-1", **kwargs)
+    assert fs.units == before_units
+    assert fs.streams == before_streams
 
 
 # --- Run options without a drawn run -----------------------------------------
@@ -508,11 +456,7 @@ def test_mirrored_false_is_named_like_any_other_stated_run_option():
 
 @pytest.mark.parametrize("word", list(RUN_WORDS))
 def test_the_same_word_is_taken_the_moment_the_station_has_a_run(word):
-    """Check that each run option moves a pinned station.
-
-    Both stations are pinned at the same point, so only the option can
-    make them differ.
-    """
+    """Check that each run option moves a pinned station."""
     fs = Flowsheet("placed")
     plain = fs.add_valve_station("CV-1", x=300, y=RUN_Y)
     stated = fs.add_valve_station("CV-2", x=300, y=RUN_Y, **{word: RUN_WORDS[word]})
@@ -521,11 +465,7 @@ def test_the_same_word_is_taken_the_moment_the_station_has_a_run(word):
 
 
 def test_a_word_left_unsaid_is_the_default_it_always_was():
-    """Check that unstated run options take their defaults once the run is drawn.
-
-    An unplaced station given none of them is accepted, and a pinned station
-    draws ``mirrored=False`` exactly as it draws the option left out.
-    """
+    """Check that unstated run options take their defaults once the run is drawn."""
     fs = Flowsheet("mixed")
     unplaced = fs.add_valve_station("CV-1")
     assert all(u.pin_ is None for u in unplaced.members)
@@ -533,13 +473,9 @@ def test_a_word_left_unsaid_is_the_default_it_always_was():
     unmirrored = fs.add_valve_station("CV-3", x=300, y=RUN_Y, mirrored=False)
     fs.layout()
     assert _drawn(unmirrored) == _drawn(placed)
-    on_the_run = [
-        u
-        for u in placed.members
-        if u not in (placed.bypass, placed.upstream_drain, placed.downstream_drain)
-    ]
-    for before, after in zip(on_the_run, on_the_run[1:]):
-        assert _box(after).x - _box(before).x_max == pytest.approx(DEFAULT_GAP)
+    run = on_the_run(placed)
+    for before, after in zip(run, run[1:]):
+        assert frame_of(after).x - frame_of(before).x_max == pytest.approx(DEFAULT_GAP)
 
 
 def test_a_station_on_a_line_takes_run_words_only_with_x_and_y():
@@ -555,35 +491,6 @@ def test_a_station_on_a_line_takes_run_words_only_with_x_and_y():
     station = fs.add_valve_station("CV-1", on=run, x=300, y=RUN_Y, mirrored=False)
     assert run.dest is station.inlet
     assert station.control.pin_ is not None and station.control.pin_.x is not None
-
-
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        dict(isolation=False, bypass=True),
-        dict(drains=3),
-        dict(x=300),
-        dict(x=300, y=RUN_Y, reducers=False, bypass_over="reduction"),
-        dict(mirrored=True, gap=50),
-        dict(mirrored=False),
-    ],
-    ids=[
-        "bypass_without_isolation",
-        "bad_drain_count",
-        "x_without_y",
-        "bypass_over_a_role_left_out",
-        "a_word_about_a_run_that_is_not_drawn",
-        "mirrored_false_without_a_run",
-    ],
-)
-def test_a_refused_call_leaves_the_sheet_exactly_as_it_was(kwargs):
-    """Check that a refused call adds no unit or stream to the sheet."""
-    fs = Flowsheet("bad")
-    before_units, before_streams = list(fs.units), list(fs.streams)
-    with pytest.raises(ValueError):
-        fs.add_valve_station("CV-1", **kwargs)
-    assert fs.units == before_units
-    assert fs.streams == before_streams
 
 
 def test_a_bypass_over_a_role_left_out_can_be_retried_with_the_same_tag():

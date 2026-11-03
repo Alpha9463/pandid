@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
-from pandid.layout.corridor import horizontal_centerline
 from pandid.layout.stages import process_units
 from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
@@ -117,26 +116,6 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
     return frames
 
 
-def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
-    """Return whether frames clear obstacles.
-
-    Parameters
-    ----------
-    frames : dict[Unit, Frame]
-        Proposed member frames.
-    obstacles : list[Unit]
-        Units the members must clear.
-
-    Returns
-    -------
-    bool
-        True if every box clears obstacles by 8.
-    """
-    return not any(boxes_overlap(unit_box(unit, frame), unit_box(other, other.frame), 8)
-                   for unit, frame in frames.items()
-                   for other in obstacles if other.frame is not None)
-
-
 def _anchored_origin(assembly: StationAssembly, preferred_left: float,
                      centerline: float, mirrored: bool) -> tuple[float, float] | None:
     """Return a station origin that meets its members' pins, or None.
@@ -164,7 +143,6 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
         If a member's stated nozzle face cannot be drawn in the station.
     """
     base = _station_frames(assembly, 0.0, 0.0, mirrored)
-    left, y = preferred_left, centerline
     pinned_x: float | None = None
     pinned_y: float | None = None
     for unit, frame in base.items():
@@ -186,22 +164,19 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
             if pinned_y is not None and abs(candidate_y - pinned_y) > 1e-6:
                 return None
             pinned_y = candidate_y
-    if pinned_x is not None:
-        left = pinned_x
-    if pinned_y is not None:
-        y = pinned_y
-    return left, y
+    return (preferred_left if pinned_x is None else pinned_x,
+            centerline if pinned_y is None else pinned_y)
 
 
 def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
-    """Return whether two stations' member boxes keep clear.
+    """Return whether two sets of member boxes keep clear.
 
     Parameters
     ----------
     first : dict[Unit, Frame]
-        One station's member frames.
+        Proposed member frames.
     second : dict[Unit, Frame]
-        The other station's member frames.
+        Frames to clear.
 
     Returns
     -------
@@ -237,16 +212,17 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
     float or None
         The leg's y, or None if no horizontal leg fits.
     """
-    axis = horizontal_centerline(source, source_port, dest, dest_port, start, end)
-    if axis is not None:
-        return axis
     assert source.frame is not None and dest.frame is not None
     source_face = resolve_port(source, source.frame, source_port).face
     dest_face = resolve_port(dest, dest.frame, dest_port).face
-    forward = 1 if end[0] > start[0] else -1
-    if source_face in ("E", "W") and source_face != ("E" if forward > 0 else "W"):
+    ahead, behind = ("E", "W") if end[0] > start[0] else ("W", "E")
+    if abs(start[1] - end[1]) <= 1 or (source_face == ahead and dest_face not in ("E", "W")):
+        return start[1]
+    if dest_face == behind and source_face not in ("E", "W"):
+        return end[1]
+    if source_face in ("E", "W") and source_face != ahead:
         return None
-    if dest_face in ("E", "W") and dest_face != ("W" if forward > 0 else "E"):
+    if dest_face in ("E", "W") and dest_face != behind:
         return None
 
     lower, upper = float("-inf"), float("inf")
@@ -290,30 +266,21 @@ def _fraction(assembly: StationAssembly) -> float:
     return 0.5 if value is None else value
 
 
-def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = None) -> int:
-    """Place each line's stations where all of them fit; count them.
+def place_stations(fs: Flowsheet, assemblies: list[StationAssembly]) -> None:
+    """Place each line's stations where all of them fit.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet with placed process units.
-    assemblies : list[StationAssembly] or None, optional
-        Stations to place; every station on the sheet by default.
-
-    Returns
-    -------
-    int
-        Number of stations placed.
+    assemblies : list[StationAssembly]
+        Stations to place.
     """
     from pandid.layout.mounted import _commit, _main_width
 
-    chosen = fs._station_assemblies if assemblies is None else assemblies
-    if not chosen:
-        return 0
     units = process_units(fs)
-    placed_count = 0
     groups: dict[int, list[StationAssembly]] = {}
-    for assembly in chosen:
+    for assembly in assemblies:
         key = id(assembly.run) if assembly.run is not None else id(assembly)
         groups.setdefault(key, []).append(assembly)
     for group in groups.values():
@@ -348,6 +315,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
                if stream.source.owner in members or stream.dest.owner in members):
             continue
         obstacles = [unit for unit in units if unit not in members]
+        placed = {unit: unit.frame for unit in obstacles if unit.frame is not None}
         proposed: list[dict[Unit, Frame]] = []
         for assembly in group:
             if assembly.mirrored and not mirrored:
@@ -366,9 +334,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
             except ValueError:
                 # Stop at a stated nozzle face the station cannot draw.
                 break
-            if not _fits(frames, obstacles) or any(
-                not _separated(frames, earlier) for earlier in proposed
-            ):
+            if not all(_separated(frames, other) for other in (placed, *proposed)):
                 break
             for unit, frame in frames.items():
                 pin = unit.pin_
@@ -381,7 +347,5 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
             proposed.append(frames)
         if len(proposed) != len(group):
             continue
-        placed_count += len(proposed)
         for frames in proposed:
             _commit(frames, obstacles)
-    return placed_count

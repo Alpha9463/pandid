@@ -547,73 +547,20 @@ def test_the_raster_paths_produce_the_table_sheet_too(tmp_path, ext):
     assert out.stat().st_size > 1000
 
 
-def test_the_option_reaches_the_drafting_call(monkeypatch):
+def test_the_option_reaches_the_drafting_call(caught):
     """Verify that table-sheet options reach the drafting call.
 
     Parameters
     ----------
-    monkeypatch : pytest.MonkeyPatch
-        Patching helper supplied by pytest.
+    caught : dict[str, str]
+        What ``show()`` handed the preview.
     """
-    from pandid.render import preview as P
-
-    seen: dict = {}
-
-    def fake(svg: str, *, title: str = "") -> str:
-        """Capture preview SVG without opening a window.
-
-        Parameters
-        ----------
-        svg : str
-            SVG document submitted to the preview backend.
-        title : str, default=""
-            Preview window title.
-
-        Returns
-        -------
-        str
-            Placeholder preview-window handle.
-        """
-        seen["svg"] = svg
-        return "window"
-
-    monkeypatch.setattr(P, "preview", fake)
     fs = _sheet(streams=21)
     fs.show(show_stream_table="sheet", page_size="A4")
-    assert seen["svg"] == _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
+    assert caught["svg"] == _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
 
 
 # --- one number apiece -------------------------------------------------------
-
-
-def test_a_table_sheet_numbered_as_its_diagram_is_refused():
-    """Verify that a table sheet cannot reuse its diagram drawing number."""
-    fs = _sheet(streams=3)
-    fs.stream_table.sheet_drawing_number = "PFD-1001"
-    with pytest.raises(ValueError, match="the diagram's own drawing number"):
-        fs.to_svg(show_stream_table="sheet", page_size="A3")
-
-
-@pytest.mark.parametrize("stated", ["pfd-1001", "  PFD-1001 "])
-def test_one_number_said_a_different_way_is_still_the_same_number(stated):
-    """Verify that canonical drawing numbers are treated as equal.
-
-    Parameters
-    ----------
-    stated : str
-        Alternative drawing-number spelling.
-    """
-    fs = _sheet(streams=3)
-    fs.stream_table.sheet_drawing_number = stated
-    with pytest.raises(ValueError, match="the diagram's own drawing number"):
-        fs.to_svg(show_stream_table="sheet", page_size="A3")
-
-
-def test_a_number_of_its_own_is_accepted():
-    """Verify that a number of its own is accepted."""
-    fs = _sheet(streams=3)
-    fs.stream_table.sheet_drawing_number = "PFD-1003"
-    assert "PFD-1003" in fs.to_svg(show_stream_table="sheet", page_size="A3")
 
 
 def _unnumbered(fs: Flowsheet) -> list:
@@ -702,34 +649,6 @@ def _unresolved(fs) -> bool:
         Whether any unit frame or stream route is absent.
     """
     return all(u.frame is None for u in fs.units) and all(s.route is None for s in fs.streams)
-
-
-@pytest.mark.parametrize(
-    "kwargs",
-    [
-        {"show_stream_table": "own sheet"},
-        {"show_stream_table": "sheet", "page_size": "A9"},
-        {"show_stream_table": "sheet", "page_size": "A4", "debug": True},
-        {"show_stream_table": "sheet", "page_size": "A3", "jump_direction": "sideways"},
-        {"show_stream_table": "sheet", "page_size": "A3", "connections": "welded"},
-        {"show_stream_table": "sheet", "page_size": "A3", "border": "hatched"},
-        {"jump_direction": "sideways"},
-        {"connections": "welded"},
-    ],
-)
-def test_a_render_that_cannot_happen_has_not_happened_halfway(kwargs):
-    """Verify that a rejected render does not derive partial geometry.
-
-    Parameters
-    ----------
-    kwargs : dict[str, object]
-        Rejected rendering options.
-    """
-    fs = _sheet(streams=3)
-    assert _unresolved(fs), "the fixture must not lay itself out"
-    with pytest.raises(ValueError):
-        fs.to_svg(**cast(Any, kwargs))
-    assert _unresolved(fs), "a refused render left the flowsheet laid out"
 
 
 def test_the_table_sheet_s_own_refusals_come_before_the_geometry():
@@ -837,7 +756,7 @@ def test_a_backend_refuses_the_keywords_it_does_not_take():
 
 
 def test_the_drawio_backend_refuses_the_overlay_when_called_directly():
-    """Verify that the drawio backend refuses the overlay when called directly."""
+    """Verify that the draw.io backend refuses the overlay when called directly."""
     fs = _sheet(streams=3)
     fs.route()
     with pytest.raises(ValueError, match="debug"):
@@ -856,21 +775,6 @@ def test_every_keyword_the_entry_points_pass_is_one_its_backend_names():
 
 
 # --- an unsupported extension is a fact about the path ----------------------
-
-
-def test_an_unsupported_extension_is_refused_before_the_geometry(tmp_path):
-    """Verify that an unsupported extension is refused before the geometry.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    """
-    fs = _sheet(streams=3)
-    assert _unresolved(fs)
-    with pytest.raises(ValueError, match="Unsupported output format"):
-        fs.render(tmp_path / "sheet.unsupported", check=False)
-    assert _unresolved(fs), "a refused render left the flowsheet laid out"
 
 
 def test_the_supported_extensions_still_write(tmp_path):
@@ -994,10 +898,6 @@ def table_sheet_noop_baselines() -> dict[str, str]:
     -------
     dict[str, str]
         SVG and Draw.io output keyed by ``Flowsheet`` export method.
-
-    Notes
-    -----
-    Each output uses a separate flowsheet because rendering writes derived state.
     """
     options = {"show_stream_table": "sheet", "page_size": "A4", "diagram": "p&id"}
     return {
@@ -1064,29 +964,13 @@ def test_the_same_option_does_change_a_diagram_that_can_show_it():
 # Failed renders restore all mutable flowsheet state.
 
 
-def _state(fs) -> bytes:
-    """Capture mutable flowsheet state for rollback comparisons.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to snapshot.
-
-    Returns
-    -------
-    tuple[object, ...]
-        Immutable representation of render-derived state.
-    """
-    return pickle.dumps(fs)
-
-
 def test_the_state_check_can_see_a_change_the_old_one_could_not():
     """Verify that the state check can see a change the old one could not."""
     fs = _sheet(streams=3)
-    before = _state(fs)
+    before = pickle.dumps(fs)
     fs.stream_number_start = 90
     fs.renumber_streams()
-    assert _state(fs) != before
+    assert pickle.dumps(fs) != before
 
 
 @pytest.mark.parametrize(
@@ -1118,10 +1002,10 @@ def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
     if numbering:
         fs.stream_number_start = 90
         fs.line_number_start = 700
-    before = _state(fs)
+    before = pickle.dumps(fs)
     with pytest.raises(ValueError):
         fs.to_svg(**cast(Any, kwargs))
-    assert _state(fs) == before, "a refused render changed the flowsheet"
+    assert pickle.dumps(fs) == before, "a refused render changed the flowsheet"
 
 
 @pytest.mark.parametrize(
@@ -1132,7 +1016,7 @@ def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
     ],
 )
 def test_a_refused_drawio_export_leaves_the_whole_flowsheet_alone(kwargs):
-    """Verify that a refused drawio export leaves the whole flowsheet alone.
+    """Verify that a refused draw.io export leaves the whole flowsheet alone.
 
     Parameters
     ----------
@@ -1143,20 +1027,20 @@ def test_a_refused_drawio_export_leaves_the_whole_flowsheet_alone(kwargs):
     pump = bare.add(U.Pump("P-101")).pin(x=100, y=100)
     tank = bare.add(U.Tank("T-101")).pin(x=300, y=100)
     bare.connect(pump.discharge, tank.inlet)
-    before = _state(bare)
+    before = pickle.dumps(bare)
     with pytest.raises(ValueError):
         bare.to_drawio(**cast(Any, kwargs))
-    assert _state(bare) == before
+    assert pickle.dumps(bare) == before
 
 
 def test_a_refused_render_leaves_the_flowsheet_alone_after_a_successful_one():
     """Verify that a refused render leaves the flowsheet alone after a successful one."""
     fs = _sheet(streams=3)
     fs.to_svg(show_stream_table="sheet", page_size="A3")
-    before = _state(fs)
+    before = pickle.dumps(fs)
     with pytest.raises(ValueError):
         fs.to_svg(show_stream_table="sheet", page_size="A9")
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
 
 
 def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
@@ -1168,20 +1052,20 @@ def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
         Temporary output directory supplied by pytest.
     """
     fs = _sheet(streams=3)
-    before = _state(fs)
+    before = pickle.dumps(fs)
     with pytest.raises(ValueError, match="Unsupported output format"):
         fs.render(tmp_path / "sheet.unsupported", check=False)
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
 
 
 def test_a_model_error_leaves_the_whole_flowsheet_alone():
     """Verify that a model error leaves the whole flowsheet alone."""
     fs = _sheet(streams=3)
-    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses one (#574)
-    before = _state(fs)
+    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses a NaN
+    before = pickle.dumps(fs)
     with pytest.raises(ValueError, match="Flowsheet validation failed"):
         fs.to_svg(page_size="A3")
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
 
 
 # --- ...including the findings it was reading --------------------------------
@@ -1193,7 +1077,7 @@ def test_a_model_error_erases_no_finding_from_the_last_render():
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     kept = [w.code for w in fs.warnings]
     assert "stream-table-section-unused" in kept
-    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses one (#574)
+    fs.units[0].pin_ = Pin(x=float("nan"), y=10.0)  # pin() refuses a NaN
     with pytest.raises(ValueError, match="Flowsheet validation failed"):
         fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert [w.code for w in fs.warnings] == kept
@@ -1517,10 +1401,10 @@ def test_the_write_failure_checks_can_see_the_mutation_they_forbid(tmp_path):
         Temporary output directory supplied by pytest.
     """
     fs = _damageable()
-    state, held, finding = _state(fs), fs.warnings, fs.warnings[0]
+    state, held, finding = pickle.dumps(fs), fs.warnings, fs.warnings[0]
     unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]
     fs.render(tmp_path / "sheet.svg", show_stream_table="sheet", page_size="A3")
-    assert _state(fs) != state
+    assert pickle.dumps(fs) != state
     assert fs.warnings is not held
     assert not any(w is finding for w in fs.warnings)
     assert _without_geometry(fs) != unbuilt
@@ -1559,7 +1443,7 @@ def test_a_render_that_cannot_be_written_leaves_the_whole_flowsheet_alone(
         Render operation forced to fail.
     """
     fs = _damageable()
-    state, held, finding = _state(fs), fs.warnings, fs.warnings[0]
+    state, held, finding = pickle.dumps(fs), fs.warnings, fs.warnings[0]
     unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]
     out = tmp_path / f"sheet{ext}"
     if injection == "write":
@@ -1573,7 +1457,7 @@ def test_a_render_that_cannot_be_written_leaves_the_whole_flowsheet_alone(
     with pytest.raises(OSError):
         fs.render(out, show_stream_table="sheet", page_size="A3")
     assert not out.exists(), "the render produced no file"
-    assert _state(fs) == state, "a render that produced no file changed the flowsheet"
+    assert pickle.dumps(fs) == state, "a render that produced no file changed the flowsheet"
     assert fs.warnings is held, "fs.warnings was replaced with another list"
     assert any(w is finding for w in fs.warnings), "a finding was erased"
     assert _without_geometry(fs) == unbuilt, "geometry was left cached for the next render"

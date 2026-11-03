@@ -7,6 +7,7 @@ reduce crossings, then moved up or down to line up each pipe's nozzles.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from itertools import accumulate
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
@@ -976,9 +977,7 @@ def _isotonic(targets: list[list[tuple[float, float]]], steps: list[float]) -> l
     list[float]
         The tops.
     """
-    offsets = [0.0]
-    for step in steps:
-        offsets.append(offsets[-1] + step)
+    offsets = [0.0, *accumulate(steps)]
     blocks: list[tuple[list[tuple[float, float]], int, float]] = []
     for i, t in enumerate(targets):
         pool, count = [(v - offsets[i], w) for v, w in t], 1

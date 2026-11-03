@@ -435,70 +435,6 @@ def outward_dir(px: float, py: float, w: float, h: float,
     return "E"
 
 
-def chosen_face(unit: "Unit", placed, port_name: str) -> str | None:
-    """Return the face chosen for a port.
-
-    A face set with ``nozzle()`` wins over the engine's choice.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit that owns the port.
-    placed : Frame, _Slot or None
-        Placement that may carry the engine's choice.
-    port_name : str
-        Port name or alias.
-
-    Returns
-    -------
-    str or None
-        Chosen face, or None for the symbol's own.
-    """
-    port_name = unit._canonical_port_name(port_name)
-    explicit = (getattr(unit, "_port_faces", None) or {}).get(port_name)
-    if explicit is not None:
-        return explicit
-    return (getattr(placed, "port_faces", None) or {}).get(port_name)
-
-
-def _local_port(unit: "Unit", port_name: str, w: float, h: float,
-                mirrored: bool, mirror_y: bool, rot: int, want: str | None
-                ) -> tuple[str, tuple[float, float]]:
-    """Return a port's face and offset from the box's top-left corner.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit that owns the port.
-    port_name : str
-        Port name.
-    w, h : float
-        Placed box size.
-    mirrored, mirror_y : bool
-        Left-right and top-bottom flips.
-    rot : int
-        Clockwise turn in degrees: 0, 90, 180 or 270.
-    want : str or None
-        Face to use, or None for the symbol's own.
-
-    Returns
-    -------
-    tuple[str, tuple[float, float]]
-        Face and offset.
-
-    Raises
-    ------
-    ValueError
-        If ``want`` cannot be reached under this transform.
-    """
-    placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
-    if want is None:
-        return next(iter(placements.items()))
-    if want not in placements:
-        raise unreachable_face(unit, port_name, want, list(placements))
-    return want, placements[want]
-
-
 class ResolvedPort(NamedTuple):
     """A port's drawn point, box-edge routing anchor and face.
 
@@ -542,8 +478,15 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     """
     w, h = frame.w, frame.h
     rot, mirrored, mirror_y = _xform(frame)
-    want = chosen_face(unit, frame, port_name)
-    d, (px, py) = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot, want)
+    # A face set with ``nozzle()`` wins over the engine's choice.
+    canonical = unit._canonical_port_name(port_name)
+    want = (getattr(unit, "_port_faces", None) or {}).get(canonical)
+    if want is None:
+        want = (getattr(frame, "port_faces", None) or {}).get(canonical)
+    placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
+    if want is not None and want not in placements:
+        raise unreachable_face(unit, port_name, want, list(placements))
+    d, (px, py) = next(iter(placements.items())) if want is None else (want, placements[want])
 
     if unit.kind in ("feed", "product"):
         # The port is the end of the flag's box that the line meets.
