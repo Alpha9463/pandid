@@ -5,10 +5,7 @@ synthetic control-layout case. Stream paths and impulse lines must begin and
 end at their intended ports and use orthogonal segments.
 """
 
-import importlib.util
 import math
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -23,7 +20,6 @@ from _render_cases import copy_settled_case
 from test_golden import SCENARIOS
 
 TOL = 0.01
-EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
 # --- the corpus ---------------------------------------------------------------
@@ -53,43 +49,7 @@ def _crowded_taps() -> Flowsheet:
     return fs
 
 
-def _example(stem: str) -> Flowsheet:
-    """Build an author-written example without writing output files.
-
-    Parameters
-    ----------
-    stem : str
-        Example filename stem.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet captured from the example's ``main`` function.
-    """
-    sys.path.insert(0, str(EXAMPLES))  # the examples' own _bootstrap
-    try:
-        spec = importlib.util.spec_from_file_location(
-            f"_invariants_{stem}", EXAMPLES / f"{stem}.py"
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    finally:
-        sys.path.remove(str(EXAMPLES))
-
-    built: list[Flowsheet] = []
-    original = Flowsheet.render
-    Flowsheet.render = lambda self, *a, **k: built.append(self)  # type: ignore[method-assign]
-    try:
-        module.main()
-    finally:
-        Flowsheet.render = original  # type: ignore[method-assign]
-    return built[0]
-
-
 CORPUS: dict = {name: build for name, (build, _kwargs) in SCENARIOS.items()}
-AUTHOR_EXAMPLE_STEMS = ("10_ethanol_pfd", "11_ethanol_pid")
-CORPUS["10_ethanol_pfd"] = lambda: _example("10_ethanol_pfd")
-CORPUS["11_ethanol_pid"] = lambda: _example("11_ethanol_pid")
 CORPUS["crowded_taps"] = _crowded_taps
 
 
@@ -97,8 +57,8 @@ CORPUS["crowded_taps"] = _crowded_taps
 def routed(settled_gallery):
     """Return isolated routed sheets for the invariant corpus.
 
-    The shared cache supplies ordinary gallery examples. The two ethanol
-    examples and synthetic control-layout fixture remain fresh.
+    The shared cache supplies the gallery examples; the synthetic
+    control-layout fixture is built fresh.
 
     Returns
     -------
@@ -107,7 +67,7 @@ def routed(settled_gallery):
     """
     sheets = {}
     for name, build in CORPUS.items():
-        if name in settled_gallery and name not in AUTHOR_EXAMPLE_STEMS:
+        if name in settled_gallery:
             fs, _kwargs = copy_settled_case(settled_gallery, name)
         else:
             fs = build()
