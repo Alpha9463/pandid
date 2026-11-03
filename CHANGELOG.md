@@ -93,6 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Feeder` and `ScreeningDevice` draw without a `variant=` (#604).** Both
   default to their `"general"` drawing instead of raising `ValueError` at
   render.
+- **A refused inlet and outlet on a one-point face are offered only shared
+  faces (#580).** The error names a walled face only if every refused port
+  may use it.
 - **A size assigned after construction is checked (#579).** `unit.width = -5`
   or `0` raises `ValueError`, as the constructor does, and leaves the size
   unchanged.
