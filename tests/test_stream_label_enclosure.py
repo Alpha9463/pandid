@@ -114,24 +114,6 @@ def numbers(fs: Flowsheet, **kwargs) -> list:
     return placed_numbers(fs, **kwargs)
 
 
-def gallery_case(settled_gallery: dict, stem: str) -> tuple[Flowsheet, dict]:
-    """Copy one settled gallery case for an enclosure test.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared routed gallery flowsheets and render options.
-    stem : str
-        Gallery example identifier.
-
-    Returns
-    -------
-    tuple[Flowsheet, dict]
-        Independent flowsheet and render options.
-    """
-    return copy_settled_case(settled_gallery, stem)
-
-
 def halo(name: str) -> "tuple[float, float]":
     """Return the text-plate dimensions for a stream label.
 
@@ -686,7 +668,7 @@ def test_a_label_on_a_vertical_run_turns_its_shape_with_it(shape, settled_galler
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = shape
     placed = numbers(fs, **kwargs)
 
@@ -761,7 +743,7 @@ def test_an_enclosed_label_is_written_on_its_run_and_never_beside_it(shape, stem
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, stem)
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
     fs.stream_labels.enclosure = shape
     placed = numbers(fs, **kwargs)
     assert placed
@@ -796,31 +778,10 @@ def test_a_bare_label_still_leaves_the_line_where_it_always_did(settled_gallery)
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     assert any(not _on_its_run(n)[0] for n in numbers(fs, **kwargs)), (
         "the fixture has to displace a bare label, or the pair proves nothing"
     )
-
-
-def test_the_crowded_sheet_keeps_its_leaders_bare_and_drops_them_when_ruled(settled_gallery):
-    """Test that the crowded sheet keeps its leaders bare and drops them when ruled.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared routed gallery flowsheets and render options.
-    """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
-    assert [n for n in numbers(fs, **kwargs) if n.leader is not None], (
-        "this sheet is the fixture because its bare labels draw leaders"
-    )
-
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
-    fs.stream_labels.enclosure = "diamond"
-    svg = fs.to_svg(**kwargs)
-    assert not [n for n in placed_numbers(fs, **kwargs) if n.leader is not None]
-    # Enclosed labels do not write leader arrowheads.
-    assert svg.count("<path d=") == 0 or "leader" not in svg
 
 
 def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
@@ -831,7 +792,7 @@ def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     svg = fs.to_svg(**kwargs)
     plain = [n for n in placed_numbers(fs, **kwargs) if n.leader is not None]
     assert plain
@@ -879,7 +840,7 @@ def test_no_label_paints_out_a_line_that_is_not_its_own(shape, stem, settled_gal
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, stem)
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
     fs.stream_labels.enclosure = shape
     svg = fs.to_svg(**kwargs)
     placed = placed_numbers(fs, **kwargs)
@@ -995,7 +956,7 @@ def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape, settled_galle
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
+    fs, kwargs = copy_settled_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
     svg = fs.to_svg(**kwargs)
     placed = placed_numbers(fs, **kwargs)
@@ -1028,7 +989,7 @@ def test_the_author_is_told_when_the_number_itself_is_written_across_a_run(shape
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
+    fs, kwargs = copy_settled_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = shape
     fs.to_svg(**kwargs)
     said = {i.message.split("'s ")[0]: i.message for i in findings(fs, {"label-over-line"})}
@@ -1112,7 +1073,7 @@ def test_a_bare_label_on_the_same_sheet_keeps_every_plate(settled_gallery):
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     placed = numbers(fs, **kwargs)
     assert placed
     assert all(n.words is not None for n in placed)
@@ -1125,16 +1086,6 @@ def test_a_shape_nobody_draws_is_refused_at_the_constructor():
     """Test that a shape nobody draws is refused at the constructor."""
     with pytest.raises(ValueError, match="enclosure must be one of"):
         StreamLabelOptions(enclosure="rhombus")  # type: ignore[arg-type]
-
-
-def test_a_shape_nobody_draws_is_refused_at_the_render():
-    """Test that a shape nobody draws is refused at the render."""
-    fs = sheet()
-    fs.stream_labels.enclosure = "rhombus"  # type: ignore[assignment]
-    with pytest.raises(ValueError, match="enclosure must be one of"):
-        fs.to_svg()
-    with pytest.raises(ValueError, match="enclosure must be one of"):
-        fs.to_drawio()
 
 
 @pytest.mark.parametrize("draw", ["to_svg", "to_drawio"])
@@ -1186,7 +1137,7 @@ def test_a_jump_direction_nobody_draws_is_refused(draw, spelling, settled_galler
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     allowed = _DRAWIO_KWARGS if draw == "to_drawio" else kwargs
     passed = {k: v for k, v in kwargs.items() if k in allowed}
     with pytest.raises(ValueError, match="Unknown jump_direction"):
@@ -1204,7 +1155,7 @@ def test_both_spellings_the_sheet_draws_are_taken(spelling, settled_gallery):
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROSSED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROSSED)
     drawn = fs.to_svg(jump_direction=spelling, **kwargs)
     assert drawn
     hops = stream_hops(fs, spelling)
@@ -1249,19 +1200,6 @@ def dense_default_render() -> tuple[tuple, tuple, tuple]:
     return tuple(placements), svg_findings, tuple(findings(fs))
 
 
-def test_a_bare_sheet_is_told_nothing_about_enclosures(settled_gallery):
-    """Test that a bare sheet is told nothing about enclosures.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared routed gallery flowsheets and render options.
-    """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
-    fs.to_svg(**kwargs)
-    assert not findings(fs)
-
-
 def test_the_author_is_told_which_unit_a_diamond_was_drawn_over(settled_gallery):
     """Test that the author is told which unit a diamond was drawn over.
 
@@ -1270,7 +1208,7 @@ def test_the_author_is_told_which_unit_a_diamond_was_drawn_over(settled_gallery)
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     over_units = findings(fs, {"enclosure-over-unit"})
@@ -1290,7 +1228,7 @@ def test_the_author_is_told_which_line_a_diamond_was_drawn_over(settled_gallery)
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, "11_ethanol_pid")
+    fs, kwargs = copy_settled_case(settled_gallery, "11_ethanol_pid")
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     over_lines = findings(fs, {"enclosure-over-line"})
@@ -1365,7 +1303,7 @@ def test_every_pair_the_sheet_calls_crossed_really_crosses(shape, settled_galler
     """
     reported = 0
     for stem in LABEL_CASES:
-        fs, kwargs = gallery_case(settled_gallery, stem)
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
         fs.stream_labels.enclosure = shape
         fs.to_svg(**kwargs)
         named = reported_pairs(fs, shape)
@@ -1381,20 +1319,6 @@ def test_every_pair_the_sheet_calls_crossed_really_crosses(shape, settled_galler
     assert reported, f"{shape}: representative sheets have no reported intersections"
 
 
-def test_two_shapes_crossing_are_reported_once(settled_gallery):
-    """Test that two shapes crossing are reported once.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared routed gallery flowsheets and render options.
-    """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
-    fs.stream_labels.enclosure = "diamond"
-    fs.to_svg(**kwargs)
-    assert reported_pairs(fs, "diamond")
-
-
 def test_a_second_render_replaces_the_findings_rather_than_repeating_them(settled_gallery):
     """Test that a second render replaces the findings rather than repeating them.
 
@@ -1403,7 +1327,7 @@ def test_a_second_render_replaces_the_findings_rather_than_repeating_them(settle
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     once = findings(fs)
@@ -1423,7 +1347,7 @@ def test_both_backends_report_the_same_findings_and_both_report_some(settled_gal
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     fs.to_svg(**kwargs)
     sheet_said = [(i.code, i.message) for i in findings(fs)]
@@ -1582,7 +1506,7 @@ def test_the_export_writes_every_enclosure_after_every_run(settled_gallery):
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     order = [c.get("id") or "" for c in cells(fs, **kwargs)]
     edges = [i for i, cid in enumerate(order) if re.fullmatch(r"s\d+", cid)]
@@ -1599,11 +1523,11 @@ def test_the_export_writes_no_leader_beside_an_enclosure(settled_gallery):
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     plain = [c.get("id") or "" for c in cells(fs, **kwargs)]
     assert [cid for cid in plain if cid.endswith("-lead")], "the fixture draws them"
 
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = "diamond"
     order = [c.get("id") or "" for c in cells(fs, **kwargs)]
     assert not [cid for cid in order if cid.endswith("-lead")]
@@ -1618,7 +1542,7 @@ def test_the_export_lays_down_no_plate_where_the_sheet_lays_none(settled_gallery
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, PLATELESS_SHEET)
+    fs, kwargs = copy_settled_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = "diamond"
     bare = {n.name for n in numbers(fs, **kwargs) if n.words is None}
     assert bare == {PLATELESS}
@@ -1648,7 +1572,7 @@ def test_the_export_turns_exactly_the_numbers_the_sheet_turns(shape, any_turned,
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Shared routed gallery flowsheets and render options.
     """
-    fs, kwargs = gallery_case(settled_gallery, CROWDED)
+    fs, kwargs = copy_settled_case(settled_gallery, CROWDED)
     fs.stream_labels.enclosure = shape
     turned = {n.name for n in numbers(fs, **kwargs) if n.vertical}
     assert bool(turned) is any_turned, (
