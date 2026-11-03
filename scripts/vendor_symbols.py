@@ -14,6 +14,9 @@ and that is the same question a unit given an explicit width and height asks.
 It is named in each emitted symbol's comment, and only a ``fixed`` shape carries
 the keyword, since stretchable is the default on both sides.
 
+``ADAPTED_ELSEWHERE`` records the stencil-derived symbols this generator cannot
+emit (the parametric ones) and where they are written instead.
+
 ``STENCIL_PATCHES`` records the corrections applied to the vendored stencils on
 the way through, for the shapes draw.io draws wrongly. The vendored XML stays
 exactly as vendored; the correction is written in the stencil's own language
@@ -1777,6 +1780,24 @@ def patch_shape(stencil, name, el):
     for op in ET.fromstring(f"<foreground>{fragment}</foreground>"):
         foreground.append(op)
     return el
+
+
+# Stencil-derived symbols this generator cannot emit, and where they live
+# instead. It emits one fixed-size Symbol per shape, and a fixed drawing placed
+# in a box of a different aspect ratio is scaled unevenly, so a shape that has
+# to stretch along one axis only cannot come out of here. Recorded so the
+# provenance is in the mapping table with everything else, and so nobody
+# "restores" one of these by adding it to KIND_MAP above: doing that would draw
+# it at one fixed size and undo the reason it was written by hand.
+#
+# (kind, variant) -> (stencil, shape_name, where it lives, what was changed)
+ADAPTED_ELSEWHERE = {
+    ("conveyor", "default"): (
+        "driers", "Drier (Roller Conveyor Belt)",
+        "pandid.render.symbols.conveyor_symbol",
+        "drier housing dropped; roller spacing made a parameter, roller r=10 kept",
+    ),
+}
 
 
 # Symbols that must not be turned, as ``Symbol.gravity_fixed``.
