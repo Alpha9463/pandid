@@ -210,6 +210,31 @@ def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
                 )
 
 
+def _own_lanes(
+    lane_units: dict[tuple[str, float], set[str]], names: set[str]
+) -> tuple[set[float], set[float]]:
+    """Return the x and y lanes that only the named units add.
+
+    Parameters
+    ----------
+    lane_units : dict[tuple[str, float], set[str]]
+        Units that add each lane, as ``VisibilityGraph.lane_units``.
+    names : set[str]
+        Unit names.
+
+    Returns
+    -------
+    tuple[set[float], set[float]]
+        x lanes, then y lanes.
+    """
+    xs: set[float] = set()
+    ys: set[float] = set()
+    for (axis, value), units in lane_units.items():
+        if units and units <= names:
+            (xs if axis == "x" else ys).add(value)
+    return xs, ys
+
+
 class DefaultRouter:
     """Route automatic streams on a visibility graph.
 
@@ -248,6 +273,7 @@ class DefaultRouter:
         UserWarning
             If an end has no frame or anchor; the stream is skipped.
         """
+        from pandid.layout.attach import tapped_stream
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
@@ -257,6 +283,12 @@ class DefaultRouter:
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
         crossing_index = CrossingIndex()
         routed: list["Stream"] = []
+        # Balloon names by the stream each one's chain of hosts taps.
+        balloons: dict[int, set[str]] = {}
+        for u in fs.units:
+            tapped = tapped_stream(u)
+            if tapped is not None:
+                balloons.setdefault(id(tapped), set()).add(u.name)
 
         def settle(stream: "Stream") -> None:
             """Add a routed stream and rebuild the crossing index.
@@ -341,9 +373,11 @@ class DefaultRouter:
             is_recycle = getattr(stream, "is_recycle", False)
             path = []
             if clear_stubs:
+                own = balloons.get(id(stream))
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
                     edge_penalties, is_recycle, crossing_index,
+                    _own_lanes(graph.lane_units, own) if own else None,
                 )
             path_found = bool(path)
 

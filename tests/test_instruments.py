@@ -1768,3 +1768,62 @@ def test_the_square_is_not_a_removed_spelling():
     location wearing a symbol type's name went, and a sweep over the whole of
     the registry's balloons would have taken this with them."""
     assert U.Instrument("FIC", 301, variant="shared").variant == "shared"
+
+
+class _CountingRouter:
+    """Route with the default router and count the passes.
+
+    Attributes
+    ----------
+    passes : int
+        Routing passes made.
+    """
+
+    def __init__(self) -> None:  # numpydoc ignore=GL08
+        from pandid.routing import DefaultRouter
+
+        self.passes = 0
+        self._router = DefaultRouter()
+
+    def route(self, fs: Flowsheet) -> None:
+        """Route the sheet and count the pass.
+
+        Parameters
+        ----------
+        fs : Flowsheet
+            Sheet to route.
+        """
+        self.passes += 1
+        self._router.route(fs)
+
+
+def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
+    """Settle a balloon chain whose asked spot lies on the tapped line.
+
+    Returns
+    -------
+    None
+        Routing settles in two passes and TIC keeps off every run of the line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("settle")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=500)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    loop = fs.add_loop("T", 1)
+    tt = fs.add_instrument("TT", loop, sensing=line, at=0.5, offset=70)
+    tic = fs.add_instrument("TIC", loop, near=tt, at="S", offset=70)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    router = _CountingRouter()
+    fs.route(router)
+
+    assert fs.route_converged
+    assert router.passes <= 2
+    assert tic.frame is not None
+    x0, y0 = tic.frame.x, tic.frame.y
+    x1, y1 = x0 + tic.frame.w, y0 + tic.frame.h
+    points = stream_path(line)
+    for (ax, ay), (bx, by) in zip(points, points[1:]):
+        on = min(ax, bx) <= x1 and max(ax, bx) >= x0 and min(ay, by) <= y1 and max(ay, by) >= y0
+        assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))

@@ -305,7 +305,8 @@ class Recorder:
         return [call for call in self.calls if call.sheet is sheet and call.route_pass == last]
 
     def _record_path(self, graph, start, goal, start_dir=None, goal_dir=None,
-                     edge_penalties=None, is_recycle=False, crossing_index=None):
+                     edge_penalties=None, is_recycle=False, crossing_index=None,
+                     own_lanes=None):
         """Record one path search with its owning drawing.
 
         Parameters
@@ -322,6 +323,8 @@ class Recorder:
             Whether this stream is a recycle.
         crossing_index : object or None, optional
             Router crossing state.
+        own_lanes : tuple or None, optional
+            Lanes only the stream's own balloons add.
 
         Returns
         -------
@@ -330,13 +333,13 @@ class Recorder:
         """
         if self._active_sheet is None:
             return self._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
-                                  is_recycle, crossing_index)
+                                  is_recycle, crossing_index, own_lanes)
         self._count = 0
         self._original_heappop = heapq.heappop
         heapq.heappop = self._count_heappop
         try:
             result = self._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
-                                    is_recycle, crossing_index)
+                                    is_recycle, crossing_index, own_lanes)
         finally:
             heapq.heappop = self._original_heappop
         budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))

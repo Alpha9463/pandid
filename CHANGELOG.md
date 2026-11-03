@@ -90,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A balloon hung from another balloon no longer sits on the line it taps
+  (#619).** The line also stops routing along lanes that only its own
+  balloons add, so balloons and routes settle instead of chasing each other.
 - **An expander keeps every field of the reducer it is turned from (#508).**
   `large_end="outlet"` now draws at the reducer's trim weight, and its bands
   are mirrored with the artwork.
