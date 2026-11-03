@@ -1,8 +1,9 @@
 """Control valve stations: the assembly a control valve sits in.
 
-A station runs along the line as bypass takeoff, isolation valve,
-drain tee, reducer, control valve, expander, drain tee, isolation
-valve and bypass rejoin, with a throttling valve on the bypass leg.
+A full station runs along the line as bypass takeoff, isolation
+valve, drain tee, reducer, control valve, expander, drain tee,
+isolation valve and bypass rejoin, with a throttling valve on the
+bypass leg.
 :meth:`~pandid.flowsheet.Flowsheet.add_valve_station` builds one.
 """
 

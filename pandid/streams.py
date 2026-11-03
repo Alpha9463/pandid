@@ -124,7 +124,7 @@ class Stream:
     Attributes
     ----------
     name : str
-        Stream number or line number.
+        Given name, stream number or line number.
     source, dest : Port
         Connected source and destination ports.
     kind : str
@@ -272,7 +272,8 @@ class Stream:
         TypeError
             If a coordinate is not a number.
         ValueError
-            If this stream is the handle of a split logical run.
+            If a coordinate is not finite, or this stream is the handle
+            of a split run.
         """
         for i, point in enumerate(waypoints):
             for axis, value in zip("xy", point):

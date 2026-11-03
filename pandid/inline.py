@@ -42,7 +42,7 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
     Raises
     ------
     ValueError
-        If the line cannot be split.
+        If ``line`` or ``at`` cannot be used.
     """
     if not isinstance(line, Stream):
         raise ValueError(f"on= takes a line returned by connect(), got {line!r}")
@@ -227,7 +227,7 @@ def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
     Raises
     ------
     ValueError
-        If the segments do not reach ``endpoint``.
+        If the segments do not form one split line to ``endpoint``.
     """
     if root._logical_to is not None or root._logical_root is not None:
         raise ValueError("logical run roots cannot overlap")

@@ -1,7 +1,7 @@
 """Type checks for numbers entering layout, and the "did you mean" hint.
 
-A real number is ``int``, ``float`` or a numpy scalar; ``bool``,
-``Decimal`` and ``Fraction`` are refused.
+A real number is an ``int``, ``float`` or numpy integer or float;
+``bool``, ``Decimal`` and ``Fraction`` are refused.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any
 
 
 def is_real(value: Any) -> bool:
-    """Return whether a value is a non-bool real, not a ``Fraction``.
+    """Return whether a value is a real number layout can compute with.
 
     Parameters
     ----------
@@ -25,7 +25,7 @@ def is_real(value: Any) -> bool:
     Returns
     -------
     bool
-        Whether layout can compute with it.
+        Whether it is a non-bool real, integral or not ``Rational``.
     """
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         return False

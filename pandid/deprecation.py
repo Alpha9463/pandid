@@ -45,7 +45,7 @@ class Deprecation:
     Raises
     ------
     ValueError
-        If ``what``, ``instead`` or ``removed_in`` is empty.
+        If ``what``, ``instead`` or ``removed_in`` is empty or blank.
     """
 
     what: str
@@ -54,7 +54,7 @@ class Deprecation:
     note: str = ""
 
     def __post_init__(self) -> None:
-        """Raise if a required field is empty."""
+        """Raise if a required field is empty or blank."""
         for field, value in (("what", self.what), ("instead", self.instead),
                              ("removed_in", self.removed_in)):
             if not str(value).strip():
@@ -92,7 +92,7 @@ class Deprecation:
         Parameters
         ----------
         carrier : object
-            Unit, stream or flowsheet the finding is stored on.
+            Object with a ``__dict__`` to store the finding on.
         where : str, default=""
             Item to edit, passed to :meth:`message`.
         stacklevel : int, default=3
@@ -101,7 +101,7 @@ class Deprecation:
         Raises
         ------
         TypeError
-            If ``carrier`` cannot store attributes.
+            If ``carrier`` has no ``__dict__``.
         """
         if not hasattr(carrier, "__dict__"):
             raise TypeError(
@@ -158,7 +158,7 @@ def declarations() -> dict[str, Deprecation]:
     Returns
     -------
     dict[str, Deprecation]
-        Declarations keyed by ``"module.NAME"``, one key per module.
+        Declarations keyed by ``"module.NAME"``, one per attribute.
     """
     import importlib
     import pkgutil

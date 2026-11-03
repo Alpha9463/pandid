@@ -38,7 +38,7 @@ class Loop:
     TypeError
         If ``number`` is neither text nor a whole number.
     ValueError
-        If ``variable`` is not one letter or ``number`` is empty.
+        If ``variable`` is not one letter or ``number`` is blank.
     """
 
     def __init__(self, variable: str, number: str | int):  # numpydoc ignore=GL08
@@ -91,7 +91,7 @@ class Loop:
         Raises
         ------
         ValueError
-            If ``letters`` is empty.
+            If ``letters`` is empty or blank.
         """
         letters = letters.strip()
         if not letters:
@@ -117,7 +117,7 @@ class Loop:
         Raises
         ------
         ValueError
-            If ``letters`` is empty or opens with another variable.
+            If ``letters`` is blank or opens with another variable.
         """
         letters = letters.strip()
         if not letters:
@@ -149,7 +149,7 @@ class Loop:
         Raises
         ------
         ValueError
-            If ``letters`` is empty or opens with another variable.
+            If ``letters`` is blank or opens with another variable.
         """
         first = letters.strip()[:1]
         if not first:

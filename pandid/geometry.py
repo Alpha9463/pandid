@@ -21,7 +21,8 @@ def normalize_orientation(value) -> int:
     Raises
     ------
     ValueError
-        If the value is not a number or not a multiple of 90 degrees.
+        If ``float(value)`` fails or the rounded angle is not a quarter
+        turn.
     """
     try:
         deg = int(round(float(value))) % 360
@@ -54,7 +55,7 @@ def normalize_mirror(value) -> tuple[bool, bool]:
     Raises
     ------
     ValueError
-        If the string is not recognised.
+        If the value is not recognised.
     """
     if value is None or value is False:
         return (False, False)
