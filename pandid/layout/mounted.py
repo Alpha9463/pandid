@@ -139,9 +139,11 @@ def _device(unit: Unit | None) -> bool:
         p.stream is not None and p.stream.kind == "material" for p in ports.values()
     ):
         return False
-    upright = Pin()  # opposite faces stay opposite under any turn or mirror
-    width, height = resolve_size(unit, upright)
-    (ax, ay), (bx, by) = (port_offset(unit, name, upright) for name in ("inlet", "outlet"))
+    # Opposite faces stay opposite under any turn or mirror, so read the
+    # device as its author placed it, where any face it states is drawn.
+    placed = unit.pin_ or Pin()
+    width, height = resolve_size(unit, placed)
+    (ax, ay), (bx, by) = (port_offset(unit, name, placed) for name in ("inlet", "outlet"))
     return abs(abs(ax - bx) - width) < 1.0 or abs(abs(ay - by) - height) < 1.0
 
 

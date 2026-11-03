@@ -438,3 +438,19 @@ def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
 
     said = " ".join(i.message for i in fs.validate() if i.code == "pin-not-honored")
     assert "orientation" in said and "mirror" in said
+
+
+def test_a_turned_device_with_a_stated_face_is_set_on_its_line() -> None:
+    """Set a turned control valve whose inlet face is stated for that turn.
+
+    Returns
+    -------
+    None
+        The line routes, the valve keeps its turn and its inlet is on N.
+    """
+    fs, line = _line()
+    valve = fs.add(D.ControlValve("CV-1").pin(orientation=90).nozzle("inlet", "N"), on=line)
+    fs.route()
+
+    assert valve.frame is not None and valve.frame.orientation == 90
+    assert resolve_port(valve, valve.frame, "inlet").face == "N"
