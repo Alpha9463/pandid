@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import math
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
 
 
 def _endpoint_to_center(x1, y1, rx, ry, phi, fa, fs, x2, y2):
@@ -235,7 +236,7 @@ _TEXT_BASELINE = {"top": 0.8, "middle": 0.35, "bottom": -0.2}
 
 
 def _text_svg(el, size):
-    s = (el.get("str") or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    s = escape(el.get("str") or "")
     align = _TEXT_ANCHOR.get(el.get("align", "left"), "start")
     y = _num(el, "y") + _TEXT_BASELINE.get(el.get("valign", "top"), 0.8) * size
     common = (f'x="{_num(el, "x")}" y="{round(y, 3)}" font-family="sans-serif" '
