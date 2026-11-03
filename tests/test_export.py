@@ -1,14 +1,4 @@
-"""PDF/PNG export: the flattening that stands between the SVG and the backend.
-
-The backend does not implement `<use>` of a `<symbol>`, `marker-end` or
-`dominant-baseline`, and drops all three without saying so, which draws every
-unit at the wrong size, loses every flow arrow, and sets every vertically
-centred label a quarter of its type size clear of the halo it is centred on.
-`pandid.render.export.flatten` resolves them into plain geometry and plain
-coordinates first. These tests hold that resolution to the SVG viewport and
-alignment rules, and hold the renderer to emitting nothing else the backend
-would quietly discard.
-"""
+"""Check PDF/PNG export and the SVG flattening it draws from."""
 
 import base64
 import importlib.util
@@ -26,9 +16,7 @@ from pandid.render import export
 GOLDEN_DIR = Path(__file__).parent / "golden"
 GOLDENS = sorted(p.name for p in GOLDEN_DIR.glob("*.svg"))
 
-# The whole extra, not one member of it: a PNG is rasterised from the PDF, so it
-# needs everything the PDF needs and pypdfium2 besides. Skipping on pypdfium2
-# alone would let a machine with the rasteriser and not the writer fail here.
+# The whole pdf extra: a PNG is rasterised from the PDF.
 _HAS_PDF_EXTRA = all(
     importlib.util.find_spec(m) is not None for m in ("svglib", "reportlab", "pypdfium2", "PIL")
 )
@@ -37,11 +25,7 @@ _OP = re.compile(r"(translate|scale|rotate)\(([^)]*)\)")
 
 
 def _matrix(transform: str) -> tuple[float, float, float, float, float, float]:
-    """A transform list as a single (a, b, c, d, e, f) matrix.
-
-    Composed left to right the way SVG does, so this test measures the order the
-    operations were written in as well as the numbers in them.
-    """
+    """Compose an SVG transform list, left to right, into one (a, b, c, d, e, f) matrix."""
     m = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
     for name, raw in _OP.findall(transform):
         v = [float(n) for n in raw.replace(",", " ").split()]
@@ -104,19 +88,20 @@ def _fs():
 
 @pytest.mark.parametrize("name", GOLDENS)
 def test_every_golden_sheet_flattens_to_something_the_backend_can_draw(name):
-    # The watchdog on the coupling: the goldens are the whole rendered feature
-    # range, and flatten() refuses anything it would otherwise hand over to be
-    # silently dropped. A renderer that grows a clip path fails here, on every
-    # machine, whether or not the pdf extra is installed.
+    """Flatten each golden sheet to no ``<use>``, ``<symbol>``, marker or ``<defs>``.
+
+    Parameters
+    ----------
+    name : str
+        Golden fixture file name.
+    """
     flat = export.flatten((GOLDEN_DIR / name).read_text(encoding="utf-8"))
     for gone in ("<use", "<symbol", "<marker", "marker-end", "<defs"):
         assert gone not in flat, f"{gone} survived flattening of {name}"
 
 
 def test_a_stretched_symbol_lands_on_exactly_the_box_the_use_asked_for():
-    # The bug this whole module exists for: the backend drew the symbol at its
-    # viewBox size and ignored the box, so equipment came out undersized and its
-    # process lines stopped short of the nozzles.
+    """Map a ``preserveAspectRatio="none"`` symbol onto its ``<use>`` box."""
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
         '<defs><symbol id="s" viewBox="0 0 10 20" preserveAspectRatio="none">'
@@ -130,9 +115,7 @@ def test_a_stretched_symbol_lands_on_exactly_the_box_the_use_asked_for():
 
 
 def test_a_symbol_that_keeps_its_aspect_is_centred_in_its_box():
-    # xMidYMid meet, which is what a symbol without preserveAspectRatio="none"
-    # asks for: an instrument balloon is a circle because ISA-5.1 says so, and
-    # it is centred in a box of another shape rather than squashed to fill it.
+    """Scale a symbol that keeps its aspect to fit its box, centred (xMidYMid meet)."""
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
         '<defs><symbol id="s" viewBox="0 0 10 10">'
@@ -141,15 +124,13 @@ def test_a_symbol_that_keeps_its_aspect_is_centred_in_its_box():
         "</svg>"
     )
     m = _matrix(re.search(r'<g transform="([^"]*)"', export.flatten(svg)).group(1))
-    # Scale 2 (the smaller of 4 and 2), so 20 wide inside a 40-wide box, with
-    # the 20 left over split evenly down the two sides.
+    # Scale 2 (the smaller of 4 and 2): 20 wide, centred in the 40-wide box.
     assert _apply(m, 0, 0) == pytest.approx((10, 0))
     assert _apply(m, 10, 10) == pytest.approx((30, 20))
 
 
 def test_the_reference_transform_is_applied_outside_the_placement():
-    # rotate() on the <use> turns the placed box; applying it inside the
-    # placement instead would turn the artwork within a box that stayed put.
+    """Apply a ``<use>`` transform to the placed box, not inside it."""
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
         '<defs><symbol id="s" viewBox="0 0 10 10" preserveAspectRatio="none">'
@@ -163,8 +144,7 @@ def test_the_reference_transform_is_applied_outside_the_placement():
 
 
 def test_an_end_marker_is_drawn_at_the_end_of_its_own_line():
-    # A PFD's arrowheads are marker-end, and the backend ignores the attribute.
-    # Losing them loses the flow direction, which is most of what a PFD says.
+    """Draw each ``marker-end`` arrowhead at the end of its line."""
     flat = export.flatten(_fs().to_svg())
     heads = re.findall(r'<g transform="translate\(([-\d.]+), ([-\d.]+)\) rotate', flat)
     ends = {
@@ -177,6 +157,7 @@ def test_an_end_marker_is_drawn_at_the_end_of_its_own_line():
 
 
 def test_a_construct_the_backend_cannot_draw_is_refused_rather_than_dropped():
+    """Refuse a clip path rather than drop it."""
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
         '<rect x="0" y="0" width="10" height="10" clip-path="url(#c)"/></svg>'
@@ -188,10 +169,7 @@ def test_a_construct_the_backend_cannot_draw_is_refused_rather_than_dropped():
 
 # --- how a string sets --------------------------------------------------------
 
-# Half the ascent/descent box of Helvetica, the face svglib resolves pandid's
-# font-family="sans-serif" onto: how far below a centred point that string's
-# alphabetic baseline belongs, per unit of font size. Written out rather than
-# imported from the module under test, so the arithmetic is stated twice.
+# Half Helvetica's ascent/descent box: the baseline's drop below a centred point per unit size.
 _MIDDLE = (0.718 - 0.207) / 2
 
 
@@ -209,12 +187,13 @@ def _text_y(flat: str) -> float:
 
 @pytest.mark.parametrize("size", ["12", "10"])
 def test_a_vertically_centred_label_is_handed_the_baseline_it_meant(size):
-    # The renderer centres a stream number, a balloon tag and most equipment
-    # labels on the point it struck the white halo round. The backend maps
-    # text-anchor and nothing else about alignment, so left alone it puts the
-    # *baseline* on that point and the lettering ends up clear of its own halo.
-    # The alphabetic baseline belongs half the ascent/descent box lower, and the
-    # shift is a fraction of the size the string is set in, not a constant.
+    """Move a ``dominant-baseline="middle"`` label to its alphabetic baseline.
+
+    Parameters
+    ----------
+    size : str
+        Font size of the label.
+    """
     flat = export.flatten(_label("middle", size))
     assert "dominant-baseline" not in flat
     assert _text_y(flat) == pytest.approx(50 + _MIDDLE * float(size))
@@ -222,29 +201,27 @@ def test_a_vertically_centred_label_is_handed_the_baseline_it_meant(size):
 
 @pytest.mark.parametrize("baseline", ["baseline", "auto", "alphabetic"])
 def test_a_label_already_set_on_its_baseline_does_not_move(baseline):
-    # What pandid writes above a unit, where the y it computed is a baseline
-    # already. "baseline" is not one of the SVG keywords and a browser reads it
-    # as "auto"; all three have to come out of here as the same drawing, and as
-    # a drawing identical to the one with no attribute at all.
+    """Leave a label already set on its alphabetic baseline where it is.
+
+    Parameters
+    ----------
+    baseline : str
+        ``dominant-baseline`` value that means the alphabetic baseline.
+    """
     flat = export.flatten(_label(baseline))
     assert "dominant-baseline" not in flat
     assert _text_y(flat) == pytest.approx(50)
 
 
 def test_a_baseline_the_backend_cannot_place_is_refused_rather_than_drawn_wrong():
-    # `hanging` is the value a renderer is next likeliest to reach for, and a
-    # browser reads it out of the font's own baseline table, which ReportLab's
-    # base-14 metrics do not carry. Guessing it would put the text somewhere
-    # near right and say nothing, which is the failure this module exists to
-    # turn into a loud one.
+    """Refuse ``dominant-baseline="hanging"``, which the backend's metrics cannot place."""
     with pytest.raises(RuntimeError) as excinfo:
         export.flatten(_label("hanging"))
     assert "hanging" in str(excinfo.value)
 
 
 def test_a_baseline_inherited_from_an_ancestor_is_refused_too():
-    # dominant-baseline inherits, so a <g> carrying one moves every string
-    # below it. Nothing here resolves that, and the backend would not either.
+    """Refuse a ``dominant-baseline`` set on an ancestor group."""
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
         '<g dominant-baseline="middle"><text x="50" y="50" font-size="12">S1</text></g></svg>'
@@ -255,10 +232,7 @@ def test_a_baseline_inherited_from_an_ancestor_is_refused_too():
 
 
 def test_a_symbol_shifts_its_own_lettering_by_its_own_size():
-    # The shift is applied after the <use> expansion and in the symbol's units,
-    # so the placement scales it with everything else it scales. Applied in the
-    # sheet's units instead, a symbol drawn at four times its definition would
-    # have its lettering nudged a quarter as far as its own artwork moved.
+    """Shift a symbol's centred lettering in the symbol's own units."""
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
         '<defs><symbol id="s" viewBox="0 0 10 10" preserveAspectRatio="none">'
@@ -274,10 +248,7 @@ def test_a_symbol_shifts_its_own_lettering_by_its_own_size():
 
 # --- and how big it is set ----------------------------------------------------
 
-# Every distinct font-size the renderer puts on a sheet, read off the goldens
-# rather than listed here: the sizes are spread over svg.py and furniture.py and
-# a new one arrives whenever a new sheet element does, so a list would be a list
-# that goes stale. Today it is ten of them, 6.5 through 18.
+# Every font size the golden sheets use.
 _SIZES = sorted(
     {
         float(s)
@@ -288,9 +259,7 @@ _SIZES = sorted(
     }
 )
 
-# Helvetica's cap height, the fraction of the font size a capital with no
-# descender measures from its baseline. Written out rather than imported, so the
-# number the drawing is held to is stated independently of the drawing.
+# Helvetica's cap height as a fraction of the font size.
 _CAP_HEIGHT = 0.718
 
 
@@ -320,20 +289,16 @@ def _ink_height(im, px: float, x0: float, x1: float) -> float:
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 @pytest.mark.parametrize("size", _SIZES)
 def test_lettering_is_drawn_at_the_size_the_file_asks_for(size):
-    # The backend converts font-size from px to pt and then scales the drawing
-    # the string sits in from px to pt as well, so the size took the 0.75 twice
-    # and the geometry beside it took it once: every label on every exported
-    # sheet came out at three quarters, measurably and only in the PDF and PNG.
-    # A cap height is what makes that checkable without a golden image. The face
-    # declares one as a fraction of the font size, so a capital and a rule of the
-    # same declared length in the same document must draw in that ratio, whatever
-    # the page size, the raster scale or the units in between -- and the rule is
-    # measured too, because a fix that moved both would satisfy neither.
+    """Rasterise a rule and two capitals and check both draw at the declared size.
+
+    Parameters
+    ----------
+    size : float
+        Font size read from the golden sheets.
+    """
     from PIL import Image
 
-    # Rasterised so a capital is about 170 device px tall whatever size it is set
-    # at, which reads its ink box to well inside a percent even for the 6.5 the
-    # title block's rows are set in.
+    # Scale so a capital is about 170 device px tall at any size.
     im = Image.open(io.BytesIO(export.to_png(_rule_and_capitals(size), scale=320 / size)))
     im = im.convert("L")
     px = im.width / (4.5 * size)
@@ -350,8 +315,7 @@ def test_lettering_is_drawn_at_the_size_the_file_asks_for(size):
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_the_written_out_metrics_are_the_ones_the_backend_will_draw_with():
-    # export.py carries Helvetica's numbers so that flatten() answers the same
-    # on a machine with no pdf extra to ask. This is what keeps the two agreeing.
+    """Match export.py's Helvetica metrics to ReportLab's."""
     from reportlab.pdfbase import pdfmetrics
 
     for bold, face in export._FACES.items():
@@ -363,6 +327,13 @@ def test_the_written_out_metrics_are_the_ones_the_backend_will_draw_with():
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_render_writes_a_pdf(tmp_path):
+    """Write a PDF for a ``.pdf`` path.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Output directory.
+    """
     out = tmp_path / "d.pdf"
     _fs().render(str(out))
     assert out.read_bytes().startswith(b"%PDF")
@@ -370,6 +341,13 @@ def test_render_writes_a_pdf(tmp_path):
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_render_writes_a_png(tmp_path):
+    """Write a PNG for a ``.png`` path.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Output directory.
+    """
     out = tmp_path / "d.png"
     _fs().render(str(out))
     assert out.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
@@ -377,9 +355,13 @@ def test_render_writes_a_png(tmp_path):
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_the_exported_pdf_draws_the_sheet_rather_than_a_picture_of_it(tmp_path):
-    # A raster page would have been the easy way out of the cairo problem, and
-    # would have cost every reader a drawing that stops resolving when zoomed.
-    # One image XObject and no path operators is what that mistake looks like.
+    """Export the PDF as vector paths and text, not an embedded image.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Output directory.
+    """
     out = tmp_path / "d.pdf"
     _fs().render(str(out), page_size="A4", border="zone")
     body = out.read_bytes()
@@ -397,30 +379,13 @@ _HALOED = re.compile(
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo():
-    # Measured rather than eyeballed, and measured on the pixels, so it covers
-    # the whole path down to the raster instead of one rewrite in the middle of
-    # it. The renderer strikes the halo and sets the text from a single centre,
-    # and dropping the alignment put this lettering 2.7 px high in a 13 px halo,
-    # half the height of the ink itself.
-    #
-    # Where it belongs is a stated distance from the middle rather than the middle:
-    # `middle` puts the alphabetic baseline half the ascent/descent box below the
-    # centre, and an all-capitals string's ink reaches a cap height above that
-    # baseline, so the ink box sits about 0.10 em high of centre and is meant to.
-    # That is what a browser draws as well. While the backend set every string at
-    # three quarters of its size those 0.10 em were 0.10 em of nine-tenths of
-    # nothing, and asking only for ink within 1.5 px of the halo's middle passed
-    # on the accident; the same labels at true size are 1.0 to 1.2 px high of it.
-    # So this states the offset instead of hoping it is zero, which holds the
-    # alignment and the type size at once and to half a pixel rather than three.
+    """Rasterise each haloed label with its ink offset from the halo's middle as stated."""
     from PIL import Image
 
-    # The sheet with the most stream numbers on it, and they are capitals and
-    # figures throughout: no descender to pull the ink box down off the letters.
+    # Many stream numbers, all capitals and figures, so no descender moves the ink box.
     svg = (GOLDEN_DIR / "03_distillation_train.svg").read_text(encoding="utf-8")
     vx, vy, vw, _ = (float(v) for v in re.search(r'viewBox="([^"]+)"', svg).group(1).split())
-    # Two device pixels per user unit, so an ink box reads to a quarter of one and
-    # the tolerance below is a statement about the drawing, not about the raster.
+    # Two device pixels per user unit.
     im = Image.open(io.BytesIO(export.to_png(svg, scale=2 * export._PX_PER_PT))).convert("L")
     px = im.width / vw
 
@@ -430,8 +395,7 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
         if rh > rw:  # a number turned to run up a vertical line
             continue
         top, bottom = (ry - vy) * px, (ry + rh - vy) * px
-        # Inside the halo, so the strokes it was struck over cannot be read as
-        # this label's ink, and thresholded so antialiasing is not either.
+        # Crop inside the halo and threshold, so only this label's ink counts.
         box = (int((rx - vx) * px) + 1, int(top) + 1, int((rx + rw - vx) * px), int(bottom))
         ink = im.crop(box).point(lambda v: 255 if v < 128 else 0).getbbox()
         assert ink, f"{text!r} drew no ink inside its own halo"
@@ -446,21 +410,7 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
 
 
 def _strings_on_the_paper(svg: str) -> int:
-    """How many strings the sheet asks a renderer to draw.
-
-    Not the number of ``<text>`` elements, which is what this counted until a
-    sheet drew a *lettered symbol* twice. The S inside a solenoid valve's box is
-    part of the artwork: ``SvgRenderer`` defines that artwork once under
-    ``<defs>`` and instantiates it with a ``<use>`` per valve, so one element in
-    the file is two strings on the paper. ``14_tank_farm`` has two solenoid
-    valves -- a receipt trip valve on each of its two atmospheric tanks -- and
-    is the first sheet in the corpus where the two numbers part company.
-
-    So a symbol's lettering counts once per reference to it and everything
-    outside a symbol counts once, which is what a PDF's ``Tj`` operators are a
-    count of. Counting elements instead would have let a symbol's letter go
-    missing on its second and every later instance without failing anything.
-    """
+    """Count the strings a sheet draws, a symbol's lettering once per ``<use>`` of it."""
     text = r"<text\b[^>]*>(.*?)</text>"
     total = 0
     for match in re.finditer(r'<symbol id="([^"]+)".*?</symbol>', svg, re.S):
@@ -474,9 +424,13 @@ def _strings_on_the_paper(svg: str) -> int:
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 @pytest.mark.parametrize("name", GOLDENS)
 def test_every_label_on_the_sheet_reaches_the_page(name):
-    # The failure mode this whole module guards against is the silent drop, and
-    # a tag that does not print is the most expensive one: on a P&ID the
-    # lettering is the content. Counted rather than eyeballed, per sheet.
+    """Draw one PDF ``Tj`` per string the golden sheet draws.
+
+    Parameters
+    ----------
+    name : str
+        Golden fixture file name.
+    """
     svg = (GOLDEN_DIR / name).read_text(encoding="utf-8")
     drawn = len(re.findall(rb"\) Tj", _page_content(export.to_pdf(svg))))
     assert drawn == _strings_on_the_paper(svg)

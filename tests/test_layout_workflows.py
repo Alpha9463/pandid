@@ -1,10 +1,4 @@
-"""Hold automatic drawing quality on a small behavioural corpus.
-
-Each scenario lays out and routes one sheet with the default engine. It must
-meet the hard invariants, draw the same sheet when routed and rendered again,
-and stay within its budgets. A budget is the figure measured at ``3e88e38``
-(1 October 2026) unless its entry says otherwise; #564 tightens them.
-"""
+"""Hold automatic drawing quality on a small behavioural corpus."""
 
 from __future__ import annotations
 
@@ -138,11 +132,9 @@ SCENARIOS: dict[str, tuple[Callable[[], tuple[Flowsheet, dict]], Budget]] = {
     "biodiesel as authored": (_biodiesel(), Budget(9, 1981, 1254)),
     "biodiesel with one pin removed": (_biodiesel(skip="s103"), Budget(7, 1981, 1254)),
     "biodiesel automatic": (_biodiesel(pinned=False), Budget(20, 1998, 942)),
-    # 13 on the layered engine (#564), against 8 before: accepted, with the drawing
-    # half the size. Four are a station bypass under its own controller's signal,
-    # and one follows from keeping the mirrors stated on XV-301, FE-303 and CV-306.
+    # Four of the 13 crossings are a station bypass under its own controller's signal.
     "ethanol P&ID automatic": (_stripped("11_ethanol_pid"), Budget(13, 2588, 1992)),
-    # Width measured on the layered engine (#564), which keeps one band up to 3200 px.
+    # The layered engine keeps one band up to 3200 px wide.
     "molecular sieve automatic": (_stripped("20_molecular_sieve_dryer"), Budget(32, 2903, 1822)),
     # Measured on the three sheets the alumina refinery is drawn on.
     "alumina digestion automatic": (_stripped("21_alumina_refinery_1"), Budget(4, 2901, 418)),
@@ -255,11 +247,6 @@ def test_scenario_meets_invariants_and_budget(name: str) -> None:
     ----------
     name : str
         Scenario key in ``SCENARIOS``.
-
-    Returns
-    -------
-    None
-        Invariants, repeat runs and each budget are checked separately.
     """
     build, budget = SCENARIOS[name]
     fs, options = build()

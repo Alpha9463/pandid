@@ -34,13 +34,7 @@ def _hash(path) -> str:
 
 
 def test_a_recovered_fallback_does_not_hide_a_new_crossing():
-    """Reject a new crossing even when a routing fallback disappears.
-
-    Returns
-    -------
-    None
-        The test succeeds when the sheet is classified as regressed.
-    """
+    """Reject a new crossing even when a routing fallback disappears."""
     variants = []
     for number in range(21):
         stem = f"sheet_{number:02d}"
@@ -85,11 +79,6 @@ def test_a_visual_win_must_match_the_measured_rule(tmp_path):
     ----------
     tmp_path : pathlib.Path
         Pytest directory for the paired review images.
-
-    Returns
-    -------
-    None
-        The changed drawing fails when its visual claim does not match a measured gain.
     """
     before_image = tmp_path / "before.svg"
     after_image = tmp_path / "after.svg"
@@ -152,11 +141,6 @@ def test_release_pass_requires_real_corpus_evidence_and_authored_intent(tmp_path
     ----------
     tmp_path : pathlib.Path
         Pytest directory for the paired review images.
-
-    Returns
-    -------
-    None
-        The test succeeds when only the complete candidate passes the gate.
     """
     before_image = tmp_path / "before.svg"
     after_image = tmp_path / "after.svg"
