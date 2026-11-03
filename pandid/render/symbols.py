@@ -1425,6 +1425,26 @@ _FIRST_PATH = re.compile(r"<path\b[^>]*>")
 _BODY_PAPER = 'fill="white"'
 
 
+def _attr(unit, name: str, default):
+    """Return ``getattr(unit, name, default)``, reading a missing name without raising.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to read.
+    name : str
+        Attribute name.
+    default : object
+        Value when neither the unit nor its class has ``name``.
+
+    Returns
+    -------
+    object
+        The attribute, or ``default``.
+    """
+    return getattr(unit, name) if hasattr(type(unit), name) else vars(unit).get(name, default)
+
+
 def closed_marking(unit, registry=None) -> str:
     """Return how a unit's normally closed position is drawn.
 
@@ -1449,7 +1469,7 @@ def closed_marking(unit, registry=None) -> str:
     ValueError
         If a non-valve with no closed drawing is normally closed.
     """
-    if getattr(unit, "normal_position", "open") != "closed":
+    if _attr(unit, "normal_position", "open") != "closed":
         return ""
     variant = getattr(unit, "variant", "")
     reg = default_registry if registry is None else registry
@@ -3260,7 +3280,7 @@ class SymbolRegistry:
         build = _built_to_size(unit.kind, variant)
         if build is not None:
             return build(unit)
-        overlays = tuple(getattr(unit, "overlays", ()) or ())
+        overlays = tuple(_attr(unit, "overlays", ()) or ())
         if overlays:
             return self.composed(unit.kind, variant, overlays)
         mark = closed_marking(unit, self)
@@ -3271,7 +3291,7 @@ class SymbolRegistry:
             if key not in self._darkened:
                 self._darkened[key] = darkened(sym)
             return self._darkened[key]
-        if getattr(unit, "large_end", "inlet") == "outlet":
+        if _attr(unit, "large_end", "inlet") == "outlet":
             key = (unit.kind, variant)
             if key not in self._expanders:
                 self._expanders[key] = expander(sym)
