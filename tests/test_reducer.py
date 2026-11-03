@@ -105,16 +105,6 @@ def test_an_expansion_is_the_reduction_turned_end_for_end(variant):
 
 
 @pytest.mark.parametrize("variant", VARIANTS)
-def test_the_two_drawings_are_two_definitions(variant):
-    """A ``<use>`` points at a ``<defs>`` entry keyed by the artwork, so a
-    station carrying both has to define both -- one id drawn twice would draw
-    the reduction where the expansion goes."""
-    fs, _, _, _ = _station(variant)
-    svg = fs.to_svg()
-    assert svg.count('<symbol id="sym_reducer') == 2
-
-
-@pytest.mark.parametrize("variant", VARIANTS)
 def test_the_run_crosses_both_fittings_without_a_break(variant):
     """Every stream ends exactly on the nozzle it is drawn to.
 
@@ -136,6 +126,8 @@ def test_the_run_crosses_both_fittings_without_a_break(variant):
         west = port_point(fitting, fitting.frame, "inlet")
         east = port_point(fitting, fitting.frame, "outlet")
         assert west[0] < east[0]
+    # A station carrying both fittings defines both drawings.
+    assert fs.to_svg().count('<symbol id="sym_reducer') == 2
 
 
 def test_the_reference_stations_proportions():

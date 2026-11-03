@@ -572,16 +572,6 @@ def test_a_screw_too_short_for_one_turn_is_refused_in_its_own_words():
     assert U.Conveyor("SC-302", variant="screw", length=SCREW_MIN_LENGTH)
 
 
-def test_a_screw_conveyor_renders_and_meets_its_streams():
-    fs = Flowsheet("screw")
-    feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
-    sc = fs.add(U.Conveyor("SC-301", variant="screw", length=140))
-    fs.connect(feed.outlet, sc.feed).properties = {"Flow (kg/h)": "4200"}
-    fs.connect(sc.discharge, out.inlet).properties = {"Flow (kg/h)": "4200"}
-    assert fs.validate() == []
-    assert "<svg" in fs.to_svg()
-
-
 # ---------------------------------------------------------------------------
 # The bucket elevators, ISO 10628-2 items 18.7 X8065 and 18.8 X8066
 # ---------------------------------------------------------------------------
@@ -636,12 +626,20 @@ def test_an_elevator_is_not_sized_by_a_length():
         U.Elevator("BE-301", length=140)  # type: ignore[call-arg]
 
 
-@pytest.mark.parametrize("variant", ["default", "z_form"])
-def test_an_elevator_renders_and_meets_its_streams(variant):
-    fs = Flowsheet("lift")
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: U.Conveyor("SC-301", variant="screw", length=140),
+        lambda: U.Elevator("BE-301", variant="default"),
+        lambda: U.Elevator("BE-301", variant="z_form"),
+    ],
+    ids=["screw conveyor", "elevator", "z-form elevator"],
+)
+def test_a_screw_conveyor_or_an_elevator_renders_and_meets_its_streams(build):
+    fs = Flowsheet("solids")
     feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
-    be = fs.add(U.Elevator("BE-301", variant=variant))
-    fs.connect(feed.outlet, be.feed).properties = {"Flow (kg/h)": "4200"}
-    fs.connect(be.discharge, out.inlet).properties = {"Flow (kg/h)": "4200"}
+    unit = fs.add(build())
+    fs.connect(feed.outlet, unit.feed).properties = {"Flow (kg/h)": "4200"}
+    fs.connect(unit.discharge, out.inlet).properties = {"Flow (kg/h)": "4200"}
     assert fs.validate() == []
     assert "<svg" in fs.to_svg()
