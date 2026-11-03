@@ -9,6 +9,8 @@ set is numbered exactly as it always was, which is what protects every sheet
 drawn before line numbers existed.
 """
 
+from typing import Any
+
 import pytest
 
 from pandid import Flowsheet, units as U
@@ -58,65 +60,84 @@ def test_an_unset_first_component_drops_its_separator_too():
     assert s1.name == "AE-1001-SS"
 
 
-def test_several_unset_leading_components_drop_one_separator():
-    fs = Flowsheet("t", line_numbering_scheme="{size}-{schedule}-{service}-{sequence}")
+@pytest.mark.parametrize(
+    "sheet, components, name",
+    [
+        (
+            {"line_numbering_scheme": "{size}-{schedule}-{service}-{sequence}"},
+            {"service": "P"},
+            "P-1001",
+        ),
+        (
+            {"line_numbering_scheme": "{size}-{service}-{sequence}-{spec}-{insulation}"},
+            {"size": '2"', "service": "S", "spec": "B1A", "insulation": "H"},
+            '2"-S-1001-B1A-H',
+        ),
+        (
+            {
+                "line_numbering_scheme": "{service}-{sequence}-{size}-{schedule}-{spec}",
+                "line_number_start": 301,
+            },
+            {"service": "FB", "size": 200, "schedule": 160, "spec": "SS"},
+            "FB-301-200-160-SS",
+        ),
+        (
+            {"line_numbering_scheme": "{size}-{schedule}-{service}-{sequence}"},
+            {"size": '6"', "schedule": "XS", "service": "P"},
+            '6"-XS-P-1001',
+        ),
+        ({"line_numbering_scheme": "{schedule}-{spec}"}, {"schedule": 80}, "80"),
+        (
+            {"line_numbering_scheme": "{size}-{schedule}-{service}-{sequence}-{spec}"},
+            {"size": '6"', "service": "P", "spec": "A1A"},
+            '6"-P-1001-A1A',
+        ),
+        (
+            {"line_numbering_scheme": lambda s: f"{s.service}{s.sequence}/{s.size}"},
+            {"size": "150", "service": "P"},
+            "P1001/150",
+        ),
+        (
+            {"line_numbering_scheme": "{service}-{sequence:0>6}", "line_number_start": 1},
+            {"service": "P"},
+            "P-000001",
+        ),
+        ({}, {"size": 150, "service": "P", "spec": "A1A"}, "150-P-1001-A1A"),
+        ({"line_number_start": 100}, {"size": '4"', "service": "P", "spec": "A1A"}, '4"-P-100-A1A'),
+    ],
+    ids=[
+        "unset-leading-components",
+        "insulation",
+        "schedule",
+        "schedule-as-a-word",
+        "schedule-alone",
+        "unset-schedule",
+        "callable",
+        "format-spec",
+        "numeric-components",
+        "line-number-start",
+    ],
+)
+def test_a_scheme_writes_the_components_it_names(
+    sheet: dict[str, Any], components: dict[str, Any], name: str
+):
+    """Check that the scheme writes the line number from the stream's components.
+
+    Parameters
+    ----------
+    sheet : dict[str, Any]
+        Line-numbering keywords for the flowsheet.
+    components : dict[str, Any]
+        Line-number components given to ``connect``.
+    name : str
+        Expected line number.
+    """
+    fs = Flowsheet("t", **sheet)
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, service="P")
-    assert s.name == "P-1001"
-
-
-def test_a_scheme_can_name_the_insulation():
-    fs = Flowsheet("t", line_numbering_scheme="{size}-{service}-{sequence}-{spec}-{insulation}")
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, size='2"', service="S", spec="B1A", insulation="H")
-    assert s.name == '2"-S-1001-B1A-H'
-
-
-def test_a_scheme_can_name_the_schedule():
-    """The size is the bore and the schedule is the wall, so they are two
-    components and not one field with a hyphen in it."""
-    fs = Flowsheet(
-        "t",
-        line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
-        line_number_start=301,
-    )
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, service="FB", size=200, schedule=160, spec="SS")
-    assert s.name == "FB-301-200-160-SS"
-
-
-def test_a_schedule_is_not_always_a_number():
-    """Schedule 40 has an older name, and a sheet is free to write it."""
-    fs = Flowsheet("t", line_numbering_scheme="{size}-{schedule}-{service}-{sequence}")
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, size='6"', schedule="XS", service="P")
-    assert s.name == '6"-XS-P-1001'
-
-
-def test_a_schedule_on_its_own_is_a_line_number():
-    fs = Flowsheet("t", line_numbering_scheme="{schedule}-{spec}")
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, schedule=80)
+    s = fs.connect(feed.outlet, prod.inlet, **components)
     assert s.has_line_number
-    assert s.name == "80"
-
-
-def test_an_unset_schedule_drops_out_with_its_separator():
-    """The default scheme does not name the schedule, so a sheet that never
-    mentions one is numbered exactly as it was before the component existed."""
-    _, _, (s1, _, _) = _skid(size='6"', service="P", spec="A1A")
-    assert s1.name == '6"-P-1001-A1A'
-
-    fs = Flowsheet("t", line_numbering_scheme="{size}-{schedule}-{service}-{sequence}-{spec}")
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, size='6"', service="P", spec="A1A")
-    assert s.name == '6"-P-1001-A1A'
+    assert s.name == name
 
 
 def test_the_default_scheme_does_not_name_the_schedule():
@@ -127,31 +148,6 @@ def test_the_default_scheme_does_not_name_the_schedule():
     assert DEFAULT_LINE_NUMBERING_SCHEME == "{size}-{service}-{sequence}-{spec}"
 
 
-def test_a_callable_scheme_takes_the_stream():
-    fs = Flowsheet("t", line_numbering_scheme=lambda s: f"{s.service}{s.sequence}/{s.size}")
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, size="150", service="P")
-    assert s.name == "P1001/150"
-
-
-def test_a_format_spec_pads_the_sequence():
-    fs = Flowsheet("t", line_numbering_scheme="{service}-{sequence:0>6}", line_number_start=1)
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, service="P")
-    assert s.name == "P-000001"
-
-
-def test_components_may_be_numbers():
-    """A metric size read out of a spreadsheet arrives as an int, not as text."""
-    fs = Flowsheet("t")
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, size=150, service="P", spec="A1A")
-    assert s.name == "150-P-1001-A1A"
-
-
 # --- the sequence -------------------------------------------------------------
 
 
@@ -159,14 +155,6 @@ def test_auto_numbering_fills_the_sequence():
     fs, fv, (s1, s2, s3) = _skid(size='6"', service="P", spec="A1A")
     fv.new_line_number = True  # two lines now, so two sequences
     assert (s1.sequence, s2.sequence, s3.sequence) == ("1001", "1001", "1002")
-
-
-def test_line_number_start_moves_the_sequence():
-    fs = Flowsheet("t", line_number_start=100)
-    feed = fs.add(U.Feed("F"))
-    prod = fs.add(U.Product("P"))
-    s = fs.connect(feed.outlet, prod.inlet, size='4"', service="P", spec="A1A")
-    assert s.name == '4"-P-100-A1A'
 
 
 def test_a_sequence_the_author_set_is_never_overwritten():
