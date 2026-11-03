@@ -2596,7 +2596,13 @@ def render() -> str:
         "",
         "",
         "def register_vendored(registry):",
-        '    """Register the vendored symbols, replacing same-key defaults."""',
+        '    """Register the vendored symbols, replacing same-key defaults.',
+        "",
+        '    Parameters',
+        '    ----------',
+        '    registry : SymbolRegistry',
+        '        Registry to register the symbols on.',
+        '    """',
         f"    from pandid.render.symbols import {imports}",
         "",
     ]
@@ -2669,14 +2675,11 @@ def render() -> str:
             if aspect == "fixed":
                 lines.append("        stretchable=False,")
             # ISO 15519-1 11.4.2: gravity is a functionality here, so the symbol
-            # must not be turned. The reason is carried into the generated file,
-            # since that is where a reader meets the keyword.
+            # must not be turned.
             if (kind, variant) in GRAVITY_FIXED:
-                lines.append(f"        # must not be turned: {GRAVITY_FIXED[(kind, variant)]}")
                 lines.append("        gravity_fixed=True,")
             # The artwork says which way something goes, and an axis flip says
-            # the reverse of it. The reason travels with the keyword for the
-            # same reason the turning one does.
+            # the reverse of it.
             if (kind, variant) in DIRECTIONAL:
                 # The renderer holds the *whole* drawing still under a flip, so
                 # a glyph inside one would be counter-transformed twice over.
@@ -2688,7 +2691,6 @@ def render() -> str:
                         f"the renderer holds a directional drawing still as a whole "
                         f"and cannot also counter-transform a glyph inside it"
                     )
-                lines.append(f"        # must not be flipped: {DIRECTIONAL[(kind, variant)]}")
                 lines.append("        directional=True,")
             if menu:
                 lines.append(f"        port_faces={menu!r},")
