@@ -268,13 +268,13 @@ DEVICES = {
     ("valve", "relief"): ("ReliefValve", """Pressure relief valve: opens itself at the set pressure.
 
     ``default`` draws the bonnet-on-a-stem body and ``psv`` the
-    spring-loaded angle body. ``fail`` and ``normal_position="closed"``
-    raise.
+    spring-loaded angle body. A ``fail`` position or
+    ``normal_position="closed"`` raises.
 """),
     ("valve", "regulator"): ("PressureRegulator", """Self-acting regulator: the process works its own diaphragm.
 
-    ``actuator`` is the external pilot line. ``fail`` and
-    ``normal_position="closed"`` raise.
+    ``actuator`` is the external pilot line. A ``fail`` position or
+    ``normal_position="closed"`` raises.
 """),
     ("valve", "motor"): ("MotorOperatedValve", """Motor-operated valve: a block valve on an electric actuator.
 
@@ -755,7 +755,7 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     Raises
     ------
     SystemExit
-        If two owned drawings have different ports.
+        If owned drawings differ in ports, or the base is unresolved.
     """
     base = base_of(kind)
     mapping = variant_map(class_name, home)
