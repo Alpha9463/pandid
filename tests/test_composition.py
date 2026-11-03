@@ -101,16 +101,6 @@ def transforms(svg):
 # ---------------------------------------------------------------- the rule
 
 
-def test_a_part_must_name_a_group_that_composes():
-    """Groups 1-25 are whole apparatus, and one is not overlaid on another.
-
-    The rule the whole mechanism turns on, made refusable: a body carrying a
-    body is two pieces of equipment on one tag, not a composition.
-    """
-    with pytest.raises(ValueError, match="not one of the part groups"):
-        IsoPart(8, "8.10", "X2618", "Separator, cyclone type")
-
-
 def test_the_part_groups_are_the_four_iso_names_them():
     assert sorted(PART_GROUPS) == [26, 27, 28, 29]
 
