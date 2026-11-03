@@ -146,13 +146,13 @@ def test_unit_overlap_suggests_an_attach_that_keeps_what_the_balloon_does():
     said = _overlap_message(fs)
     call = re.search(r"call \.attach\(<the FV-101 unit>, (.*?)\) on FIC-101", said)
     assert call is not None, said
-    filled: dict[str, Any] = {"at": "N", "offset": 70.0}
+    filled: dict[str, Any] = {"face": "N", "offset": 70.0}
     kwargs: dict[str, Any] = {}
     for arg in call.group(1).split(", "):
         key, value = arg.split("=", 1)
         kwargs[key] = filled[key] if value == "..." else ast.literal_eval(value)
     fic.attach(fv, **kwargs)
-    assert (fic.relation, fic.angle, fic.at, fic.offset) == ("near", 45.1234567, "N", 70.0)
+    assert (fic.relation, fic.angle, fic.face, fic.offset) == ("near", 45.1234567, "N", 70.0)
 
 
 def test_unit_overlap_does_not_offer_a_grid_pin_to_an_attached_balloon():
@@ -556,7 +556,7 @@ def test_a_signal_line_has_no_elevation_to_be_off():
     prod = fs.add(U.Product("P")).pin(x=700, port="inlet", y=195)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, prod.inlet)
-    lic = fs.add_instrument("LIC", 101, sensing=drum, at="S", offset=90, display="central")
+    lic = fs.add_instrument("LIC", 101, sensing=drum, face="S", offset=90, display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     fs.layout()
     assert [i.message for i in _off_elevation(fs) if "LIC" in i.message] == []

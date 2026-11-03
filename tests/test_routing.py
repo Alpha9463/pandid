@@ -451,7 +451,7 @@ def test_the_router_keeps_lines_off_the_tag_the_renderer_draws():
     name = "V-101-FEED-SURGE-DRUM-FIRST-STAGE"
     fs.add(Vessel(name, label_pos="top")).pin(x=300, y=200)
     element = fs.add(Fitting("FE-303", variant="venturi")).pin(x=100, y=400)
-    fs.add_balloon(element, at="S", offset=46)
+    fs.add_balloon(element, face="S", offset=46)
     fs.layout()
     graph = VisibilityGraph(fs)
     bodies = {id(rect) for _, rect in graph.body_obstacles}

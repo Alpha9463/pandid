@@ -172,9 +172,9 @@ def main():
     # The element's tag moves into a balloon on a short impulse line and
     # the plate is left unlettered; FT-301 stacks on that balloon, edge to
     # edge, reading the same element.
-    fe301_b = fs.add_balloon(fe301, at="N", offset=38)
-    ft301 = fs.add_instrument("FT", flow301, near=fe301_b, at="N", offset=23)
-    fic301 = fs.add_instrument("FIC", flow301, near=ft301, at="N", offset=60,
+    fe301_b = fs.add_balloon(fe301, face="N", offset=38)
+    ft301 = fs.add_instrument("FT", flow301, near=fe301_b, face="N", offset=23)
+    fic301 = fs.add_instrument("FIC", flow301, near=ft301, face="N", offset=60,
                                variant="shared")
     fs.connect(ft301.sig_out, fic301.pv, kind="electric")
     fs.connect(fic301.sig_out, cv301.actuator, kind="pneumatic")
@@ -186,14 +186,14 @@ def main():
     # TI-306 is what says how hot the bed itself is.
     tt302 = fs.add_instrument("TT", temp302, sensing=inlet_line, at=0.5,
                               offset=60)
-    tic302 = fs.add_instrument("TIC", temp302, near=tt302, at="N", offset=70,
+    tic302 = fs.add_instrument("TIC", temp302, near=tt302, face="N", offset=70,
                                variant="shared")
     tic302.annotate(high="TAH")
     fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
 
-    fe303_b = fs.add_balloon(fe303, at="N", offset=38)
-    ft303 = fs.add_instrument("FT", flow303, near=fe303_b, at="N", offset=23)
-    fic303 = fs.add_instrument("FIC", flow303, near=ft303, at="N", offset=60,
+    fe303_b = fs.add_balloon(fe303, face="N", offset=38)
+    ft303 = fs.add_instrument("FT", flow303, near=fe303_b, face="N", offset=23)
+    fic303 = fs.add_instrument("FIC", flow303, near=ft303, face="N", offset=60,
                                variant="shared")
     # The measurement lands on pv and the master sets sig_in: a cascade
     # sets a setpoint, it does not stroke a valve.
@@ -208,7 +208,7 @@ def main():
     # loop rather than left to an operator with a hand valve.
     pt304 = fs.add_instrument("PT", press304, sensing=loop_gas, at=0.4,
                               offset=60)
-    pic304 = fs.add_instrument("PIC", press304, near=pt304, at="N", offset=70,
+    pic304 = fs.add_instrument("PIC", press304, near=pt304, face="N", offset=70,
                                variant="shared")
     pic304.annotate(high="PAH", low="PAL")
     fs.connect(pt304.sig_out, pic304.sig_in, kind="electric")
@@ -222,8 +222,8 @@ def main():
     # the actuator -- and its alarm lettering was written across the line
     # number. Over the valve, the output drops straight onto the actuator
     # and nothing in the loop crosses a process line at all.
-    lt305 = fs.add_instrument("LT", level305, sensing=sep, at="E", offset=60)
-    lic305 = fs.add_instrument("LIC", level305, near=cv305, at="N", offset=52,
+    lt305 = fs.add_instrument("LT", level305, sensing=sep, face="E", offset=60)
+    lic305 = fs.add_instrument("LIC", level305, near=cv305, face="N", offset=52,
                                variant="shared")
     lic305.annotate(high="LAH", low="LAL")
     fs.connect(lt305.sig_out, lic305.sig_in, kind="electric")
@@ -235,18 +235,18 @@ def main():
     # is a well of its own: a trip taking TIC-302's reading stops working
     # the moment that loop is put on manual.
     #
-    # at="N" and not "W": the feed nozzle sits at the vessel's vertical
+    # face="N" and not "W": the feed nozzle sits at the vessel's vertical
     # centre, which is also where "W" anchors a balloon with no nozzle of
     # its own, so TI-306 landed on the feed line's own elevation and the
     # feed had to bend around it. The top is clear on this vessel and TI-
     # 306 has no physical side to be drawn on.
-    fs.add_instrument("TI", 306, sensing=rx, at="N", offset=60)
-    tt307 = fs.add_instrument("TT", 307, sensing=rx, at="E", offset=60)
-    fs.add_instrument("Z", 1, sensing=tt307, at="E", offset=44, variant="sis")
+    fs.add_instrument("TI", 306, sensing=rx, face="N", offset=60)
+    tt307 = fs.add_instrument("TT", 307, sensing=rx, face="E", offset=60)
+    fs.add_instrument("Z", 1, sensing=tt307, face="E", offset=44, variant="sis")
     # Over the valve rather than under it: a valve that states a fail
     # position writes FC beneath its tag, and a square standing there is
     # a square with lettering across it.
-    fs.add_instrument("Z", 1, acting_on=xv307, at="N", offset=34, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv307, face="N", offset=34, variant="sis")
 
     # --- Sheet furniture ----------------------------------------------
     # date= is stated rather than left blank: left blank, the renderer

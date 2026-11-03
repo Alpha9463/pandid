@@ -416,7 +416,7 @@ def test_a_balloons_pick_survives_being_re_placed_by_the_router():
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, vessel.inlet)
     fs.connect(vessel.outlet, prod.inlet)
-    lic = fs.add_instrument("LIC", 101, sensing=vessel, at="S", offset=115, display="central")
+    lic = fs.add_instrument("LIC", 101, sensing=vessel, face="S", offset=115, display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     fs.layout()
     fs.route()

@@ -330,13 +330,13 @@ def main():
     # near= places the indicator under its transmitter and draws nothing
     # between them; the 4-20 mA the gauge reads on is a line of its own,
     # and connect() is what puts it on the paper.
-    lt601 = fs.add_instrument("LT", ms_level, sensing=tk601, at="W", offset=62)
-    li601 = fs.add_instrument("LI", ms_level, near=lt601, at="S", offset=50,
+    lt601 = fs.add_instrument("LT", ms_level, sensing=tk601, face="W", offset=62)
+    li601 = fs.add_instrument("LI", ms_level, near=lt601, face="S", offset=50,
                               variant="shared")
     li601.annotate(high="LAH", low="LAL")
     fs.connect(lt601.sig_out, li601.sig_in, kind="electric")
-    lt602 = fs.add_instrument("LT", eth_level, sensing=tk602, at="W", offset=32)
-    li602 = fs.add_instrument("LI", eth_level, near=lt602, at="S", offset=50,
+    lt602 = fs.add_instrument("LT", eth_level, sensing=tk602, face="W", offset=32)
+    li602 = fs.add_instrument("LI", eth_level, near=lt602, face="S", offset=50,
                               variant="shared")
     li602.annotate(high="LAH", low="LAL")
     fs.connect(lt602.sig_out, li602.sig_in, kind="electric")
@@ -344,24 +344,24 @@ def main():
     # Both switches keep literal numbers. What they initiate is Z-1,
     # which carries the trip's number and not theirs, so declaring L-611
     # would put a loop of exactly one balloon in fs.loops.
-    lsh611 = fs.add_instrument("LSHH", 611, sensing=tk601, at="E", offset=32)
-    lsh612 = fs.add_instrument("LSHH", 612, sensing=tk602, at="E", offset=40)
+    lsh611 = fs.add_instrument("LSHH", 611, sensing=tk601, face="E", offset=32)
+    lsh612 = fs.add_instrument("LSHH", 612, sensing=tk602, face="E", offset=40)
     # Instrument(variant="sis") is the one symbol allowed to carry its
     # tag more than once, so Z-1 is drawn at each of the four points it
     # touches -- and it reads the two switches and strokes the two
     # valves, which is sensing= against acting_on=.
-    fs.add_instrument("Z", 1, sensing=lsh611, at="N", offset=40, variant="sis")
-    fs.add_instrument("Z", 1, sensing=lsh612, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, sensing=lsh611, face="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, sensing=lsh612, face="N", offset=40, variant="sis")
     # 46 and not 26: FC is written directly below each valve, so the
     # square has to hang below that mark rather than on it.
-    fs.add_instrument("Z", 1, acting_on=xv601, at="S", offset=46, variant="sis")
-    fs.add_instrument("Z", 1, acting_on=xv602, at="S", offset=46, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv601, face="S", offset=46, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv602, face="S", offset=46, variant="sis")
 
     # 50 and not 40, which stood the two balloons edge to edge: the
     # signal between them is a line and a line needs paper to be drawn
     # on. The same 50 the two level gauges above stand off at.
-    pt603 = fs.add_instrument("PT", lpg_press, sensing=v603, at="E", offset=30)
-    pi603 = fs.add_instrument("PI", lpg_press, near=pt603, at="N", offset=50,
+    pt603 = fs.add_instrument("PT", lpg_press, sensing=v603, face="E", offset=30)
+    pi603 = fs.add_instrument("PI", lpg_press, near=pt603, face="N", offset=50,
                               variant="shared")
     pi603.annotate(high="PAH")
     fs.connect(pt603.sig_out, pi603.sig_in, kind="electric")
@@ -380,9 +380,9 @@ def main():
     # Each element's tag goes in a balloon standing on its impulse line,
     # with the transmitter's own balloon touching it above: the meter
     # bodies carry no lettering at all, as P&ID_301 draws them.
-    fe604_b = fs.add_balloon(fe604, at="N", offset=fe604_top - low_row_y - 45)
-    ft604 = fs.add_instrument("FT", load_flow, near=fe604_b, at="N", offset=23)
-    fic604 = fs.add_instrument("FIC", load_flow, near=cv604, at="N", variant="shared",
+    fe604_b = fs.add_balloon(fe604, face="N", offset=fe604_top - low_row_y - 45)
+    ft604 = fs.add_instrument("FT", load_flow, near=fe604_b, face="N", offset=23)
+    fic604 = fs.add_instrument("FIC", load_flow, near=cv604, face="N", variant="shared",
                                offset=cv604_top - balloon_row_y)
     fic604.nozzle("sig_out", "S")
     fs.connect(ft604.sig_out, fic604.sig_in, kind="electric")
@@ -392,9 +392,9 @@ def main():
     # kind="software" and not a wire: both faceplates are functions of
     # the same DCS. The route is given by hand because the router leaves
     # FIC-604 through its last free face instead.
-    fe605_b = fs.add_balloon(fe605, at="N", offset=fe605_top - balloon_row_y - 45)
-    ft605 = fs.add_instrument("FT", blend_flow, near=fe605_b, at="N", offset=23)
-    fic605 = fs.add_instrument("FIC", blend_flow, near=cv605, at="N", variant="shared",
+    fe605_b = fs.add_balloon(fe605, face="N", offset=fe605_top - balloon_row_y - 45)
+    ft605 = fs.add_instrument("FT", blend_flow, near=fe605_b, face="N", offset=23)
+    fic605 = fs.add_instrument("FIC", blend_flow, near=cv605, face="N", variant="shared",
                                offset=cv605_top - balloon_row_y)
     fic605.nozzle("sig_out", "S")
     fic605.nozzle("sig_in", "N")

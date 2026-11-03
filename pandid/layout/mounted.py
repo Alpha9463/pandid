@@ -193,7 +193,7 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
     tapped: dict[int, list[tuple[Port, Port, float]]] = {}
     for unit in fs.units:
         host, at = vars(unit).get("host"), getattr(unit, "at", None)
-        if unit.kind != "instrument" or not isinstance(host, Stream) or isinstance(at, str):
+        if unit.kind != "instrument" or not isinstance(host, Stream):
             continue
         line = host._logical_root or host
         tap = (line.source, line._logical_to or line.dest, 0.5 if at is None else float(at))

@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upright pipe is drawn upright, unless its author stated a turn with
   `pin(orientation=...)`; a stated 0 keeps it level, and a stated
   `mirrored=` is kept too.
+- **`Instrument.at` is only a fraction along a line (#438).** A balloon on a
+  unit keeps its side in the new `Instrument.face`, and its `at` is `None`.
 - **`pin(row=...)` orders units down their column (#564).** A lower row is
   drawn above a higher one in the same `col=` column; it no longer names an
   absolute grid row.
@@ -40,8 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `ci.yml` and `release.yml` names a commit, with its version in a
   comment.
 - **`unit-overlap` says how to clear it (#434).** The finding names one of
-  the two units and the call that moves it: `at=` and `offset=` for an
-  attached balloon, `pin()` for any other unit. A suggested `attach()`
+  the two units and the call that moves it: `at=`/`face=` and `offset=` for
+  an attached balloon, `pin()` for any other unit. A suggested `attach()`
   repeats the balloon's `relation=` and `angle=`.
 
 ### Deprecated
@@ -49,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PLACES` and `LAYOUT_CONFIDENCE` on a unit class (#564).** Layout no
   longer reads them, and a subclass that sets them is reported. Point a
   nozzle with `nozzle(port, face)` or `pin(orientation=..., mirrored=...)`.
+- **A unit's side given as `at=` (#438).** Use `face="N"` in
+  `add_instrument()`, `add_balloon()`, `add_control_loop()` and `attach()`,
+  `face: N` in a spec, and `controller_face=` for `controller_at=`.
 
 ### Removed
 
@@ -93,6 +98,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A balloon hung from another balloon no longer sits on the line it taps
   (#619).** The line also stops routing along lanes that only its own
   balloons add, so balloons and routes settle instead of chasing each other.
+- **A refused balloon placement changes nothing (#438).** `attach()` with a
+  bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
+  face no longer leaves the balloon on the sheet, and `add_instrument()`
+  refuses `at=` or `face=` given with no `sensing=`, `acting_on=` or `near=`
+  instead of dropping them.
+- **A control loop refused while it is added leaves the sheet as it was
+  (#438).** `add_control_loop()` refused at its second signal line, such as by
+  a `stream_naming_scheme` that cannot name it, used to leave the loop, both
+  balloons and the first line behind.
 - **An expander keeps every field of the reducer it is turned from (#508).**
   `large_end="outlet"` now draws at the reducer's trim weight, and its bands
   are mirrored with the artwork.
