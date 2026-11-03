@@ -397,6 +397,11 @@ def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
         Element to walk, changed in place.
     size : float or None, default=None
         Font size inherited from its ancestors.
+
+    Raises
+    ------
+    RuntimeError
+        If a font size is invalid or a baseline unsupported.
     """
     size = _font_size(el, size)
     if _local(el.tag) == "text":

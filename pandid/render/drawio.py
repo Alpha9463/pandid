@@ -120,7 +120,7 @@ def _hops(polylines: dict, direction: str,
     jumps: set = set()
     # Crossings the sheet draws flat, keyed by both edges.
     marginal: dict = {key: set() for key in keys}
-    # Hops of a run over itself, which draw.io never draws.
+    # Hops of a run over itself.
     own: set = set()
     for hop_key, _seg, cross_key, x, y, room in _svg.crossings(polylines, direction):
         if hop_key == cross_key:
@@ -145,7 +145,7 @@ def _hops(polylines: dict, direction: str,
             break
         order.append(ready[0])
         done.add(ready[0])
-    # The edges left in a cycle, in stream order.
+    # Edges in a cycle or ordered after one, in stream order.
     order += [key for key in keys if key not in done]
     # An edge keeps its style only if every edge that hops it, and every
     # edge it crosses flat, is written after it.
@@ -648,7 +648,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     ink = _ink(fs, direction)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
-    # Quadrant codes are placed first, so tags avoid them.
+    # Reserve the quadrant codes' boxes before placing tags.
     codes = quadrant_labels(fs, direction)
     symbols += [(None, b) for b in map(_unit_label_box, codes) if b is not None]
     at: dict = {}
@@ -2208,7 +2208,7 @@ def _distribute(weights, total: float) -> list[float]:
     Returns
     -------
     list[float]
-        Parts summing to ``total``.
+        Parts summing to ``round(total, 2)``.
     """
     ws = [max(float(w), 0.0) for w in weights] or [1.0]
     span = sum(ws)
