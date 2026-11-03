@@ -1311,7 +1311,7 @@ class Flowsheet:
             loop, controller_letters, f"{loop.variable}IC", "controller_letters")
         self._refuse_foreign("measuring", measuring)
         self._refuse_foreign("acting_on", acting_on)
-        # Build the balloons without adding them.
+        # Build and check both balloons before adding either.
         transmitter = self._build_instrument(
             transmitter_code, loop, sensing=measuring,
             **_stated(at=at, offset=offset, angle=angle))
