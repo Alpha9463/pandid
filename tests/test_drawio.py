@@ -44,6 +44,7 @@ from pandid.render.svg import (
     stream_hops,
     stream_polyline,
     tap_lines,
+    tap_route,
 )
 from pandid.render.symbols import _GROUP, Symbol, default_registry, expander
 from pandid.render.weights import LineWeight
@@ -3905,8 +3906,8 @@ def _edge_lines(fs, kwargs, root):
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     assert isinstance(fit, _Fit)
     known = {f"s{n}": [fit.at(*p) for p in stream_polyline(s)] for n, s in enumerate(fs.streams)}
-    for n, (_inst, tap, centre) in enumerate(tap_lines(fs)):
-        known[f"t{n}"] = [fit.at(*tap), fit.at(*centre)]
+    for n, (inst, tap, centre) in enumerate(tap_lines(fs)):
+        known[f"t{n}"] = [fit.at(*p) for p in tap_route(inst, tap, centre)]
     out = []
     for cell in root.findall("mxCell"):
         if cell.get("edge") != "1":
