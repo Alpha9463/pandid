@@ -292,7 +292,8 @@ def convert_shape(shape_el, stroke_width=2.0):
     units). At a symbol's native scale this equals the sheet's line weight; for
     a symbol later scaled by ``s``, pass ``stroke_width = 2 / s`` so the
     rendered line still lands at 2px. It is also the ceiling a stencil's own
-    <strokewidth> is held to, and the unit a dash pattern is measured in.
+    <strokewidth> is held to, half of it the floor, and the unit a dash
+    pattern is measured in.
 
     ``aspect`` is the stencil author's own statement about resizing:
     ``"variable"`` for a shape that may be stretched to fill whatever box it is
@@ -405,7 +406,11 @@ def convert_shape(shape_el, stroke_width=2.0):
                 # 6.2 has no name for one -- draw.io's own base is 1px and
                 # pandid's is 2, so a stencil written to stand out against the
                 # thinner pen would come out heavier still against this one.
-                state["stroke_width"] = min(_num(el, "width", stroke_width), stroke_width)
+                #
+                # Floored at half of it, 0,1 M, which ISO 10628-1 5.3.1 c) sets
+                # as the finest line on the sheet.
+                state["stroke_width"] = min(max(_num(el, "width", stroke_width),
+                                                stroke_width / 2), stroke_width)
             elif t == "linecap":
                 state["linecap"] = el.get("cap", "butt")
             elif t == "save":

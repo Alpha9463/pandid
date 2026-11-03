@@ -3411,19 +3411,19 @@ class SymbolRegistry:
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
             trim=True))
         self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></g>',
+            svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
             trim=True), "panel")
         self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="1.5"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="1.5"/></g>',
+            svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="2"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
             trim=True), "aux")
         # Shared display: a circle in a square with one bar
         # (ISO 15519-2 Table 1).
         self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="1.5"/></g>',
+            svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
             trim=True), "shared")

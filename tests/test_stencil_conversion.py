@@ -171,9 +171,11 @@ def test_a_stencil_may_draw_finer_than_the_sheet_weight_but_not_heavier():
     The library holds every symbol to exactly that: the heaviest pen in a
     drawing is the sheet's (``tests/test_line_weight.py``). draw.io's own base
     pen is 1px against pandid's 2, so a stencil written to stand out against
-    the thinner one would come out heavier still against this one.
+    the thinner one would come out heavier still against this one. Nothing
+    is finer than 0,1 M, half the sheet weight (ISO 10628-1 5.3.1 c), #500).
     """
-    assert _drawn(f'<strokewidth width="0.5"/>{GEOM}<stroke/>')[0].get("stroke-width") == "0.5"
+    assert _drawn(f'<strokewidth width="1.5"/>{GEOM}<stroke/>')[0].get("stroke-width") == "1.5"
+    assert _drawn(f'<strokewidth width="0.5"/>{GEOM}<stroke/>')[0].get("stroke-width") == "1.0"
     assert _drawn(f'<strokewidth width="4"/>{GEOM}<stroke/>')[0].get("stroke-width") == "2.0"
 
 
@@ -186,11 +188,11 @@ def test_save_and_restore_bracket_the_pen_as_well_as_the_fill():
     pen through everything after it.
     """
     body = (
-        f'<save/><dashed dashed="1"/><strokewidth width="0.5"/><fillcolor color="none"/>'
+        f'<save/><dashed dashed="1"/><strokewidth width="1.5"/><fillcolor color="none"/>'
         f"{GEOM}<stroke/><restore/>{GEOM}<stroke/>"
     )
     inside, outside = _drawn(body)
-    assert inside.get("stroke-dasharray") and inside.get("stroke-width") == "0.5"
+    assert inside.get("stroke-dasharray") and inside.get("stroke-width") == "1.5"
     assert outside.get("stroke-dasharray") is None
     assert outside.get("stroke-width") == "2.0"
 
