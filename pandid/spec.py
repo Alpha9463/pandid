@@ -38,8 +38,8 @@ The format::
 
     instruments:
       - {type: LIC, number: 101, display: central,
-         near: LT-101, at: S, offset: 115, port_faces: {sig_out: W}}
-      - {balloon_of: FE-101, at: N, offset: 38}
+         near: LT-101, face: S, offset: 115, port_faces: {sig_out: W}}
+      - {balloon_of: FE-101, face: N, offset: 38}
 
     streams:
       - {from: [Raw Feed, outlet], to: [ST-101, inlet],
@@ -662,7 +662,7 @@ _UNIT_KEYS = {
 _INSTRUMENT_KEYS = {
     "type", "number", "variant", "display", "description", "reference", "width",
     "height", "label_pos", "new_line_number", "sensing", "acting_on", "near",
-    "at", "offset", "angle", "pin", "port_faces", "quadrants",
+    "at", "face", "offset", "angle", "pin", "port_faces", "quadrants",
 }
 # The three ways an instrument entry names its anchor.
 _ANCHOR_KEYS = ("sensing", "acting_on", "near")
@@ -1263,8 +1263,13 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
         at = entry["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
     kwargs.update(_read_fields(entry, where, ((("offset", "angle", "width", "height"), _number),
-                                              (("variant", "display", "label_pos"), _text),
+                                              (("face", "variant", "display", "label_pos"),
+                                               _text),
                                               (("description", "reference"), _drawn))))
+    # A text at: is a face, warned of once the entry is read.
+    old = kwargs.pop("at") if isinstance(kwargs.get("at"), str) and "face" not in kwargs else None
+    if old is not None:
+        kwargs["face"] = old
     with _blame(where, (TypeError, ValueError)):
         inst = fs.add_balloon(element, **kwargs)
     # add_balloon added the balloon; set the remaining fields here.
@@ -1276,6 +1281,7 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
         _read_pin(inst, entry["pin"], f"{where}.pin")
     if "port_faces" in entry:
         _read_port_faces(inst, entry["port_faces"], f"{where}.port_faces")
+    inst._deprecate_at(old, inst.face)
     return inst
 
 
@@ -1778,7 +1784,7 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
             f"connection, 'near' draws nothing"
         )
     if not named:
-        stray = [key for key in ("at", "offset", "angle") if key in data]
+        stray = [key for key in ("at", "face", "offset", "angle") if key in data]
         if stray:
             raise SpecError(
                 f"{where}: {stray} only mean something with one of "
@@ -1792,7 +1798,8 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
     if "at" in data:
         at = data["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
-    kwargs.update(_read_fields(data, where, ((("offset", "angle"), _number),)))
+    kwargs.update(_read_fields(data, where, ((("offset", "angle"), _number),
+                                             (("face",), _text))))
     with _blame(where, (TypeError, ValueError)):
         inst.attach(host, **kwargs)
 
@@ -2425,7 +2432,7 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
         if by_name:
             entry["quadrants"] = by_name
     if inst._marks is not None:
-        entry["at"] = inst.at
+        entry["face"] = inst.face
         if inst.offset != 46.0:
             entry["offset"] = inst.offset
         if inst.angle != 90.0:
@@ -2437,7 +2444,10 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
             [inst.host.source.owner.name, inst.host.source.name]
             if isinstance(inst.host, Stream) else inst.host.name
         )
-        entry["at"] = inst.at
+        if isinstance(inst.host, Stream):
+            entry["at"] = inst.at
+        else:
+            entry["face"] = inst.face
         if inst.offset != 45.0:
             entry["offset"] = inst.offset
         if inst.angle != 90.0:

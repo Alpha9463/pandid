@@ -133,9 +133,9 @@ def _plant(payload: str, field: str) -> Flowsheet:
     )
     line.properties[at("stream property name", "Duty")] = at("stream property value", "12 kW")
     loop = fs.add_loop("F", at("loop number", "301"))
-    fs.add_instrument("FT", loop, near=pump, at="N", offset=40)
+    fs.add_instrument("FT", loop, near=pump, face="N", offset=40)
     # A direct instrument accepts the selected tag.
-    fs.add_instrument(at("instrument letters", "PI"), 205, near=product, at="N", offset=40)
+    fs.add_instrument(at("instrument letters", "PI"), 205, near=product, face="N", offset=40)
 
     fs.title_block = TitleBlock(
         # A blank title renders the flowsheet-name fallback.
@@ -594,8 +594,8 @@ def test_an_inch_mark_is_escaped_and_stays_escaped():
 def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
     """Measure ``R&D`` as the three characters drawn, in both backends.
 
-    The halo is 6.6 px a character plus 8, so 27.8 wide; measured on
-    ``R&amp;D`` it was 26.4 too wide (#574).
+    The halo is the drawn text's width plus 8, so 33.3 wide; measured
+    on ``R&amp;D`` it would be wider by the escape's four characters.
 
     Returns
     -------
@@ -610,9 +610,9 @@ def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
     svg = fs.to_svg()
     labels = svg[svg.index('<g id="unit_labels">') :]
     halo = re.search(r'<rect [^>]*width="([\d.]+)"[^>]*/>\s*<text [^>]*>R&amp;D</text>', labels)
-    assert halo is not None and halo.group(1) == "27.8"
+    assert halo is not None and halo.group(1) == "33.3"
     plates = _tag_pass(fs, default_registry, None, "vertical").plates
-    assert [round(x1 - x0, 1) for x0, _y0, x1, _y1 in plates] == [27.8]
+    assert [round(x1 - x0, 1) for x0, _y0, x1, _y1 in plates] == [33.3]
 
 
 @pytest.mark.parametrize(

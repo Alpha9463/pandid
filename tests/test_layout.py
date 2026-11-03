@@ -909,7 +909,7 @@ def test_an_x_pinned_unit_and_its_balloon_keep_clear_of_a_pinned_body() -> None:
     fixed = fs.add(U.Pump("Fixed", width=1500, height=400)).pin(x=0, y=50)
     host = fs.add(U.Pump("Host", width=100, height=100)).pin(x=550)
     fs.connect(fixed.discharge, host.suction)
-    fs.add_instrument("LT", 1, sensing=host, at="S", offset=40)
+    fs.add_instrument("LT", 1, sensing=host, face="S", offset=40)
     fs.layout()
 
     assert fixed.frame is not None and host.frame is not None
@@ -996,8 +996,8 @@ def test_the_drawing_and_its_balloon_halos_start_at_the_margin() -> None:
     drum = fs.add(U.Vessel("V-1"))
     fs.connect(feed.outlet, drum.inlet)
     fs.connect(drum.outlet, fs.add(U.Product("P")).inlet)
-    fs.add_instrument("PT", 1, sensing=drum, at="N", offset=60)
-    fs.add_instrument("TT", 1, sensing=feed, at="W", offset=60)
+    fs.add_instrument("PT", 1, sensing=drum, face="N", offset=60)
+    fs.add_instrument("TT", 1, sensing=feed, face="W", offset=60)
     fs.layout()
 
     pads = balloon_pads(fs)
@@ -1074,8 +1074,8 @@ def _interlock_on_a_signal() -> tuple[Flowsheet, U.Unit]:
     prod = fs.add(U.Product("Product"))
     fs.connect(feed.outlet, drum.inlet)
     fs.connect(drum.outlet, prod.inlet)
-    lt = fs.add_instrument("LT", 101, sensing=drum, at="S", offset=70)
-    lic = fs.add_instrument("LIC", 101, near=lt, at="S", offset=95, variant="shared")
+    lt = fs.add_instrument("LT", 101, sensing=drum, face="S", offset=70)
+    lic = fs.add_instrument("LIC", 101, near=lt, face="S", offset=95, variant="shared")
     measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
     interlock = fs.add_instrument(
         "I", 1, sensing=measurement, at=0.5, offset=44, angle=90, variant="logic"
@@ -1208,9 +1208,9 @@ def test_a_chain_of_balloons_is_reserved_paper_before_anything_is_placed() -> No
     fs.connect(feed.outlet, plate.inlet)
     fs.connect(plate.outlet, valve.inlet)
     fs.connect(valve.outlet, prod.inlet)
-    top = fs.add_balloon(plate, at="N", offset=38)
-    ft = fs.add_instrument("FT", 101, near=top, at="N", offset=23)
-    fs.add_instrument("FIC", 101, near=ft, at="N", offset=60, variant="shared")
+    top = fs.add_balloon(plate, face="N", offset=38)
+    ft = fs.add_instrument("FT", 101, near=top, face="N", offset=23)
+    fs.add_instrument("FIC", 101, near=ft, face="N", offset=60, variant="shared")
     fs.route()
 
     assert _unit_overlaps(fs) == [], "a balloon was drawn over something"

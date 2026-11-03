@@ -209,7 +209,7 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return _along(points, float(inst.at if inst.at is not None else 0.5))
     if host.frame is None:
         return None
-    (px, py), (nx, ny) = face_point(host, host.frame, str(inst.at or "E"))
+    (px, py), (nx, ny) = face_point(host, host.frame, inst.face or "E")
     return (px, py), (-ny, nx)
 
 

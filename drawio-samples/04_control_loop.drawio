@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <mxfile host="pandid" agent="pandid 0.1.5" type="device">
   <diagram id="pandid-647f892a6104bd60" name="Flow Control Loop">
-    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="946" pageHeight="596.59" math="0" shadow="0">
+    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="940" pageHeight="596.59" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -71,14 +71,14 @@
         <mxCell id="u4" value="LV-101" style="html=1;shape=mxgraph.pid.valves.pneumatic_operated;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=1;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=12;flipV=1;" vertex="1" parent="1">
           <mxGeometry x="640" y="187.6" width="24.5" height="19.8" as="geometry" />
         </mxCell>
-        <mxCell id="u5" value="Product" style="html=1;shape=offPageConnector;size=0.174419;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
-          <mxGeometry x="790" y="185" width="86" height="20" as="geometry" />
+        <mxCell id="u5" value="Product" style="html=1;shape=offPageConnector;size=0.1875;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="790" y="185" width="80" height="20" as="geometry" />
         </mxCell>
         <mxCell id="u6" value="PSV-101" style="html=1;shape=mxgraph.pid.valves.relief_prv;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=1;labelPosition=right;align=left;verticalLabelPosition=middle;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="443.5" y="55" width="15" height="22.1" as="geometry" />
         </mxCell>
-        <mxCell id="u7" value="To Flare&lt;br&gt;P&amp;amp;ID-902" style="html=1;shape=offPageConnector;size=0.159574;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=10.8333;" vertex="1" parent="1">
-          <mxGeometry x="630" y="17" width="94" height="26" as="geometry" />
+        <mxCell id="u7" value="To Flare&lt;br&gt;P&amp;amp;ID-902" style="html=1;shape=offPageConnector;size=0.182882;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=10.8333;" vertex="1" parent="1">
+          <mxGeometry x="630" y="17" width="82.02" height="26" as="geometry" />
         </mxCell>
         <mxCell id="s0" value="S1" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=2;endArrow=block;endFill=1;endSize=12;startArrow=none;labelBackgroundColor=#ffffff;verticalAlign=middle;align=center;fontSize=10;" edge="1" parent="1" source="u0" target="u3">
           <mxGeometry relative="1" as="geometry" x="0">
@@ -111,10 +111,11 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="s7" value="" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1;dashed=1;dashPattern=7 4;fixDash=1;endArrow=none;startArrow=none;" edge="1" parent="1" source="u9" target="u10">
+        <mxCell id="s7" value="" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1;dashed=1;dashPattern=7 4;fixDash=1;endArrow=none;startArrow=none;" edge="1" parent="1" source="u9" target="u10">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="186.25" y="19.41" />
+              <mxPoint x="229.36" y="104.5" />
+              <mxPoint x="229.36" y="19.41" />
             </Array>
           </mxGeometry>
         </mxCell>

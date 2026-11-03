@@ -244,7 +244,7 @@ def test_a_member_is_an_ordinary_unit_that_can_still_be_moved_and_instrumented()
     fs.streams[0].properties = {"Flow (kg/h)": "4200"}
     st.bypass.pin(x=555)
     assert st.bypass.pin_.x == 555
-    fic = fs.add_instrument("FIC", 303, near=st.control, at="N", variant="shared")
+    fic = fs.add_instrument("FIC", 303, near=st.control, face="N", variant="shared")
     fs.connect(fic.sig_out, st.control.actuator, kind="pneumatic")
     assert fs.validate() == []
 

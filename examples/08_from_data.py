@@ -61,15 +61,15 @@ SPEC = {
     # from, since a balloon is round and has no natural in/out side.
     "instruments": [
         {"type": "LT", "number": 201, "description": "Deaerator Level Transmitter",
-         "sensing": "V-201", "at": "S", "offset": 58, "port_faces": {"sig_out": "S"}},
+         "sensing": "V-201", "face": "S", "offset": 58, "port_faces": {"sig_out": "S"}},
         # Directly below the transmitter: a straight drop. ``near`` and
         # not ``sensing``, so no second line is drawn from the drum past
         # LT-201 to a controller in the control room.
         {"type": "LIC", "number": 201, "display": "central",
-         "description": "Deaerator Level Control", "near": "V-201", "at": "S",
+         "description": "Deaerator Level Control", "near": "V-201", "face": "S",
          "offset": 140, "port_faces": {"sig_in": "N"}},
         {"type": "LV", "number": 201, "description": "Level Valve I/P Transducer",
-         "acting_on": "CV-201", "at": "S", "offset": 58,
+         "acting_on": "CV-201", "face": "S", "offset": 58,
          "port_faces": {"sig_in": "W", "sig_out": "N"}},
     ],
     # --- Stream table -------------------------------------------------

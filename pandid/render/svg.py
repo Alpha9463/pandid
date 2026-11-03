@@ -14,8 +14,8 @@ from pandid.layout.conflicts import boxes_overlap
 from pandid.portgeom import tag_width, unit_box
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
-from pandid.render.symbols import (ARROWHEAD, _STROKE, closed_marking, fail_marking,
-                                   wears_arrowhead)
+from pandid.render.symbols import (ARROWHEAD, _STROKE, _TAG_TYPE, closed_marking,
+                                   fail_marking, wears_arrowhead)
 from pandid.render.weights import LineWeight, M
 from pandid.route_geometry import stream_polyline
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -1086,8 +1086,6 @@ def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
 
 #: Font size of a line number.
 NUMBER_TYPE = 10
-# Font size of tags, instrument letters and flag names.
-_TAG_TYPE = 12.0
 # Halo width per character, added width and depth.
 _HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
 

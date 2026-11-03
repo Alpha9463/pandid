@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upright pipe is drawn upright, unless its author stated a turn with
   `pin(orientation=...)`; a stated 0 keeps it level, and a stated
   `mirrored=` is kept too.
+- **`Instrument.at` is only a fraction along a line (#438).** A balloon on a
+  unit keeps its side in the new `Instrument.face`, and its `at` is `None`.
 - **`pin(row=...)` orders units down their column (#564).** A lower row is
   drawn above a higher one in the same `col=` column; it no longer names an
   absolute grid row.
@@ -40,8 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `ci.yml` and `release.yml` names a commit, with its version in a
   comment.
 - **`unit-overlap` says how to clear it (#434).** The finding names one of
-  the two units and the call that moves it: `at=` and `offset=` for an
-  attached balloon, `pin()` for any other unit. A suggested `attach()`
+  the two units and the call that moves it: `at=`/`face=` and `offset=` for
+  an attached balloon, `pin()` for any other unit. A suggested `attach()`
   repeats the balloon's `relation=` and `angle=`.
 - **A controller with no anchor is drawn beyond the valve it drives (#443).**
   A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives
@@ -54,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PLACES` and `LAYOUT_CONFIDENCE` on a unit class (#564).** Layout no
   longer reads them, and a subclass that sets them is reported. Point a
   nozzle with `nozzle(port, face)` or `pin(orientation=..., mirrored=...)`.
+- **A unit's side given as `at=` (#438).** Use `face="N"` in
+  `add_instrument()`, `add_balloon()`, `add_control_loop()` and `attach()`,
+  `face: N` in a spec, and `controller_face=` for `controller_at=`.
 
 ### Removed
 
@@ -95,6 +100,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A refused balloon placement changes nothing (#438).** `attach()` with a
+  bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
+  face no longer leaves the balloon on the sheet, and `add_instrument()`
+  refuses `at=` or `face=` given with no `sensing=`, `acting_on=` or `near=`
+  instead of dropping them.
+- **A control loop refused while it is added leaves the sheet as it was
+  (#438).** `add_control_loop()` refused at its second signal line, such as by
+  a `stream_naming_scheme` that cannot name it, used to leave the loop, both
+  balloons and the first line behind.
 - **An expander keeps every field of the reducer it is turned from (#508).**
   `large_end="outlet"` now draws at the reducer's trim weight, and its bands
   are mirrored with the artwork.
@@ -112,6 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exchanger, now meet the ISO 10628-1 5.3.1 c) floor.
 - **A multi-feed `Separator` round-trips through a spec (#579).**
   `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
+- **Tag halos and self-sized blocks and flags fit their text (#579).** They
+  are measured with the face's own letter widths, so wide capitals are
+  covered and lower-case names no longer pad their box.
+- **draw.io letters table and revision cells where the sheet does (#579).**
+  Their text had sat one or two units further in.
 - **A tap line to a balloon off its tap's axis is drawn square (#170).** It
   leaves the host at a right angle and turns once onto the balloon, or twice
   when the balloon is behind the tapped face, instead of running diagonally.

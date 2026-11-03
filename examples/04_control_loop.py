@@ -13,7 +13,7 @@ says what the two have to do with each other:
   A **stream** taps the line: ``at=`` is the point along its routed
   path, ``offset=`` how far the balloon stands off the tap, and
   ``angle=`` which way it branches, measured from the flow direction so
-  a re-route cannot spin it. A **unit** taps a face, ``at=`` naming it.
+  a re-route cannot spin it. A **unit** taps a face, ``face=`` naming it.
 - ``acting_on=`` the balloon commands it.
 - ``near=`` neither: the balloon only sits there and nothing is drawn.
   What reaches the valve is a signal, stated with ``connect()``.
@@ -99,11 +99,11 @@ def main():
     # line, so the fitting draws none. offset= is measured from the
     # face, so 38 stands the balloon centre a diameter off the run and
     # 23 leaves FT-101's edge on FE-101's: the pair reads as one column.
-    fe_b = fs.add_balloon(fe, at="N", offset=38)
-    ft = fs.add_instrument("FT", flow, near=fe_b, at="N", offset=23)
+    fe_b = fs.add_balloon(fe, face="N", offset=38)
+    ft = fs.add_instrument("FT", flow, near=fe_b, face="N", offset=23)
     # ``variant="shared"`` is the circle-in-a-square a controller takes;
     # its bar comes from the square, which is the control room already.
-    fic = fs.add_instrument("FIC", flow, near=ft, at="N", offset=110, angle=35,
+    fic = fs.add_instrument("FIC", flow, near=ft, face="N", offset=110, angle=35,
                             variant="shared")
     # Output off the bottom: on the default east face the signal leaves
     # away from the valve below and has to double back to reach it.
@@ -121,8 +121,8 @@ def main():
     # left out, each balloon takes its usual standoff and the resolver
     # walks it clear of anything in the way.
     level_loop = fs.add_control_loop(
-        level, measuring=drum, acting_on=lv, at="S", offset=70,
-        controller_at="S", controller_offset=95, output_kind="electric")
+        level, measuring=drum, acting_on=lv, face="S", offset=70,
+        controller_face="S", controller_offset=95, output_kind="electric")
     # Every part stays reachable, which is what the next two lines want.
     # The alarms are lettering in the controller's own quadrants, not
     # balloons: ISO 15519-2 5.2.5 is a shall, and an alarm is a function

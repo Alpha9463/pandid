@@ -503,17 +503,17 @@
     <symbol id="sym_tee" viewBox="0 0 12.0 12.0" overflow="visible"><path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_vessel_horizontal_s110x36" viewBox="0 0 110 36" overflow="visible"><path d="M 6.936612 36 L 103.111475 36 A 18 6.93565 90 0 0 110.047126 18 A 18 6.93565 90 0 0 103.111475 0 L 6.936612 0 A 18 6.93565 90 0 0 0.000962 18 A 18 6.93565 90 0 0 6.936612 36 Z M 6.936612 0 L 6.936612 36 M 103.111475 0 L 103.111475 36" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
-  <g id="drawing" transform="translate(179.75, 220.04) scale(0.740593)">
+  <g id="drawing" transform="translate(180.99, 220.04) scale(0.740593)">
   <g id="units">
-    <polygon points="16.0,298.25 175.0,298.25 190.0,311.25 175.0,324.25 16.0,324.25" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="95.5" y="307.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Fermentation Broth</text>
-    <text x="95.5" y="319.25" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-201</text>
-    <polygon points="80.0,633.8203900808785 175.0,633.8203900808785 190.0,646.8203900808785 175.0,659.8203900808785 80.0,659.8203900808785" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="127.5" y="642.8203900808785" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Flocculant</text>
-    <text x="127.5" y="654.8203900808785" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-301</text>
-    <polygon points="96.0,710.0750247765557 175.0,710.0750247765557 190.0,723.0750247765557 175.0,736.0750247765557 96.0,736.0750247765557" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="135.5" y="719.0750247765557" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">RO Water</text>
-    <text x="135.5" y="731.0750247765557" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-301</text>
+    <polygon points="57.292,298.25 175.0,298.25 190.0,311.25 175.0,324.25 57.292,324.25" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="116.146" y="307.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Fermentation Broth</text>
+    <text x="116.146" y="319.25" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-201</text>
+    <polygon points="105.316,633.8203900808785 175.0,633.8203900808785 190.0,646.8203900808785 175.0,659.8203900808785 105.316,659.8203900808785" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="140.15800000000002" y="642.8203900808785" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Flocculant</text>
+    <text x="140.15800000000002" y="654.8203900808785" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-301</text>
+    <polygon points="106.66,710.0750247765557 175.0,710.0750247765557 190.0,723.0750247765557 175.0,736.0750247765557 106.66,736.0750247765557" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="140.82999999999998" y="719.0750247765557" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">RO Water</text>
+    <text x="140.82999999999998" y="731.0750247765557" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-301</text>
     <use href="#sym_column_c94688fb2_s110x250" x="430" y="180" width="110" height="250" />
     <use href="#sym_hex_condenser_s64x64_ty" x="453" y="56" width="64" height="64" transform="translate(0, 176) scale(1, -1)" />
     <use href="#sym_vessel_horizontal_s110x36" x="700" y="100" width="110" height="36" />
@@ -524,15 +524,15 @@
     <use href="#sym_tank" x="1120" y="467.5" width="100.0" height="95.5" />
     <use href="#sym_filter_press_s120x60" x="1250" y="512.5" width="120" height="60" />
     <use href="#sym_conveyor_L120" x="1300" y="715" width="120.0" height="20.0" />
-    <polygon points="1330.0,262.0 1489.0,262.0 1504.0,275.0 1489.0,288.0 1330.0,288.0" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1409.5" y="271.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Azeotropic Ethanol</text>
-    <text x="1409.5" y="283.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-302</text>
-    <polygon points="1440.0,529.5 1535.0,529.5 1550.0,542.5 1535.0,555.5 1440.0,555.5" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1487.5" y="538.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Wastewater</text>
-    <text x="1487.5" y="550.5" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-302</text>
-    <polygon points="1460.0,712.0 1627.0,712.0 1642.0,725.0 1627.0,738.0 1460.0,738.0" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1543.5" y="721.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Biomass Filter Cake</text>
-    <text x="1543.5" y="733.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-501</text>
+    <polygon points="1330.0,262.0 1445.716,262.0 1460.716,275.0 1445.716,288.0 1330.0,288.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1387.858" y="271.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Azeotropic Ethanol</text>
+    <text x="1387.858" y="283.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-302</text>
+    <polygon points="1440.0,529.5 1518.348,529.5 1533.348,542.5 1518.348,555.5 1440.0,555.5" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1479.174" y="538.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Wastewater</text>
+    <text x="1479.174" y="550.5" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-302</text>
+    <polygon points="1460.0,712.0 1582.352,712.0 1597.352,725.0 1582.352,738.0 1460.0,738.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1521.176" y="721.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Biomass Filter Cake</text>
+    <text x="1521.176" y="733.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-501</text>
   </g>
   <g id="streams">
     <path d="M 190.0,311.25 L 430.0,311.25" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -575,21 +575,21 @@
   </g>
   <g id="unit_labels">
     <text x="485.0" y="305.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">T-301</text>
-    <rect x="527.0" y="80.5" width="41.0" height="15.0" fill="white" />
+    <rect x="527.0" y="80.5" width="40.0" height="15.0" fill="white" />
     <text x="527.0" y="88.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-301</text>
-    <rect x="734.5" y="78.0" width="41.0" height="15.0" fill="white" />
+    <rect x="735.0" y="78.0" width="40.0" height="15.0" fill="white" />
     <text x="755.0" y="90.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">V-301</text>
-    <rect x="770.0" y="434.5" width="41.0" height="15.0" fill="white" />
+    <rect x="770.0" y="434.5" width="40.0" height="15.0" fill="white" />
     <text x="770" y="442.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-302</text>
-    <rect x="951.2" y="488.0" width="47.6" height="15.0" fill="white" />
+    <rect x="950.7" y="488.0" width="48.7" height="15.0" fill="white" />
     <text x="975.0" y="500.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HX-301</text>
-    <rect x="575.5" y="598.0" width="41.0" height="15.0" fill="white" />
+    <rect x="575.0" y="598.0" width="42.0" height="15.0" fill="white" />
     <text x="596.0" y="610.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">M-301</text>
-    <rect x="1149.5" y="445.5" width="41.0" height="15.0" fill="white" />
+    <rect x="1149.0" y="445.5" width="42.0" height="15.0" fill="white" />
     <text x="1170.0" y="457.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">M-302</text>
-    <rect x="1289.5" y="490.5" width="41.0" height="15.0" fill="white" />
+    <rect x="1290.3" y="490.5" width="39.3" height="15.0" fill="white" />
     <text x="1310.0" y="502.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">F-301</text>
-    <rect x="1336.2" y="742.5" width="47.6" height="15.0" fill="white" />
+    <rect x="1335.7" y="742.5" width="48.7" height="15.0" fill="white" />
     <text x="1360.0" y="750.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">BC-301</text>
   </g>
   </g>
