@@ -3204,37 +3204,15 @@ class Evaporator(Unit):
         _compose_onto(self, ("supports", supports, lambda name, _body: support_overlays(name)))
 
 
-#: Default thickener rake: ISO 10628-2 item 28.4 C2021, the cross-beam
-#: stirrer, the nearest group-28 form to a rake.
+#: Default thickener rake: the cross-beam stirrer (ISO 10628-2 28.4).
 DEFAULT_RAKE = "cross_beam"
 
 
 class Thickener(Unit):
-    """Thickener or clarifier: solids settled out of a slurry by gravity.
+    """Thickener or clarifier that settles solids out of a slurry.
 
-    A thickener is bought for the underflow and a clarifier for the
-    overflow; the drawing is the same, so there is one class::
-
-        thickener.feed        the slurry, into a launder at the rim
-        thickener.overflow    the clarified liquor, over the weir
-        thickener.underflow   the thickened solids, out of the cone
-
-    The draws are named by position, as on :class:`Separator`. This is not
-    ``Separator(characteristic="gravity")`` (ISO item 8.3 X8031), which is
-    a tall hopper-bottomed drum with no rake.
-
-    ``rake`` names the ISO group-28 stirrer on the central shaft::
-
-        Thickener("TH-101")                     # raked, 28.4's cross-beam
-        Thickener("TH-102", rake="gate_paddle")
-        Thickener("TH-103", rake=None)          # a plain settling tank
-
-    The rake drive is not drawn, because ISO draws a motor inside an
-    apparatus only for item 1.27; draw a tagged drive beside the thickener
-    if needed (see :func:`~pandid.render.iso_parts.rake_overlays`).
-    Drawn one way up and reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    Ports are ``feed``, ``overflow`` and ``underflow``. ``validate``
+    reports a turned thickener as ``gravity-turned``.
 
     Parameters
     ----------
@@ -3243,7 +3221,8 @@ class Thickener(Unit):
     variant : str, default="default"
         Body drawing.
     rake : str or None, default=DEFAULT_RAKE
-        Group-28 stirrer, or ``None`` for none. Fixed at construction.
+        Group-28 stirrer on the shaft, or ``None``. Fixed at
+        construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
     """
@@ -3258,7 +3237,6 @@ class Thickener(Unit):
         ("overflow", "outlet", "process"),
         ("underflow", "outlet", "process"),
     ]
-    # Raked unless rake=None.
     COMPOSITION = {"rake": DEFAULT_RAKE}
     _FIXED_AT_CONSTRUCTION = frozenset({"rake"})
 
@@ -3289,53 +3267,14 @@ class Thickener(Unit):
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
-    """Return feed port names ``feed_1`` to ``feed_n``.
-
-    Numbered from one at every count; the caller adds the bare ``feed``
-    alias when there is one feed. ``unit.feeds[0]`` is ``feed_1``.
-
-    Parameters
-    ----------
-    n_feeds : int
-        Number of feeds.
-    owner : str
-        Unit name, for error messages.
-
-    Returns
-    -------
-    list[str]
-        Port names.
-
-    Raises
-    ------
-    ValueError
-        If ``n_feeds`` is less than 1.
-    """
+    """Return the feed port names ``feed_1`` to ``feed_n``."""
     if n_feeds < 1:
         raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
     return [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
 def _draw_names(n_draws: int, owner: str) -> list[str]:
-    """Return a column's side-draw port names.
-
-    Parameters
-    ----------
-    n_draws : int
-        Number of draws; may be 0.
-    owner : str
-        Unit name, for error messages.
-
-    Returns
-    -------
-    list[str]
-        ``[]``, ``["draw"]``, or ``draw_1`` to ``draw_n``.
-
-    Raises
-    ------
-    ValueError
-        If ``n_draws`` is negative.
-    """
+    """Return side-draw names: ``draw``, or ``draw_1`` to ``draw_n``."""
     if n_draws < 0:
         raise ValueError(f"{owner} cannot take a negative number of draws, got {n_draws}")
     if n_draws == 0:
@@ -3352,40 +3291,14 @@ def _stage_fractions(
     keyword: str,
     noun: str,
 ) -> dict[str, float]:
-    """Return the shell fraction for each port given a stage.
-
-    Shared by a column's ``feed_stages`` and ``draw_stages`` so both are
-    checked alike. Ports without a stage keep the even spread of
-    :class:`~pandid.render.symbols.PortSeries`.
+    """Return the shell fraction of each port given a stage.
 
     Parameters
     ----------
-    name : str
-        Unit name, for error messages.
-    internals : str or None
-        Column internals; ``None`` draws no stages.
-    trays : int
-        Drawn stage count.
     stages : list[int or None] or None
-        One stage per port in declaration order, ``None`` for a port that
-        keeps the even spread; ``None`` for all.
-    names : list[str]
-        Port names.
-    keyword : str
-        Argument name, for error messages.
-    noun : str
-        ``"feed"`` or ``"draw"``, for error messages.
-
-    Returns
-    -------
-    dict[str, float]
-        Port name to fraction of the shell, for ports given a stage.
-
-    Raises
-    ------
-    ValueError
-        If the list length differs from ``names``, a stage is named with no
-        internals, or a stage is out of range.
+        One stage per port in ``names``; ``None`` keeps the even spread.
+    keyword, noun : str
+        Argument name and ``"feed"`` or ``"draw"``, for error messages.
     """
     if stages is None:
         return {}
@@ -3419,52 +3332,27 @@ def _stage_fractions(
 
 
 class Reactor(Unit):
-    """Reactor: CSTR, PFR, packed bed or fluidised bed.
+    """Reactor: a vessel body with an agitator and internals.
 
-    ISO 10628-2 has no reactor symbol, so a reactor is a vessel body
-    (``variant``) with ISO parts inside (``agitator`` and ``internals``)::
-
-        Reactor("R-101")                              # a CSTR
-        Reactor("R-102", agitator="turbine")
-        Reactor("R-103", variant="jacketed")          # jacketed CSTR
-        Reactor("R-201", internals="packing")         # a PBR
-        Reactor("R-202", internals="fluidised_bed")   # a FBR
-        Reactor("R-301", variant="tubular")           # a PFR
-
-    ``variant`` is ``"default"`` (dished-end stirred tank), ``"jacketed"``
-    or ``"tubular"`` (horizontal plug-flow shell).
-
-    ``agitator`` is one of the ten ISO group-28 stirrers: ``"agitator"``
-    (general), ``"turbine"``, ``"propeller"``, ``"anchor"``,
-    ``"helical"``, ``"flat_blade"``, ``"gate_paddle"``, ``"cross_beam"``,
-    ``"impeller"`` or ``"disc"``. It is drawn with its drive motor (ISO
-    item 20.6 C0082, as in item 1.27 X8006), which carries the ``drive``
-    port. ``internals`` is one of the eight ISO group-27 internals, such as
-    ``"packing"`` or ``"fluidised_bed"``. Either may be ``None``. A
-    ``"tubular"`` body cannot carry an agitator, since the motor above it
-    would move a nozzle onto another face.
-
-    When ``agitator`` is not given, the default and jacketed bodies get the
-    general agitator unless ``internals`` is named; name both for a stirred
-    slurry bed, such as
-    ``Reactor("R-203", agitator="turbine", internals="packing")``.
-
-    ``vent`` is the off-gas port at the top (absent on ``tubular``) and
-    ``duty`` the jacket or coil connection. ``n_feeds`` adds ``feed_1`` to
-    ``feed_n`` down the shell, top to bottom; with one, ``feed`` is an
-    alias for ``feed_1``.
+    ``Reactor("R-1")`` is a CSTR, ``variant="tubular"`` a PFR,
+    ``internals="packing"`` a packed bed and
+    ``internals="fluidised_bed"`` a fluidised bed. The agitator is
+    drawn with its motor, which carries the ``drive`` port. ``vent``
+    is the off-gas port on a stirred body; ``duty`` is the jacket or
+    coil connection.
 
     Parameters
     ----------
     name : str
         Tag.
     n_feeds : int, default=1
-        Number of feed ports.
+        Number of feeds, ``feed_1`` to ``feed_n`` down the shell; with
+        one, ``feed`` is an alias for ``feed_1``.
     variant : str, default="default"
-        Body.
+        Body: ``"default"``, ``"jacketed"`` or ``"tubular"``.
     agitator : str or None, optional
-        Group-28 stirrer, or ``None`` for none. Defaults from the body and
-        internals. Fixed at construction.
+        Group-28 stirrer, or ``None``. Defaults to ``"agitator"`` on a
+        stirred body without internals. Fixed at construction.
     internals : str or None, default=None
         Group-27 internals. Fixed at construction.
     width, height, label_pos, description, reference
@@ -3480,17 +3368,14 @@ class Reactor(Unit):
     outlet: Port
     vent: Port
     duty: Port
-    # Present only with an agitator; declared for type checkers.
+    # Present only with an agitator.
     drive: Port
-    # feed_1 to feed_n, top to bottom down the shell.
+    # feed_1 to feed_n, top to bottom.
     feeds: tuple[Port, ...]
     # Alias for feed_1 when there is one feed.
     feed: Port
 
-    # A literal n_feeds returns a typed view declaring feed_1 to feed_n
-    # (Reactor1 to Reactor8); a computed count gets Reactor and
-    # ``reactor.feeds[i]``. scripts/gen_devices.py gives each generated
-    # subclass its own overloads so it stays assignable to its own type.
+    # A literal n_feeds returns a typed view, Reactor1 to Reactor8.
     if TYPE_CHECKING:
 
         @overload
@@ -3538,29 +3423,25 @@ class Reactor(Unit):
         def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Reactor": ...
 
     kind = "reactor"
-    # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
+    # __init__ adds the variant's ports.
     PORTS: list[tuple[str, str, str]] = []
-    # Default port set: product, off-gas and jacket or coil duty.
     _DEFAULT_PORTS = [
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("duty", "inlet", "energy"),
     ]
-    # Variant -> port set; absent variants use _DEFAULT_PORTS.
     _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {
-        # No vapour space, so no vent.
         "tubular": [
             ("outlet", "outlet", "process"),
             ("duty", "inlet", "energy"),
         ],
     }
 
-    # Bodies that get an agitator by default; a tubular body is not stirred.
+    # Bodies that get an agitator by default.
     _STIRRED = ("default", "jacketed")
 
-    # The agitator default depends on body and internals.
+    # The agitator default depends on the body and internals.
     COMPOSITION = {"agitator": _UNSTATED, "internals": None}
-    # Both choose overlays, and agitator the drive port, in __init__.
     _FIXED_AT_CONSTRUCTION = frozenset({"agitator", "internals"})
 
     @classmethod
@@ -3569,9 +3450,8 @@ class Reactor(Unit):
     ) -> dict[str, Any]:
         """Return composition defaults for a body and stated parts.
 
-        A stirred body (:attr:`_STIRRED`) gets the general agitator (ISO
-        item 28.1) unless internals are stated; other bodies get none. A
-        stated agitator always wins.
+        A stirred body gets the general agitator unless internals are
+        stated; other bodies get none.
 
         Parameters
         ----------
@@ -3619,52 +3499,49 @@ class Reactor(Unit):
             agitator = self.composition_defaults(self.variant, {"internals": internals})["agitator"]
         self.agitator = agitator
         self.internals = internals
-        # Add before the feeds to keep port order: product, off-gas, duty,
-        # then feeds. Use the resolved variant, not the argument.
+        # Port order: product, off-gas, duty, then feeds.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
-        # Draw the bed first so the stirrer shaft is drawn over it.
+        # Internals are drawn first, under the stirrer shaft.
         from pandid.render.iso_parts import agitator_overlays, internals_overlays
 
         _compose_onto(
             self,
             ("internals", internals, lambda name, _body: internals_overlays(name)),
-            # Placed by the body's aspect, so a motor stays round on any body.
+            # Placed by the body's aspect.
             ("agitator", agitator, lambda name, body: agitator_overlays(name, self.kind, body)),
         )
-        # The agitator brings the motor and its drive port.
         if agitator is not None:
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
-            # An alias, not a second port, so the feed series has one member.
+            # An alias, not a second port.
             self.feed = self.feeds[0]
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above; never built at run time. The
-    # base class declares the ``feed`` alias.
+    # Typed views for the overloads above.
 
     class Reactor1(Reactor):
-        """Reactor declaring ``feed_1`` for type checkers."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Reactor2(Reactor):
-        """Reactor declaring ``feed_1`` to ``feed_2`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Reactor3(Reactor):
-        """Reactor declaring ``feed_1`` to ``feed_3`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Reactor4(Reactor):
-        """Reactor declaring ``feed_1`` to ``feed_4`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -3672,7 +3549,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Reactor5(Reactor):
-        """Reactor declaring ``feed_1`` to ``feed_5`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -3681,7 +3558,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Reactor6(Reactor):
-        """Reactor declaring ``feed_1`` to ``feed_6`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -3691,7 +3568,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Reactor7(Reactor):
-        """Reactor declaring ``feed_1`` to ``feed_7`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -3702,7 +3579,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Reactor8(Reactor):
-        """Reactor declaring ``feed_1`` to ``feed_8`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -3717,55 +3594,25 @@ if TYPE_CHECKING:
 class Separator(Unit):
     """Flash drum or other separator.
 
-    ``"default"`` is the upright dished-head drum and ``"horizontal"`` the
-    lying drum; use the variant rather than turning the upright one.
-    ``"knockout"`` draws a demister pad and level gauge into the drum; the
-    gauge is artwork, so a level instrument added separately draws its own
-    balloon.
-
-    The draws are named for what leaves:
-
-    - ``vapor`` and ``liquid`` on the phase separators: ``"default"``,
-      ``"horizontal"``, ``"knockout"`` and ``"scrubber"``;
-    - ``overflow`` (high) and ``underflow`` (apex) on the mechanical
-      separators (``"sifter"``, ``"impact"``, ``"permanent_magnet"``,
-      ``"electromagnetic"``) and the dust collectors (``"cyclone"``,
-      ``"gravity"``, ``"electrostatic"``). They name positions, because
-      either may be the product.
-
-    ``characteristic`` names one of three ISO 10628-2 group-29 marks
-    drawn in the separating vessel::
-
-        Separator("V-201", characteristic="gravity")          # 8.3 X8031
-        Separator("V-202", characteristic="electrostatic")    # 8.6 X8125
-        Separator("V-203", characteristic="electromagnetic")  # 8.8 X8126
-
-    The cyclone (X2618), sifter, impact separator, permanent magnet and
-    scrubber are registered symbols of their own and stay variants.
-
-    ``n_feeds`` adds ``feed_1`` to ``feed_n`` down the wall, ``feed_1``
-    highest; with one, ``feed`` is an alias for ``feed_1``. On
-    hopper-bottomed bodies the family grows downward from the single-feed
-    position, so adding a feed does not move the first
-    (:data:`pandid.render.symbols.FROM_START`)::
-
-        Separator("V-401", n_feeds=2, characteristic="gravity")
-
-    ``"horizontal"`` takes one feed only (:attr:`_ONE_FEED_VARIANTS`).
-    Every variant is drawn one way up and reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    The phase separators (``"default"``, ``"horizontal"``,
+    ``"knockout"``, ``"scrubber"``) have ``vapor`` and ``liquid``
+    draws. The mechanical separators and dust collectors have
+    ``overflow`` (high) and ``underflow`` (apex). ``validate`` reports
+    a turned separator as ``gravity-turned``.
 
     Parameters
     ----------
     name : str
         Tag.
     n_feeds : int, default=1
-        Number of feed ports.
+        Number of feeds, ``feed_1`` to ``feed_n`` down the wall; with
+        one, ``feed`` is an alias for ``feed_1``. ``"horizontal"``
+        takes one.
     variant : str, default="default"
         Body.
     characteristic : str, optional
-        Group-29 mark; replaces ``variant``.
+        Group-29 mark: ``"gravity"``, ``"electrostatic"`` or
+        ``"electromagnetic"``. Replaces ``variant``.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
 
@@ -3777,12 +3624,10 @@ class Separator(Unit):
         less than 1, or the variant takes one feed only.
     """
 
-    # Only the phase draws, so ``sep.overflow`` does not type-check on a
-    # flash drum. The pandid.devices classes declare the others; otherwise
-    # use ``sep.port("overflow")``.
+    # Only the phase draws; other draws are ``sep.port("overflow")``.
     vapor: Port
     liquid: Port
-    # feed_1 to feed_n, top to bottom down the wall.
+    # feed_1 to feed_n, top to bottom.
     feeds: tuple[Port, ...]
     # Alias for feed_1 when there is one feed.
     feed: Port
@@ -3835,20 +3680,17 @@ class Separator(Unit):
         def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Separator": ...
 
     kind = "separator"
-    # Ports depend on the variant; __init__ adds feeds, then _VARIANT_PORTS.
+    # __init__ adds the feeds, then the variant's ports.
     PORTS: list[tuple[str, str, str]] = []
-    # Default draws. Feeds are a family added in __init__.
     _DEFAULT_PORTS = [
         ("vapor", "outlet", "vapor"),
         ("liquid", "outlet", "liquid"),
     ]
-    # A high draw and a low draw, named by position. Role "process": dust,
-    # tramp metal or a size fraction have no role of their own.
+    # A high draw and a low draw, named by position.
     _OVER_AND_UNDER = [
         ("overflow", "outlet", "process"),
         ("underflow", "outlet", "process"),
     ]
-    # Variant -> draws; absent variants are phase separators.
     _VARIANT_PORTS = {
         "cyclone": _OVER_AND_UNDER,
         "gravity": _OVER_AND_UNDER,
@@ -3858,52 +3700,31 @@ class Separator(Unit):
         "permanent_magnet": _OVER_AND_UNDER,
         "electromagnetic": _OVER_AND_UNDER,
     }
-    # Variant -> {port: artwork anchor} where the artwork uses another name.
-    # Per variant, since most drawings anchor the port names directly.
+    # Variant -> {port: artwork anchor}, where the artwork renames one.
     _VARIANT_ANCHORS = {
         "cyclone": {"overflow": "vapor", "underflow": "liquid"},
         "gravity": {"overflow": "vapor", "underflow": "liquid"},
         "electrostatic": {"overflow": "vapor", "underflow": "liquid"},
-        # Composed on the same separating vessel as gravity and electrostatic.
         "electromagnetic": {"overflow": "vapor", "underflow": "liquid"},
-        # The artwork names its single feed "feed", with a three-face menu.
+        # The artwork names its single feed "feed".
         "horizontal": {"feed_1": "feed"},
     }
 
-    # Values of ``characteristic``; see
-    # SymbolRegistry._register_composed.
+    # Values of ``characteristic``.
     _CHARACTERISTICS = ("gravity", "electrostatic", "electromagnetic")
 
-    # Variant -> advice, for variants that take one feed. The horizontal
-    # drum offers its feed on three faces, and a Symbol cannot carry both a
-    # face menu and a port family for one port; its 30-unit head also has
-    # no room for two.
+    # Variant -> advice, for variants that take one feed.
     _ONE_FEED_VARIANTS = {
         "horizontal": "Separator(variant='default'), the upright drum, takes as many as "
                       "you like, and a Mixer ahead of the drum draws the junction where "
                       "two feeds really do combine before they enter",
     }
 
-    # No mark unless characteristic names one; it becomes the variant.
     COMPOSITION = {"characteristic": None}
     COMPOSITION_VARIANT = "characteristic"
 
     def _symbol_anchor(self, port_name: str) -> str:
-        """Return the artwork anchor for a port.
-
-        :attr:`_VARIANT_ANCHORS` is checked before
-        :attr:`Unit.PORT_ANCHORS`.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str
-            Anchor name in the symbol.
-        """
+        """Return a port's anchor, checking _VARIANT_ANCHORS first."""
         renamed = self._VARIANT_ANCHORS.get(self.variant, {})
         return renamed.get(port_name) or super()._symbol_anchor(port_name)
 
@@ -3920,7 +3741,7 @@ class Separator(Unit):
         reference: str = "",
     ):
         names = _feed_names(n_feeds, "Separator")
-        # A characteristic is stored as the variant, so refuse one typed there.
+        # Refuse a characteristic given as the variant.
         if variant in self._CHARACTERISTICS:
             raise ValueError(
                 f"{name}: {variant!r} is a characteristic, not a variant; "
@@ -3954,8 +3775,7 @@ class Separator(Unit):
             reference=reference,
         )
         self.characteristic = self.variant if self.variant in self._CHARACTERISTICS else None
-        # Use the resolved variant: a device class may reach "horizontal"
-        # through VARIANT_ALIASES.
+        # Check the variant after VARIANT_ALIASES.
         instead = self._ONE_FEED_VARIANTS.get(self.variant)
         if instead is not None and n_feeds != 1:
             raise ValueError(
@@ -3965,40 +3785,38 @@ class Separator(Unit):
                 f"down one face, so the drawing can offer one or the other and this one "
                 f"offers the choice of head. {instead}"
             )
-        # Add feeds before the draws to keep the port order stable.
+        # Feeds come before the draws.
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         if n_feeds == 1:
-            # An alias, not a second port, so the feed series has one member.
+            # An alias, not a second port.
             self.feed = self.feeds[0]
-        # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above; never built at run time. The
-    # base class declares the ``feed`` alias.
+    # Typed views for the overloads above.
 
     class Separator1(Separator):
-        """Separator declaring ``feed_1`` for type checkers."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Separator2(Separator):
-        """Separator declaring ``feed_1`` to ``feed_2`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Separator3(Separator):
-        """Separator declaring ``feed_1`` to ``feed_3`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Separator4(Separator):
-        """Separator declaring ``feed_1`` to ``feed_4`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -4006,7 +3824,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Separator5(Separator):
-        """Separator declaring ``feed_1`` to ``feed_5`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -4015,7 +3833,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Separator6(Separator):
-        """Separator declaring ``feed_1`` to ``feed_6`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -4025,7 +3843,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Separator7(Separator):
-        """Separator declaring ``feed_1`` to ``feed_7`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -4036,7 +3854,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Separator8(Separator):
-        """Separator declaring ``feed_1`` to ``feed_8`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -4048,77 +3866,48 @@ if TYPE_CHECKING:
         feed_8: Port
 
 
-#: Default drawn tray count: eight decks, as ISO 10628-2 item 2.6 X8011
-#: draws. The drawn count need not match the real tray count.
+#: Default drawn tray count (ISO 10628-2 2.6).
 DEFAULT_TRAYS = 8
 
 
 class Column(Unit):
-    """General tower: a dished-end shell with feeds, overhead and bottoms.
+    """General tower: a shell with feeds, overhead and bottoms.
 
-    Every column has feeds, ``overhead`` off the top and ``bottoms`` off
-    the bottom. :class:`DistillationColumn` adds the reflux and reboiler
-    ports, :class:`Stripper` the reboiler only, and :class:`Absorber`
-    nothing, so ``t: Column`` accepts all four. Use a plain ``Column`` for
-    a scrubber, adsorber or molecular sieve.
-
-    ``n_feeds`` adds ``feed_1`` to ``feed_n`` down the west side,
-    ``feed_1`` highest, for a solvent or entrainer feed; with one, ``feed``
-    is an alias for ``feed_1``. ``n_draws`` adds side draws on the east
-    face: ``draw`` for one, ``draw_1`` to ``draw_n`` for more. A draw
-    places a port only; give its phase through the stream. A pumparound is
-    a draw and a feed connected separately.
-
-    ``internals`` furnishes the bare shell with an ISO 10628-2 group-27
-    internal, drawn ``trays`` times. A bare column is ISO item 2.1 X8100;
-    the tray tower is item 2.2 X8101::
-
-        Column("T-101")                                    # a bare shell
-        Column("T-102", internals="tray")                  # a tray tower
-        Column("T-103", internals="bubble_cap_tray", trays=12)
-        Column("T-104", internals="valve_tray", trays=30)
-        Column("T-105", internals="packing", trays=2)      # two beds
-
-    The internals are ``"tray"`` (27.1), ``"baffle_tray"``,
-    ``"bubble_cap_tray"``, ``"valve_tray"``, ``"sieve_tray"``,
-    ``"filter_insert"``, ``"fluidised_bed"`` and ``"packing"``. Absorbers,
-    strippers and adsorbers have no ISO symbols of their own; they are this
-    shell with the internal they contain.
-
-    ``feed_stages`` and ``draw_stages`` put each feed or draw on a stage,
-    numbered 1 at the top to ``trays`` at the bottom, one entry per port in
-    declaration order; ``None`` keeps that port on the even spread::
+    :class:`DistillationColumn` adds the reflux and reboiler ports,
+    :class:`Stripper` the reboiler only and :class:`Absorber` nothing.
+    Stages are numbered 1 at the top to ``trays`` at the bottom::
 
         Column("T-101", internals="valve_tray", trays=30,
                n_feeds=2, feed_stages=[12, 22])
-        Column("T-301", internals="valve_tray", trays=30,
-               n_draws=1, draw_stages=[15])
 
     Parameters
     ----------
     name : str
         Tag.
     n_feeds : int, default=1
-        Number of feed ports.
+        Number of feeds, ``feed_1`` to ``feed_n`` down the west side;
+        with one, ``feed`` is an alias for ``feed_1``.
     variant : str, default="default"
         Shell drawing.
     internals : str or None, optional
-        Group-27 internal; none when omitted. Fixed at construction, as
-        are ``trays``, ``feed_stages`` and ``draw_stages``.
+        Group-27 internal, such as ``"tray"`` or ``"packing"``; none
+        when omitted. Fixed at construction.
     trays : int, default=DEFAULT_TRAYS
-        Drawn count of decks or beds.
+        Drawn count of decks or beds. Fixed at construction.
     feed_stages, draw_stages : list[int or None], optional
-        Stage per feed or draw.
+        Stage per feed or draw, in order; ``None`` keeps the even
+        spread. Fixed at construction.
     n_draws : int, default=0
-        Number of side draws.
+        Number of side draws on the east face: ``draw`` for one, else
+        ``draw_1`` to ``draw_n``.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
 
     Raises
     ------
     ValueError
-        If a count is out of range, a stage list has the wrong length, a
-        stage is outside the column, or a stage is named with no internals.
+        If a count is out of range, a stage list has the wrong length,
+        a stage is outside the column, or a stage has no internals.
     """
 
     overhead: Port
@@ -4127,19 +3916,14 @@ class Column(Unit):
     feeds: tuple[Port, ...]
     # Alias for feed_1 when there is one feed.
     feed: Port
-    # Side draws, highest first. No bare ``draw`` annotation here, since
-    # most columns have none; ColumnDraw1 declares it.
+    # Side draws, highest first; ColumnDraw1 declares ``draw``.
     draws: tuple[Port, ...]
 
-    # Two typed overload families instead of all 64 combinations:
-    #
-    # - any literal n_feeds with n_draws=0 returns Column1 to Column8;
-    # - n_feeds=1 with a literal n_draws returns ColumnDraw1 to ColumnDraw8.
-    #
-    # Both counts above one, or a computed count, return Column; use
-    # ``col.feeds``, ``col.draws`` or ``col.port(...)``.
+    # A literal n_feeds with n_draws=0 returns Column1 to Column8;
+    # n_feeds=1 with a literal n_draws returns ColumnDraw1 to
+    # ColumnDraw8. Other counts return Column.
     if TYPE_CHECKING:
-        # Family A: any n_feeds, n_draws=0 (keyword-only, as at run time).
+        # Family A: any n_feeds, n_draws=0.
         @overload
         def __new__(
             cls,
@@ -4185,8 +3969,7 @@ class Column(Unit):
             cls, name: str, n_feeds: Literal[8], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
         ) -> "Column8": ...
 
-        # Family B: n_feeds=1, n_draws required, so a bare Column("T-1")
-        # still resolves to Column1.
+        # Family B: n_feeds=1 and a required n_draws.
         @overload
         def __new__(
             cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[1], **kwargs: Any
@@ -4242,13 +4025,9 @@ class Column(Unit):
         ("bottoms", "outlet", "liquid"),
     ]
 
-    # The artwork still anchors overhead under its old name.
     PORT_ANCHORS = {"overhead": "distillate"}
 
-    # A bare shell by default (ISO item 2.1 X8100); a default deck would
-    # assert trays the author never gave.
     COMPOSITION = {"internals": None, "trays": DEFAULT_TRAYS}
-    # Read once in __init__ by every column subclass.
     _FIXED_AT_CONSTRUCTION = frozenset(
         {"internals", "trays", "feed_stages", "draw_stages"}
     )
@@ -4292,7 +4071,7 @@ class Column(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         self.draws = tuple(self._add_port(draw, "outlet", "draw") for draw in draw_names)
         if n_feeds == 1:
-            # An alias, not a second port, so the feed series has one member.
+            # An alias, not a second port.
             self.feed = self.feeds[0]
         self.feed_stages = feed_stages
         self.draw_stages = draw_stages
@@ -4304,45 +4083,33 @@ class Column(Unit):
         }
 
     def _series_pin(self, port_name: str) -> float | None:
-        """Return the shell fraction a stage pins a port to.
-
-        Parameters
-        ----------
-        port_name : str
-            Feed or draw port name.
-
-        Returns
-        -------
-        float or None
-            Fraction of the shell, or ``None`` for the even spread.
-        """
+        """Return the shell fraction a stage pins a port to, or None."""
         return self._stage_fractions.get(port_name)
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above; never built at run time. The
-    # base class declares the ``feed`` alias.
+    # Typed views for the overloads above.
 
     class Column1(Column):
-        """Column declaring ``feed_1`` for type checkers."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Column2(Column):
-        """Column declaring ``feed_1`` to ``feed_2`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Column3(Column):
-        """Column declaring ``feed_1`` to ``feed_3`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Column4(Column):
-        """Column declaring ``feed_1`` to ``feed_4`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -4350,7 +4117,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Column5(Column):
-        """Column declaring ``feed_1`` to ``feed_5`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -4359,7 +4126,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Column6(Column):
-        """Column declaring ``feed_1`` to ``feed_6`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -4369,7 +4136,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Column7(Column):
-        """Column declaring ``feed_1`` to ``feed_7`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -4380,7 +4147,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Column8(Column):
-        """Column declaring ``feed_1`` to ``feed_8`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -4391,29 +4158,28 @@ if TYPE_CHECKING:
         feed_7: Port
         feed_8: Port
 
-    # Typed views for Family B. A single draw is named ``draw``, with no
-    # ``draw_1``, so ColumnDraw1 declares it.
+    # Typed views for Family B.
 
     class ColumnDraw1(Column):
-        """Column declaring ``draw`` for type checkers."""
+        """Typed view declaring ``draw``."""
 
         draw: Port
 
     class ColumnDraw2(Column):
-        """Column declaring ``draw_1`` to ``draw_2`` for type checkers."""
+        """Typed view declaring ``draw_1`` to ``draw_2``."""
 
         draw_1: Port
         draw_2: Port
 
     class ColumnDraw3(Column):
-        """Column declaring ``draw_1`` to ``draw_3`` for type checkers."""
+        """Typed view declaring ``draw_1`` to ``draw_3``."""
 
         draw_1: Port
         draw_2: Port
         draw_3: Port
 
     class ColumnDraw4(Column):
-        """Column declaring ``draw_1`` to ``draw_4`` for type checkers."""
+        """Typed view declaring ``draw_1`` to ``draw_4``."""
 
         draw_1: Port
         draw_2: Port
@@ -4421,7 +4187,7 @@ if TYPE_CHECKING:
         draw_4: Port
 
     class ColumnDraw5(Column):
-        """Column declaring ``draw_1`` to ``draw_5`` for type checkers."""
+        """Typed view declaring ``draw_1`` to ``draw_5``."""
 
         draw_1: Port
         draw_2: Port
@@ -4430,7 +4196,7 @@ if TYPE_CHECKING:
         draw_5: Port
 
     class ColumnDraw6(Column):
-        """Column declaring ``draw_1`` to ``draw_6`` for type checkers."""
+        """Typed view declaring ``draw_1`` to ``draw_6``."""
 
         draw_1: Port
         draw_2: Port
@@ -4440,7 +4206,7 @@ if TYPE_CHECKING:
         draw_6: Port
 
     class ColumnDraw7(Column):
-        """Column declaring ``draw_1`` to ``draw_7`` for type checkers."""
+        """Typed view declaring ``draw_1`` to ``draw_7``."""
 
         draw_1: Port
         draw_2: Port
@@ -4451,7 +4217,7 @@ if TYPE_CHECKING:
         draw_7: Port
 
     class ColumnDraw8(Column):
-        """Column declaring ``draw_1`` to ``draw_8`` for type checkers."""
+        """Typed view declaring ``draw_1`` to ``draw_8``."""
 
         draw_1: Port
         draw_2: Port
@@ -4466,15 +4232,9 @@ if TYPE_CHECKING:
 class DistillationColumn(Column):
     """Distillation column with reflux and reboiler ports.
 
-    Adds to :class:`Column` the return ports ``reflux_in`` (liquid from
-    the reflux drum) and ``boilup_in`` (vapour from the reboiler), and the
-    ``reboiler_duty`` and ``condenser_duty`` energy streams. Every other
-    argument is :class:`Column`'s::
-
-        DistillationColumn("T-101", internals="valve_tray", trays=30)
-
-    These ports are declared here, not on Column, so a type checker knows
-    :class:`Absorber` and :class:`Stripper` lack them.
+    Adds to :class:`Column` the inlets ``reflux_in`` (liquid) and
+    ``boilup_in`` (vapour), and the energy ports ``reboiler_duty`` and
+    ``condenser_duty``. Every argument is :class:`Column`'s.
     """
 
     PORTS = [
@@ -4548,25 +4308,25 @@ class DistillationColumn(Column):
 if TYPE_CHECKING:
 
     class DistillationColumn1(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` for type checkers."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class DistillationColumn2(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` to ``feed_2`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class DistillationColumn3(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` to ``feed_3`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class DistillationColumn4(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` to ``feed_4`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -4574,7 +4334,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class DistillationColumn5(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` to ``feed_5`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -4583,7 +4343,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class DistillationColumn6(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` to ``feed_6`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -4593,7 +4353,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class DistillationColumn7(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` to ``feed_7`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -4604,7 +4364,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class DistillationColumn8(DistillationColumn):
-        """DistillationColumn declaring ``feed_1`` to ``feed_8`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -4617,30 +4377,20 @@ if TYPE_CHECKING:
 
 
 class Absorber(Column):
-    """Absorption or scrubbing tower: a solute moves from a gas into a liquid.
+    """Absorption or scrubbing tower with no distillation ports.
 
-    A :class:`Column` with no distillation ports. Gas enters at the bottom
-    and lean liquid at the top, as two feeds on the stages they enter;
-    treated gas leaves by ``overhead`` and rich liquid by ``bottoms``::
+    ``internals`` defaults to ``"packing"``; every other argument is
+    :class:`Column`'s. Lean liquid and gas are two feeds::
 
-        Absorber("V-501", internals="packing",
-                 n_feeds=2, feed_stages=[1, 8])
-
-    It has no ``reflux_in``, ``boilup_in``, ``reboiler_duty`` or
-    ``condenser_duty``, because nothing in an absorber boils. ``internals`` defaults to ``"packing"``; every other argument is
-    :class:`Column`'s.
+        Absorber("V-501", n_feeds=2, feed_stages=[1, 8])
     """
 
     overhead: Port
     bottoms: Port
 
-    # Packed by default.
     COMPOSITION = {"internals": "packing", "trays": DEFAULT_TRAYS}
 
-    # Own overloads, so a literal n_feeds returns Absorber2 rather than
-    # Column2 and ``t: Absorber = Absorber("V-1")`` type-checks. n_draws
-    # has no typed family here; use ``absorber.draws[i]`` or
-    # ``absorber.port("draw_2")``.
+    # A literal n_feeds returns a typed view, Absorber1 to Absorber8.
     if TYPE_CHECKING:
 
         @overload
@@ -4691,25 +4441,25 @@ class Absorber(Column):
 if TYPE_CHECKING:
 
     class Absorber1(Absorber):
-        """Absorber declaring ``feed_1`` for type checkers."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Absorber2(Absorber):
-        """Absorber declaring ``feed_1`` to ``feed_2`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Absorber3(Absorber):
-        """Absorber declaring ``feed_1`` to ``feed_3`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Absorber4(Absorber):
-        """Absorber declaring ``feed_1`` to ``feed_4`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -4717,7 +4467,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Absorber5(Absorber):
-        """Absorber declaring ``feed_1`` to ``feed_5`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -4726,7 +4476,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Absorber6(Absorber):
-        """Absorber declaring ``feed_1`` to ``feed_6`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -4736,7 +4486,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Absorber7(Absorber):
-        """Absorber declaring ``feed_1`` to ``feed_7`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -4747,7 +4497,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Absorber8(Absorber):
-        """Absorber declaring ``feed_1`` to ``feed_8`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -4760,13 +4510,10 @@ if TYPE_CHECKING:
 
 
 class Stripper(Column):
-    """Stripping column: a light component is driven out of a liquid by heat.
+    """Stripping column: a reboiled tower with no condenser or reflux.
 
-    A :class:`Column` with a reboiler but no condenser or reflux, since the
-    overhead is the stripped product. It has ``overhead``, ``bottoms``,
-    ``boilup_in`` and ``reboiler_duty``, and no ``reflux_in`` or
-    ``condenser_duty``. Every argument is
-    :class:`Column`'s, including its ``internals`` default.
+    Ports are ``overhead``, ``bottoms``, ``boilup_in`` and
+    ``reboiler_duty``. Every argument is :class:`Column`'s.
     """
 
     PORTS = [
@@ -4832,25 +4579,25 @@ class Stripper(Column):
 if TYPE_CHECKING:
 
     class Stripper1(Stripper):
-        """Stripper declaring ``feed_1`` for type checkers."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Stripper2(Stripper):
-        """Stripper declaring ``feed_1`` to ``feed_2`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Stripper3(Stripper):
-        """Stripper declaring ``feed_1`` to ``feed_3`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Stripper4(Stripper):
-        """Stripper declaring ``feed_1`` to ``feed_4`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -4858,7 +4605,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Stripper5(Stripper):
-        """Stripper declaring ``feed_1`` to ``feed_5`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -4867,7 +4614,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Stripper6(Stripper):
-        """Stripper declaring ``feed_1`` to ``feed_6`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -4877,7 +4624,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Stripper7(Stripper):
-        """Stripper declaring ``feed_1`` to ``feed_7`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -4888,7 +4635,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Stripper8(Stripper):
-        """Stripper declaring ``feed_1`` to ``feed_8`` for type checkers."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -4908,9 +4655,8 @@ if TYPE_CHECKING:
 class Mixer(Unit):
     """Mixer: combines several inlet streams into one outlet.
 
-    Equipment drawn as a triangle; where two lines simply meet, use a
-    :class:`Tee`. The inlets are ``in_1`` to ``in_n`` and :attr:`inlets`,
-    indexed from zero (``m.inlets[0]`` is ``in_1``).
+    Drawn as a triangle. The inlets are ``in_1`` to ``in_n``, also
+    :attr:`inlets` from index zero.
 
     Parameters
     ----------
@@ -4927,17 +4673,11 @@ class Mixer(Unit):
         If ``n_inlets`` is less than 1.
     """
 
-    # in_1 to in_n in order. The count is per instance, so no class
-    # annotation can name each member; use ``m.inlets[i]``,
-    # ``m.port("in_3")`` or ``enumerate(m.inlets, start=1)``.
+    # in_1 to in_n in order.
     inlets: tuple[Port, ...]
     outlet: Port
 
-    # A literal n_inlets returns a typed view declaring in_1 to in_n
-    # (Mixer1 to Mixer8), so ``Mixer("M", n_inlets=3).in_3`` is a Port and
-    # ``.in_4`` is an error. A computed count gets Mixer; use
-    # ``m.inlets[i]``. The views exist only for type checkers, and
-    # ``*args``/``**kwargs`` defer to the __init__ signature.
+    # A literal n_inlets returns a typed view, Mixer1 to Mixer8.
     if TYPE_CHECKING:
 
         @overload
@@ -5007,7 +4747,6 @@ class Mixer(Unit):
             description=description,
             reference=reference,
         )
-        # Keep the ports as created, rather than re-matching names.
         self.inlets = tuple(
             self._add_port(f"in_{i}", "inlet", "process") for i in range(1, n_inlets + 1)
         )
@@ -5015,29 +4754,28 @@ class Mixer(Unit):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above, written out because type
-    # checkers read source; never built at run time.
+    # Typed views for the overloads above.
 
     class Mixer1(Mixer):
-        """Mixer declaring ``in_1`` for type checkers."""
+        """Typed view declaring ``in_1``."""
 
         in_1: Port
 
     class Mixer2(Mixer):
-        """Mixer declaring ``in_1`` to ``in_2`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_2``."""
 
         in_1: Port
         in_2: Port
 
     class Mixer3(Mixer):
-        """Mixer declaring ``in_1`` to ``in_3`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_3``."""
 
         in_1: Port
         in_2: Port
         in_3: Port
 
     class Mixer4(Mixer):
-        """Mixer declaring ``in_1`` to ``in_4`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_4``."""
 
         in_1: Port
         in_2: Port
@@ -5045,7 +4783,7 @@ if TYPE_CHECKING:
         in_4: Port
 
     class Mixer5(Mixer):
-        """Mixer declaring ``in_1`` to ``in_5`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_5``."""
 
         in_1: Port
         in_2: Port
@@ -5054,7 +4792,7 @@ if TYPE_CHECKING:
         in_5: Port
 
     class Mixer6(Mixer):
-        """Mixer declaring ``in_1`` to ``in_6`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_6``."""
 
         in_1: Port
         in_2: Port
@@ -5064,7 +4802,7 @@ if TYPE_CHECKING:
         in_6: Port
 
     class Mixer7(Mixer):
-        """Mixer declaring ``in_1`` to ``in_7`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_7``."""
 
         in_1: Port
         in_2: Port
@@ -5075,7 +4813,7 @@ if TYPE_CHECKING:
         in_7: Port
 
     class Mixer8(Mixer):
-        """Mixer declaring ``in_1`` to ``in_8`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_8``."""
 
         in_1: Port
         in_2: Port
@@ -5090,8 +4828,7 @@ if TYPE_CHECKING:
 class Splitter(Unit):
     """Splitter: divides one inlet stream into several outlets.
 
-    Equipment drawn as a triangle; for a bypass, drain, vent or sample
-    branch, use a :class:`Tee`. The outlets are ``out_1`` to ``out_n`` and
+    Drawn as a triangle. The outlets are ``out_1`` to ``out_n``, also
     :attr:`outlets`.
 
     Parameters
@@ -5110,7 +4847,7 @@ class Splitter(Unit):
     """
 
     inlet: Port
-    # out_1 to out_n in order; see Mixer.
+    # out_1 to out_n in order.
     outlets: tuple[Port, ...]
 
     # Typed overloads for a literal n_outlets, as on Mixer.
@@ -5193,28 +4930,28 @@ class Splitter(Unit):
 
 
 if TYPE_CHECKING:
-    # Typed views for the overloads above; never built at run time.
+    # Typed views for the overloads above.
 
     class Splitter1(Splitter):
-        """Splitter declaring ``out_1`` for type checkers."""
+        """Typed view declaring ``out_1``."""
 
         out_1: Port
 
     class Splitter2(Splitter):
-        """Splitter declaring ``out_1`` to ``out_2`` for type checkers."""
+        """Typed view declaring ``out_1`` to ``out_2``."""
 
         out_1: Port
         out_2: Port
 
     class Splitter3(Splitter):
-        """Splitter declaring ``out_1`` to ``out_3`` for type checkers."""
+        """Typed view declaring ``out_1`` to ``out_3``."""
 
         out_1: Port
         out_2: Port
         out_3: Port
 
     class Splitter4(Splitter):
-        """Splitter declaring ``out_1`` to ``out_4`` for type checkers."""
+        """Typed view declaring ``out_1`` to ``out_4``."""
 
         out_1: Port
         out_2: Port
@@ -5222,7 +4959,7 @@ if TYPE_CHECKING:
         out_4: Port
 
     class Splitter5(Splitter):
-        """Splitter declaring ``out_1`` to ``out_5`` for type checkers."""
+        """Typed view declaring ``out_1`` to ``out_5``."""
 
         out_1: Port
         out_2: Port
@@ -5231,7 +4968,7 @@ if TYPE_CHECKING:
         out_5: Port
 
     class Splitter6(Splitter):
-        """Splitter declaring ``out_1`` to ``out_6`` for type checkers."""
+        """Typed view declaring ``out_1`` to ``out_6``."""
 
         out_1: Port
         out_2: Port
@@ -5241,7 +4978,7 @@ if TYPE_CHECKING:
         out_6: Port
 
     class Splitter7(Splitter):
-        """Splitter declaring ``out_1`` to ``out_7`` for type checkers."""
+        """Typed view declaring ``out_1`` to ``out_7``."""
 
         out_1: Port
         out_2: Port
@@ -5252,7 +4989,7 @@ if TYPE_CHECKING:
         out_7: Port
 
     class Splitter8(Splitter):
-        """Splitter declaring ``out_1`` to ``out_8`` for type checkers."""
+        """Typed view declaring ``out_1`` to ``out_8``."""
 
         out_1: Port
         out_2: Port
@@ -5265,35 +5002,8 @@ if TYPE_CHECKING:
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument: str) -> list[str]:
-    """Return one face per connection from an ``inputs`` or ``outputs`` value.
-
-    A count puts every connection on the default face; a sequence names
-    each face in order.
-
-    Parameters
-    ----------
-    spec : int or Sequence[str]
-        Count, or one face per connection.
-    default : str
-        Face for a count.
-    owner : str
-        Unit name, for error messages.
-    argument : str
-        Argument name, for error messages.
-
-    Returns
-    -------
-    list[str]
-        Compass faces.
-
-    Raises
-    ------
-    ValueError
-        If ``spec`` is a string, bool, negative count or holds an invalid
-        face.
-    """
+    """Return one face per connection from a count or a face list."""
     if isinstance(spec, bool) or not isinstance(spec, (int, Sequence)) or isinstance(spec, str):
-        # Refuse a bare string, which would read as one face per character.
         raise ValueError(
             f"{owner}: {argument}= is a count ({argument}=3) or one face per "
             f"connection ({argument}=['W', 'W', 'N']), got {spec!r}"
@@ -5306,26 +5016,7 @@ def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument
 
 
 def _block_face(face: object, owner: str) -> str:
-    """Return a compass face from a compass or side name.
-
-    Parameters
-    ----------
-    face : object
-        ``"N"``, ``"S"``, ``"E"``, ``"W"``, or ``"top"``, ``"bottom"``,
-        ``"left"``, ``"right"``.
-    owner : str
-        Unit name, for error messages.
-
-    Returns
-    -------
-    str
-        Compass face.
-
-    Raises
-    ------
-    ValueError
-        If ``face`` is not a face name.
-    """
+    """Return the compass face for a compass or side name."""
     resolved = (
         _FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
         if isinstance(face, str)
@@ -5340,45 +5031,25 @@ def _block_face(face: object, owner: str) -> str:
 
 
 class Block(_FaceFamilies):
-    """Block flow diagram box: a plant section drawn as a labelled rectangle.
+    """Block flow diagram box: a plant section drawn as a rectangle.
 
-    A block has no equipment ports, only connections and the side each is
-    on.
-
-    .. code-block:: python
+    Connections are ``in_1`` to ``in_n`` and ``out_1`` to ``out_m``,
+    also :attr:`inlets` and :attr:`outlets`; :attr:`input_faces` and
+    :attr:`output_faces` are their faces. A face names the box's own
+    side, and layout draws each peer on that side. The box grows to
+    fit its connections and name::
 
         rx = fs.add(units.Block("Reaction",
                                 inputs=["W", "W", "N"],
                                 outputs=["E", "S"]))
-        fs.connect(feed.outlet, rx.in_1)      # west
         fs.connect(recycle.out_1, rx.in_3)    # north
-        fs.connect(rx.out_2, drain.inlet)     # south
-
-    ``inputs`` and ``outputs`` give one face per connection, or a count on
-    the default face (inputs west, outputs east). Connections are
-    ``in_1`` to ``in_n`` and ``out_1`` to ``out_m``, numbered across the
-    family; :attr:`inlets` and :attr:`outlets` are the ports and
-    :attr:`input_faces` and :attr:`output_faces` their faces.
-
-    Layout reads each face as the side the peer is drawn on (north puts it
-    above), so a BFD lays itself out (:mod:`pandid.layout.layered`). A
-    face names the box's own side: a turned or mirrored :meth:`pin` moves
-    every connection with the box. :func:`pandid.portgeom.port_faces`
-    reports faces on the finished sheet.
-
-    The box grows to space its connections at
-    :data:`~pandid.render.symbols.BLOCK_PITCH` and to fit its name. An
-    explicit ``width`` or ``height`` wins, but a box too small for its
-    connections is refused by the constructor, an assignment,
-    :meth:`nozzle` and :meth:`pin`. A name wider than an explicit width
-    overhangs the box and, on its opaque halo, hides what is beside it.
 
     Parameters
     ----------
     name : str
         Section name, written inside the box.
     inputs, outputs : int or Sequence[str], default=1
-        Count, or one face per connection.
+        Count on the default face, or one face per connection.
     variant, width, height, label_pos, description, reference
         As for :class:`Unit`; there are no variants.
 
@@ -5390,20 +5061,15 @@ class Block(_FaceFamilies):
     Raises
     ------
     ValueError
-        If there are no connections, a face is invalid, or the box is too
-        small for its connections.
+        If there are no connections, a face is invalid, or the box is
+        too small for its connections.
     """
 
-    # Only the families: their sizes are the caller's, so even ``in_1``
-    # may not exist. tests/test_port_annotations.py lists the classes that
-    # declare families.
+    # Only the families; their sizes are the caller's.
     inlets: tuple[Port, ...]
     outlets: tuple[Port, ...]
 
-    # Tell type checkers any other attribute is a Port, so ``b.in_3``
-    # type-checks. Only Block pays the lost typo detection, since its
-    # numbered connections outnumber its fixed ones; a typo still raises
-    # at run time with the list of real ports.
+    # Type checkers read any other attribute as a Port.
     if TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Port: ...
@@ -5414,8 +5080,7 @@ class Block(_FaceFamilies):
     DEFAULT_INPUT_FACE = "W"
     DEFAULT_OUTPUT_FACE = "E"
 
-    # Class-level defaults, so Unit.__init__ can set width and height
-    # before the connections exist.
+    # Class defaults, read when Unit.__init__ first sets the size.
     _width: float | None = None
     _height: float | None = None
 
@@ -5457,95 +5122,39 @@ class Block(_FaceFamilies):
             self._add_connection(f"out_{i}", "outlet", face)
             for i, face in enumerate(out_faces, start=1)
         )
-        # Check now, so the error points at the constructor, not a render.
         self._check_box()
 
     def _add_connection(self, name: str, direction: str, face: str) -> Port:
-        """Create a connection and record its face.
-
-        The port is added first, so a refused name records no face.
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-        direction : str
-            ``"inlet"`` or ``"outlet"``.
-        face : str
-            Compass face.
-
-        Returns
-        -------
-        Port
-            The new port.
-        """
+        """Create a connection and record its face."""
         port = self._add_port(name, direction, "process")
         self._faces[name] = face
         return port
 
     @property
     def width(self) -> float | None:
-        """Return the box width, or ``None`` to size it to the connections."""
+        """Return the box width, or ``None`` to fit the connections."""
         return self._width
 
     @width.setter
     def width(self, value: float | None) -> None:
-        """Set the box width.
-
-        Parameters
-        ----------
-        value : float or None
-            Width in pixels, or ``None`` to size automatically.
-
-        Raises
-        ------
-        ValueError
-            If the width is too small for the connections; the old width
-            is kept.
-        """
+        """Set the box width; raise ValueError if it is too small."""
         self._resize("_width", value)
 
     @property
     def height(self) -> float | None:
-        """Return the box height, or ``None`` to size it to the connections."""
+        """Return the box height, or ``None`` to fit the connections."""
         return self._height
 
     @height.setter
     def height(self, value: float | None) -> None:
-        """Set the box height.
-
-        Parameters
-        ----------
-        value : float or None
-            Height in pixels, or ``None`` to size automatically.
-
-        Raises
-        ------
-        ValueError
-            If the height is too small for the connections; the old height
-            is kept.
-        """
+        """Set the box height; raise ValueError if it is too small."""
         self._resize("_height", value)
 
     def _resize(self, attr: str, value: float | None) -> None:
-        """Set a box dimension, restoring the old value if it is refused.
-
-        Parameters
-        ----------
-        attr : str
-            ``"_width"`` or ``"_height"``.
-        value : float or None
-            New value.
-
-        Raises
-        ------
-        ValueError
-            If the box is too small for the connections.
-        """
+        """Set a box dimension, keeping the old one if refused."""
         was = getattr(self, attr)
         setattr(self, attr, value)
-        # Unit.__init__ sets the size before connections exist; the
-        # constructor checks at the end.
+        # Unit.__init__ sets the size before the connections exist.
         if "_faces" not in self.__dict__:
             return
         try:
@@ -5567,8 +5176,6 @@ class Block(_FaceFamilies):
     ) -> "Block":
         """Place the block, checking the placed box can draw it.
 
-        A quarter turn changes which box axis each face runs along.
-
         Parameters
         ----------
         col, row, x, y, orientation, mirrored, port
@@ -5585,8 +5192,7 @@ class Block(_FaceFamilies):
             If the placement leaves too little room for a face's
             connections; the previous placement is kept.
         """
-        # Restore the stated pin, not the resolved corner, so a refused
-        # call keeps the anchor port the previous pin named.
+        # Keep the stated pin to restore on refusal.
         was, was_ports = self._pin, dict(self._pin_ports)
         was_stated = self._turn_stated, self._mirror_stated
         super().pin(
@@ -5595,8 +5201,6 @@ class Block(_FaceFamilies):
         try:
             self._check_box()
         except ValueError:
-            # The sheet stays marked stale; the extra layout run gives the
-            # same frames.
             self._pin_ports = was_ports
             self._pin = was
             self._turn_stated, self._mirror_stated = was_stated
@@ -5606,10 +5210,8 @@ class Block(_FaceFamilies):
     def nozzle(self, port_name: str, face: str) -> "Block":
         """Move a connection to another side of the box.
 
-        Unlike :meth:`Unit.nozzle`, ``face`` names the box's own side, so
-        a later turn or mirror moves the connection with the box, and any
-        side is allowed. The move updates the declaration that ``to_dict``
-        writes back.
+        ``face`` names the box's own side, so a later turn or mirror
+        moves the connection with the box.
 
         Parameters
         ----------
@@ -5628,8 +5230,8 @@ class Block(_FaceFamilies):
         KeyError
             If there is no such connection.
         ValueError
-            If ``face`` is invalid or the destination side has no room; the
-            block is unchanged.
+            If ``face`` is invalid or the side has no room; the block is
+            unchanged.
         """
         if port_name not in self.ports:
             raise KeyError(
@@ -5643,16 +5245,11 @@ class Block(_FaceFamilies):
         except ValueError:
             self._faces[port_name] = was
             raise
-        # The artwork and ports moved, so the layout is stale.
         self._invalidate_layout()
         return self
 
     def symbol(self) -> "Symbol":
         """Return this block's symbol, built to its connections.
-
-        Called by :meth:`~pandid.render.symbols.SymbolRegistry.for_unit` on
-        every port resolution. It does not check the box, since
-        :meth:`_check_box` calls it.
 
         Returns
         -------
@@ -5661,24 +5258,11 @@ class Block(_FaceFamilies):
         """
         from pandid.render.symbols import block_symbol
 
-        # Pass the name only when it sizes the box; otherwise every block
-        # would need its own <defs> entry.
+        # Pass the name only when it sizes the box.
         return block_symbol(tuple(self._faces.items()), "" if self.width is not None else self.tag)
 
     def _check_box(self) -> None:
-        """Raise unless the placed box spaces each face's connections at pitch.
-
-        Measured on the box :func:`~pandid.portgeom.resolve_size` gives for
-        the current :attr:`~Unit.pin_`, allowing for a quarter turn, which
-        swaps the axis a face runs along. Callers commit a candidate
-        placement first and roll it back on error.
-
-        Raises
-        ------
-        ValueError
-            If a face with two or more connections is drawn shorter than
-            the symbol needs.
-        """
+        """Raise if the placed box crowds a face's connections."""
         from pandid.portgeom import resolve_size
         from pandid.render.symbols import block_box_too_small
 
@@ -5687,7 +5271,7 @@ class Block(_FaceFamilies):
         w, h = resolve_size(self, placed)
         turned = int(getattr(placed, "orientation", 0) or 0) in (90, 270)
         for face, count in Counter(self._faces.values()).items():
-            # One connection on a face has no spacing to crush.
+            # A single connection needs no spacing.
             if count < 2:
                 continue
             upright = face in ("W", "E")
