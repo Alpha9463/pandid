@@ -10,9 +10,6 @@ bounding-box edge as ``(edge, along)`` for shapes that lack a needed anchor.
 The shape's ``aspect`` becomes ``Symbol.stretchable``; only a ``fixed`` shape
 carries the keyword.
 
-``ADAPTED_ELSEWHERE`` records the stencil-derived symbols this generator cannot
-emit (the parametric ones) and where they are written instead.
-
 ``STENCIL_PATCHES`` corrects the shapes draw.io draws wrongly; the vendored XML
 stays as vendored.
 
@@ -665,17 +662,6 @@ def patch_shape(stencil, name, el):
     for op in ET.fromstring(f"<foreground>{fragment}</foreground>"):
         foreground.append(op)
     return el
-
-
-# Stencil-derived symbols drawn by hand to stretch along one axis.
-# (kind, variant) -> (stencil, shape_name, where it lives, what was changed)
-ADAPTED_ELSEWHERE = {
-    ("conveyor", "default"): (
-        "driers", "Drier (Roller Conveyor Belt)",
-        "pandid.render.symbols.conveyor_symbol",
-        "drier housing dropped; roller spacing made a parameter, roller r=10 kept",
-    ),
-}
 
 
 # Symbols that must not be turned, as ``Symbol.gravity_fixed`` (ISO 15519-1
