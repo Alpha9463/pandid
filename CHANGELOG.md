@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the two units and the call that moves it: `at=`/`face=` and `offset=` for
   an attached balloon, `pin()` for any other unit. A suggested `attach()`
   repeats the balloon's `relation=` and `angle=`.
+- **The alumina refinery example draws three sheets (#622).** Its areas are
+  joined by off-page `Feed`/`Product` flags that name each other's drawing.
 
 ### Deprecated
 

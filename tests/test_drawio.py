@@ -3002,7 +3002,7 @@ DRAWIO_REPRESENTATIVES = (
     "11_ethanol_pid",
     "12_block_flow_diagram",
     "14_tank_farm",
-    "21_alumina_refinery",
+    "21_alumina_refinery_3",
 )
 
 #: Sheets whose material-line labels exercise collision avoidance.
@@ -3022,7 +3022,7 @@ CROSSING_REPRESENTATIVES = (
 INSTRUMENT_CODE_SHEETS = ("04_control_loop", "11_ethanol_pid", "14_tank_farm")
 
 #: Zoned, paged, and large tables for Draw.io furniture checks.
-TABLE_REPRESENTATIVES = ("03_distillation_train", "10_ethanol_pfd", "21_alumina_refinery")
+TABLE_REPRESENTATIVES = ("03_distillation_train", "10_ethanol_pfd", "21_alumina_refinery_3")
 
 #: Paged representatives for checking actual gallery fit on A3 paper.
 PAGED_REPRESENTATIVES = ("10_ethanol_pfd", "11_ethanol_pid")

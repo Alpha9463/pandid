@@ -224,3 +224,43 @@ def test_the_fractionator_schedules_only_equipment_that_exists():
         "V-701",
         "E-702",
     ]
+
+
+def test_each_alumina_off_page_flag_has_its_partner_on_the_sheet_it_names():
+    """Pair every alumina refinery flag that names another sheet of its set.
+
+    Returns
+    -------
+    None
+        Assertion result for the stated behaviour.
+    """
+    sheets = {}
+    for n in (1, 2, 3):
+        fs = SCENARIOS[f"21_alumina_refinery_{n}"][0]()
+        assert fs.title_block is not None
+        sheets[fs.title_block.drawing_number] = fs
+    assert len(sheets) == 3, "two sheets share a drawing number"
+
+    opposite = {"feed": "product", "product": "feed"}
+    pairs = 0
+    for number, fs in sheets.items():
+        for flag in fs.units:
+            if flag.kind not in opposite or flag.reference not in sheets:
+                continue
+            partners = [
+                unit
+                for unit in sheets[flag.reference].units
+                if unit.kind == opposite[flag.kind]
+                and unit.name == flag.name
+                and unit.reference == number
+            ]
+            assert len(partners) == 1, (
+                f"{number} {flag.kind} {flag.name!r} has {len(partners)} partners on {flag.reference}"
+            )
+            (port,) = flag.ports.values()
+            (partner_port,) = partners[0].ports.values()
+            assert port.stream is not None and partner_port.stream is not None
+            assert port.stream.name == partner_port.stream.name
+            pairs += 1
+    # Three crossings, each seen from both of its ends.
+    assert pairs == 6
