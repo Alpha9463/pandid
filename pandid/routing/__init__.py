@@ -210,6 +210,117 @@ def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
                 )
 
 
+def _candidate_orders(fs, graph):  # numpydoc ignore=GL08
+    import os
+
+    rules = os.environ.get("PANDID_ORDER", "decl").split(",")
+    return [_order_experiment(fs, graph, rule) for rule in rules]
+
+
+def _drawing_score(fs):  # numpydoc ignore=GL08
+    from pandid.layout.conflicts import analyze_conflicts
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import crossing_count, path_length, real_bends
+
+    hard = sum(c.kind != "crossing" for c in analyze_conflicts(fs))
+    paths = [
+        stream_polyline(s) for s in fs.streams
+        if s.route is not None and s.source.owner.frame is not None and s.dest.owner.frame is not None
+    ]
+    return (hard, crossing_count(paths), sum(real_bends(p) for p in paths), sum(path_length(p) for p in paths))
+
+
+def _order_experiment(fs, graph, rule):  # numpydoc ignore=GL08
+    from pandid.streams import SIGNAL_KINDS
+
+    streams = list(fs.streams)
+
+    def ends(s):
+        a = b = None
+        if s.source.owner is not None:
+            a = graph.port_anchors.get((s.source.owner.name, s.source.name))
+        if s.dest.owner is not None:
+            b = graph.port_anchors.get((s.dest.owner.name, s.dest.name))
+        return a, b
+
+    def length(s):
+        a, b = ends(s)
+        if a is None or b is None:
+            return 0.0
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    def manual(s):
+        return bool(s.route and s.route.manual)
+
+    def signal(s):
+        return s.kind in SIGNAL_KINDS
+
+    def srcx(s):
+        a, _ = ends(s)
+        return (a[0], a[1]) if a is not None else (0.0, 0.0)
+
+    if rule.startswith("seed:"):
+        import random
+        seed, _, rule = rule[5:].partition("+")
+        random.Random(int(seed)).shuffle(streams)
+        if not rule:
+            return streams
+    from pandid.routing.metrics import min_bends
+
+    def mb(s):
+        a, b = ends(s)
+        if a is None or b is None:
+            return 0
+        da = graph.port_dirs.get((s.source.owner.name, s.source.name))
+        db = graph.port_dirs.get((s.dest.owner.name, s.dest.name))
+        m = min_bends(a, da, b, db)
+        return 9 if m is None else m
+
+    def box(s):
+        a, b = ends(s)
+        if a is None or b is None:
+            return 0.0
+        return abs(a[0] - b[0]) * abs(a[1] - b[1])
+
+    rev = rule.endswith("-rev")
+    base = rule[:-4] if rev else rule
+    keys = {
+        "proc-bends": lambda s: (signal(s), mb(s), length(s)),
+        "proc-bends-long": lambda s: (signal(s), mb(s), -length(s)),
+        "man-proc-bends": lambda s: (not manual(s), signal(s), mb(s), length(s)),
+        "proc-mbdesc": lambda s: (signal(s), -mb(s), length(s)),
+        "proc-recfirst-short": lambda s: (signal(s), not s.is_recycle, length(s)),
+        "proc-recfirst-bends": lambda s: (signal(s), not s.is_recycle, mb(s), length(s)),
+        "proc-straight-short": lambda s: (signal(s), mb(s) > 0, length(s)),
+        "bends": lambda s: (mb(s), length(s)),
+        "proc-box": lambda s: (signal(s), box(s), length(s)),
+        "box": lambda s: (box(s), length(s)),
+        "proc-ltr": lambda s: (signal(s), srcx(s)),
+        "proc-recycle-short": lambda s: (signal(s), s.is_recycle, length(s)),
+        "proc-short-recycle": lambda s: (signal(s), length(s) if not s.is_recycle else 1e9 + length(s)),
+        "decl": None,
+        "short": lambda s: length(s),
+        "long": lambda s: -length(s),
+        "constrained": lambda s: (not manual(s), not s.is_recycle),
+        "manual": lambda s: not manual(s),
+        "process": lambda s: signal(s),
+        "ltr": lambda s: srcx(s),
+        "proc-short": lambda s: (signal(s), length(s)),
+        "proc-long": lambda s: (signal(s), -length(s)),
+        "con-short": lambda s: (not manual(s), not s.is_recycle, length(s)),
+        "con-long": lambda s: (not manual(s), not s.is_recycle, -length(s)),
+        "man-short": lambda s: (not manual(s), length(s)),
+        "man-long": lambda s: (not manual(s), -length(s)),
+        "man-proc-short": lambda s: (not manual(s), signal(s), length(s)),
+        "man-proc-long": lambda s: (not manual(s), signal(s), -length(s)),
+        "man-proc": lambda s: (not manual(s), signal(s)),
+        "recycle-last": lambda s: s.is_recycle,
+    }
+    key = keys[base]
+    out = streams if key is None else sorted(streams, key=key)
+    return out[::-1] if rev else out
+
+
 class DefaultRouter:
     """Route automatic streams on a visibility graph.
 
@@ -248,12 +359,24 @@ class DefaultRouter:
         UserWarning
             If an end has no frame or anchor; the stream is skipped.
         """
-        from pandid.routing.visibility import VisibilityGraph, share_escape_room
-        from pandid.routing.astar import CrossingIndex, find_path
-        from pandid.routing.separation import preview_separated_waypoints
+        from pandid.routing.visibility import VisibilityGraph
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
+        best = None
+        for order in _candidate_orders(fs, graph):
+            self._route_in_order(fs, graph, order)
+            score = _drawing_score(fs)
+            if best is None or score < best[0]:
+                best = (score, [s.route for s in fs.streams])
+        assert best is not None
+        for s, r in zip(fs.streams, best[1]):
+            s.route = r
+
+    def _route_in_order(self, fs, graph, streams):  # numpydoc ignore=GL08
+        from pandid.routing.visibility import share_escape_room
+        from pandid.routing.astar import CrossingIndex, find_path
+        from pandid.routing.separation import preview_separated_waypoints
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
         crossing_index = CrossingIndex()
         routed: list["Stream"] = []
@@ -279,7 +402,7 @@ class DefaultRouter:
                 wp = preview.get(id(s), s.route.waypoints)
                 _record_route(crossing_index, wp, s.route.manual)
 
-        for stream in fs.streams:
+        for stream in streams:
             if stream.route and stream.route.manual:
                 settle(stream)
                 continue
