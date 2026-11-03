@@ -36,12 +36,13 @@ def main():
     # coke-forming feed, and a shed deck is what goes in there because
     # it has no perforation to plug and no valve to stick. They are
     # inefficient, so the tower is few decks and tall sections.
-    # n_draws=2 adds two side draws on the east wall, here on trays 6 and 8.
+    # Trays count from the top: the feed enters on tray 10, and n_draws=2
+    # adds two side draws on the east wall, on trays 6 and 8.
     col = fs.add(DistillationColumn("T-701", internals="baffle_tray", trays=10,
-                                    n_draws=2, draw_stages=[6, 8],
+                                    feed_stages=[10], n_draws=2, draw_stages=[6, 8],
                                     description="Main Fractionator"))
-    light = fs.add(Product("Light Side Draw", reference="PFD-400"))
-    heavy = fs.add(Product("Heavy Side Draw", reference="PFD-500"))
+    light = fs.add(Product("Light Cycle Oil", reference="PFD-400"))
+    heavy = fs.add(Product("Heavy Cycle Oil", reference="PFD-500"))
 
     # width/height stay close to each symbol's native proportions:
     # scaling one far past its drawn aspect is what makes a sheet look
