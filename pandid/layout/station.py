@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
-from pandid.layout.corridor import horizontal_centerline
 from pandid.layout.stages import process_units
 from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
 from pandid.routing.visibility import MIN_ESCAPE
@@ -237,16 +236,17 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
     float or None
         The leg's y, or None if no horizontal leg fits.
     """
-    axis = horizontal_centerline(source, source_port, dest, dest_port, start, end)
-    if axis is not None:
-        return axis
     assert source.frame is not None and dest.frame is not None
     source_face = resolve_port(source, source.frame, source_port).face
     dest_face = resolve_port(dest, dest.frame, dest_port).face
-    forward = 1 if end[0] > start[0] else -1
-    if source_face in ("E", "W") and source_face != ("E" if forward > 0 else "W"):
+    ahead, behind = ("E", "W") if end[0] > start[0] else ("W", "E")
+    if abs(start[1] - end[1]) <= 1 or (source_face == ahead and dest_face not in ("E", "W")):
+        return start[1]
+    if dest_face == behind and source_face not in ("E", "W"):
+        return end[1]
+    if source_face in ("E", "W") and source_face != ahead:
         return None
-    if dest_face in ("E", "W") and dest_face != ("W" if forward > 0 else "E"):
+    if dest_face in ("E", "W") and dest_face != behind:
         return None
 
     lower, upper = float("-inf"), float("inf")
