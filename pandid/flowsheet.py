@@ -2057,8 +2057,9 @@ class Flowsheet:
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
+        from pandid.routing import DefaultRouter
+
         if router is None:
-            from pandid.routing import DefaultRouter
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import _clashes, _hangable, place_control
@@ -2079,8 +2080,16 @@ class Flowsheet:
                     copy.deepcopy({id(st): st.route for st in self.streams}),
                     self.route_converged)
 
-        def restore(state: tuple) -> None:
-            """Put back what save() returned; a route drawn by hand stays."""
+        def restore(state: tuple, keep_manual: bool) -> None:
+            """Put back what save() returned.
+
+            Parameters
+            ----------
+            state : tuple
+                What save() returned.
+            keep_manual : bool
+                Keep a route now drawn by hand rather than the saved one.
+            """
             frames, routes, converged = state
             for u in self.units:
                 if id(u) in frames:
@@ -2088,20 +2097,21 @@ class Flowsheet:
                     if hasattr(u, "tap"):
                         u.tap = tap
             for st in self.streams:
-                if id(st) in routes and not (st.route is not None and st.route.manual):
+                manual = st.route is not None and st.route.manual
+                if id(st) in routes and not (keep_manual and manual):
                     st.route = routes[id(st)]
             self.route_converged = converged
 
         # Start from the sheet as routed without hanging, not from a hung
         # controller left by the last route().
         if self._unhung is not None:
-            restore(self._unhung)
+            restore(self._unhung, keep_manual=True)
             self._unhung = None
         router.route(self)
         place()
         # Hang each controller it can off its actuator, and keep that only
-        # if the sheet stays clean.
-        if any(_hangable(self, u) for u in self.units):
+        # if the sheet stays clean. The check assumes the default router.
+        if type(router) is DefaultRouter and any(_hangable(self, u) for u in self.units):
             unhung = save()
             self._may_hang, self._hung = True, set()
             try:
@@ -2112,7 +2122,7 @@ class Flowsheet:
             finally:
                 self._may_hang = False
             if clash or not self._hung:
-                restore(unhung)
+                restore(unhung, keep_manual=False)
             else:
                 self._unhung = unhung
         # Mark the routes current.

@@ -121,8 +121,8 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     """Return the corner of a balloon hung off the one actuator it drives.
 
     An unpinned balloon that, with its lines, carries no attached
-    balloon, has no hand-routed line, and whose signal lines drive
-    exactly one placed valve's actuator, stands
+    balloon, and whose signal lines drive exactly one placed valve's
+    actuator, stands
     :data:`ACTUATOR_OFFSET` out from that actuator, square to its face.
     It steps out and swings as an attached balloon does until it clears
     every blocked box.
@@ -180,7 +180,7 @@ def _hangable(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
     Unit or None
         The one placed valve whose actuator the balloon drives, or None
         if it is not a free, unpinned control balloon whose lines carry
-        no balloon and none drawn by hand.
+        no balloon.
     """
     from pandid.layout.stages import is_control
 
@@ -189,8 +189,6 @@ def _hangable(fs: "Flowsheet", inst: "Unit") -> "Unit | None":
     wired = [(p, s) for p in inst.ports.values() if (s := p.stream) is not None]
     hosts = {id(inst), *(id(s) for _, s in wired)}
     if any(id(getattr(u, "host", None)) in hosts for u in fs.units):
-        return None
-    if any(s.route is not None and s.route.manual for _, s in wired):
         return None
     driven = [s.dest.owner for p, s in wired if s.source is p and s.dest.name == "actuator"]
     if len(driven) != 1 or driven[0].frame is None:
@@ -222,9 +220,9 @@ def _halos(fs: "Flowsheet") -> list[_Box]:
 def _clashes(fs: "Flowsheet") -> bool:
     """Return whether the routed sheet has a clash.
 
-    A clash is an error finding, a line through a unit or a tag halo, a
-    slanted line, unsettled placement, or a tap line through a unit other
-    than its own.
+    A clash is an error finding, a unit over a tag halo, a line through
+    a unit or a tag halo, a slanted line, unsettled placement, or a tap
+    line through a unit other than its own.
 
     Parameters
     ----------
@@ -237,7 +235,7 @@ def _clashes(fs: "Flowsheet") -> bool:
         True if the sheet has a clash.
     """
     from pandid.layout.attach import stream_path
-    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
 
@@ -245,6 +243,9 @@ def _clashes(fs: "Flowsheet") -> bool:
     if any(i.severity == "error" or i.code in codes for i in fs.validate()):
         return True
     halos = _halos(fs)
+    boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    if any(boxes_overlap(box, h, -_BODY_TOL) for _, box in boxes for h in halos):
+        return True
     for s in fs.streams:
         if s.route is None:
             continue
@@ -252,7 +253,6 @@ def _clashes(fs: "Flowsheet") -> bool:
         if any(segment_crosses_box(a, b, h) for a, b in zip(points, points[1:])
                for h in halos):
             return True
-    boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     for inst, tap, centre in tap_lines(fs):
         route = tap_route(inst, tap, centre)
         if any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:])

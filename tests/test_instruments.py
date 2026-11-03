@@ -1412,6 +1412,56 @@ def test_a_hung_controllers_line_keeps_out_of_a_tag_halo() -> None:
         assert not any(segment_crosses_box(a, b, halo) for a, b in zip(points, points[1:]))
 
 
+def test_a_hung_line_frozen_with_via_is_drawn_as_frozen() -> None:
+    """Freezing the drawn line with via() and routing again keeps the
+    controller where that line was drawn to."""
+    fs, lic, _ = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    fs.route()
+    assert line.route is not None
+    line.via(list(line.route.waypoints))
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_custom_router_routes_the_sheet_without_hanging() -> None:
+    """A router other than the default one is given the sheet as main
+    lays it out; a route it freezes is not left behind."""
+    from pandid.routing import DefaultRouter
+
+    class FreezeStraightRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for stream in fs.streams:
+                assert stream.route is not None
+                if len({x for x, _ in stream.route.waypoints}) == 1:
+                    stream.route.manual = True
+
+    fs, _, _ = _hung_controller()
+    fs.route(FreezeStraightRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_a_balloon_moved_by_hanging_keeps_out_of_a_tag_halo() -> None:
+    """XI-1 follows the hung LIC-1; neither may land on P-101's tag."""
+    from pandid.layout.control import _halos
+    from pandid.portgeom import unit_box
+
+    fs, lic, _ = _hung_controller()
+    xi = fs.add_instrument("XI", 1)
+    fs.connect(lic.signal_port("sig_out_2"), xi.sig_in, kind="electric")
+    fs.add(U.Pump("P-101-ABCDEF", width=44, height=44, label_pos="left")).pin(x=350, y=103)
+    fs.route()
+
+    for unit in (lic, xi):
+        box = unit_box(unit, _placed(unit))
+        for left, top, right, bottom in _halos(fs):
+            assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 
