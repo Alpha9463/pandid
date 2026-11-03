@@ -1,15 +1,8 @@
-"""Define a stream: a connection from one port to another.
+"""Streams: connections from one port to another.
 
-A stream's ``name`` is its stream number; the flowsheet keeps an
-automatically named stream's number current and never changes a name
-given to ``connect()``. Setting any of ``size``, ``schedule``,
-``service``, ``spec`` or ``insulation`` turns the number into a line
-number built by the flowsheet's ``line_numbering_scheme``.
-
-``kind`` is one of :data:`STREAM_KINDS`. ``is_recycle`` is computed by
-layout and read-only; ``draw_as_recycle`` only advises which stream of a
-cycle to treat as the return. ``color`` and ``dasharray`` are validated
-when set, because the renderer silently ignores a value it cannot read.
+A stream's ``name`` is its stream number, or a line number built by
+the flowsheet's ``line_numbering_scheme`` once any of ``size``,
+``schedule``, ``service``, ``spec`` or ``insulation`` is set.
 """
 
 from __future__ import annotations
@@ -25,26 +18,20 @@ if TYPE_CHECKING:
     from pandid.ports import Port
     from pandid.state import State
 
-#: Line-number components, in conventional order. ``schedule`` follows
-#: ``size`` because together they give the bore and the wall. The set is
-#: fixed; a different format needs a callable ``line_numbering_scheme``.
+#: Line-number components, in conventional order.
 LINE_NUMBER_FIELDS = ("size", "schedule", "service", "sequence", "spec", "insulation")
 
 #: Kinds that carry process fluid or duty.
 PROCESS_KINDS = frozenset({"material", "energy"})
 
-#: Kinds that carry a measurement or command, each with its own ISA-5.1
-#: line style. They may only join signal-role ports.
+#: Kinds that carry a signal; they join signal-role ports only.
 SIGNAL_KINDS = frozenset({"electric", "pneumatic", "data", "capillary", "software"})
 
 #: Every kind ``connect()`` accepts.
 STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS
 
-#: Accepted colour shapes: a keyword, a hex colour of 3, 4, 6 or 8 digits,
-#: or an ``rgb``/``rgba``/``hsl``/``hsla`` function over numbers. The shape
-#: excludes quotes, angle brackets, ampersands, ``;`` and ``=``, so a value
-#: cannot break out of an SVG attribute or a draw.io style string.
-#: ``url(#...)`` is excluded because no gradient or pattern is defined.
+#: Accepted colour shapes: a keyword, a hex colour of 3, 4, 6 or 8
+#: digits, or an ``rgb``/``rgba``/``hsl``/``hsla`` function.
 _COLOR = re.compile(
     r"""\A(?:
         [A-Za-z][A-Za-z0-9-]*                        # a keyword
@@ -54,8 +41,7 @@ _COLOR = re.compile(
     re.VERBOSE,
 )
 
-#: One unitless number in a dash pattern, in drawing units, which the
-#: draw.io export can translate.
+#: One number in a dash pattern, in drawing units.
 _DASH_NUMBER = r"(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)"
 
 #: A dash pattern: ``none``, or lengths separated by commas or spaces.
@@ -63,41 +49,13 @@ _DASHARRAY = re.compile(rf"\A(?:none|{_DASH_NUMBER}(?:[, ]+{_DASH_NUMBER})*)\Z")
 
 
 def _names(stream: "Stream | None") -> str:
-    """Return a message prefix naming a stream, if it has a name yet.
-
-    Parameters
-    ----------
-    stream : Stream or None
-        Stream being checked; it may not be numbered yet.
-
-    Returns
-    -------
-    str
-        ``"<name>: "``, or an empty string.
-    """
+    """Return ``"<name>: "`` for a named stream, else ``""``."""
     name = getattr(stream, "name", "") if stream is not None else ""
     return f"{name}: " if name else ""
 
 
 def check_color(value: str, stream: "Stream | None" = None) -> None:
-    """Reject a ``color`` value that is not a colour.
-
-    An unreadable paint is ignored by renderers, so the line would vanish.
-    Only the shape is checked; a misspelled keyword such as ``"blck"``
-    passes.
-
-    Parameters
-    ----------
-    value : str
-        Proposed colour.
-    stream : Stream or None, optional
-        Stream named in the error message.
-
-    Raises
-    ------
-    ValueError
-        If the value is not a keyword, hex colour or colour function.
-    """
+    """Raise ``ValueError`` unless ``value`` is shaped like a colour."""
     if _COLOR.match(value):
         return
     raise ValueError(
@@ -110,23 +68,7 @@ def check_color(value: str, stream: "Stream | None" = None) -> None:
 
 
 def check_dasharray(value: str, stream: "Stream | None" = None) -> None:
-    """Reject a ``dasharray`` value that is not a dash pattern.
-
-    An unreadable pattern is ignored and the line is drawn solid, so a
-    signal line would read as a pipe.
-
-    Parameters
-    ----------
-    value : str
-        Proposed dash pattern.
-    stream : Stream or None, optional
-        Stream named in the error message.
-
-    Raises
-    ------
-    ValueError
-        If the value is not ``none`` or a list of numbers.
-    """
+    """Raise ``ValueError`` unless ``value`` is a dash pattern."""
     if _DASHARRAY.match(value):
         return
     raise ValueError(
@@ -156,22 +98,20 @@ class Stream:
     color, dasharray : str or None, default=None
         Line colour and dash pattern, validated when set.
     ends : str, tuple[str, str], or None, default=None
-        Joint style at both ends, or at ``(source, dest)``, overriding the
-        sheet's ``connections``. ``None`` inherits. Resolved by
-        :func:`pandid.render.svg.resolve_connections`.
+        Joint style at both ends, or at ``(source, dest)``; ``None``
+        inherits the sheet's ``connections``.
     auto_named : bool, default=True
         Whether the flowsheet assigns the name.
-    size, schedule, service, sequence, spec, insulation : str, float, or None, default=None
-        Line-number components. ``sequence`` is filled by automatic
-        numbering unless set; ``schedule`` is a schedule number or
-        ``STD``/``XS``/``XXS``.
+    size, schedule, service, sequence, spec, insulation : optional
+        Line-number components, as text or numbers. ``schedule`` is a
+        number or ``STD``/``XS``/``XXS``.
     properties : dict[str, str | float], optional
         Values shown in the stream table.
     tabulate : bool, default=False
-        Report this segment's values in the stream-table column of a run
-        drawn through inline devices. It does not add the run to the table.
+        Report this segment in the stream-table column of a run drawn
+        through inline devices.
     state : State or None, default=None
-        Stream conditions for a future balance engine.
+        Stream conditions.
     """
 
     name: str
@@ -194,39 +134,20 @@ class Stream:
     tabulate: bool = False
     state: State | None = None
     _is_recycle: bool = field(default=False, init=False, repr=False)
-    # Sequence last written by automatic numbering, so an author's value is
-    # recognised and kept.
+    # Sequence last written by automatic numbering.
     _auto_sequence: str | None = field(default=None, init=False, repr=False)
     _inline_at: float | None = field(default=None, init=False, repr=False, compare=False)
     _logical_to: Port | None = field(default=None, init=False, repr=False, compare=False)
     _logical_segments: list[Stream] = field(default_factory=list, init=False, repr=False, compare=False)
     _logical_root: Stream | None = field(default=None, init=False, repr=False, compare=False)
 
-    #: Fields validated on assignment: renderer instructions that are
-    #: silently dropped when unreadable. Other text is escaped on output.
+    #: Fields validated on assignment, with their checks.
     _CHECKED = {"color": check_color, "dasharray": check_dasharray}
 
     def __setattr__(self, name: str, value) -> None:
-        """Set an attribute, validating ``color`` and ``dasharray``.
-
-        Parameters
-        ----------
-        name : str
-            Attribute name.
-        value : object
-            New value.
-
-        Raises
-        ------
-        TypeError
-            If ``color`` or ``dasharray`` is not text or ``None``.
-        ValueError
-            If a checked field receives an invalid value.
-        """
+        """Set an attribute, validating ``color`` and ``dasharray``."""
         check = self._CHECKED.get(name)
         if check is not None and value is not None:
-            # Both are written into SVG and draw.io styles as text; a bool or
-            # number passes the shape check as str() but breaks the renderers.
             if not isinstance(value, str):
                 raise TypeError(
                     f"{_names(self)}{name}={value!r} must be text, such as "
@@ -237,69 +158,33 @@ class Stream:
 
     @property
     def is_recycle(self) -> bool:
-        """Return whether layout marked this stream as a return line.
-
-        Returns
-        -------
-        bool
-            Read-only result of cycle breaking.
-        """
+        """Return whether layout made this a cycle's return line."""
         return self._is_recycle
 
     @property
     def has_line_number(self) -> bool:
-        """Return whether a line number, not a stream number, names the stream.
+        """Return whether a line number, not a stream number, names it.
 
-        ``sequence`` alone does not count, because automatic numbering fills
-        it on every stream.
-
-        Returns
-        -------
-        bool
-            Whether ``size``, ``schedule``, ``service``, ``spec`` or
-            ``insulation`` is set.
+        True when ``size``, ``schedule``, ``service``, ``spec`` or
+        ``insulation`` is set.
         """
         return any((self.size, self.schedule, self.service, self.spec, self.insulation))
 
     @property
     def at_boundary(self) -> bool:
-        """Return whether this segment crosses the sheet boundary.
-
-        A segment is a boundary segment when one end is a
-        :class:`~pandid.units.Feed` or :class:`~pandid.units.Product` flag.
-        ISO 10628-1:2014 4.3.2 d) requires a PFD to name every ingoing and
-        outgoing material with its flow, so the stream table keeps such
-        columns and :mod:`pandid.validate` reports empty ones. A
-        :class:`~pandid.units.Vent` or :class:`~pandid.units.Funnel` is
-        drawn as piping, not as a reference to another drawing, and is not
-        a boundary here.
-
-        The answer is per segment: on a run drawn through inline devices,
-        only the segment at the flag returns ``True``.
-
-        Returns
-        -------
-        bool
-            Whether either end is a boundary flag.
-        """
+        """Return whether this segment ends at a Feed or Product."""
         from pandid.units import _Boundary
 
         return (isinstance(self.source.owner, _Boundary)
                 or isinstance(self.dest.owner, _Boundary))
 
     def line_components(self) -> dict[str, str]:
-        """Return the line-number components as text.
-
-        Returns
-        -------
-        dict[str, str]
-            Value per field in :data:`LINE_NUMBER_FIELDS`, empty where unset.
-        """
+        """Return the line-number fields as text, empty where unset."""
         return {f: "" if getattr(self, f) is None else str(getattr(self, f))
                 for f in LINE_NUMBER_FIELDS}
 
     def via(self, waypoints: list[tuple[float, float]]) -> "Stream":
-        """Route the stream through exact author-supplied waypoints.
+        """Route the stream through exact waypoints.
 
         Parameters
         ----------

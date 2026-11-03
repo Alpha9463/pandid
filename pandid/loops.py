@@ -1,34 +1,8 @@
-"""Define control loops: the variable and number instrument tags share.
+"""Control loops: the variable and number instrument tags share.
 
-A loop is a namespace, not a drawn thing: it has no frame or ports and is
-not in :attr:`~pandid.flowsheet.Flowsheet.units`. It owns a number and
-checks the first letter of every balloon tagged from it::
-
-    loop = fs.add_loop("F", 303)
-    fe = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
-    fs.add_balloon(fe, at="N", offset=38)
-    ft = fs.add_instrument("FT", loop, near=fe.balloon, at="N", offset=23)
-    fic = fs.add_instrument("FIC", loop, near=ft, at="E", offset=70,
-                            variant="shared")
-    cv = fs.add(units.Valve(loop.tag("CV"), variant="control"))
-
-The common single loop of transmitter, controller and valve is one call
-(:meth:`~pandid.flowsheet.Flowsheet.add_control_loop`), returning a
-:class:`ControlLoop`::
-
-    loop = fs.add_control_loop("F", 303, measuring=feed, acting_on=cv)
-
-A primary element is lettered from the measured variable, so
-:meth:`Loop.element` checks its letter. A final control element is not
-(control valves are ``CV-`` whatever they act on), so :meth:`Loop.tag`
-does not check. A loop is identified by its variable and number together:
-``FIC-101`` and ``LIC-101`` are different loops.
-
-Loop numbers are author intent and are never renumbered. If the number is
-omitted, the flowsheet allocates the next one from a single counter when
-the loop is declared. :meth:`~pandid.flowsheet.Flowsheet.to_dict` writes
-every number explicitly, and reading a spec sets the counter past the
-highest number in it.
+:meth:`~pandid.flowsheet.Flowsheet.add_loop` returns a :class:`Loop`;
+:meth:`~pandid.flowsheet.Flowsheet.add_control_loop` builds a
+transmitter, controller and output and returns a :class:`ControlLoop`.
 """
 
 from __future__ import annotations
@@ -44,9 +18,6 @@ if TYPE_CHECKING:
 
 class Loop:
     """One control loop: a measured-variable letter and a number.
-
-    Create loops with :meth:`~pandid.flowsheet.Flowsheet.add_loop`, which
-    refuses duplicates and allocates a number when none is given.
 
     Parameters
     ----------
@@ -78,7 +49,6 @@ class Loop:
                 f"for level, 'T' for temperature), got {variable!r}. The function "
                 f"letters stay on each instrument, so the loop takes only the first one"
             )
-        # A float would draw as F-303.0; loop numbers are integers or text.
         if not (isinstance(number, str) or is_whole(number)):
             raise TypeError(
                 f"a loop number is text or a whole number (an int), got {number!r}"
@@ -96,24 +66,13 @@ class Loop:
 
     @property
     def name(self) -> str:
-        """Return the loop's identity, such as ``"F-303"``.
-
-        This is not a tag; no instrument carries it.
-
-        Returns
-        -------
-        str
-            Variable and number.
-        """
+        """Return the loop's identity, such as ``"F-303"``."""
         return f"{self.variable}-{self.number}"
 
     def tag(self, letters: str) -> str:
-        """Return a final control element's tag on this loop.
+        """Return a final control element's tag, such as ``"CV-303"``.
 
-        ``loop.tag("CV")`` gives ``"CV-303"``. The letters are not checked
-        against the measured variable: a control valve is ``CV-`` whatever
-        it acts on. The number joins it to the loop. Use :meth:`element`
-        for a primary element.
+        The letters are not checked against the measured variable.
 
         Parameters
         ----------
@@ -139,18 +98,12 @@ class Loop:
         return f"{letters}-{self.number}"
 
     def element(self, letters: str) -> str:
-        """Return a primary element's tag on this loop, checked.
-
-        ``loop.element("FE")`` gives ``"FE-303"``. A primary element (an
-        orifice plate, venturi or meter) is lettered from the measured
-        variable, so its first letter must match it, as for a balloon. Any
-        function letter is allowed: ``FO`` and ``FG`` are fine on a flow
-        loop.
+        """Return a checked primary element tag, such as ``"FE-303"``.
 
         Parameters
         ----------
         letters : str
-            The element's letters.
+            The element's letters, opening with the measured variable.
 
         Returns
         -------
@@ -182,10 +135,7 @@ class Loop:
         return f"{letters}-{self.number}"
 
     def check(self, letters: str) -> None:
-        """Check that instrument letters open with the measured variable.
-
-        Called by :meth:`~pandid.flowsheet.Flowsheet.add_instrument`, so a
-        ``TT`` on a flow loop fails where it is written.
+        """Check that letters open with the measured variable.
 
         Parameters
         ----------
@@ -220,14 +170,6 @@ class Loop:
 class ControlLoop:
     """Handle for a single-variable feedback loop and its members.
 
-    Returned by :meth:`~pandid.flowsheet.Flowsheet.add_control_loop`. It
-    draws nothing and is not in
-    :attr:`~pandid.flowsheet.Flowsheet.units`; its members are ordinary
-    balloons, units and signal streams that can still be pinned or
-    reconnected. It wraps the :class:`Loop` rather than subclassing it, so
-    :attr:`~pandid.flowsheet.Flowsheet.loops` keeps one entry per loop.
-    Cascade, ratio, split-range and override loops are built by hand.
-
     Parameters
     ----------
     loop : Loop
@@ -237,8 +179,7 @@ class ControlLoop:
     controller : Instrument
         Balloon holding the setpoint, such as ``FIC-101``.
     final_element : Unit
-        Unit the output acts on: a valve, damper, louvre or drive. Where a
-        port was given, the unit that owns it.
+        Unit the output acts on, such as a valve.
     measurement : Stream
         Signal from transmitter to controller.
     output : Stream

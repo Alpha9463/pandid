@@ -1,4 +1,4 @@
-"""Put devices and valve stations on a line while keeping the line's handle."""
+"""Put devices and valve stations on a line, keeping its handle."""
 
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ _INLINE_KINDS = frozenset({"valve", "reducer", "fitting"})
 
 
 def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Stream], int]:
-    """Return a line's segments and the index of the one a new item splits.
+    """Return a line's segments and the index a new item splits.
 
-    An item without ``at`` goes last. One with ``at`` goes before the
+    An item without ``at`` goes last; one with ``at`` goes before the
     first item with a larger ``at``.
 
     Parameters
@@ -29,21 +29,20 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
     fs : Flowsheet
         Sheet that owns the line.
     line : Stream
-        Line handle returned by ``connect()``, including after earlier
-        insertions.
+        Line handle returned by ``connect()``.
     at : float or None
         Fraction of the line strictly between 0 and 1, or ``None``.
 
     Returns
     -------
     tuple[list[Stream], int]
-        The line's physical segments in flow order, and the index of the
+        The physical segments in flow order, and the index of the
         segment whose destination the new item takes.
 
     Raises
     ------
     ValueError
-        If the line cannot be split without changing what the author typed.
+        If the line cannot be split.
     """
     if not isinstance(line, Stream):
         raise ValueError(f"on= takes a line returned by connect(), got {line!r}")
@@ -74,21 +73,10 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
 
 
 def position(segment: Stream) -> float | None:
-    """Return where on its line the item a segment enters sits.
+    """Return the line fraction of the item a segment enters.
 
-    An item added without ``at`` is spread evenly between its stated
-    neighbours, or the line's ends.
-
-    Parameters
-    ----------
-    segment : Stream
-        Physical segment entering a device or station.
-
-    Returns
-    -------
-    float or None
-        Fraction of the whole line, or ``None`` for a segment that is not
-        on a line built with ``on=`` and states no position.
+    An item without ``at`` is spread evenly between its stated
+    neighbours. Returns ``None`` for a segment not on a split line.
     """
     if segment._inline_at is not None:
         return segment._inline_at
@@ -106,28 +94,7 @@ def position(segment: Stream) -> float | None:
 
 def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
             inlet: Port, outlet: Port, at: float | None) -> None:
-    """Route one segment of a line into ``inlet`` and a new one out of ``outlet``.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet that owns the line.
-    line : Stream
-        Line handle.
-    segments : list[Stream]
-        The line's physical segments.
-    index : int
-        Segment to split, from :func:`split_point`.
-    inlet, outlet : Port
-        Where the line enters and leaves the new item.
-    at : float or None
-        The item's stated fraction.
-
-    Returns
-    -------
-    None
-        The line, its ports and ``fs.streams`` are updated in place.
-    """
+    """Route a segment into ``inlet`` and a new one from ``outlet``."""
     selected = segments[index]
     old_dest = selected.dest
     successor = Stream(name="", source=outlet, dest=old_dest, kind="material",
@@ -148,7 +115,7 @@ def _splice(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
 
 def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
                   at: float | None) -> _UnitT:
-    """Add a fresh two-port device to a sheet, in a line.
+    """Add an unconnected two-port device to a sheet, in a line.
 
     Parameters
     ----------
@@ -159,7 +126,7 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
     device : Unit
         Unconnected valve, reducer or fitting.
     at : float or None
-        Fraction of the line, or ``None`` to go after the items already on it.
+        Fraction of the line, or ``None`` to go last.
 
     Returns
     -------
@@ -190,7 +157,7 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
 
 def insert_station(fs: Flowsheet, line: Stream, station: ValveStation, *,
                    at: float | None) -> None:
-    """Put a freshly built valve station in a line.
+    """Put a newly built valve station in a line.
 
     Parameters
     ----------
@@ -199,14 +166,9 @@ def insert_station(fs: Flowsheet, line: Stream, station: ValveStation, *,
     line : Stream
         Line handle returned by ``connect()``.
     station : ValveStation
-        Station whose inlet and outlet are still free.
+        Station whose inlet and outlet are free.
     at : float or None
-        Fraction of the line, or ``None`` to go after the items already on it.
-
-    Returns
-    -------
-    None
-        The line runs through the station and its assembly records the line.
+        Fraction of the line, or ``None`` to go last.
 
     Raises
     ------
@@ -226,26 +188,21 @@ def insert_station(fs: Flowsheet, line: Stream, station: ValveStation, *,
 
 
 def restore_logical_run(fs: Flowsheet, root: Stream, endpoint: Port) -> None:
-    """Rebuild a logical run from its serialized physical segments.
+    """Rebuild a split line from its serialized physical segments.
 
     Parameters
     ----------
     fs : Flowsheet
-        Sheet containing all physical segments.
+        Sheet containing the segments.
     root : Stream
-        First physical segment and logical run handle.
+        First segment and the line's handle.
     endpoint : Port
-        Original destination of the run before insertion.
-
-    Returns
-    -------
-    None
-        The root and its downstream segments are linked.
+        The line's final destination.
 
     Raises
     ------
     ValueError
-        If the physical chain cannot reach the stated endpoint.
+        If the segments do not reach ``endpoint``.
     """
     if root._logical_to is not None or root._logical_root is not None:
         raise ValueError("logical run roots cannot overlap")
