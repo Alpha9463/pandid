@@ -17,8 +17,8 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from _drawio_compare import normalize
 from _render_cases import copy_settled_case, gallery
+from test_halo_invariants import _overlaps
 import pandid
 from pandid import units
 from pandid.flowsheet import Flowsheet
@@ -204,22 +204,6 @@ def test_a_referenced_stencil_is_always_variable_aspect():
 # ---------------------------------------------------------------------------
 
 
-def _codes(fs: Flowsheet) -> list[str]:
-    """Collect warning codes from a flowsheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to inspect.
-
-    Returns
-    -------
-    list[str]
-        Warning codes in report order.
-    """
-    return [w.code for w in fs.warnings]
-
-
 def test_a_stand_in_says_on_fs_warnings_what_it_lost():
     """Report the artwork lost by each approximate symbol."""
     fs = Flowsheet("lost")
@@ -238,10 +222,10 @@ def test_a_stand_in_says_on_fs_warnings_what_it_lost():
     # The SVG loses nothing, so it says nothing -- and a second export replaces
     # the first export's findings rather than stacking a second copy on them.
     fs.to_svg()
-    assert "drawio-approximated" not in _codes(fs)
+    assert "drawio-approximated" not in [w.code for w in fs.warnings]
     fs.to_drawio()
     fs.to_drawio()
-    assert _codes(fs).count("drawio-approximated") == 1
+    assert [w.code for w in fs.warnings].count("drawio-approximated") == 1
 
 
 def test_a_stand_in_that_loses_nothing_says_nothing():
@@ -252,7 +236,7 @@ def test_a_stand_in_that_loses_nothing_says_nothing():
     prod = fs.add(units.Product("P"))
     fs.connect(feed.outlet, prod.inlet)
     fs.to_drawio()
-    assert "drawio-approximated" not in _codes(fs)
+    assert "drawio-approximated" not in [w.code for w in fs.warnings]
 
 
 def _truncated_title_sheet() -> Flowsheet:
@@ -548,7 +532,7 @@ def test_a_label_written_inside_its_shape_fits_inside_it(settled_gallery, render
     from pandid.render.drawio import _LINE_BOX
 
     for stem in DRAWIO_REPRESENTATIVES:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
         cells = _gallery_cells(rendered_gallery, stem)
         for i, unit in enumerate(fs.units):
             cell = cells[f"u{i}"]
@@ -1455,7 +1439,7 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
     from pandid.render.svg import sheet_connections, stream_numbers
 
     for stem in LINE_NUMBER_SHEETS:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
         # Enclosed numbers use a separate cell, checked in test_stream_label_enclosure.py.
         if fs.stream_labels.enclosure != "none":
             continue
@@ -1504,7 +1488,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
 
     written, counted = {}, {}
     for stem in INSTRUMENT_CODE_SHEETS:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
         svg = rendered_gallery[stem].svg
         cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
@@ -2408,7 +2392,7 @@ def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery, rendered_
 
     checked = []
     for stem in TABLE_REPRESENTATIVES:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
         if not kwargs.get("show_stream_table"):
             continue
         drawn = _svg_stream_table(rendered_gallery[stem].svg)
@@ -2459,7 +2443,7 @@ def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(
 
     checked = []
     for stem in TABLE_REPRESENTATIVES:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
         if not kwargs.get("show_stream_table"):
             continue
         cells = _gallery_cells(rendered_gallery, stem)
@@ -2808,46 +2792,29 @@ def test_each_paged_representative_lands_on_its_configured_paper(settled_gallery
     settled_gallery : dict[str, tuple[Flowsheet, dict]]
         Session-scoped routed gallery sources.
     """
-    from pandid.render.svg import _page
-
     for stem in PAGED_REPRESENTATIVES:
-        _lands_on_its_paper(stem, _page, settled_gallery)
-
-
-def _lands_on_its_paper(stem, _page, settled_gallery):
-    """Check that an example drawing fits its declared page.
-
-    Parameters
-    ----------
-    stem : str
-        Gallery example name.
-    _page : callable
-        Page-size resolver.
-    settled_gallery : dict
-        Routed gallery sheets.
-    """
-    fs, kwargs = _gallery_case(settled_gallery, stem)
-    fs.to_svg(**kwargs)
-    sheet = _page(kwargs.get("page_size"))
-    doc = fs.to_drawio(
-        diagram=kwargs.get("diagram"),
-        page_size=kwargs.get("page_size"),
-        border=kwargs.get("border"),
-    )
-    root = ET.fromstring(doc)
-    if sheet is None:
-        assert root.find("diagram/mxGraphModel").get("page") == "0"
-        return
-    for cell in root.iter("mxCell"):
-        geo = cell.find("mxGeometry")
-        if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
+        fs.to_svg(**kwargs)
+        sheet = _page(kwargs.get("page_size"))
+        doc = fs.to_drawio(
+            diagram=kwargs.get("diagram"),
+            page_size=kwargs.get("page_size"),
+            border=kwargs.get("border"),
+        )
+        root = ET.fromstring(doc)
+        if sheet is None:
+            assert root.find("diagram/mxGraphModel").get("page") == "0"
             continue
-        if cell.get("parent") not in (None, "1"):
-            continue  # a table row or cell, measured inside its own container
-        x, y = float(geo.get("x")), float(geo.get("y"))
-        w, h = float(geo.get("width") or 0), float(geo.get("height") or 0)
-        assert -1 <= x and x + w <= sheet.width + 1, f"{cell.get('id')} runs off the page"
-        assert -1 <= y and y + h <= sheet.height + 1, f"{cell.get('id')} runs off the page"
+        for cell in root.iter("mxCell"):
+            geo = cell.find("mxGeometry")
+            if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
+                continue
+            if cell.get("parent") not in (None, "1"):
+                continue  # a table row or cell, measured inside its own container
+            x, y = float(geo.get("x")), float(geo.get("y"))
+            w, h = float(geo.get("width") or 0), float(geo.get("height") or 0)
+            assert -1 <= x and x + w <= sheet.width + 1, f"{cell.get('id')} runs off the page"
+            assert -1 <= y and y + h <= sheet.height + 1, f"{cell.get('id')} runs off the page"
 
 
 def test_an_unruled_sheet_draws_no_frame():
@@ -2915,24 +2882,6 @@ TABLE_REPRESENTATIVES = ("03_distillation_train", "10_ethanol_pfd", "21_alumina_
 PAGED_REPRESENTATIVES = ("10_ethanol_pfd", "11_ethanol_pid")
 
 
-def _gallery_case(settled_gallery, stem):
-    """Copy a shared routed gallery sheet for an independent export check.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Session-scoped routed source sheets.
-    stem : str
-        Gallery example name.
-
-    Returns
-    -------
-    tuple[Flowsheet, dict]
-        Independent sheet and rendering options.
-    """
-    return copy_settled_case(settled_gallery, stem)
-
-
 @dataclass(frozen=True)
 class _GalleryArtifacts:
     """Rendered outputs shared by read-only gallery export checks.
@@ -2971,7 +2920,7 @@ def rendered_gallery(settled_gallery) -> dict[str, _GalleryArtifacts]:
     """
     artifacts = {}
     for stem in DRAWIO_REPRESENTATIVES:
-        fs, kwargs = _gallery_case(settled_gallery, stem)
+        fs, kwargs = copy_settled_case(settled_gallery, stem)
         artifacts[stem] = _GalleryArtifacts(
             svg=fs.to_svg(**kwargs),
             drawio=fs.to_drawio(**_drawio_options(kwargs)),
@@ -3008,7 +2957,7 @@ def test_each_representative_export_matches_its_rendered_sheet(settled_gallery, 
     stem : str
         Representative gallery example name.
     """
-    fs, kwargs = _gallery_case(settled_gallery, stem)
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
     fs.to_svg(**kwargs)  # draw the same settled geometry as the example
     root = ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram")))
     cells = {cell.get("id"): cell for cell in root.iter("mxCell")}
@@ -3108,24 +3057,6 @@ def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
     return symbols, tags, numbers
 
 
-def _boxes_overlap(a, b) -> bool:
-    """Check whether two axis-aligned rectangles intersect.
-
-    Parameters
-    ----------
-    a : tuple[float, float, float, float]
-        First rectangle as left, top, right, bottom.
-    b : tuple[float, float, float, float]
-        Second rectangle in the same form.
-
-    Returns
-    -------
-    bool
-        Whether the rectangles overlap with positive area.
-    """
-    return a[2] > b[0] and a[0] < b[2] and a[3] > b[1] and a[1] < b[3]
-
-
 @pytest.mark.parametrize("stem", LINE_NUMBER_SHEETS, ids=LINE_NUMBER_SHEETS)
 def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
     settled_gallery, rendered_gallery, stem
@@ -3141,7 +3072,7 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
     stem : str
         Representative gallery example name with material-line labels.
     """
-    fs, kwargs = _gallery_case(settled_gallery, stem)
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
     symbols, tags, numbers = _drawn_boxes(fs, kwargs, _gallery_cells(rendered_gallery, stem))
     drawn = {**symbols, **{f"{k} tag": v for k, v in tags.items()}}
 
@@ -3149,7 +3080,7 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
         (name, other)
         for name, box in numbers
         for other, obstacle in drawn.items()
-        if _boxes_overlap(box, obstacle)
+        if _overlaps(box, obstacle)
     ]
     assert not struck, f"{stem}: line numbers written over {struck}"
 
@@ -3169,7 +3100,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
     """
     from test_label_invariants import _labels
 
-    fs, kwargs = _gallery_case(settled_gallery, stem)
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
     svg = rendered_gallery[stem].svg
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     cells = _gallery_cells(rendered_gallery, stem)
@@ -3241,7 +3172,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
         Representative gallery example name.
     """
 
-    fs, kwargs = _gallery_case(settled_gallery, stem)
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     cells = _gallery_cells(rendered_gallery, stem)
     seen = 0
@@ -3452,7 +3383,7 @@ def test_each_marked_representative_accounts_for_every_drawio_hop(settled_galler
     style : str
         Crossing style requested for both output backends.
     """
-    fs, kwargs = _gallery_case(settled_gallery, stem)
+    fs, kwargs = copy_settled_case(settled_gallery, stem)
     fs.to_svg(**kwargs, crossing_style=style)
     root = ET.fromstring(
         fs.to_drawio(
@@ -3651,21 +3582,6 @@ def test_a_cycle_costs_only_the_runs_inside_it():
 # ---------------------------------------------------------------------------
 
 
-def _samples():
-    """Load the Draw.io sample-generation script.
-
-    Returns
-    -------
-    ModuleType
-        Sample-generation module.
-    """
-    path = ROOT / "scripts" / "drawio_samples.py"
-    spec = importlib.util.spec_from_file_location("_pandid_script_drawio_samples", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     """Keep generated sample structure independent of generator provenance.
 
@@ -3674,13 +3590,17 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     monkeypatch : pytest.MonkeyPatch
         Fixture used to replace the package version during the test.
     """
-    samples = _samples()
+    path = ROOT / "scripts" / "drawio_samples.py"
+    spec = importlib.util.spec_from_file_location("_pandid_script_drawio_samples", path)
+    samples = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(samples)
     current, _dropped = samples.sample("04_control_loop")
     monkeypatch.setattr(pandid, "__version__", "99.99.99")
     bumped, _dropped = samples.sample("04_control_loop")
 
     assert current != bumped, "the generator version is absent from the sample"
-    assert normalize(current) == normalize(bumped)
+    agent = re.compile(r'(<mxfile\b[^>]*\bagent=)"[^"]*"')
+    assert agent.sub(r"\1", current) == agent.sub(r"\1", bumped)
 
 
 # ---------------------------------------------------------------------------
