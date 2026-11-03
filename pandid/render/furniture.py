@@ -625,7 +625,7 @@ def _width_floor(stated: float | str, name: str, ruled: float) -> float:
     Raises
     ------
     ValueError
-        If ``stated`` is not a number or is negative.
+        If ``stated`` is not ``"auto"`` or a non-negative number.
     """
     if stated == "auto":
         return 0.0
@@ -938,7 +938,7 @@ def stream_table_layout(fs) -> "StreamTable | None":
     ValueError
         If the stated font size is not positive.
     ValueError
-        If a column width option is negative or not a number.
+        If a column width is not ``"auto"`` or a non-negative number.
     ValueError
         If more than one segment of a run is marked ``tabulate``.
     """
@@ -969,7 +969,7 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
     ValueError
         If the stated font size is not positive.
     ValueError
-        If a column width option is negative or not a number.
+        If a column width is not ``"auto"`` or a non-negative number.
     ValueError
         If more than one segment of a run is marked ``tabulate``.
     """
@@ -1159,7 +1159,7 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     ValueError
         If the stated font size is not positive.
     ValueError
-        If a column width option is negative or not a number.
+        If a column width is not ``"auto"`` or a non-negative number.
     ValueError
         If more than one segment of a run is marked ``tabulate``.
     """
@@ -2015,7 +2015,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
     Raises
     ------
     TypeError
-        If ``sheet`` overflows and ``too_small`` is not given.
+        If the furniture overflows ``sheet`` and ``too_small`` is None.
     Exception
         From ``too_small``, if the furniture overflows ``sheet``.
     """

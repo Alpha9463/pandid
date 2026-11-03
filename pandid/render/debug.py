@@ -64,8 +64,8 @@ def resolve_spacing(debug: "bool | float") -> "float | None":
 
     Parameters
     ----------
-    debug : bool or float
-        ``False`` (off), ``True`` (:data:`DEFAULT_SPACING`) or a pitch.
+    debug : bool, float or None
+        ``False``/``None``: off; ``True``: default; else the pitch.
 
     Returns
     -------
@@ -75,8 +75,9 @@ def resolve_spacing(debug: "bool | float") -> "float | None":
     Raises
     ------
     ValueError
-        If ``debug`` is not a finite number of at least
-        :data:`_MIN_SPACING`.
+        If ``debug`` is not a bool, ``None`` or convertible to a float.
+    ValueError
+        If the pitch is not finite or is below :data:`_MIN_SPACING`.
     """
     if debug is False or debug is None:
         return None
@@ -437,7 +438,7 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
                 best, damage = (spot, box), cost
                 if cost == _CLEAR:
                     break
-        assert best is not None  # _spots never returns an empty list
+        assert best is not None  # _spots returns at least one offset.
         (x, y, anchor), box = best
         placed.append(box)
         words[i] = _text(x, y, lab.text, lab.size, lab.colour, anchor)

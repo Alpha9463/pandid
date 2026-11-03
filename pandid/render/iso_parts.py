@@ -109,7 +109,7 @@ def _build() -> tuple:
         Raises
         ------
         ValueError
-            If the item, registration number or descriptor is invalid.
+            If ``name``, ``item``, ``reg`` or ``descriptor`` is invalid.
         """
         return OverlayPart(
             name=name, iso=IsoPart(27, item, reg, descriptor),
@@ -143,7 +143,7 @@ def _build() -> tuple:
         Raises
         ------
         ValueError
-            If the item, registration number or descriptor is invalid.
+            If ``name``, ``item``, ``reg`` or ``descriptor`` is invalid.
         """
         return OverlayPart(
             name=name, iso=IsoPart(28, item, reg, descriptor),
@@ -580,7 +580,7 @@ def agitator_overlays(name: str, kind: str, variant: str) -> tuple:
     ValueError
         If ``name`` is not a registered agitator.
     ValueError
-        If ``kind`` has no variant ``variant``.
+        If ``kind`` is registered without ``variant``.
     """
     from pandid.render.symbols import Overlay, default_registry
     _part(28, name)
