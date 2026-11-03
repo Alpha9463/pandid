@@ -111,7 +111,7 @@ DEVICES = {
     # --- Separators ---------------------------------------------------
     ("separator", "cyclone"): ("Cyclone", """Cyclone separator: a vortex throws the heavy phase down.
 
-    ISO 15519-1 symbol X 2618. The draws are ``overflow`` (gas) and
+    ISO 15519-1 X 2618. The draws are ``overflow`` (gas) and
     ``underflow`` (solids).
 """),
     ("separator", "gravity"): ("GravitySeparator", """Gravity separator: the gas slows and the heavy phase falls."""),
@@ -155,62 +155,59 @@ DEVICES = {
     ("dryer", "spray"): ("SprayDryer", """Spray dryer: feed atomised into hot gas, powder off the floor."""),
     ("dryer", "shelf"): ("ShelfDryer", """Shelf (tray) dryer: trays of product in a heated chamber.
 
-    ISO 10628-2 item 10.2, X8083.
+    ISO 10628-2 item 10.2.
 """),
     ("dryer", "turbo"): ("TurboDryer", """Turbo dryer: a stack of rotating discs on one shaft.
 
-    ISO 10628-2 item 10.3, X8040.
+    ISO 10628-2 item 10.3.
 """),
     ("dryer", "belt"): ("BeltDryer", """Belt dryer: product carried through on a moving belt.
 
-    ISO 10628-2 item 10.6, X8043.
+    ISO 10628-2 item 10.6.
 """),
 
     # --- Crushers and mills -------------------------------------------
     ("crusher", "jaw"): ("JawCrusher", """Jaw crusher: a swing jaw worked by an eccentric.
 
-    ISO 10628-2 item 11.5 X8047: the crusher body with item 29.9 C2036.
+    ISO 10628-2 item 11.5.
 """),
     ("crusher", "cone"): ("ConeCrusher", """Cone crusher: a gyrating head inside a fixed bowl.
 
-    ISO 10628-2 item 11.7 X8049: the crusher body with item 29.12
-    C2038.
+    ISO 10628-2 item 11.7.
 """),
     ("crusher", "hammer"): ("HammerCrusher", """Hammer crusher: swing hammers on a rotor against a breaker plate.
 
-    ISO 10628-2 item 11.3 X8045: the crusher body with item 29.7 C2034.
+    ISO 10628-2 item 11.3.
 """),
     ("crusher", "impact"): ("ImpactCrusher", """Impact crusher: blow bars on a rotor throw feed at aprons.
 
-    ISO 10628-2 item 11.4 X8046: the crusher body with item 29.8 C2035.
+    ISO 10628-2 item 11.4.
 """),
     ("crusher", "roller"): ("RollerCrusher", """Roll crusher: two counter-rotating rolls with a nip between.
 
-    ISO 10628-2 item 11.6 X8048: the crusher body with item 29.11
-    C2037.
+    ISO 10628-2 item 11.6.
 """),
     ("mill", "hammer"): ("HammerMill", """Hammer mill: swing hammers against a screen.
 
-    ISO 10628-2 item 11.9 X8050: the mill body with item 29.7 C2034.
+    ISO 10628-2 item 11.9.
 """),
     ("mill", "impact"): ("ImpactMill", """Impact mill or pin mill: a rotor throws feed at a liner.
 
-    ISO 10628-2 item 11.10 X8051: the mill body with item 29.8 C2035.
+    ISO 10628-2 item 11.10.
 """),
     ("mill", "roller"): ("RollerMill", """Roller mill: rolls running on a table or against a ring.
 
-    ISO 10628-2 item 11.11 X8053: the mill body with item 29.11 C2037.
+    ISO 10628-2 item 11.11.
 """),
     ("mill", "vibration"): ("VibratingMill", """Vibrating mill: a charged drum shaken rather than tumbled.
 
-    ISO 10628-2 item 11.12 X8054: a drum with the two arrows of item
-    29.14 (3831).
+    ISO 10628-2 item 11.12.
 """),
 
     # --- Solids conveying ---------------------------------------------
     ("conveyor", "screw"): ("ScrewConveyor", """Screw conveyor: a flighted shaft turning in a closed trough.
 
-    ISO 10628-2 item 18.5 X8063. ``feed`` is on top near the tail and
+    ISO 10628-2 item 18.5. ``feed`` is on top near the tail and
     ``discharge`` underneath near the head. ``length=`` sets the trough
     length.
 """),
@@ -218,41 +215,41 @@ DEVICES = {
     # --- Feeders ------------------------------------------------------
     ("feeder", "rotary_valve"): ("RotaryValveFeeder", """Rotary valve feeder: a rotor metering solids through a housing.
 
-    ISO 10628-2 item 19.2 X8067.
+    ISO 10628-2 item 19.2.
 """),
     ("feeder", "rotary_table"): ("RotaryTableFeeder", """Rotary table feeder: solids ploughed off a turning table.
 
-    ISO 10628-2 item 19.3 C0074.
+    ISO 10628-2 item 19.3.
 """),
     ("feeder", "metering"): ("MeteringFeeder", """Metering (weigh) feeder: solids let through by measured weight.
 
-    ISO 10628-2 item 19.4 C0035, drawn as a balance.
+    ISO 10628-2 item 19.4, drawn as a balance.
 """),
 
     # --- Screens ------------------------------------------------------
     ("screening_device", "coarse_rake"): ("CoarseRakeScreen", """Rake screen, coarse type: a mesh cleared by a coarse rake.
 
-    ISO 10628-2 item 7.2 X8026.
+    ISO 10628-2 item 7.2.
 """),
     ("screening_device", "fine_rake"): ("FineRakeScreen", """Rake screen, fine type: a mesh cleared by a fine rake.
 
-    ISO 10628-2 item 7.3 X8027.
+    ISO 10628-2 item 7.3.
 """),
     ("screening_device", "coarse_and_fine"): ("CoarseAndFineScreen", """Double-deck screen: a coarse deck over a fine one.
 
-    ISO 10628-2 item 7.4 X8028.
+    ISO 10628-2 item 7.4.
 """),
     ("screening_device", "vibrating"): ("VibratingScreen", """Vibrating screen: a deck shaken to move material across it.
 
-    ISO 10628-2 item 7.5 X2605.
+    ISO 10628-2 item 7.5.
 """),
     ("screening_device", "rotating_drum"): ("RotaryDrumScreen", """Rotary drum screen (trommel): a turning perforated cylinder.
 
-    ISO 10628-2 item 7.6 X8029.
+    ISO 10628-2 item 7.6.
 """),
     ("screening_device", "basket_reel"): ("ReelScreen", """Reel screen: a wire basket turned between two rollers.
 
-    ISO 10628-2 item 7.7 X8030.
+    ISO 10628-2 item 7.7.
 """),
 
     # --- Valves -------------------------------------------------------
@@ -297,7 +294,7 @@ DEVICES = {
 """),
     ("fitting", "steam_trap"): ("SteamTrap", """Steam trap: drains condensate from a steam line.
 
-    ISO 10628-2 item 24.15, symbol 2181.
+    ISO 10628-2 item 24.15.
 """),
     ("fitting", "venturi"): ("FlowElement", """Primary flow element: the device in the run an FE balloon reads.
 
@@ -505,19 +502,59 @@ STAYS_ON_BASE = {
 
 
 def variant_map(class_name: str, home: str) -> dict[str, str]:
-    """Return a class's ``{class-local: registry}`` variant map."""
+    """Return a class's ``{class-local: registry}`` variant map.
+
+    Parameters
+    ----------
+    class_name : str
+        Generated class name.
+    home : str
+        Registry variant the class is named for.
+
+    Returns
+    -------
+    dict[str, str]
+        Class-local variant to registry variant.
+    """
     if class_name in OWNS:
         return dict(OWNS[class_name])
     return {"default": home}
 
 
 def declared_variants(mapping: dict[str, str]) -> tuple[str, ...]:
-    """Return ``VARIANTS``: class-local names, then registry ones."""
+    """Return ``VARIANTS``: class-local names, then registry ones.
+
+    Parameters
+    ----------
+    mapping : dict[str, str]
+        Output of :func:`variant_map`.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Accepted variant names.
+    """
     return tuple(dict.fromkeys([*mapping, *mapping.values()]))
 
 
 def base_of(kind: str) -> type:
-    """Return the exported units class that owns ``kind``."""
+    """Return the exported units class that owns ``kind``.
+
+    Parameters
+    ----------
+    kind : str
+        Unit kind.
+
+    Returns
+    -------
+    type
+        Base class for generated subclasses.
+
+    Raises
+    ------
+    SystemExit
+        If no exported class owns ``kind``.
+    """
     for name in units.__all__:
         cls = getattr(units, name)
         if cls is not units.Unit and cls.kind == kind and not cls.VARIANTS:
@@ -526,7 +563,20 @@ def base_of(kind: str) -> type:
 
 
 def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
-    """Return a base's declared ports plus those of ``variant``."""
+    """Return a base's declared ports plus those of ``variant``.
+
+    Parameters
+    ----------
+    base : type
+        Base unit class.
+    variant : str
+        Registry variant.
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        ``(name, direction, role)`` port specs.
+    """
     declared = base._declared_ports()
     variant_ports = base._variant_ports(variant)
     return [*declared, *variant_ports]
@@ -540,7 +590,13 @@ _ARITY_CLASS_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
 
 @functools.lru_cache(maxsize=None)
 def _arity_families() -> dict[str, dict[int, list[str]]]:
-    """Return each base's ``{arity: port names}`` from units.py."""
+    """Return each base's ``{arity: port names}`` from units.py.
+
+    Returns
+    -------
+    dict[str, dict[int, list[str]]]
+        Base name to its per-arity annotated port names.
+    """
     tree = ast.parse((HERE.parent / "pandid" / "units.py").read_text(encoding="utf-8"))
     families: dict[str, dict[int, list[str]]] = {}
     for node in ast.walk(tree):
@@ -562,8 +618,20 @@ def _arity_families() -> dict[str, dict[int, list[str]]]:
 def arity_family(base: type) -> "_Family | None":
     """Return ``(keyword, member, default, max_n)`` for a family base.
 
-    Returns ``None`` when ``base`` has no per-arity classes. Raises
-    ``SystemExit`` if the family cannot be derived.
+    Parameters
+    ----------
+    base : type
+        Base unit class.
+
+    Returns
+    -------
+    tuple[str, str, int, int] or None
+        The family, or ``None`` when ``base`` has no per-arity classes.
+
+    Raises
+    ------
+    SystemExit
+        If the family cannot be derived from the base.
     """
     arities = _arity_families().get(base.__name__)
     if not arities:
@@ -602,15 +670,30 @@ def arity_family(base: type) -> "_Family | None":
 def claims() -> dict[tuple[str, str], str]:
     """Return each registered ``(kind, variant)`` and its claimant.
 
-    Raises ``SystemExit`` on an unclaimed, unregistered, refused or
-    doubly claimed key.
+    Returns
+    -------
+    dict[tuple[str, str], str]
+        Registry key to claiming class or reason.
+
+    Raises
+    ------
+    SystemExit
+        If a key is unclaimed, unknown, refused or claimed twice.
     """
     registered = set(default_registry._symbols)
     claimed: dict[tuple[str, str], str] = {}
     twice: list[str] = []
 
     def claim(key: tuple[str, str], by: str) -> None:
-        """Record a claim, noting a second claim on one key."""
+        """Record a claim, noting a second claim on one key.
+
+        Parameters
+        ----------
+        key : tuple[str, str]
+            Registry ``(kind, variant)``.
+        by : str
+            Claiming class or reason.
+        """
         if key in claimed:
             twice.append(f"{key[0]}/{key[1]} (by {claimed[key]} and by {by})")
         claimed[key] = by
@@ -651,7 +734,29 @@ def claims() -> dict[tuple[str, str], str]:
 
 
 def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
-    """Return one generated class's spec, read from the live library."""
+    """Return one generated class's spec, read from the live library.
+
+    Parameters
+    ----------
+    class_name : str
+        Generated class name.
+    kind : str
+        Unit kind.
+    home : str
+        Registry variant the class is named for.
+    doc : str
+        Class docstring.
+
+    Returns
+    -------
+    dict
+        Name, base, doc, variants, aliases, ports and family.
+
+    Raises
+    ------
+    SystemExit
+        If two owned drawings have different ports.
+    """
     base = base_of(kind)
     mapping = variant_map(class_name, home)
     variants = declared_variants(mapping)
@@ -696,7 +801,18 @@ _TYPING_IMPORT = "\nfrom typing import TYPE_CHECKING, Any, Literal, overload\n"
 
 
 def render() -> str:
-    """Return the generated module source with LF line endings."""
+    """Return the generated module source with LF line endings.
+
+    Returns
+    -------
+    str
+        Module source.
+
+    Raises
+    ------
+    SystemExit
+        If the tables are inconsistent or a name is in ``units.__all__``.
+    """
     claims()
     specs = [spec_of(class_name, kind, variant, doc)
              for (kind, variant), (class_name, doc) in DEVICES.items()]
@@ -720,7 +836,18 @@ def render() -> str:
 
 
 def emit(spec: dict) -> str:
-    """Return one generated class, plus its arity classes, as source."""
+    """Return one generated class, plus its arity classes, as source.
+
+    Parameters
+    ----------
+    spec : dict
+        Output of :func:`spec_of`.
+
+    Returns
+    -------
+    str
+        Class source.
+    """
     body = [
         "",
         f"class {spec['name']}({spec['base']}):",
@@ -745,7 +872,20 @@ def emit(spec: dict) -> str:
 
 
 def _family_overload_lines(name: str, family: "_Family") -> list[str]:
-    """Return ``__new__`` overloads giving a literal count its class."""
+    """Return ``__new__`` overloads giving a literal count its class.
+
+    Parameters
+    ----------
+    name : str
+        Generated class name.
+    family : tuple[str, str, int, int]
+        Output of :func:`arity_family`.
+
+    Returns
+    -------
+    list[str]
+        Source lines, indented for the class body.
+    """
     keyword, _member, default, max_n = family
     lines = ["    if TYPE_CHECKING:", ""]
     for n in range(1, max_n + 1):
@@ -765,7 +905,20 @@ def _family_overload_lines(name: str, family: "_Family") -> list[str]:
 
 
 def _family_class_block(name: str, family: "_Family") -> str:
-    """Return the ``if TYPE_CHECKING:`` block of per-arity classes."""
+    """Return the ``if TYPE_CHECKING:`` block of per-arity classes.
+
+    Parameters
+    ----------
+    name : str
+        Generated class name.
+    family : tuple[str, str, int, int]
+        Output of :func:`arity_family`.
+
+    Returns
+    -------
+    str
+        Block declaring ``Name1`` to ``Name{max_n}``.
+    """
     _keyword, member, _default, max_n = family
     lines = ["if TYPE_CHECKING:", ""]
     for n in range(1, max_n + 1):
@@ -779,12 +932,34 @@ def _family_class_block(name: str, family: "_Family") -> str:
 
 
 def _q(text: str) -> str:
-    """Return ``text`` double-quoted."""
+    """Return ``text`` double-quoted.
+
+    Parameters
+    ----------
+    text : str
+        Text to quote.
+
+    Returns
+    -------
+    str
+        ``"text"``.
+    """
     return f'"{text}"'
 
 
 def _variants_source(variants: tuple[str, ...]) -> str:
-    """Return ``VARIANTS`` as source, wrapped if over one line."""
+    """Return ``VARIANTS`` as source, wrapped if over one line.
+
+    Parameters
+    ----------
+    variants : tuple[str, ...]
+        Variant names.
+
+    Returns
+    -------
+    str
+        Tuple literal.
+    """
     if len(variants) == 1:
         return f"({_q(variants[0])},)"
     flat = "(" + ", ".join(_q(v) for v in variants) + ")"
@@ -794,19 +969,56 @@ def _variants_source(variants: tuple[str, ...]) -> str:
 
 
 def _wrap(open_bracket: str, entries: list[str], close_bracket: str) -> str:
-    """Return a literal with one entry per line, closed at indent 4."""
+    """Return a literal with one entry per line, closed at indent 4.
+
+    Parameters
+    ----------
+    open_bracket : str
+        Opening bracket.
+    entries : list[str]
+        Entry sources.
+    close_bracket : str
+        Closing bracket.
+
+    Returns
+    -------
+    str
+        Wrapped literal.
+    """
     return (open_bracket + "\n"
             + "".join(f"        {entry},\n" for entry in entries)
             + "    " + close_bracket)
 
 
 def _dict(mapping: dict[str, str]) -> str:
-    """Return a string mapping as a one-line dict literal."""
+    """Return a string mapping as a one-line dict literal.
+
+    Parameters
+    ----------
+    mapping : dict[str, str]
+        Mapping to write.
+
+    Returns
+    -------
+    str
+        Dict literal.
+    """
     return "{" + ", ".join(f"{_q(k)}: {_q(v)}" for k, v in mapping.items()) + "}"
 
 
 def _ports_source(ports: list[tuple[str, str, str]]) -> str:
-    """Return ``PORTS`` as source, wrapped if over one line."""
+    """Return ``PORTS`` as source, wrapped if over one line.
+
+    Parameters
+    ----------
+    ports : list[tuple[str, str, str]]
+        Port specs.
+
+    Returns
+    -------
+    str
+        List literal.
+    """
     tuples = ["(" + ", ".join(_q(field) for field in port) + ")" for port in ports]
     flat = "[" + ", ".join(tuples) + "]"
     return flat if len(flat) + len("    PORTS = ") <= 99 else _wrap("[", tuples, "]")

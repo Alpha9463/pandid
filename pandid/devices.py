@@ -601,7 +601,7 @@ class ShaftKiln(Kiln):
 class Cyclone(Separator):
     """Cyclone separator: a vortex throws the heavy phase down.
 
-    ISO 15519-1 symbol X 2618. The draws are ``overflow`` (gas) and
+    ISO 15519-1 X 2618. The draws are ``overflow`` (gas) and
     ``underflow`` (solids).
 
     Parameters are those of :class:`~pandid.units.Separator`.
@@ -1883,7 +1883,7 @@ class SprayDryer(Dryer):
 class ShelfDryer(Dryer):
     """Shelf (tray) dryer: trays of product in a heated chamber.
 
-    ISO 10628-2 item 10.2, X8083.
+    ISO 10628-2 item 10.2.
 
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
@@ -1906,7 +1906,7 @@ class ShelfDryer(Dryer):
 class TurboDryer(Dryer):
     """Turbo dryer: a stack of rotating discs on one shaft.
 
-    ISO 10628-2 item 10.3, X8040.
+    ISO 10628-2 item 10.3.
 
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
@@ -1929,7 +1929,7 @@ class TurboDryer(Dryer):
 class BeltDryer(Dryer):
     """Belt dryer: product carried through on a moving belt.
 
-    ISO 10628-2 item 10.6, X8043.
+    ISO 10628-2 item 10.6.
 
     Parameters are those of :class:`~pandid.units.Dryer`.
     """
@@ -1952,7 +1952,7 @@ class BeltDryer(Dryer):
 class JawCrusher(Crusher):
     """Jaw crusher: a swing jaw worked by an eccentric.
 
-    ISO 10628-2 item 11.5 X8047: the crusher body with item 29.9 C2036.
+    ISO 10628-2 item 11.5.
 
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
@@ -1968,8 +1968,7 @@ class JawCrusher(Crusher):
 class ConeCrusher(Crusher):
     """Cone crusher: a gyrating head inside a fixed bowl.
 
-    ISO 10628-2 item 11.7 X8049: the crusher body with item 29.12
-    C2038.
+    ISO 10628-2 item 11.7.
 
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
@@ -1985,7 +1984,7 @@ class ConeCrusher(Crusher):
 class HammerCrusher(Crusher):
     """Hammer crusher: swing hammers on a rotor against a breaker plate.
 
-    ISO 10628-2 item 11.3 X8045: the crusher body with item 29.7 C2034.
+    ISO 10628-2 item 11.3.
 
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
@@ -2001,7 +2000,7 @@ class HammerCrusher(Crusher):
 class ImpactCrusher(Crusher):
     """Impact crusher: blow bars on a rotor throw feed at aprons.
 
-    ISO 10628-2 item 11.4 X8046: the crusher body with item 29.8 C2035.
+    ISO 10628-2 item 11.4.
 
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
@@ -2017,8 +2016,7 @@ class ImpactCrusher(Crusher):
 class RollerCrusher(Crusher):
     """Roll crusher: two counter-rotating rolls with a nip between.
 
-    ISO 10628-2 item 11.6 X8048: the crusher body with item 29.11
-    C2037.
+    ISO 10628-2 item 11.6.
 
     Parameters are those of :class:`~pandid.units.Crusher`.
     """
@@ -2034,7 +2032,7 @@ class RollerCrusher(Crusher):
 class HammerMill(Mill):
     """Hammer mill: swing hammers against a screen.
 
-    ISO 10628-2 item 11.9 X8050: the mill body with item 29.7 C2034.
+    ISO 10628-2 item 11.9.
 
     Parameters are those of :class:`~pandid.units.Mill`.
     """
@@ -2050,7 +2048,7 @@ class HammerMill(Mill):
 class ImpactMill(Mill):
     """Impact mill or pin mill: a rotor throws feed at a liner.
 
-    ISO 10628-2 item 11.10 X8051: the mill body with item 29.8 C2035.
+    ISO 10628-2 item 11.10.
 
     Parameters are those of :class:`~pandid.units.Mill`.
     """
@@ -2066,7 +2064,7 @@ class ImpactMill(Mill):
 class RollerMill(Mill):
     """Roller mill: rolls running on a table or against a ring.
 
-    ISO 10628-2 item 11.11 X8053: the mill body with item 29.11 C2037.
+    ISO 10628-2 item 11.11.
 
     Parameters are those of :class:`~pandid.units.Mill`.
     """
@@ -2082,8 +2080,7 @@ class RollerMill(Mill):
 class VibratingMill(Mill):
     """Vibrating mill: a charged drum shaken rather than tumbled.
 
-    ISO 10628-2 item 11.12 X8054: a drum with the two arrows of item
-    29.14 (3831).
+    ISO 10628-2 item 11.12.
 
     Parameters are those of :class:`~pandid.units.Mill`.
     """
@@ -2099,7 +2096,7 @@ class VibratingMill(Mill):
 class ScrewConveyor(Conveyor):
     """Screw conveyor: a flighted shaft turning in a closed trough.
 
-    ISO 10628-2 item 18.5 X8063. ``feed`` is on top near the tail and
+    ISO 10628-2 item 18.5. ``feed`` is on top near the tail and
     ``discharge`` underneath near the head. ``length=`` sets the trough
     length.
 
@@ -2117,7 +2114,7 @@ class ScrewConveyor(Conveyor):
 class RotaryValveFeeder(Feeder):
     """Rotary valve feeder: a rotor metering solids through a housing.
 
-    ISO 10628-2 item 19.2 X8067.
+    ISO 10628-2 item 19.2.
 
     Parameters are those of :class:`~pandid.units.Feeder`.
     """
@@ -2133,7 +2130,7 @@ class RotaryValveFeeder(Feeder):
 class RotaryTableFeeder(Feeder):
     """Rotary table feeder: solids ploughed off a turning table.
 
-    ISO 10628-2 item 19.3 C0074.
+    ISO 10628-2 item 19.3.
 
     Parameters are those of :class:`~pandid.units.Feeder`.
     """
@@ -2149,7 +2146,7 @@ class RotaryTableFeeder(Feeder):
 class MeteringFeeder(Feeder):
     """Metering (weigh) feeder: solids let through by measured weight.
 
-    ISO 10628-2 item 19.4 C0035, drawn as a balance.
+    ISO 10628-2 item 19.4, drawn as a balance.
 
     Parameters are those of :class:`~pandid.units.Feeder`.
     """
@@ -2165,7 +2162,7 @@ class MeteringFeeder(Feeder):
 class CoarseRakeScreen(ScreeningDevice):
     """Rake screen, coarse type: a mesh cleared by a coarse rake.
 
-    ISO 10628-2 item 7.2 X8026.
+    ISO 10628-2 item 7.2.
 
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
@@ -2186,7 +2183,7 @@ class CoarseRakeScreen(ScreeningDevice):
 class FineRakeScreen(ScreeningDevice):
     """Rake screen, fine type: a mesh cleared by a fine rake.
 
-    ISO 10628-2 item 7.3 X8027.
+    ISO 10628-2 item 7.3.
 
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
@@ -2207,7 +2204,7 @@ class FineRakeScreen(ScreeningDevice):
 class CoarseAndFineScreen(ScreeningDevice):
     """Double-deck screen: a coarse deck over a fine one.
 
-    ISO 10628-2 item 7.4 X8028.
+    ISO 10628-2 item 7.4.
 
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
@@ -2228,7 +2225,7 @@ class CoarseAndFineScreen(ScreeningDevice):
 class VibratingScreen(ScreeningDevice):
     """Vibrating screen: a deck shaken to move material across it.
 
-    ISO 10628-2 item 7.5 X2605.
+    ISO 10628-2 item 7.5.
 
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
@@ -2249,7 +2246,7 @@ class VibratingScreen(ScreeningDevice):
 class RotaryDrumScreen(ScreeningDevice):
     """Rotary drum screen (trommel): a turning perforated cylinder.
 
-    ISO 10628-2 item 7.6 X8029.
+    ISO 10628-2 item 7.6.
 
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
@@ -2270,7 +2267,7 @@ class RotaryDrumScreen(ScreeningDevice):
 class ReelScreen(ScreeningDevice):
     """Reel screen: a wire basket turned between two rollers.
 
-    ISO 10628-2 item 7.7 X8030.
+    ISO 10628-2 item 7.7.
 
     Parameters are those of :class:`~pandid.units.ScreeningDevice`.
     """
@@ -2457,7 +2454,7 @@ class SpectacleBlind(Fitting):
 class SteamTrap(Fitting):
     """Steam trap: drains condensate from a steam line.
 
-    ISO 10628-2 item 24.15, symbol 2181.
+    ISO 10628-2 item 24.15.
 
     Parameters are those of :class:`~pandid.units.Fitting`.
     """
