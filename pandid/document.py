@@ -103,8 +103,7 @@ def _drawn_rows(rows: Any) -> list:
     list
         Rows of the same shapes, as text.
     """
-    # shortcut: a row appended to .rows in place is not converted;
-    # convert at draw time if needed.
+    # shortcut: rows.append skips this, convert at draw time if needed.
     return [tuple(map(_drawn_text, r)) if isinstance(r, tuple)
             else list(map(_drawn_text, r)) if isinstance(r, list)
             else _drawn_text(r) for r in rows]
@@ -209,7 +208,8 @@ class _Box:
         Raises
         ------
         TypeError
-            If a numeric field or ``position`` entry is not a number.
+            If a numeric field or ``position`` entry is a bool or not
+            a real number, or ``position`` is not iterable.
         ValueError
             If a numeric field or ``position`` entry is not finite.
         """
@@ -253,7 +253,8 @@ class Annotation(_Box):
     Raises
     ------
     TypeError
-        If a numeric field or ``position`` coordinate is not a number.
+        If a numeric field or ``position`` coordinate is a bool or
+        not a real number, or ``position`` is not iterable.
     ValueError
         If ``align`` is invalid or a number is not finite.
     """
@@ -302,7 +303,8 @@ class TableBox(_Box):
     Raises
     ------
     TypeError
-        If a numeric field or ``position`` coordinate is not a number.
+        If a numeric field or ``position`` coordinate is a bool or
+        not a real number, or ``position`` is not iterable.
     ValueError
         If ``align`` or ``col_align`` is bad or a number is not finite.
     """
@@ -600,7 +602,8 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
         If an ``include`` name is not on the sheet, ``align`` is
         invalid, or a number is not finite.
     TypeError
-        If ``margin``, ``width`` or ``position`` is not a number.
+        If ``margin``, ``width`` or a ``position`` coordinate is a
+        bool or not a real number, or ``position`` is not iterable.
     """
     if include is None:
         chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
@@ -652,7 +655,8 @@ def notes(items, *, title="NOTES", align="top-right", position=None,
     ValueError
         If ``align`` is invalid or a number is not finite.
     TypeError
-        If ``margin``, ``width`` or ``position`` is not a number.
+        If ``margin``, ``width`` or a ``position`` coordinate is a
+        bool or not a real number, or ``position`` is not iterable.
     """
     rows = []
     for i, text in enumerate(items, start=1):
@@ -690,7 +694,8 @@ def legend(entries, *, title="LEGEND", align="top-left",
     ValueError
         If ``align`` is invalid or a number is not finite.
     TypeError
-        If ``margin``, ``width`` or ``position`` is not a number.
+        If ``margin``, ``width`` or a ``position`` coordinate is a
+        bool or not a real number, or ``position`` is not iterable.
     """
     if isinstance(entries, dict):
         entries = list(entries.items())

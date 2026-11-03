@@ -1384,7 +1384,7 @@ class Flowsheet:
         x, y : float or None, optional
             Station left edge and run centreline; give both or neither.
         mirrored : bool or None, optional
-            Pipe a pinned run east to west.
+            Pipe the run east to west; any bool needs ``x`` and ``y``.
         variant : str, default="control"
             Control valve symbol.
         number : str, int or None, optional
@@ -1402,7 +1402,7 @@ class Flowsheet:
         tag_scheme : str, callable or None, optional
             Member tag format; defaults to ``valve_station_tag_scheme``.
         gap, bypass_rise, drain_drop : float or None, optional
-            Spacing for a pinned station.
+            Spacing for a pinned station; needs ``x`` and ``y``.
         size, schedule, service : str or float, optional
             Bypass and drain line bore, wall schedule and service.
         sequence, spec, insulation : str or float, optional
@@ -1423,8 +1423,9 @@ class Flowsheet:
             If ``x``, ``y`` or a spacing is not a number.
         ValueError
             If ``drains``, ``bypass_over`` or a member tag is invalid,
-            ``bypass`` lacks ``isolation``, ``x`` and ``y`` or the run
-            options come apart, or ``on`` and ``at`` cannot be used.
+            ``bypass`` lacks ``isolation``, only one of ``x`` and ``y``
+            is given, a run option comes without them, or ``on`` and
+            ``at`` cannot be used.
         """
         # Undo every member if any step raises.
         with self._unchanged_if_it_raises():
