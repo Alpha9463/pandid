@@ -116,7 +116,7 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
 
 
 def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
-    """Return whether frames keep their pins and clear obstacles.
+    """Return whether frames clear obstacles.
 
     Parameters
     ----------
@@ -128,23 +128,9 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
     Returns
     -------
     bool
-        True if no member has a grid pin, each frame keeps its
-        member's pin, and every box clears obstacles by 8.
+        True if every box clears obstacles by 8.
     """
     for unit, frame in frames.items():
-        pin = unit.pin_
-        if pin is not None and (
-            pin.col is not None or pin.row is not None
-            or frame.orientation != pin.orientation
-            or frame.mirrored != pin.mirrored or frame.mirror_y != pin.mirror_y
-        ):
-            return False
-        if pin is not None and any(
-            getattr(pin, axis) is not None
-            and abs(getattr(frame, axis) - getattr(pin, axis)) > 1e-6
-            for axis in ("x", "y")
-        ):
-            return False
         left, top, right, bottom = unit_box(unit, frame)
         for other in obstacles:
             if other.frame is None:
