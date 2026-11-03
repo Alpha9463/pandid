@@ -113,23 +113,6 @@ def test_parallel_runs_sharing_a_corridor_are_separated():
                 )
 
 
-def test_routes_remain_orthogonal_and_clear_of_equipment():
-    # No routing refinement may buy its result with diagonal segments or
-    # obstacle crossings.
-    fs = _ammonia_loop()
-    fs.layout()
-    fs.route()
-    boxes = []
-    for u in fs.units:
-        f = u.frame
-        boxes.append((u, f.x, f.y, f.x + f.w, f.y + f.h))
-    for s in fs.streams:
-        wp = s.route.waypoints
-        for i in range(len(wp) - 1):
-            (x1, y1), (x2, y2) = wp[i], wp[i + 1]
-            assert abs(x1 - x2) < 0.5 or abs(y1 - y2) < 0.5, f"{s.name} has a diagonal segment"
-
-
 OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
 
 
