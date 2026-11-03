@@ -83,13 +83,13 @@
     <line x1="2573.0" y1="1248.0" x2="2589.0" y2="1248.0" stroke="black" stroke-width="0.75"/>
     <text x="16.0" y="1341.2" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
     <text x="2581.0" y="1341.2" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
-    <rect x="24.0" y="-15.0" width="256.2" height="211.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="152.1" y="2.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
-    <line x1="24.0" y1="8.0" x2="280.2" y2="8.0" stroke="black" stroke-width="1"/>
+    <rect x="24.0" y="-15.0" width="209.7" height="211.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="128.9" y="2.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
+    <line x1="24.0" y1="8.0" x2="233.7" y2="8.0" stroke="black" stroke-width="1"/>
     <text x="33.0" y="22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CS</text>
     <text x="79.2" y="22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Carbon Steel A106-B</text>
-    <text x="33.0" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">LT</text>
-    <text x="79.2" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Low Temperature Carbon Steel A333-6</text>
+    <text x="33.0" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">AS</text>
+    <text x="79.2" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Alloy Steel A335 P11</text>
     <text x="33.0" y="58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SS</text>
     <text x="79.2" y="58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Stainless Steel 316L</text>
     <text x="33.0" y="76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SG</text>
@@ -317,9 +317,9 @@
     <rect x="842.8" y="581.5" width="86.6" height="13.0" fill="white" />
     <text x="886.1" y="588.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-314-CS</text>
     <rect x="1181.7" y="397.5" width="86.6" height="13.0" fill="white" />
-    <text x="1225.0" y="404.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-LT</text>
+    <text x="1225.0" y="404.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-AS</text>
     <rect x="1203.1" y="462.5" width="86.6" height="13.0" fill="white" />
-    <text x="1246.4" y="469.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-LT</text>
+    <text x="1246.4" y="469.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-AS</text>
     <rect x="682.5" y="787.2" width="13.0" height="86.6" fill="white" />
     <text x="689.0" y="830.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 689.0, 830.5)">350-LG-306-CS</text>
     <rect x="1258.0" y="1048.5" width="86.6" height="13.0" fill="white" />
