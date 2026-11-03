@@ -1,28 +1,7 @@
 """Validate a flowsheet's model and drawn geometry.
 
-Findings have two severities:
-
-- **errors**: contradictions the engine cannot honour, such as
-  overlapping pinned units or negative or non-finite coordinates.
-  ``render()`` raises on these rather than draw a wrong sheet.
-- **warnings**: a valid but imperfect drawing, such as a stream crossing
-  a unit, an excessive detour, control letters out of order, or a
-  counted nozzle with no line. They are collected on ``fs.warnings``.
-
-:func:`validate` runs two passes:
-
-- :func:`model_issues` reads what the author wrote (pins, tags, nozzle
-  counts, stream names) and needs no layout. A render runs it before
-  building geometry, so a contradiction such as ``pin(x=nan)`` is
-  reported instead of breaking the router
-  (:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`).
-- :func:`geometry_issues` reads resolved geometry: overlaps, coincident
-  nozzles, crossings, detours and elevations. It checks the units that
-  have a frame, so one unplaced balloon does not hide every overlap.
-
-``route-not-settled``, ``instrument-unplaced`` and ``deprecated`` are
-recorded by earlier phases and read back here; see
-:mod:`pandid.deprecation`.
+An error is a contradiction a render refuses; a warning is a valid
+but imperfect drawing, collected on ``fs.warnings``.
 """
 
 from __future__ import annotations
@@ -38,45 +17,25 @@ from pandid.portgeom import COMPASS
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
-_TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
+_TOL = 1.0  # tolerance in px
 
-#: Distance in px a drawn coordinate may sit from its pin before
-#: ``pin-not-honored``. A pinned axis is copied onto the frame, so only
-#: float rounding through a nozzle offset should remain.
+#: Distance in px a drawn coordinate may sit from its pin.
 _PIN_TOL = 0.05
 
-#: ``(kind, variant)`` pairs a run is meant to change centreline through,
-#: so ``run-off-elevation`` ignores them. An eccentric reducer is flat on
-#: top, so its two nozzles differ in height by design. A unit whose
-#: nozzles merely sit at different heights, such as a pump, does not
-#: belong here; ``tests/test_validate.py`` checks the geometry.
+#: ``(kind, variant)`` pairs whose nozzles step in height by design.
 OFFSET_BY_DESIGN = frozenset({
     ("reducer", "eccentric"),
 })
 
-#: ``(group, name)`` of supplementary parts whose shape is derived from
-#: the body's box, so they distort when the body is drawn at another
-#: aspect. Only the item 20.6 drive motor, a circle sized from the shell
-#: (:func:`pandid.render.iso_parts.agitator_overlays`); other parts are
-#: lines, bars and decks that stay correct on a stretched shell.
-#: ``tests/test_validate.py`` measures the circle.
+#: ``(group, name)`` of round parts that a stretched body distorts.
 ROUND_PARTS = frozenset({
     (20, "motor"),
 })
 
-#: Fraction a symbol carrying a :data:`ROUND_PARTS` mark may depart from
-#: its natural aspect before ``symbol-out-of-aspect``. Above the about 1%
-#: that whole-unit sizes cannot avoid, and below the 7% and 22% ovals
-#: ``agitator_overlays`` is designed to prevent.
+#: Fraction a :data:`ROUND_PARTS` symbol may depart from its aspect.
 _ASPECT_TOL = 0.02
 
-#: Required order of control-function letters in a tag (BS ISO
-#: 15519-2:2015 5.2.4), so ``FIC`` is right and ``FCI`` is wrong. Only
-#: these letters move; the first letter (measured variable), modifiers
-#: (``D``, ``H``, ``L``, ``P``) and unsequenced ISA letters (``T``, ``E``,
-#: ``Y``, ``V``) keep their place. See :func:`_is_control_function` for
-#: letters that act as modifiers. ``M`` is listed by the clause but no
-#: defined control function uses it.
+#: Order of control-function letters in a tag (ISO 15519-2 5.2.4).
 CONTROL_FUNCTION_SEQUENCE = "IRCSMZA"
 
 
@@ -93,56 +52,85 @@ class Issue:
     message : str
         Human-readable description.
     """
-    severity: str        # "error" | "warning"
-    code: str            # short kebab-case category
+    severity: str
+    code: str
     message: str
 
     def __str__(self) -> str:
-        """Return ``[severity] code: message``."""
+        """Return ``[severity] code: message``.
+
+        Returns
+        -------
+        str
+            Formatted finding.
+        """
         return f"[{self.severity}] {self.code}: {self.message}"
 
 
 def _overlap_cure(a, b) -> str:
-    """Return how to clear a ``unit-overlap`` between two units.
-
-    Names one unit and the call that moves it. An attached balloon that
-    is not pinned is placed from its host, so ``at=`` and ``offset=`` move
-    it; a pin outranks that standoff, so a pinned unit is moved by its pin.
-    An attached balloon stands in no grid, so only an ``x`` or ``y`` pin
-    counts for one. Each test prefers the later unit, usually the one
-    added on top.
-
-    The calls name the unit in words, since a tag such as ``FT-101`` is
-    not a Python name. A suggested ``attach()`` repeats any ``angle`` or
-    ``relation`` other than its default, which it would otherwise reset,
-    so following it moves the balloon without changing what it draws.
+    """Return a sentence naming the call that clears an overlap.
 
     Parameters
     ----------
     a, b : Unit
-        The overlapping units, in sheet order.
+        The two overlapping units.
 
     Returns
     -------
     str
-        The remedy, as a sentence.
+        Advice naming a ``pin()``, ``attach()`` or placement call.
     """
     from pandid.streams import Stream
 
     def attached(u) -> bool:
+        """Return whether a unit hangs off a host.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to test.
+
+        Returns
+        -------
+        bool
+            Whether ``u`` has a host.
+        """
         return getattr(u, "host", None) is not None
 
     def pinned(u) -> bool:
+        """Return whether a unit is pinned on an axis that places it.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to test.
+
+        Returns
+        -------
+        bool
+            Whether ``u`` has a pin that places it.
+        """
         pin = u.pin_
         axes = ("x", "y") if attached(u) else ("col", "row", "x", "y")
         return pin is not None and any(getattr(pin, f) is not None for f in axes)
 
     def how(u) -> str:
+        """Return the ``pin()`` call that moves a unit.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to move.
+
+        Returns
+        -------
+        str
+            Call text, naming the port each axis is pinned by.
+        """
         pin = u.pin_
         if not attached(u) and pin is not None and pin.x is None and pin.y is None:
             return f"call .pin(col=..., row=...) on {u.name}"
-        # Repeat the port each axis is pinned by: pin() without port= places
-        # the unit's corner there instead.
+        # Name the port each axis is pinned by.
         ports = getattr(u, "_pin_ports", None) or {}
         calls = ([(ports.get("x"), "x=..., y=...")] if ports.get("x") == ports.get("y")
                  else [(ports.get("x"), "x=..."), (ports.get("y"), "y=...")])
@@ -178,19 +166,16 @@ def _overlap_cure(a, b) -> str:
 
 
 def _is_control_function(letters: str, i: int) -> bool:
-    """Return whether ``letters[i]`` is a control function ISO 5.2.4 orders.
+    """Return whether ``letters[i]`` is a sequenced control function.
 
-    Two cases are not: the first letter, which is the measured variable,
-    and the ``C`` after ``S`` in a position tag such as ``ZSC``, where it
-    means closed (ANSI/ISA-5.1-2009 Table 5.2.1). ``FSC`` and ``ZAC`` are
-    still checked.
+    A letter counts after the first, except the ``C`` of a ``ZSC`` tag.
 
     Parameters
     ----------
     letters : str
-        Tag letters.
+        Functional letters of a tag.
     i : int
-        Letter index.
+        Index of the letter to test.
 
     Returns
     -------
@@ -210,7 +195,7 @@ def _control_functions(letters: str) -> list[str]:
     Parameters
     ----------
     letters : str
-        Tag letters.
+        Functional letters of a tag.
 
     Returns
     -------
@@ -221,19 +206,17 @@ def _control_functions(letters: str) -> list[str]:
 
 
 def _in_sequence(letters: str) -> str:
-    """Return the tag letters with control functions in ISO 15519-2 order.
-
-    Only control-function letters move; modifiers keep their positions.
+    """Return a tag with its control-function letters reordered.
 
     Parameters
     ----------
     letters : str
-        Tag letters.
+        Functional letters of a tag.
 
     Returns
     -------
     str
-        Reordered letters.
+        Letters with the control functions in sequence.
     """
     ordered = iter(sorted(_control_functions(letters),
                           key=lambda c: CONTROL_FUNCTION_SEQUENCE.index(c.upper())))
@@ -244,22 +227,17 @@ def _in_sequence(letters: str) -> str:
 
 
 def _family_stem(port_name: str) -> str | None:
-    """Return the family stem of a numbered port.
-
-    ``in_3`` gives ``"in"``; ``inlet``, ``sig_in`` and ``tube_out`` give
-    ``None``. Read from the unit's port names rather than the symbol, since
-    :class:`~pandid.units.Block` has no port series. Whether the count was
-    stated explicitly is checked by the caller.
+    """Return the stem of a numbered port, or ``None``.
 
     Parameters
     ----------
     port_name : str
-        Port name.
+        Port name, such as ``"in_2"``.
 
     Returns
     -------
     str or None
-        Stem before ``_<digits>``, or ``None``.
+        Stem before ``_<n>``, or ``None`` if the name is not numbered.
     """
     stem, sep, index = port_name.rpartition("_")
     return stem if sep and stem and index.isdigit() else None
@@ -276,7 +254,7 @@ def _and(names: list[str]) -> str:
     Returns
     -------
     str
-        Joined phrase.
+        Joined names.
     """
     return " and ".join(filter(None, [", ".join(names[:-1]), *names[-1:]]))
 
@@ -286,33 +264,31 @@ def _square(x1, y1, x2, y2) -> bool:
 
     Parameters
     ----------
-    x1, y1, x2, y2 : float
-        Segment end points.
+    x1, y1 : float
+        Start point.
+    x2, y2 : float
+        End point.
 
     Returns
     -------
     bool
-        True within :data:`_SQUARE_TOL`.
+        Whether it is horizontal or vertical within ``_SQUARE_TOL``.
     """
     return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
 def _corners(pts):
-    """Return a drawn path as its corners.
-
-    Repeated points go, and so does the middle of any three on one line,
-    including a line that doubles back on itself: its ink is the stretch
-    the outer two span.
+    """Return a drawn path less repeats and axis-run midpoints.
 
     Parameters
     ----------
     pts : list[tuple[float, float]]
-        Drawn points.
+        Drawn path.
 
     Returns
     -------
     list[tuple[float, float]]
-        The same ends, with only the points the line turns at between.
+        The path less repeats and points inside a straight axis run.
     """
     out: list = []
     for p in pts:
@@ -330,20 +306,12 @@ def _corners(pts):
 def _pierced_end(path, ends):
     """Return the end of a run whose line is drawn through its own unit.
 
-    A run meets its own unit at the nozzle, which may sit inside the box
-    where the outline is not square, so the end segment may lie in the
-    box as long as it does not head inward from the nozzle: straight out
-    of the face, or along it, off the top of a round shell. Any other
-    segment in the box, or an end segment arriving from the far side, is
-    the line drawn through the equipment.
-
     Parameters
     ----------
     path : list[tuple[float, float]]
         :func:`_corners` of the drawn path, source nozzle first.
     ends : sequence
-        ``(unit, port, box, face)`` for the source then the destination,
-        or ``None`` for an end with no anchored nozzle.
+        ``(unit, port, box, face)`` per end, or ``None`` if unanchored.
 
     Returns
     -------
@@ -371,59 +339,58 @@ def _pierced_end(path, ends):
 def _pinned_y(unit) -> bool:
     """Return whether a unit has an explicit pixel ``y`` pin.
 
-    A ``row`` pin is a grid cell, not a coordinate, and does not count.
-
     Parameters
     ----------
     unit : Unit
-        Unit to check.
+        Unit to test.
 
     Returns
     -------
     bool
-        Whether ``pin_.y`` is set.
+        Whether ``unit`` is pinned in ``y``.
     """
     pin = getattr(unit, "pin_", None)
     return pin is not None and getattr(pin, "y", None) is not None
 
 
 def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
-    """Return how far two connected nozzles miss a straight run.
+    """Return how far two facing E/W nozzles miss a straight run.
+
+    ``span`` is the shorter unit's height; an offset that clears it is a
+    change of elevation.
 
     Parameters
     ----------
-    su, du : Unit
-        Source and destination units.
-    sp, dp : ResolvedPort
-        Their resolved ports.
+    su : Unit
+        Source unit.
+    sp : ResolvedPort
+        Source port.
+    du : Unit
+        Destination unit.
+    dp : ResolvedPort
+        Destination port.
 
     Returns
     -------
     tuple[float, float, bool] or None
-        ``(offset, span, source_is_shorter)``: the vertical miss, the
-        shorter unit's height it is measured against, and which end that
-        is. ``None`` when the run is not a facing E/W pair, the offset is
-        by design or sub-pixel, or it clears the shorter unit.
+        ``(offset, span, source_is_shorter)`` for a miss, else ``None``.
     """
     from pandid.portgeom import unit_box
 
-    # Only facing E/W nozzles share one elevation; vertical faces make a
-    # riser, and a run that doubles back is not a straight line.
+    # Only E/W nozzles that face each other.
     if {sp.face, dp.face} != {"E", "W"} or (sp.face == "E") != (dp.point[0] > sp.point[0]):
         return None
 
-    # The fitting is meant to step; see OFFSET_BY_DESIGN.
     for u in (su, du):
         if (u.kind, getattr(u, "variant", "default")) in OFFSET_BY_DESIGN:
             return None
 
     offset = abs(dp.point[1] - sp.point[1])
     if offset <= _TOL:
-        return None  # sub-pixel; nothing is drawn differently
+        return None  # 1 px or less
 
-    # Compare with the shorter drawn unit's height: an unadjusted nozzle
-    # offset is smaller than that, while a deliberate change of elevation
-    # clears the unit. Half the height misses real cases.
+    # An offset under the shorter unit's height is a miss; one that
+    # clears it is a change of elevation.
     sb, db = unit_box(su, su.frame), unit_box(du, du.frame)
     sh, dh = sb[3] - sb[1], db[3] - db[1]
     span = min(sh, dh)
@@ -432,9 +399,7 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
 
 def _crowded(heads: list[tuple[float, str]], floor: float
              ) -> tuple[float, str, str] | None:
-    """Return the tightest adjacent pair of arrowheads on a face, if too tight.
-
-    Pairs under :data:`_TOL` are left to ``coincident-ports``.
+    """Return the tightest adjacent pair over 1 px and under ``floor``.
 
     Parameters
     ----------
@@ -446,7 +411,7 @@ def _crowded(heads: list[tuple[float, str]], floor: float
     Returns
     -------
     tuple[float, str, str] or None
-        ``(pitch, nearer port, further port)``, or ``None``.
+        ``(pitch, port, port)`` of the tightest pair, or ``None``.
     """
     order = sorted(heads)
     pairs = sorted((b[0] - a[0], a[1], b[1]) for a, b in zip(order, order[1:]))
@@ -456,19 +421,12 @@ def _crowded(heads: list[tuple[float, str]], floor: float
 def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     """Return the findings that need no layout, errors first.
 
-    These run before a render builds geometry. ``gravity-turned`` is here
-    because a turn comes only from the pin, which layout copies onto the
-    frame unchanged; the frame is preferred when there is one.
-
     Parameters
     ----------
     fs : Flowsheet
         Sheet to check.
     tabulates : bool, default=True
-        :func:`~pandid.render.svg.tabulates_boundary_flows` for the
-        diagram. Only ``stream-table-missing`` reads it: ISO 10628-1
-        4.3.2 d) requires a stream table on a PFD, not on a P&ID (4.4.2)
-        or BFD (4.2).
+        Whether the diagram owes a stream table.
 
     Returns
     -------
@@ -485,7 +443,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     errors: list[Issue] = []
     warnings: list[Issue] = []
 
-    # --- deprecated API (recorded at the call) ---
+    # --- deprecated API ---
     warnings.extend(deprecation_findings(fs))
 
     # --- pin sanity ---
@@ -504,13 +462,9 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
 
     # --- a label side no renderer places ---
-    # An error: an unknown label_pos would draw the tag at the top and,
-    # being an explicit choice, skip the search that moves tags off ink.
-    # Checked here rather than in Unit.__init__ because a spec sets the
-    # attribute directly; every drawing path validates the model first.
     for u in fs.units:
         side = getattr(u, "label_pos", None)
-        # Empty means unset; readers use ``label_pos or "top"``.
+        # Empty means unset.
         if not side or side in LABEL_POSITIONS:
             continue
         errors.append(Issue(
@@ -522,10 +476,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
               f"nozzle leaves from"))
 
     # --- a kind the symbol library has no artwork for ---
-    # SymbolRegistry.get draws an unregistered kind as a blank 60x60 box,
-    # which is right for an external Unit subclass but silent for a typo.
-    # Reported here, once per kind, because the registry is asked on every
-    # port resolution and never sees the unit.
+    # One finding per kind.
     catalogue = sorted({getattr(units, name).kind for name in units.__all__
                         if default_registry.variants(getattr(units, name).kind)})
     unknown: set[str] = set()
@@ -533,7 +484,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         if default_registry.variants(u.kind) or u.kind in unknown:
             continue
         unknown.add(u.kind)
-        # Describe the box the registry actually draws.
+        # The blank box the registry draws for it.
         blank = default_registry.get(u.kind)
         warnings.append(Issue(
             "warning", "symbol-kind-unknown",
@@ -543,24 +494,17 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
               f"no ports. Register artwork for it with "
               f"default_registry.register({u.kind!r}, Symbol(...))"))
 
-    # --- turned symbols whose function is gravity ---
-    # ISO 15519-1:2010 11.4.2 excepts symbols whose function depends on
-    # gravity from turning, naming the open tank (2061) and the cyclone
-    # (X 2618). A warning: the sheet still draws, and
-    # tests/test_symbol_invariants turns every symbol. Mirroring is not
-    # covered. Read from the frame when placed, else the pin.
+    # --- a turned gravity-fixed symbol (ISO 15519-1 11.4.2) ---
     for u in fs.units:
         placed = u.frame if u.frame is not None else u.pin_
         turn = int(getattr(placed, "orientation", 0) or 0)
         variant = getattr(u, "variant", "default")
-        # Leave an unknown variant to the renderer; looking it up here
-        # would raise.
+        # Skip a variant the registry has no artwork for.
         if not turn or variant not in default_registry.variants(u.kind):
             continue
         if not default_registry.for_unit(u).gravity_fixed:
             continue
-        # ISO's remedy is a symbol drawn in the wanted orientation; suggest
-        # the lying variant where one exists.
+        # Suggest the lying variant where one exists.
         lying = ("horizontal" if variant != "horizontal"
                  and "horizontal" in default_registry.variants(u.kind) else "")
         warnings.append(Issue(
@@ -572,13 +516,6 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                f"down rather than the upright one turned" if lying else "")))
 
     # --- a round mark drawn as an oval ---
-    # An explicit width/height is the final box
-    # (:func:`pandid.portgeom.resolve_size`), so a box of another shape
-    # stretches the artwork. That is fine for a shell but distorts the
-    # marks in :data:`ROUND_PARTS`. Changing a symbol's artwork can make a
-    # hard-coded example size wrong, so this is checked. Read from the
-    # model, before layout; resolve_size already handles quarter turns and
-    # label-sized boundary flags.
     for u in fs.units:
         variant = getattr(u, "variant", "default")
         if variant not in default_registry.variants(u.kind):
@@ -587,7 +524,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         marks = [ov for ov in sym.overlays if (ov.group, ov.name) in ROUND_PARTS]
         if not marks:
             continue
-        # Compare the drawn box with the natural box, swapped for a turn.
+        # Compare with the natural box, swapped for a turn.
         placed = u.frame if u.frame is not None else u.pin_
         w, h = resolve_size(u, placed)
         nat_w, nat_h = sym.width, sym.height
@@ -615,8 +552,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             f"size itself"))
 
     # --- tag spelling ---
-    # A warning, since house styles differ. One finding per tag, so a
-    # repeated interlock square reports once.
+    # One finding per tag.
     spelled: set[str] = set()
     for u in fs.units:
         if not isinstance(u, Instrument) or u.tag in spelled:
@@ -632,12 +568,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             f"orders them {sequence}, so this tag reads {ordered!r}"))
 
     # --- a counted nozzle with no line on it ---
-    # A numbered nozzle family is a count the author wrote (n_inlets=4),
-    # so an unconnected member is a missing stream; the gap also spaces
-    # the drawn lines wrongly. Declared single nozzles (drains, vents,
-    # duties, spare sides) are offers and may stay open. One finding per
-    # family. No standard requires this; the drawing contradicts its own
-    # declaration. tests/test_validate.py measures the examples.
+    # One finding per numbered nozzle family.
     for u in fs.units:
         families: dict[str, list[str]] = {}
         for name in u.ports:
@@ -645,14 +576,11 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             if stem is not None:
                 families.setdefault(stem, []).append(name)
         for stem, members in families.items():
-            # Process ports only: a bare signal port is normal.
+            # Process ports only.
             if any(u.ports[n].role == "signal" for n in members):
                 continue
-            # A sole member with a live alias (Reactor.feed, Column.feed,
-            # Tank.inlet) is offered by the class, not counted by the
-            # author, so skip it. Aliases are instance attributes outside
-            # ``ports``; the port's own attribute (``in_1``) is in ports and
-            # does not count, so Mixer(n_inlets=1) is still checked.
+            # Skip a sole member the class offers under an alias, such
+            # as ``Reactor.feed``.
             sole = u.ports[members[0]]
             if len(members) == 1 and any(
                 name not in u.ports and not name.startswith("_") and value is sole
@@ -664,11 +592,10 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             if not loose:
                 continue
             n, piped = len(members), len(members) - len(loose)
-            # Abbreviate as ``in_1..in_4`` only for an unbroken run.
+            # Abbreviate an unbroken run of 3 or more as ``in_1..in_n``.
             run = [f"{stem}_{i}" for i in range(1, n + 1)]
             named = (f"{members[0]}..{members[-1]}" if n > 2 and members == run
                      else _and(members))
-            # Offer both cures: connect, or build with fewer.
             it = "it" if len(loose) == 1 else "them"
             cure = (f"Connect {it}, or build {u.name} with the {piped} it uses."
                     if piped else
@@ -683,21 +610,17 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"{n} connections and draws {piped}. {cure}"))
 
     # --- a counted number landing on a name already taken ---
-    # The stream table has one column per name, so two streams with one
-    # name lose a column. Authors share names on purpose (one run drawn in
-    # several connect calls, or one line number over several segments), so
-    # only names the counter invented are reported: renumber_streams
-    # promises an unused name. A warning, since the cure is a rename.
+    # Only names the counter chose are reported.
     counted: dict[str, list] = {}
     taken: dict[str, int] = {}
     for group in fs._stream_groups():
-        # Counted only when no stream has an explicit name or line number.
+        # Counted unless a stream has an explicit name or line number.
         chosen = any(not s.auto_named or s.has_line_number for s in group)
         name = group[0].name
         taken[name] = taken.get(name, 0) + 1
         if not chosen:
             counted.setdefault(name, []).append(group)
-    # Signal and duty lines share the counter, so include them.
+    # Signal and duty lines share the counter.
     for s in fs.streams:
         if s.kind == "material":
             continue
@@ -707,7 +630,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     for name, groups in counted.items():
         if taken[name] < 2:
             continue
-        # Name the ends of the counted runs so they can be found.
+        # Name the ends of the first two counted runs.
         where = _and([f"{g[0].source.owner.name} to {g[-1].dest.owner.name}"
                       for g in groups[:2]])
         plural = "run" if len(groups) == 1 else "runs"
@@ -722,12 +645,6 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             f"Flowsheet(stream_number_start=...)"))
 
     # --- a title-block cell that cannot hold what it was given ---
-    # The strip (ISO 5457 position, ISO 7200 content) is fixed, so a long
-    # value is shrunk, abbreviated or overflows, per
-    # :func:`~pandid.render.furniture.title_strip_layout`. Silently altered
-    # values, such as a truncated drawing number, must be reported. Widths
-    # are constants, so this needs no layout; renderers replace these
-    # findings with their own (``_FIT_CODES`` in :mod:`pandid.render.svg`).
     if fs.title_block is not None:
         from datetime import datetime
 
@@ -737,14 +654,11 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         from pandid.render.svg import fit_issue
 
         tb = fs.title_block
-        # Pass the fallbacks unchosen, as the renderers do, so blank
-        # handling matches the drawn sheet.
+        # Pass the fallbacks as the renderers do.
         warnings.extend(fit_issue(*found) for found in title_strip_fit(
             tb, fs.name, datetime.now().strftime("%Y-%m-%d")))
 
         # --- a company name that wraps out through the strip ---
-        # The company cell grows by wrapping, and the wrapped stack can
-        # overflow the strip top and bottom.
         over = company_overflow(tb)
         if over is not None:
             rows, room, need = over
@@ -758,13 +672,8 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"the drawing office puts on a sheet"))
 
         # --- a signatory the strip does not letter ---
-        # drawn_by, checked_by and approved_by fill the newest revision
-        # row's BY / CHK'D / APP'D cells
-        # (:func:`~pandid.render.furniture.undrawn_signatories`). They go
-        # undrawn when there is no revision, or when the newest revision
-        # names its own signatory. ISO 7200 4.3 makes the creator and
-        # approver mandatory, so both cases are reported, separately since
-        # the cures differ. No row is invented for them.
+        # A signatory with no revision row, and one the newest revision
+        # overrides, are reported separately.
         unfilled = [f"{field}={value!r}"
                     for field, value, displaced in undrawn_signatories(tb)
                     if not displaced]
@@ -792,12 +701,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"the revision and let the block fill the row"))
 
     # --- an ingoing or outgoing material with nothing to report ---
-    # ISO 10628-1:2014 4.3.2 d) requires a PFD to state each ingoing and
-    # outgoing material's flow rate. The stream table keeps a boundary
-    # column even when empty (:func:`pandid.render.furniture._table_runs`);
-    # this says what a column of dashes means. Only on a sheet that
-    # tabulates other streams: a sheet with no properties at all is
-    # handled below.
+    # ISO 10628-1 4.3.2 d), when any stream states a property.
     runs = fs._named_runs()
     if any(s.properties for segments in runs.values() for s in segments):
         for name, segments in runs.items():
@@ -821,12 +725,8 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"that there is nothing to report with a blank value, which "
                 f"keeps the column on purpose"))
     else:
-        # --- a PFD with material crossing its edge and no table at all ---
-        # ISO 10628-1:2014 4.3.2 c) and d) still apply to a PFD with no
-        # stream table. ``tabulates`` is true only for a PFD
-        # (:func:`~pandid.render.svg.tabulates_boundary_flows`): a P&ID
-        # answers 4.4.2, and a BFD lists flow rate as optional (4.2.3). One
-        # finding for the sheet.
+        # --- a PFD with material crossing its edge and no table ---
+        # ISO 10628-1 4.3.2 d); one finding for the sheet.
         if tabulates:
             crossed = list(dict.fromkeys(
                 name for name, segments in runs.items()
@@ -849,24 +749,17 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
 def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     """Return the findings that need resolved geometry, errors first.
 
-    Before :meth:`~pandid.flowsheet.Flowsheet.layout` and
-    :meth:`~pandid.flowsheet.Flowsheet.route` have run these are silent
-    rather than wrong: nothing is placed, ``route_converged`` starts true
-    and ``unplaced_instruments`` starts empty.
-
     Parameters
     ----------
     fs : Flowsheet
-        Drawing whose resolved geometry is checked.
+        Sheet to check.
     arrows : bool, default=True
-        Whether this rendering draws arrowheads on process lines (a PFD or
-        BFD, not a P&ID); :func:`pandid.render.svg.draws_arrowheads`
-        decides, via :meth:`pandid.flowsheet.Flowsheet.validate`.
+        Whether process lines carry arrowheads.
 
     Returns
     -------
     list[Issue]
-        Geometry findings with errors before warnings.
+        Errors, then warnings.
     """
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces,
@@ -881,9 +774,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     warnings: list[Issue] = []
 
     # --- routing settled? (recorded by route()) ---
-    # Placing instruments and routing around them can alternate on a
-    # dense sheet; the drawing is coherent but which state it caught is
-    # arbitrary.
     if not fs.route_converged:
         warnings.append(Issue(
             "warning", "route-not-settled",
@@ -892,10 +782,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             "Pin the balloon-carrying lines with via() to settle it"))
 
     # --- a balloon nothing could place (recorded by layout) ---
-    # An attached instrument is placed from its host, so a chain of them
-    # must end on a placed unit. Read from place_attached's record,
-    # because ``frame is None`` alone cannot tell "not laid out yet" from
-    # "gave up". An error: the renderer refuses a frameless unit.
     for u in fs.unplaced_instruments:
         # Name what is actually missing for each kind of host.
         where = (f"stream {u.host.name}, which has an end nothing placed"
@@ -911,18 +797,10 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"anchor at all, which lays it out like any other unit"))
 
     # --- geometric checks (need resolved frames) ---
-    # Check the placed units, so one unplaced balloon does not hide the
-    # rest.
     placed = [u for u in fs.units if u.frame is not None]
     if placed:
         # Soft: a placement the sheet did not honour.
-        #
-        # A pinned axis is copied exactly, so a different drawn coordinate
-        # means something moved the unit afterwards. One check covers every
-        # cause, comparing :func:`~pandid.portgeom.pin_intent` with the
-        # frame. A warning: the drawing is coherent, just not as asked.
         for u in placed:
-            # Messages, worded per axis kind.
             missed: list[str] = []
             for axis, (port_name, want) in pin_intent(u).items():
                 drawn = (port_point(u, u.frame, port_name)[0 if axis == "x" else 1]
@@ -931,7 +809,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     nozzle = f".{port_name}" if port_name is not None else ""
                     missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
                                   f"drawn at {drawn:g}, {abs(drawn - want):g} away")
-            # A stated turn or mirror is drawn as stated.
+            # Check that a stated turn or mirror is drawn as stated.
             pin = u.pin_
             if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
                 missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
@@ -941,10 +819,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 missed.append(f"{u.name} was pinned with mirrored="
                               f"{(pin.mirrored, pin.mirror_y)} and is drawn with "
                               f"{(u.frame.mirrored, u.frame.mirror_y)}")
-            # Grid ranks: compare the pinned col/row with the frame's. Skip a
-            # rank superseded by an absolute pin on the same axis
-            # (:func:`pandid.layout.control._place_free`); the coordinate
-            # is checked above.
+            # Compare pinned col/row with the frame's, skipping an axis
+            # with an absolute pin.
             pin = u.pin_
             for axis, absolute in (("col", "x"), ("row", "y")) if pin is not None else ():
                 want, rank = getattr(pin, axis), getattr(u.frame, axis)
@@ -953,7 +829,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 missed.append(f"{u.name} was pinned {axis}={want} and is "
                               + (f"drawn in {axis}={rank}" if rank is not None
                                  else f"drawn with no {axis} of its own"))
-            # An attached balloon has no grid rank, so suggest what works.
+            # Suggest what moves an attached balloon.
             cure = ("An attached balloon stands in no grid: it is placed from "
                     "its host, or from an absolute pin. Say where with "
                     f"{u.name}.pin(x=..., y=...), aim it with "
@@ -965,9 +841,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             for said in missed:
                 warnings.append(Issue("warning", "pin-not-honored", f"{said}. {cure}"))
 
-        # A grid pin is a place in order: a lower col is drawn further west,
-        # and a lower row higher up its column. A frame records the rank it
-        # was pinned to, so compare where the units are drawn.
+        # Grid pins in order: a lower col is drawn further west, and a
+        # lower row higher up its column.
         graded = [u for u in placed if u.kind != "instrument" and u.pin_ is not None]
         for a in graded:
             for b in graded:
@@ -990,9 +865,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
 
-        # A block's name is lettered inside its box, so an explicit width
-        # that is too narrow overruns it. A warning, under its own code:
-        # SvgRenderer replaces ``text-overruns-cell`` findings with its own.
+        # Soft: a block name wider than its box.
         for u, box in boxes:
             if not isinstance(u, Block) or not u.tag:
                 continue
@@ -1007,15 +880,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"{(needed - room) / 2:.0f} units out through each side. Widen the "
                 f"block, or leave width= unset and let it size itself to the name"))
 
-        # Hard: a nozzle drawn off the body it belongs to.
-        #
-        # A line to it would stop in blank paper. Registered symbols keep
-        # nozzles on their box by construction (the invariant suite and
-        # :func:`~pandid.render.symbols.spread`), so this guards third-party
-        # symbols and new families. Unanchored ports fall back to the box
-        # centre and are left to ``coincident-ports``. Measured against
-        # :func:`~pandid.portgeom.unit_box`, the router's obstacle, with
-        # ``_TOL`` for nozzles on the edge.
+        # Hard: an anchored nozzle drawn off its unit's box.
         for u, box in boxes:
             for name in u.ports:
                 if not is_anchored(u, name):
@@ -1042,12 +907,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     errors.append(Issue("error", "unit-overlap",
                                         f"{a.name} and {b.name} overlap. {_overlap_cure(a, b)}"))
 
-        # Hard: two live connections on one unit landing on the same
-        # point. The runtime half of
-        # :meth:`pandid.render.symbols.Symbol.coincident_ports`, since face
-        # choice is known only on the finished sheet. Units with
-        # :attr:`pandid.units.Unit.ONE_NOZZLE_MANY_RUNS` (boundary flags)
-        # are exempt: every run on a flag meets at its mark.
+        # Hard: two live connections on one unit landing on one point.
+        # Boundary flags are exempt.
         for u in placed:
             if type(u).ONE_NOZZLE_MANY_RUNS:
                 continue
@@ -1060,8 +921,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 if first is None:
                     seen[pt] = name
                     continue
-                # Unanchored ports share the box centre: a symbol gap, so
-                # only a warning.
+                # Unanchored ports share the box centre: a warning.
                 anchored = is_anchored(u, name) and is_anchored(u, first)
                 issue = Issue(
                     "error" if anchored else "warning", "coincident-ports",
@@ -1071,13 +931,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                        "of them, so both fall back to the centre of the box"))
                 (errors if anchored else warnings).append(issue)
 
-        # Soft: arrowheads on one face too close to tell apart. Two heads
-        # (:data:`pandid.render.symbols.ARROWHEAD`) at pitch p leave
-        # ``p - ARROWHEAD`` of paper, which must be at least
-        # MIN_HEAD_CLEARANCE (ISO 128-20). Both ports of a pair must carry
-        # a head. The message suggests a box size, scaling the face extent
-        # by the shortfall, and a move only where the symbol offers
-        # another face.
+        # Soft: arrowheads on one face closer than MIN_NOZZLE_PITCH.
         for u in placed if arrows else ():
             heads: dict[str, list[tuple[float, str]]] = {}
             for name, port in u.ports.items():
@@ -1110,7 +964,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     if gap > 0 else
                     f"which overlaps two {ARROWHEAD:.0f}px arrowheads by "
                     f"{-gap:.1f}px, so the two heads are drawn over each other")
-                # Suggest a move only where the artwork offers another face.
+                # Suggest a move only where another face is offered.
                 movable = [n for n in (first, second)
                            if len(port_faces(u, n, u.frame)) > 1]
                 elsewhere = (f", or move {u.name}.{movable[0]} onto another face "
@@ -1121,13 +975,11 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     f"on {u.name}'s {face} face{crowd}, {measured}. Give the unit a "
                     f"box with room for them, {u.name}.{dim} = {room}{elsewhere}"))
 
-        # Soft: a route passing through a unit body it does not connect
-        # to, and grossly indirect routes.
-        # Each unit's host, read once: asking per segment misses the
-        # attribute on every unit that has none, which dominated this loop.
+        # Soft: a route through a unit body it does not connect to, and
+        # grossly indirect routes.
         hosted = [(u, box, getattr(u, "host", None)) for u, box in boxes]
         for s in drawn:
-            # A route with no waypoints is drawn straight between the nozzles.
+            # Skip a stream with no route.
             if s.route is None:
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
@@ -1138,15 +990,13 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             for k in range(len(pts) - 1):
                 for u, box, host in hosted:
                     if u is src_u or u is dst_u or host is s:
-                        continue  # in-line elements own their line
+                        continue  # the stream's ends and balloons
                     if segment_crosses_box(pts[k], pts[k + 1], box):
                         warnings.append(Issue("warning", "route-crosses-unit",
                                               f"stream {s.name} crosses {u.name}"))
                         break
 
-            # Soft: a line drawn through a unit it connects to (#468), which
-            # the check above skips. Nozzles without an anchor sit at the
-            # centre of the box, so every line to one is inside it.
+            # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
             ends = [(u, name, unit_box(u, u.frame), resolve_port(u, u.frame, name).face)
                     if is_anchored(u, name) else None
@@ -1166,20 +1016,14 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     f"meets its own unit only at the nozzle, from beyond the face the "
                     f"nozzle is on, and {u.name}.{name} is on the {face} face. {cure}"))
 
-            # Soft: a segment drawn on the slant. BS ISO 15519-1:2010 12.1
-            # wants horizontal or vertical lines but allows oblique ones
-            # where clearer, so this warns. A single off-axis via() point is
-            # the usual cause. route-detour cannot see it (same Manhattan
-            # length) and route-crosses-unit ignores sloping segments. One
+            # Soft: a segment drawn on the slant (ISO 15519-1 12.1). One
             # finding per stream.
             slopes = [(a, b) for a, b in zip(pts, pts[1:]) if not _square(*a, *b)]
             if slopes:
                 (x1, y1), (x2, y2) = slopes[0]
                 more = ("" if len(slopes) == 1 else
                         f", the first of {len(slopes)} on it")
-                # Offer the corners that do not double the line back. On an
-                # automatic route a slope means stale geometry, so suggest
-                # routing again.
+                # Offer the corners that do not double the line back.
                 corners = [c for c in ((x1, y2), (x2, y1))
                            if all(math.dist(c, p) > _SQUARE_TOL for p in pts)]
                 named = " or ".join(f"({cx:g}, {cy:g})"
@@ -1209,16 +1053,12 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
 
         # Soft: a horizontal run whose ends nearly share an elevation.
-        # Pinning units by their top-left corner leaves nozzles slightly
-        # off level, and the router draws a step. ``pin(port=...)`` is the
-        # cure.
         for s in drawn:
-            # Signal lines have no elevation to be off.
+            # Skip signal lines.
             if s.kind in SIGNAL_KINDS:
                 continue
             su, du = s.source.owner, s.dest.owner
-            # Only where an elevation was pinned by hand; layout may move
-            # free units.
+            # Only where an elevation was pinned by hand.
             if not (_pinned_y(su) or _pinned_y(du)):
                 continue
             src = resolve_port(su, su.frame, s.source.name)
@@ -1227,7 +1067,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if near is None:
                 continue
             offset, span, at_source = near
-            # Suggest pinning the shorter unit's nozzle to the other's level.
+            # Suggest pinning the shorter unit's nozzle level.
             if at_source:
                 dev, port, target = su, s.source.name, dst.point[1]
             else:
@@ -1241,27 +1081,24 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"That is corner arithmetic rather than a step: pin the nozzle, "
                 f"{dev.name}.pin(port={port!r}, y={target:g})"))
 
-    # Soft: two parallel runs closer than ISO 10628-1 5.3.2 allows: twice
-    # the wider line and at least 1 mm, which is ``max(2 * wider, 4)``
-    # drawing units (one unit is 0.25 mm; pandid.render.weights.M). Only
-    # runs that overlap in projection count.
+    # Soft: parallel runs closer than ISO 10628-1 5.3.2 allows.
     warnings.extend(_crowded_lines(fs))
 
     return errors + warnings
 
 
 def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
-    """Return ``lines-crowded`` findings for parallel runs (ISO 10628-1 5.3.2).
+    """Return ``lines-crowded`` findings (ISO 10628-1 5.3.2).
 
     Parameters
     ----------
     fs : Flowsheet
-        Routed sheet.
+        Sheet to check.
 
     Returns
     -------
     list[Issue]
-        One warning per crowded pair, tightest first.
+        One warning per pair of streams with crowded parallel runs.
     """
     from pandid.render.svg import stream_polyline, _stream_rung
     from pandid.render.weights import M
@@ -1292,8 +1129,7 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
             need = max(2 * max(aw, bw), floor_mm / unit_mm)
             if gap >= need - 1e-9:
                 continue
-            # Count only pairs that run together for at least the required
-            # gap, not segments that merely abut end to end.
+            # Count only pairs that run together for more than ``need``.
             overlap = min(a_hi, b_hi) - max(a_lo, b_lo)
             if overlap <= need:
                 continue
@@ -1318,10 +1154,6 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
 def validate(fs: "Flowsheet", *, arrows: bool = True,
              tabulates: bool = True) -> list["Issue"]:
     """Return all validation issues for the flowsheet, errors first.
-
-    Runs :func:`model_issues` and :func:`geometry_issues` on the sheet as
-    it stands. A render runs them separately, before and after geometry
-    (:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`).
 
     Parameters
     ----------

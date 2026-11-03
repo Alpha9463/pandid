@@ -294,6 +294,32 @@ def test_every_symbol_declares_a_pen_centred_on_the_sheet_weight() -> None:
     assert checked > 100, f"only {checked} symbols were checked"
 
 
+def test_no_symbol_draws_ink_below_the_floor_once_its_class_is_applied() -> None:
+    """Verify every stencil's ink is drawn at 0,1 M or wider (#500).
+
+    ISO 10628-1 5.3.1 c) sets the floor. A trimmed symbol is drawn at the
+    detail rung, so its declared widths are scaled down by that ratio. A
+    white halo behind lettering is not ink.
+    """
+    floor = LineWeight.DETAIL.width
+    thin: list[str] = []
+    for (kind, variant), symbol in sorted(default_registry._symbols.items()):
+        ink = symbol.svg.replace('stroke="white"', 'stroke="none"')
+        pens: list[DrawnPen] = []
+        _walk(
+            ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{ink}</svg>'),
+            _IDENTITY,
+            {},
+            pens,
+            "",
+        )
+        ratio = LineWeight.DETAIL.width / LineWeight.EQUIPMENT.width if symbol.trim else 1.0
+        drawn = min(math.sqrt(minor * major) for _, minor, major in pens) * ratio
+        if drawn < floor * (1 - 2e-3):
+            thin.append(f"{kind}/{variant} draws {drawn:.4g}")
+    assert not thin, f"ink below the {floor:g}-unit floor: {thin}"
+
+
 @pytest.mark.parametrize("stem", _SHEETS, ids=_SHEETS)
 def test_every_symbol_on_the_corpus_is_drawn_at_its_declared_weight(
     stem: str, settled_gallery_svg: dict[str, tuple[Flowsheet, str]]

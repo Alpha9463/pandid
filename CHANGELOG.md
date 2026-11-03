@@ -96,9 +96,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Feeder` and `ScreeningDevice` draw without a `variant=` (#604).** Both
   default to their `"general"` drawing instead of raising `ValueError` at
   render.
+- **A refused inlet and outlet on a one-point face are offered only shared
+  faces (#580).** The error names a walled face only if every refused port
+  may use it.
 - **A size assigned after construction is checked (#579).** `unit.width = -5`
   or `0` raises `ValueError`, as the constructor does, and leaves the size
   unchanged.
+- **No stencil draws ink below 0,1 M (#500).** The bars across the panel,
+  auxiliary and shared-display balloons, and the ticks on the hairpin
+  exchanger, now meet the ISO 10628-1 5.3.1 c) floor.
 - **A multi-feed `Separator` round-trips through a spec (#579).**
   `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
 - **A refused `add_valve_station()` leaves the sheet unchanged (#564).** A

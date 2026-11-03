@@ -1,8 +1,4 @@
-"""Choose each unit's label side, after faces are selected.
-
-A label avoids the faces nozzles use, so this runs after
-:mod:`pandid.layout.faces`.
-"""
+"""Choose label sides for placed units."""
 
 from __future__ import annotations
 
@@ -17,7 +13,7 @@ LABEL_SIDES = ("top", "bottom", "right", "left")
 
 
 def free_label_sides(u) -> list[str]:
-    """Return the sides of a unit that no connected nozzle uses.
+    """Return a placed unit's sides that no connected nozzle uses.
 
     Parameters
     ----------
@@ -27,7 +23,7 @@ def free_label_sides(u) -> list[str]:
     Returns
     -------
     list[str]
-        Free sides in order of preference; empty for an unplaced unit.
+        Free sides, in :data:`LABEL_SIDES` order.
     """
     from pandid.portgeom import port_anchor
 
@@ -43,20 +39,15 @@ def free_label_sides(u) -> list[str]:
 
 
 def assign_labels(fs: "Flowsheet") -> None:
-    """Choose a label side for every placed unit.
+    """Set ``label_pos`` on every placed unit's frame but a flag's.
 
     An explicit ``label_pos`` wins, then the symbol's default, then the
-    first side free of connected nozzles.
+    first side free of connected nozzles, then ``"top"``.
 
     Parameters
     ----------
     fs : Flowsheet
-        Sheet with placed frames and selected port faces.
-
-    Returns
-    -------
-    None
-        ``label_pos`` is stored on each frame.
+        Sheet whose units to label.
     """
     from pandid.render.symbols import default_registry
 

@@ -1,4 +1,4 @@
-"""Measure a laid-out and routed drawing: hard findings, crossings, bends and area."""
+"""Measure a routed drawing: findings, crossings, bends and area."""
 
 from __future__ import annotations
 
@@ -26,21 +26,26 @@ _HARD_CODES = (
 
 @dataclass(frozen=True)
 class Quality:
-    """Hard findings and measured costs of one settled drawing.
+    """Hold the hard findings and measured costs of one drawing.
 
     Attributes
     ----------
     hard : tuple[int, ...]
-        Error count, fallback count, named geometric findings, and undrawn
-        stream count, in a stable order for pairwise comparison.
-    crossings, bends, excess_bends : int
-        Proper crossings and direction changes on final separated paths.
-    length, area : float
-        Total route length and frame bounding-box area in drawing pixels.
+        Error, fallback, finding-code and undrawn-stream counts.
+    crossings : int
+        Proper crossings between routed paths.
+    bends : int
+        Direction changes between orthogonal runs of routed paths.
+    excess_bends : int
+        Bends beyond each automatic route's minimum.
+    length : float
+        Total Manhattan route length.
+    area : float
+        Bounding-box area of the unit frames.
     hard_conflicts : frozenset[Conflict]
-        Named automatic routing and placement defects.
+        Routing and placement defects other than crossings.
     crossing_pairs : frozenset[tuple[int, int]]
-        Crossing stream identities in global flowsheet order.
+        Stream index pairs that cross.
     """
 
     hard: tuple[int, ...]
@@ -54,22 +59,22 @@ class Quality:
 
 
 def measure_final(fs: Flowsheet) -> Quality:
-    """Measure the final frames and separated routes of a settled sheet.
+    """Measure the frames and routes of a laid-out and routed sheet.
 
     Parameters
     ----------
     fs : Flowsheet
-        A sheet whose layout and route stages have completed.
+        Sheet with completed layout and routing.
 
     Returns
     -------
     Quality
-        Drawing findings and costs for candidate acceptance.
+        Findings and costs of the drawing.
 
     Raises
     ------
     ValueError
-        If the sheet has stale geometry.
+        If layout or routing is stale.
     """
     if fs._layout_stale or fs._route_stale:
         raise ValueError("measure_final requires completed layout and routing")

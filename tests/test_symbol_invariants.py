@@ -1939,11 +1939,17 @@ def test_an_inlet_and_an_outlet_on_a_face_with_no_wall_are_refused_by_the_drawin
             bands={"N": (50.0, 50.0), "W": (30.0, 80.0)},
         )
     default_registry.register("tank", apex, variant)
+    # W has a wall, but only the outlet may use it, so neither path offers it (#580).
     try:
-        with pytest.raises(ValueError, match="in_1 and out_1 are both on the N face"):
+        with pytest.raises(ValueError, match="in_1 and out_1 are both on the N face") as drawn:
             vessel_symbol("tank", variant, (("in_1", "N"), ("out_1", "N")))
+        tank = units.Tank("T-1", variant=variant, inputs=["N"], outputs=["W"])
+        with pytest.raises(ValueError, match="in_1 and out_1 are both on the N face") as moved:
+            tank.nozzle("out_1", "N")
     finally:
         default_registry._symbols.pop(("tank", variant), None)
+    for refused in (drawn, moved):
+        assert "No face with a wall takes all of them" in str(refused.value)
 
 
 def test_moving_a_second_connection_onto_a_wall_less_face_is_refused():
