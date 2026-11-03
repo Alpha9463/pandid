@@ -2,6 +2,7 @@
 
 import math
 import warnings
+from collections import defaultdict
 from typing import Protocol, TYPE_CHECKING
 
 from pandid.geometry import Route
@@ -254,7 +255,8 @@ class DefaultRouter:
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
-        edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
+        edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float]
+        edge_penalties = defaultdict(float)
         crossing_index = CrossingIndex()
         routed: list["Stream"] = []
 
@@ -302,8 +304,8 @@ class DefaultRouter:
                 )
                 continue
 
-            start = graph.port_anchors.get((src_u.name, stream.source.name))
-            goal = graph.port_anchors.get((dst_u.name, stream.dest.name))
+            s_key, d_key = (src_u.name, stream.source.name), (dst_u.name, stream.dest.name)
+            start, goal = graph.port_anchors.get(s_key), graph.port_anchors.get(d_key)
             if start is None or goal is None:
                 missing = (f"{src_u.name}.{stream.source.name}" if start is None
                            else f"{dst_u.name}.{stream.dest.name}")
@@ -314,11 +316,8 @@ class DefaultRouter:
                 )
                 continue
 
-            start_dir = graph.port_dirs[(src_u.name, stream.source.name)]
-            goal_dir = graph.port_dirs[(dst_u.name, stream.dest.name)]
-
-            start_proj = graph.port_projs[(src_u.name, stream.source.name)]
-            goal_proj = graph.port_projs[(dst_u.name, stream.dest.name)]
+            start_dir, goal_dir = graph.port_dirs[s_key], graph.port_dirs[d_key]
+            start_proj, goal_proj = graph.port_projs[s_key], graph.port_projs[d_key]
 
             # Clamp each stand-off to the peer's lane, then share the
             # room between two facing ports.
@@ -349,10 +348,9 @@ class DefaultRouter:
             if path:
                 path = [start] + path + [goal]
                 # Penalise used segments for later streams.
-                for i in range(len(path) - 1):
-                    u_node, v_node = path[i], path[i+1]
-                    edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + 2000.0
-                    edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + 2000.0
+                for u_node, v_node in zip(path, path[1:]):
+                    edge_penalties[(u_node, v_node)] += 2000.0
+                    edge_penalties[(v_node, u_node)] += 2000.0
             else:
                 path = _fallback_path(
                     start, start_proj, goal_proj, goal, graph.obstacles, crossing_index
