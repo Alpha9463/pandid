@@ -377,35 +377,6 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
                 [stream_polyline(other) for other in others if other.route is not None])
 
 
-def _legs(points: list[Point]) -> list[Leg]:
-    """Merge an orthogonal polyline into maximal straight legs.
-
-    Parameters
-    ----------
-    points : list[Point]
-        Polyline.
-
-    Returns
-    -------
-    list[Leg]
-        Legs as ``(start, end)`` pairs.
-    """
-    legs: list[Leg] = []
-    for a, b in zip(points, points[1:]):
-        if a == b:
-            continue
-        if legs:
-            p, q = legs[-1]
-            level = abs(p[1] - q[1]) < 1e-6
-            if level == (abs(a[1] - b[1]) < 1e-6) and (
-                (q[0] - p[0]) * (b[0] - a[0]) > 0 or (q[1] - p[1]) * (b[1] - a[1]) > 0
-            ):
-                legs[-1] = (p, b)
-                continue
-        legs.append((a, b))
-    return legs
-
-
 def _size(leg: Leg) -> float:
     """Return a leg's length.
 
@@ -1072,7 +1043,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     source, dest = run.source.owner, run.dest.owner
     assert source is not None and dest is not None
     assert source.frame is not None and dest.frame is not None
-    legs = _legs(points)
+    legs: list[Leg] = list(zip(points, points[1:]))
     if not legs:
         a = port_point(source, source.frame, run.source.name)
         b = port_point(dest, dest.frame, run.dest.name)
