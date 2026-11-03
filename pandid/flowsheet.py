@@ -2074,6 +2074,7 @@ class Flowsheet:
         # The sheet as laid out, to route again if hanging fails.
         laid = copy.deepcopy([(u.frame, getattr(u, "tap", None)) for u in self.units])
         drawn = copy.deepcopy([s.route for s in self.streams])
+        converged = self.route_converged
         self._may_hang, self._hung = True, set()
         try:
             settle()
@@ -2093,6 +2094,7 @@ class Flowsheet:
                     u.tap = tap
             for st, route in zip(self.streams, drawn):
                 st.route = route
+            self.route_converged = converged
             self._hung = set()
             settle()
         # Mark the routes current.

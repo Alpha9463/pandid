@@ -81,12 +81,14 @@ def _place_free(fs: "Flowsheet") -> bool:
               for s in fs.streams if s.route is not None]
     segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
                 for ends, points in lines for a, b in zip(points, points[1:])]
+    # Tag halos a hung balloon must clear, as the router blocks them.
+    halos = _halos(fs) if fs._may_hang else []
     moved = rehung = False
     # Place in flowsheet order, each against what is already placed.
     for inst in pending:
         w, h = resolve_size(inst)
         crossed = [box for ends, box in segments if inst not in ends]
-        hung = (_actuator_spot(fs, inst, w, h, taken + clear + crossed)
+        hung = (_actuator_spot(fs, inst, w, h, taken + clear + crossed + halos)
                 if fs._may_hang else None)
         if hung is not None:
             fs._hung.add(id(inst))
@@ -170,6 +172,27 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
             if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
                 return box[0], box[1]
     return None
+
+
+def _halos(fs: "Flowsheet") -> list[_Box]:
+    """Return the tag halos the router blocks, as boxes.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+
+    Returns
+    -------
+    list[_Box]
+        Each halo as ``(left, top, right, bottom)``.
+    """
+    from pandid.routing.visibility import VisibilityGraph
+
+    graph = VisibilityGraph(fs)
+    bodies = {id(r) for _, r in graph.body_obstacles}
+    return [(r.x_min, r.y_min, r.x_max, r.y_max) for r in graph.obstacles
+            if id(r) not in bodies]
 
 
 def _clashes(fs: "Flowsheet") -> bool:

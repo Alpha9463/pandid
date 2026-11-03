@@ -1349,6 +1349,38 @@ def test_the_fallback_keeps_an_engine_that_refines_the_layout() -> None:
     assert [i for i in fs.validate() if i.severity == "error"] == []
 
 
+def test_a_hung_controller_keeps_out_of_a_tag_halo() -> None:
+    """P-101's tag sits left of it, over the actuator's standoff; LIC-1
+    stands clear of the tag's halo."""
+    from pandid.layout.control import _halos
+    from pandid.portgeom import unit_box
+
+    fs, lic, _ = _hung_controller()
+    fs.add(U.Pump("P-101", width=44, height=44, label_pos="left")).pin(x=350, y=178)
+    fs.route()
+
+    box = unit_box(lic, _placed(lic))
+    for left, top, right, bottom in _halos(fs):
+        assert not (box[0] < right and left < box[2] and box[1] < bottom and top < box[3])
+
+
+def test_the_fallback_starts_from_the_settled_state_it_saved() -> None:
+    """A router that reads route_converged sees the value the sheet had
+    before the hung attempt."""
+    from pandid.routing import DefaultRouter
+
+    class CheckingRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            if any(i.code == "route-not-settled" for i in fs.validate()):
+                raise ValueError("unsettled")
+
+    fs, _, _ = _hung_controller()
+    fs.route(CheckingRouter())
+
+    assert fs.route_converged
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 
