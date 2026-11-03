@@ -451,13 +451,31 @@ def test_crossing_index_crosses_counts_rather_than_answers_yes_or_no():
     assert not index.crosses((50.0, 5.0), "v")
 
 
+def _graph(*paths: list[tuple[float, float]]) -> VisibilityGraph:
+    """Build a stand-in search graph that joins consecutive points of each path.
+
+    Parameters
+    ----------
+    *paths : list[tuple[float, float]]
+        Point sequences; each consecutive pair becomes a two-way edge.
+
+    Returns
+    -------
+    VisibilityGraph
+        Stand-in carrying the ``nodes``, ``edges`` and ``recycle_y`` that
+        ``find_path`` reads.
+    """
+    edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
+    for path in paths:
+        for a, b in zip(path, path[1:]):
+            edges.setdefault(a, []).append(b)
+            edges.setdefault(b, []).append(a)
+    return cast(VisibilityGraph, SimpleNamespace(nodes=set(edges), edges=edges, recycle_y=[]))
+
+
 def test_a_route_that_crosses_two_streams_costs_twice():
     """Charge one crossing penalty per stream crossed."""
-    nodes = {(0.0, 0.0), (40.0, 0.0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0.0, 0.0)].append((40.0, 0.0))
-    edges[(40.0, 0.0)].append((0.0, 0.0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    graph = _graph([(0.0, 0.0), (40.0, 0.0)])
 
     clear = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, "W")
 
@@ -480,46 +498,12 @@ def test_crossing_index_protects_a_stubs_whole_span_not_just_its_ends():
     assert index.crosses((617.0, 450.0), "v")
 
 
-def _tie_graph() -> VisibilityGraph:
-    """Build two routes from (0, 0) to (40, 0) tied on bends and length.
-
-    One route runs north through (20, 10) and one south through (20, -10).
-    No direct edge exists. The graph is built by hand so the tie is exact.
-
-    Returns
-    -------
-    VisibilityGraph
-        Stand-in carrying the ``nodes``, ``edges``, and ``recycle_y`` that
-        ``find_path`` reads.
-    """
-    nodes = {(0, 0), (40, 0), (0, 10), (20, 10), (40, 10), (0, -10), (20, -10), (40, -10)}
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0, 0), (0, 10))
-    link((0, 10), (20, 10))
-    link((20, 10), (40, 10))
-    link((40, 10), (40, 0))
-    link((0, 0), (0, -10))
-    link((0, -10), (20, -10))
-    link((20, -10), (40, -10))
-    link((40, -10), (40, 0))
-    return cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-
 def test_a_bend_and_length_tie_breaks_towards_the_route_that_does_not_cross():
     """Prefer the tied route that crosses no recorded line."""
-    graph = _tie_graph()
+    graph = _graph(
+        [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)],
+        [(0, 0), (0, -10), (20, -10), (40, -10), (40, 0)],
+    )
 
     # Record a vertical run that only the north route crosses.
     crosses_north = CrossingIndex()
@@ -542,40 +526,10 @@ def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
     The north route has 3 bends and one crossing. The south route is clear
     but has 5 bends. ``CROSSING_PENALTY`` is far below ``BEND_PENALTY``.
     """
-    nodes = {
-        (0, 0),
-        (40, 0),
-        (0, 10),
-        (20, 10),
-        (40, 10),
-        (0, -10),
-        (20, -10),
-        (20, -30),
-        (40, -30),
-    }
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0, 0), (0, 10))
-    link((0, 10), (20, 10))
-    link((20, 10), (40, 10))
-    link((40, 10), (40, 0))
-    link((0, 0), (0, -10))
-    link((0, -10), (20, -10))
-    link((20, -10), (20, -30))
-    link((20, -30), (40, -30))
-    link((40, -30), (40, 0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    graph = _graph(
+        [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)],
+        [(0, 0), (0, -10), (20, -10), (20, -30), (40, -30), (40, 0)],
+    )
 
     index = CrossingIndex()
     index.v[20] = [(0.0, 20.0)]  # Cross the north route at (20, 10).
@@ -642,25 +596,10 @@ def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
     arrives in line with the stub and crosses a recorded line; the other
     arrives from the side, which adds a bend at the stub.
     """
-    nodes = {(0.0, -20.0), (0.0, 0.0), (20.0, 0.0), (20.0, -20.0)}
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0.0, -20.0), (0.0, 0.0))
-    link((0.0, 0.0), (20.0, 0.0))  # Arrive heading east, in line with the stub.
-    link((0.0, -20.0), (20.0, -20.0))
-    link((20.0, -20.0), (20.0, 0.0))  # Arrive heading north, from the side.
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    graph = _graph(
+        [(0.0, -20.0), (0.0, 0.0), (20.0, 0.0)],  # Arrive in line with the stub.
+        [(0.0, -20.0), (20.0, -20.0), (20.0, 0.0)],  # Arrive from the side.
+    )
 
     index = CrossingIndex()
     index.v[20.0] = [(-30.0, 30.0)]  # Place the goal strictly inside the span.
@@ -687,13 +626,7 @@ def test_a_recycle_search_returns_the_cheapest_path():
     """
     west = [(0.0, 0.0), (0.0, 50.0), (0.0, 100.0), (100.0, 100.0)]
     east = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0)]
-    nodes = set(west) | set(east)
-    edges: dict = {n: [] for n in nodes}
-    for path in (west, east):
-        for a, b in zip(path, path[1:]):
-            edges[a].append(b)
-            edges[b].append(a)
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    graph = _graph(west, east)
     penalties = {((0.0, 0.0), (100.0, 0.0)): 100.0}
     routed = find_path(graph, (0.0, 0.0), (100.0, 100.0), edge_penalties=penalties, is_recycle=True)
     assert routed == west, f"returned the dearer route: {routed}"
@@ -888,11 +821,7 @@ def test_crossings_along_sees_a_track_added_after_its_own_sorted_cache_was_built
 
 def test_find_path_prices_a_crossing_strictly_inside_a_long_edge_not_just_at_a_node():
     """Charge a crossing that lies inside an edge and on no graph node."""
-    nodes = {(0.0, 0.0), (100.0, 0.0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0.0, 0.0)].append((100.0, 0.0))
-    edges[(100.0, 0.0)].append((0.0, 0.0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
+    graph = _graph([(0.0, 0.0), (100.0, 0.0)])
 
     clear = _final_g(graph, (0.0, 0.0), (100.0, 0.0), None, "W")
 
