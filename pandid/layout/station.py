@@ -270,30 +270,21 @@ def _fraction(assembly: StationAssembly) -> float:
     return 0.5 if value is None else value
 
 
-def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = None) -> int:
-    """Place each line's stations where all of them fit; count them.
+def place_stations(fs: Flowsheet, assemblies: list[StationAssembly]) -> None:
+    """Place each line's stations where all of them fit.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet with placed process units.
-    assemblies : list[StationAssembly] or None, optional
-        Stations to place; every station on the sheet by default.
-
-    Returns
-    -------
-    int
-        Number of stations placed.
+    assemblies : list[StationAssembly]
+        Stations to place.
     """
     from pandid.layout.mounted import _commit, _main_width
 
-    chosen = fs._station_assemblies if assemblies is None else assemblies
-    if not chosen:
-        return 0
     units = process_units(fs)
-    placed_count = 0
     groups: dict[int, list[StationAssembly]] = {}
-    for assembly in chosen:
+    for assembly in assemblies:
         key = id(assembly.run) if assembly.run is not None else id(assembly)
         groups.setdefault(key, []).append(assembly)
     for group in groups.values():
@@ -360,7 +351,5 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
             proposed.append(frames)
         if len(proposed) != len(group):
             continue
-        placed_count += len(proposed)
         for frames in proposed:
             _commit(frames, obstacles)
-    return placed_count
