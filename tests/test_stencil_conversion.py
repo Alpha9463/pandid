@@ -83,7 +83,7 @@ def test_a_directive_the_converter_does_not_know_stops_the_conversion():
 
 
 def test_the_shape_that_could_not_be_converted_is_named():
-    """A stencil set is fourteen files and eight hundred shapes."""
+    """Name the shape a refused directive came from."""
     with pytest.raises(ValueError, match="Liquid Filter"):
         _converter().convert_shape(_shape(f'<glow radius="4"/>{GEOM}', "Liquid Filter"))
 

@@ -188,11 +188,10 @@ The shape's `aspect` comes across with it, as `Symbol.stretchable`. The stencil
 author has already answered whether the drawing may be reshaped to fill a box of
 another shape (`aspect="variable"`, mxGraph's default) or has to keep its
 proportions (`aspect="fixed"`), and that is the same question a unit given an
-explicit `width` and `height` asks. Every shape `KIND_MAP` names today is a
-variable one, because the 24 fixed shapes in the stencil set are draw.io's own
-instrument balloons, which `pandid` draws itself, so no generated symbol carries
-the keyword. Do not set it by hand on one: change the stencil mapping, or say so
-in `symbols.py` if the symbol is hand-drawn.
+explicit `width` and `height` asks. Every shape `KIND_MAP` names is a variable
+one, so no generated symbol carries the keyword. Do not set it by hand on one:
+change the stencil mapping, or say so in `symbols.py` if the symbol is
+hand-drawn.
 
 Only a handful of symbols are hand-drawn in `pandid/render/symbols.py`: the
 Feed/Product boundary flags, the variable-port Mixer and Splitter, the ISA-5.1
