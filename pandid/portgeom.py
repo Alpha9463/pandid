@@ -55,7 +55,7 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
     """Map a point in symbol coordinates into the placed box.
 
     Mirror first, in the symbol's frame, then turn clockwise by ``rot``
-    degrees; a quarter turn swaps the box size.
+    degrees; any ``rot`` but 90, 180 or 270 leaves the point unturned.
 
     Parameters
     ----------
@@ -64,7 +64,7 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
     sw, sh : float
         Symbol width and height.
     rot : int, default=0
-        Clockwise turn in degrees.
+        Clockwise turn in degrees: 0, 90, 180 or 270.
     mirror_x, mirror_y : bool, default=False
         Left-right and top-bottom flips.
 

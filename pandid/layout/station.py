@@ -387,7 +387,8 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
                     break
                 frames = _station_frames(assembly, *origin, mirrored)
             except ValueError:
-                break  # a member's stated nozzle face does not fit the station
+                # Stop at a stated nozzle face the station cannot draw.
+                break
             if not _fits(frames, obstacles) or any(
                 not _separated(frames, earlier) for earlier in proposed
             ):

@@ -509,6 +509,11 @@ def _blame(where: str, errors: tuple[type[Exception], ...] = (ValueError,)) -> I
     errors : tuple[type[Exception], ...], default=(ValueError,)
         Exception types to convert.
 
+    Yields
+    ------
+    None
+        Control to the block.
+
     Raises
     ------
     SpecError
@@ -644,7 +649,7 @@ _SHEET_SETTINGS: tuple[tuple[str, Any, Callable[[Any, str], Any]], ...] = (
     ("loop_number_start", DEFAULT_LOOP_NUMBER_START, _integer),
     ("valve_station_tag_scheme", DEFAULT_VALVE_STATION_TAG_SCHEME, _text),
 )
-# Retired top-level keys, each with the reason its error gives.
+# Top-level keys refused with their own reason.
 _RETIRED_KEYS = {
     "direction": "the layout engine only draws left to right, so it never did anything",
 }
@@ -2726,7 +2731,8 @@ def _core_schema_loader(yaml_module) -> Any:
                         try:
                             repeated = key in seen
                         except TypeError:
-                            continue  # unhashable; the base class names it
+                            # Leave an unhashable key to the base class.
+                            continue
                         if repeated:
                             raise _written_twice(key, key_node.start_mark.line + 1)
                         seen.add(key)

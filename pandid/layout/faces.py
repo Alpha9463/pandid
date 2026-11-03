@@ -87,7 +87,8 @@ def select_faces(
             if face is None:
                 face = _best(unit, frame, name, list(menu), target, taken)
             if face is None:
-                continue  # Every face is taken; keep the symbol's placement.
+                # Every face is taken; keep the symbol's placement.
+                continue
             frame.port_faces[name] = face
             taken.add(_point(unit, frame, name))
 

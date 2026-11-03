@@ -336,7 +336,8 @@ class StreamTableOptions:
     sheet_subtitle : str
         Subtitle of the table's own sheet.
     sheet_drawing_number : str
-        Table sheet's number; blank uses the diagram's number plus
+        Table sheet's number; the diagram's own raises ValueError on
+        a table-sheet render. Blank uses the diagram's number plus
         :data:`TABLE_SHEET_SUFFIX`, or blank if the diagram has none.
     """
 

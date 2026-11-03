@@ -445,7 +445,8 @@ def _stacks(units: list[Unit], links: list[Link]
 
     col = {u: None if u.pin_ is None else u.pin_.col for u in units}
     row = {u: None if u.pin_ is None else u.pin_.row for u in units}
-    depth = dict.fromkeys(units, 0)  # place down the stack, from its root's
+    # Place down the stack, from its root's.
+    depth = dict.fromkeys(units, 0)
     group = {u: [u] for u in units}
     stacked = []
     for link in links:
@@ -609,7 +610,8 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
         pred[b].append(a)
     order: list[_Node] = []
     placed: set[_Node] = set()
-    while len(order) < len(nodes):  # topological order, flowsheet order among ties
+    # Topological order, flowsheet order among ties.
+    while len(order) < len(nodes):
         n = next(n for n in nodes if n not in placed and all(p in placed for p in pred[n]))
         order.append(n)
         placed.add(n)
@@ -617,7 +619,8 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
              for n in nodes if any(u.pin_ is not None and u.pin_.col is not None for u in n.members)}
     for n in order:
         n.layer = fixed.get(n, max((p.layer + 1 for p in pred[n]), default=0))
-    for n in reversed(order):  # a source sits just before its nearest consumer
+    # Put a source just before its nearest consumer.
+    for n in reversed(order):
         if not pred[n] and succ[n] and n not in fixed:
             n.layer = min(m.layer for m in succ[n]) - 1
     return kept
@@ -787,13 +790,15 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
     east = {k: max((n.pad.east for n in layers.get(k, [])), default=0.0) for k in width}
     west = {k: max((n.pad.west for n in layers.get(k, [])), default=0.0) for k in width}
     room = dict.fromkeys(width, 0.0)
-    for s in segs:  # furniture room goes in the gap after the pipe's west end
+    # Furniture room goes in the gap after the pipe's west end.
+    for s in segs:
         if s.link.room and s.lport is not None:
             room[s.left.layer] = max(room[s.left.layer], s.link.room + END_ROOM)
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
         left[k] = x
-        if any(n.members for n in layers.get(k, [])):  # a layer of only pipes takes no room
+        # A layer of only pipes takes no room.
+        if any(n.members for n in layers.get(k, [])):
             x += width[k] + max(COL_GAP + east[k] + west.get(k + 1, 0.0), room[k])
     sides: dict[_Node, set[int]] = {}
     for s in segs:
@@ -850,7 +855,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         entries[:] = [(o, m, t, w * (1.5 if hops.get(o, far) < hops.get(n, far) else 1))
                       for o, m, t, w in entries]
     lead = {"N": LEAD, "S": -LEAD}
-    for layer in layers.values():  # start each layer centred on one axis
+    # Start each layer centred on one axis.
+    for layer in layers.values():
         y = 0.0
         for k, n in enumerate(layer):
             n.y = y

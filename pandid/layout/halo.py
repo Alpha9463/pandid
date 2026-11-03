@@ -105,7 +105,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     Returns
     -------
     tuple[float, float, str, list[Unit]] or None
-        The chain's charge, or None for a loop or an unplaced host.
+        None for a closed chain, a hostless balloon or an unowned end.
     """
     from pandid.layout.attach import _rotate_ccw
     from pandid.layout.stages import is_control

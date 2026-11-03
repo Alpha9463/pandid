@@ -112,7 +112,7 @@ def logical_stream_path(stream: "Stream") -> list[Point]:
     Parameters
     ----------
     stream : Stream
-        Any segment of the run.
+        Run handle, or a segment, which gives only its own path.
 
     Returns
     -------

@@ -277,7 +277,7 @@ def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
     pad : int
         Width of the label column.
     width : int
-        Maximum line width.
+        Line width past which the next item starts a new line.
 
     Returns
     -------

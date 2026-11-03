@@ -1375,7 +1375,8 @@ class Flowsheet:
         number : str, int or None, optional
             Member tag number; defaults to the control tag's.
         isolation, reducers, bypass : bool, default=True
-            Include isolation valves, reducers and a bypass.
+            Include isolation valves, reducers and a bypass; a bypass
+            needs ``isolation=True``.
         drains : int, default=2
             Number of drain valves: 0, 1 or 2.
         description : str, default=""
@@ -1404,8 +1405,9 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If ``drains`` or ``bypass_over`` is invalid, options
-            conflict, or the station cannot go in the ``on`` line.
+            If ``drains`` or ``bypass_over`` is invalid, ``bypass`` has
+            no ``isolation``, ``x`` and ``y`` or the run options lack
+            each other, ``at`` lacks ``on``, or ``on`` cannot take it.
         """
         # Undo every member if any step raises.
         with self._unchanged_if_it_raises():
@@ -1418,7 +1420,8 @@ class Flowsheet:
             from pandid.units import Reducer, Tee, Valve
 
             if on is not None:
-                split_point(self, on, at)  # refuse before any member is added
+                # Refuse a bad position before any member is added.
+                split_point(self, on, at)
             elif at is not None:
                 raise ValueError(f"{tag}: at= is a position on the line given by on=")
             if drains not in (0, 1, 2):
@@ -1574,7 +1577,8 @@ class Flowsheet:
                 gap = DEFAULT_GAP if gap is None else gap
                 bypass_rise = DEFAULT_BYPASS_RISE if bypass_rise is None else bypass_rise
                 drain_drop = DEFAULT_DRAIN_DROP if drain_drop is None else drain_drop
-                left: dict[int, float] = {}   # pinned left edge per member
+                # Pinned left edge per member.
+                left: dict[int, float] = {}
                 cursor = x
                 for unit in (reversed(run) if mirrored else run):
                     unit.pin(x=cursor, mirrored=member_mirror(mirrored, unit in (t_bya, t_byb)))
@@ -2063,7 +2067,8 @@ class Flowsheet:
             Runs in order of their first segment.
         """
         material = [s for s in self.streams if s.kind == "material"]
-        pos = {id(s): i for i, s in enumerate(material)}  # Stream: unhashable
+        # Key by id; a Stream is unhashable.
+        pos = {id(s): i for i, s in enumerate(material)}
         parent = list(range(len(material)))
 
         def find(i):
@@ -2093,7 +2098,8 @@ class Flowsheet:
                 if len(ends) == 2:
                     parent[find(ends[0])] = find(ends[1])
 
-        groups: dict = {}  # insertion order gives first-appearance order
+        # Groups keep the order of first appearance.
+        groups: dict = {}
         for i, s in enumerate(material):
             groups.setdefault(find(i), []).append(s)
         return list(groups.values())

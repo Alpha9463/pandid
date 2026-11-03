@@ -311,6 +311,11 @@ def _pipe_view(fs: Flowsheet, units: list[Unit], pipes: list[Stream]) -> Iterato
         Units to show.
     pipes : list[Stream]
         Streams to show.
+
+    Yields
+    ------
+    None
+        Control while the narrowed view is in place.
     """
     saved_units, saved_streams = fs.units, fs.streams
     saved_ports = [(port, port.stream) for pipe in pipes for port in (pipe.source, pipe.dest)]
