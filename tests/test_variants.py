@@ -24,6 +24,7 @@ statement in ``pandid/devices.py``, counted by AST.
 
 import pytest
 
+import pandid
 from pandid import Flowsheet, devices, units
 from pandid.render.symbols import default_registry
 
@@ -168,6 +169,21 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
         assert built == want
     else:
         assert built == set(cls("X-1").ports)
+
+
+_EXPORTED_UNITS: list[type[units.Unit]] = [
+    obj
+    for obj in (getattr(pandid, name) for name in pandid.__all__)
+    if isinstance(obj, type) and issubclass(obj, units.Unit)
+]
+
+
+@pytest.mark.parametrize("cls", _EXPORTED_UNITS, ids=[cls.__name__ for cls in _EXPORTED_UNITS])
+def test_every_exported_unit_renders_without_a_variant(cls: type[units.Unit]) -> None:
+    """Draw each exported unit class with its default variant (#604)."""
+    fs = Flowsheet("F")
+    fs.add(cls("X-1"))
+    fs.to_svg()
 
 
 def test_a_base_class_still_refuses_an_unknown_variant_at_render():

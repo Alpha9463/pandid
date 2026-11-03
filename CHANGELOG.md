@@ -90,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`Feeder` and `ScreeningDevice` draw without a `variant=` (#604).** Both
+  default to their `"general"` drawing instead of raising `ValueError` at
+  render.
 - **A size assigned after construction is checked (#579).** `unit.width = -5`
   or `0` raises `ValueError`, as the constructor does, and leaves the size
   unchanged.

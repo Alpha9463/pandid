@@ -2996,16 +2996,18 @@ class Feeder(Unit):
     """Proportional or metering feeder, ISO 10628-2 group 19.
 
     Solids enter at ``feed`` and leave metered at ``discharge``.
-    Variants, by ISO item: ``"general"`` (19.1), ``"rotary_valve"``
-    (19.2), ``"rotary_table"`` (19.3) and ``"metering"`` (19.4). Drawn
-    one way up; ``validate`` reports a turned feeder as
-    ``gravity-turned``. Parameters are those of :class:`Unit`.
+    Variants, by ISO item: ``"general"`` (19.1, the default),
+    ``"rotary_valve"`` (19.2), ``"rotary_table"`` (19.3) and
+    ``"metering"`` (19.4). Drawn one way up; ``validate`` reports a
+    turned feeder as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
     """
 
     feed: Port
     discharge: Port
 
     kind = "feeder"
+    VARIANT_ALIASES = {"default": "general"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
 
@@ -3027,12 +3029,12 @@ class ScreeningDevice(Unit):
 
     ``feed`` enters from above (from the west on ``"basket_reel"``),
     ``oversize`` leaves a side wall and ``undersize`` the apex below.
-    Variants, by ISO item: ``"general"`` (7.1), ``"coarse_rake"``
-    (7.2), ``"fine_rake"`` (7.3), ``"coarse_and_fine"`` (7.4),
-    ``"vibrating"`` (7.5), ``"rotating_drum"`` (7.6) and
-    ``"basket_reel"`` (7.7). Drawn one way up; ``validate`` reports a
-    turned device as ``gravity-turned``. Parameters are those of
-    :class:`Unit`.
+    Variants, by ISO item: ``"general"`` (7.1, the default),
+    ``"coarse_rake"`` (7.2), ``"fine_rake"`` (7.3),
+    ``"coarse_and_fine"`` (7.4), ``"vibrating"`` (7.5),
+    ``"rotating_drum"`` (7.6) and ``"basket_reel"`` (7.7). Drawn one
+    way up; ``validate`` reports a turned device as
+    ``gravity-turned``. Parameters are those of :class:`Unit`.
     """
 
     feed: Port
@@ -3041,6 +3043,7 @@ class ScreeningDevice(Unit):
 
     # "screen" is the Screen device class's name in pandid.spec.
     kind = "screening_device"
+    VARIANT_ALIASES = {"default": "general"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("oversize", "outlet", "process"),
