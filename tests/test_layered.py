@@ -454,3 +454,32 @@ def test_a_turned_device_with_a_stated_face_is_set_on_its_line() -> None:
 
     assert valve.frame is not None and valve.frame.orientation == 90
     assert resolve_port(valve, valve.frame, "inlet").face == "N"
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_side_draw_peers_follow_their_nozzle_heights(reverse: bool) -> None:
+    """Draw the stripper on the higher side draw above the other (#460).
+
+    Parameters
+    ----------
+    reverse : bool
+        Add the lower draw's stripper first.
+
+    Returns
+    -------
+    None
+        The stripper on ``draw_1`` is drawn above the one on ``draw_2``.
+    """
+    fs = Flowsheet("Crude")
+    tower = fs.add(
+        U.Column("T-101", internals="valve_tray", trays=30, n_draws=2, draw_stages=[10, 20])
+    )
+    upper, lower = U.Stripper("T-102"), U.Stripper("T-103")
+    for stripper in (lower, upper) if reverse else (upper, lower):
+        fs.add(stripper)
+    fs.connect(tower.draw_1, upper.feed)
+    fs.connect(tower.draw_2, lower.feed)
+    fs.route()
+
+    assert upper.frame is not None and lower.frame is not None
+    assert upper.frame.y < lower.frame.y
