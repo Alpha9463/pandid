@@ -1536,6 +1536,28 @@ def test_hanging_adds_no_tap_line_through_a_tag_halo() -> None:
             assert not any(segment_crosses_box(a, b, halo) for a, b in zip(route, route[1:]))
 
 
+def test_hanging_lays_no_line_along_another() -> None:
+    """A pipe drawn by hand runs up to the actuator; LIC-1 is not hung
+    where its line would lie along that pipe."""
+    from pandid.layout.attach import stream_path
+    from pandid.layout.control import _shared
+
+    fs = Flowsheet("coincident")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="S")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=265)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=265)
+    pipe = fs.connect(feed.outlet, prod.inlet).via(
+        [(312.2, 265), (312.2, 275), (500, 275), (500, 265)]
+    )
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    sp, pp = stream_path(signal), stream_path(pipe)
+    assert not any(_shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(pp, pp[1:]))
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

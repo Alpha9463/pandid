@@ -231,7 +231,8 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, and tap lines through units or tag halos.
+        through tag halos, runs two lines share, and tap lines through
+        units or tag halos.
     """
     from collections import Counter
 
@@ -264,12 +265,41 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
                                for _, box in boxes for h in halos)
     lines = [stream_path(s) for s in fs.streams if s.route is not None]
     flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
+    runs = [(k, a, b) for k, points in enumerate(lines) for a, b in zip(points, points[1:])]
+    flaws["line-on-line"] = sum(
+        _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
+        for m, c, d in runs[i + 1:] if m != k)
     for inst, tap, centre in tap_lines(fs):
         route = tap_route(inst, tap, centre)
         flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
                                          if u is not inst and u is not inst.host)
         flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
     return flaws
+
+
+def _shared(a: tuple[float, float], b: tuple[float, float],
+            c: tuple[float, float], d: tuple[float, float]) -> bool:
+    """Return whether two square runs lie on one track and overlap.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float]
+        Ends of the first run.
+    c, d : tuple[float, float]
+        Ends of the second run.
+
+    Returns
+    -------
+    bool
+        True if both runs are level, or both upright, within 1 of the
+        same track, and overlap by more than 1 along it.
+    """
+    for along, across in ((0, 1), (1, 0)):
+        if a[across] == b[across] and c[across] == d[across] and abs(a[across] - c[across]) < 1:
+            lo = max(min(a[along], b[along]), min(c[along], d[along]))
+            hi = min(max(a[along], b[along]), max(c[along], d[along]))
+            return hi - lo > 1
+    return False
 
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
