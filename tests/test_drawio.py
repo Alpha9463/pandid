@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from _render_cases import copy_settled_case, gallery
+from _render_cases import copy_settled_case
 from test_crossing_style import _ARC, MARKED, _paths
 from test_halo_invariants import _overlaps
 import pandid
@@ -547,11 +547,17 @@ def _unit_label_sizes(fs, kwargs, **over) -> list[float]:
     ]
 
 
-def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it():
-    """Scale exported lettering with the drawing geometry."""
+def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it(settled_gallery):
+    """Scale exported lettering with the drawing geometry.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    """
     from pandid.render.drawio import _TAG_TYPE
 
-    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs, kwargs = copy_settled_case(settled_gallery, "11_ethanol_pid")
     fs.to_svg(**kwargs)
 
     # Without paper there is no fitting to do, so the drawing keeps its own
@@ -566,13 +572,14 @@ def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it():
     assert max(fitted) < _TAG_TYPE, "the type was left at its unfitted size"
     ratio = max(fitted) / _TAG_TYPE
     assert all(size <= ratio * _TAG_TYPE + 0.01 for size in fitted)
+    cells = _drawio_cells(fs, kwargs)
     for i, unit in enumerate(fs.units):
         if unit.kind not in ("feed", "product") or not fs.units[i].tag:
             continue
         box = boundary_flag(unit, unit.frame).box
         # A flag's cell is scaled by that same ratio, which is what makes the
         # cap a statement about the drawing rather than about the model.
-        cell = _drawio_cells(fs, kwargs)[f"u{i}"].find("mxGeometry")
+        cell = cells[f"u{i}"].find("mxGeometry")
         assert float(cell.get("height")) == pytest.approx(ratio * (box[3] - box[1]), abs=0.01)
 
 
@@ -3325,11 +3332,17 @@ def test_a_run_that_crosses_itself_is_marked_on_the_sheet_and_reported_by_drawio
     assert len(dropped) == 1 and "crosses itself" in dropped[0].message
 
 
-def test_the_hop_is_the_radius_the_sheet_draws_it_at():
-    """Match exported jump size to the rendered hop radius."""
+def test_the_hop_is_the_radius_the_sheet_draws_it_at(settled_gallery):
+    """Match exported jump size to the rendered hop radius.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Session-scoped routed gallery sources.
+    """
     from pandid.render.svg import HOP_R
 
-    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs, kwargs = copy_settled_case(settled_gallery, "11_ethanol_pid")
     # Select arcs explicitly to check their exported radius.
     fs.to_svg(**kwargs, crossing_style="arc")
     _boxes, _frame, fit = _drawio_furniture(fs, dict(kwargs, crossing_style="arc"))
@@ -3347,11 +3360,15 @@ def test_the_hop_is_the_radius_the_sheet_draws_it_at():
         assert radius == pytest.approx(fit.length(HOP_R), abs=0.5)
 
 
-def test_only_a_stream_hops_or_is_hopped():
-    """Restrict line jumps to stream crossings."""
-    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
-    fs.to_svg(**kwargs)
-    cells = _drawio_cells(fs, kwargs)
+def test_only_a_stream_hops_or_is_hopped(rendered_gallery):
+    """Restrict line jumps to stream crossings.
+
+    Parameters
+    ----------
+    rendered_gallery : dict[str, _GalleryArtifacts]
+        Shared default SVG and Draw.io outputs.
+    """
+    cells = _gallery_cells(rendered_gallery, "11_ethanol_pid")
     edges = {cid: c for cid, c in cells.items() if c.get("edge") == "1"}
     assert edges, "no edges at all"
     for cid, cell in edges.items():
