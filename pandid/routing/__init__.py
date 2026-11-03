@@ -375,6 +375,5 @@ class DefaultRouter:
 
             settle(stream)
 
-        # Separate parallel segments that share a lane.
         from pandid.routing.separation import separate_streams
         separate_streams(fs)

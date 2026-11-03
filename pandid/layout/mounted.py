@@ -1122,6 +1122,5 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     routes, lines = _routed_pipes(fs, runs, retained)
     obstacles = list(retained)
     zones: list[Box] = []
-    # Set the longest chains first.
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
         _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes])
