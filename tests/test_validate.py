@@ -11,6 +11,7 @@ from pandid import Condenser, Flowsheet, Pin, units as U
 from pandid.portgeom import pinned_y, port_point
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
+from test_symbol_invariants import _drawing
 
 
 def test_overlapping_pins_raise():
@@ -1160,9 +1161,7 @@ def test_every_registered_symbol_is_quiet_on_a_nozzle_pinned_run(kind, variant):
     cls = _unit_classes().get(kind)
     if cls is None:
         pytest.skip(f"{kind} has no built-in Unit class")
-    # A Separator's characteristic drawings are asked for by characteristic=.
-    how = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
-    unit = cls("U-1", **{how: variant})
+    unit = cls("U-1", **_drawing(cls, variant))
     ins = [n for n, p in unit.ports.items() if p.direction == "inlet" and p.role != "signal"]
     outs = [n for n, p in unit.ports.items() if p.direction == "outlet" and p.role != "signal"]
     if not ins or not outs:

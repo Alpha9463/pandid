@@ -30,7 +30,7 @@ import pytest
 from pandid import Flowsheet, devices, portgeom, spec, units
 from pandid.ports import Port
 from pandid.render.symbols import default_registry
-from test_symbol_invariants import _script
+from test_symbol_invariants import _drawing, _script
 
 DEVICE_CLASSES = [getattr(devices, name) for name in devices.__all__]
 IDS = [cls.__name__ for cls in DEVICE_CLASSES]
@@ -143,13 +143,6 @@ def test_every_declared_nozzle_is_one_the_symbol_anchors(cls):
     assert unplaced == []
 
 
-def _drawn(cls, variant):
-    """Build ``cls`` drawing ``variant``; a Separator's characteristic drawings
-    are asked for by ``characteristic=``."""
-    how = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
-    return cls("X-1", **{how: variant})
-
-
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_every_variant_a_class_owns_anchors_the_same_nozzles(cls):
     """``PORTS`` is read once, so a class is one nozzle set across its drawings.
@@ -165,10 +158,10 @@ def test_every_variant_a_class_owns_anchors_the_same_nozzles(cls):
     base. Restating that one in ``PORTS`` would hand ``_add_port`` a name it
     already has.
     """
-    built = {variant: set(_drawn(cls, variant).ports) for variant in cls.VARIANTS}
+    built = {variant: set(cls("X-1", **_drawing(cls, variant)).ports) for variant in cls.VARIANTS}
     assert len(set(map(frozenset, built.values()))) == 1
     for variant, names in built.items():
-        unit = _drawn(cls, variant)
+        unit = cls("X-1", **_drawing(cls, variant))
         assert {port for port, _, _ in cls.PORTS} <= names
         assert all(portgeom.is_anchored(unit, name) for name in names)
 
@@ -293,7 +286,9 @@ def test_a_collector_draws_the_same_nozzles_whichever_way_it_was_built(cls, vari
     forms are held to one another.
     """
     assert set(cls("S-1").ports) == {"feed_1", "overflow", "underflow"}
-    assert set(_drawn(units.Separator, variant).ports) == set(cls("S-3").ports)
+    assert set(units.Separator("X-1", **_drawing(units.Separator, variant)).ports) == set(
+        cls("S-3").ports
+    )
 
 
 @pytest.mark.parametrize(("cls", "variant"), _COLLECTORS, ids=lambda x: getattr(x, "__name__", x))
@@ -307,7 +302,7 @@ def test_a_renamed_draw_lands_where_the_drawing_puts_the_nozzle_it_renamed(cls, 
     a moved drawing rather than as a failure here.
     """
     renamed = cls("S-1")
-    low_level = _drawn(units.Separator, variant)
+    low_level = units.Separator("X-1", **_drawing(units.Separator, variant))
     symbol = default_registry.for_unit(renamed)
     for new, old in (("overflow", "vapor"), ("underflow", "liquid")):
         assert portgeom.port_faces(renamed, new) == portgeom.port_faces(low_level, new)

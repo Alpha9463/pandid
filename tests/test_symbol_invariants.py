@@ -741,34 +741,44 @@ _UNBOXABLE_KINDS = {"conveyor"}
 
 _UNIT_BY_KIND = {cls.kind: cls for cls in (getattr(units, n) for n in units.__all__)}
 
-_RETIRED_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
+_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
 
 
-def _drawing(cls, variant: str) -> dict[str, str]:
+def _drawing(cls, variant: str) -> dict[str, Any]:
     """Return the keyword that asks ``cls`` for a registered drawing.
 
-    A Separator's characteristic drawings are asked for by
-    ``characteristic=``; ``variant=`` refuses them.
+    Parameters
+    ----------
+    cls : type
+        Unit class.
+    variant : str
+        Registered variant.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``display=``, ``characteristic=`` or ``variant=``, whichever reaches it.
     """
-    return {
-        "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant": variant
-    }
+    if cls is units.Instrument and variant in _DISPLAYS:
+        return {"display": _DISPLAYS[variant]}
+    key = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
+    return {key: variant}
 
 
 # Dynamic-unit placement invariants
 
 
-def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
-    """Construct a unit with explicit dimensions.
+def _unit(kind: str, variant: str, index: int = 1, **size: float):
+    """Construct a unit drawing a registered symbol.
 
     Parameters
     ----------
     kind, variant : str
         Registered symbol key.
     index : int
-        Instrument index.
-    w, h : float
-        Requested dimensions.
+        Number that keeps the name unique on a sheet.
+    **size : float
+        ``width`` and ``height``, if given.
 
     Returns
     -------
@@ -777,33 +787,8 @@ def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
     """
     cls = _UNIT_BY_KIND[kind]
     if kind == "instrument":  # tagged (type, number) rather than named
-        display = _RETIRED_DISPLAYS.get(variant)
-        if display is not None:
-            return cls("XX", index, display=display, width=w, height=h)
-        return cls("XX", index, variant=variant, width=w, height=h)
-    return cls(f"{kind}-{variant}-{index}", **_drawing(cls, variant), width=w, height=h)
-
-
-def _default_unit(kind: str, variant: str):
-    """Construct a unit at its natural size.
-
-    Parameters
-    ----------
-    kind, variant : str
-        Registered symbol key.
-
-    Returns
-    -------
-    units.Unit
-        Configured unit.
-    """
-    cls = _UNIT_BY_KIND[kind]
-    if kind == "instrument":
-        display = _RETIRED_DISPLAYS.get(variant)
-        if display is not None:
-            return cls("XX", 1, display=display)
-        return cls("XX", 1, variant=variant)
-    return cls(f"{kind}-{variant}-x", **_drawing(cls, variant))
+        return cls("XX", index, **_drawing(cls, variant), **size)
+    return cls(f"{kind}-{variant}-{index}", **_drawing(cls, variant), **size)
 
 
 _WIDEST_CLASS_FOR_KIND = {"column": units.DistillationColumn}
@@ -816,7 +801,7 @@ def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
     """Verify every drawn anchor is reachable by a modelled port."""
     (kind, variant), sym = entry
     cls = _WIDEST_CLASS_FOR_KIND.get(kind)
-    unit = cls(f"{kind}-{variant}-x", variant=variant) if cls else _default_unit(kind, variant)
+    unit = cls(f"{kind}-{variant}-x", variant=variant) if cls else _unit(kind, variant)
     reachable = {unit._symbol_anchor(name) for name in unit.ports}
     reachable |= {
         artwork_name
@@ -939,7 +924,7 @@ def odd_box_sheets():
         for i, ((kind, variant), _) in enumerate(_SYMBOLS):
             if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
                 continue
-            unit = _sized_unit(kind, variant, i, *box)
+            unit = _unit(kind, variant, i, width=box[0], height=box[1])
             fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8))
             placed[(kind, variant)] = unit
         matrices = _placements(fs.to_svg(), _natives(fs))

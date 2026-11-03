@@ -27,6 +27,7 @@ import pytest
 import pandid
 from pandid import Flowsheet, devices, units
 from pandid.render.symbols import default_registry
+from test_symbol_invariants import _drawing
 
 
 def _unit_classes():
@@ -99,24 +100,6 @@ def test_every_generated_class_names_its_variants():
     assert silent == []
 
 
-#: ``panel`` and ``aux`` are registered *artwork* whose constructor spelling is
-#: ``display=``: they say where the information is available, which is not a
-#: symbol type, and naming one as a ``variant`` was removed in 0.1.3. Both
-#: drawings still ship and both are still swept, asked for the way they are
-#: asked for. A Separator's characteristic drawings are asked for by
-#: ``characteristic=`` for the same reason (#579).
-_DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
-
-
-def _shipped(cls, variant):
-    """One unit of ``(class, variant)``, however that variant is reached."""
-    display = _DISPLAY_VARIANTS.get(variant)
-    if cls is units.Instrument and display is not None:
-        return cls("X-1", display=display)
-    how = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
-    return cls("X-1", **{how: variant})
-
-
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
 def test_every_shipped_variant_still_constructs(cls, variant):
     """Construction is not where a shipped ``Kind(variant=...)`` can fail.
@@ -124,7 +107,7 @@ def test_every_shipped_variant_still_constructs(cls, variant):
     Every unit takes its name as the first positional argument, so one call
     builds any of them; the variant is the only thing varying here.
     """
-    assert _shipped(cls, variant).variant == variant
+    assert cls("X-1", **_drawing(cls, variant)).variant == variant
 
 
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
@@ -145,7 +128,7 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     unit rather than per variant. ``_STIRRED`` is the list of bodies that get
     one when the author names none.
     """
-    built = set(_shipped(cls, variant).ports)
+    built = set(cls("X-1", **_drawing(cls, variant)).ports)
     if cls is units.HeatExchanger:
         table = cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
         assert built == {spec[0] for spec in table}
