@@ -1020,9 +1020,11 @@ def no_clear_paper() -> Flowsheet:
         feed = fs.add(Feed(f"F{row}")).pin(x=270, y=y)
         vessel = fs.add(Vessel(f"V-{row}")).pin(x=360, y=y - 50)
         fs.connect(feed.outlet, vessel.inlet)
-    top = fs.add(Tank("TA")).pin(x=300, y=120)
-    bottom = fs.add(Tank("TB")).pin(x=300, y=900)
-    fs.connect(top.outlet, bottom.inlet)
+    for picket in range(2):
+        x = 300 + picket * 30
+        top = fs.add(Tank(f"TA-{picket}")).pin(x=x, y=120)
+        bottom = fs.add(Tank(f"TB-{picket}")).pin(x=x, y=900)
+        fs.connect(top.outlet, bottom.inlet)
     return fs
 
 
