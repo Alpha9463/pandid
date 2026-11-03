@@ -96,6 +96,26 @@ def _biodiesel(**options) -> Callable[[], tuple[Flowsheet, dict]]:
     return lambda: (build_biodiesel(**options)[0], {})
 
 
+def _long_chain() -> tuple[Flowsheet, dict]:
+    """Build twelve pump and exchanger pairs in one line, too wide for one band.
+
+    Returns
+    -------
+    tuple[Flowsheet, dict]
+        Unpinned flowsheet and its render options.
+    """
+    fs = Flowsheet("Long chain")
+    port = fs.add(U.Feed("Feed")).outlet
+    for i in range(101, 113):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        exchanger = fs.add(U.HeatExchanger(f"E-{i}"))
+        fs.connect(port, pump.suction)
+        fs.connect(pump.discharge, exchanger.tube_in)
+        port = exchanger.tube_out
+    fs.connect(port, fs.add(U.Product("Product")).inlet)
+    return fs, {}
+
+
 def _stripped(stem: str) -> Callable[[], tuple[Flowsheet, dict]]:
     """Return a builder for a shipped example with its placement pins removed.
 
@@ -124,7 +144,12 @@ SCENARIOS: dict[str, tuple[Callable[[], tuple[Flowsheet, dict]], Budget]] = {
     "ethanol P&ID automatic": (_stripped("11_ethanol_pid"), Budget(13, 2588, 1992)),
     # Width measured on the layered engine (#564), which keeps one band up to 3200 px.
     "molecular sieve automatic": (_stripped("20_molecular_sieve_dryer"), Budget(32, 2903, 1822)),
-    "alumina refinery automatic": (_stripped("21_alumina_refinery"), Budget(69, 3150, 2147)),
+    # Measured on the three sheets the alumina refinery is drawn on.
+    "alumina digestion automatic": (_stripped("21_alumina_refinery_1"), Budget(4, 2901, 418)),
+    "alumina clarification automatic": (_stripped("21_alumina_refinery_2"), Budget(4, 1487, 422)),
+    "alumina precipitation automatic": (_stripped("21_alumina_refinery_3"), Budget(10, 2329, 910)),
+    # 4690 px drawn in one band, so it meets the width budget only folded into two.
+    "long chain folded": (_long_chain, Budget(0, 3040, 534)),
 }
 
 

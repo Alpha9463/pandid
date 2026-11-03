@@ -71,7 +71,9 @@ BASE_STEMS = (
     "18_fixed_bed_recycle",
     "19_absorber_stripper",
     "20_molecular_sieve_dryer",
-    "21_alumina_refinery",
+    "21_alumina_refinery_1",
+    "21_alumina_refinery_2",
+    "21_alumina_refinery_3",
 )
 
 
@@ -776,7 +778,7 @@ def compare(before: dict, after: dict, review: dict | None = None) -> Comparison
     if before.get("head") != BASE_HEAD:
         gate_reasons.append(f"baseline head must be {BASE_HEAD}")
     if tuple(stems) != BASE_STEMS:
-        gate_reasons.append("snapshot is not the fixed 21-sheet example corpus")
+        gate_reasons.append("snapshot is not the fixed example corpus")
     reasons: dict[str, list[str]] = {}
     improved, regressed, unchanged = [], [], []
     for stem in stems:
