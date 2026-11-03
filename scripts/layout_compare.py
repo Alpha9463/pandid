@@ -51,7 +51,6 @@ TOTAL_KEYS = ("crossings", "bends", "length", "area")
 RULES = ("S1", "S2", "S3", "S4", "G1", "G2", "G3", "G4")
 BASE_HEAD = "127d669257b158f9f33d8d9bad96d7785ba48c79"
 BASE_STEMS = (
-    "01_ammonia_loop",
     "02_manual_layout",
     "03_distillation_train",
     "04_control_loop",

@@ -100,6 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still takes a `ControlLoop`.
 - **`DEFAULT_INPUT_FACE` and `DEFAULT_OUTPUT_FACE` on `Tank` and `Vessel`
   (#579).** Use `default_input_face()` and `default_output_face()`.
+- **The ammonia loop example (#624).** Example 05 draws the same loop with more
+  equipment. The other examples keep their numbers.
 
 ### Fixed
 
