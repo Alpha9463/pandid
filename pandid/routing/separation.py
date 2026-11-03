@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
 
-#: Track grid step, and the least gap a moved run keeps.
+#: Grid step between the tracks runs are moved onto.
 SPACING = 6.0
 
 
@@ -24,7 +24,7 @@ def _compute_offsets(
     streams : Sequence[Stream]
         Routed streams.
     spacing : float
-        Track grid step, and the least gap a moved run keeps.
+        Grid step between the tracks runs are moved onto.
 
     Returns
     -------
