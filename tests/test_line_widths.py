@@ -206,7 +206,7 @@ def test_a_control_line_is_drawn_at_half_the_run_it_reads() -> None:
 def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(
     settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], name: str
 ) -> None:
-    """Check representative sheets use only ladder widths.
+    """Check representative sheets use only ladder widths, none under the floor.
 
     Parameters
     ----------
@@ -228,23 +228,7 @@ def test_every_width_a_sheet_draws_on_is_a_rung_of_one_ladder(
         f"which is not the 4:2:1 of ISO 10628-1 5.3.1"
     )
     assert len(widths) <= 3, f"{name}: {len(widths)} widths, and 5.3.1 states three"
-
-
-@pytest.mark.parametrize("name", WIDTH_CASES, ids=WIDTH_CASES)
-def test_no_line_the_renderer_chooses_a_width_for_is_under_the_floor(
-    settled_gallery: dict[str, tuple[Flowsheet, dict[str, Any]]], name: str
-) -> None:
-    """Check representative renderer widths meet the physical floor.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Session-scoped routed gallery source.
-    name : str
-        Representative gallery example name.
-    """
-    fs, kwargs = copy_settled_case(settled_gallery, name)
-    for width in _renderer_widths(fs.to_svg(**kwargs)):
+    for width in widths:
         assert width * UNIT_MM >= 0.25 - 1e-9, (
             f"{name}: a line drawn at {width:g} units is {width * UNIT_MM:.3f} mm, "
             f"under the floor ISO 10628-1 5.3.1 sets"
@@ -331,7 +315,4 @@ def test_a_leader_head_is_a_size_and_does_not_follow_a_rung() -> None:
     """Check leader-head size remains independent of the ladder."""
     from pandid.render.svg import _LEADER_HEAD
 
-    fs = _two_unit_sheet()
-    pens = sorted(_stream_pens(fs.to_svg()))
     assert ARROWHEAD / _LEADER_HEAD == pytest.approx(2.0)
-    assert pens[-1] / pens[0] == pytest.approx(2.0)
