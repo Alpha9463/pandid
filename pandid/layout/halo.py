@@ -47,7 +47,7 @@ class Pad(NamedTuple):
         reach : float
             Distance out from the face.
         girth : float, default=0.0
-            Half-width across the face, added to the faces beside it.
+            Half-width across the face, reserved on the faces beside it.
 
         Returns
         -------
@@ -105,7 +105,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     Returns
     -------
     tuple[float, float, str, list[Unit]] or None
-        None for a closed chain, a hostless balloon or an unowned end.
+        None for a closed chain, a free root balloon or ownerless end.
     """
     from pandid.layout.attach import _rotate_ccw
     from pandid.layout.stages import is_control

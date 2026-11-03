@@ -37,7 +37,7 @@ def horizontal_centerline(
     end : tuple[float, float]
         Destination nozzle point.
     require_clear_exit : bool, optional
-        Require a vertical nozzle to face the leg from at least 25 away.
+        Require facing level ends, or a vertical nozzle 25 off the leg.
 
     Returns
     -------

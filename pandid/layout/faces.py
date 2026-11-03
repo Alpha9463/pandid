@@ -24,14 +24,14 @@ def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, 
     fs : Flowsheet
         Sheet being laid out.
     unit : Unit
-        Placed unit.
+        Unit owning the port.
     port_name : str
         Port to test.
 
     Returns
     -------
     tuple[str, ...]
-        The face menu, or ``()`` if the port's face is fixed.
+        Two or more faces, or ``()`` if the port's face cannot move.
     """
     from pandid.portgeom import pin_intent, port_faces
 
@@ -95,10 +95,12 @@ def select_faces(
 
 def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
                   menu: list[str]) -> list[str]:
-    """Return the faces that are clear and need no extra bends.
+    """Return the clear faces, dropping any that add bends.
 
-    A face is blocked when its outward stub crosses another unit. The
-    menu is returned unchanged when every face is blocked.
+    A face is clear when its outward stub misses every unattached unit
+    but the peer; with none clear, the menu comes back unchanged. If
+    the first face is clear and the peer's face is fixed, faces needing
+    more bends than the first are dropped.
 
     Parameters
     ----------
@@ -203,7 +205,7 @@ def _reference(port: "Port") -> tuple[float, float] | None:
     Returns
     -------
     tuple[float, float] or None
-        Target point, or None if the port or its peer is unplaced.
+        Target, or None if the port is unconnected or its peer unplaced.
     """
     from pandid.portgeom import port_faces, resolve_port, unit_box
 

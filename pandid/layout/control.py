@@ -34,7 +34,7 @@ def place_control(fs: "Flowsheet") -> bool:
     Returns
     -------
     bool
-        True if any balloon's frame moved.
+        True if any balloon is newly placed or moved.
     """
     from pandid.layout.attach import place_attached
 
@@ -53,7 +53,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     Returns
     -------
     bool
-        True if any balloon's frame moved.
+        True if any balloon is newly placed or moved.
     """
     from pandid.geometry import Frame
     from pandid.layout.stages import is_control
@@ -146,7 +146,7 @@ def _lane(grid: dict[int, tuple[float, float]], index: int | None,
     Returns
     -------
     float or None
-        Start of the line, or None if ``index`` or ``grid`` is empty.
+        Line start, or None if ``index`` is None or ``grid`` empty.
     """
     if index is None or not grid:
         return None
@@ -212,7 +212,7 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
     Returns
     -------
     tuple[float, float]
-        Centre point, or a point below the drawing if none is wired.
+        Their centre, else a spot below the drawing, else ``(0, 0)``.
     """
     points = []
     for port in inst.ports.values():

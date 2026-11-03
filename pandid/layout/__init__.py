@@ -1,7 +1,7 @@
 """Compute each unit's frame from the flowsheet topology.
 
 Stage 1 places process units and pipe furniture; stage 2 places
-instruments and signal runs against that geometry.
+instrument balloons against that geometry.
 """
 
 from typing import Protocol, TYPE_CHECKING
@@ -53,7 +53,7 @@ class ConstraintLayoutEngine:
     """Place units with the default automatic layout."""
 
     def layout(self, fs: "Flowsheet") -> None:
-        """Set each unit's frame and port faces.
+        """Set each unit's frame, port faces and label side.
 
         Parameters
         ----------

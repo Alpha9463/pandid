@@ -345,9 +345,11 @@ def _rank(layers: dict[int, list[_Node]]) -> None:
 
 
 def _clear_pins(units: list[Unit]) -> None:
-    """Move units off the units pinned on both axes.
+    """Move units clear of the pinned units and of each other.
 
-    A unit moves down past an overlap, or right if its y is pinned.
+    If any unit is pinned, each other unit in x-then-y order moves
+    down, or right if its y is pinned, until it is ``LANE`` clear of
+    the units pinned on both axes and those moved before it.
 
     Parameters
     ----------
@@ -445,7 +447,7 @@ def _stacks(units: list[Unit], links: list[Link]
 
     col = {u: None if u.pin_ is None else u.pin_.col for u in units}
     row = {u: None if u.pin_ is None else u.pin_.row for u in units}
-    # Place down the stack, from its root's.
+    # Each unit's depth down its stack.
     depth = dict.fromkeys(units, 0)
     group = {u: [u] for u in units}
     stacked = []
@@ -628,7 +630,7 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
 
 def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: list[Unit]
             ) -> tuple[dict[int, list[_Node]], list[_Seg]]:
-    """Split each pipe into steps, one per layer, with dummies.
+    """Split each cross-layer pipe into steps, adding dummies.
 
     Parameters
     ----------
@@ -642,7 +644,7 @@ def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: l
     Returns
     -------
     tuple[dict[int, list[_Node]], list[_Seg]]
-        Nodes in each layer, and the pipe steps.
+        Stacks and dummies in each layer, and the pipe steps.
     """
     first = {n: min(units.index(u) for u in n.members) for n in nodes}
     layers: dict[int, list[_Node]] = {}

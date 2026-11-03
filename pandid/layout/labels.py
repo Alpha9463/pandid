@@ -39,10 +39,10 @@ def free_label_sides(u) -> list[str]:
 
 
 def assign_labels(fs: "Flowsheet") -> None:
-    """Set ``label_pos`` on every placed unit's frame.
+    """Set ``label_pos`` on every placed unit's frame but a flag's.
 
     An explicit ``label_pos`` wins, then the symbol's default, then the
-    first side free of connected nozzles.
+    first side free of connected nozzles, then ``"top"``.
 
     Parameters
     ----------

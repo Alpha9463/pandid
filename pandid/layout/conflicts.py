@@ -61,7 +61,7 @@ def boxes_overlap(
     Returns
     -------
     bool
-        True if the box interiors overlap.
+        True if they overlap by more than the tolerance.
     """
     return not (
         a[2] - _BODY_TOL <= b[0]

@@ -28,9 +28,9 @@ def _frame(unit: Unit, x: float, y: float, *, mirror: bool | str = False,
         New left edge.
     y : float
         New top edge.
-    mirror : bool or str
-        ``True``, ``"x"``, ``"y"`` or ``"xy"`` mirrors on those axes.
-    orientation : float
+    mirror : bool or str, default=False
+        ``"x"`` (or ``True``), ``"y"`` or ``"xy"``: axes to flip.
+    orientation : float, default=0
         Rotation in degrees.
 
     Returns
@@ -128,7 +128,7 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
     Returns
     -------
     bool
-        True if every frame keeps its pin and clears every obstacle.
+        True if every frame keeps its pin and clears obstacles by 8.
     """
     for unit, frame in frames.items():
         pin = unit.pin_
@@ -172,7 +172,7 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
     Returns
     -------
     tuple[float, float] or None
-        Left edge and centerline, or None if the pins conflict.
+        Left edge and centerline, or None if the pins cannot all hold.
 
     Raises
     ------
@@ -312,7 +312,7 @@ def _fraction(assembly: StationAssembly) -> float:
 
 
 def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = None) -> int:
-    """Place each station that fits on its line, and return the count.
+    """Place each line's stations where all of them fit; count them.
 
     Parameters
     ----------

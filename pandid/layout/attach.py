@@ -29,7 +29,7 @@ SWEEP_LIMIT = 60.0
 SWEEP_STEP = 15.0
 
 #: Smallest angle, in degrees, between a swept branch and the host's
-#: reference direction.
+#: reference line.
 MIN_BRANCH = 20.0
 
 #: Clearance a balloon keeps once a collision forces a new standoff.
@@ -39,7 +39,7 @@ RESOLVED_CLEARANCE = 6.0
 #: connected nozzle.
 ESCAPE_ROOM = 25.0
 
-#: Overlap validation tolerates before it reports a collision.
+#: Overlap two boxes may share before they count as colliding.
 TOUCHING = 1.0
 
 Box = tuple[float, float, float, float]
@@ -193,7 +193,7 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     Returns
     -------
     tuple[Point, Point] or None
-        Tap point and reference direction, or None if unplaced.
+        Tap point and direction, or None if the host is unplaced.
     """
     from pandid.portgeom import face_point
     from pandid.streams import Stream
@@ -234,7 +234,7 @@ def _intrusion(a: Box, b: Box, gap: float) -> float:
 
 
 def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
-    """Return the escape strips outside connected process nozzles.
+    """Return the escape strips at unattached units' connected nozzles.
 
     Parameters
     ----------
@@ -323,6 +323,8 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                     keepouts: list[Box]) -> tuple[float, float]:
     """Return the distance and angle to hang a balloon at.
 
+    A balloon whose requested box straddles its stream tap keeps it.
+
     Parameters
     ----------
     inst : Instrument
@@ -336,14 +338,14 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     h : float
         Balloon height.
     obstacles : list[Box]
-        Placed process boxes and balloons placed earlier in this pass.
+        Boxes every candidate must clear.
     keepouts : list[Box]
         Boxes a moved balloon must also clear.
 
     Returns
     -------
     tuple[float, float]
-        Clear standoff and angle, or the least-overlapping candidate.
+        First clear standoff and angle, else the least crowded.
     """
     from pandid.streams import Stream
 
@@ -384,13 +386,13 @@ def place_attached(fs: "Flowsheet") -> bool:
     Returns
     -------
     bool
-        True if any balloon's frame moved.
+        True if any balloon is newly placed or moved.
     """
     from pandid.geometry import Frame
     from pandid.portgeom import resolve_size, unit_box
 
     moved = False
-    # Start from process boxes; each balloon joins once placed.
+    # Start from placed unattached units; add each balloon once placed.
     obstacles = [unit_box(u, u.frame) for u in fs.units
                  if u.frame is not None and not is_attached(u)]
     mounted = fs._mounted_layout
@@ -434,7 +436,7 @@ def place_attached(fs: "Flowsheet") -> bool:
             pending.remove(inst)
             progressed = True
         if not progressed:
-            # The rest hang on each other in a closed chain.
+            # The rest have no tap point or hang on each other.
             break
     fs.unplaced_instruments = list(pending)
     return moved
