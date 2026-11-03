@@ -3721,7 +3721,7 @@ class Instrument(Unit):
         ----------
         on : Stream or Unit
             Host line or equipment.
-        at : float, optional
+        at : float or str, optional
             Fraction from 0 to 1 inclusive along a stream; default 0.5.
             A unit face given here is deprecated; use ``face``.
         face : str, optional
