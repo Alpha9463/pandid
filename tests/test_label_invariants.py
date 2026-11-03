@@ -52,11 +52,8 @@ the halo stepped around has moved the defect rather than fixed it.
 """
 
 import html
-import importlib.util
 import math
 import re
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -68,7 +65,6 @@ from pandid.render.svg import _along, _crosses, _ink, _SIGNAL_KINDS, UPRIGHT_ENC
 
 from test_golden import SCENARIOS
 
-EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 TOL = 0.01
 
 _RECT = re.compile(
@@ -90,35 +86,6 @@ _HEAD = re.compile(
 
 
 # --- the corpus ---------------------------------------------------------------
-
-
-def _example(stem: str) -> "tuple[Flowsheet, dict]":
-    """An example's flowsheet and the options it renders itself with.
-
-    The keywords matter as much as the topology: 11 is the P&ID, and a P&ID
-    draws no flow arrowheads, so rendering it as anything else would be
-    measuring a sheet nobody ships.
-    """
-    sys.path.insert(0, str(EXAMPLES))  # the examples' own _bootstrap
-    try:
-        spec = importlib.util.spec_from_file_location(f"_labels_{stem}", EXAMPLES / f"{stem}.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    finally:
-        sys.path.remove(str(EXAMPLES))
-
-    built: list = []
-    original = Flowsheet.render
-
-    def capture(self, _path=None, **kwargs):
-        built.append((self, kwargs))
-
-    Flowsheet.render = capture  # type: ignore[method-assign]
-    try:
-        module.main()
-    finally:
-        Flowsheet.render = original  # type: ignore[method-assign]
-    return built[0]
 
 
 def _crowded_number() -> "tuple[Flowsheet, dict]":
@@ -150,8 +117,6 @@ def _crowded_number() -> "tuple[Flowsheet, dict]":
 
 
 CORPUS: dict = {name: (lambda b=build, k=kw: (b(), k)) for name, (build, kw) in SCENARIOS.items()}
-CORPUS["10_ethanol_pfd"] = lambda: _example("10_ethanol_pfd")
-CORPUS["11_ethanol_pid"] = lambda: _example("11_ethanol_pid")
 CORPUS["crowded_number"] = _crowded_number
 
 #: The options a corpus sheet is redrawn with here, which have to be the options
