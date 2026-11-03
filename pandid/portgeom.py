@@ -15,13 +15,35 @@ if TYPE_CHECKING:
 
 
 def _sym(unit: "Unit"):
-    """Return the symbol the default registry draws a unit with."""
+    """Return the symbol the default registry draws a unit with.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to look up.
+
+    Returns
+    -------
+    Symbol
+        The unit's symbol.
+    """
     from pandid.render.symbols import default_registry
     return default_registry.for_unit(unit)
 
 
 def _xform(frame) -> tuple[int, bool, bool]:
-    """Return a placement's turn and left-right and top-bottom flips."""
+    """Return a placement's turn and left-right and top-bottom flips.
+
+    Parameters
+    ----------
+    frame : Frame, Pin or _Slot
+        Placement to read.
+
+    Returns
+    -------
+    tuple[int, bool, bool]
+        Clockwise turn in degrees, ``mirrored`` and ``mirror_y``.
+    """
     return (int(getattr(frame, "orientation", 0) or 0),
             bool(getattr(frame, "mirrored", False)),
             bool(getattr(frame, "mirror_y", False)))
@@ -32,14 +54,24 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
                   ) -> tuple[float, float, float, float]:
     """Map a point in symbol coordinates into the placed box.
 
-    Mirror first, in the symbol's frame, then turn clockwise by
-    ``rot`` degrees. Return ``(x, y, box_w, box_h)``; a quarter turn
-    swaps the box size.
+    Mirror first, in the symbol's frame, then turn clockwise by ``rot``
+    degrees; a quarter turn swaps the box size.
 
     Parameters
     ----------
+    px, py : float
+        Point in symbol coordinates.
     sw, sh : float
         Symbol width and height.
+    rot : int, default=0
+        Clockwise turn in degrees.
+    mirror_x, mirror_y : bool, default=False
+        Left-right and top-bottom flips.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Mapped ``x`` and ``y``, and the turned box width and height.
     """
     if mirror_x:
         px = sw - px
@@ -65,16 +97,19 @@ def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True
             ) -> tuple[float, float, float, float]:
     """Return where a symbol's artwork lands inside its placed box.
 
-    A stretchable symbol fills the box; any other keeps its aspect and
-    is centred. Return ``(x, y, width, height)`` from the box's
-    top-left corner.
-
     Parameters
     ----------
     bw, bh : float
         Symbol box, already turned by :func:`symbol_to_box`.
     w, h : float
         Placed box.
+    stretchable : bool, default=True
+        Whether the artwork fills the box or keeps its aspect.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x, y, width, height)`` from the box's top-left corner.
     """
     if stretchable:
         return 0.0, 0.0, w, h
@@ -88,8 +123,17 @@ def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
 
     Parameters
     ----------
+    unit : Unit
+        Unit that owns the port.
+    port_name : str
+        Port name.
     placed : Pin, Frame or None, optional
         Placement to answer for; defaults to the unit's pin, then frame.
+
+    Returns
+    -------
+    list[str]
+        Compass faces.
     """
     if placed is None:
         placed = unit.pin_ if unit.pin_ is not None else unit.frame
@@ -100,7 +144,24 @@ def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
 
 def unreachable_face(unit: "Unit", port_name: str, face: str,
                      options: list[str]) -> ValueError:
-    """Build the error for a face a port cannot take as drawn."""
+    """Build the error for a face a port cannot take as drawn.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    port_name : str
+        Port name.
+    face : str
+        Face requested.
+    options : list[str]
+        Faces the port can take.
+
+    Returns
+    -------
+    ValueError
+        Error naming the faces on offer.
+    """
     offered = " or ".join(filter(None, [", ".join(options[:-1]), *options[-1:]]))
     return ValueError(
         f"{unit.name}.{port_name} can be piped from {offered} as drawn; "
@@ -113,7 +174,23 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
                       ) -> dict[str, tuple[float, float]]:
     """Return a port's drawn point on each face it may take, best first.
 
-    Points are relative to the box's top-left corner.
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    port_name : str
+        Port name.
+    w, h : float
+        Placed box size.
+    rot : int
+        Clockwise turn in degrees.
+    mirrored, mirror_y : bool
+        Left-right and top-bottom flips.
+
+    Returns
+    -------
+    dict[str, tuple[float, float]]
+        Face to point, relative to the box's top-left corner.
     """
     sym = _sym(unit)
     anchor = unit._symbol_anchor(port_name)
@@ -143,7 +220,22 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
 
 def _series_point(unit: "Unit", sym, port_name: str
                   ) -> tuple[float, float] | None:
-    """Return the symbol point a port series gives a port, or None."""
+    """Return the symbol point a port series gives a port.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    sym : Symbol
+        Unit's symbol.
+    port_name : str
+        Port name or alias.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Point in symbol coordinates, or None if no series places it.
+    """
     series = sym.series_for(port_name) if hasattr(sym, "series_for") else None
     if series is None:
         return None
@@ -158,16 +250,41 @@ def _series_point(unit: "Unit", sym, port_name: str
 
 
 def is_anchored(unit: "Unit", port_name: str) -> bool:
-    """Return whether the symbol or a port series places a port."""
+    """Return whether the symbol or a port series places a port.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    port_name : str
+        Port name.
+
+    Returns
+    -------
+    bool
+        True if the port has a drawn position.
+    """
     sym = _sym(unit)
     return (unit._symbol_anchor(port_name) in sym.ports
             or _series_point(unit, sym, port_name) is not None)
 
 
 def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
-    """Return a unit's drawn box as ``(x_min, y_min, x_max, y_max)``.
+    """Return a unit's drawn box.
 
     An unmirrored feed extends left from its port at ``frame.x + 50``.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to measure.
+    frame : Frame or _Slot
+        Its placement.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(x_min, y_min, x_max, y_max)``.
     """
     if unit.kind == "feed" and not frame.mirrored:
         return (frame.x + 50.0 - frame.w, frame.y, frame.x + 50.0, frame.y + frame.h)
@@ -175,7 +292,18 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
 
 
 def tag_width(tag: str) -> float:
-    """Return the width of the halo an equipment tag is drawn on."""
+    """Return the width of the halo an equipment tag is drawn on.
+
+    Parameters
+    ----------
+    tag : str
+        Tag as drawn.
+
+    Returns
+    -------
+    float
+        Halo width.
+    """
     from pandid.render.furniture import script_counts
 
     narrow, wide, _zero = script_counts(tag)
@@ -186,7 +314,19 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
                                                         tuple[float, float]]:
     """Return a unit box face's midpoint and outward normal.
 
-    ``face`` is ``"N"``, ``"S"``, ``"E"`` or ``"W"``, in any case.
+    Parameters
+    ----------
+    unit : Unit
+        Host unit.
+    frame : Frame
+        Its placement.
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``, in any case.
+
+    Returns
+    -------
+    tuple[tuple[float, float], tuple[float, float]]
+        Midpoint and unit normal.
     """
     x0, y0, x1, y1 = unit_box(unit, frame)
     return {
@@ -198,7 +338,18 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
 
 
 def _flag_reference(unit: "Unit") -> str:
-    """Return the off-page reference a boundary flag draws, as text."""
+    """Return the off-page reference a boundary flag draws, as text.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit, usually a Feed or Product.
+
+    Returns
+    -------
+    str
+        Reference text, blank if none.
+    """
     from pandid.document import _drawn_text
 
     return _drawn_text(getattr(unit, "reference", None))
@@ -207,9 +358,8 @@ def _flag_reference(unit: "Unit") -> str:
 def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
     """Return the size of a unit's placed box.
 
-    An explicit ``width`` or ``height`` is the final size. A symbol
-    size swaps on a quarter turn. A feed or product flag is as wide as
-    its tag or off-page reference, at least 80.
+    An explicit ``width`` or ``height`` is the final size. A symbol size
+    swaps on a quarter turn. A flag is as wide as its tag or reference.
 
     Parameters
     ----------
@@ -245,6 +395,24 @@ def outward_dir(px: float, py: float, w: float, h: float,
 
     A feed outlet or product inlet faces along its pennant; any other
     port faces the nearest box edge.
+
+    Parameters
+    ----------
+    px, py : float
+        Port position from the box's top-left corner.
+    w, h : float
+        Box size.
+    kind : str, default=""
+        Unit kind.
+    port_name : str, default=""
+        Anchor name.
+    mirrored : bool, default=False
+        Whether the unit is flipped left to right.
+
+    Returns
+    -------
+    str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
     """
     if kind == "product" and port_name == "inlet":
         return "E" if mirrored else "W"
@@ -262,10 +430,23 @@ def outward_dir(px: float, py: float, w: float, h: float,
 
 
 def chosen_face(unit: "Unit", placed, port_name: str) -> str | None:
-    """Return the face chosen for a port, or None for the symbol's own.
+    """Return the face chosen for a port.
 
-    A face set with ``nozzle()`` wins over the engine's choice on the
-    placement.
+    A face set with ``nozzle()`` wins over the engine's choice.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    placed : Frame, _Slot or None
+        Placement that may carry the engine's choice.
+    port_name : str
+        Port name or alias.
+
+    Returns
+    -------
+    str or None
+        Chosen face, or None for the symbol's own.
     """
     port_name = unit._canonical_port_name(port_name)
     explicit = (getattr(unit, "_port_faces", None) or {}).get(port_name)
@@ -281,8 +462,28 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
 
     Parameters
     ----------
+    unit : Unit
+        Unit that owns the port.
+    port_name : str
+        Port name.
+    w, h : float
+        Placed box size.
+    mirrored, mirror_y : bool
+        Left-right and top-bottom flips.
+    rot : int
+        Clockwise turn in degrees.
     want : str or None
-        Face to use, or ``None`` for the symbol's own.
+        Face to use, or None for the symbol's own.
+
+    Returns
+    -------
+    tuple[str, tuple[float, float]]
+        Face and offset.
+
+    Raises
+    ------
+    ValueError
+        If ``want`` cannot be reached under this transform.
     """
     placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
     if want is None:
@@ -293,7 +494,17 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
 
 
 class ResolvedPort(NamedTuple):
-    """A port's drawn point, box-edge routing anchor and face."""
+    """A port's drawn point, box-edge routing anchor and face.
+
+    Attributes
+    ----------
+    point : tuple[float, float]
+        Where the line attaches on the drawing.
+    anchor : tuple[float, float]
+        Where routing starts: the point projected onto the box edge.
+    face : str
+        Compass face the port leaves by.
+    """
     point: tuple[float, float]
     anchor: tuple[float, float]
     face: str
@@ -302,8 +513,26 @@ class ResolvedPort(NamedTuple):
 def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     """Resolve a port's drawn point, routing anchor and face.
 
-    The anchor is the point projected onto the edge of the placed box. A
-    boundary flag's port is the tip of its pennant for both.
+    A boundary flag's port is the tip of its pennant for both points.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    frame : Frame or _Slot
+        Its placement.
+    port_name : str
+        Port name or alias.
+
+    Returns
+    -------
+    ResolvedPort
+        Point, anchor and face.
+
+    Raises
+    ------
+    ValueError
+        If the chosen face cannot be reached under the placement.
     """
     w, h = frame.w, frame.h
     rot, mirrored, mirror_y = _xform(frame)
@@ -348,12 +577,37 @@ def port_point(unit: "Unit", frame, port_name: str) -> tuple[float, float]:
     -------
     tuple[float, float]
         Point on the drawing.
+
+    Raises
+    ------
+    ValueError
+        If the chosen face cannot be reached under the placement.
     """
     return resolve_port(unit, frame, port_name).point
 
 
 def port_anchor(unit: "Unit", frame, port_name: str) -> tuple[float, float, str]:
-    """Return a port's routing anchor ``x``, ``y`` and face."""
+    """Return a port's routing anchor and face.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit that owns the port.
+    frame : Frame or _Slot
+        Its placement.
+    port_name : str
+        Port name.
+
+    Returns
+    -------
+    tuple[float, float, str]
+        Anchor ``x`` and ``y``, and the face.
+
+    Raises
+    ------
+    ValueError
+        If the chosen face cannot be reached under the placement.
+    """
     _, (ax, ay), d = resolve_port(unit, frame, port_name)
     return ax, ay, d
 
@@ -368,13 +622,17 @@ def port_offset(unit: "Unit", port_name: str, placed=None) -> tuple[float, float
     port_name : str
         Port name.
     placed : Pin, Frame or None, optional
-        Placement whose turn and mirror apply; defaults to the unit's
-        pin, then its frame.
+        Placement to use; defaults to the pin, then the frame.
 
     Returns
     -------
     tuple[float, float]
         Offset in the placed box.
+
+    Raises
+    ------
+    ValueError
+        If the chosen face cannot be reached under the placement.
     """
     from pandid.geometry import Frame
 
@@ -388,7 +646,27 @@ def port_offset(unit: "Unit", port_name: str, placed=None) -> tuple[float, float
 
 
 def _pinned(unit: "Unit", axis: str, port_name: str | None) -> float:
-    """Return one pinned coordinate of a unit's corner or port."""
+    """Return one pinned coordinate of a unit's corner or port.
+
+    Parameters
+    ----------
+    unit : Unit
+        Pinned unit.
+    axis : str
+        ``"x"`` or ``"y"``.
+    port_name : str or None
+        Port to measure to, or None for the corner.
+
+    Returns
+    -------
+    float
+        Absolute coordinate.
+
+    Raises
+    ------
+    ValueError
+        If the unit is unpinned or not pinned in pixels on this axis.
+    """
     pin = unit.pin_
     if pin is None:
         raise ValueError(
@@ -413,14 +691,14 @@ def _pinned(unit: "Unit", axis: str, port_name: str | None) -> float:
 def pinned_x(unit: "Unit", port_name: str | None = None) -> float:
     """Return the pinned ``x`` of a unit's corner or one of its ports.
 
-    It reads the pin; after layout use :func:`port_point` on the frame.
+    After layout, use :func:`port_point` on the frame.
 
     Parameters
     ----------
     unit : Unit
         Pinned unit.
     port_name : str or None, optional
-        Port to measure to, or ``None`` for the corner.
+        Port to measure to, or None for the corner.
 
     Returns
     -------
@@ -443,7 +721,7 @@ def pinned_y(unit: "Unit", port_name: str | None = None) -> float:
     unit : Unit
         Pinned unit.
     port_name : str or None, optional
-        Port to measure to, or ``None`` for the corner.
+        Port to measure to, or None for the corner.
 
     Returns
     -------
@@ -461,8 +739,15 @@ def pinned_y(unit: "Unit", port_name: str | None = None) -> float:
 def pin_intent(unit: "Unit") -> dict[str, tuple[str | None, float]]:
     """Return the pixel coordinates the author pinned, per axis.
 
-    Map each pinned pixel axis to the port it is measured to (``None``
-    for the corner) and its value, such as ``{"y": ("inlet", 440.0)}``.
+    Parameters
+    ----------
+    unit : Unit
+        Unit to read.
+
+    Returns
+    -------
+    dict[str, tuple[str or None, float]]
+        Axis to ``(port, value)``, such as ``{"y": ("inlet", 440.0)}``.
     """
     pin = getattr(unit, "_pin", None)
     if pin is None:
@@ -476,10 +761,12 @@ def pin_intent(unit: "Unit") -> dict[str, tuple[str | None, float]]:
 def port_refusal(port_name: "str | None", axes: "Sequence[str]",
                  measured: "Collection[str]", ranks: "Collection[str]",
                  drop: str) -> str | None:
-    """Return why a port named on a pin locates no coordinate, or None.
+    """Return why a port named on a pin locates no coordinate.
 
     Parameters
     ----------
+    port_name : str or None
+        Port named on the pin.
     axes : Sequence[str]
         Coordinates the port is offered for.
     measured : Collection[str]
@@ -487,8 +774,12 @@ def port_refusal(port_name: "str | None", axes: "Sequence[str]",
     ranks : Collection[str]
         Grid ranks the pin names.
     drop : str
-        What the author removes to keep the rest of the pin, such as
-        ``port`` or ``port.x``.
+        What the author removes to keep the rest, such as ``port.x``.
+
+    Returns
+    -------
+    str or None
+        The refusal message, or None if the port locates a coordinate.
     """
     if not axes or set(axes) & set(measured):
         return None
