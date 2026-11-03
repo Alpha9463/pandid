@@ -71,13 +71,8 @@ def _place_free(fs: "Flowsheet") -> bool:
     # Use each unit's drawn box, which may reach outside its frame.
     taken = [unit_box(u, u.frame) for u in fs.units
              if u.frame is not None and u not in set(pending)]
-    # Strips and pinned balloons a balloon hung off an actuator must clear.
+    # Strips a balloon hung off an actuator must clear.
     clear = _nozzle_keepouts(fs, skip=set(pending))
-    for u in pending:
-        pin = u.pin_
-        if pin is not None and pin.x is not None and pin.y is not None:
-            w, h = resolve_size(u)
-            clear.append((pin.x, pin.y, pin.x + w, pin.y + h))
     # Drawn lines it must clear too, each with the units it joins.
     lines: list[tuple[tuple[object, ...], list[tuple[float, float]]]] = [
         ((u.host,), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
@@ -86,11 +81,12 @@ def _place_free(fs: "Flowsheet") -> bool:
     segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
                 for ends, points in lines for a, b in zip(points, points[1:])]
     moved = False
-    # Place in flowsheet order, each against what is already placed.
-    for inst in pending:
+    # Place pinned balloons first, then the rest in flowsheet order, each
+    # against what is already placed.
+    for inst in sorted(pending, key=lambda u: u.pin_ is None):
         w, h = resolve_size(inst)
         crossed = [box for ends, box in segments if inst not in ends]
-        x, y = (_actuator_spot(inst, w, h, taken + clear + crossed)
+        x, y = (_actuator_spot(fs, inst, w, h, taken + clear + crossed)
                 or _spot(fs, inst, w, h, taken))
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
@@ -111,17 +107,20 @@ def _place_free(fs: "Flowsheet") -> bool:
     return moved
 
 
-def _actuator_spot(inst: "Unit", w: float, h: float,
+def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
                    blocked: list[_Box]) -> tuple[float, float] | None:
     """Return the corner of a balloon hung off the one actuator it drives.
 
-    An unpinned balloon whose signal lines drive exactly one placed
+    An unpinned balloon that carries no attached balloon, has no
+    hand-routed line, and whose signal lines drive exactly one placed
     valve's actuator stands :data:`ACTUATOR_OFFSET` out from that
     actuator, square to its face. It steps out and swings as an attached
     balloon does until it clears every blocked box.
 
     Parameters
     ----------
+    fs : Flowsheet
+        Sheet the balloon is on.
     inst : Unit
         Free-standing balloon.
     w : float
@@ -134,19 +133,20 @@ def _actuator_spot(inst: "Unit", w: float, h: float,
     Returns
     -------
     tuple[float, float] or None
-        Top-left corner, or None if the balloon is pinned, drives no
-        actuator or several, or no standoff is clear.
+        Top-left corner, or None if the balloon is not hung or no
+        standoff is clear.
     """
     from pandid.layout.attach import (
         RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
         _standoff_box)
     from pandid.portgeom import face_point, port_anchor
 
-    if inst.pin_ is not None:
+    if inst.pin_ is not None or any(getattr(u, "host", None) is inst for u in fs.units):
         return None
-    driven = [port.stream.dest.owner for port in inst.ports.values()
-              if port.stream is not None and port.stream.source is port
-              and port.stream.dest.name == "actuator"]
+    wired = [(p, s) for p in inst.ports.values() if (s := p.stream) is not None]
+    if any(s.route is not None and s.route.manual for _, s in wired):
+        return None
+    driven = [s.dest.owner for p, s in wired if s.source is p and s.dest.name == "actuator"]
     if len(driven) != 1 or driven[0].frame is None:
         return None
     valve = driven[0]

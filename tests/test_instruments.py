@@ -724,7 +724,7 @@ def test_a_controller_driving_no_actuator_is_not_hung():
     fs.connect(ly.sig_out, lv.actuator, kind="pneumatic")
     fs.route()
 
-    assert _actuator_spot(lic, 44.0, 44.0, []) is None
+    assert _actuator_spot(fs, lic, 44.0, 44.0, []) is None
 
 
 def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
@@ -853,6 +853,47 @@ def test_a_hung_controller_keeps_its_own_tap_line() -> None:
 
     assert fs.route_converged
     assert pi.tap == pytest.approx(face_point(lic, _placed(lic), "N")[0])
+
+
+def test_a_hung_controller_clears_a_balloon_pinned_on_the_grid() -> None:
+    """PI-1 is pinned by grid rank over the valve; LIC-1 stands clear of it."""
+    fs = Flowsheet("grid")
+    valve = fs.add(U.Valve("V", variant="control")).pin(col=0, row=0)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.add_instrument("PI", 1).pin(col=0, row=-1)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "unit-overlap"] == []
+
+
+def test_a_controller_carrying_a_balloon_is_not_hung() -> None:
+    """PI-1 hangs south of LIC-1, so LIC-1 is placed from its wiring and
+    PI-1's tap line does not run through the valve."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs, lic, valve = _hung_controller()
+    fs.add_instrument("PI", 1, sensing=lic, at="S", offset=140)
+    fs.route()
+
+    box = unit_box(valve, _placed(valve))
+    ((inst, tap, centre),) = tap_lines(fs)
+    route = tap_route(inst, tap, centre)
+    assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+
+
+def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
+    """LIC-1's own line is routed by hand past the actuator, so LIC-1 is
+    placed from its wiring rather than on that line."""
+    fs, lic, valve = _hung_controller()
+    line = lic.sig_out.stream
+    assert line is not None
+    line.via([(100, 200), (500, 200)])
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
