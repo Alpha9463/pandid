@@ -712,17 +712,82 @@ def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
     assert fs.to_dict() == spec
 
 
-def test_a_controller_driving_no_actuator_is_placed_as_before():
-    """LIC-101 drives the relay on the valve, not the valve: it is placed
-    from its wiring, on the spot it took before controllers were hung off
-    actuators."""
+def test_a_controller_driving_no_actuator_is_not_hung():
+    """LIC-101 drives the relay on the valve, not the valve, so it is
+    offered no spot off the actuator even with nothing in the way."""
+    from pandid.layout.control import _actuator_spot
+
     fs, lic, lv = _level_loop()
     ly = fs.add_instrument("LY", 101, near=lv, at="N")
     fs.connect(lic.sig_out, ly.sig_in, kind="electric")
     fs.connect(ly.sig_out, lv.actuator, kind="pneumatic")
     fs.route()
 
-    assert _centre(lic) == pytest.approx((327.438, 63.612), abs=0.01)
+    assert _actuator_spot(lic, 44.0, 44.0, []) is None
+
+
+def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
+    """No standoff off the actuator clears the valve, so the balloon is
+    placed from its wiring rather than over the valve."""
+    fs = Flowsheet("big")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add(U.Instrument("LIC", 1, width=600, height=600))
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert not _overlaps(lic, valve)
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_a_controller_is_not_hung_across_a_pipe():
+    """The supply pipe runs through the actuator's standoff, so the balloon
+    stands clear of it instead of on it."""
+    fs = Flowsheet("pipe")
+    feed = fs.add(U.Feed("Feed")).pin(port="outlet", x=100, y=100)
+    fv = fs.add(U.Valve("FV-1", variant="control")).pin(port="inlet", x=300, y=212.4)
+    prod = fs.add(U.Product("Product")).pin(port="inlet", x=600, y=212.4)
+    fs.connect(feed.outlet, fv.inlet).via([(400, 100), (400, 160), (275, 160), (275, 212.4)])
+    fs.connect(fv.outlet, prod.inlet)
+    fic = fs.add(U.Instrument("FIC", 1))
+    fs.connect(fic.sig_out, fv.actuator, kind="electric")
+    fs.route()
+
+    assert "route-crosses-unit" not in {i.code for i in fs.validate()}
+
+
+def test_a_controller_driving_two_actuators_reads_back_in_place():
+    """Port order is not in the spec, so a balloon driving two actuators
+    hangs off neither and reads back onto the same spot."""
+    fs = Flowsheet("split")
+    first = fs.add(U.Valve("FV-1", variant="control")).pin(x=100, y=300)
+    second = fs.add(U.Valve("FV-2", variant="control")).pin(x=500, y=300)
+    fic = fs.add(U.Instrument("FIC", 1))
+    third_out = fic.signal_port("sig_out_3")
+    fs.connect(fic.signal_port("sig_out_2"), second.actuator, kind="electric")
+    fs.connect(third_out, first.actuator, kind="electric")
+    fs.route()
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    rebuilt.route()
+
+    (twin,) = [u for u in rebuilt.units if u.name == "FIC-1"]
+    assert _centre(twin) == pytest.approx(_centre(fic))
+
+
+def test_a_controller_hangs_from_the_actuators_own_point():
+    """An angle valve's actuator is off the middle of its top face, and the
+    balloon stands square to the actuator, not to the middle of the face."""
+    from pandid.portgeom import port_anchor
+
+    fs = Flowsheet("angle")
+    valve = fs.add(U.Valve("V", variant="angle", width=198, height=198)).pin(x=300, y=300)
+    lic = fs.add(U.Instrument("LIC", 1))
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    ax, ay, face = port_anchor(valve, _placed(valve), "actuator")
+    assert face == "N"
+    assert abs(ax - _placed(valve).cx) > 1.0, "the actuator has to be off the face's middle"
+    assert _centre(lic) == pytest.approx((ax, ay - 100.0))
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():

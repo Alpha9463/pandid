@@ -22,6 +22,9 @@ STEP = 25.0
 #: Rings searched before a balloon is left at its preferred spot.
 REACH = 40
 
+#: Standoff of a balloon hung off the actuator it drives.
+ACTUATOR_OFFSET = 100.0
+
 
 def place_control(fs: "Flowsheet") -> bool:
     """Place balloons and return whether any moved.
@@ -56,22 +59,31 @@ def _place_free(fs: "Flowsheet") -> bool:
         True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
-    from pandid.layout.attach import _hang
+    from pandid.layout.attach import _nozzle_keepouts, stream_path
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
+    from pandid.streams import SIGNAL_KINDS
 
-    pending = [u for u in fs.units if is_control(u) and _hang(u) is None]
+    pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
         return False
 
     # Use each unit's drawn box, which may reach outside its frame.
     taken = [unit_box(u, u.frame) for u in fs.units
              if u.frame is not None and u not in set(pending)]
+    # Strips and routed pipes a balloon hung off an actuator must clear.
+    clear = _nozzle_keepouts(fs, skip=set(pending))
+    for stream in fs.streams:
+        if stream.kind in SIGNAL_KINDS or stream.route is None:
+            continue
+        points = stream_path(stream)
+        clear += [(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+                  for a, b in zip(points, points[1:])]
     moved = False
     # Place in flowsheet order, each against what is already placed.
     for inst in pending:
         w, h = resolve_size(inst)
-        x, y = _spot(fs, inst, w, h, taken)
+        x, y = _actuator_spot(inst, w, h, taken + clear) or _spot(fs, inst, w, h, taken)
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
             moved = True
@@ -89,6 +101,56 @@ def _place_free(fs: "Flowsheet") -> bool:
         )
         taken.append(unit_box(inst, inst.frame))
     return moved
+
+
+def _actuator_spot(inst: "Unit", w: float, h: float,
+                   blocked: list[_Box]) -> tuple[float, float] | None:
+    """Return the corner of a balloon hung off the one actuator it drives.
+
+    An unpinned balloon whose signal lines drive exactly one placed
+    valve's actuator stands :data:`ACTUATOR_OFFSET` out from that
+    actuator, square to its face. It steps out and swings as an attached
+    balloon does until it clears every blocked box.
+
+    Parameters
+    ----------
+    inst : Unit
+        Free-standing balloon.
+    w : float
+        Balloon width.
+    h : float
+        Balloon height.
+    blocked : list[_Box]
+        Boxes the balloon must clear.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Top-left corner, or None if the balloon is pinned, drives no
+        actuator or several, or no standoff is clear.
+    """
+    from pandid.layout.attach import (
+        RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
+        _standoff_box)
+    from pandid.portgeom import face_point, port_anchor
+
+    if inst.pin_ is not None:
+        return None
+    driven = [port.stream.dest.owner for port in inst.ports.values()
+              if port.stream is not None and port.stream.source is port
+              and port.stream.dest.name == "actuator"]
+    if len(driven) != 1 or driven[0].frame is None:
+        return None
+    valve = driven[0]
+    ax, ay, face = port_anchor(valve, valve.frame, "actuator")
+    _, (nx, ny) = face_point(valve, valve.frame, face)
+    for ring in range(STANDOFF_STEPS + 1):
+        for angle in _branch_angles(90.0):
+            box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
+                                angle, w, h)
+            if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
+                return box[0], box[1]
+    return None
 
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
