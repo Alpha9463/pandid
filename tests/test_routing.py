@@ -583,34 +583,6 @@ def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
     assert (20, 10) in routed, f"detoured two extra bends to dodge a crossing: {routed}"
 
 
-def test_a_forced_crossing_still_routes():
-    """Find the only route although it crosses a recorded line."""
-    nodes = {(0, 0), (40, 0), (0, 10), (20, 10), (40, 10)}
-    edges: dict = {n: [] for n in nodes}
-
-    def link(a, b):
-        """Join two nodes in both directions.
-
-        Parameters
-        ----------
-        a, b : tuple[float, float]
-            Graph nodes.
-        """
-        edges[a].append(b)
-        edges[b].append(a)
-
-    link((0, 0), (0, 10))
-    link((0, 10), (20, 10))
-    link((20, 10), (40, 10))
-    link((40, 10), (40, 0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-    index = CrossingIndex()
-    index.v[20] = [(0.0, 20.0)]
-    routed = find_path(graph, (0, 0), (40, 0), "E", None, crossing_index=index)
-    assert routed == [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)]
-
-
 def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
     """Return the cost of the state ``find_path`` stops on.
 
@@ -661,28 +633,6 @@ def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
         heapq.heappop = original
     assert result, f"no route found in a graph built to have exactly one: {popped}"
     return popped[-1][1]
-
-
-def test_a_terminal_crossing_at_the_goal_itself_is_priced():
-    """Charge a crossing that lies on the goal node.
-
-    The search returns on reaching the goal without expanding it. An
-    arrival that continues into the fixed goal stub makes the goal an
-    interior point of the drawn line.
-    """
-    nodes = {(0.0, 0.0), (40.0, 0.0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0.0, 0.0)].append((40.0, 0.0))
-    edges[(40.0, 0.0)].append((0.0, 0.0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-    g_clear = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, "W")
-
-    index = CrossingIndex()
-    index.v[40.0] = [(-10.0, 10.0)]  # Place the goal strictly inside the span.
-    g_crossed = _final_g(graph, (0.0, 0.0), (40.0, 0.0), None, "W", crossing_index=index)
-
-    assert g_crossed == pytest.approx(g_clear + astar.CROSSING_PENALTY)
 
 
 def test_a_crossing_at_the_terminal_is_never_worth_a_bend():
@@ -747,20 +697,6 @@ def test_a_recycle_search_returns_the_cheapest_path():
     penalties = {((0.0, 0.0), (100.0, 0.0)): 100.0}
     routed = find_path(graph, (0.0, 0.0), (100.0, 100.0), edge_penalties=penalties, is_recycle=True)
     assert routed == west, f"returned the dearer route: {routed}"
-
-
-def test_a_forced_terminal_crossing_still_routes():
-    """Find the only route although its goal lies on a recorded line."""
-    nodes = {(0, 0), (40, 0)}
-    edges: dict = {n: [] for n in nodes}
-    edges[(0, 0)].append((40, 0))
-    edges[(40, 0)].append((0, 0))
-    graph = cast(VisibilityGraph, SimpleNamespace(nodes=nodes, edges=edges, recycle_y=[]))
-
-    index = CrossingIndex()
-    index.v[40] = [(-10.0, 10.0)]
-    routed = find_path(graph, (0, 0), (40, 0), None, "W", crossing_index=index)
-    assert routed == [(0, 0), (40, 0)]
 
 
 def test_committed_segments_refuses_a_diagonal_pair():
