@@ -18,8 +18,7 @@ def settled_gallery() -> dict[str, tuple[Flowsheet, dict]]:
 
     Notes
     -----
-    Consumers copy a case before rendering or mutating it. The fixture owns
-    cold layout and routing; each test owns its output and mutations.
+    Copy a case with ``copy_settled_case`` before rendering or mutating it.
     """
     cases = {}
     for stem in gallery.sheets():

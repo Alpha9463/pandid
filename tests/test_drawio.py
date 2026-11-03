@@ -1,8 +1,4 @@
-"""Check Draw.io document structure, shape keys, geometry, and styling.
-
-These tests parse exported XML and compare it with rendered SVG and independently
-derived stencil keys. They do not open documents in the Draw.io application.
-"""
+"""Check Draw.io document structure, shape keys, geometry, and styling against the SVG sheet."""
 
 from __future__ import annotations
 
@@ -152,7 +148,7 @@ def test_every_drawing_exports_as_a_stencil_or_a_written_down_approximation(entr
 
 
 def test_the_approximations_name_only_shapes_and_symbols_that_exist():
-    """The table is data, and stale data here is a silent wrong drawing."""
+    """Check each approximation names a registered stencil-less symbol and built-in shapes."""
     for (kind, variant), approx in _APPROXIMATIONS.items():
         assert (kind, variant) in default_registry._symbols, (
             f"_APPROXIMATIONS names {kind}/{variant}, which the registry does not draw"
@@ -189,8 +185,7 @@ def test_a_stand_in_says_on_fs_warnings_what_it_lost():
     assert "CV-101" in said[0].message
     assert _APPROXIMATIONS[("conveyor", "default")].lost in said[0].message
 
-    # The SVG loses nothing, so it says nothing -- and a second export replaces
-    # the first export's findings rather than stacking a second copy on them.
+    # The SVG reports nothing, and a second export replaces the first one's findings.
     fs.to_svg()
     assert "drawio-approximated" not in [w.code for w in fs.warnings]
     fs.to_drawio()
@@ -249,8 +244,7 @@ def test_the_export_reports_a_title_block_cell_it_had_to_abbreviate():
 # ---------------------------------------------------------------------------
 
 
-#: The registered ``(kind, variant)`` pairs that are reached through
-#: ``display=`` instead; see :func:`every_symbol_sheet`.
+#: Registered ``(kind, variant)`` pairs selected by ``display=``.
 _BY_DISPLAY = {("instrument", "panel"): "central", ("instrument", "aux"): "subsidiary"}
 
 
@@ -419,8 +413,7 @@ def test_every_edge_joins_cells_that_exist(sample):
     root = _model(sample)
     ids = {cell.get("id") for cell in root.findall("mxCell")}
     edges = [c for c in root.findall("mxCell") if c.get("edge") == "1"]
-    # Every stream, and every instrument connection: the latter is not a stream
-    # and would be dropped by anything that walked fs.streams alone.
+    # Every stream and every instrument connection is an edge.
     assert len(edges) == len(sample.streams) + len(tap_lines(sample))
     for edge in edges:
         assert edge.get("target") in ids
@@ -447,11 +440,9 @@ def test_every_instrument_connection_is_exported_as_an_edge(sample):
     at = {i: _style(c) for i, c in {c.get("id"): c for c in root.findall("mxCell")}.items()}
     for n, (inst, tap, centre) in enumerate(drawn):
         style = _style(taps[f"t{n}"])
-        # Solid to the process, dashed to the control system: §5.1.1's two
-        # bullets, answered by impulse_tap() and not decided again here.
+        # Solid to the process, dashed to the control system (§5.1.1).
         assert ("dashed" in style) != impulse_tap(inst)
-        # The balloon end lands on the balloon's centre, which is where the
-        # sheet runs the line to.
+        # The balloon end lands on the balloon's centre.
         landed = _drawio_connection_point(inst, at[taps[f"t{n}"].get("target")], style, "entry")
         assert landed == pytest.approx(centre, abs=0.01)
         source = taps[f"t{n}"].get("source")
@@ -478,8 +469,7 @@ def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
         style = _style(cells[f"u{i}"])
         assert style["shape"] == "offPageConnector"
         assert style["direction"] == direction
-        # The point is cut back fifteen units, stated as the fraction of the
-        # shape's own height that the quarter turn makes of the cell's width.
+        # The 15-unit point cut, as a fraction of the turned cell's width.
         (x0, _, x1, _), depth, _east = boundary_flag(unit, unit.frame)
         assert float(style["size"]) == pytest.approx(depth / (x1 - x0), abs=1e-6)
         # Keep the tag inside the flag.
@@ -508,8 +498,7 @@ def test_a_label_written_inside_its_shape_fits_inside_it(settled_gallery, render
             cell = cells[f"u{i}"]
             value = cell.get("value") or ""
             style = _style(cell)
-            # Only the labels written *in* the cell: a tag on a side of a symbol
-            # is on the paper beside it and has no box to overflow.
+            # Only labels written inside the cell; a side tag has no box to overflow.
             if not value or style.get("verticalLabelPosition") != "middle":
                 continue
             if style.get("labelPosition") in ("left", "right"):
@@ -560,13 +549,11 @@ def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it(settled_galler
     fs, kwargs = copy_settled_case(settled_gallery, "11_ethanol_pid")
     fs.to_svg(**kwargs)
 
-    # Without paper there is no fitting to do, so the drawing keeps its own
-    # coordinates and its own type: _Fit.identity() end to end.
+    # Without paper the export keeps the drawing's own coordinates and type.
     plain = _unit_label_sizes(fs, kwargs, page_size=None, border=None)
     assert plain and max(plain) == _TAG_TYPE
 
-    # With it, every label rides the same ratio the geometry does -- or is
-    # smaller still, where it had to be capped to the shape it is written in.
+    # With paper every label scales by the geometry's ratio, or is capped smaller.
     fitted = _unit_label_sizes(fs, kwargs)
     assert len(fitted) == len(plain)
     assert max(fitted) < _TAG_TYPE, "the type was left at its unfitted size"
@@ -577,8 +564,7 @@ def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it(settled_galler
         if unit.kind not in ("feed", "product") or not fs.units[i].tag:
             continue
         box = boundary_flag(unit, unit.frame).box
-        # A flag's cell is scaled by that same ratio, which is what makes the
-        # cap a statement about the drawing rather than about the model.
+        # A flag's cell is scaled by the same ratio.
         cell = cells[f"u{i}"].find("mxGeometry")
         assert float(cell.get("height")) == pytest.approx(ratio * (box[3] - box[1]), abs=0.01)
 
@@ -620,8 +606,7 @@ def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
         assert (uy1 - uy0) == pytest.approx(120.0)
 
         bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
-        # Inset a fixed amount off the *placed* height, so a taller box
-        # gets a taller pennant rather than the same 20-unit strip.
+        # The pennant is inset a fixed amount from the placed height.
         assert (by1 - by0) == pytest.approx(120.0 - 2 * 15)
         assert uy0 < by0 < by1 < uy1
 
@@ -630,8 +615,7 @@ def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
         # Centred in the pennant, not a quarter of the way down it.
         assert py == pytest.approx((by0 + by1) / 2)
 
-        # The SVG polygon's own tip agrees with the port and with
-        # draw.io's cell, since both resolve through the same box.
+        # The SVG polygon's tip agrees with the port and with draw.io's cell.
         svg = fs.to_svg()
         points = re.findall(r'<polygon[^>]*points="([^"]+)"', svg)[0]
         tip_y = float(points.split()[2].split(",")[1])
@@ -707,13 +691,11 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
         geo = hatch.find("mxGeometry")
         assert geo.get("relative") == "1"
         assert -1.0 <= float(geo.get("x")) <= 1.0
-        # mxGraphView puts a relative child's TOP-LEFT on the point it computes,
-        # so the offset has to carry the half-size or the mark sits off the line.
+        # mxGraph puts a relative child's top-left on its point; the offset adds the half-size.
         offset = geo.find('mxPoint[@as="offset"]')
         assert offset is not None
         half = float(geo.get("width")) / 2
         assert abs(float(offset.get("x")) + half) <= 3 or abs(float(offset.get("y")) + half) <= 3
-        # Keep the pneumatic line solid.
     assert "dashed" not in _style(cells["s0"])
 
 
@@ -788,9 +770,6 @@ def test_the_hatch_stroke_is_the_same_in_both_backends():
 )
 def test_a_dash_draws_in_drawio_as_the_svg_draws_it(dasharray, pattern):
     """Read a dash as SVG does: any comma and space separate, ``none`` is solid.
-
-    ``"7, 4"`` used to become ``7  4``, which mxGraph splits into
-    ``[7, 0, 4]``, and ``"none"`` was marked dashed (#574).
 
     Parameters
     ----------
@@ -1050,7 +1029,7 @@ def _one_unit(unit, **pin) -> dict[str, str]:
     "orientation,direction", [(0, None), (90, "south"), (180, "west"), (270, "north")]
 )
 def test_a_quarter_turn_exports_as_the_direction_it_turns_to(orientation, direction):
-    """pandid turns clockwise; draw.io names where the shape's east ended up.
+    """Export a clockwise quarter turn as the direction the shape's east ends up facing.
 
     Parameters
     ----------
@@ -1107,8 +1086,7 @@ def test_a_balloon_carries_its_letters_over_its_number():
     assert cell.get("value") == "FT<br>101"
     style = _style(cell)
     assert style["shape"] == "ellipse"
-    # Opaque, as the symbol's own artwork is: a balloon is drawn over the line
-    # it reads, and a transparent one has that line running through its tag.
+    # Opaque, so the line a balloon is drawn over does not run through its tag.
     assert style["fillColor"] == "#ffffff"
 
 
@@ -1153,8 +1131,7 @@ def test_a_trip_balloon_keeps_the_square_around_its_diamond(variant):
     fs.layout()
     cells = _cells(fs, check=False)
     square, diamond = cells["u0"], cells["u0-in"]
-    # The square is the cell: it carries the number, it is what a pipe lands on,
-    # and it is draw.io's default vertex with the corners left square.
+    # The square is the cell: it carries the number and is draw.io's default vertex.
     assert "shape" not in _style(square)
     assert _style(square)["rounded"] == "0"
     assert square.get("value") == "301"
@@ -1265,7 +1242,7 @@ def test_a_pfd_exports_arrowheads_and_a_p_and_id_does_not(sample):
 
 
 def test_a_stream_number_is_written_once_however_many_segments_carry_it(sample):
-    """A number names a run, and a run survives the valves in it.
+    """Write each stream number once, however many segments carry it.
 
     Parameters
     ----------
@@ -1332,8 +1309,7 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
         cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         plates = _tag_pass(fs, default_registry, None, "vertical").plates
-        # The sheet's own joints, because a flange mark is ink the number search
-        # dodges: asking without them is asking about a different drawing.
+        # The sheet's own joints: a flange mark is ink the number search dodges.
         joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
         wanted = {number.name: number for number in stream_numbers(fs, plates, joints, "vertical")}
         checked = 0
@@ -1350,8 +1326,7 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
             assert landed == pytest.approx(fit.at(number.x, number.y), abs=0.6), (
                 f"{stem}: {name} lands at {landed}, not where the sheet writes it"
             )
-            # ...and it is written on the sheet's own opaque halo, so a number
-            # that has to cross a passing run still reads.
+            # Written on an opaque halo, as the sheet writes it.
             assert _style(cell)["labelBackgroundColor"] == "#ffffff"
             checked += 1
         assert checked or not [s for s in fs.streams if s.kind == "material"]
@@ -1395,8 +1370,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
             assert (edge, y + h / 2) == pytest.approx(fit.at(lx, ly), abs=0.01), (
                 f"{stem}: {text} is exported out of its quadrant"
             )
-            # A code is written in a two-unit gap beside a balloon, so it is
-            # haloed for the lines it could not step off, as the sheet haloes it.
+            # A code beside a balloon is haloed, as the sheet haloes it.
             assert style["labelBackgroundColor"] == "#ffffff"
 
     # Assert the code population as well as parity between both renderers.
@@ -1570,8 +1544,7 @@ def test_a_table_rules_rows_and_cells_that_add_up_to_it():
         for row in rows:
             rgeo = row.find("mxGeometry")
             assert _style(row)["shape"] == "tableRow"
-            # A row's y is measured from the table's top-left, title band and
-            # all, and a row spans the whole table.
+            # A row's y is measured from the table's top-left; a row spans the table.
             assert float(rgeo.get("y")) == pytest.approx(top, abs=0.01)
             assert float(rgeo.get("width")) == pytest.approx(width, abs=0.01)
             rh = float(rgeo.get("height"))
@@ -1632,8 +1605,7 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
         assert sum((Decimal(c.find("mxGeometry").get("width")) for c in cs), Decimal(0)) == width
 
 
-#: Gallery options supported by the Draw.io exporter, including page fit and
-#: connection placement used in cross-renderer checks.
+#: Gallery render options that ``to_drawio`` accepts.
 _DRAWIO_KWARGS = (
     "diagram",
     "page_size",
@@ -2043,8 +2015,7 @@ def test_the_title_strip_is_one_rectangle_flush_to_the_frame():
     assert (float(geo.get("width")), float(geo.get("height"))) == pytest.approx((sw, sh))
     assert float(geo.get("x")) + sw == pytest.approx(fx + fw, abs=0.01)
     assert float(geo.get("y")) + sh == pytest.approx(fy + fh, abs=0.01)
-    # ...and the frame it is flush to is ruled at the weight the strip is, so
-    # the corner of the sheet reads as one heavy line rather than two.
+    # The frame is ruled at the strip's weight.
     assert _style(cells["z-frame"])["strokeWidth"] == f"{F.FRAME_RULE:g}"
 
 
@@ -2301,8 +2272,7 @@ def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery, rendered_
             assert galign == ("left" if anchor == "start" else "center"), (
                 f"{stem}: {text!r} is set {anchor} and exported {galign}"
             )
-        # ...and the whole of it is inside the frame the export rules, which is
-        # what the dock was asked for.
+        # The whole table sits inside the exported frame.
         geo = table.find("mxGeometry")
         tx, ty = float(geo.get("x")), float(geo.get("y"))
         tw, th = float(geo.get("width")), float(geo.get("height"))
@@ -2469,8 +2439,7 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
     sheet = _page(page_size)
     _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet, border=border)
     if sheet is not None:
-        # Paper: the page is the paper, and page="1" anchors draw.io's page grid
-        # at the model origin, which is where the fitted drawing already sits.
+        # Paged: the page is the paper, anchored at the model origin.
         assert page == "1"
         assert (pw, ph) == pytest.approx((sheet.width, sheet.height), abs=0.01)
         return
@@ -2481,7 +2450,7 @@ def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, bord
     ox, oy = ox - F.OUTER_MARGIN, oy - F.OUTER_MARGIN
     assert (pw, ph) == pytest.approx((ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN), abs=0.01)
 
-    # ...and that box really does hold the drawing and its frame.
+    # The page holds the drawing and its frame.
     dx0, dy0, dx1, dy1 = drawing_bounds(fs)
     fx, fy, fw, fh = frame
     for x0, y0, x1, y1 in ((dx0, dy0, dx1, dy1), (fx, fy, fx + fw, fy + fh)):
@@ -2545,9 +2514,6 @@ def _two_tanks(name: str) -> Flowsheet:
 @pytest.mark.parametrize("case", ["zone border", "box in the strip's corner"])
 def test_the_title_strip_is_docked_where_the_sheet_docks_it(case):
     """Dock draw.io's title strip on the rectangle the SVG sheet gives it.
-
-    A zone border carries a strip without a title block, and the strip
-    keeps the corner when a box shares its band.
 
     Parameters
     ----------
@@ -2616,7 +2582,7 @@ def test_a_paged_drawing_is_fitted_onto_its_paper():
         x0, y0, x1, y1 = cell_box(u)
         geo = cells[f"u{i}"].find("mxGeometry")
         assert float(geo.get("width")) == pytest.approx(scale * (x1 - x0), abs=0.01)
-    # ...and every cell lands inside the paper it was fitted to.
+    # Every cell lands inside the paper.
     for cell in cells.values():
         geo = cell.find("mxGeometry")
         if geo is None or geo.get("x") is None or cell.get("edge") == "1":
@@ -2731,9 +2697,7 @@ def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path,
 # ---------------------------------------------------------------------------
 
 
-#: Representative sheets for cross-backend Draw.io export contracts. They cover
-#: a zoned PFD with enclosed labels, instrumentation, material-line labels, an
-#: A3 PFD, a dense P&ID, a BFD, a second instrumented P&ID, and a large table.
+#: Representative sheets for cross-backend Draw.io export checks.
 DRAWIO_REPRESENTATIVES = (
     "03_distillation_train",
     "04_control_loop",
@@ -2791,12 +2755,6 @@ def rendered_gallery(settled_gallery) -> dict[str, _GalleryArtifacts]:
     -------
     dict[str, _GalleryArtifacts]
         Immutable SVG and Draw.io text keyed by representative sheet name.
-
-    Notes
-    -----
-    Consumers parse fresh XML elements and obtain their own model copy. This
-    fixture only owns identical default renderer calls; variant-specific
-    exports remain local to the contract that changes their options.
     """
     artifacts = {}
     for stem in DRAWIO_REPRESENTATIVES:
@@ -2912,8 +2870,7 @@ def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
         offset = geometry.find("mxPoint[@as='offset']")
         dx = float(offset.get("x")) if offset is not None else 0.0
         dy = float(offset.get("y")) if offset is not None else 0.0
-        # `verticalLabelPosition` puts the label's box outside the cell and the
-        # `verticalAlign` beside it pulls the text back against the cell.
+        # The label box sits outside the cell, with its text pulled against it.
         cx = x + w / 2 + dx
         top = (y - lh if style["verticalLabelPosition"] == "top" else y + h) + dy
         tags[f"u{i}"] = (cx - lw / 2, top, cx + lw / 2, top + lh)
@@ -2931,8 +2888,7 @@ def _drawn_boxes(fs, kwargs, cells: dict) -> tuple[dict, dict, list]:
             [fit.at(*p) for p in stream_polyline(s)], cell.find("mxGeometry")
         )
         lw, lh = text_width(name, size), _LINE_BOX * size
-        # `horizontal=0` turns the label a quarter, so the paper it takes is the
-        # transpose; it is centred on the same point either way round.
+        # `horizontal=0` turns the label a quarter, so its box is transposed.
         if style.get("horizontal") == "0":
             lw, lh = lh, lw
         numbers.append((name, (cx - lw / 2, cy - lh / 2, cx + lw / 2, cy + lh / 2)))
@@ -3003,8 +2959,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
             at = geometry.find(f'mxPoint[@as="{point}"]')
             got += [float(at.get("x")), float(at.get("y"))]
             want += list(fit.at(*end))
-        # A twentieth, because the sheet writes this line's coordinates to one
-        # decimal and the export writes them to two.
+        # The sheet writes these coordinates to one decimal, the export to two.
         assert got == pytest.approx(want, abs=0.06)
         style = _style(cell)
         # The head goes on the end that lands on the run, and nowhere else.
@@ -3050,8 +3005,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
             if cell is None:
                 continue
             style = _style(cell)
-            # A pipe tee draws no ink of its own -- the three runs meeting draw
-            # the junction -- so it has no pen to state.
+            # A pipe tee draws no ink, so it has no pen to state.
             if style.get("strokeColor") == "none":
                 continue
             assert "strokeWidth" in style, (
@@ -3498,8 +3452,6 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-#: Representative compositions, including per-unit overlays absent from the
-#: default symbol registry.
 def _composed_units():
     """Build one unit for each supported symbol composition.
 
@@ -3589,7 +3541,7 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
         f"{unit.name}: the sheet draws {len(sym.overlays)} parts and the export "
         f"draws {len(children)}"
     )
-    # ...and the SVG's own count, so this is three drawings agreeing and not two.
+    # The SVG draws at least as many parts.
     inner = _GROUP.match(sym.svg).group(2)
     assert inner.count("<g transform=") >= len(sym.overlays)
 
@@ -3657,7 +3609,7 @@ def test_every_part_resolves_to_a_stencil_or_a_documented_built_in(part):
 
 
 def test_the_part_table_names_only_parts_that_exist():
-    """The table is data, and stale data here is a silently wrong drawing."""
+    """Check each part approximation names a registered part."""
     registered = {p.key() for p in default_registry.parts()}
     assert set(_PART_APPROXIMATIONS) <= registered, (
         f"_PART_APPROXIMATIONS names parts nobody registers: "
@@ -3666,7 +3618,7 @@ def test_the_part_table_names_only_parts_that_exist():
 
 
 def test_an_annotation_of_empty_rows_exports() -> None:
-    """Rows with no cells have no columns, and the export must still draw the box."""
+    """Export an annotation whose rows have no cells."""
     from pandid.document import Annotation
 
     fs = Flowsheet("Empty notes")

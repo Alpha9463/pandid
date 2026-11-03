@@ -1,8 +1,4 @@
-"""Check ``Flowsheet.show()``: its keywords, its window, and its fallback.
-
-No test calls ``mainloop()``. A window is built, inspected, and closed, and
-the browser fallback is tested through the decision function.
-"""
+"""Check ``Flowsheet.show()``: its keywords, its window, and its fallback."""
 
 import inspect
 import os
@@ -65,8 +61,7 @@ def test_show_takes_exactly_the_keywords_render_takes():
         ("diagram", "p&id", True),
         ("page_size", "A3", True),
         ("debug", True, True),
-        # These three do not change this sheet: a PFD marks no joints, no
-        # lines cross, and ``check`` affects warnings rather than the drawing.
+        # These three do not change this sheet's drawing.
         ("connections", "flanged", False),
         ("jump_direction", "horizontal", False),
         ("check", False, False),
@@ -240,12 +235,7 @@ def test_macos_with_a_gui_session_can_open_tkinter(monkeypatch):
     calls = []
 
     class Root:
-        """Stand in for a Tk root.
-
-        Notes
-        -----
-        Each call is recorded in ``calls``.
-        """
+        """Stand in for a Tk root, recording each call in ``calls``."""
 
         def withdraw(self) -> None:
             """Record that the temporary window was hidden."""
@@ -263,8 +253,7 @@ def test_macos_with_a_gui_session_can_open_tkinter(monkeypatch):
     monkeypatch.setattr(P, "_macos_gui_session", lambda: True)
     monkeypatch.setitem(sys.modules, "tkinter", SimpleNamespace(Tk=Root, TclError=Exception))
     assert P._no_display() == ""
-    # Tk 9 on macOS aborts when a later root services an idle task left by a
-    # destroyed root, so idle tasks run before the root is destroyed.
+    # Idle tasks run before the root is destroyed.
     assert calls == ["withdraw", "update_idletasks", "destroy"]
 
 
@@ -426,9 +415,6 @@ def _tk_or_skip():
 def _drawn(root, canvas, width: int, height: int) -> tuple[int, int]:
     """Resize the window and return the size of the image it settles on.
 
-    The redraw is delayed by ``_SETTLE_MS``, so ``update()`` is called again
-    after that delay instead of entering the event loop.
-
     Parameters
     ----------
     root : tkinter.Tk
@@ -454,10 +440,7 @@ def _drawn(root, canvas, width: int, height: int) -> tuple[int, int]:
 
 
 def test_the_window_draws_the_sheet_scaled_to_the_window():
-    """Redraw the sheet at the canvas size when the window is resized.
-
-    This test opens a real window and closes it in ``finally``.
-    """
+    """Redraw the sheet at the canvas size when the window is resized."""
     from pandid.render import export
 
     root = _tk_or_skip()
