@@ -267,7 +267,7 @@ def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
 # ---------------------------------------------------------------------------
 # A nozzle drawn off the body it belongs to (#488).
 #
-# 21_alumina_refinery shipped with M-901's third inlet 8,9px below the bottom of
+# 21_alumina_refinery_2 shipped with M-901's third inlet 8,9px below the bottom of
 # the tank: the stream was drawn to it correctly and it was not on the drawing,
 # so the line ended in blank paper beside a symbol it never reached. validate()
 # said nothing, and that silence is the half of the defect that must not recur.

@@ -6,7 +6,9 @@ review the generated assets. A version-only package update needs no redraw.
 """
 
 import argparse
+import contextlib
 import importlib.util
+import io
 import pathlib
 import sys
 
@@ -50,14 +52,39 @@ def _pandid_is_this_checkout() -> None:
 
 
 def sheets() -> list[str]:
-    """Return gallery example stems in filename order.
+    """Return gallery sheet names in filename order.
+
+    A one-sheet example's sheet is named by its stem, and sheet *n* of a
+    longer example by ``{stem}_{n}``.
 
     Returns
     -------
     list[str]
-        Example filename stems used for gallery asset names.
+        Sheet names used for gallery asset names.
     """
-    return sorted(p.stem for p in EXAMPLES.glob("[0-9]*.py"))
+    names = []
+    for stem in sorted(p.stem for p in EXAMPLES.glob("[0-9]*.py")):
+        with contextlib.redirect_stdout(io.StringIO()):
+            names += _names(stem, len(_capture(stem)))
+    return names
+
+
+def _names(stem: str, count: int) -> list[str]:
+    """Return the sheet names of an example that draws *count* sheets.
+
+    Parameters
+    ----------
+    stem : str
+        Example filename stem.
+    count : int
+        Number of sheets the example draws.
+
+    Returns
+    -------
+    list[str]
+        ``[stem]`` for at most one sheet, else ``{stem}_1`` to ``{stem}_{count}``.
+    """
+    return [stem] if count <= 1 else [f"{stem}_{n}" for n in range(1, count + 1)]
 
 
 def _stamp(fs: Flowsheet) -> None:
@@ -78,8 +105,8 @@ def _stamp(fs: Flowsheet) -> None:
         tb.date = tb.revisions[-1].date
 
 
-def flowsheet(stem: str) -> "tuple[Flowsheet, dict]":
-    """Capture one example flowsheet and its SVG render options.
+def _capture(stem: str) -> "list[tuple[Flowsheet, dict]]":
+    """Run one example and capture every SVG render it requests.
 
     Parameters
     ----------
@@ -88,13 +115,13 @@ def flowsheet(stem: str) -> "tuple[Flowsheet, dict]":
 
     Returns
     -------
-    tuple[pandid.Flowsheet, dict]
-        Captured flowsheet and the options supplied to its SVG render call.
+    list[tuple[pandid.Flowsheet, dict]]
+        Each captured flowsheet and the options supplied to its render call.
 
     Raises
     ------
     SystemExit
-        If the example does not request exactly one SVG render.
+        If the example cannot be imported.
     """
     caught: list[tuple[Flowsheet, dict]] = []
     original = Flowsheet.render
@@ -132,24 +159,46 @@ def flowsheet(stem: str) -> "tuple[Flowsheet, dict]":
     finally:
         Flowsheet.render = original  # type: ignore[method-assign]
         sys.path.remove(str(EXAMPLES))
+    return caught
 
-    if len(caught) != 1:
-        raise SystemExit(
-            f"examples/{stem}.py drew {len(caught)} sheets, not one. The gallery is "
-            f"one file per example; teach this script what the second one is called."
-        )
-    fs, kwargs = caught[0]
+
+def flowsheet(name: str) -> "tuple[Flowsheet, dict]":
+    """Capture one gallery sheet and its SVG render options.
+
+    Parameters
+    ----------
+    name : str
+        Sheet name from :func:`sheets`.
+
+    Returns
+    -------
+    tuple[pandid.Flowsheet, dict]
+        Captured flowsheet and the options supplied to its SVG render call.
+
+    Raises
+    ------
+    SystemExit
+        If the example draws no sheet, or no sheet of that name.
+    """
+    stem = name if (EXAMPLES / f"{name}.py").exists() else name.rpartition("_")[0]
+    caught = _capture(stem)
+    names = _names(stem, len(caught))
+    if not caught:
+        raise SystemExit(f"examples/{stem}.py drew no sheet.")
+    if name not in names:
+        raise SystemExit(f"examples/{stem}.py has no sheet {name!r}; its sheets are {', '.join(names)}.")
+    fs, kwargs = caught[names.index(name)]
     _stamp(fs)
     return fs, kwargs
 
 
 def render(stem: str) -> str:
-    """Render one example as canonical SVG without writing output files.
+    """Render one gallery sheet as canonical SVG without writing output files.
 
     Parameters
     ----------
     stem : str
-        Example filename stem.
+        Sheet name from :func:`sheets`.
 
     Returns
     -------

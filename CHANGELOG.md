@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the nearest clear standoff, when the default router runs. If no standoff
   is clear, or hanging adds any finding or any line or balloon over a unit
   or tag, the sheet is routed as it was before this rule.
+- **The alumina refinery example draws three sheets (#622).** Its areas are
+  joined by off-page `Feed`/`Product` flags that name each other's drawing.
 
 ### Deprecated
 
