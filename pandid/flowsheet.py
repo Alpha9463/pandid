@@ -2101,7 +2101,6 @@ class Flowsheet:
                 self._put_geometry(unhung, keep_manual=False)
             else:
                 self._unhung = unhung
-        # Mark the routes current.
         self._route_stale = False
 
     def _geometry(self) -> tuple:
