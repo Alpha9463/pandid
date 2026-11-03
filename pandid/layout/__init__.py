@@ -4,23 +4,10 @@ Stage 1 places process units and pipe furniture; stage 2 places
 instrument balloons against that geometry.
 """
 
-from typing import Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
-
-
-class LayoutEngine(Protocol):
-    """Define the interface a layout engine implements."""
-
-    def layout(self, fs: "Flowsheet") -> None:
-        """Store a frame on each unit.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Sheet to lay out.
-        """
 
 
 def _seed_slots(fs: "Flowsheet") -> None:

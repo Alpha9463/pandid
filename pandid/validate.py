@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pandid._checks import suggest
-from pandid.layout.conflicts import _SQUARE_TOL, boxes_overlap, segment_crosses_box
+from pandid.layout.conflicts import _BODY_TOL, _SQUARE_TOL, boxes_overlap, segment_crosses_box
 from pandid.portgeom import COMPASS
 
 if TYPE_CHECKING:
@@ -902,7 +902,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # Hard: overlapping unit bodies, with the call that moves one.
         for i in range(len(boxes)):
             for j in range(i + 1, len(boxes)):
-                if boxes_overlap(boxes[i][1], boxes[j][1]):
+                if boxes_overlap(boxes[i][1], boxes[j][1], -_BODY_TOL):
                     a, b = boxes[i][0], boxes[j][0]
                     errors.append(Issue("error", "unit-overlap",
                                         f"{a.name} and {b.name} overlap. {_overlap_cure(a, b)}"))

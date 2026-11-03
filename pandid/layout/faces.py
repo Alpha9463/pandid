@@ -7,13 +7,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Mapping
 
+from pandid.routing.visibility import MIN_ESCAPE
+
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.ports import Port
     from pandid.units import Unit
-
-#: Router stand-off from a nozzle.
-_ESCAPE = 25.0
 
 
 def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, ...]:
@@ -148,7 +147,7 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
         frame.port_faces[port_name] = face
         _, anchor, landed = resolve_port(unit, frame, port_name)
         normal = face_point(unit, frame, landed)[1]
-        tip = (anchor[0] + _ESCAPE * normal[0], anchor[1] + _ESCAPE * normal[1])
+        tip = (anchor[0] + MIN_ESCAPE * normal[0], anchor[1] + MIN_ESCAPE * normal[1])
         if not any(segment_crosses_box(anchor, tip, box) for box in boxes):
             clear.append(face)
         bends[face] = (
@@ -284,7 +283,7 @@ def _cost(anchor: tuple[float, float], normal: tuple[float, float],
     """
     (ax, ay), (nx, ny), (tx, ty) = anchor, normal, target
     reach = (tx - ax) * nx + (ty - ay) * ny
-    return abs(tx - ax) + abs(ty - ay) + (0.0 if reach >= 0.0 else 2.0 * _ESCAPE)
+    return abs(tx - ax) + abs(ty - ay) + (0.0 if reach >= 0.0 else 2.0 * MIN_ESCAPE)
 
 
 def _aim(centre: tuple[float, float], normal: tuple[float, float],

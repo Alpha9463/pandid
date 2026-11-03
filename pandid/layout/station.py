@@ -6,9 +6,11 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
+from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.corridor import horizontal_centerline
-from pandid.layout.stages import process_units, slot
+from pandid.layout.stages import process_units
 from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
+from pandid.routing.visibility import MIN_ESCAPE
 from pandid.stations import StationAssembly, member_mirror
 
 if TYPE_CHECKING:
@@ -116,7 +118,7 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
 
 
 def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
-    """Return whether frames keep their pins and clear obstacles.
+    """Return whether frames clear obstacles.
 
     Parameters
     ----------
@@ -128,31 +130,11 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
     Returns
     -------
     bool
-        True if no member has a grid pin, each frame keeps its
-        member's pin, and every box clears obstacles by 8.
+        True if every box clears obstacles by 8.
     """
-    for unit, frame in frames.items():
-        pin = unit.pin_
-        if pin is not None and (
-            pin.col is not None or pin.row is not None
-            or frame.orientation != pin.orientation
-            or frame.mirrored != pin.mirrored or frame.mirror_y != pin.mirror_y
-        ):
-            return False
-        if pin is not None and any(
-            getattr(pin, axis) is not None
-            and abs(getattr(frame, axis) - getattr(pin, axis)) > 1e-6
-            for axis in ("x", "y")
-        ):
-            return False
-        left, top, right, bottom = unit_box(unit, frame)
-        for other in obstacles:
-            if other.frame is None:
-                continue
-            o_left, o_top, o_right, o_bottom = unit_box(other, other.frame)
-            if right + 8 > o_left and o_right + 8 > left and bottom + 8 > o_top and o_bottom + 8 > top:
-                return False
-    return True
+    return not any(boxes_overlap(unit_box(unit, frame), unit_box(other, other.frame), 8)
+                   for unit, frame in frames.items()
+                   for other in obstacles if other.frame is not None)
 
 
 def _anchored_origin(assembly: StationAssembly, preferred_left: float,
@@ -226,13 +208,8 @@ def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
     bool
         True if no two boxes come within 8 of each other.
     """
-    for unit, frame in first.items():
-        left, top, right, bottom = unit_box(unit, frame)
-        for other, other_frame in second.items():
-            o_left, o_top, o_right, o_bottom = unit_box(other, other_frame)
-            if right + 8 > o_left and o_right + 8 > left and bottom + 8 > o_top and o_bottom + 8 > top:
-                return False
-    return True
+    return not any(boxes_overlap(unit_box(unit, frame), unit_box(other, other_frame), 8)
+                   for unit, frame in first.items() for other, other_frame in second.items())
 
 
 def _station_centerline(source: Unit, source_port: str, dest: Unit,
@@ -275,9 +252,9 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
     lower, upper = float("-inf"), float("inf")
     for face, point in ((source_face, start), (dest_face, end)):
         if face == "N":
-            upper = min(upper, point[1] - 25.0)
+            upper = min(upper, point[1] - MIN_ESCAPE)
         elif face == "S":
-            lower = max(lower, point[1] + 25.0)
+            lower = max(lower, point[1] + MIN_ESCAPE)
     if lower > upper:
         return None
     if source_face in ("E", "W"):
@@ -328,6 +305,8 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
     int
         Number of stations placed.
     """
+    from pandid.layout.mounted import _commit, _main_width
+
     chosen = fs._station_assemblies if assemblies is None else assemblies
     if not chosen:
         return 0
@@ -373,11 +352,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
         for assembly in group:
             if assembly.mirrored and not mirrored:
                 break
-            station = assembly.station
-            branch = {station.bypass, station.upstream_drain, station.downstream_drain}
-            main = [unit for unit in station.members if unit not in branch]
-            width = sum(resolve_size(unit)[0] for unit in main)
-            width += assembly.gap * (len(main) - 1)
+            width = _main_width(assembly)
             if high - low < width + 16:
                 break
             fraction = _fraction(assembly)
@@ -408,11 +383,5 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
             continue
         placed_count += len(proposed)
         for frames in proposed:
-            for unit, frame in frames.items():
-                unit.frame = frame
-                placed = slot(unit)
-                placed.x, placed.y = frame.x, frame.y
-                placed.w, placed.h = frame.w, frame.h
-                placed.orientation = frame.orientation
-                placed.mirrored, placed.mirror_y = frame.mirrored, frame.mirror_y
+            _commit(frames, obstacles)
     return placed_count

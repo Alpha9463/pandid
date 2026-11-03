@@ -343,12 +343,13 @@ def _cost(lab: "_Label", dx: float, dy: float,
     tuple
         ``((labels, plates, ink, outside), (x, y, anchor), box)``.
     """
-    from pandid.render.svg import _covering, _meets
+    from pandid.layout.conflicts import boxes_overlap
+    from pandid.render.svg import _covering
 
     plates, ink = lab.near
     x, y = lab.px + dx * lab.size, lab.py + dy * lab.size
     box = _box(x, y, lab.text, lab.size, dx)
-    mine = sum(1 for b in placed if _meets(box, b))
+    mine = sum(1 for b in placed if boxes_overlap(box, b))
     # Count exactly only while this spot could still beat ``limit``.
     cap: "tuple[int, int] | None"
     if limit is None or mine < limit[0]:
@@ -558,7 +559,7 @@ def _marks(fs: "Flowsheet", scale: float,
         Geometry and tethers, then the label text elements.
     """
     from pandid.portgeom import resolve_port, unit_box
-    from pandid.render.svg import _meets
+    from pandid.layout.conflicts import boxes_overlap
 
     geometry: list[str] = []
     jobs: list[_Label] = []
@@ -585,8 +586,8 @@ def _marks(fs: "Flowsheet", scale: float,
         """
         lab = _Label(text, px, py, size, colour, spots, ([], []))
         seen = _window(lab)
-        jobs.append(lab._replace(near=([b for b in plates if _meets(b, seen)],
-                                       [b for b in ink if _meets(b, seen)])))
+        jobs.append(lab._replace(near=([b for b in plates if boxes_overlap(b, seen)],
+                                       [b for b in ink if boxes_overlap(b, seen)])))
 
     anchor_spots = _spots(*_ANCHOR_LABEL)
     for u, f in frames:
