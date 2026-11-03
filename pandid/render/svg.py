@@ -4266,25 +4266,9 @@ class SvgRenderer:
             for hop in stream_hops(fs, jump_direction):
                 hops.setdefault((hop.stream, hop.seg), []).append(hop)
 
-        # A gap is an ``M`` subpath in the same ``d``.
-
-        def cross(far: str) -> str:
-            """Return the path command crossing to ``far``.
-
-            Parameters
-            ----------
-            far : str
-                Far side of the crossing, as ``"x,y"``.
-
-            Returns
-            -------
-            str
-                Arc command for ``"arc"``, else a move.
-            """
-            if crossing_style == "arc":
-                return f"A {HOP_R:g} {HOP_R:g} 0 0 1 {far}"
-            return f"M {far}"
-
+        # The command crossing to the far side: an arc, or a gap as an
+        # ``M`` subpath in the same ``d``.
+        cross = f"A {HOP_R:g} {HOP_R:g} 0 0 1 " if crossing_style == "arc" else "M "
         lines = ['  <g id="streams">']
         for n, (s, points) in enumerate(stream_geoms):
             paint = s.color or "black"
@@ -4307,12 +4291,12 @@ class SvgRenderer:
                         foot = HOP_R if y1 < y2 else -HOP_R
                         d_parts.extend([
                             f"L {x1},{hop.y - foot:g}",
-                            cross(f"{x1},{hop.y + foot:g}")])
+                            f"{cross}{x1},{hop.y + foot:g}"])
                     else:
                         foot = HOP_R if x1 < x2 else -HOP_R
                         d_parts.extend([
                             f"L {hop.x - foot:g},{y1}",
-                            cross(f"{hop.x + foot:g},{y1}")])
+                            f"{cross}{hop.x + foot:g},{y1}"])
                 d_parts.append(f"L {x2},{y2}")
             d_str = " ".join(d_parts)
 

@@ -380,23 +380,10 @@ def _overflowing_text(ann, size: float, body_w: float) -> str:
     """
     if text_width(ann.title, size + 1, bold=True) > body_w:
         return ann.title
-
-    def flat(r):
-        """Return a row as one string.
-
-        Parameters
-        ----------
-        r : str or sequence
-            Row, or a row's cells.
-
-        Returns
-        -------
-        str
-            The cells joined by spaces.
-        """
-        return "   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
-    return max((flat(r) for r in ann.rows), key=lambda s: text_width(s, size),
-               default=ann.title)
+    # A row of cells reads as one string, the cells spaced apart.
+    rows = ("   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
+            for r in ann.rows)
+    return max(rows, key=lambda s: text_width(s, size), default=ann.title)
 
 
 def draw_annotation(ann, x: float, y: float, *,
@@ -1967,22 +1954,6 @@ def dock(items, inner, *, sheet=None, too_small=None):
         """
         return max((w for _, w, _ in entries), default=0.0)
 
-    def biggest(dim: int):
-        """Return the largest piece along ``dim``.
-
-        Parameters
-        ----------
-        dim : int
-            1 for width, 2 for height.
-
-        Returns
-        -------
-        object or None
-            The piece, or ``None`` if there is none.
-        """
-        entries = [it for col in cols.values() for it in col]
-        return max(entries, key=lambda it: it[dim])[0] if entries else None
-
     # band thicknesses -------------------------------------------
     top_h = max(stack_h(cols["top-left"]), stack_h(cols["top"]),
                 stack_h(cols["top-right"]))
@@ -2021,8 +1992,11 @@ def dock(items, inner, *, sheet=None, too_small=None):
         if too_wide or need_h >= sheet.height - 2 * edge:
             if too_small is None:
                 raise TypeError("dock() needs a too_small callback when sheet is given")
+            # Blame the widest piece, or the tallest.
+            dim = 1 if too_wide else 2
+            entries = [it for col in cols.values() for it in col]
             raise too_small(need_w + 2 * edge, need_h + 2 * edge,
-                            biggest(1 if too_wide else 2))
+                            max(entries, key=lambda it: it[dim])[0] if entries else None)
         ix, iy = edge, edge
         ixr, iyb = sheet.width - edge, sheet.height - edge
     else:

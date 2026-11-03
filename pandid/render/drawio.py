@@ -1491,30 +1491,16 @@ class DrawioRenderer:
         self._findings += label_findings(fs, shape, placed, direction)
         polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
         order, hops, lost = _hops(polylines, direction, crossing_style)
-
-        def _run(key):
-            """Return a stream's name for a message.
-
-            Parameters
-            ----------
-            key : int
-                Stream index.
-
-            Returns
-            -------
-            str
-                Stream name, or ``"stream <n>"``.
-            """
-            return fs.streams[key].name or f"stream {key + 1}"
-
         for hop_key, cross_key, x, y in sorted(lost):
             at = f"({fmt(x, 2)}, {fmt(y, 2)})"
+            hopper, crossed = (fs.streams[k].name or f"stream {k + 1}"
+                               for k in (hop_key, cross_key))
             self._findings.append(Issue(
                 "warning", HOP_DROPPED,
-                f"{_run(hop_key)} crosses itself at {at}, and draw.io hops a line "
+                f"{hopper} crosses itself at {at}, and draw.io hops a line "
                 f"only over the lines written before it, never over itself; the "
                 f"crossing is exported flat" if hop_key == cross_key else
-                f"{_run(hop_key)} hops {_run(cross_key)} at {at} "
+                f"{hopper} hops {crossed} at {at} "
                 f"on the sheet, and the two cross each other more than once, which "
                 f"draw.io cannot draw either way round; the crossing is exported "
                 f"flat"))
