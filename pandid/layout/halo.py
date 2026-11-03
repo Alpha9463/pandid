@@ -136,7 +136,7 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
     elif is_control(node):
         return None
     else:
-        nx, ny = _face_normal(str(getattr(root, "at", None) or "E"))
+        nx, ny = _face_normal(str(getattr(root, "face", None) or "E"))
         flow = (-ny, nx)  # the face's tangent
         hosts = [node]
 

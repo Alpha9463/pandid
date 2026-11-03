@@ -11,6 +11,7 @@ from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
 
+from pandid.deprecation import Deprecation
 from pandid.document import StreamLabelOptions, StreamTableOptions
 from pandid.stations import (
     DEFAULT_BYPASS_RISE,
@@ -325,6 +326,14 @@ def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
         Arguments with a value.
     """
     return {name: value for name, value in kwargs.items() if value is not None}
+
+
+#: Deprecation of add_control_loop(controller_at=).
+_CONTROLLER_AT = Deprecation(
+    what="add_control_loop(controller_at=...)",
+    instead="controller_face=...",
+    removed_in="0.1.7",
+)
 
 
 def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) -> str:
@@ -939,7 +948,7 @@ class Flowsheet:
                        sensing: "Stream | Unit | None" = None,
                        acting_on: "Stream | Unit | None" = None,
                        near: "Stream | Unit | None" = None,
-                       at: float | str | None = None,
+                       at: float | str | None = None, face: str | None = None,
                        offset: float = 45.0, angle: float = 90.0,
                        variant: str = "default", **kwargs) -> "Instrument":
         """Add an ISA-5.1 instrument balloon.
@@ -960,7 +969,9 @@ class Flowsheet:
         near : Stream or Unit or None, optional
             Host the balloon is placed by.
         at : float, str or None, optional
-            Fraction along a stream host, or face of a unit host.
+            Fraction along a stream host; a unit face here is deprecated.
+        face : str or None, optional
+            Face of a unit host, as for :meth:`Instrument.attach`.
         offset : float, default=45.0
             Distance from the tap to the balloon centre.
         angle : float, default=90.0
@@ -983,12 +994,17 @@ class Flowsheet:
             If an argument is invalid, the tag clashes, or a host is
             off this sheet.
 
+        Warns
+        -----
+        DeprecationWarning
+            If ``at`` names a face of a unit.
+
         Examples
         --------
         >>> s = fs.connect(feed.outlet, fv.inlet)
         >>> ft = fs.add_instrument("FT", 101, sensing=s, at=0.4,
         ...                        offset=60)
-        >>> fic = fs.add_instrument("FIC", 101, near=ft, at="N",
+        >>> fic = fs.add_instrument("FIC", 101, near=ft, face="N",
         ...                         offset=70, display="central")
         >>> fs.connect(ft.sig_out, fic.sig_in, kind="electric")
         """
@@ -998,7 +1014,7 @@ class Flowsheet:
                 self._refuse_foreign(role, host)
         inst = self._build_instrument(
             type, number, sensing=sensing, acting_on=acting_on, near=near,
-            at=at, offset=offset, angle=angle, variant=variant, **kwargs)
+            at=at, face=face, offset=offset, angle=angle, variant=variant, **kwargs)
         self.add(inst)
         return inst
 
@@ -1007,7 +1023,7 @@ class Flowsheet:
                           sensing: "Stream | Unit | None" = None,
                           acting_on: "Stream | Unit | None" = None,
                           near: "Stream | Unit | None" = None,
-                          at: float | str | None = None,
+                          at: float | str | None = None, face: str | None = None,
                           offset: float = 45.0, angle: float = 90.0,
                           variant: str = "default", **kwargs) -> "Instrument":
         """Build a balloon, anchored to its host if one is given.
@@ -1021,7 +1037,9 @@ class Flowsheet:
         sensing, acting_on, near : Stream or Unit or None, optional
             Anchor; at most one.
         at : float, str or None, optional
-            Fraction along a stream host, or face of a unit host.
+            Fraction along a stream host; a unit face here is deprecated.
+        face : str or None, optional
+            Face of a unit host.
         offset : float, default=45.0
             Distance from the tap to the balloon centre.
         angle : float, default=90.0
@@ -1054,7 +1072,8 @@ class Flowsheet:
         inst = Instrument(type, number, variant=variant, **kwargs)
         host, relation = self._anchor(inst, sensing, acting_on, near)
         if host is not None:
-            inst.attach(host, at=at, offset=offset, angle=angle, relation=relation)
+            # stacklevel 5: the caller of add_instrument() or add_control_loop().
+            inst._attach(host, at, face, offset, angle, relation, stacklevel=5)
         return inst
 
     def _refuse_foreign(self, role: str, thing: "Stream | Port | Unit") -> None:
@@ -1176,7 +1195,7 @@ class Flowsheet:
         return host, relation
 
     def add_balloon(self, element: "Unit", *, at: float | str | None = None,
-                    offset: float = 46.0, angle: float = 90.0,
+                    face: str | None = None, offset: float = 46.0, angle: float = 90.0,
                     variant: str = "default", **kwargs) -> "Instrument":
         """Move a primary element's tag into a balloon drawn beside it.
 
@@ -1187,7 +1206,9 @@ class Flowsheet:
         element : Unit
             Tagged element already on this sheet.
         at : float, str or None, optional
-            Face or fraction to hang the balloon from.
+            Deprecated; use ``face``.
+        face : str or None, optional
+            Face of the element to hang the balloon from; default ``"E"``.
         offset : float, default=46.0
             Distance from the tap to the balloon centre.
         angle : float, default=90.0
@@ -1208,7 +1229,12 @@ class Flowsheet:
             If a ``kwargs`` size is not a number.
         ValueError
             If the element is off this sheet, has a balloon or no tag,
-            or ``at`` or ``offset`` is invalid.
+            or ``at``, ``face`` or ``offset`` is invalid.
+
+        Warns
+        -----
+        DeprecationWarning
+            If ``at`` is given.
         """
         from pandid.units import Instrument
 
@@ -1233,19 +1259,20 @@ class Flowsheet:
                 f"lettered from its loop, e.g. Fitting(loop.element('FE'))"
             )
         inst = Instrument(element.tag, variant=variant, **kwargs)
+        inst._attach(element, at, face, offset, angle, "sensing", stacklevel=4)
         # Mark the element first; add() then allows the shared tag.
         inst._marks = element
         self.add(inst)
         element.balloon = inst
-        inst.attach(element, at=at, offset=offset, angle=angle, relation="sensing")
         return inst
 
     def add_control_loop(
         self, variable: "str | Loop", number: str | int | None = None, *,
         measuring: "Stream | Unit", acting_on: "Port | Unit",
-        at: float | str | None = None, offset: float | None = None,
-        angle: float | None = None,
-        controller_at: str | None = None, controller_offset: float | None = None,
+        at: float | str | None = None, face: str | None = None,
+        offset: float | None = None, angle: float | None = None,
+        controller_at: str | None = None, controller_face: str | None = None,
+        controller_offset: float | None = None,
         transmitter_letters: str | None = None, controller_letters: str | None = None,
         controller_variant: str = "shared",
         measurement_kind: str = "electric", output_kind: str = "pneumatic",
@@ -1269,10 +1296,14 @@ class Flowsheet:
         acting_on : Port or Unit
             Final control element, or its signal port.
         at : float, str or None, optional
-            Transmitter tap: a stream fraction or a unit face.
+            Transmitter tap along a stream; a unit face here is deprecated.
+        face : str or None, optional
+            Face of a measured unit the transmitter hangs from.
         offset, angle : float or None, optional
             Transmitter standoff and branch angle.
         controller_at : str or None, optional
+            Deprecated; use ``controller_face``.
+        controller_face : str or None, optional
             Face of the transmitter the controller hangs from.
         controller_offset : float or None, optional
             Controller standoff.
@@ -1296,11 +1327,21 @@ class Flowsheet:
             If ``number`` is neither text nor a whole number.
         ValueError
             If an argument is invalid or belongs to another sheet.
+
+        Warns
+        -----
+        DeprecationWarning
+            If ``at`` names a face of a unit, or ``controller_at`` is given.
         """
         from pandid.loops import ControlLoop, Loop
         from pandid.ports import Port
 
         # Check everything, then commit below.
+        if controller_at is not None and controller_face is not None:
+            raise ValueError(
+                "controller_at= and controller_face= both name the face of the "
+                "transmitter the controller hangs from; give controller_face= alone"
+            )
         if isinstance(variable, Loop):
             if number is not None:
                 raise ValueError(
@@ -1330,12 +1371,13 @@ class Flowsheet:
         # Build and check both balloons before adding either.
         transmitter = self._build_instrument(
             transmitter_code, loop, sensing=measuring,
-            **_stated(at=at, offset=offset, angle=angle))
+            **_stated(at=at, face=face, offset=offset, angle=angle))
         # near=: the measurement signal is the only line drawn.
         controller = self._build_instrument(
             controller_code, loop, near=transmitter,
             variant=controller_variant,
-            **_stated(at=controller_at, offset=controller_offset))
+            **_stated(face=controller_face if controller_at is None else controller_at,
+                      offset=controller_offset))
         self._refuse_unaddable(transmitter)
         # Check the controller's tag against the pending transmitter.
         self._refuse_unaddable(controller, alongside=(transmitter,))
@@ -1345,6 +1387,8 @@ class Flowsheet:
         self._resolve_connection(controller.sig_out, acting_on,
                                  kind=output_kind, pending=pending)
 
+        if controller_at is not None:
+            _CONTROLLER_AT.warn(controller, where=controller.name)
         # Commit.
         if allocates is not None:
             self._register_loop(loop, allocated=allocates)

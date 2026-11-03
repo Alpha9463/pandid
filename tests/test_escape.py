@@ -133,9 +133,9 @@ def _plant(payload: str, field: str) -> Flowsheet:
     )
     line.properties[at("stream property name", "Duty")] = at("stream property value", "12 kW")
     loop = fs.add_loop("F", at("loop number", "301"))
-    fs.add_instrument("FT", loop, near=pump, at="N", offset=40)
+    fs.add_instrument("FT", loop, near=pump, face="N", offset=40)
     # A direct instrument accepts the selected tag.
-    fs.add_instrument(at("instrument letters", "PI"), 205, near=product, at="N", offset=40)
+    fs.add_instrument(at("instrument letters", "PI"), 205, near=product, face="N", offset=40)
 
     fs.title_block = TitleBlock(
         # A blank title renders the flowsheet-name fallback.

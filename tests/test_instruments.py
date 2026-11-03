@@ -1,11 +1,14 @@
 """Instrumentation subsystem: balloons, tags, attachment, signal lines."""
 
 import math
+import os
+import warnings
 
 import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.portgeom import port_point
+from pandid.streams import Stream
 
 
 def _line(**kw):
@@ -281,7 +284,7 @@ def test_impulse_line_is_drawn_thin_from_the_tap():
 def test_attached_to_unit_hangs_off_the_named_face():
     fs = Flowsheet("u")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
-    lic = fs.add_instrument("LIC", 101, sensing=drum, at="E", offset=80, display="central")
+    lic = fs.add_instrument("LIC", 101, sensing=drum, face="E", offset=80, display="central")
     fs.route()
     f = drum.frame
     assert lic.tap == pytest.approx((f.x_max, f.cy))
@@ -291,11 +294,11 @@ def test_attached_to_unit_hangs_off_the_named_face():
 def test_unit_face_default_and_validation():
     fs = Flowsheet("u")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
-    assert fs.add_instrument("LT", 1, sensing=drum).at == "E"
+    assert fs.add_instrument("LT", 1, sensing=drum).face == "E"
     with pytest.raises(ValueError):
         fs.add_instrument("LT", 2, sensing=drum, at=0.5)
     with pytest.raises(ValueError):
-        fs.add_instrument("LT", 3, sensing=drum, at="up")
+        fs.add_instrument("LT", 3, sensing=drum, face="up")
 
 
 def test_stream_host_rejects_a_face():
@@ -318,11 +321,11 @@ def test_a_balloon_refused_its_placement_never_reaches_the_sheet():
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
     before = list(fs.units)
 
-    with pytest.raises(ValueError, match="at= on a unit host"):
-        fs.add_instrument("LT", 101, sensing=drum, at="up")
+    with pytest.raises(ValueError, match="face= is a side of V-101"):
+        fs.add_instrument("LT", 101, sensing=drum, face="up")
 
     assert list(fs.units) == before
-    assert fs.add_instrument("LT", 101, sensing=drum, at="N").name == "LT-101"
+    assert fs.add_instrument("LT", 101, sensing=drum, face="N").name == "LT-101"
 
 
 def test_a_balloon_may_not_be_anchored_to_another_sheets_unit():
@@ -342,6 +345,134 @@ def test_a_balloon_may_not_be_anchored_to_another_sheets_unit():
     assert fs.add_instrument("LT", 101, sensing=drum).name == "LT-101"
 
 
+# --- face= names a side of a unit, at= a fraction along a line (#438) ----------
+
+
+def _hosts() -> tuple[Flowsheet, U.Vessel, U.Fitting, Stream]:
+    """A line into a tagged venturi and on to a drum: one host of each kind."""
+    fs = Flowsheet("face")
+    feed = fs.add(U.Feed("Feed"))
+    fe = fs.add(U.Fitting("FE-303", variant="venturi"))
+    drum = fs.add(U.Vessel("V-101"))
+    line = fs.connect(feed.outlet, fe.inlet)
+    fs.connect(fe.outlet, drum.inlet)
+    return fs, drum, fe, line
+
+
+def _same_file(path: str) -> str:
+    """Return a path as the file system resolves and compares it."""
+    return os.path.normcase(os.path.realpath(path))
+
+
+def _placement(fs: Flowsheet) -> list[tuple[object, ...]]:
+    """Return each unit's name, host, fraction, face and balloon."""
+    return [
+        (u.name, vars(u).get("host"), vars(u).get("at"), vars(u).get("face"), u.balloon)
+        for u in fs.units
+    ]
+
+
+def test_face_names_the_side_of_a_unit_and_defaults_to_east():
+    fs, drum, _, _ = _hosts()
+    assert fs.add_instrument("LT", 1, sensing=drum).face == "E"
+    north = fs.add_instrument("LT", 2, sensing=drum, face="N")
+    assert (north.at, north.face) == (None, "N")
+    # nozzle()'s spellings, stored as the compass letter.
+    assert fs.add_instrument("LT", 3, sensing=drum, face="top").face == "N"
+    assert fs.add_instrument("LT", 4, sensing=drum, face=" w ").face == "W"
+
+
+def test_a_balloon_on_a_line_has_a_fraction_and_no_face():
+    fs, _, _, line = _hosts()
+    ft = fs.add_instrument("FT", 1, sensing=line, at=0.3)
+    assert (ft.at, ft.face) == (0.3, None)
+    assert fs.add_instrument("FT", 2, sensing=line).at == 0.5
+
+
+_AT_A_FACE = {
+    "add_instrument": lambda fs, drum, fe: fs.add_instrument("LT", 101, sensing=drum, at="N"),
+    "add_balloon": lambda fs, drum, fe: fs.add_balloon(fe, at="N"),
+    "attach": lambda fs, drum, fe: fs.add(U.Instrument("LT", 101)).attach(drum, at="N"),
+}
+
+
+@pytest.mark.parametrize("entry", sorted(_AT_A_FACE))
+def test_a_face_given_as_at_warns_at_the_authors_line(entry: str):
+    """Python shows a DeprecationWarning only from ``__main__``, so the warning
+    names the author's file whichever entry point was called."""
+    fs, drum, fe, _ = _hosts()
+    with pytest.warns(DeprecationWarning, match="use face='N'") as caught:
+        inst = _AT_A_FACE[entry](fs, drum, fe)
+    assert len(caught) == 1
+    assert _same_file(caught[0].filename) == _same_file(__file__)
+    assert (inst.at, inst.face) == (None, "N")
+    found = [i.message for i in fs.validate() if i.code == "deprecated"]
+    assert found == [str(caught[0].message)]
+    assert found[0].startswith(f"{inst.tag}: ")
+
+
+def test_a_face_given_as_at_is_placed_where_face_puts_it():
+    old, old_drum, _, _ = _hosts()
+    with pytest.warns(DeprecationWarning):
+        old_lt = old.add_instrument("LT", 101, sensing=old_drum, at="N", offset=60)
+    new, new_drum, _, _ = _hosts()
+    new_lt = new.add_instrument("LT", 101, sensing=new_drum, face="N", offset=60)
+    old.route()
+    new.route()
+    assert new_drum.frame is not None and new_lt.tap is not None
+    assert new_lt.tap[1] == pytest.approx(new_drum.frame.y)
+    assert old_lt.tap == new_lt.tap
+    assert old.to_svg() == new.to_svg()
+
+
+_REFUSED = {
+    "both on a unit": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("LT", 1, sensing=drum, at="N", face="N"),
+        "V-101 is a unit, so give face= alone",
+    ),
+    "both on a line": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("FT", 1, sensing=line, at=0.5, face="N"),
+        "is a line, so give at= alone",
+    ),
+    "both on a balloon's element": (
+        lambda fs, lt, drum, fe, line: fs.add_balloon(fe, at="N", face="N"),
+        "FE-303 is a unit, so give face= alone",
+    ),
+    "both on attach": (
+        lambda fs, lt, drum, fe, line: lt.attach(drum, at="N", face="N"),
+        "V-101 is a unit, so give face= alone",
+    ),
+    "face on a line": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("FT", 1, sensing=line, face="N"),
+        "is a line; give at=",
+    ),
+    "face on attach to a line": (
+        lambda fs, lt, drum, fe, line: lt.attach(line, face="N"),
+        "is a line; give at=",
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_REFUSED))
+def test_a_refused_face_leaves_the_sheet_unchanged_and_warns_nothing(case: str):
+    fs, drum, fe, line = _hosts()
+    lt = fs.add_instrument("LT", 100, sensing=drum, face="W")
+    before = _placement(fs)
+    call, match = _REFUSED[case]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match=match):
+            call(fs, lt, drum, fe, line)
+    assert caught == []
+    assert _placement(fs) == before
+
+
+def test_a_fraction_on_a_unit_names_face():
+    fs, drum, _, _ = _hosts()
+    with pytest.raises(ValueError, match="V-101 is a unit; give face="):
+        fs.add_instrument("LT", 1, sensing=drum, at=0.5)
+
+
 # --- layout ------------------------------------------------------------------
 
 
@@ -351,7 +482,7 @@ def test_attached_balloons_take_no_rank():
     prod = fs.add(U.Product("Product"))
     s = fs.connect(feed.outlet, prod.inlet)
     ft = fs.add_instrument("FT", 101, sensing=s, offset=60)
-    fic = fs.add_instrument("FIC", 101, near=ft, at="N", offset=60)
+    fic = fs.add_instrument("FIC", 101, near=ft, face="N", offset=60)
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.layout()
     assert (ft.frame.col, ft.frame.row) == (None, None)
@@ -444,7 +575,7 @@ def test_a_bubble_mounted_flush_is_pushed_clear_of_the_wall():
     than in line with anything."""
     fs = Flowsheet("flush")
     drum = fs.add(U.Vessel("V-1")).pin(x=300, y=250)
-    lt = fs.add_instrument("LT", 1, sensing=drum, at="E", offset=10)
+    lt = fs.add_instrument("LT", 1, sensing=drum, face="E", offset=10)
     fs.route()
     assert not _overlaps(lt, drum)
     face = _placed(drum)
@@ -637,7 +768,7 @@ def test_controller_output_routes_to_the_valve_actuator():
     from pandid.portgeom import port_point
 
     fs, _, ft, fv = _line(at=0.4, offset=60)
-    fic = fs.add_instrument("FIC", 101, near=ft, at="N", offset=120, angle=35, display="central")
+    fic = fs.add_instrument("FIC", 101, near=ft, face="N", offset=120, angle=35, display="central")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     sig = fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
     fs.route()
@@ -733,7 +864,9 @@ def test_hanger_is_not_drawn_where_a_signal_already_joins_the_pair():
     # sensing= and not near=, deliberately: what this asserts is that the
     # *signal* is what suppresses the hanger, so the balloon has to be one
     # that would otherwise be joined to its host by a line.
-    fic = fs.add_instrument("FIC", 101, sensing=ft, at="N", offset=110, angle=35, display="central")
+    fic = fs.add_instrument(
+        "FIC", 101, sensing=ft, face="N", offset=110, angle=35, display="central"
+    )
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     # A drawn ``<line>`` starts its own text line; a nested one does not --
     # ``display="central"`` is a trimmed balloon since #305 and its own
@@ -750,7 +883,7 @@ def test_hanger_is_not_drawn_where_a_signal_already_joins_the_pair():
 
 def test_interlock_hangs_off_its_controller_on_a_dashed_line():
     fs, _, ft, _ = _line(at=0.5, offset=60)
-    fs.add_instrument("I", 1, sensing=ft, at="S", offset=44, variant="logic")
+    fs.add_instrument("I", 1, sensing=ft, face="S", offset=44, variant="logic")
     taps = [ln for ln in fs.to_svg().split("\n") if "<line" in ln and 'stroke-width="1"' in ln]
     assert any("stroke-dasharray" in ln for ln in taps)  # instrument host -> dashed
     assert any("stroke-dasharray" not in ln for ln in taps)  # process tap -> solid
@@ -818,7 +951,9 @@ def test_link_style_follows_the_balloon_not_only_its_host(variant, display, styl
     """
     fs = Flowsheet("what is on the end of it")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=200)
-    fs.add_instrument("LX", 101, sensing=drum, at="E", offset=80, variant=variant, display=display)
+    fs.add_instrument(
+        "LX", 101, sensing=drum, face="E", offset=80, variant=variant, display=display
+    )
     fs.route()
     assert _tap_styles(fs) == {"LX-101": style}
 
@@ -844,15 +979,15 @@ def test_link_style_follows_the_host_not_only_its_balloon(host, style):
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     drum = fs.add(U.Vessel("V-101")).pin(x=400, y=140)
     line = fs.connect(feed.outlet, drum.inlet)
-    hosts = {"stream": lambda: (line, {"at": 0.5}), "vessel": lambda: (drum, {"at": "S"})}
+    hosts = {"stream": lambda: (line, {"at": 0.5}), "vessel": lambda: (drum, {"face": "S"})}
     if host == "valve":
         valve = fs.add(U.Valve("XV-1", variant="solenoid")).pin(x=200, y=300)
-        hosts["valve"] = lambda: (valve, {"at": "S"})
+        hosts["valve"] = lambda: (valve, {"face": "S"})
     elif host in ("instrument", "signal"):
-        lt = fs.add_instrument("LT", 101, sensing=drum, at="E", offset=70)
-        lic = fs.add_instrument("LIC", 101, near=lt, at="E", offset=70, variant="shared")
+        lt = fs.add_instrument("LT", 101, sensing=drum, face="E", offset=70)
+        lic = fs.add_instrument("LIC", 101, near=lt, face="E", offset=70, variant="shared")
         signal = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
-        hosts["instrument"] = lambda: (lt, {"at": "N"})
+        hosts["instrument"] = lambda: (lt, {"face": "N"})
         hosts["signal"] = lambda: (signal, {"at": 0.5})
     anchor, where = hosts[host]()
     fs.add_instrument("PX", 1, sensing=anchor, offset=70, variant="default", **where)
@@ -874,9 +1009,9 @@ def test_the_trip_square_on_a_valve_is_drawn_as_the_signal_it_is():
     prod = fs.add(U.Product("Product")).pin(x=520, y=170)
     fs.connect(feed.outlet, xv.inlet)
     fs.connect(xv.outlet, prod.inlet)
-    ti = fs.add_instrument("TI", 325, sensing=xv, at="N", offset=44)
-    fs.add_instrument("I", 2, acting_on=xv, at="S", offset=44, variant="sis")
-    fs.add_instrument("I", 2, sensing=ti, at="E", offset=44, variant="sis")
+    ti = fs.add_instrument("TI", 325, sensing=xv, face="N", offset=44)
+    fs.add_instrument("I", 2, acting_on=xv, face="S", offset=44, variant="sis")
+    fs.add_instrument("I", 2, sensing=ti, face="E", offset=44, variant="sis")
     fs.route()
     styles = _tap_styles(fs)
     assert styles["I-2"] == styles["I-2 (2)"] == "dashed"
@@ -987,7 +1122,7 @@ def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     actuator right beneath it) with none at all, rendering it as plain pipe."""
     fs = Flowsheet("short-pneumatic")
     valve = fs.add(U.Valve("LV-101", variant="control")).pin(x=300, y=300)
-    ly = fs.add_instrument("LY", 101, near=valve, at="N", offset=58)
+    ly = fs.add_instrument("LY", 101, near=valve, face="N", offset=58)
     ly.nozzle("sig_out", "S")
     fs.connect(ly.sig_out, valve.actuator, kind="pneumatic")
     fs.layout()
@@ -1399,7 +1534,7 @@ def _drum(relation, **kwargs):
     prod = fs.add(U.Product("Product")).pin(x=600, y=170)
     fs.connect(feed.outlet, drum.inlet)
     fs.connect(drum.outlet, prod.inlet)
-    inst = fs.add_instrument("LX", 101, at="E", offset=70, **{relation: drum}, **kwargs)
+    inst = fs.add_instrument("LX", 101, face="E", offset=70, **{relation: drum}, **kwargs)
     fs.route()
     return fs, inst
 
@@ -1430,7 +1565,7 @@ def test_a_placement_is_still_a_placement():
     host at all."""
     _, standing = _drum("near")
     host = standing.host
-    assert standing.at == "E"
+    assert standing.face == "E"
     assert (standing.frame.cx, standing.frame.cy) == pytest.approx(
         (host.frame.x_max + 70, host.frame.cy)
     )
@@ -1607,7 +1742,7 @@ def test_a_balloon_carries_the_elements_tag_and_the_element_stops_drawing_it():
     plain name, since it is the item an equipment list schedules; the balloon is
     named as a repeated square is."""
     fs, fe = _element()
-    balloon = fs.add_balloon(fe, at="N", offset=38)
+    balloon = fs.add_balloon(fe, face="N", offset=38)
     assert fe.balloon is balloon
     assert (balloon.tag, balloon.name) == ("FE-303", "FE-303 (2)")
     assert (fe.tag, fe.name) == ("", "FE-303")
@@ -1617,7 +1752,7 @@ def test_the_shared_tag_is_drawn_exactly_once():
     """Which is the whole of what moving it does to the sheet: one tag, one
     place, and the bookkeeping name never reaches the paper."""
     fs, fe = _element()
-    fs.add_balloon(fe, at="N", offset=38)
+    fs.add_balloon(fe, face="N", offset=38)
     fs.route()
     svg = fs.to_svg()
     assert svg.count(">FE<") == 1 and svg.count(">303<") == 1
@@ -1630,7 +1765,7 @@ def test_the_balloon_reads_the_element_it_stands_for():
     from pandid.render.svg import impulse_tap
 
     fs, fe = _element()
-    balloon = fs.add_balloon(fe, at="N", offset=38)
+    balloon = fs.add_balloon(fe, face="N", offset=38)
     fs.route()
     assert (balloon.host, balloon.relation) == (fe, "sensing")
     assert impulse_tap(balloon) is True
@@ -1669,7 +1804,7 @@ def test_the_anchor_no_longer_leaves_the_relationship_to_be_guessed():
     fs = Flowsheet("removed")
     drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
     with pytest.raises(TypeError, match="'on'"):
-        fs.add_instrument("LX", 101, on=drum, at="E", offset=70)
+        fs.add_instrument("LX", 101, on=drum, face="E", offset=70)
 
 
 @pytest.mark.parametrize("variant,display", [("panel", "central"), ("aux", "subsidiary")])

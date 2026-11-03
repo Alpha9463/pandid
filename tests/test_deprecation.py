@@ -348,11 +348,17 @@ def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
     assert declarations()["pandid.layout.faces.RETIRED"] is RETIRED
 
 
-def test_the_package_declares_only_the_placement_hints():
-    """The twelve spellings 0.1.3 and 0.1.4 deprecated are deleted (#579); the
-    one retiring now is a unit class's ``PLACES``/``LAYOUT_CONFIDENCE`` (#564),
-    which layout no longer reads.
+def test_the_package_declares_only_the_placement_hints_and_the_faces():
+    """The twelve spellings 0.1.3 and 0.1.4 deprecated are deleted (#579). Those
+    retiring now are a unit class's ``PLACES``/``LAYOUT_CONFIDENCE`` (#564),
+    which layout no longer reads, and a unit face given as ``at=`` or
+    ``controller_at=`` (#438).
     """
-    from pandid.units import _PLACEMENT_HINTS
+    from pandid.flowsheet import _CONTROLLER_AT
+    from pandid.units import _AT_FACE, _PLACEMENT_HINTS
 
-    assert declarations() == {"pandid.units._PLACEMENT_HINTS": _PLACEMENT_HINTS}
+    assert declarations() == {
+        "pandid.flowsheet._CONTROLLER_AT": _CONTROLLER_AT,
+        "pandid.units._AT_FACE": _AT_FACE,
+        "pandid.units._PLACEMENT_HINTS": _PLACEMENT_HINTS,
+    }

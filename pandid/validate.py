@@ -143,18 +143,19 @@ def _overlap_cure(a, b) -> str:
         if host is None or pinned(u):
             continue
         stream = isinstance(host, Stream)
+        key = "at" if stream else "face"
         where = (f"how far along {host.name} it taps, 0 to 1 (now {u.at:g})" if stream else
-                 f"the face of {host.name} it sits by, 'N', 'S', 'E' or 'W' (now {u.at!r})")
+                 f"the face of {host.name} it sits by, 'N', 'S', 'E' or 'W' (now {u.face!r})")
         kept = ((f", angle={u.angle!r}" if u.angle != 90.0 else "")
                 + (f", relation={u.relation!r}" if u.relation != "sensing" else ""))
         pin = u.pin_
         grid = (f". Its col= and row= pin does not move an attached balloon; an "
                 f"x= and y= pin does: {how(u)}"
                 if pin is not None and (pin.col is not None or pin.row is not None) else "")
-        return (f"{u.name} hangs off {host.name}, so say where on it: at= is "
+        return (f"{u.name} hangs off {host.name}, so say where on it: {key}= is "
                 f"{where}, and offset= how far it stands off (now {u.offset:g}). "
                 f"Change them on add_instrument(), or call .attach(<the {host.name} "
-                f"{'stream' if stream else 'unit'}>, at=..., offset=...{kept}) on "
+                f"{'stream' if stream else 'unit'}>, {key}=..., offset=...{kept}) on "
                 f"{u.name}{grid}")
     if pinned(a) and pinned(b):
         return f"Both are pinned, so move one pin clear of the other: {how(b)}"
@@ -833,7 +834,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             cure = ("An attached balloon stands in no grid: it is placed from "
                     "its host, or from an absolute pin. Say where with "
                     f"{u.name}.pin(x=..., y=...), aim it with "
-                    f"{u.name}.attach(at=..., offset=..., angle=...), or "
+                    f"{u.name}.attach("
+                    f"{'at' if isinstance(getattr(u, 'host', None), Stream) else 'face'}=..., "
+                    "offset=..., angle=...), or "
                     "detach it to have it laid out like any other unit"
                     if getattr(u, "host", None) is not None else
                     "A pinned axis is honoured exactly, so something moved "

@@ -1174,7 +1174,7 @@ def test_instrument_attached_to_a_unit():
                     "number": 101,
                     "display": "central",
                     "sensing": "P-101",
-                    "at": "S",
+                    "face": "S",
                     "offset": 90,
                     "angle": 35,
                     "port_faces": {"sig_out": "W"},
@@ -1188,8 +1188,86 @@ def test_instrument_attached_to_a_unit():
     # The two axes the entry states, and the one variant they resolve to.
     assert (inst.symbol_type, inst.display, inst.variant) == ("default", "central", "panel")
     assert (inst.host.name, inst.relation) == ("P-101", "sensing")
-    assert (inst.at, inst.offset, inst.angle) == ("S", 90.0, 35.0)
+    assert (inst.face, inst.offset, inst.angle) == ("S", 90.0, 35.0)
     assert inst._port_faces == {"sig_out": "W"}
+
+
+#: The units of :func:`_spec`, and a tagged element to hang a balloon from.
+_WITH_ELEMENT = [
+    {"kind": "Feed", "name": "F"},
+    {"kind": "Pump", "name": "P-101"},
+    {"kind": "Product", "name": "P"},
+    {"kind": "Fitting", "name": "FE-303", "variant": "venturi"},
+]
+
+
+def test_a_side_is_read_and_written_as_face_and_a_fraction_as_at():
+    fs = Flowsheet.from_dict(
+        _spec(
+            instruments=[
+                {"type": "LT", "number": 101, "sensing": "P-101", "face": "S"},
+                {"type": "FT", "number": 101, "sensing": ["F", "outlet"], "at": 0.4},
+            ]
+        )
+    )
+    lt, ft = fs.units[-2:]
+    assert (lt.at, lt.face, ft.at, ft.face) == (None, "S", 0.4, None)
+    written = fs.to_dict()["instruments"]
+    assert [sorted({"at", "face"} & set(entry)) for entry in written] == [["face"], ["at"]]
+    assert (written[0]["face"], written[1]["at"]) == ("S", 0.4)
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
+def test_a_balloons_side_is_written_as_face():
+    fs = Flowsheet("balloon")
+    fe = fs.add(units.Fitting("FE-303", variant="venturi"))
+    fs.add_balloon(fe, face="S")
+    entry = fs.to_dict()["instruments"][0]
+    assert (entry["face"], "at" in entry) == ("S", False)
+    back = Flowsheet.from_dict(fs.to_dict()).units[-1]
+    assert (back.at, back.face) == (None, "S")
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"type": "LT", "number": 101, "sensing": "P-101", "at": "S"},
+        {"balloon_of": "FE-303", "at": "S"},
+    ],
+    ids=["instrument", "balloon"],
+)
+def test_a_side_given_as_at_still_loads_and_is_reported(entry):
+    spec = _spec(units=_WITH_ELEMENT, instruments=[entry])
+    with pytest.warns(DeprecationWarning, match="use face='N'"):
+        fs = Flowsheet.from_dict(spec)
+    inst = fs.units[-1]
+    assert (inst.at, inst.face) == (None, "S")
+    found = [i.message for i in fs.validate() if i.code == "deprecated"]
+    assert len(found) == 1 and found[0].startswith(f"{inst.tag}: ")
+    assert fs.to_dict()["instruments"][0]["face"] == "S"
+
+
+@pytest.mark.parametrize(
+    "entry, match",
+    [
+        (
+            {"type": "LT", "number": 101, "sensing": "P-101", "at": "S", "face": "S"},
+            "give face= alone",
+        ),
+        (
+            {"type": "FT", "number": 101, "sensing": ["F", "outlet"], "at": 0.4, "face": "S"},
+            "give at= alone",
+        ),
+        ({"type": "FT", "number": 101, "sensing": ["F", "outlet"], "face": "S"}, "give at="),
+        ({"balloon_of": "FE-303", "at": "S", "face": "S"}, "give face= alone"),
+        ({"type": "LT", "number": 101, "face": "S"}, r"\['face'\] only mean something"),
+    ],
+    ids=["both on a unit", "both on a line", "face on a line", "both on a balloon", "no host"],
+)
+def test_a_side_the_spec_cannot_honour_is_refused(entry, match):
+    spec = _spec(units=_WITH_ELEMENT, instruments=[entry])
+    with pytest.raises(SpecError, match=match):
+        Flowsheet.from_dict(spec)
 
 
 def test_instrument_tapping_a_line_by_the_port_it_leaves():
@@ -1224,7 +1302,7 @@ def test_unattached_instrument_is_laid_out_like_any_unit():
 def test_each_relation_is_read_back_and_written_out_again(relation):
     """Which keyword named the anchor is what decides what is drawn between the
     two, so it is part of the sheet and has to survive being written down."""
-    entry = {"type": "I", "number": 1, "variant": "sis", relation: "P-101", "at": "S"}
+    entry = {"type": "I", "number": 1, "variant": "sis", relation: "P-101", "face": "S"}
     fs = Flowsheet.from_dict(_spec(instruments=[entry]))
     assert (fs.units[-1].host.name, fs.units[-1].relation) == ("P-101", relation)
     assert fs.to_dict()["instruments"][0][relation] == "P-101"
@@ -1246,9 +1324,9 @@ def test_a_sheet_using_the_whole_instrument_vocabulary_round_trips():
     prod = fs.add(units.Product("Product")).pin(x=620, y=170)
     fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, prod.inlet)
-    balloon = fs.add_balloon(fe, at="N", offset=38)
-    ft = fs.add_instrument("FT", 303, near=balloon, at="N", offset=23)
-    fic = fs.add_instrument("FIC", 303, near=ft, at="E", offset=70, display="central")
+    balloon = fs.add_balloon(fe, face="N", offset=38)
+    ft = fs.add_instrument("FT", 303, near=balloon, face="N", offset=23)
+    fic = fs.add_instrument("FIC", 303, near=ft, face="E", offset=70, display="central")
     fic.annotate(high=("FAHH", "FSHH"), low="FAL", safety="SIL 2")
 
     spec = fs.to_dict()
@@ -1288,7 +1366,7 @@ def test_a_balloons_placement_reaches_the_file_and_comes_back():
     """
     fs = Flowsheet("placed")
     fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, y=195)
-    balloon = fs.add_balloon(fe, at="S")
+    balloon = fs.add_balloon(fe, face="S")
     balloon.pin(x=300, y=320)
     balloon.nozzle("pv", "N")
 
@@ -1315,7 +1393,7 @@ def test_a_balloon_carrying_every_field_it_takes_round_trips():
     fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, y=195)
     balloon = fs.add_balloon(
         fe,
-        at="N",
+        face="N",
         offset=38,
         angle=75,
         variant="shared",
@@ -1568,13 +1646,13 @@ def test_yaml_reads_the_keys_that_were_written(tmp_path):
         "  - type: LIC\n"
         "    number: 101\n"
         "    sensing: V-1\n"
-        "    at: N\n"
+        "    face: N\n"
         "title_block: {revisions: [{rev: A, date: 2026-05-18}]}\n",
         encoding="utf-8",
     )
     fs = Flowsheet.from_yaml(path)
     assert fs.units[-1].host is fs.units[0]
-    assert fs.units[-1].at == "N"
+    assert fs.units[-1].face == "N"
     assert fs.title_block.revisions[0].date == "2026-05-18"
 
 

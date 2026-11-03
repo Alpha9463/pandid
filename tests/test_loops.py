@@ -1,5 +1,8 @@
 """Control loops: identity, tagging, and the two rules a declared loop enforces."""
 
+import os
+import warnings
+
 import pytest
 
 from pandid import Flowsheet, units as U
@@ -347,7 +350,7 @@ def test_a_literal_number_still_works():
     """
     fs, line = _sheet()
     ti = fs.add_instrument("TI", 325, sensing=line, at=0.3, offset=50)
-    square = fs.add_instrument("I", 1, sensing=ti, at="S", offset=44, variant="logic")
+    square = fs.add_instrument("I", 1, sensing=ti, face="S", offset=44, variant="logic")
     assert (ti.name, square.name) == ("TI-325", "I-1")
     assert fs.loops == []
     fs.to_svg()  # renders, and validation raises nothing
@@ -463,7 +466,7 @@ def test_one_warning_per_tag_however_often_the_square_is_drawn():
     first = fs.add_instrument("ZAC", 1, sensing=line, at=0.5, offset=60, variant="logic")
     host = first
     for _ in range(3):
-        host = fs.add_instrument("ZAC", 1, sensing=host, at="N", offset=50, variant="logic")
+        host = fs.add_instrument("ZAC", 1, sensing=host, face="N", offset=50, variant="logic")
     assert len({u.tag for u in fs.units if isinstance(u, U.Instrument)}) == 1
     assert len(_letter_warnings(fs)) == 1
 
@@ -676,7 +679,7 @@ def _feedback_sheet():
 #: it holds when nothing is stated as well as when everything is.
 _PLACEMENTS = [
     {},
-    {"at": "S", "offset": 70, "controller_at": "S", "controller_offset": 95},
+    {"face": "S", "offset": 70, "controller_face": "S", "controller_offset": 95},
 ]
 
 
@@ -774,12 +777,12 @@ def test_the_parts_stay_reachable_and_pinnable():
     loop.controller.pin(mirrored=True)
     # Re-anchored after the fact: the balloons this built are attached the way
     # any other balloon is, so the arrangement is not sealed by the call.
-    loop.transmitter.attach(drum, at="E", offset=60)
+    loop.transmitter.attach(drum, face="E", offset=60)
     fs.layout()
 
     assert loop.controller.quadrants == {"c": ("LAH",), "d": ("LAL",)}
     assert loop.controller.frame is not None and loop.controller.frame.mirrored
-    assert (loop.transmitter.at, loop.transmitter.offset) == ("E", 60)
+    assert (loop.transmitter.face, loop.transmitter.offset) == ("E", 60)
     assert loop.transmitter.frame is not None
 
 
@@ -923,7 +926,7 @@ def test_the_handle_answers_for_the_loop_it_names():
     fs, drum, lv = _feedback_sheet()
 
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
-    alarm = fs.add_instrument("LAH", loop, near=loop.controller, at="E")
+    alarm = fs.add_instrument("LAH", loop, near=loop.controller, face="E")
 
     assert (loop.loop.variable, loop.loop.number) == ("L", "101")
     assert loop.loop.tag("XV") == "XV-101"
@@ -999,7 +1002,7 @@ def _take_the_controllers_tag(fs: Flowsheet, drum: U.Vessel, lv: U.Valve) -> Non
 
 
 def _stroke_the_valve_already(fs: Flowsheet, drum: U.Vessel, lv: U.Valve) -> None:
-    driver = fs.add_instrument("LY", 900, near=lv, at="N")
+    driver = fs.add_instrument("LY", 900, near=lv, face="N")
     fs.connect(driver.sig_out, lv.actuator, kind="pneumatic")
 
 
@@ -1040,21 +1043,41 @@ _REJECTIONS = [
     ),
     pytest.param(
         _nothing,
-        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, at="Q"),
-        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, at="N"),
-        "at= on a unit host",
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, face="Q"),
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, face="N"),
+        "face= is a side of V-101",
         id="the transmitter is placed nowhere",
     ),
     pytest.param(
         _nothing,
         lambda fs, drum, lv: fs.add_control_loop(
-            "L", 101, measuring=drum, acting_on=lv, controller_at="Q"
+            "L", 101, measuring=drum, acting_on=lv, controller_face="Q"
         ),
         lambda fs, drum, lv: fs.add_control_loop(
-            "L", 101, measuring=drum, acting_on=lv, controller_at="N"
+            "L", 101, measuring=drum, acting_on=lv, controller_face="N"
         ),
-        "at= on a unit host",
+        "face= is a side of LT-101",
         id="the controller is placed nowhere",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, at="N", face="N"
+        ),
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, face="N"),
+        "V-101 is a unit, so give face= alone",
+        id="the transmitter's face given twice",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_at="N", controller_face="N"
+        ),
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_face="N"
+        ),
+        "give controller_face= alone",
+        id="the controller's face given twice",
     ),
     pytest.param(
         _nothing,
@@ -1112,6 +1135,66 @@ def test_a_refused_control_loop_leaves_the_sheet_as_it_found_it(prepare, refused
     loop = corrected(fs, drum, lv)
     assert loop.loop.name == "L-101"
     assert [declared.name for declared in fs.loops] == ["L-101"]
+
+
+@pytest.mark.parametrize(
+    "refused",
+    [
+        pytest.param(
+            lambda fs, drum, lv: fs.add_control_loop(
+                "L", 101, measuring=drum, acting_on=lv, at="N", face="N"
+            ),
+            id="face",
+        ),
+        pytest.param(
+            lambda fs, drum, lv: fs.add_control_loop(
+                "L", 101, measuring=drum, acting_on=lv, controller_at="N", controller_face="N"
+            ),
+            id="controller_face",
+        ),
+    ],
+)
+def test_a_face_given_twice_warns_nothing(refused):
+    fs, drum, lv = _feedback_sheet()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match="alone"):
+            refused(fs, drum, lv)
+    assert caught == []
+
+
+@pytest.mark.parametrize(
+    "old, member",
+    [
+        pytest.param(
+            lambda fs, drum, lv: fs.add_control_loop(
+                "L", 101, measuring=drum, acting_on=lv, at="S"
+            ),
+            "transmitter",
+            id="at",
+        ),
+        pytest.param(
+            lambda fs, drum, lv: fs.add_control_loop(
+                "L", 101, measuring=drum, acting_on=lv, controller_at="S"
+            ),
+            "controller",
+            id="controller_at",
+        ),
+    ],
+)
+def test_a_face_given_the_old_way_warns_at_the_authors_line(old, member: str):
+    fs, drum, lv = _feedback_sheet()
+    with pytest.warns(DeprecationWarning, match="face=") as caught:
+        loop = old(fs, drum, lv)
+    assert [_same_file(w.filename) for w in caught] == [_same_file(__file__)]
+    assert getattr(loop, member).face == "S"
+    found = [i.message for i in fs.validate() if i.code == "deprecated"]
+    assert found == [str(caught[0].message)]
+
+
+def _same_file(path: str) -> str:
+    """Return a path as the file system resolves and compares it."""
+    return os.path.normcase(os.path.realpath(path))
 
 
 def test_a_refused_control_loop_burns_no_allocated_number():
