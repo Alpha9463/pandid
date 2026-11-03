@@ -1,5 +1,8 @@
 """Shared fixtures."""
 
+import os
+from collections.abc import Callable
+
 import pytest
 
 from pandid import Flowsheet, units as U
@@ -67,6 +70,18 @@ def caught(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 
     monkeypatch.setattr(P, "preview", fake)
     return seen
+
+
+@pytest.fixture
+def same_file() -> Callable[[str], str]:
+    """Provide a function that returns a path as the file system resolves and compares it.
+
+    Returns
+    -------
+    Callable[[str], str]
+        Path normaliser for comparing a warning's file with ``__file__``.
+    """
+    return lambda path: os.path.normcase(os.path.realpath(path))
 
 
 @pytest.fixture

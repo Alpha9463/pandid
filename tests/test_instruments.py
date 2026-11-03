@@ -1,7 +1,6 @@
 """Instrumentation subsystem: balloons, tags, attachment, signal lines."""
 
 import math
-import os
 import warnings
 from collections.abc import Callable
 
@@ -366,11 +365,6 @@ def _hosts() -> tuple[Flowsheet, U.Vessel, U.Fitting, Stream]:
     return fs, drum, fe, line
 
 
-def _same_file(path: str) -> str:
-    """Return a path as the file system resolves and compares it."""
-    return os.path.normcase(os.path.realpath(path))
-
-
 def _placement(fs: Flowsheet) -> list[tuple[object, ...]]:
     """Return each unit's name, host, fraction, face and balloon."""
     return [
@@ -404,14 +398,14 @@ _AT_A_FACE = {
 
 
 @pytest.mark.parametrize("entry", sorted(_AT_A_FACE))
-def test_a_face_given_as_at_warns_at_the_authors_line(entry: str):
+def test_a_face_given_as_at_warns_at_the_authors_line(entry: str, same_file):
     """Python shows a DeprecationWarning only from ``__main__``, so the warning
     names the author's file whichever entry point was called."""
     fs, drum, fe, _ = _hosts()
     with pytest.warns(DeprecationWarning, match="use face='N'") as caught:
         inst = _AT_A_FACE[entry](fs, drum, fe)
     assert len(caught) == 1
-    assert _same_file(caught[0].filename) == _same_file(__file__)
+    assert same_file(caught[0].filename) == same_file(__file__)
     assert (inst.at, inst.face) == (None, "N")
     found = [i.message for i in fs.validate() if i.code == "deprecated"]
     assert found == [str(caught[0].message)]

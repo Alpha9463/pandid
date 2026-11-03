@@ -1,6 +1,5 @@
 """Test the deprecation mechanism: one declaration, a warning and a finding."""
 
-import os
 import warnings
 
 import pytest
@@ -72,16 +71,11 @@ def test_the_message_names_the_replacement_and_the_release():
     assert "99.0.0" in message  # when it goes
 
 
-def test_the_warning_points_at_the_callers_line():
+def test_the_warning_points_at_the_callers_line(same_file):
     """Check that the warning points at the caller's file."""
     with pytest.warns(DeprecationWarning) as caught:
         _OldPump("P-101")
-
-    def same(path: str) -> str:
-        """Return a path as the file system resolves and compares it."""
-        return os.path.normcase(os.path.realpath(path))
-
-    assert same(caught[0].filename) == same(__file__)
+    assert same_file(caught[0].filename) == same_file(__file__)
 
 
 # --- carried from construction to validate() ---------------------------------

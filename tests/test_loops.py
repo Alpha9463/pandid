@@ -1,6 +1,5 @@
 """Control loops: identity, tagging, and the two rules a declared loop enforces."""
 
-import os
 import warnings
 
 import pytest
@@ -962,19 +961,14 @@ def test_a_refused_face_warns_nothing(refused, match: str):
         ),
     ],
 )
-def test_a_face_given_the_old_way_warns_at_the_authors_line(old, member: str):
+def test_a_face_given_the_old_way_warns_at_the_authors_line(old, member: str, same_file):
     fs, drum, lv = _feedback_sheet()
     with pytest.warns(DeprecationWarning, match="face='S'") as caught:
         loop = old(fs, drum, lv)
-    assert [_same_file(w.filename) for w in caught] == [_same_file(__file__)]
+    assert [same_file(w.filename) for w in caught] == [same_file(__file__)]
     assert getattr(loop, member).face == "S"
     found = [i.message for i in fs.validate() if i.code == "deprecated"]
     assert found == [str(caught[0].message)]
-
-
-def _same_file(path: str) -> str:
-    """Return a path as the file system resolves and compares it."""
-    return os.path.normcase(os.path.realpath(path))
 
 
 @pytest.mark.parametrize(
