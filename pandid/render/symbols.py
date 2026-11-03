@@ -37,7 +37,20 @@ MIN_NOZZLE_PITCH = ARROWHEAD + MIN_HEAD_CLEARANCE
 
 
 def wears_arrowhead(stream, registry) -> bool:
-    """Return whether a stream ends in an arrowhead."""
+    """Return whether a stream ends in an arrowhead.
+
+    Parameters
+    ----------
+    stream : Stream
+        Stream to check.
+    registry : SymbolRegistry
+        Registry resolving the destination unit's symbol.
+
+    Returns
+    -------
+    bool
+        False for a signal or a stream ending at a bare run.
+    """
     if stream.kind in SIGNAL_KINDS:
         return False
     return not registry.for_unit(stream.dest.owner).bare_run
@@ -56,12 +69,15 @@ def spread(index: int, count: int, along: float, pitch: float,
            band: "tuple[float, float] | None" = None) -> float:
     """Return the position of member ``index`` of ``count`` on a face.
 
-    Members sit ``pitch`` apart about ``at``. The run is squeezed to at
-    most ``extent * along`` and the band length, then slid into the
-    band.
+    Members sit ``pitch`` apart about ``at``, squeezed to fit ``extent``
+    of the face and the band, then slid into the band.
 
     Parameters
     ----------
+    index : int
+        Member index, from 0.
+    count : int
+        Family size.
     along : float
         Face length.
     pitch : float
@@ -73,8 +89,12 @@ def spread(index: int, count: int, along: float, pitch: float,
     align : str, default=CENTRED
         :data:`CENTRED` or :data:`FROM_START`.
     band : tuple[float, float], optional
-        ``(lo, hi)`` part of the face members may use; the whole face
-        when omitted.
+        ``(lo, hi)`` part of the face to use; the whole face if omitted.
+
+    Returns
+    -------
+    float
+        Coordinate along the face.
     """
     lo, hi = (0.0, along) if band is None else band
     start = (lo + hi) / 2 if at is None else at
@@ -87,7 +107,20 @@ def spread(index: int, count: int, along: float, pitch: float,
 
 
 def walled_faces(sym: "Symbol", role: str) -> list[str]:
-    """Return the faces a role may use whose band has length."""
+    """Return the faces a role may use whose band has length.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Symbol to read.
+    role : str
+        Port role, such as ``"inlet"``.
+
+    Returns
+    -------
+    list[str]
+        Face names.
+    """
     return [face for face, band in ((f, sym.bands.get(f))
                                     for f in sym.port_faces.get(role, {}))
             if band is None or band[0] < band[1]]
@@ -101,12 +134,19 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
     ----------
     who : str
         Unit name.
+    face : str
+        Face name.
     at : float
         The face's single point.
     members : list[str]
         Ports placed on the face.
     offered : list[str]
         Faces with a wall, from :func:`walled_faces`.
+
+    Returns
+    -------
+    ValueError
+        The error to raise.
     """
     named = " and ".join(filter(None, [", ".join(members[:-1]), *members[-1:]]))
     verb = "are both" if len(members) == 2 else "are all"
@@ -129,7 +169,19 @@ def bandless_face(who: str, face: str, at: float, members: "list[str]",
 def _on_face(face: str, t: float, width: float, height: float) -> tuple[float, float]:
     """Return the symbol-space point ``t`` along a face.
 
-    ``t`` runs top to bottom on W and E, left to right on N and S.
+    Parameters
+    ----------
+    face : str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+    t : float
+        Distance along the face, top-down or left-to-right.
+    width, height : float
+        Symbol box.
+
+    Returns
+    -------
+    tuple[float, float]
+        Point in symbol coordinates.
     """
     return {"W": (0.0, t), "E": (width, t),
             "N": (t, 0.0), "S": (t, height)}[face]
@@ -162,7 +214,18 @@ class PortSeries:
     align: str = CENTRED
 
     def matches(self, port_name: str) -> bool:
-        """Return whether ``port_name`` is a member of this series."""
+        """Return whether ``port_name`` is a member of this series.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        bool
+            True for the singular name or ``prefix`` plus digits.
+        """
         return port_name == self.singular or (
             port_name.startswith(self.prefix)
             and port_name[len(self.prefix):].isdigit())
@@ -174,11 +237,21 @@ class PortSeries:
 
         Parameters
         ----------
+        index : int
+            Member index, from 0.
+        count : int
+            Family size.
+        width, height : float
+            Symbol box.
         pin : float, optional
-            Fraction of the face that places this member instead of the
-            spread.
+            Fraction of the face that places this member instead.
         band : tuple[float, float], optional
             :attr:`Symbol.bands` entry for this face.
+
+        Returns
+        -------
+        tuple[float, float]
+            Point in symbol coordinates.
         """
         along = height if self.face in ("W", "E") else width
         if pin is not None:
@@ -192,10 +265,19 @@ class PortSeries:
     def reach(self, width: float, height: float,
               band: "tuple[float, float] | None" = None
               ) -> tuple[float, float, float]:
-        """Return ``(fixed, lo, hi)``: where members can sit.
+        """Return where members can sit on the face, at any count.
 
-        ``fixed`` is the face's coordinate and ``lo`` to ``hi`` the
-        range along it, at any count.
+        Parameters
+        ----------
+        width, height : float
+            Symbol box.
+        band : tuple[float, float], optional
+            :attr:`Symbol.bands` entry for this face.
+
+        Returns
+        -------
+        tuple[float, float, float]
+            The face's fixed coordinate, then ``lo`` and ``hi``.
         """
         along = height if self.face in ("W", "E") else width
         # Two members at full extent give the ends of the range.
@@ -242,6 +324,11 @@ class IsoPart:
         Registration number, such as ``"C2028"``.
     name : str
         The item's descriptor in the standard.
+
+    Raises
+    ------
+    ValueError
+        If the group, item, registration number or name is invalid.
     """
 
     group: int
@@ -296,9 +383,14 @@ class Overlay:
     x, y : float
         Left and top edge, as fractions of the body's width and height.
     w, h : float
-        Width and height, as fractions of the body's width and height.
+        Width and height, as positive fractions of the body's box.
     mirror : bool
         Reflect the part left to right.
+
+    Raises
+    ------
+    ValueError
+        If ``w`` or ``h`` is not positive.
     """
 
     group: int
@@ -332,13 +424,13 @@ class Symbol:
     ports : dict[str, tuple[float, float]]
         Home anchor of each fixed port, keyed by the unit's port name.
     port_faces : dict[str, dict[str, tuple[float, float]]]
-        Every placement each port may take, by face, home included.
+        Placements of each port by face; each must lie nearest its face.
     faceless_ports : frozenset[str]
-        Ports with no face, which may share placements with each other.
+        Ports in ``ports`` with no face, which may share placements.
     port_series : tuple[PortSeries, ...]
-        Port families whose size the unit decides.
+        Port families, each on N, S, E or W and apart from ``ports``.
     bands : dict[str, tuple[float, float]]
-        Stretch of each face a family may use.
+        Stretch ``(lo, hi)`` a family may use, from each face's start.
     label_pos : str or None
         Fixed tag side, such as ``"center"``.
     id_suffix : str
@@ -469,14 +561,31 @@ class Symbol:
             )
 
     def series_for(self, port_name: str) -> PortSeries | None:
-        """Return the series placing ``port_name``, if any."""
+        """Return the series placing ``port_name``, if any.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        PortSeries or None
+            The series, or ``None`` for a fixed port.
+        """
         for series in self.port_series:
             if series.matches(port_name):
                 return series
         return None
 
     def symbol_id(self) -> str:
-        """Return the SVG id, for messages."""
+        """Return the SVG id, for messages.
+
+        Returns
+        -------
+        str
+            The artwork's id, or ``"<symbol>"``.
+        """
         match = re.search(r'\bid="([^"]+)"', self.svg)
         return match.group(1) if match else "<symbol>"
 
@@ -485,6 +594,11 @@ class Symbol:
 
         Faceless ports may share with each other. A series is checked as
         the stretch of face it may use and reported as ``prefix*``.
+
+        Returns
+        -------
+        list[tuple[str, str, tuple[float, float]]]
+            ``(port, port, point)`` for each clash.
         """
         placements = [(name, xy) for name, faces in self.port_faces.items()
                       for xy in faces.values()]
@@ -529,13 +643,39 @@ CONVEYOR_LENGTH = 80.0
 
 
 def conveyor_min_length(diameter: float = CONVEYOR_DIAMETER) -> float:
-    """Return the shortest belt run: two roller diameters."""
+    """Return the shortest belt run: two roller diameters.
+
+    Parameters
+    ----------
+    diameter : float, default=CONVEYOR_DIAMETER
+        Roller diameter.
+
+    Returns
+    -------
+    float
+        Minimum run.
+    """
     return 2 * diameter
 
 
 def conveyor_too_short(length: float, owner: str = "",
                        diameter: float = CONVEYOR_DIAMETER) -> ValueError:
-    """Return the error for a belt run too short for its rollers."""
+    """Return the error for a belt run too short for its rollers.
+
+    Parameters
+    ----------
+    length : float
+        Requested run.
+    owner : str, default=""
+        Unit name for the message, or empty.
+    diameter : float, default=CONVEYOR_DIAMETER
+        Roller diameter.
+
+    Returns
+    -------
+    ValueError
+        The error to raise.
+    """
     return ValueError(
         f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
         f"conveyor can be drawn: the rollers are {diameter / 2:g} in radius "
@@ -545,7 +685,20 @@ def conveyor_too_short(length: float, owner: str = "",
 
 
 def conveyor_bad_diameter(diameter: float, owner: str = "") -> ValueError:
-    """Return the error for a non-positive roller diameter."""
+    """Return the error for a non-positive roller diameter.
+
+    Parameters
+    ----------
+    diameter : float
+        Requested diameter.
+    owner : str, default=""
+        Unit name for the message, or empty.
+
+    Returns
+    -------
+    ValueError
+        The error to raise.
+    """
     return ValueError(
         f"{owner + ': ' if owner else ''}diameter={diameter:g} is not a "
         f"conveyor: the rollers are circles and a circle has a positive "
@@ -559,9 +712,25 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
                     diameter: float = CONVEYOR_DIAMETER) -> Symbol:
     """Return a belt conveyor symbol built to its run and roller size.
 
-    The box is ``length`` wide and ``diameter`` deep. ``feed`` is the
-    tail roller, also offered on top; ``discharge`` is the head roller,
-    also offered underneath.
+    ``feed`` is the tail roller, also offered on top; ``discharge`` is
+    the head roller, also offered underneath.
+
+    Parameters
+    ----------
+    length : float, default=CONVEYOR_LENGTH
+        Run from tail to head, at least two roller diameters.
+    diameter : float, default=CONVEYOR_DIAMETER
+        Roller diameter and drawn depth; positive.
+
+    Returns
+    -------
+    Symbol
+        Symbol ``length`` wide and ``diameter`` deep.
+
+    Raises
+    ------
+    ValueError
+        If ``diameter`` is not positive or ``length`` is too short.
     """
     if diameter <= 0:
         raise conveyor_bad_diameter(diameter)
@@ -616,7 +785,20 @@ SCREW_MIN_LENGTH = 2 * SCREW_MARGIN + SCREW_TURN
 
 
 def screw_too_short(length: float, owner: str = "") -> ValueError:
-    """Return the error for a screw casing too short for one turn."""
+    """Return the error for a screw casing too short for one turn.
+
+    Parameters
+    ----------
+    length : float
+        Requested length.
+    owner : str, default=""
+        Unit name for the message, or empty.
+
+    Returns
+    -------
+    ValueError
+        The error to raise.
+    """
     return ValueError(
         f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
         f"screw conveyor can be drawn: one turn of the flight is "
@@ -626,7 +808,20 @@ def screw_too_short(length: float, owner: str = "") -> ValueError:
 
 
 def screw_bad_diameter(diameter: float, owner: str = "") -> ValueError:
-    """Return the error for a non-positive screw bore."""
+    """Return the error for a non-positive screw bore.
+
+    Parameters
+    ----------
+    diameter : float
+        Requested bore.
+    owner : str, default=""
+        Unit name for the message, or empty.
+
+    Returns
+    -------
+    ValueError
+        The error to raise.
+    """
     return ValueError(
         f"{owner + ': ' if owner else ''}diameter={diameter:g} is not a screw "
         f"conveyor: the casing is a tube and a tube has a positive bore. "
@@ -640,9 +835,24 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
                           diameter: float = SCREW_HEIGHT) -> Symbol:
     """Return a closed screw conveyor symbol (ISO 10628-2 item 18.5).
 
-    Turns repeat at :data:`SCREW_PITCH` along the casing and the flight
-    follows the bore. ``feed`` is on top near the tail and ``discharge``
-    underneath near the head; the ends are also offered.
+    Turns repeat at :data:`SCREW_PITCH` and the flight follows the bore.
+
+    Parameters
+    ----------
+    length : float, default=CONVEYOR_LENGTH
+        Casing length, at least :data:`SCREW_MIN_LENGTH`.
+    diameter : float, default=SCREW_HEIGHT
+        Casing bore and drawn depth; positive.
+
+    Returns
+    -------
+    Symbol
+        Symbol ``length`` wide and ``diameter`` deep.
+
+    Raises
+    ------
+    ValueError
+        If ``diameter`` is not positive or ``length`` is too short.
     """
     if diameter <= 0:
         raise screw_bad_diameter(diameter)
@@ -695,16 +905,38 @@ _LIFT_R = _LIFT_M
 
 
 def _lift_pulley(cx: float, cy: float) -> str:
-    """Return a pulley circle of radius 1 M at ``(cx, cy)``."""
+    """Return a pulley circle of radius 1 M.
+
+    Parameters
+    ----------
+    cx, cy : float
+        Centre.
+
+    Returns
+    -------
+    str
+        SVG ``<circle>``.
+    """
     return (f'<circle cx="{cx:g}" cy="{cy:g}" r="{_LIFT_R:g}" '
             f'fill="none" stroke="#111" stroke-width="2"/>')
 
 
 def _lift_chute(x: float, y: float, dx: float, dy: float) -> str:
-    """Return a chute: a run and a quarter arc back to the belt.
+    """Return a chute: a run then a quarter arc back to the belt.
 
-    The run goes from ``(x, y)`` to ``(x + dx, y)`` and the arc returns
-    to ``(x, y + dy)``.
+    Parameters
+    ----------
+    x, y : float
+        Start on the belt.
+    dx : float
+        Signed run length.
+    dy : float
+        Signed drop of the arc.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
     """
     r = abs(dx)
     return (f'<path d="M {x:g} {y:g} L {x + dx:g} {y:g} '
@@ -734,8 +966,15 @@ _LABEL_EM_WIDE = 12.0
 def label_span(text: str) -> float:
     """Return the width a tag needs to letter ``text`` inside a box.
 
-    Narrow characters count :data:`_LABEL_EM`, wide ones
-    :data:`_LABEL_EM_WIDE` and combining marks nothing, plus padding.
+    Parameters
+    ----------
+    text : str
+        Tag text.
+
+    Returns
+    -------
+    float
+        Width in drawing units, padding included.
     """
     from pandid.render.furniture import script_counts
     narrow, wide, zero = script_counts(text)
@@ -745,7 +984,18 @@ def label_span(text: str) -> float:
 
 
 def block_span(count: int) -> float:
-    """Return the face length ``count`` block connections need."""
+    """Return the face length ``count`` block connections need.
+
+    Parameters
+    ----------
+    count : int
+        Connections on the face.
+
+    Returns
+    -------
+    float
+        One :data:`BLOCK_PITCH` per connection.
+    """
     return BLOCK_PITCH * count
 
 
@@ -756,6 +1006,12 @@ def block_box_too_small(owner: str, face: str, count: int, axis: str,
 
     Parameters
     ----------
+    owner : str
+        Unit name.
+    face : str
+        Crowded face.
+    count : int
+        Connections on it.
     axis : str
         ``"width"`` or ``"height"``.
     given : float
@@ -764,6 +1020,11 @@ def block_box_too_small(owner: str, face: str, count: int, axis: str,
         Size the block would choose.
     turned : bool, default=False
         Whether a quarter turn moved ``face`` onto ``axis``.
+
+    Returns
+    -------
+    ValueError
+        The error to raise.
     """
     spun = (f" The block is turned a quarter, so its {face} face is drawn along "
             f"the box's {axis}." if turned else "")
@@ -793,6 +1054,11 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
         ``(port_name, face)`` in the unit's port order.
     label : str, default=""
         Tag lettered inside the box, which widens it to fit.
+
+    Returns
+    -------
+    Symbol
+        Block symbol.
     """
     on: dict[str, list[str]] = {face: [] for face in _BLOCK_FACES}
     for port_name, face in faces:
@@ -827,7 +1093,19 @@ def _face_local(face: str, x: float, y: float, width: float, height: float
                 ) -> tuple[float, float]:
     """Return ``(along, inset)`` of a symbol-space point on a face.
 
-    The inverse of :func:`_face_point`.
+    Parameters
+    ----------
+    face : str
+        Face name.
+    x, y : float
+        Point in symbol coordinates.
+    width, height : float
+        Symbol box.
+
+    Returns
+    -------
+    tuple[float, float]
+        Position along the face and distance in from its edge.
     """
     if face == "W":
         return y, x
@@ -842,7 +1120,21 @@ def _face_point(face: str, t: float, inset: float, width: float, height: float
                 ) -> tuple[float, float]:
     """Return the point ``t`` along a face, ``inset`` from its edge.
 
-    The inverse of :func:`_face_local`.
+    Parameters
+    ----------
+    face : str
+        Face name.
+    t : float
+        Position along the face.
+    inset : float
+        Distance in from the face's edge.
+    width, height : float
+        Symbol box.
+
+    Returns
+    -------
+    tuple[float, float]
+        Point in symbol coordinates.
     """
     if face == "W":
         return inset, t
@@ -863,18 +1155,29 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
                   overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
     """Return a tank or vessel symbol with its nozzle families placed.
 
-    Starts from the vendored symbol with ``overlays`` composed on. Each
-    family is spread about the stencil's anchor within
-    :attr:`Symbol.bands`. A role with one member keeps its full face
-    menu.
+    Each family is spread about the stencil's anchor within
+    :attr:`Symbol.bands`; a role with one member keeps its full menu.
 
     Parameters
     ----------
+    kind : str
+        ``"tank"`` or ``"vessel"``.
+    variant : str
+        Resolved variant.
     faces : tuple[tuple[str, str], ...]
-        ``(port_name, face)`` for the inlet and outlet families, in port
-        order.
+        ``(port_name, face)`` for the inlet and outlet families.
     overlays : tuple[Overlay, ...], default=()
         The unit's composed parts.
+
+    Returns
+    -------
+    Symbol
+        Symbol with the families placed.
+
+    Raises
+    ------
+    ValueError
+        If a role has no placement on a face, or a face has no wall.
     """
     base = default_registry.composed(kind, variant, overlays)
     ports = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
@@ -934,7 +1237,20 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
 
 
 def _built_to_size(kind: str, variant: str) -> "Callable[..., Symbol] | None":
-    """Return the builder for ``(kind, variant)``, or ``None``."""
+    """Return the builder for ``(kind, variant)``, or ``None``.
+
+    Parameters
+    ----------
+    kind : str
+        Unit kind.
+    variant : str
+        Resolved variant.
+
+    Returns
+    -------
+    callable or None
+        Function taking the unit and returning its symbol.
+    """
     return _BUILT_TO_SIZE.get((kind, variant)) or _BUILT_TO_SIZE.get((kind, None))
 
 
@@ -978,7 +1294,25 @@ ACTUATORS: tuple[str, ...] = ("diaphragm", "motor", "solenoid", "hydraulic",
 
 
 def actuated_variant(body: str, actuator: str) -> str:
-    """Return the variant drawing ``body`` with ``actuator`` on it."""
+    """Return the variant drawing ``body`` with ``actuator`` on it.
+
+    Parameters
+    ----------
+    body : str
+        Body variant.
+    actuator : str
+        One of :data:`ACTUATORS`.
+
+    Returns
+    -------
+    str
+        Variant from :data:`ACTUATED`.
+
+    Raises
+    ------
+    ValueError
+        If no variant draws the pairing.
+    """
     drawn = ACTUATED.get((body, actuator))
     if drawn is not None:
         return drawn
@@ -1017,7 +1351,23 @@ FAIL_ACTUATED = frozenset({
 
 
 def fail_marking(unit) -> str:
-    """Return the fail-position letters for a valve, or ``""``."""
+    """Return the fail-position letters for a valve, or ``""``.
+
+    Parameters
+    ----------
+    unit : Unit
+        Valve.
+
+    Returns
+    -------
+    str
+        Letters from :data:`FAIL_POSITIONS`, or ``""`` if none declared.
+
+    Raises
+    ------
+    ValueError
+        If a variant without an actuator declares a fail position.
+    """
     declared = getattr(unit, "fail", "") or ""
     if not declared:
         return ""
@@ -1046,14 +1396,24 @@ def closed_marking(unit, registry=None) -> str:
 
     ``"stencil"`` uses a registered closed drawing, ``"fill"`` darkens
     the body (PIP PIC001 4.2.2.7) and ``"NC"`` letters the valve
-    (ISO 15519-1 11.4.5). Returns ``""`` when the unit is not normally
-    closed.
+    (ISO 15519-1 11.4.5).
 
     Parameters
     ----------
+    unit : Unit
+        Valve or fitting.
     registry : SymbolRegistry, optional
-        Registry to look up closed drawings in; ``default_registry``
-        when omitted.
+        Registry of closed drawings; ``default_registry`` when omitted.
+
+    Returns
+    -------
+    str
+        ``"stencil"``, ``"fill"``, ``"NC"``, or ``""`` if not closed.
+
+    Raises
+    ------
+    ValueError
+        If a non-valve with no closed drawing is normally closed.
     """
     if getattr(unit, "normal_position", "open") != "closed":
         return ""
@@ -1073,7 +1433,23 @@ def closed_marking(unit, registry=None) -> str:
 
 
 def darkened(sym: Symbol) -> Symbol:
-    """Return ``sym`` with its body filled and an ``_nc`` id suffix."""
+    """Return ``sym`` with its body filled and an ``_nc`` id suffix.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Open valve symbol.
+
+    Returns
+    -------
+    Symbol
+        Normally closed valve symbol.
+
+    Raises
+    ------
+    ValueError
+        If the first ``<path>`` is not a white-filled body.
+    """
     head = _FIRST_PATH.search(sym.svg)
     if head is None or _BODY_PAPER not in head.group(0):
         raise ValueError(
@@ -1113,7 +1489,22 @@ def expander(sym: Symbol) -> Symbol:
     """Return ``sym`` turned end for end, as an expander.
 
     The artwork is mirrored left to right and ``inlet`` and ``outlet``
-    trade placements, so ``inlet`` stays west. The id gains ``_exp``.
+    trade placements. The id gains ``_exp``.
+
+    Parameters
+    ----------
+    sym : Symbol
+        Reducer symbol.
+
+    Returns
+    -------
+    Symbol
+        Expander symbol.
+
+    Raises
+    ------
+    ValueError
+        If the symbol is not a two-port fitting drawn as one ``<g>``.
     """
     swap = {"inlet": "outlet", "outlet": "inlet"}
     if set(sym.ports) != set(swap) or sym.port_series:
@@ -1136,7 +1527,18 @@ def expander(sym: Symbol) -> Symbol:
            f'{body}</g>{tail}')
 
     def turn(xy: tuple[float, float]) -> tuple[float, float]:
-        """Return ``xy`` mirrored left to right in the symbol box."""
+        """Return ``xy`` mirrored left to right in the symbol box.
+
+        Parameters
+        ----------
+        xy : tuple[float, float]
+            Point in symbol coordinates.
+
+        Returns
+        -------
+        tuple[float, float]
+            Mirrored point.
+        """
         return (round(sym.width - xy[0], 4), xy[1])
 
     return Symbol(
@@ -1177,9 +1579,9 @@ class OverlayPart:
     svg : str
         A single ``<g>`` group.
     width, height : float
-        Box the artwork is drawn in.
+        Positive box the artwork is drawn in.
     ports : dict[str, tuple[float, float]]
-        Connections the part brings, in the part's own coordinates.
+        Connections the part brings, inside its own box.
     stretchable : bool
         Whether the artwork may be scaled unevenly.
     gravity_fixed : bool
@@ -1188,6 +1590,11 @@ class OverlayPart:
         Whether an axis flip would reverse what the artwork says.
     drawio_shape : str
         draw.io stencil that draws this part alone, or empty.
+
+    Raises
+    ------
+    ValueError
+        If the name, box, artwork or a port position is invalid.
     """
 
     name: str
@@ -1228,7 +1635,13 @@ class OverlayPart:
                 )
 
     def key(self) -> "tuple[int, str]":
-        """Return the registry key ``(group, name)``."""
+        """Return the registry key ``(group, name)``.
+
+        Returns
+        -------
+        tuple[int, str]
+            ISO subject group and part name.
+        """
         return (self.iso.group, self.name)
 
 
@@ -1237,7 +1650,20 @@ _STROKE = re.compile(r'stroke-width="([\d.]+)"')
 
 
 def _at_part_scale(svg: str, scale: float) -> str:
-    """Return ``svg`` with every line weight divided by ``scale``."""
+    """Return ``svg`` with every line weight divided by ``scale``.
+
+    Parameters
+    ----------
+    svg : str
+        Part artwork.
+    scale : float
+        Scale the part is drawn at.
+
+    Returns
+    -------
+    str
+        Artwork with compensated stroke widths.
+    """
     if math.isclose(scale, 1.0, rel_tol=1e-9):
         return svg
     return _STROKE.sub(
@@ -1246,7 +1672,20 @@ def _at_part_scale(svg: str, scale: float) -> str:
 
 def _shifted_bands(body: Symbol, ox: float, oy: float
                    ) -> "dict[str, tuple[float, float]]":
-    """Return ``body.bands`` moved by the body's offset ``(ox, oy)``."""
+    """Return ``body.bands`` moved by the body's offset ``(ox, oy)``.
+
+    Parameters
+    ----------
+    body : Symbol
+        Body being composed.
+    ox, oy : float
+        Offset of the body in the composed box.
+
+    Returns
+    -------
+    dict[str, tuple[float, float]]
+        Face to ``(lo, hi)`` along it.
+    """
     if (ox, oy) == (0.0, 0.0):
         return dict(body.bands)
     return {face: (lo + (oy if face in ("W", "E") else ox),
@@ -1258,8 +1697,21 @@ def _shifted_series(series: PortSeries, body: Symbol, ox: float, oy: float,
                     width: float, height: float) -> PortSeries:
     """Return ``series`` moved and rescaled onto the composed box.
 
-    ``at`` moves by the body's offset and ``extent`` is rescaled to
-    cover the same length of wall.
+    Parameters
+    ----------
+    series : PortSeries
+        Body's port series.
+    body : Symbol
+        Body being composed.
+    ox, oy : float
+        Offset of the body in the composed box.
+    width, height : float
+        Composed box.
+
+    Returns
+    -------
+    PortSeries
+        The series with ``at`` moved and ``extent`` rescaled.
     """
     along, grown = ((body.height, height) if series.face in ("W", "E")
                     else (body.width, width))
@@ -1275,21 +1727,26 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
     """Return ``body`` with its supplementary parts painted over it.
 
     Each part maps from its own box onto the fraction of the body box
-    its :class:`Overlay` names. The composed box is the union of the
-    body's and every part's; growing it shifts the ink, ports and
-    series. The result is stretchable only if the body and every part
-    are, and gravity-fixed or directional if any of them is. It has no
-    ``drawio_shape``; the draw.io export reads :attr:`Symbol.overlays`
-    and :attr:`Symbol.drawio_body_shape`.
+    its :class:`Overlay` names, and the box grows to hold every part.
 
     Parameters
     ----------
     body : Symbol
-        Body; its artwork must be a single ``<g>`` group.
+        Body drawn as one ``<g>`` group.
     parts : list[tuple[Overlay, OverlayPart]]
         Placements and the parts placed.
     iso_reg : str, default=""
         Registration number of the composition, if it has one.
+
+    Returns
+    -------
+    Symbol
+        Composed symbol.
+
+    Raises
+    ------
+    ValueError
+        If the body is not one group, a port moves face or names clash.
     """
     match = _GROUP.match(body.svg)
     if match is None:
@@ -1336,7 +1793,18 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         )
 
     def shift(xy: "tuple[float, float]") -> "tuple[float, float]":
-        """Return a body point moved into the composed box."""
+        """Return a body point moved into the composed box.
+
+        Parameters
+        ----------
+        xy : tuple[float, float]
+            Point in body coordinates.
+
+        Returns
+        -------
+        tuple[float, float]
+            Point in composed coordinates.
+        """
         return (round(xy[0] + ox, 4), round(xy[1] + oy, 4))
 
     ports = {name: shift(xy) for name, xy in body.ports.items()}
@@ -1420,7 +1888,18 @@ _CENTRIFUGE_MARGIN = 10.0
 
 
 def _centrifuge_outline(ox: float) -> str:
-    """Return the bare group-9 square with its west wall at ``ox``."""
+    """Return the bare group-9 square with its west wall at ``ox``.
+
+    Parameters
+    ----------
+    ox : float
+        West wall offset.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
     return (f'<path d="M {ox:g} 0 L {ox + _CENTRIFUGE_SQ:g} 0 '
             f'L {ox + _CENTRIFUGE_SQ:g} {_CENTRIFUGE_SQ:g} '
             f'L {ox:g} {_CENTRIFUGE_SQ:g} Z" fill="white" stroke="#111" stroke-width="2"/>')
@@ -1440,6 +1919,13 @@ def _dashed_wall(fixed: float, offset: float, vertical: bool) -> str:
         The wall's x if vertical, else its y.
     offset : float
         Position of the square's near edge along the wall.
+    vertical : bool
+        Whether the wall is vertical.
+
+    Returns
+    -------
+    str
+        SVG ``<line>`` elements.
     """
     out = []
     for a, b in _CENTRIFUGE_DASH:
@@ -1534,10 +2020,23 @@ def _centrifuge(name: str, reg: str, width: float, height: float, ox: float,
 
     Parameters
     ----------
+    name : str
+        Variant, used in the SVG id.
+    reg : str
+        ISO registration number.
+    width, height : float
+        Symbol box.
     ox : float
-        West wall offset (:func:`_centrifuge_outline`).
+        West wall offset.
     detail : str
         The item's mark.
+    ports : dict
+        Port positions.
+
+    Returns
+    -------
+    Symbol
+        Centrifuge symbol.
     """
     return Symbol(
         svg=f'<g id="sym_centrifuge_{name}">{_centrifuge_outline(ox)}{detail}</g>',
@@ -1569,10 +2068,17 @@ def _crushing_machine(name: str, reg: str, *detail: str) -> Symbol:
 
     Parameters
     ----------
+    name : str
+        Name used in the SVG id.
     reg : str
-        Registration number of the item it reproduces, or ``""``.
+        Registration number of the item, or ``""``.
     *detail : str
         Marks drawn inside the outline.
+
+    Returns
+    -------
+    Symbol
+        Crushing machine symbol.
     """
     return Symbol(
         svg=f'<g id="sym_{name}">{_CRUSHER_OUTLINE}'
@@ -1630,10 +2136,19 @@ def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Sy
 
     Parameters
     ----------
+    name : str
+        Name used in the SVG id.
+    reg : str
+        ISO registration number.
     *detail : str
         Marks drawn inside the casing.
     gravity_fixed : bool, default=False
         Whether the mark relies on gravity, as shelves do.
+
+    Returns
+    -------
+    Symbol
+        Dryer symbol.
     """
     return Symbol(
         svg=f'<g id="sym_drier_{name}">{_DRIER_OUTLINE}' + "".join(detail) + "</g>",
@@ -1694,7 +2209,18 @@ _TOWER_WET = (
 )
 
 def _tower_fan(cy: float) -> str:
-    """Return a 2 M fan with bow-tie blades centred at height ``cy``."""
+    """Return a 2 M fan with bow-tie blades.
+
+    Parameters
+    ----------
+    cy : float
+        Centre height in drawing units.
+
+    Returns
+    -------
+    str
+        SVG elements.
+    """
     return (
         f'<circle cx="40" cy="{cy:g}" r="10" fill="none" stroke="#111" stroke-width="2"/>'
         f'<path d="M 36 {cy - 9:g} L 31 {cy + 5:g} M 44 {cy - 9:g} L 49 {cy + 5:g}" '
@@ -1762,7 +2288,22 @@ _FEEDER_CIRCLE_PORTS = {"feed": (20.0, 0.0), "discharge": (20.0, 40.0)}
 
 
 def _feeder_circle(name: str, reg: str, mark: str) -> Symbol:
-    """Return a group-19 circle body: the shared rim plus its mark."""
+    """Return a group-19 circle body: the shared rim plus its mark.
+
+    Parameters
+    ----------
+    name : str
+        Name used in the SVG id.
+    reg : str
+        ISO registration number.
+    mark : str
+        The item's mark.
+
+    Returns
+    -------
+    Symbol
+        Feeder symbol.
+    """
     return Symbol(
         svg=f'<g id="sym_feeder_{name}">'
             f'<circle cx="20" cy="20" r="20" fill="white" stroke="#111" '
@@ -1786,7 +2327,20 @@ _FEEDER_ROTOR_ANGLES = (0, 60, 120, 180, 240, 300)
 
 
 def _feeder_rotor(cx: float, cy: float, hub_r: float, rim_r: float) -> str:
-    """Return a hub circle and spokes from the hub to the rim."""
+    """Return a hub circle and spokes from the hub to the rim.
+
+    Parameters
+    ----------
+    cx, cy : float
+        Centre.
+    hub_r, rim_r : float
+        Hub and rim radii.
+
+    Returns
+    -------
+    str
+        SVG elements.
+    """
     ink = 'fill="none" stroke="#111" stroke-width="2"'
     spokes = "".join(
         f'<line x1="{cx + hub_r * math.cos(math.radians(a)):g}" '
@@ -1859,7 +2413,18 @@ _SPRAY_NOZZLE = Symbol(
 # ----------------------------------------------------------------
 
 def _mix_element(x0: float) -> str:
-    """Return one "N" mixing element of items 12.1-12.3 at ``x0``."""
+    """Return one "N" mixing element of items 12.1-12.3.
+
+    Parameters
+    ----------
+    x0 : float
+        Left edge.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
     ink = 'fill="none" stroke="#111" stroke-width="2"'
     return (
         f'<path d="M {x0:g} 5 L {x0:g} 25 M {x0:g} 5 L {x0 + 40:g} 55 '
@@ -2001,7 +2566,22 @@ _SCREEN_MESH = (
 
 
 def _screen(name: str, reg: str, mark: str) -> Symbol:
-    """Return a group-7 screen: the shared outline plus its mark."""
+    """Return a group-7 screen: the shared outline plus its mark.
+
+    Parameters
+    ----------
+    name : str
+        Name used in the SVG id.
+    reg : str
+        ISO registration number.
+    mark : str
+        The item's mark.
+
+    Returns
+    -------
+    Symbol
+        Screen symbol.
+    """
     return Symbol(
         svg=f'<g id="sym_screen_{name}">{_SCREEN_OUTLINE}{mark}</g>',
         width=_SCREEN_W, height=_SCREEN_H,
@@ -2016,7 +2596,7 @@ _SCREEN_SQ2 = math.sqrt(2) / 2
 
 
 def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
-    """Return rake teeth crossing :data:`_SCREEN_MESH` at right angles.
+    """Return rake teeth across the mesh diagonal.
 
     Parameters
     ----------
@@ -2024,6 +2604,11 @@ def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
         Fractions along the diagonal.
     half_len : float
         Half the tooth length.
+
+    Returns
+    -------
+    str
+        SVG ``<line>`` elements.
     """
     ink = 'fill="none" stroke="#111" stroke-width="2"'
     out = []
@@ -2036,16 +2621,30 @@ def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
 
 
 def _screen_vibration() -> str:
-    """Return item 7.5 X2605's vibration mark beside the mesh diagonal.
+    """Return item 7.5 X2605's vibration mark by the mesh diagonal.
 
-    Two opposed arrows on tracks either side of the diagonal's middle.
+    Returns
+    -------
+    str
+        Two opposed arrows on tracks either side of the diagonal.
     """
     along = (_SCREEN_SQ2, _SCREEN_SQ2)
     across = (_SCREEN_SQ2, -_SCREEN_SQ2)
     ink = 'fill="none" stroke="#111" stroke-width="2"'
 
     def track(tail: "tuple[float, float]", tip: "tuple[float, float]") -> str:
-        """Return one arrow from ``tail`` to ``tip``."""
+        """Return one arrow from ``tail`` to ``tip``.
+
+        Parameters
+        ----------
+        tail, tip : tuple[float, float]
+            Ends of the arrow.
+
+        Returns
+        -------
+        str
+            SVG line and arrowhead.
+        """
         base = (tip[0] - 6 * along[0], tip[1] - 6 * along[1])
         wing = 2.5
         left = (base[0] + wing * across[0], base[1] + wing * across[1])
@@ -2145,13 +2744,37 @@ _EVAP_FEED_HIGH, _EVAP_FEED_LOW = 30.0, 140.0
 
 
 def _evap_tubesheets(top: float, bot: float) -> str:
-    """Return the two tubesheets at heights ``top`` and ``bot``."""
+    """Return the two tubesheets, wall to wall.
+
+    Parameters
+    ----------
+    top, bot : float
+        Tubesheet heights.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
     return (f'<path d="M 0 {top:g} L {_EVAP_W:g} {top:g} '
             f'M 0 {bot:g} L {_EVAP_W:g} {bot:g}" {_DETAIL}/>')
 
 
 def _evap_tubes(top: float, bot: float, xs: "tuple[float, ...]") -> str:
-    """Return tubes between the tubesheets at each x in ``xs``."""
+    """Return tubes between the tubesheets.
+
+    Parameters
+    ----------
+    top, bot : float
+        Tubesheet heights.
+    xs : tuple[float, ...]
+        Tube positions.
+
+    Returns
+    -------
+    str
+        SVG ``<path>``.
+    """
     return ('<path d="'
             + " ".join(f"M {x:g} {top:g} L {x:g} {bot:g}" for x in xs)
             + f'" {_DETAIL}/>')
@@ -2206,13 +2829,19 @@ def _evaporator(name: str, *detail: str,
 
     Parameters
     ----------
+    name : str
+        Variant, used in the SVG id.
     *detail : str
         Element marks.
-    band : tuple[float, float], default=(_EVAP_TUBE_TOP, _EVAP_TUBE_BOT)
-        Heating element's top and bottom, which place the steam-chest
-        ports.
-    feed_y : float, default=_EVAP_FEED_HIGH
-        Feed height on the west wall.
+    band : tuple[float, float], optional
+        Element's top and bottom; the long-tube band by default.
+    feed_y : float, optional
+        Feed height on the west wall; above the element by default.
+
+    Returns
+    -------
+    Symbol
+        Evaporator symbol.
     """
     top, bot = band
     return Symbol(
@@ -2237,7 +2866,18 @@ _KILN_H = _KILN_BORE + _KILN_FALL
 
 
 def _kiln_top(x: float) -> float:
-    """Return the shell's upper wall height at ``x``."""
+    """Return the shell's upper wall height at ``x``.
+
+    Parameters
+    ----------
+    x : float
+        Distance along the kiln.
+
+    Returns
+    -------
+    float
+        Height of the upper wall.
+    """
     return _KILN_FALL * x / _KILN_W
 
 
@@ -2399,7 +3039,25 @@ class SymbolRegistry:
         self._composed.clear()
 
     def part(self, group: int, name: str) -> OverlayPart:
-        """Return the part registered as ``(group, name)``."""
+        """Return the part registered as ``(group, name)``.
+
+        Parameters
+        ----------
+        group : int
+            ISO 10628-2 subject group: 26 to 29, or 20 for the motor.
+        name : str
+            Registered part name.
+
+        Returns
+        -------
+        OverlayPart
+            The part.
+
+        Raises
+        ------
+        ValueError
+            If no part is registered under ``(group, name)``.
+        """
         if (group, name) in self._parts:
             return self._parts[(group, name)]
         known = self.part_names(group)
@@ -2410,18 +3068,54 @@ class SymbolRegistry:
         )
 
     def part_names(self, group: int) -> list[str]:
-        """Return the sorted part names registered in ``group``."""
+        """Return the sorted part names registered in ``group``.
+
+        Parameters
+        ----------
+        group : int
+            ISO 10628-2 subject group.
+
+        Returns
+        -------
+        list[str]
+            Part names.
+        """
         return sorted(name for (g, name) in self._parts if g == group)
 
     def parts(self) -> list[OverlayPart]:
-        """Return every registered part, by group then name."""
+        """Return every registered part, by group then name.
+
+        Returns
+        -------
+        list[OverlayPart]
+            Registered parts.
+        """
         return [self._parts[key] for key in sorted(self._parts)]
 
     def composed(self, kind: str, variant: str = "default",
                  overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
         """Return ``(kind, variant)`` with ``overlays`` drawn on it.
 
-        With no overlays the body is returned unchanged.
+        Compositions are cached. With no overlays the body is returned.
+
+        Parameters
+        ----------
+        kind : str
+            Unit kind.
+        variant : str, default="default"
+            Registered variant name.
+        overlays : tuple[Overlay, ...], default=()
+            Parts to draw, each registered with :meth:`register_part`.
+
+        Returns
+        -------
+        Symbol
+            Composed drawing.
+
+        Raises
+        ------
+        ValueError
+            If a variant or part is unregistered or cannot be composed.
         """
         if not overlays:
             return self.get(kind, variant)
@@ -2459,19 +3153,43 @@ class SymbolRegistry:
         self._closed[(kind, variant)] = template
 
     def closed_symbol(self, kind: str, variant: str = "default") -> Symbol | None:
-        """Return the closed drawing of ``(kind, variant)``, if any."""
+        """Return the closed drawing of ``(kind, variant)``, if any.
+
+        Parameters
+        ----------
+        kind : str
+            Unit kind.
+        variant : str, default="default"
+            Variant name.
+
+        Returns
+        -------
+        Symbol or None
+            Closed-state drawing, or ``None``.
+        """
         return self._closed.get((kind, variant))
 
     def closed_variants(self, kind: str) -> list[str]:
-        """Return the sorted ``kind`` variants with a closed drawing."""
+        """Return the sorted ``kind`` variants with a closed drawing.
+
+        Parameters
+        ----------
+        kind : str
+            Unit kind.
+
+        Returns
+        -------
+        list[str]
+            Variant names.
+        """
         return sorted(variant for (k, variant) in self._closed if k == kind)
 
     def for_unit(self, unit) -> Symbol:
         """Return the symbol to draw a unit with.
 
         Starts from :meth:`get`, then uses, in order, a symbol built
-        to the unit's size, the body with the unit's parts, a normally
-        closed drawing, or a reducer turned end for end.
+        to the unit's size, the body with its parts, a normally closed
+        drawing, or a reducer turned end for end.
 
         Parameters
         ----------
@@ -2486,7 +3204,7 @@ class SymbolRegistry:
         Raises
         ------
         ValueError
-            If the unit's variant is not registered for its kind.
+            If the variant is unknown or a derived drawing is refused.
         """
         variant = getattr(unit, "variant", "default")
         sym = self.get(unit.kind, variant)
@@ -2561,7 +3279,13 @@ class SymbolRegistry:
         )
 
     def _generic_symbol(self) -> Symbol:
-        """Return the blank 60 x 60 box for an unregistered kind."""
+        """Return the blank 60 x 60 box for an unregistered kind.
+
+        Returns
+        -------
+        Symbol
+            Generic box symbol.
+        """
         svg = (
             '<g id="sym_generic">'
             '<rect x="0" y="0" width="60" height="60" fill="none" stroke="black" stroke-width="2" />'
@@ -2848,10 +3572,7 @@ class SymbolRegistry:
             "dryer", _drier("belt", "X8043", _DRIER_BELT), "belt")
 
     def _register_cooling_towers(self):
-        """Register ISO 10628-2 group 5 except the spray cooler.
-
-        Each tower combines a fill mark and a draught mark.
-        """
+        """Register ISO 10628-2 group 5 except the spray cooler."""
         self.register("cooling_tower", Symbol(
             svg=f'<g id="sym_cooling_tower_general">{_TOWER_OUTLINE}</g>',
             width=_TOWER_W, height=_TOWER_H, ports=dict(_TOWER_PORTS),
