@@ -35,6 +35,8 @@ import pytest
 from pandid import Flowsheet, SteamTrap
 from pandid import units
 
+from test_drawio import _style
+
 #: The two quarter turns. A half turn leaves the axes alone, so it cannot
 #: tell a turned child from an unturned one and is no use here; it is
 #: covered for the trap in ``tests/test_steam_trap.py``.
@@ -55,11 +57,8 @@ def _export(
         geometry = cell.find("mxGeometry")
         if geometry is None:
             continue
-        style = dict(
-            part.split("=", 1) for part in (cell.get("style") or "").split(";") if "=" in part
-        )
         out[cell.get("id") or ""] = (
-            style,
+            _style(cell),
             tuple(float(geometry.get(key, 0)) for key in ("x", "y", "width", "height")),
         )
     return out
