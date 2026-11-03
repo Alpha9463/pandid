@@ -41,6 +41,9 @@ ESCAPE_ROOM = 25.0
 #: Overlap two boxes may share before they count as colliding.
 TOUCHING = 1.0
 
+#: Standoff of a balloon hung off the actuator it drives.
+ACTUATOR_OFFSET = 100.0
+
 Box = tuple[float, float, float, float]
 
 
@@ -58,6 +61,43 @@ def is_attached(unit: "Unit | None") -> bool:
         True if the unit has a host.
     """
     return unit is not None and getattr(unit, "host", None) is not None
+
+
+def _hang(unit: "Unit") -> "tuple[Stream | Unit, float | str | None, float, float] | None":
+    """Return what a balloon hangs from, where on it, its standoff and angle.
+
+    A balloon with a host hangs from it. An unpinned balloon with no host
+    whose signal line drives a placed valve's actuator hangs off that
+    valve's actuator face.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to read.
+
+    Returns
+    -------
+    tuple or None
+        Host, ``at``, standoff and branch angle, or None if the unit
+        hangs from nothing.
+    """
+    from pandid.portgeom import port_anchor
+    from pandid.units import Instrument
+
+    if not isinstance(unit, Instrument):
+        return None
+    if unit.host is not None:
+        return unit.host, unit.at, unit.offset, unit.angle
+    if unit.pin_ is not None:
+        return None
+    for port in unit.ports.values():
+        stream = port.stream
+        if stream is None or stream.source is not port or stream.dest.name != "actuator":
+            continue
+        valve = stream.dest.owner
+        if valve.frame is not None:
+            return valve, port_anchor(valve, valve.frame, "actuator")[2], ACTUATOR_OFFSET, 90.0
+    return None
 
 
 def _rotate_ccw(vx: float, vy: float, degrees: float) -> Point:
@@ -189,7 +229,7 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     Parameters
     ----------
     inst : Instrument
-        Attached balloon.
+        Balloon that :func:`_hang` hangs from something.
 
     Returns
     -------
@@ -199,16 +239,17 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     from pandid.portgeom import face_point
     from pandid.streams import Stream
 
-    host = inst.host
-    assert host is not None
+    hang = _hang(inst)
+    assert hang is not None
+    host, at = hang[0], hang[1]
     if isinstance(host, Stream):
         points = logical_stream_path(host)
         if len(points) < 2:
             return None
-        return _along(points, float(inst.at if inst.at is not None else 0.5))
+        return _along(points, float(at if at is not None else 0.5))
     if host.frame is None:
         return None
-    (px, py), (nx, ny) = face_point(host, host.frame, str(inst.at or "E"))
+    (px, py), (nx, ny) = face_point(host, host.frame, str(at or "E"))
     return (px, py), (-ny, nx)
 
 
@@ -235,7 +276,7 @@ def _intrusion(a: Box, b: Box, gap: float) -> float:
 
 
 def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
-    """Return the escape strips at unattached units' connected nozzles.
+    """Return the escape strips at the connected nozzles of units hung from nothing.
 
     Parameters
     ----------
@@ -253,7 +294,7 @@ def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
 
     out: list[Box] = []
     for u in fs.units:
-        if u.frame is None or is_attached(u):
+        if u.frame is None or _hang(u) is not None:
             continue
         for name, port in u.ports.items():
             if port.stream is None:
@@ -350,12 +391,15 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     """
     from pandid.streams import Stream
 
-    on_a_line = isinstance(inst.host, Stream)
-    angles = _branch_angles(inst.angle)
-    asked = (inst.offset, inst.angle)
+    hang = _hang(inst)
+    assert hang is not None
+    host, _, offset, branch = hang
+    on_a_line = isinstance(host, Stream)
+    angles = _branch_angles(branch)
+    asked = (offset, branch)
     fallback, least = asked, None
     for ring in range(STANDOFF_STEPS + 1):
-        distance = inst.offset + ring * STANDOFF_STEP
+        distance = offset + ring * STANDOFF_STEP
         for angle in angles:
             box = _standoff_box(tap, ref, distance, angle, w, h)
             if (distance, angle) == asked:
@@ -375,7 +419,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
 
 
 def place_attached(fs: "Flowsheet") -> bool:
-    """Place attached balloons and return whether any moved.
+    """Place the balloons :func:`_hang` hangs and return whether any moved.
 
     Balloons left unplaced are recorded in ``fs.unplaced_instruments``.
 
@@ -393,13 +437,13 @@ def place_attached(fs: "Flowsheet") -> bool:
     from pandid.portgeom import resolve_size, unit_box
 
     moved = False
-    # Start from placed unattached units; add each balloon once placed.
+    # Start from placed units hung from nothing; add each balloon once placed.
     obstacles = [unit_box(u, u.frame) for u in fs.units
-                 if u.frame is not None and not is_attached(u)]
+                 if u.frame is not None and _hang(u) is None]
     mounted = fs._mounted_layout
     keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if mounted else 0.0)
     # Place a host before whatever hangs on it.
-    pending = [u for u in fs.units if is_attached(u)]
+    pending = [u for u in fs.units if _hang(u) is not None]
     while pending:
         progressed = False
         for inst in list(pending):

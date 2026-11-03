@@ -652,6 +652,79 @@ def test_controller_output_routes_to_the_valve_actuator():
     assert _hatch_marks(fs.to_svg()) >= 2  # pneumatic slash ticks drawn
 
 
+def _level_loop() -> tuple[Flowsheet, U.Instrument, U.Valve]:
+    """A drum's level transmitter wired to LIC-101, which is anchored to
+    nothing, and LV-101 on the drum's outlet."""
+    fs = Flowsheet("level")
+    feed = fs.add(U.Feed("Feed"))
+    drum = fs.add(U.Vessel("V-1"))
+    lv = fs.add(U.Valve("LV-101", variant="control"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, lv.inlet)
+    fs.connect(lv.outlet, prod.inlet)
+    lt = fs.add_instrument("LT", 101, sensing=drum)
+    lic = fs.add_instrument("LIC", 101)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    return fs, lic, lv
+
+
+def test_an_unanchored_controller_hangs_beyond_the_actuator_it_drives():
+    """A controller with no host stands on the valve's actuator axis, 100
+    out past the face the actuator is on, rather than wherever the middle
+    of its wiring happens to be clear."""
+    from pandid.portgeom import port_anchor
+
+    fs, lic, lv = _level_loop()
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
+    fs.route()
+
+    valve = _placed(lv)
+    ax, ay, face = port_anchor(lv, valve, "actuator")
+    cx, cy = _centre(lic)
+    beyond = {"N": valve.y - cy, "S": cy - valve.y_max, "W": valve.x - cx, "E": cx - valve.x_max}
+    assert beyond[face] > 0, f"LIC-101 is not on the {face} side of LV-101"
+    assert (cx if face in "NS" else cy) == pytest.approx(ax if face in "NS" else ay, abs=0.5)
+    assert math.dist((cx, cy), (ax, ay)) == pytest.approx(100.0, abs=1.0)
+    assert [i.code for i in fs.validate() if i.severity == "error"] == []
+
+
+def test_hanging_a_controller_off_its_valve_writes_nothing_into_the_model():
+    """The valve is where layout puts the balloon, not an anchor the author
+    gave: the spec reads back without one, and a second layout lands the
+    balloon on the same spot."""
+    from pandid.portgeom import port_anchor
+
+    fs, lic, lv = _level_loop()
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
+    spec = fs.to_dict()
+    fs.layout()
+    fs.route()
+
+    ax, ay, _ = port_anchor(lv, _placed(lv), "actuator")
+    first = _centre(lic)
+    assert math.dist(first, (ax, ay)) == pytest.approx(100.0, abs=1.0)
+    assert lic.host is None
+    assert fs.to_dict() == spec
+    fs.layout()
+    fs.route()
+    assert _centre(lic) == pytest.approx(first)
+    assert fs.to_dict() == spec
+
+
+def test_a_controller_driving_no_actuator_is_placed_as_before():
+    """LIC-101 drives the relay on the valve, not the valve: it is placed
+    from its wiring, on the spot it took before controllers were hung off
+    actuators."""
+    fs, lic, lv = _level_loop()
+    ly = fs.add_instrument("LY", 101, near=lv, at="N")
+    fs.connect(lic.sig_out, ly.sig_in, kind="electric")
+    fs.connect(ly.sig_out, lv.actuator, kind="pneumatic")
+    fs.route()
+
+    assert _centre(lic) == pytest.approx((327.438, 63.612), abs=0.01)
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

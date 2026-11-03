@@ -56,10 +56,11 @@ def _place_free(fs: "Flowsheet") -> bool:
         True if any balloon is newly placed or moved by over 0.01.
     """
     from pandid.geometry import Frame
+    from pandid.layout.attach import _hang
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
 
-    pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
+    pending = [u for u in fs.units if is_control(u) and _hang(u) is None]
     if not pending:
         return False
 

@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the two units and the call that moves it: `at=` and `offset=` for an
   attached balloon, `pin()` for any other unit. A suggested `attach()`
   repeats the balloon's `relation=` and `angle=`.
+- **A controller with no anchor is drawn beyond the valve it drives (#443).**
+  A balloon with no `near=`, `sensing=`, `acting_on=` or pin whose signal
+  line drives a valve's `actuator` stands 100 out from the actuator, on its
+  axis.
 
 ### Deprecated
 
