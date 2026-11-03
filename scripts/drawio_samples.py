@@ -6,15 +6,13 @@ and review the generated files. A version-only package update needs no redraw.
 """
 
 import argparse
+import importlib.util
 import pathlib
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(HERE))
-
-import gallery  # noqa: E402
 
 #: Representative examples that cover document, P&ID, PFD, and BFD exports.
 SAMPLES = {
@@ -25,6 +23,20 @@ SAMPLES = {
 }
 
 OUT = ROOT / "drawio-samples"
+
+
+def _gallery():
+    """Load the gallery generator module.
+
+    Returns
+    -------
+    module
+        Imported ``scripts/gallery.py`` module.
+    """
+    spec = importlib.util.spec_from_file_location("_pandid_gallery", HERE / "gallery.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 #: Example render options accepted by :meth:`pandid.Flowsheet.to_drawio`.
@@ -45,6 +57,7 @@ def sample(stem: str) -> "tuple[str, list[str]]":
         Draw.io document and sorted render-option names not supported by the
         exporter.
     """
+    gallery = _gallery()
     fs, kwargs = gallery.flowsheet(stem)
     dropped = sorted(k for k in kwargs if k not in _EXPORTED)
     return (fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _EXPORTED}), dropped)
