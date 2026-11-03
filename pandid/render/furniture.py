@@ -92,7 +92,7 @@ def script_counts(s: str) -> "tuple[int, int, int]":
 
 
 def text_width(s, size: float, bold: bool = False) -> float:
-    """Return the drawn width of ``s`` at ``size``, without padding.
+    """Return the drawn width of ``s`` at ``size``.
 
     Parameters
     ----------
@@ -932,6 +932,15 @@ def stream_table_layout(fs) -> "StreamTable | None":
     -------
     StreamTable or None
         Table geometry, or ``None`` if it is empty.
+
+    Raises
+    ------
+    ValueError
+        If the stated font size is not positive.
+    ValueError
+        If a column width option is negative or not a number.
+    ValueError
+        If more than one segment of a run is marked ``tabulate``.
     """
     m = _measure(fs)
     if m is None:
@@ -959,6 +968,10 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
     ------
     ValueError
         If the stated font size is not positive.
+    ValueError
+        If a column width option is negative or not a number.
+    ValueError
+        If more than one segment of a run is marked ``tabulate``.
     """
     runs = _table_runs(fs)
     if not runs:
@@ -1140,6 +1153,15 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     -------
     TableSheet or None
         Stacked blocks, or ``None`` if it is empty.
+
+    Raises
+    ------
+    ValueError
+        If the stated font size is not positive.
+    ValueError
+        If a column width option is negative or not a number.
+    ValueError
+        If more than one segment of a run is marked ``tabulate``.
     """
     m = _measure(fs, own_sheet=True)
     if m is None:
@@ -1983,8 +2005,12 @@ def dock(items, inner, *, sheet=None, too_small=None):
 
     Returns
     -------
-    tuple
-        Placed boxes, the frame ``(x, y, w, h)`` and the free region.
+    placed : list[Docked]
+        Placed boxes.
+    frame : tuple[float, float, float, float]
+        Frame ``(x, y, w, h)``.
+    free : tuple[float, float, float, float] or None
+        Region left free on ``sheet``; ``None`` without ``sheet``.
 
     Raises
     ------
