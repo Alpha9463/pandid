@@ -1426,7 +1426,7 @@ def test_a_placement_draws_nothing_where_a_reading_draws_a_line():
 
 @pytest.mark.parametrize(
     ("case", "corners"),
-    [("pipe", 1), ("face", 1), ("behind", 2), ("level", 3), ("near", 1)],
+    [("pipe", 1), ("face", 1), ("behind", 2), ("level", 3), ("near", 1), ("opposite", 3)],
 )
 def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) -> None:
     """An off-axis balloon gets an L, or a Z behind a face, never a slope (#170).
@@ -1457,8 +1457,10 @@ def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) 
         fs.add_instrument("LX", 101, at="S", sensing=drum).pin(x=420, y=150)
     elif case == "level":
         fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=120, y=150)
-    else:
+    elif case == "near":
         fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=420, y=168.25)
+    else:
+        fs.add_instrument("LX", 101, at="E", sensing=drum).pin(x=120, y=168)
     fs.route()
     ((_, tap, centre),) = tap_lines(fs)
     group = fs.to_svg().split('<g id="instrument_taps">', 1)[1].split("</g>", 1)[0]
@@ -1478,6 +1480,25 @@ def test_a_balloon_off_its_taps_axis_is_reached_square(case: str, corners: int) 
     # draw.io gets the same corners as waypoints.
     edge = fs.to_drawio().split('id="t0"', 1)[1].split("</mxCell>", 1)[0]
     assert edge.split('<Array as="points">', 1)[1].count("<mxPoint ") == corners
+
+
+def test_a_balloon_on_a_slanted_pipe_is_reached_square() -> None:
+    """A balloon on a manually slanted run is reached with one square turn."""
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs = Flowsheet("slant")
+    feed = fs.add(U.Feed("Feed")).pin(x=100, y=100)
+    prod = fs.add(U.Product("Product")).pin(x=500, y=500)
+    line = fs.connect(feed.outlet, prod.inlet)
+    line.via([(200, 200), (400, 400)])
+    fs.add_instrument("PI", 101, sensing=line, at=0.5).pin(x=578, y=578)
+    fs.to_svg()
+    fs.to_drawio()
+    ((inst, tap, centre),) = tap_lines(fs)
+    route = tap_route(inst, tap, centre)
+    assert len(route) == 3
+    for (x1, y1), (x2, y2) in zip(route, route[1:]):
+        assert x1 == x2 or y1 == y2, route
 
 
 def test_a_placement_is_still_a_placement():

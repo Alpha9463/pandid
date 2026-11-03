@@ -269,11 +269,11 @@ def tap_lines(fs):
 def tap_route(inst, tap, centre):
     """Return the orthogonal path of one tap line.
 
-    An aligned balloon is reached in one straight run. Otherwise the
-    line leaves the tap square to its host, out of a unit's face or
-    across a pipe toward the balloon, and turns once onto the balloon
-    centre (ISO 15519-1 12.4). A balloon behind a unit's face is reached
-    one module out from the face, and around the unit's box when level
+    A balloon on a pipe, or ahead of a unit's face, is reached in one
+    straight run when aligned with the tap. Otherwise the line leaves
+    the tap square to its host and turns once onto the balloon centre
+    (ISO 15519-1 12.4). A balloon behind a unit's face is reached one
+    module out from the face, and around the unit's box when level
     with it.
 
     Parameters
@@ -293,17 +293,16 @@ def tap_route(inst, tap, centre):
 
     (tx, ty), (cx, cy) = tap, centre
     anchor = _anchor(inst)
-    if anchor is None or abs(cx - tx) < 0.01 or abs(cy - ty) < 0.01:
+    if anchor is None:
         return [tap, centre]
     # A unit's reference runs along its face; turned, it is the outward normal.
     rx, ry = anchor[1]
     nx, ny = ry, -rx
-    ahead = (cx - tx) * nx + (cy - ty) * ny
-    if isinstance(inst.host, Stream) and ahead < 0:
-        # A pipe has no outside, so leave toward the balloon.
-        nx, ny, ahead = -nx, -ny, -ahead
     across = abs(nx) > abs(ny)
-    if ahead > 0:
+    # A pipe has no outside, so its balloon is always ahead.
+    if isinstance(inst.host, Stream) or (cx - tx) * nx + (cy - ty) * ny > 0:
+        if abs(cx - tx) < 0.01 or abs(cy - ty) < 0.01:
+            return [tap, centre]
         return [tap, (cx, ty) if across else (tx, cy), centre]
     sx, sy = tx + nx * M, ty + ny * M
     x0, y0, x1, y1 = unit_box(inst.host, inst.host.frame)
