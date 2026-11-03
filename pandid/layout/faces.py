@@ -1,13 +1,6 @@
-"""Select which declared placement each movable port is drawn on.
+"""Select the face each movable port is drawn on.
 
-This module states a policy only. Coordinates come from
-:mod:`pandid.portgeom`.
-
-Selection runs after coordinate assignment has placed every box, because a
-face is judged against where the peer landed, and before labels, routing,
-and rendering read a face. The choice is stored on the resolved
-:class:`~pandid.geometry.Frame`, which each layout run replaces, so placement
-passes never read a previous choice.
+The choice is stored on the unit's resolved frame.
 """
 
 from __future__ import annotations
@@ -19,28 +12,26 @@ if TYPE_CHECKING:
     from pandid.ports import Port
     from pandid.units import Unit
 
-#: Router stand-off from a nozzle. A face pointing away from its peer costs
-#: twice this distance.
+#: Router stand-off from a nozzle.
 _ESCAPE = 25.0
 
 
 def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, ...]:
-    """List automatic face choices for a connected port.
+    """Return the faces a connected port may move between, or ``()``.
 
     Parameters
     ----------
     fs : Flowsheet
-        Drawing whose automatic-face setting controls selection.
+        Sheet being laid out.
     unit : Unit
-        Owner of the port.
+        Unit owning the port.
     port_name : str
-        Canonical connected port name.
+        Canonical port name.
 
     Returns
     -------
     tuple[str, ...]
-        Drawn-space alternatives in symbol preference order. Author
-        nozzles, pinned nozzles, and fixed ports have no alternatives.
+        Two or more faces, or ``()`` if the port's face cannot move.
     """
     from pandid.portgeom import pin_intent, port_faces
 
@@ -59,20 +50,14 @@ def select_faces(
     fs: "Flowsheet",
     preferred: Mapping[tuple[int, str], str] | None = None,
 ) -> None:
-    """Choose a face for every movable port without author overrides.
+    """Choose a face for every movable port.
 
     Parameters
     ----------
     fs : Flowsheet
-        Placed drawing whose resolved frame faces are updated.
+        Sheet with placed units.
     preferred : Mapping[tuple[int, str], str] or None, optional
-        Trial-only preferences keyed by global unit index and port name.
-        Unavailable or occupied choices fall back to normal selection.
-
-    Returns
-    -------
-    None
-        Automatic selections are stored on each resolved frame.
+        Face to try first, keyed by unit index and port name.
     """
     from pandid.layout.stages import is_control
 
@@ -80,19 +65,14 @@ def select_faces(
         frame = unit.frame
         if frame is None:
             continue
-        # Clear earlier choices so selection depends on the sheet alone.
+        # Clear earlier choices.
         frame.port_faces.clear()
         if not fs.auto_faces:
             continue
-        # ``eligible_faces`` excludes pinned and author-chosen nozzles: a pin
-        # fixes the box from the nozzle position, so a later choice would move
-        # the nozzle off its pin.
         live = [name for name, port in unit.ports.items() if port.stream is not None]
         menus = {name: menu for name in live
                  if (menu := eligible_faces(fs, unit, name))}
-        # Record the points of fixed ports. Ports are served in declaration
-        # order and no choice may land on a taken point; two connections on
-        # one point is a validation error.
+        # Points of fixed ports; no choice may land on a taken point.
         taken = {_point(unit, frame, name) for name in live if name not in menus}
         for name, menu in menus.items():
             target = _reference(unit.ports[name])
@@ -107,37 +87,38 @@ def select_faces(
             if face is None:
                 face = _best(unit, frame, name, list(menu), target, taken)
             if face is None:
-                continue  # Every face is taken; keep the symbol's placement.
+                # Every face is taken; keep the symbol's placement.
+                continue
             frame.port_faces[name] = face
             taken.add(_point(unit, frame, name))
 
 
 def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
                   menu: list[str]) -> list[str]:
-    """Drop faces that are blocked or need more bends than the home face.
+    """Return the clear faces, dropping any that add bends.
 
-    A face is blocked when its outward stub crosses another unit. When the
-    peer's nozzle is fixed, an alternate face is also dropped if it needs
-    more bends than the first face of the menu. The menu is returned
-    unchanged when every face is blocked.
+    A face is clear when its outward stub misses every unattached unit
+    but the peer; with none clear, the menu comes back unchanged. If
+    the first face is clear and the peer's face is fixed, faces needing
+    more bends than the first are dropped.
 
     Parameters
     ----------
     fs : Flowsheet
-        Placed drawing.
+        Sheet with placed units.
     unit : Unit
-        Owner of the port.
+        Unit owning the port.
     frame : Frame
-        Resolved frame of the unit.
+        The unit's frame.
     port_name : str
-        Connected port with more than one declared face.
+        Port to choose a face for.
     menu : list[str]
-        Declared faces in symbol preference order.
+        Faces the port may take.
 
     Returns
     -------
     list[str]
-        Usable faces in the same order.
+        Usable faces, in menu order.
     """
     from pandid.layout.attach import is_attached
     from pandid.layout.conflicts import segment_crosses_box
@@ -189,21 +170,21 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
 
 
 def _point(unit: "Unit", frame, port_name: str) -> tuple[float, ...]:
-    """Return a port's drawn point, rounded for coincidence checks.
+    """Return a port's drawn point, rounded to three decimals.
 
     Parameters
     ----------
     unit : Unit
-        Owner of the port.
+        Unit owning the port.
     frame : Frame
-        Resolved frame of the unit.
+        The unit's frame.
     port_name : str
-        Port to resolve.
+        Port to locate.
 
     Returns
     -------
     tuple[float, ...]
-        Point coordinates rounded to three decimals.
+        Rounded point.
     """
     from pandid.portgeom import resolve_port
 
@@ -211,21 +192,20 @@ def _point(unit: "Unit", frame, port_name: str) -> tuple[float, ...]:
 
 
 def _reference(port: "Port") -> tuple[float, float] | None:
-    """Return the point a candidate face is scored against.
+    """Return the point a port's faces are scored against, or None.
 
-    A peer with one declared face gives its nozzle anchor. A peer with
-    several gives the centre of its unit, which does not depend on the face
-    it later takes.
+    This is the peer's nozzle anchor if that nozzle has one face, else
+    the centre of the peer unit.
 
     Parameters
     ----------
     port : Port
-        Connected port being placed.
+        Connected port.
 
     Returns
     -------
     tuple[float, float] or None
-        Target point, or ``None`` when the peer is unplaced.
+        Target, or None if the port is unconnected or its peer unplaced.
     """
     from pandid.portgeom import port_faces, resolve_port, unit_box
 
@@ -244,30 +224,27 @@ def _reference(port: "Port") -> tuple[float, float] | None:
 
 def _best(unit: "Unit", frame, port_name: str, menu: list[str],
           target: tuple[float, float], taken: set[tuple[float, ...]]) -> str | None:
-    """Return the cheapest untaken face for a run to the target.
-
-    Ties go to the face aimed most directly at the peer, then to the
-    symbol's preference order.
+    """Return the cheapest untaken face toward the target, or None.
 
     Parameters
     ----------
     unit : Unit
-        Owner of the port.
+        Unit owning the port.
     frame : Frame
-        Resolved frame of the unit.
+        The unit's frame.
     port_name : str
-        Port being placed.
+        Port to choose a face for.
     menu : list[str]
-        Candidate faces in symbol preference order.
+        Faces to score.
     target : tuple[float, float]
-        Point the run must reach.
+        Point the port should face.
     taken : set[tuple[float, ...]]
-        Points already used by other connected ports.
+        Rounded points already used by other ports.
 
     Returns
     -------
     str or None
-        Chosen face, or ``None`` when every candidate point is taken.
+        Best face, or None if every face lands on a taken point.
     """
     from pandid.portgeom import face_point, resolve_port, unit_box
 
@@ -289,22 +266,21 @@ def _best(unit: "Unit", frame, port_name: str, menu: list[str],
 
 def _cost(anchor: tuple[float, float], normal: tuple[float, float],
           target: tuple[float, float]) -> float:
-    """Return the orthogonal run length plus a penalty for facing away.
+    """Return the Manhattan distance, plus a penalty for facing away.
 
     Parameters
     ----------
     anchor : tuple[float, float]
-        Port anchor on the candidate face.
+        Nozzle anchor.
     normal : tuple[float, float]
-        Outward normal of that face.
+        Outward face normal.
     target : tuple[float, float]
-        Point the run must reach.
+        Point the port should face.
 
     Returns
     -------
     float
-        Manhattan distance, plus twice the stand-off when the target lies
-        behind the face.
+        Cost of the face.
     """
     (ax, ay), (nx, ny), (tx, ty) = anchor, normal, target
     reach = (tx - ax) * nx + (ty - ay) * ny
@@ -313,20 +289,20 @@ def _cost(anchor: tuple[float, float], normal: tuple[float, float],
 
 def _aim(centre: tuple[float, float], normal: tuple[float, float],
          target: tuple[float, float]) -> float:
-    """Return how directly a face's outward normal points at the target.
+    """Return the centre-to-target vector projected on a face normal.
 
     Parameters
     ----------
     centre : tuple[float, float]
-        Centre of the unit's drawn box.
+        Centre of the unit box.
     normal : tuple[float, float]
-        Outward normal of the candidate face.
+        Outward face normal.
     target : tuple[float, float]
-        Point the run must reach.
+        Point the port should face.
 
     Returns
     -------
     float
-        Projection of the centre-to-target vector on the normal.
+        Projection length.
     """
     return (target[0] - centre[0]) * normal[0] + (target[1] - centre[1]) * normal[1]

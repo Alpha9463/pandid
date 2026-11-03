@@ -1,11 +1,6 @@
 """Split a sheet into its process stage and its control stage.
 
-Stage 1 places and routes process units (everything that carries
-material) and material streams. Stage 2 places instruments and routes
-signal and energy lines against the frozen stage 1 geometry, so a signal
-never moves a process line. Free-standing and attached instruments both
-belong to stage 2, so a control loop never forms a cycle in the process
-graph.
+Stage 1 is process units and material streams; stage 2 is instruments.
 """
 
 from __future__ import annotations
@@ -20,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def slot(unit: "Unit") -> "_Slot":
-    """Return the solver state a unit carries during layout.
+    """Return the solver slot a unit carries during layout.
 
     Parameters
     ----------
@@ -30,12 +25,12 @@ def slot(unit: "Unit") -> "_Slot":
     Returns
     -------
     _Slot
-        Scratch placement seeded by :func:`pandid.layout._seed_slots`.
+        The unit's slot.
 
     Raises
     ------
-    AssertionError
-        If layout has not seeded the slot, meaning a pass ran out of order.
+    AttributeError
+        If layout has not seeded the slot.
     """
     assert unit._slot is not None, f"{unit.name} has no slot; layout ran out of order"
     return unit._slot
@@ -52,13 +47,13 @@ def is_control(unit: "Unit | None") -> bool:
     Returns
     -------
     bool
-        ``True`` for any instrument, attached or free-standing.
+        True for an instrument.
     """
     return unit is not None and unit.kind == "instrument"
 
 
 def process_units(fs: "Flowsheet") -> list["Unit"]:
-    """Return the units stage 1 places.
+    """Return every unit that is not an instrument.
 
     Parameters
     ----------
@@ -68,16 +63,13 @@ def process_units(fs: "Flowsheet") -> list["Unit"]:
     Returns
     -------
     list[Unit]
-        Every unit that is not an instrument, in flowsheet order.
+        Process units, in flowsheet order.
     """
     return [u for u in fs.units if not is_control(u)]
 
 
 def is_process_stream(stream: "Stream") -> bool:
-    """Return whether stage 1 places units against a stream.
-
-    Only a material stream between two process units states an order;
-    an energy line is a duty and a signal is a measurement.
+    """Return whether a material stream joins two process units.
 
     Parameters
     ----------
@@ -87,7 +79,7 @@ def is_process_stream(stream: "Stream") -> bool:
     Returns
     -------
     bool
-        Whether the stream is material and joins two process units.
+        True for a material stream between two process units.
     """
     src, dst = stream.source.owner, stream.dest.owner
     return (stream.kind == "material" and src is not None and dst is not None
@@ -95,7 +87,7 @@ def is_process_stream(stream: "Stream") -> bool:
 
 
 def process_streams(fs: "Flowsheet") -> list["Stream"]:
-    """Return the streams stage 1 places units against.
+    """Return the process streams, in flowsheet order.
 
     Parameters
     ----------
@@ -105,6 +97,6 @@ def process_streams(fs: "Flowsheet") -> list["Stream"]:
     Returns
     -------
     list[Stream]
-        Process streams, in flowsheet order.
+        Material streams between process units.
     """
     return [s for s in fs.streams if is_process_stream(s)]

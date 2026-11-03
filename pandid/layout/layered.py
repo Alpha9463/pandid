@@ -1,15 +1,7 @@
 """Place equipment by layered graph drawing, with nozzles as ports.
 
-The graph holds equipment and boundary flags; each furnished pipe is one
-link between its two end nozzles (:mod:`pandid.layout.mounted`).
-
-1. **Layers.** Return lines are reversed (:mod:`pandid.layout.cycles`) and
-   flow runs west to east, one layer per step. A pipe from a top nozzle to
-   a bottom nozzle stacks its two units in one layer instead.
-2. **Order.** Barycentre sweeps over nozzle positions, with a dummy in each
-   layer a pipe skips, keep the order with the fewest crossings.
-3. **Coordinates.** Weighted-median sweeps line up each pipe's two nozzles
-   while keeping every layer's order and spacing (pool adjacent violators).
+Units are layered west to east along the flow, ordered in each layer to
+reduce crossings, then moved up or down to line up each pipe's nozzles.
 """
 
 from __future__ import annotations
@@ -27,39 +19,41 @@ if TYPE_CHECKING:
     from pandid.ports import Port
     from pandid.units import Unit
 
-#: Clear width between layers; it holds a run and its line number.
+#: Least gap between layers, added to their balloon room.
 COL_GAP = 120.0
-#: Clear height between units in one layer.
+#: Least clear height in a stack, or beside equipment in a layer.
 ROW_GAP = 70.0
-#: Clear height beside a pipe passing through a layer.
+#: Gap between neighbours of only flags or pipes; pin clearance.
 LANE = 25.0
-#: Left and top sheet margins.
+#: Left and top margins, used when no x or y pin sets that axis.
 MARGIN = 50.0
-#: Pipe kept at the two nozzles of a furnished link: an exit and a clearance.
+#: Pipe added to a furnished link's room for its two nozzle ends.
 END_ROOM = 41.0
 #: How far a top or bottom nozzle wants its peer above or below it.
 LEAD = 40.0
-#: Ordering and straightening passes.
+#: Passes for ordering, swapping and straightening.
 SWEEPS = 12
-#: Widest band before the drawing folds: about an A1 sheet at 96 dpi.
+#: Widest band before the drawing folds.
 BAND_WIDTH = 3200.0
-#: Clear height between bands, wide enough for a folded run to turn in.
+#: Clear height between bands.
 BAND_GAP = 160.0
 
-#: Faces each end of a stacking pipe must have: (source, dest) -> dest is above.
+#: Stacking pipe end faces ``(source, dest)`` -> whether dest is above.
 _STACK: dict[tuple[str | None, str | None], bool] = {("N", "S"): True, ("S", "N"): False}
 
 
 @dataclass(frozen=True)
 class Link:
-    """One pipe between two placed units.
+    """One pipe between two units to place.
 
     Attributes
     ----------
-    source, dest : Port
-        End nozzles, in flow order.
+    source : Port
+        Source nozzle.
+    dest : Port
+        Destination nozzle.
     recycle : bool
-        Whether the pipe is a return line, drawn against the flow.
+        Whether the pipe is a return line.
     room : float
         Level pipe its furniture needs.
     rise : float
@@ -75,7 +69,29 @@ class Link:
 
 @dataclass(eq=False)
 class _Node:
-    """A stack of units, or a dummy where a pipe crosses a layer."""
+    """A stack of units, or a dummy where a pipe crosses a layer.
+
+    Attributes
+    ----------
+    members : list[Unit]
+        Units, top to bottom once shaped; empty for a dummy.
+    dx : dict[Unit, float]
+        Each member's x offset from the stack's left edge.
+    dy : dict[Unit, float]
+        Each member's y offset from the stack's top.
+    w : float
+        Stack width.
+    h : float
+        Stack height.
+    pad : Pad
+        Balloon room around the stack.
+    layer : int
+        Layer index.
+    y : float
+        Top of the stack.
+    faces : dict[int, str]
+        Face chosen for a multi-face nozzle, keyed by port id.
+    """
 
     members: list[Unit] = field(default_factory=list)
     dx: dict[Unit, float] = field(default_factory=dict)
@@ -90,7 +106,23 @@ class _Node:
 
 @dataclass(eq=False)
 class _Seg:
-    """A pipe's step between two adjacent layers; a port is None at a dummy."""
+    """A pipe's step between adjacent layers; a dummy has no port.
+
+    Attributes
+    ----------
+    left : _Node
+        Node in the western layer.
+    lport : Port or None
+        Nozzle on ``left``, or None at a dummy.
+    right : _Node
+        Node in the eastern layer.
+    rport : Port or None
+        Nozzle on ``right``, or None at a dummy.
+    link : Link
+        Pipe the step belongs to.
+    back : bool
+        Whether layering dropped the pipe for closing a cycle.
+    """
 
     left: _Node
     lport: Port | None
@@ -101,7 +133,18 @@ class _Seg:
 
 
 def _face(port: Port | None) -> str | None:
-    """Return the face a nozzle is drawn on, or None when it has a menu."""
+    """Return a nozzle's stated or only face, else None.
+
+    Parameters
+    ----------
+    port : Port or None
+        Nozzle to read, or None.
+
+    Returns
+    -------
+    str or None
+        Face, or None for no port or a choice of faces.
+    """
     if port is None:
         return None
     unit = port.owner
@@ -114,13 +157,37 @@ def _face(port: Port | None) -> str | None:
 
 
 def _shift(unit: Unit) -> float:
-    """Return how far a unit's drawn box starts right of its frame; a feed flag's starts left."""
+    """Return the x offset of a unit's drawn box from its frame.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit with a seeded slot.
+
+    Returns
+    -------
+    float
+        Offset of the box's left edge.
+    """
     s = slot(unit)
     return unit_box(unit, Frame(x=0.0, y=0.0, w=s.w, h=s.h, mirrored=s.mirrored))[0]
 
 
 def _nozzle(port: Port, face: str | None = None) -> tuple[float, float, str]:
-    """Return a nozzle's offset from its unit's drawn box, and its face; on ``face`` if given."""
+    """Return a nozzle's offset from its drawn box, and its face.
+
+    Parameters
+    ----------
+    port : Port
+        Nozzle to locate.
+    face : str or None, optional
+        Face to read the nozzle on.
+
+    Returns
+    -------
+    tuple[float, float, str]
+        Offset x, offset y and face.
+    """
     unit = port.owner
     assert unit is not None
     s = slot(unit)
@@ -132,7 +199,20 @@ def _nozzle(port: Port, face: str | None = None) -> tuple[float, float, str]:
 
 
 def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
-    """Return a nozzle's offset from its stack's corner; a dummy's is 0."""
+    """Return a nozzle's offset from its stack's corner.
+
+    Parameters
+    ----------
+    node : _Node
+        Stack holding the nozzle.
+    port : Port or None
+        Nozzle, or None for the stack's top centre.
+
+    Returns
+    -------
+    tuple[float, float]
+        Offset from the stack's top-left corner.
+    """
     if port is None:
         return (node.w / 2, 0.0)
     assert port.owner is not None
@@ -141,11 +221,24 @@ def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
 
 
 def _around(node: _Node, port: Port | None, east: bool) -> float:
-    """Return a nozzle's height down its stack, 0 to 1, for ordering against one side.
+    """Return a nozzle's rank down its stack, about 0 to 1.
 
-    Nozzles on a top or bottom face tie on height, so the one nearer the
-    peer's side sits inside: seen from the west, the east end of the top
-    face is highest.
+    A top or bottom nozzle ranks further inside the nearer it is to the
+    side given by ``east``.
+
+    Parameters
+    ----------
+    node : _Node
+        Stack holding the nozzle.
+    port : Port or None
+        Nozzle, or None for a dummy.
+    east : bool
+        Whether the nozzle is ranked against the east side.
+
+    Returns
+    -------
+    float
+        Rank down the stack; 0.5 for a dummy or a flat stack.
     """
     if port is None or not node.h:
         return 0.5
@@ -157,26 +250,32 @@ def _around(node: _Node, port: Port | None, east: bool) -> float:
 
 
 def _flag(port: Port | None) -> bool:
-    """Return whether a nozzle belongs to a boundary flag."""
+    """Return whether a nozzle belongs to a boundary flag.
+
+    Parameters
+    ----------
+    port : Port or None
+        Nozzle to test.
+
+    Returns
+    -------
+    bool
+        True for a feed or product flag.
+    """
     return port is not None and port.owner is not None and port.owner.kind in ("feed", "product")
 
 
 def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None:
-    """Give every unit a frame by layered drawing.
+    """Give every unit a frame by layered drawing, keeping pins.
 
     Parameters
     ----------
     fs : Flowsheet
-        Sheet with seeded slots and recycle marks.
+        Sheet being laid out.
     units : list[Unit]
-        Units to place: equipment and boundary flags.
+        Units to place.
     links : list[Link]
-        Pipes between them.
-
-    Returns
-    -------
-    None
-        Each unit gets a slot position and a frame; pins are kept.
+        Pipes between the units.
     """
     if not units:
         return
@@ -187,7 +286,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     layers, segs = _chains(nodes, edges, units)
     for seg in segs:
         seg.back = id(seg.link) not in kept
-        # A nozzle with a menu of faces is read on the face toward its peer.
+        # Read a multi-face nozzle on the face toward its peer.
         for node, port, want in ((seg.left, seg.lport, "E"), (seg.right, seg.rport, "W")):
             if (port is not None and _face(port) is None
                     and want in port_faces(port.owner, port.name, slot(port.owner))):
@@ -202,12 +301,12 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     xs = _columns(layers, segs)
     _straighten(layers, segs)
     if not any(u.pin_ is not None and (u.pin_.x is not None or u.pin_.y is not None)
-               for u in units):  # a fold could land on a pinned unit
+               for u in units):
         _fold(layers, segs, xs)
     pinned_y = any(u.pin_ is not None and u.pin_.y is not None for u in units)
     lift = 0.0 if pinned_y else MARGIN - min(
         n.y - n.pad.north for layer in layers.values() for n in layer if n.members)
-    # Free units move with the layers so that the first x pin lands on its own layer.
+    # Shift free units to put the first x-pinned unit on its pin.
     slide = next((u.pin_.x - xs[node] - node.dx[u] + _shift(u)
                   for layer in layers.values() for node in layer for u in node.members
                   if u.pin_ is not None and u.pin_.x is not None), 0.0)
@@ -230,7 +329,13 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
 
 
 def _rank(layers: dict[int, list[_Node]]) -> None:
-    """Record each unit's layer and its row: its place down the layer, pipes not counted."""
+    """Record each unit's layer and its row within the layer.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    """
     for layer in layers.values():
         row = 0
         for node in layer:
@@ -240,16 +345,48 @@ def _rank(layers: dict[int, list[_Node]]) -> None:
 
 
 def _clear_pins(units: list[Unit]) -> None:
-    """Move a unit off a pinned unit it landed on, along an axis its author left free.
+    """Step units off the fully pinned units and the units before them.
 
-    The layers place free units without regard to where pins put the rest,
-    so a unit that lands on one moves down past it, or right if its height
-    is pinned. Units pinned on both axes stay put.
+    If any unit has an x or y pin, each unit not pinned on both axes,
+    in x-then-y order, steps below (right of, if its y is pinned) a
+    box it comes within ``LANE`` of, up to one step more than there
+    are boxes. The boxes are the fully pinned units and those before.
+
+    Parameters
+    ----------
+    units : list[Unit]
+        Units with set slots.
     """
     def free(u: Unit, axis: str) -> bool:
+        """Return whether a unit is unpinned on one axis.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to test.
+        axis : str
+            ``"x"`` or ``"y"``.
+
+        Returns
+        -------
+        bool
+            True if the axis is free.
+        """
         return u.pin_ is None or getattr(u.pin_, axis) is None
 
     def box(u: Unit) -> tuple[float, float, float, float]:
+        """Return a unit's drawn box at its slot.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit with a set slot.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Box as left, top, right, bottom.
+        """
         s = slot(u)
         return unit_box(u, Frame(x=s.x or 0.0, y=s.y or 0.0, w=s.w, h=s.h, mirrored=s.mirrored))
 
@@ -275,17 +412,35 @@ def _clear_pins(units: list[Unit]) -> None:
 
 def _stacks(units: list[Unit], links: list[Link]
             ) -> tuple[list[_Node], dict[Unit, _Node], list[tuple[Unit, Unit, Link]]]:
-    """Group units joined by a top-to-bottom pipe into one stack per layer.
+    """Group units joined by a top-to-bottom pipe into stacks.
+
+    Parameters
+    ----------
+    units : list[Unit]
+        Units to group.
+    links : list[Link]
+        Pipes between the units.
 
     Returns
     -------
-    tuple
-        Stacks in flowsheet order, each unit's stack, and the stacking pipes
-        as ``(upper, lower, link)``.
+    tuple[list[_Node], dict[Unit, _Node], list[tuple]]
+        Stacks, each unit's stack, and ``(upper, lower, link)`` pipes.
     """
     lead = {u: u for u in units}
 
     def find(u: Unit) -> Unit:
+        """Return the root unit of a unit's stack.
+
+        Parameters
+        ----------
+        u : Unit
+            Unit to look up.
+
+        Returns
+        -------
+        Unit
+            Root of the stack.
+        """
         while lead[u] is not u:
             lead[u] = lead[lead[u]]
             u = lead[u]
@@ -293,7 +448,8 @@ def _stacks(units: list[Unit], links: list[Link]
 
     col = {u: None if u.pin_ is None else u.pin_.col for u in units}
     row = {u: None if u.pin_ is None else u.pin_.row for u in units}
-    depth = dict.fromkeys(units, 0)  # place down the stack, from its root's
+    # Each unit's depth down its stack.
+    depth = dict.fromkeys(units, 0)
     group = {u: [u] for u in units}
     stacked = []
     for link in links:
@@ -306,7 +462,7 @@ def _stacks(units: list[Unit], links: list[Link]
         drop = depth[upper] + 1 - depth[lower]
         merged = [(u, depth[u]) for u in group[top]] + [(u, depth[u] + drop) for u in group[bottom]]
         ranked = [(r, d) for u, d in merged if (r := row[u]) is not None]
-        # The author's grid pins win: a stack never joins two columns or turns rows over.
+        # Skip merges that break column or row pins.
         if (col[top] is not None and col[bottom] is not None and col[top] != col[bottom]) or any(
                 r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked):
             continue
@@ -329,12 +485,22 @@ def _stacks(units: list[Unit], links: list[Link]
 
 
 def _shape(node: _Node, stacked: list[tuple[Unit, Unit, Link]], pads: dict[Unit, Pad]) -> None:
-    """Order a stack top to bottom and line up its stacking nozzles."""
+    """Order a stack top to bottom and line up its stacking nozzles.
+
+    Parameters
+    ----------
+    node : _Node
+        Stack to shape.
+    stacked : list[tuple[Unit, Unit, Link]]
+        Stacking pipes as ``(upper, lower, link)``.
+    pads : dict[Unit, Pad]
+        Balloon room of each unit.
+    """
     mine = set(node.members)
     inside = [(a, b, link) for a, b, link in stacked if a in mine]
     below = {u: [(b, link) for a, b, link in inside if a is u] for u in node.members}
     has_upper = {b for _, b, _ in inside}
-    # A depth-first walk from each top unit gives every unit its x and its turn.
+    # Walk down from each top unit, setting each unit's x and order.
     order: list[Unit] = []
     dx: dict[Unit, float] = {}
     for top in node.members:
@@ -368,15 +534,24 @@ def _shape(node: _Node, stacked: list[tuple[Unit, Unit, Link]], pads: dict[Unit,
 
 
 def _east(link: Link) -> tuple[int, int]:
-    """Return how sure a pipe is of its direction, and +1 if its dest lies east.
+    """Return a pipe's certainty rank and direction.
 
-    A return line runs west, last. Otherwise the nozzle faces say it: a pipe
-    leaving an east face or reaching a west face runs east, so a mirrored
-    pump runs west. Without a level face, flow order says east.
+    A lower rank is surer. A return line runs west; otherwise level
+    nozzle faces vote, and a tie runs east.
+
+    Parameters
+    ----------
+    link : Link
+        Pipe to rank.
+
+    Returns
+    -------
+    tuple[int, int]
+        Rank, and +1 for east or -1 for west.
     """
     if link.recycle:
         return (3, -1)
-    # A flag's face is artwork: its pennant points whichever way it is drawn.
+    # Only non-flag faces vote.
     vote = ({"E": 1, "W": -1}.get(_face(link.source) or "", 0) * (not _flag(link.source))
             + {"W": 1, "E": -1}.get(_face(link.dest) or "", 0) * (not _flag(link.dest)))
     return (2 - abs(vote), -1 if vote < 0 else 1)
@@ -384,14 +559,41 @@ def _east(link: Link) -> tuple[int, int]:
 
 def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
             ) -> list[tuple[_Node, _Node, Link]]:
-    """Give each stack the longest-path layer and return the pipes kept west to east.
+    """Assign each stack a layer and return the pipes kept west to east.
 
-    Pipes are kept surest first, each unless it closes a cycle; a source
-    then sits just before its nearest peer.
+    Pipes are kept surest first unless they close a cycle. A column
+    pin fixes a stack's layer; an unpinned source sits just before its
+    nearest consumer.
+
+    Parameters
+    ----------
+    nodes : list[_Node]
+        Stacks to layer.
+    edges : list[tuple[_Node, _Node, Link]]
+        Pipes between different stacks.
+
+    Returns
+    -------
+    list[tuple[_Node, _Node, Link]]
+        Kept pipes as ``(west, east, link)``.
     """
     succ: dict[_Node, list[_Node]] = {n: [] for n in nodes}
 
     def reaches(a: _Node, b: _Node) -> bool:
+        """Return whether kept pipes lead from one stack to another.
+
+        Parameters
+        ----------
+        a : _Node
+            Start stack.
+        b : _Node
+            Target stack.
+
+        Returns
+        -------
+        bool
+            True if ``b`` is reachable from ``a``.
+        """
         seen, walk = {a}, [a]
         while walk:
             for m in succ[walk.pop()]:
@@ -413,7 +615,8 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
         pred[b].append(a)
     order: list[_Node] = []
     placed: set[_Node] = set()
-    while len(order) < len(nodes):  # topological order, flowsheet order among ties
+    # Topological order, flowsheet order among ties.
+    while len(order) < len(nodes):
         n = next(n for n in nodes if n not in placed and all(p in placed for p in pred[n]))
         order.append(n)
         placed.add(n)
@@ -421,7 +624,8 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
              for n in nodes if any(u.pin_ is not None and u.pin_.col is not None for u in n.members)}
     for n in order:
         n.layer = fixed.get(n, max((p.layer + 1 for p in pred[n]), default=0))
-    for n in reversed(order):  # a source follows its nearest consumer
+    # Put a source just before its nearest consumer.
+    for n in reversed(order):
         if not pred[n] and succ[n] and n not in fixed:
             n.layer = min(m.layer for m in succ[n]) - 1
     return kept
@@ -429,7 +633,22 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
 
 def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: list[Unit]
             ) -> tuple[dict[int, list[_Node]], list[_Seg]]:
-    """Split each pipe into one step per layer, with dummies where it skips layers."""
+    """Split each cross-layer pipe into steps, adding dummies.
+
+    Parameters
+    ----------
+    nodes : list[_Node]
+        Layered stacks.
+    edges : list[tuple[_Node, _Node, Link]]
+        Pipes between different stacks.
+    units : list[Unit]
+        Units in flowsheet order.
+
+    Returns
+    -------
+    tuple[dict[int, list[_Node]], list[_Seg]]
+        Stacks then dummies in each layer, and the pipe steps.
+    """
     first = {n: min(units.index(u) for u in n.members) for n in nodes}
     layers: dict[int, list[_Node]] = {}
     for n in sorted(nodes, key=first.__getitem__):
@@ -454,14 +673,22 @@ def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: l
 
 
 def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
-    """Reorder each layer by its neighbours' nozzle positions, then swap neighbours.
+    """Order each layer to reduce pipe crossings.
 
-    Barycentre sweeps keep the order with the fewest crossings; adjacent
-    swaps that remove a crossing follow.
+    Barycentre sweeps keep the order with the fewest crossings, adjacent
+    swaps remove more, then each flag moves beside the nozzle it serves.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    segs : list[_Seg]
+        Pipe steps between adjacent layers.
     """
     pos: dict[_Node, float] = {}
 
     def index() -> None:
+        """Record each node's position in its layer."""
         for layer in layers.values():
             pos.update((n, float(i)) for i, n in enumerate(layer))
 
@@ -471,6 +698,18 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         gaps.setdefault(e[0].left.layer, []).append(e)
 
     def crossings(k: int) -> int:
+        """Return the pipe crossings between layer ``k`` and the next.
+
+        Parameters
+        ----------
+        k : int
+            Layer index.
+
+        Returns
+        -------
+        int
+            Number of crossing pairs.
+        """
         pairs = [(pos[s.left] + a, pos[s.right] + b) for s, a, b in gaps.get(k, [])]
         return sum(1 for i, (a, b) in enumerate(pairs) for c, d in pairs[i + 1:]
                    if (a - c) * (b - d) < 0)
@@ -483,7 +722,7 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         for k in (keys[1:] if down else keys[-2::-1]):
             near: dict[_Node, list[float]] = {}
             for s, a, b in ends:
-                # A unit is ordered by its peers, not by its flags.
+                # Order a unit by its peers, ignoring its flags.
                 if down and s.right.layer == k and (_flag(s.rport) or not _flag(s.lport)):
                     near.setdefault(s.right, []).append(pos[s.left] + a)
                 elif not down and s.left.layer == k and (_flag(s.lport) or not _flag(s.rport)):
@@ -510,7 +749,7 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         if not swapped:
             break
     peer: dict[_Node, float] = {}
-    for s, a, b in ends:  # a flag sits beside the nozzle it serves, whatever that crosses
+    for s, a, b in ends:
         if s.lport is not None and _flag(s.lport) and s.left.members == [s.lport.owner]:
             peer[s.left] = pos[s.right] + b
         if s.rport is not None and _flag(s.rport) and s.right.members == [s.rport.owner]:
@@ -520,7 +759,13 @@ def _order(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
 
 
 def _row_pins(layers: dict[int, list[_Node]]) -> None:
-    """Put the stacks with a row pin in their pinned order, in the places they hold."""
+    """Sort row-pinned stacks into pin order in the places they hold.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    """
     for layer in layers.values():
         rows = {n: min(u.pin_.row for u in n.members if u.pin_ is not None and u.pin_.row is not None)
                 for n in layer
@@ -531,19 +776,34 @@ def _row_pins(layers: dict[int, list[_Node]]) -> None:
 
 
 def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, float]:
-    """Return each stack's left edge: layers side by side, a stack against its pipes."""
+    """Return each node's left edge.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    segs : list[_Seg]
+        Pipe steps between adjacent layers.
+
+    Returns
+    -------
+    dict[_Node, float]
+        Left edge of each node.
+    """
     lo, hi = min(layers), max(layers)
     width = {k: max((n.w for n in layers.get(k, [])), default=0.0) for k in range(lo, hi + 1)}
     east = {k: max((n.pad.east for n in layers.get(k, [])), default=0.0) for k in width}
     west = {k: max((n.pad.west for n in layers.get(k, [])), default=0.0) for k in width}
     room = dict.fromkeys(width, 0.0)
-    for s in segs:  # a pipe's furniture needs room once, in the gap it leaves its west end by
+    # Furniture room goes in the gap after the pipe's west end.
+    for s in segs:
         if s.link.room and s.lport is not None:
             room[s.left.layer] = max(room[s.left.layer], s.link.room + END_ROOM)
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
         left[k] = x
-        if any(n.members for n in layers.get(k, [])):  # a layer of only pipes takes no room
+        # A layer of only pipes takes no room.
+        if any(n.members for n in layers.get(k, [])):
             x += width[k] + max(COL_GAP + east[k] + west.get(k + 1, 0.0), room[k])
     sides: dict[_Node, set[int]] = {}
     for s in segs:
@@ -553,23 +813,31 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
     for k, layer in layers.items():
         for n in layer:
             side = sides.get(n, set())
-            # A stack whose pipes all leave one way sits on that side of its layer.
+            # Push a stack toward the side all its pipes leave by.
             slack = width[k] - n.w
             out[n] = left[k] + (slack if side == {1} else 0.0 if side == {-1} else slack / 2)
     return out
 
 
 def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
-    """Set each stack's top so pipes run level, keeping each layer's order."""
+    """Set each stack's top to level its pipes, keeping layer order.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    segs : list[_Seg]
+        Pipe steps between adjacent layers.
+    """
     near: dict[_Node, list[tuple[_Node, Port | None, Port | None, float]]] = {}
     for s in segs:
         both = (s.lport, s.rport)
         level = all(_face(p) in (None, "E", "W") for p in both)
-        # A furnished pipe wants a straight leg for its furniture.
+        # Dummy runs pull hardest, then level pipes; furniture adds one.
         weight = (4.0 if s.lport is None and s.rport is None else 2.0 if level else 1.0) + bool(s.link.room)
         for own, mine, other, theirs in ((s.left, s.lport, s.right, s.rport),
                                          (s.right, s.rport, s.left, s.lport)):
-            # A unit ignores its flags and its return lines; they come to the unit.
+            # A unit barely pulls toward its flags and return lines.
             w = 0.1 if (_flag(theirs) and not _flag(mine)) or (mine and (s.back or s.link.recycle)) else weight
             near.setdefault(own, []).append((other, mine, theirs, w))
     pinned = {}
@@ -578,8 +846,7 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             for u in n.members:
                 if u.pin_ is not None and u.pin_.y is not None:
                     pinned[n] = u.pin_.y - n.dy[u]
-    # A pin cannot move, so free units come to it: each pulls harder toward
-    # the neighbour nearer a pin, and a chain lines up with the pin.
+    # Each stack pulls harder toward a neighbour nearer a pin.
     hops = dict.fromkeys(pinned, 0)
     walk = list(pinned)
     while walk:
@@ -593,7 +860,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
         entries[:] = [(o, m, t, w * (1.5 if hops.get(o, far) < hops.get(n, far) else 1))
                       for o, m, t, w in entries]
     lead = {"N": LEAD, "S": -LEAD}
-    for layer in layers.values():  # start each layer centred on one axis
+    # Start each layer centred on one axis.
+    for layer in layers.values():
         y = 0.0
         for k, n in enumerate(layer):
             n.y = y
@@ -602,6 +870,13 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
             n.y = pinned.get(n, n.y - y / 2)
 
     def solve(layer: list[_Node]) -> None:
+        """Set the tops of one layer's stacks nearest their targets.
+
+        Parameters
+        ----------
+        layer : list[_Node]
+            Stacks of one layer, in order.
+        """
         targets = []
         for n in layer:
             if n in pinned:
@@ -622,9 +897,19 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
 
 
 def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, float]) -> None:
-    """Fold a drawing wider than :data:`BAND_WIDTH` into bands down the sheet.
+    """Fold a drawing wider than :data:`BAND_WIDTH` into bands.
 
-    Each band ends in its last third, after the layer fewest pipes leave.
+    A band ends at the layer in its second half that the fewest pipe
+    steps leave, the latest on a tie.
+
+    Parameters
+    ----------
+    layers : dict[int, list[_Node]]
+        Stacks and dummies in each layer, in order.
+    segs : list[_Seg]
+        Pipe steps between adjacent layers.
+    xs : dict[_Node, float]
+        Left edge of each node, updated in place.
     """
     keys = sorted(layers)
     left = {k: min(xs[n] - n.pad.west for n in layers[k]) for k in keys}
@@ -654,18 +939,42 @@ def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, floa
 
 
 def _gap(upper: _Node, lower: _Node) -> float:
-    """Return the clear height kept between two neighbours in a layer."""
+    """Return the clear height between two neighbours in a layer.
+
+    Parameters
+    ----------
+    upper : _Node
+        Upper neighbour.
+    lower : _Node
+        Lower neighbour.
+
+    Returns
+    -------
+    float
+        ``LANE`` or ``ROW_GAP``, plus the balloon room between them.
+    """
     flags = all(u.kind in ("feed", "product") for u in (*upper.members, *lower.members))
-    gap = LANE if flags else ROW_GAP  # dummies and flags carry no balloons or labels
+    gap = LANE if flags else ROW_GAP  # dummies and flags only
     return gap + upper.pad.south + lower.pad.north
 
 
 def _isotonic(targets: list[list[tuple[float, float]]], steps: list[float]) -> list[float]:
-    """Return tops nearest their weighted targets, in order, each ``step`` below the last.
+    """Return the tops nearest their weighted targets, in order.
 
-    Pool adjacent violators on ``y - offset``; a pooled block sits at the
-    weighted median of its targets, which lines up whole pipes rather than
-    splitting the difference.
+    Each top is at least its step below the last; adjacent violators
+    share the weighted median of their targets less each top's offset.
+
+    Parameters
+    ----------
+    targets : list[list[tuple[float, float]]]
+        ``(value, weight)`` targets for each top.
+    steps : list[float]
+        Least distance from each top to the next.
+
+    Returns
+    -------
+    list[float]
+        The tops.
     """
     offsets = [0.0]
     for step in steps:
@@ -687,7 +996,23 @@ def _isotonic(targets: list[list[tuple[float, float]]], steps: list[float]) -> l
 
 
 def _median(pairs: list[tuple[float, float]]) -> float:
-    """Return the weighted median of ``(value, weight)`` pairs."""
+    """Return the lower weighted median of ``(value, weight)`` pairs.
+
+    Parameters
+    ----------
+    pairs : list[tuple[float, float]]
+        Values and weights.
+
+    Returns
+    -------
+    float
+        Least value whose cumulative weight reaches half the total.
+
+    Raises
+    ------
+    IndexError
+        If ``pairs`` is empty.
+    """
     pairs = sorted(pairs)
     half, total = sum(w for _, w in pairs) / 2, 0.0
     for v, w in pairs:

@@ -16,7 +16,7 @@ Axis = Literal["h", "v"]
 CROSSING_PENALTY = 10.0
 
 
-#: Crossing queries before a search binds the index's sorted tracks locally.
+#: Crossing queries before a search caches the sorted tracks locally.
 _INLINE_CROSSING_QUERY_THRESHOLD = 500
 
 
@@ -25,14 +25,14 @@ _AXIS: Dict[str, Axis] = {"E": "h", "W": "h", "N": "v", "S": "v"}
 
 @dataclass
 class CrossingIndex:
-    """Index orthogonal route segments for crossing queries.
+    """Index of orthogonal route segments for crossing queries.
 
     Attributes
     ----------
     h : dict[float, list[tuple[float, float]]]
-        Horizontal spans keyed by their y coordinate.
+        Horizontal spans ``(lo, hi)`` keyed by their y.
     v : dict[float, list[tuple[float, float]]]
-        Vertical spans keyed by their x coordinate.
+        Vertical spans ``(lo, hi)`` keyed by their x.
     """
 
     h: Dict[float, List[Tuple[float, float]]] = field(default_factory=dict)
@@ -42,28 +42,33 @@ class CrossingIndex:
     _v_sorted: Optional[Tuple[int, List[float]]] = field(default=None, repr=False, compare=False)
 
     def record(self, path: List[Tuple[float, float]]) -> None:
-        """Record the merged segments of a committed route.
+        """Record each same-axis run of a route by its two ends.
 
         Parameters
         ----------
         path : list[tuple[float, float]]
-            Orthogonal route waypoints.
+            Route waypoints.
+
+        Raises
+        ------
+        ValueError
+            If two consecutive waypoints form a diagonal segment.
         """
         for axis, fixed, lo, hi in committed_segments(path):
             (self.h if axis == "h" else self.v).setdefault(fixed, []).append((lo, hi))
 
     def _sorted_keys(self, axis: Axis) -> List[float]:
-        """Return the sorted coordinates for one segment axis.
+        """Return the sorted fixed coordinates of one axis, cached.
 
         Parameters
         ----------
         axis : {"h", "v"}
-            Axis whose fixed coordinates are requested.
+            Axis whose segments to read.
 
         Returns
         -------
         list[float]
-            Sorted fixed coordinates for the selected axis.
+            Sorted y of horizontal or x of vertical segments.
         """
         d = self.h if axis == "h" else self.v
         cached = self._h_sorted if axis == "h" else self._v_sorted
@@ -77,24 +82,24 @@ class CrossingIndex:
         return keys
 
     def crosses(self, node: Tuple[float, float], axis: Axis) -> int:
-        """Count segments crossed by a route continuing through a node.
+        """Count perpendicular segments strictly containing ``node``.
 
         Parameters
         ----------
         node : tuple[float, float]
-            Node on the candidate route.
+            Point the route passes through.
         axis : {"h", "v"}
-            Axis on which the candidate route continues.
+            Axis on which the route continues through ``node``.
 
         Returns
         -------
         int
-            Number of perpendicular segments that strictly contain the node.
+            Number of segments crossed at ``node``.
 
         Raises
         ------
         ValueError
-            If ``axis`` is not horizontal or vertical.
+            If ``axis`` is not ``"h"`` or ``"v"``.
         """
         if axis not in ("h", "v"):
             raise ValueError(f"axis must be 'h' or 'v', got {axis!r}")
@@ -104,18 +109,17 @@ class CrossingIndex:
         return sum(1 for lo, hi in self.v.get(x, ()) if lo < y < hi)
 
     def crossings_along(self, p1: Tuple[float, float], p2: Tuple[float, float]) -> int:
-        """Count segments crossed by an entire orthogonal run.
+        """Count perpendicular segments crossing inside run p1-p2.
 
         Parameters
         ----------
         p1, p2 : tuple[float, float]
-            Endpoints of the candidate run.
+            Ends of the run.
 
         Returns
         -------
         int
-            Number of perpendicular segments strictly inside the run. Diagonal and
-            zero-length pairs return zero.
+            Number of crossings, 0 for a diagonal or empty run.
         """
         if p1[1] == p2[1] and p1[0] != p2[0]:
             y = p1[1]
@@ -137,41 +141,41 @@ class CrossingIndex:
 
 
 def committed_segments(path: List[Tuple[float, float]]) -> List[Tuple[Axis, float, float, float]]:
-    """Return merged orthogonal segments for a route.
+    """Return each same-axis run of a route as a span between its ends.
 
     Parameters
     ----------
     path : list[tuple[float, float]]
-        Route waypoints, including any fixed nozzle stubs.
+        Route waypoints.
 
     Returns
     -------
-    list[tuple[{"h", "v"}, float, float, float]]
-        ``(axis, fixed_coordinate, lower_bound, upper_bound)`` tuples.
+    list[tuple[str, float, float, float]]
+        One ``(axis, fixed, lo, hi)`` per straight run.
 
     Raises
     ------
     ValueError
-        If consecutive waypoints form a diagonal segment.
+        If two consecutive waypoints form a diagonal segment.
     """
 
     def axis_of(p: Tuple[float, float], q: Tuple[float, float]) -> Optional[Axis]:
-        """Return the axis of an orthogonal segment.
+        """Return the axis of segment p-q.
 
         Parameters
         ----------
         p, q : tuple[float, float]
-            Segment endpoints.
+            Segment ends.
 
         Returns
         -------
         {"h", "v"} or None
-            Segment axis, or ``None`` for equal points.
+            Segment axis, or None for equal points.
 
         Raises
         ------
         ValueError
-            If the endpoints form a diagonal segment.
+            If the segment is diagonal.
         """
         dx, dy = p[0] != q[0], p[1] != q[1]
         if dx and dy:
@@ -209,17 +213,17 @@ OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
 
 
 def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
-    """Return the cardinal direction from one point to another.
+    """Return the compass direction from p1 to p2, x first.
 
     Parameters
     ----------
     p1, p2 : tuple[float, float]
-        Orthogonal segment endpoints.
+        Start and end points.
 
     Returns
     -------
     str or None
-        ``E``, ``W``, ``N``, or ``S``; ``None`` for equal points.
+        ``"E"`` or ``"W"``, else ``"S"`` or ``"N"``; None if equal.
     """
     if p1[0] < p2[0]:
         return "E"
@@ -234,22 +238,19 @@ def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
 
 def heuristic(a: Tuple[float, float], b: Tuple[float, float],
               bend_cost: float = BEND_PENALTY) -> float:
-    """Estimate the remaining A* cost between two graph nodes.
-
-    Admissible only while it never exceeds the true cost, so the bend it
-    counts must cost what the search charges for one.
+    """Return the Manhattan distance plus one bend if not aligned.
 
     Parameters
     ----------
     a, b : tuple[float, float]
-        Current and goal coordinates.
+        Points to measure between.
     bend_cost : float, default=BEND_PENALTY
-        What the search charges for a bend; half for a recycle.
+        Cost of one bend.
 
     Returns
     -------
     float
-        Manhattan distance, plus one bend when the two are not aligned.
+        Estimated path cost.
     """
     dx = abs(a[0] - b[0])
     dy = abs(a[1] - b[1])
@@ -270,33 +271,32 @@ def find_path(
     is_recycle: bool = False,
     crossing_index: Optional[CrossingIndex] = None,
 ) -> List[Tuple[float, float]]:
-    """Find a lowest-cost orthogonal path through a visibility graph.
+    """Return the cheapest orthogonal path on the graph.
 
     Parameters
     ----------
     graph : VisibilityGraph
-        Graph of clear routing lanes.
+        Graph to search.
     start, goal : tuple[float, float]
-        Escape-node coordinates for the route.
+        Escape nodes of the source and destination ports.
     start_dir, goal_dir : str or None, optional
         Outward directions at the source and destination ports.
-    edge_penalties : dict[tuple[tuple[float, float], tuple[float, float]], float], optional
-        Accumulated penalties for already-used directed graph edges.
+    edge_penalties : dict, optional
+        Penalties on directed edges used by earlier routes.
     is_recycle : bool, default=False
-        Whether recycle-lane preferences apply.
-    crossing_index : CrossingIndex, optional
-        Segments of routes committed before this route.
+        Favour recycle lanes and halve the bend cost.
+    crossing_index : CrossingIndex or None, optional
+        Routes drawn before this one.
 
     Returns
     -------
     list[tuple[float, float]]
-        Graph nodes from ``start`` to ``goal``, or an empty list when no path
-        is available.
+        Path from ``start`` to ``goal``, or ``[]`` if none.
 
     Raises
     ------
     ValueError
-        If either endpoint is non-finite.
+        If ``start`` or ``goal`` is non-finite.
     RuntimeError
         If the search exceeds its expansion budget.
     """

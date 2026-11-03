@@ -1,4 +1,4 @@
-"""Choose a straight leg between the endpoint nozzles of a material run."""
+"""Choose a horizontal leg between the end nozzles of a run."""
 
 from __future__ import annotations
 
@@ -20,23 +20,30 @@ def horizontal_centerline(
     *,
     require_clear_exit: bool = False,
 ) -> float | None:
-    """Choose a horizontal leg from the endpoint nozzle geometry.
+    """Return the y of a horizontal leg between two nozzles, or None.
 
     Parameters
     ----------
-    source, dest : Unit
-        Equipment at the ends of the host run.
-    source_port, dest_port : str
-        Connected nozzle names on that equipment.
-    start, end : tuple[float, float]
-        Resolved nozzle coordinates.
+    source : Unit
+        Unit at the start of the run.
+    source_port : str
+        Port name on ``source``.
+    dest : Unit
+        Unit at the end of the run.
+    dest_port : str
+        Port name on ``dest``.
+    start : tuple[float, float]
+        Source nozzle point.
+    end : tuple[float, float]
+        Destination nozzle point.
     require_clear_exit : bool, optional
-        Require a vertical nozzle to point toward a 25 px exit leg.
+        Require a vertical nozzle facing the leg from 25 or more away,
+        or two level ends facing each other.
 
     Returns
     -------
     float or None
-        Axis of a horizontal leg, or ``None`` without a legal leg.
+        The leg's y, at one nozzle's level, or None.
     """
     assert source.frame is not None and dest.frame is not None
     source_face = resolve_port(source, source.frame, source_port).face

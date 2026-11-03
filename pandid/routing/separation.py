@@ -1,10 +1,7 @@
 """Separate routed streams that share a track.
 
-Runs of different streams that lie on nearly the same track and overlap
-along their length are moved onto distinct tracks at least :data:`SPACING`
-apart. Runs that end at a nozzle keep their tracks, as does every run of a
-route the author drew with ``via()``, which is never rewritten. A run is
-never moved onto a track through either unit its own stream joins (#468).
+Overlapping runs of different streams on tracks within :data:`SPACING`
+are assigned tracks; end runs and manual routes keep their track.
 """
 
 from typing import Any, Sequence, TYPE_CHECKING
@@ -13,36 +10,29 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
 
-#: Minimum distance between separated tracks.
+#: Grid step between the tracks runs are moved onto.
 SPACING = 6.0
 
 
 def _compute_offsets(
     streams: "Sequence[Stream]", spacing: float
 ) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
-    """Compute the offsets :func:`separate_streams` would apply.
-
-    :func:`preview_separated_waypoints` uses this without writing
-    waypoints. Writing after every stream would re-settle earlier tracks
-    and make the drawing depend on routing order, so only the final
-    :func:`separate_streams` call writes.
+    """Return the offsets for horizontal and vertical segments.
 
     Parameters
     ----------
     streams : Sequence[Stream]
-        Routed streams to separate.
+        Routed streams.
     spacing : float
-        Minimum distance between separated tracks.
+        Grid step between the tracks runs are moved onto.
 
     Returns
     -------
-    tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]
-        Vertical offsets for horizontal segments and horizontal offsets for
-        vertical segments, keyed by ``(id(stream), segment index)``.
+    tuple[dict, dict]
+        Y offsets of horizontal segments, then x offsets of vertical
+        segments, each keyed by ``(id(stream), segment)``.
     """
-    # Collect runs: maximal chains of consecutive segments on one axis.
-    # Collinear segments are one drawn line and must move together. Tracks
-    # keep their raw coordinate so the offset lands exactly on its slot.
+    # A run is a maximal chain of consecutive segments on one axis.
     h_runs: list[dict[str, Any]] = []
     v_runs: list[dict[str, Any]] = []
 
@@ -59,10 +49,9 @@ def _compute_offsets(
         boxes = [unit_box(u, u.frame) for u in ends if u is not None and u.frame is not None]
         pts = s.route.waypoints
         n_segs = len(pts) - 1
-        # The author placed every point of a via() route, so none moves;
-        # the other streams separate from it instead.
+        # Every run of a via() route is fixed.
         manual = s.route.manual
-        # The run the previous segment extended, and which axis it lies on.
+        # The run the previous segment extended, and its axis.
         open_run: dict[str, Any] | None = None
         open_axis: str | None = None
 
@@ -114,20 +103,19 @@ def _compute_offsets(
             offsets[(id(s), i)] = 0.0
 
     def enters(run, track):
-        """Return whether a run moved onto a track would cross its own end units.
+        """Return whether a run on a track crosses its end units.
 
         Parameters
         ----------
         run : dict
-            Run to move.
+            Run to test.
         track : float
-            Proposed track.
+            Candidate track coordinate.
 
         Returns
         -------
         bool
-            Whether the moved run passes through a box of a unit its own
-            stream joins.
+            Whether the run would enter one of its end units.
         """
         lo, hi = run["min_val"], run["max_val"]
         for x0, y0, x1, y1 in run["boxes"]:
@@ -140,18 +128,18 @@ def _compute_offsets(
         """Assign target tracks to one cluster of nearby runs.
 
         Runs that overlap along their length form a component. In a
-        component with more than one stream, runs that end at a nozzle keep
-        their track, a free run of a stream that already has a nozzle run
-        joins the nearer of that stream's tracks, and every other run takes
-        the nearest free slot on a ``spacing`` grid around the component's
-        mean track.
+        component of several streams, fixed runs keep their track, a
+        free run joins its stream's nearest fixed track clear of its end
+        units, and any other run takes the nearest free slot on a
+        ``spacing`` grid around the fixed runs' mean track, or all
+        runs' if none is fixed.
 
         Parameters
         ----------
         runs : list[dict]
-            Runs on one axis with nearby tracks.
+            Runs of one cluster.
         offsets_dict : dict[tuple[int, int], float]
-            Segment offsets, updated in place.
+            Offsets to write, by ``(id(stream), segment)``.
         """
         runs.sort(key=lambda r: r["min_val"])
 
@@ -160,7 +148,6 @@ def _compute_offsets(
         current_max = -float('inf')
 
         for run in runs:
-            # Overlap condition
             if run["min_val"] <= current_max + 0.1:
                 current_comp.append(run)
                 current_max = max(current_max, run["max_val"])
@@ -179,11 +166,8 @@ def _compute_offsets(
                 continue
 
             if len({run["stream"] for run in comp}) <= 1:
-                continue  # one stream's own runs, nothing to separate
+                continue
 
-            # Assign absolute target tracks rather than per-run deltas, so
-            # runs cannot end closer than they began. Each nozzle run keeps
-            # its own track, so a stream's jog between two nozzles survives.
             fixed = [run for run in comp if run["is_fixed"]]
             pool = fixed or comp
             base = sum(run["track"] for run in pool) / len(pool)
@@ -199,15 +183,12 @@ def _compute_offsets(
                     continue
                 own = [t for t in nozzles.get(run["stream"], []) if not enters(run, t)]
                 if own:
-                    # Join this stream's nearer nozzle track rather than
-                    # taking a slot, which would add two bends.
                     track = run["track"]
                     run["target"] = min(own, key=lambda t: (abs(t - track), t))
                     continue
                 k = 0
                 while "target" not in run:
                     for cand in ((base,) if k == 0 else (base + k * spacing, base - k * spacing)):
-                        # The epsilon absorbs float error in ``base + k * spacing``.
                         if (all(abs(cand - o) >= spacing - 1e-9 for o in occupied)
                                 and not enters(run, cand)):
                             run["target"] = cand
@@ -220,18 +201,15 @@ def _compute_offsets(
                 for seg_idx in run["seg_idxs"]:
                     offsets_dict[(run["stream"], seg_idx)] = offset
 
-    # Cluster tracks by single linkage within ``spacing``: runs a few pixels
-    # apart read as one doubled line. resolve_track then separates only runs
-    # that also overlap along their length.
     def group_by_track(runs, tolerance):
-        """Cluster runs whose tracks chain within a tolerance.
+        """Cluster runs whose tracks chain within ``tolerance``.
 
         Parameters
         ----------
         runs : list[dict]
             Runs on one axis.
         tolerance : float
-            Largest gap between consecutive tracks in one cluster.
+            Largest gap between neighbouring tracks in a cluster.
 
         Returns
         -------
@@ -253,7 +231,6 @@ def _compute_offsets(
             groups.append(current)
         return groups
 
-    # A wider window would pull legible runs together onto the spacing grid.
     window = spacing
     for group in group_by_track(h_runs, window):
         resolve_track(group, h_offsets)
@@ -269,20 +246,21 @@ def _apply_offsets(
     h_offsets: dict[tuple[int, int], float],
     v_offsets: dict[tuple[int, int], float],
 ) -> dict[int, list[tuple[float, float]]]:
-    """Return every stream's waypoints with the offsets applied.
+    """Return each stream's waypoints moved by the segment offsets.
 
     Parameters
     ----------
     streams : Sequence[Stream]
         Routed streams.
-    h_offsets, v_offsets : dict[tuple[int, int], float]
-        Offsets from :func:`_compute_offsets`.
+    h_offsets : dict[tuple[int, int], float]
+        Horizontal-segment offsets by ``(id(stream), segment)``.
+    v_offsets : dict[tuple[int, int], float]
+        Vertical-segment offsets by ``(id(stream), segment)``.
 
     Returns
     -------
     dict[int, list[tuple[float, float]]]
-        New waypoints keyed by ``id(stream)``. A waypoint takes its own
-        segment's offset in preference to the previous segment's.
+        Offset waypoints by ``id(stream)``, for each routed stream.
     """
     result: dict[int, list[tuple[float, float]]] = {}
     for s in streams:
@@ -319,19 +297,16 @@ def _apply_offsets(
 
 
 def separate_streams(fs: "Flowsheet") -> None:
-    """Separate overlapping parallel runs and write the new waypoints.
-
-    Called once per routing pass, on the complete set of streams.
+    """Separate overlapping runs and rewrite every automatic route.
 
     Parameters
     ----------
     fs : Flowsheet
-        Routed sheet; route waypoints are updated in place.
+        Sheet with routed streams.
     """
     h_offsets, v_offsets = _compute_offsets(fs.streams, SPACING)
     new_waypoints = _apply_offsets(fs.streams, h_offsets, v_offsets)
     for s in fs.streams:
-        # A via() route keeps the author's own list.
         if id(s) in new_waypoints and not s.route.manual:  # type: ignore[union-attr]
             s.route.waypoints = new_waypoints[id(s)]  # type: ignore[union-attr]
 
@@ -339,22 +314,17 @@ def separate_streams(fs: "Flowsheet") -> None:
 def preview_separated_waypoints(
     streams: "Sequence[Stream]",
 ) -> dict[int, list[tuple[float, float]]]:
-    """Return where :func:`separate_streams` would put each stream's waypoints.
-
-    ``DefaultRouter.route()`` prices crossings against this preview of the
-    streams routed so far, without writing waypoints. A later stream can
-    still move an earlier stream's track, so a search can underprice a
-    crossing in the finished drawing (#509).
+    """Return each stream's separated waypoints.
 
     Parameters
     ----------
     streams : Sequence[Stream]
-        Streams routed so far.
+        Routed streams.
 
     Returns
     -------
     dict[int, list[tuple[float, float]]]
-        Separated waypoints keyed by ``id(stream)``.
+        Separated waypoints by ``id(stream)``, for each routed stream.
     """
     h_offsets, v_offsets = _compute_offsets(streams, SPACING)
     return _apply_offsets(streams, h_offsets, v_offsets)
