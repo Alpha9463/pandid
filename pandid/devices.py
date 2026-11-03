@@ -658,25 +658,25 @@ class Cyclone(Separator):
 if TYPE_CHECKING:
 
     class Cyclone1(Cyclone):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Cyclone2(Cyclone):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Cyclone3(Cyclone):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Cyclone4(Cyclone):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -684,7 +684,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Cyclone5(Cyclone):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -693,7 +693,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Cyclone6(Cyclone):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -703,7 +703,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Cyclone7(Cyclone):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -714,7 +714,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Cyclone8(Cyclone):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -783,25 +783,25 @@ class GravitySeparator(Separator):
 if TYPE_CHECKING:
 
     class GravitySeparator1(GravitySeparator):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class GravitySeparator2(GravitySeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class GravitySeparator3(GravitySeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class GravitySeparator4(GravitySeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -809,7 +809,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class GravitySeparator5(GravitySeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -818,7 +818,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class GravitySeparator6(GravitySeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -828,7 +828,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class GravitySeparator7(GravitySeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -839,7 +839,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class GravitySeparator8(GravitySeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -908,25 +908,25 @@ class ElectrostaticPrecipitator(Separator):
 if TYPE_CHECKING:
 
     class ElectrostaticPrecipitator1(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class ElectrostaticPrecipitator2(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class ElectrostaticPrecipitator3(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class ElectrostaticPrecipitator4(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -934,7 +934,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class ElectrostaticPrecipitator5(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -943,7 +943,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class ElectrostaticPrecipitator6(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -953,7 +953,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class ElectrostaticPrecipitator7(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -964,7 +964,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class ElectrostaticPrecipitator8(ElectrostaticPrecipitator):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -1033,25 +1033,25 @@ class Screen(Separator):
 if TYPE_CHECKING:
 
     class Screen1(Screen):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Screen2(Screen):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Screen3(Screen):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Screen4(Screen):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -1059,7 +1059,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Screen5(Screen):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -1068,7 +1068,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Screen6(Screen):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -1078,7 +1078,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Screen7(Screen):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -1089,7 +1089,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Screen8(Screen):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -1158,25 +1158,25 @@ class ImpactSeparator(Separator):
 if TYPE_CHECKING:
 
     class ImpactSeparator1(ImpactSeparator):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class ImpactSeparator2(ImpactSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class ImpactSeparator3(ImpactSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class ImpactSeparator4(ImpactSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -1184,7 +1184,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class ImpactSeparator5(ImpactSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -1193,7 +1193,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class ImpactSeparator6(ImpactSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -1203,7 +1203,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class ImpactSeparator7(ImpactSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -1214,7 +1214,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class ImpactSeparator8(ImpactSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -1286,25 +1286,25 @@ class MagneticSeparator(Separator):
 if TYPE_CHECKING:
 
     class MagneticSeparator1(MagneticSeparator):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class MagneticSeparator2(MagneticSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class MagneticSeparator3(MagneticSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class MagneticSeparator4(MagneticSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -1312,7 +1312,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class MagneticSeparator5(MagneticSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -1321,7 +1321,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class MagneticSeparator6(MagneticSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -1331,7 +1331,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class MagneticSeparator7(MagneticSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -1342,7 +1342,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class MagneticSeparator8(MagneticSeparator):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -1411,25 +1411,25 @@ class Scrubber(Separator):
 if TYPE_CHECKING:
 
     class Scrubber1(Scrubber):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class Scrubber2(Scrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class Scrubber3(Scrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class Scrubber4(Scrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -1437,7 +1437,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class Scrubber5(Scrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -1446,7 +1446,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class Scrubber6(Scrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -1456,7 +1456,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class Scrubber7(Scrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -1467,7 +1467,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Scrubber8(Scrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -1536,25 +1536,25 @@ class VenturiScrubber(Separator):
 if TYPE_CHECKING:
 
     class VenturiScrubber1(VenturiScrubber):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class VenturiScrubber2(VenturiScrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class VenturiScrubber3(VenturiScrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class VenturiScrubber4(VenturiScrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -1562,7 +1562,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class VenturiScrubber5(VenturiScrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -1571,7 +1571,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class VenturiScrubber6(VenturiScrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -1581,7 +1581,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class VenturiScrubber7(VenturiScrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -1592,7 +1592,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class VenturiScrubber8(VenturiScrubber):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -1661,25 +1661,25 @@ class KnockoutDrum(Separator):
 if TYPE_CHECKING:
 
     class KnockoutDrum1(KnockoutDrum):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class KnockoutDrum2(KnockoutDrum):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class KnockoutDrum3(KnockoutDrum):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class KnockoutDrum4(KnockoutDrum):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -1687,7 +1687,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class KnockoutDrum5(KnockoutDrum):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -1696,7 +1696,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class KnockoutDrum6(KnockoutDrum):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -1706,7 +1706,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class KnockoutDrum7(KnockoutDrum):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -1717,7 +1717,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class KnockoutDrum8(KnockoutDrum):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -2564,25 +2564,25 @@ class StirredTankReactor(Reactor):
 if TYPE_CHECKING:
 
     class StirredTankReactor1(StirredTankReactor):
-        """Type-checker view declaring ``feed_1``."""
+        """Typed view declaring ``feed_1``."""
 
         feed_1: Port
 
     class StirredTankReactor2(StirredTankReactor):
-        """Type-checker view declaring ``feed_1`` to ``feed_2``."""
+        """Typed view declaring ``feed_1`` to ``feed_2``."""
 
         feed_1: Port
         feed_2: Port
 
     class StirredTankReactor3(StirredTankReactor):
-        """Type-checker view declaring ``feed_1`` to ``feed_3``."""
+        """Typed view declaring ``feed_1`` to ``feed_3``."""
 
         feed_1: Port
         feed_2: Port
         feed_3: Port
 
     class StirredTankReactor4(StirredTankReactor):
-        """Type-checker view declaring ``feed_1`` to ``feed_4``."""
+        """Typed view declaring ``feed_1`` to ``feed_4``."""
 
         feed_1: Port
         feed_2: Port
@@ -2590,7 +2590,7 @@ if TYPE_CHECKING:
         feed_4: Port
 
     class StirredTankReactor5(StirredTankReactor):
-        """Type-checker view declaring ``feed_1`` to ``feed_5``."""
+        """Typed view declaring ``feed_1`` to ``feed_5``."""
 
         feed_1: Port
         feed_2: Port
@@ -2599,7 +2599,7 @@ if TYPE_CHECKING:
         feed_5: Port
 
     class StirredTankReactor6(StirredTankReactor):
-        """Type-checker view declaring ``feed_1`` to ``feed_6``."""
+        """Typed view declaring ``feed_1`` to ``feed_6``."""
 
         feed_1: Port
         feed_2: Port
@@ -2609,7 +2609,7 @@ if TYPE_CHECKING:
         feed_6: Port
 
     class StirredTankReactor7(StirredTankReactor):
-        """Type-checker view declaring ``feed_1`` to ``feed_7``."""
+        """Typed view declaring ``feed_1`` to ``feed_7``."""
 
         feed_1: Port
         feed_2: Port
@@ -2620,7 +2620,7 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class StirredTankReactor8(StirredTankReactor):
-        """Type-checker view declaring ``feed_1`` to ``feed_8``."""
+        """Typed view declaring ``feed_1`` to ``feed_8``."""
 
         feed_1: Port
         feed_2: Port
@@ -2698,25 +2698,25 @@ class GasHolder(Tank):
 if TYPE_CHECKING:
 
     class GasHolder1(GasHolder):
-        """Type-checker view declaring ``in_1``."""
+        """Typed view declaring ``in_1``."""
 
         in_1: Port
 
     class GasHolder2(GasHolder):
-        """Type-checker view declaring ``in_1`` to ``in_2``."""
+        """Typed view declaring ``in_1`` to ``in_2``."""
 
         in_1: Port
         in_2: Port
 
     class GasHolder3(GasHolder):
-        """Type-checker view declaring ``in_1`` to ``in_3``."""
+        """Typed view declaring ``in_1`` to ``in_3``."""
 
         in_1: Port
         in_2: Port
         in_3: Port
 
     class GasHolder4(GasHolder):
-        """Type-checker view declaring ``in_1`` to ``in_4``."""
+        """Typed view declaring ``in_1`` to ``in_4``."""
 
         in_1: Port
         in_2: Port
@@ -2724,7 +2724,7 @@ if TYPE_CHECKING:
         in_4: Port
 
     class GasHolder5(GasHolder):
-        """Type-checker view declaring ``in_1`` to ``in_5``."""
+        """Typed view declaring ``in_1`` to ``in_5``."""
 
         in_1: Port
         in_2: Port
@@ -2733,7 +2733,7 @@ if TYPE_CHECKING:
         in_5: Port
 
     class GasHolder6(GasHolder):
-        """Type-checker view declaring ``in_1`` to ``in_6``."""
+        """Typed view declaring ``in_1`` to ``in_6``."""
 
         in_1: Port
         in_2: Port
@@ -2743,7 +2743,7 @@ if TYPE_CHECKING:
         in_6: Port
 
     class GasHolder7(GasHolder):
-        """Type-checker view declaring ``in_1`` to ``in_7``."""
+        """Typed view declaring ``in_1`` to ``in_7``."""
 
         in_1: Port
         in_2: Port
@@ -2754,7 +2754,7 @@ if TYPE_CHECKING:
         in_7: Port
 
     class GasHolder8(GasHolder):
-        """Type-checker view declaring ``in_1`` to ``in_8``."""
+        """Typed view declaring ``in_1`` to ``in_8``."""
 
         in_1: Port
         in_2: Port

@@ -771,7 +771,7 @@ def _family_class_block(name: str, family: "_Family") -> str:
     for n in range(1, max_n + 1):
         lines.append(f"    class {name}{n}({name}):")
         ports = f"``{member}_1``" if n == 1 else f"``{member}_1`` to ``{member}_{n}``"
-        lines.append(f'        """Type-checker view declaring {ports}."""')
+        lines.append(f'        """Typed view declaring {ports}."""')
         lines.append("")
         lines += [f"        {member}_{i}: Port" for i in range(1, n + 1)]
         lines.append("")

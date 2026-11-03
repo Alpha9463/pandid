@@ -922,8 +922,9 @@ class Valve(_NormallyPositioned):
     Raises
     ------
     ValueError
-        If the actuator is unknown or contradicts the variant, the pairing
-        is not drawn, or ``normal_position`` or ``fail`` is invalid.
+        If the actuator is unknown or contradicts the variant, the
+        pairing is not drawn, or ``normal_position`` or ``fail`` is
+        invalid.
     """
 
     inlet: Port
@@ -1593,25 +1594,25 @@ class Vessel(_MultiPortVessel):
 if TYPE_CHECKING:
 
     class Vessel1(Vessel):
-        """Vessel declaring ``in_1`` for type checkers."""
+        """Typed view declaring ``in_1``."""
 
         in_1: Port
 
     class Vessel2(Vessel):
-        """Vessel declaring ``in_1`` to ``in_2`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_2``."""
 
         in_1: Port
         in_2: Port
 
     class Vessel3(Vessel):
-        """Vessel declaring ``in_1`` to ``in_3`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_3``."""
 
         in_1: Port
         in_2: Port
         in_3: Port
 
     class Vessel4(Vessel):
-        """Vessel declaring ``in_1`` to ``in_4`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_4``."""
 
         in_1: Port
         in_2: Port
@@ -1619,7 +1620,7 @@ if TYPE_CHECKING:
         in_4: Port
 
     class Vessel5(Vessel):
-        """Vessel declaring ``in_1`` to ``in_5`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_5``."""
 
         in_1: Port
         in_2: Port
@@ -1628,7 +1629,7 @@ if TYPE_CHECKING:
         in_5: Port
 
     class Vessel6(Vessel):
-        """Vessel declaring ``in_1`` to ``in_6`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_6``."""
 
         in_1: Port
         in_2: Port
@@ -1638,7 +1639,7 @@ if TYPE_CHECKING:
         in_6: Port
 
     class Vessel7(Vessel):
-        """Vessel declaring ``in_1`` to ``in_7`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_7``."""
 
         in_1: Port
         in_2: Port
@@ -1649,7 +1650,7 @@ if TYPE_CHECKING:
         in_7: Port
 
     class Vessel8(Vessel):
-        """Vessel declaring ``in_1`` to ``in_8`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_8``."""
 
         in_1: Port
         in_2: Port
@@ -1802,25 +1803,25 @@ class Tank(_MultiPortVessel):
 if TYPE_CHECKING:
 
     class Tank1(Tank):
-        """Tank declaring ``in_1`` for type checkers."""
+        """Typed view declaring ``in_1``."""
 
         in_1: Port
 
     class Tank2(Tank):
-        """Tank declaring ``in_1`` to ``in_2`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_2``."""
 
         in_1: Port
         in_2: Port
 
     class Tank3(Tank):
-        """Tank declaring ``in_1`` to ``in_3`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_3``."""
 
         in_1: Port
         in_2: Port
         in_3: Port
 
     class Tank4(Tank):
-        """Tank declaring ``in_1`` to ``in_4`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_4``."""
 
         in_1: Port
         in_2: Port
@@ -1828,7 +1829,7 @@ if TYPE_CHECKING:
         in_4: Port
 
     class Tank5(Tank):
-        """Tank declaring ``in_1`` to ``in_5`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_5``."""
 
         in_1: Port
         in_2: Port
@@ -1837,7 +1838,7 @@ if TYPE_CHECKING:
         in_5: Port
 
     class Tank6(Tank):
-        """Tank declaring ``in_1`` to ``in_6`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_6``."""
 
         in_1: Port
         in_2: Port
@@ -1847,7 +1848,7 @@ if TYPE_CHECKING:
         in_6: Port
 
     class Tank7(Tank):
-        """Tank declaring ``in_1`` to ``in_7`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_7``."""
 
         in_1: Port
         in_2: Port
@@ -1858,7 +1859,7 @@ if TYPE_CHECKING:
         in_7: Port
 
     class Tank8(Tank):
-        """Tank declaring ``in_1`` to ``in_8`` for type checkers."""
+        """Typed view declaring ``in_1`` to ``in_8``."""
 
         in_1: Port
         in_2: Port
@@ -1940,7 +1941,7 @@ class Reducer(Unit):
 
     @property
     def large_end(self) -> str:
-        """Return ``"inlet"`` for a reduction, ``"outlet"`` for expansion."""
+        """Return ``"inlet"`` for a reduction, else ``"outlet"``."""
         return self._large_end
 
     @large_end.setter
@@ -1971,7 +1972,7 @@ class Tee(Unit):
     name : str, default=""
         Flowsheet name; :data:`DEFAULT_NAME` when empty.
     branch : {"outlet", "inlet"}, default="outlet"
-        ``"outlet"`` takes flow off the run; ``"inlet"`` returns flow to it.
+        ``"outlet"`` takes flow off the run; ``"inlet"`` returns it.
     variant : str, default="default"
         Drawing variant.
     width, height, description, reference
@@ -2059,25 +2060,26 @@ class Fitting(_NormallyPositioned):
     """In-line pipe device other than a valve.
 
     The variant picks the device: ``strainer``, ``strainer_cone``,
-    ``strainer_y``, ``strainer_basket``, ``strainer_duplex``, ``orifice``,
-    ``rotameter``, ``rupture_disc``, ``sight_glass``, ``sight_glass_lit``,
-    ``silencer``, ``expansion_joint``, ``bellows``, ``blind``, ``damper``,
-    ``spool``, ``static_mixer`` (ISO 10628-2 item 12.2 X2673),
-    ``rotary_mixer`` (item 12.1 X2672), ``mixing_path`` (item 12.3 X8184),
-    ``steam_trap`` (item 24.15, registered 2181), ``hose``, ``coupling``,
-    ``clamped_coupling``, ``flange`` (the default), and the flame arrestors
-    (``flame_arrestor`` plus ``_explosion_proof`` / ``_detonation_proof``
-    / ``_fire_resistant``).
+    ``strainer_y``, ``strainer_basket``, ``strainer_duplex``,
+    ``orifice``, ``rotameter``, ``rupture_disc``, ``sight_glass``,
+    ``sight_glass_lit``, ``silencer``, ``expansion_joint``,
+    ``bellows``, ``blind``, ``damper``, ``spool``, ``static_mixer``
+    (ISO 10628-2 item 12.2 X2673), ``rotary_mixer`` (item 12.1
+    X2672), ``mixing_path`` (item 12.3 X8184), ``steam_trap`` (item
+    24.15, 2181), ``hose``, ``coupling``, ``clamped_coupling``,
+    ``flange`` (the default) and the flame arrestors
+    (``flame_arrestor`` plus ``_explosion_proof``,
+    ``_detonation_proof`` or ``_fire_resistant``).
 
-    Primary flow elements are variants too: ``venturi``, ``flow_nozzle``,
-    ``coriolis``, ``vortex``, ``ultrasonic``, ``turbine_meter``,
-    ``positive_displacement``, ``v_cone``, ``wedge``, ``target``,
-    ``pitot`` and ``averaging_pitot``.
+    Primary flow elements are variants too: ``venturi``,
+    ``flow_nozzle``, ``coriolis``, ``vortex``, ``ultrasonic``,
+    ``turbine_meter``, ``positive_displacement``, ``v_cone``,
+    ``wedge``, ``target``, ``pitot`` and ``averaging_pitot``.
 
     A stream keeps its line number through a fitting unless
-    ``new_line_number`` is set. ``blind`` (spectacle blind) is the only
-    variant with a ``normal_position``: ``"open"`` (default) draws the
-    bored disc, ``"closed"`` the solid disc. Parameters are those of
+    ``new_line_number`` is set. Only ``blind`` takes a
+    ``normal_position``: ``"open"`` (default) draws the bored disc,
+    ``"closed"`` the solid disc. Parameters are those of
     :class:`_NormallyPositioned`.
     """
 
@@ -2104,8 +2106,8 @@ class Fitting(_NormallyPositioned):
 class Ejector(Unit):
     """Steam or gas ejector, or eductor.
 
-    ``motive`` drives the nozzle, ``suction`` is the entrained stream, and
-    ``discharge`` leaves the diffuser.
+    ``motive`` drives the nozzle, ``suction`` is the entrained stream
+    and ``discharge`` leaves the diffuser.
     """
 
     motive: Port
@@ -2471,7 +2473,7 @@ class Conveyor(Unit):
     length : float, optional
         Run from tail to head; the symbol default when omitted.
     diameter : float, optional
-        Belt roller or screw bore; :meth:`default_diameter` when omitted.
+        Belt roller or screw bore; :meth:`default_diameter` if omitted.
     variant : str, default="default"
         ``"default"`` (belt) or ``"screw"``.
     width, height : None
@@ -2846,7 +2848,7 @@ class Instrument(Unit):
         return self._add_port(name, self.ports[member.group(1)].direction, "signal")
 
     def _mint_port(self, name: str) -> Port | None:
-        """Return :meth:`signal_port`, or ``None`` instead of raising."""
+        """Return :meth:`signal_port`, or ``None`` if there is none."""
         try:
             return self.signal_port(name)
         except KeyError:
@@ -2882,7 +2884,7 @@ class Instrument(Unit):
         """
 
         def symbol(variant: object) -> object:
-            """Return the symbol a variant draws; ``logic`` is ``sis``."""
+            """Return the symbol a variant draws."""
             return "sis" if variant == "logic" else variant
 
         if other is self._marks:
@@ -3104,7 +3106,7 @@ class Heater(Unit):
 
 
 class Cooler(Unit):
-    """Single-stream cooler; ``utility_out`` takes the cooling medium."""
+    """Single-stream cooler; ``utility_out`` carries the coolant."""
 
     inlet: Port
     outlet: Port
