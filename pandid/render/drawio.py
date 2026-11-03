@@ -783,25 +783,6 @@ class DrawioRenderer:
         # Findings put on fs.warnings at the end of render().
         self._findings: list = []
 
-    def _report(self, field: str, text: str, drawn: str,
-                room: float, need: float) -> None:
-        """Record a cell that could not hold its text.
-
-        Parameters
-        ----------
-        field : str
-            Field name.
-        text : str
-            Text supplied.
-        drawn : str
-            Text drawn.
-        room : float
-            Width available.
-        need : float
-            Width needed.
-        """
-        self._findings.append(fit_issue(field, text, drawn, room, need))
-
     # --------------------------------------------------- document
 
     def render(self, fs: "Flowsheet", *, diagram: "str | None" = None,
@@ -1880,8 +1861,9 @@ class DrawioRenderer:
         list[str]
             Cell XML lines.
         """
-        strip = F.title_strip_layout(block, name, date, x + w, y + h, scale,
-                                     report=self._report)
+        strip = F.title_strip_layout(
+            block, name, date, x + w, y + h, scale,
+            report=lambda *cell: self._findings.append(fit_issue(*cell)))
         bx, by, bw, bh = strip.box
         out = _rect(cid, bx, by, bw, bh,
                     "rounded=0;html=1;movable=1;"

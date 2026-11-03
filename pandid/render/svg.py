@@ -3528,25 +3528,8 @@ class SvgRenderer:
         fit_issues: list[Issue] = []
         # Findings from the label passes.
         self._findings: list[Issue] = []
-
-        def report(field: str, text: str, drawn: str,
-                   room: float, need: float) -> None:
-            """Record a title-block or annotation cell that overflowed.
-
-            Parameters
-            ----------
-            field : str
-                Field name.
-            text : str
-                Value given.
-            drawn : str
-                Value drawn.
-            room, need : float
-                Cell width and text width, in drawing units.
-            """
-            fit_issues.append(fit_issue(field, text, drawn, room, need))
-
-        furniture, canvas = self._place_furniture(fs, plan, border, report)
+        furniture, canvas = self._place_furniture(
+            fs, plan, border, lambda *cell: fit_issues.append(fit_issue(*cell)))
 
         # Replace render findings from earlier renders.
         render_issues = fit_issues + _crossing_issues(fs, jump_direction,
@@ -3669,32 +3652,15 @@ class SvgRenderer:
         from pandid.document import _drawn_text
 
         fit_issues: list[Issue] = []
-
-        def report(field: str, text: str, drawn: str,
-                   room: float, need: float) -> None:
-            """Record a title-block cell that overflowed.
-
-            Parameters
-            ----------
-            field : str
-                Field name.
-            text : str
-                Value given.
-            drawn : str
-                Value drawn.
-            room, need : float
-                Cell width and text width, in drawing units.
-            """
-            fit_issues.append(fit_issue(field, text, drawn, room, need))
-
         plan = table_sheet_plan(fs, sheet)
         furniture: list[str] = []
         for i, part, bx, by in plan.table.at(plan.left, plan.top):
             furniture.extend(F.draw_stream_table(
                 part, bx, by, group=f"stream_table_{i + 1}"))
         sx, sy, sw, sh = plan.strip
-        furniture.extend(F.draw_title_strip(plan.block, plan.name, plan.date,
-                                            sx + sw, sy + sh, report=report))
+        furniture.extend(F.draw_title_strip(
+            plan.block, plan.name, plan.date, sx + sw, sy + sh,
+            report=lambda *cell: fit_issues.append(fit_issue(*cell))))
         if border == "zone":
             frame_lines, outer = F.zone_frame(*plan.frame)
             furniture[:0] = frame_lines  # the border sits behind the rest

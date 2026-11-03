@@ -1639,27 +1639,8 @@ def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
         Findings, each a tuple of :data:`Reporter` arguments.
     """
     found: list[tuple[str, str, str, float, float]] = []
-
-    def collect(field: str, text: str, drawn: str,
-                room: float, need: float) -> None:
-        """Record a finding.
-
-        Parameters
-        ----------
-        field : str
-            Field name.
-        text : str
-            Requested text.
-        drawn : str
-            Drawn text.
-        room : float
-            Cell width.
-        need : float
-            Text width.
-        """
-        found.append((field, text, drawn, room, need))
-
-    title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale, report=collect)
+    title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale,
+                       report=lambda *cell: found.append(cell))
     return found
 
 
