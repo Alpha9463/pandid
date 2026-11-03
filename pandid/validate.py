@@ -399,7 +399,7 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
 
 def _crowded(heads: list[tuple[float, str]], floor: float
              ) -> tuple[float, str, str] | None:
-    """Return the tightest arrowhead pair closer than ``floor``.
+    """Return the tightest adjacent pair over 1 px and under ``floor``.
 
     Parameters
     ----------
@@ -499,7 +499,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
         placed = u.frame if u.frame is not None else u.pin_
         turn = int(getattr(placed, "orientation", 0) or 0)
         variant = getattr(u, "variant", "default")
-        # An unknown variant is left to the renderer.
+        # Skip a variant the registry has no artwork for.
         if not turn or variant not in default_registry.variants(u.kind):
             continue
         if not default_registry.for_unit(u).gravity_fixed:
@@ -592,7 +592,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             if not loose:
                 continue
             n, piped = len(members), len(members) - len(loose)
-            # Abbreviate as ``in_1..in_4`` only for an unbroken run.
+            # Abbreviate an unbroken run of 3 or more as ``in_1..in_n``.
             run = [f"{stem}_{i}" for i in range(1, n + 1)]
             named = (f"{members[0]}..{members[-1]}" if n > 2 and members == run
                      else _and(members))
@@ -701,7 +701,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                 f"the revision and let the block fill the row"))
 
     # --- an ingoing or outgoing material with nothing to report ---
-    # ISO 10628-1 4.3.2 d), on a sheet whose other streams state theirs.
+    # ISO 10628-1 4.3.2 d), when any stream states a property.
     runs = fs._named_runs()
     if any(s.properties for segments in runs.values() for s in segments):
         for name, segments in runs.items():
@@ -809,7 +809,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     nozzle = f".{port_name}" if port_name is not None else ""
                     missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
                                   f"drawn at {drawn:g}, {abs(drawn - want):g} away")
-            # A stated turn or mirror is drawn as stated.
+            # Check that a stated turn or mirror is drawn as stated.
             pin = u.pin_
             if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
                 missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
@@ -979,7 +979,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # grossly indirect routes.
         hosted = [(u, box, getattr(u, "host", None)) for u, box in boxes]
         for s in drawn:
-            # A route with no waypoints is drawn straight.
+            # Skip a stream with no route.
             if s.route is None:
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
@@ -990,7 +990,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             for k in range(len(pts) - 1):
                 for u, box, host in hosted:
                     if u is src_u or u is dst_u or host is s:
-                        continue  # in-line elements own their line
+                        continue  # the stream's ends and balloons
                     if segment_crosses_box(pts[k], pts[k + 1], box):
                         warnings.append(Issue("warning", "route-crosses-unit",
                                               f"stream {s.name} crosses {u.name}"))
@@ -1054,7 +1054,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
         # Soft: a horizontal run whose ends nearly share an elevation.
         for s in drawn:
-            # Signal lines have no elevation to be off.
+            # Skip signal lines.
             if s.kind in SIGNAL_KINDS:
                 continue
             su, du = s.source.owner, s.dest.owner
@@ -1129,7 +1129,7 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
             need = max(2 * max(aw, bw), floor_mm / unit_mm)
             if gap >= need - 1e-9:
                 continue
-            # Count only pairs that run together for at least the gap.
+            # Count only pairs that run together for more than ``need``.
             overlap = min(a_hi, b_hi) - max(a_lo, b_lo)
             if overlap <= need:
                 continue
