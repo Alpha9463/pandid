@@ -305,8 +305,11 @@ class Recorder:
         return [call for call in self.calls if call.sheet is sheet and call.route_pass == last]
 
     def _record_path(self, graph, start, goal, start_dir=None, goal_dir=None,
-                     edge_penalties=None, is_recycle=False, crossing_index=None):
-        """Record one path search with its owning drawing.
+                     edge_penalties=None, is_recycle=False, crossing_index=None,
+                     crossing_penalty=astar_mod.CROSSING_PENALTY, budget=None):
+        """Record one route-pass search with its owning drawing.
+
+        A search with its own budget is a reroute and is not recorded.
 
         Parameters
         ----------
@@ -322,15 +325,19 @@ class Recorder:
             Whether this stream is a recycle.
         crossing_index : object or None, optional
             Router crossing state.
+        crossing_penalty : float, optional
+            Cost of one crossing.
+        budget : int or None, optional
+            Expansions allowed.
 
         Returns
         -------
         list[Point]
             Original path search result.
         """
-        if self._active_sheet is None:
+        if self._active_sheet is None or budget is not None:
             return self._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
-                                  is_recycle, crossing_index)
+                                  is_recycle, crossing_index, crossing_penalty, budget)
         self._count = 0
         self._original_heappop = heapq.heappop
         heapq.heappop = self._count_heappop

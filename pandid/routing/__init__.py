@@ -2,6 +2,7 @@
 
 import math
 import warnings
+from collections import Counter
 from typing import Protocol, TYPE_CHECKING
 
 from pandid.geometry import Route
@@ -24,6 +25,9 @@ RIPUP_BUDGET = 20_000
 
 #: Bends a reroute may add per crossing it removes.
 RIPUP_BENDS_PER_CROSSING = 1
+
+#: Gap under which a rerouted line touches another line or a unit.
+RIPUP_CLEARANCE = 12.0
 
 
 class Router(Protocol):
@@ -229,11 +233,35 @@ def _simplify(
     return simplified
 
 
-def _meets(paths: dict[int, list[tuple[float, float]]], keys: set[int]) -> tuple[int, int]:
+def _apart(
+    a: tuple[float, float], b: tuple[float, float], x0: float, x1: float, y0: float, y1: float
+) -> float:
+    """Return the distance from segment a-b to a box.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float]
+        Segment ends.
+    x0, x1, y0, y1 : float
+        Box left, right, top and bottom.
+
+    Returns
+    -------
+    float
+        Euclidean gap, 0 where they touch or overlap.
+    """
+    gx = max(0.0, x0 - max(a[0], b[0]), min(a[0], b[0]) - x1)
+    gy = max(0.0, y0 - max(a[1], b[1]), min(a[1], b[1]) - y1)
+    return math.hypot(gx, gy)
+
+
+def _meets(
+    paths: dict[int, list[tuple[float, float]]], keys: set[int]
+) -> tuple[int, Counter[tuple[int, int]]]:
     """Count crossings and contacts between paths, each pair touching ``keys``.
 
-    A contact is two runs that do not cross but come within
-    :data:`~pandid.routing.separation.SPACING` of each other.
+    A contact is two runs that come within :data:`RIPUP_CLEARANCE` of
+    each other without crossing, or cross within it of either run's end.
 
     Parameters
     ----------
@@ -244,29 +272,33 @@ def _meets(paths: dict[int, list[tuple[float, float]]], keys: set[int]) -> tuple
 
     Returns
     -------
-    tuple[int, int]
-        Crossings, then contacts.
+    tuple[int, Counter[tuple[int, int]]]
+        Crossings, then contacts by stream id pair.
     """
     from pandid.routing.metrics import crossing_point
-    from pandid.routing.separation import SPACING
-
     segs = [(k, a, b) for k, pts in paths.items() for a, b in zip(pts, pts[1:])
             if a != b and (a[0] == b[0] or a[1] == b[1])]
-    crossings = contacts = 0
+    crossings = 0
+    contacts: Counter[tuple[int, int]] = Counter()
     for k1, a1, b1 in segs:
         if k1 not in keys:
             continue
         for k2, a2, b2 in segs:
             if k2 == k1 or (k2 in keys and k2 < k1):
                 continue
+            pair = (min(k1, k2), max(k1, k2))
             if (a1[1] == b1[1]) != (a2[1] == b2[1]):
                 h, v = ((a1, b1), (a2, b2)) if a1[1] == b1[1] else ((a2, b2), (a1, b1))
-                if crossing_point(h, v) is not None:
+                p = crossing_point(h, v)
+                if p is not None:
                     crossings += 1
+                    if min(abs(p[0] - h[0][0]), abs(p[0] - h[1][0]),
+                           abs(p[1] - v[0][1]), abs(p[1] - v[1][1])) <= RIPUP_CLEARANCE + 1e-6:
+                        contacts[pair] += 1
                     continue
-            gx = max(0.0, min(a2[0], b2[0]) - max(a1[0], b1[0]), min(a1[0], b1[0]) - max(a2[0], b2[0]))
-            gy = max(0.0, min(a2[1], b2[1]) - max(a1[1], b1[1]), min(a1[1], b1[1]) - max(a2[1], b2[1]))
-            contacts += math.hypot(gx, gy) <= SPACING + 1e-6
+            box = (min(a2[0], b2[0]), max(a2[0], b2[0]), min(a2[1], b2[1]), max(a2[1], b2[1]))
+            if _apart(a1, b1, *box) <= RIPUP_CLEARANCE + 1e-6:
+                contacts[pair] += 1
     return crossings, contacts
 
 
@@ -276,7 +308,7 @@ def _improves(
 ) -> bool:
     """Return whether ``after`` crosses less and is no worse otherwise.
 
-    Fewer crossings, no more contacts, and at most
+    Fewer crossings, no new contact between two streams, and at most
     :data:`RIPUP_BENDS_PER_CROSSING` added bends per crossing removed.
 
     Parameters
@@ -295,7 +327,7 @@ def _improves(
     x0, c0 = _meets(before, changed)
     x1, c1 = _meets(after, changed)
     added = sum(real_bends(after[k]) - real_bends(before[k]) for k in changed)
-    return x1 < x0 and c1 <= c0 and added <= RIPUP_BENDS_PER_CROSSING * (x0 - x1)
+    return x1 < x0 and not c1 - c0 and added <= RIPUP_BENDS_PER_CROSSING * (x0 - x1)
 
 
 def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
@@ -410,6 +442,26 @@ class DefaultRouter:
             nonlocal crossing_index
             routed.append(stream)
             crossing_index = index_of(routed)
+
+        def hugs(stream: "Stream", pts: list[tuple[float, float]]) -> set[int]:
+            """Return the units other than its ends that ``pts`` passes close to.
+
+            Parameters
+            ----------
+            stream : Stream
+                Stream the waypoints belong to.
+            pts : list[tuple[float, float]]
+                Waypoints.
+
+            Returns
+            -------
+            set[int]
+                Ids of the units passed.
+            """
+            ends = (stream.source.owner, stream.dest.owner)
+            return {id(u) for u, r in graph.body_obstacles if u not in ends
+                    for a, b in zip(pts, pts[1:])
+                    if _apart(a, b, r.x_min, r.x_max, r.y_min, r.y_max) <= RIPUP_CLEARANCE + 1e-6}
 
         def charge(path: list[tuple[float, float]], amount: float) -> None:
             """Add ``amount`` to the penalty of each edge on ``path``, both ways.
@@ -533,7 +585,8 @@ class DefaultRouter:
                 path = [start, *path, goal]
                 stream.route = Route(waypoints=_simplify(path, start_proj, goal_proj))
                 after = preview_separated_waypoints(routed)
-                if _improves(preview, after):
+                if (_improves(preview, after)
+                        and hugs(stream, after[id(stream)]) <= hugs(stream, preview[id(stream)])):
                     preview, found[id(stream)] = after, path
                     charge(path, LANE_PENALTY)
                     continue
