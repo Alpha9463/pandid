@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pandid.portgeom import resolve_port, unit_box
+from pandid.portgeom import COMPASS, resolve_port, unit_box
 from pandid.route_geometry import stream_polyline
 from pandid.routing.metrics import crossing_pairs
 
@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 _BODY_TOL = 1.0
 _SQUARE_TOL = 0.5
 _POINT_TOL = 0.05
-# Outward unit step for each face, with y increasing down the sheet.
-_DIRECTION = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}
 
 
 @dataclass(frozen=True, order=True)
@@ -143,9 +141,7 @@ def _outward(a: tuple[float, float], b: tuple[float, float], face: str) -> bool:
     bool
         True if the leg leaves the face square to it.
     """
-    direction = _DIRECTION.get(face)
-    if direction is None:
-        return False
+    direction = COMPASS[face]
     dx, dy = b[0] - a[0], b[1] - a[1]
     if direction[0]:
         return abs(dy) < _SQUARE_TOL and dx * direction[0] > _POINT_TOL

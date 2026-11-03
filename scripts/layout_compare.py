@@ -34,7 +34,7 @@ import layout_quality  # noqa: E402
 import route_quality  # noqa: E402
 
 from pandid.layout.stages import process_streams, process_units  # noqa: E402
-from pandid.portgeom import resolve_port, unit_box  # noqa: E402
+from pandid.portgeom import COMPASS, resolve_port, unit_box  # noqa: E402
 
 HARD_KEYS = (
     "errors",
@@ -258,7 +258,7 @@ def _proxies(fs, extent, fit_scale: float | None, route_report) -> dict:
             continue
         a = resolve_port(source, source.frame, stream.source.name)
         b = resolve_port(dest, dest.frame, stream.dest.name)
-        nx, ny = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}[a.face]
+        nx, ny = COMPASS[a.face]
         if (b.anchor[0] - a.anchor[0]) * nx + (b.anchor[1] - a.anchor[1]) * ny < -0.01:
             backward_exits.append(stream.name)
 

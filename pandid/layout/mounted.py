@@ -740,16 +740,15 @@ def _signal_exits(frames: dict[Unit, Frame]) -> list[Box]:
     list[Box]
         One box per connected signal port.
     """
-    from pandid.portgeom import port_anchor
+    from pandid.portgeom import COMPASS, port_anchor
 
-    reach = {"N": (0.0, -END), "S": (0.0, END), "E": (END, 0.0), "W": (-END, 0.0)}
     out = []
     for unit, frame in frames.items():
         for port in unit.ports.values():
             if port.role != "signal" or port.stream is None:
                 continue
             x, y, face = port_anchor(unit, frame, port.name)
-            ux, uy = reach.get(face, (0.0, 0.0))
+            ux, uy = END * COMPASS[face][0], END * COMPASS[face][1]
             out.append((min(x, x + ux), min(y, y + uy), max(x, x + ux), max(y, y + uy)))
     return out
 

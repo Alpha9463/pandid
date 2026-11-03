@@ -249,7 +249,7 @@ def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
     list[Box]
         One strip per connected nozzle.
     """
-    from pandid.portgeom import port_anchor
+    from pandid.portgeom import COMPASS, port_anchor
 
     out: list[Box] = []
     for u in fs.units:
@@ -259,8 +259,8 @@ def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
             if port.stream is None:
                 continue
             ax, ay, facing = port_anchor(u, u.frame, name)
-            bx = ax + ESCAPE_ROOM * (1.0 if facing == "E" else -1.0 if facing == "W" else 0.0)
-            by = ay + ESCAPE_ROOM * (1.0 if facing == "S" else -1.0 if facing == "N" else 0.0)
+            dx, dy = COMPASS[facing]
+            bx, by = ax + ESCAPE_ROOM * dx, ay + ESCAPE_ROOM * dy
             out.append((min(ax, bx) - margin, min(ay, by) - margin,
                         max(ax, bx) + margin, max(ay, by) + margin))
     return out

@@ -211,7 +211,7 @@ class VisibilityGraph:
 
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
-        from pandid.portgeom import port_anchor, tag_width, unit_box
+        from pandid.portgeom import COMPASS, port_anchor, tag_width, unit_box
 
         margin = 15.0  # clearance around unit and label obstacles
 
@@ -288,16 +288,9 @@ class VisibilityGraph:
                 self.port_anchors[(u.name, name)] = (ax, ay)
                 self.port_dirs[(u.name, name)] = o_dir
 
-                px_proj, py_proj = ax, ay
                 proj_dist = escape_distance(u.kind, lpos, o_dir)
-                if o_dir == "N":
-                    py_proj -= proj_dist
-                elif o_dir == "S":
-                    py_proj += proj_dist
-                elif o_dir == "W":
-                    px_proj -= proj_dist
-                elif o_dir == "E":
-                    px_proj += proj_dist
+                dx, dy = COMPASS[o_dir]
+                px_proj, py_proj = ax + proj_dist * dx, ay + proj_dist * dy
                 self.port_projs[(u.name, name)] = (px_proj, py_proj)
                 x_set.add(px_proj)
                 y_set.add(py_proj)

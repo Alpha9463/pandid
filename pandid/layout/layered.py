@@ -13,7 +13,7 @@ from pandid.geometry import Frame
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.stages import slot
-from pandid.portgeom import port_faces, resolve_port, unit_box
+from pandid.portgeom import COMPASS, port_faces, resolve_port, unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -246,7 +246,7 @@ def _around(node: _Node, port: Port | None, east: bool) -> float:
     assert port.owner is not None
     _, _, face = _nozzle(port, node.faces.get(id(port)))
     x, y = _offset(node, port)
-    lean = {"N": -1, "S": 1}.get(face, 0) * (-1 if east else 1) * x / (100 * max(node.w, 1))
+    lean = COMPASS[face][1] * (-1 if east else 1) * x / (100 * max(node.w, 1))
     return y / node.h + lean
 
 
