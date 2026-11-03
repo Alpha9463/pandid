@@ -2516,6 +2516,34 @@ def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
     assert "route-crosses-unit" not in [issue.code for issue in fs.validate()]
 
 
+def test_keeping_chained_balloons_clear_disconnects_no_tap():
+    """Keep the first drawing when keeping chained balloons clear moves a tap off its line.
+
+    Returns
+    -------
+    None
+        TT-1's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("two chains")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=400)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=300, y=300)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt1 = fs.add_instrument("TT", 1, sensing=line, at=0.3, offset=70, angle=135)
+    fs.add_instrument("TIC", 1, near=tt1, face="E", offset=50, angle=135)
+    tt2 = fs.add_instrument("TT", 2, sensing=line, at=0.7, offset=100, angle=90)
+    fs.add_instrument("TIC", 2, near=tt2, face="W", offset=100, angle=270)
+    fs.route()
+
+    assert tt1.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt1.tap[0] <= max(ax, bx) and min(ay, by) <= tt1.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt1.tap, points)
+
+
 def test_a_run_that_doubles_back_is_two_runs():
     """Split a straight run where it reverses along its track.
 

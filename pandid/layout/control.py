@@ -231,21 +231,18 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     fs : Flowsheet
         Routed sheet.
     full : bool, default=False
-        Count shared runs per straight run rather than per segment, and
-        count taps off their host's drawn line or face.
+        Count shared runs per straight run rather than per segment.
 
     Returns
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
         through tag halos, tap lines through units or tag halos, and runs
-        two lines or tap lines share; with ``full``, also taps off their
-        line.
+        two lines or tap lines share.
     """
     from collections import Counter
 
-    from pandid.layout.attach import _anchor, is_attached, logical_stream_path, stream_path
-    from pandid.streams import Stream
+    from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -284,20 +281,41 @@ def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     flaws["line-on-line"] = sum(
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
-    for u in fs.units if full else ():
+    return flaws
+
+
+def _taps_off(fs: "Flowsheet") -> set[int]:
+    """Return the balloons whose tap is off their host's drawn line or face.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    set[int]
+        ``id()`` of each such balloon.
+    """
+    from pandid.layout.attach import _anchor, is_attached, logical_stream_path
+    from pandid.streams import Stream
+
+    off = set()
+    for u in fs.units:
         tap = getattr(u, "tap", None)
         if tap is None or not is_attached(u):
             continue
         if isinstance(u.host, Stream):
             points = logical_stream_path(u.host)
-            off = not any(min(a[0], b[0]) - _TAP_TOL <= tap[0] <= max(a[0], b[0]) + _TAP_TOL
-                          and min(a[1], b[1]) - _TAP_TOL <= tap[1] <= max(a[1], b[1]) + _TAP_TOL
-                          for a, b in zip(points, points[1:]))
+            on = any(min(a[0], b[0]) - _TAP_TOL <= tap[0] <= max(a[0], b[0]) + _TAP_TOL
+                     and min(a[1], b[1]) - _TAP_TOL <= tap[1] <= max(a[1], b[1]) + _TAP_TOL
+                     for a, b in zip(points, points[1:]))
         else:
             anchor = _anchor(u)
-            off = anchor is None or math.dist(anchor[0], tap) > _TAP_TOL
-        flaws["tap-off-line"] += off
-    return flaws
+            on = anchor is not None and math.dist(anchor[0], tap) <= _TAP_TOL
+        if not on:
+            off.add(id(u))
+    return off
 
 
 def _straight_runs(points: list) -> list:

@@ -2040,8 +2040,8 @@ class Flowsheet:
         :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES` passes;
         ``route_converged`` records whether it settled. The sheet is then
         placed again with balloons hung from balloons kept off the line
-        their chain taps, and that is kept only if no finding or clash
-        grows.
+        their chain taps, and that is kept only if no tap leaves its line
+        and no finding or clash grows.
 
         Parameters
         ----------
@@ -2060,7 +2060,7 @@ class Flowsheet:
         if router is None:
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
-        from pandid.layout.control import _flaws, _hangable, place_control
+        from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
 
         def place() -> None:
             """Place balloons and re-route until nothing moves."""
@@ -2095,15 +2095,17 @@ class Flowsheet:
             else:
                 self._unhung = unhung
         # Then keep each chained balloon off its tapped line, hanging as
-        # above, and keep that only if the sheet stays as clean.
+        # above, and keep that only if no tap leaves its line and the sheet
+        # stays as clean.
         if attempt and any(_chained(u) for u in self.units):
             prior = self._geometry()
-            before = _flaws(self, full=True)
+            before, off = _flaws(self, full=True), _taps_off(self)
             self._may_hang = self._unhung is not None
             self._keep_clear, self._kept_clear = True, False
             try:
                 place()
-                clash = any(n > before[k] for k, n in _flaws(self, full=True).items())
+                clash = (not _taps_off(self) <= off
+                         or any(n > before[k] for k, n in _flaws(self, full=True).items()))
             except Exception:
                 clash = True
             finally:
