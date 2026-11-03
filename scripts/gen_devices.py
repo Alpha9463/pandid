@@ -811,7 +811,7 @@ def render() -> str:
     Raises
     ------
     SystemExit
-        If the tables are inconsistent or a name is in ``units.__all__``.
+        If the tables disagree or a name is in ``units.__all__``.
     """
     claims()
     specs = [spec_of(class_name, kind, variant, doc)
