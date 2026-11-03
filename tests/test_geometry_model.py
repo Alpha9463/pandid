@@ -523,6 +523,28 @@ def _codes(fs):
     return [i.code for i in fs.validate()]
 
 
+def _drum_run(name: str) -> tuple[Flowsheet, U.Vessel]:
+    """Build a feed, a drum ``V-1`` and a product in one line.
+
+    Parameters
+    ----------
+    name : str
+        Sheet name.
+
+    Returns
+    -------
+    tuple[Flowsheet, Vessel]
+        The unlaid sheet and its drum.
+    """
+    fs = Flowsheet(name)
+    feed = fs.add(U.Feed("F"))
+    vessel = fs.add(U.Vessel("V-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, prod.inlet)
+    return fs, vessel
+
+
 def test_a_placement_the_sheet_did_not_honour_is_reported():
     """The loud half: one check for the whole shape of the defect.
 
@@ -541,12 +563,7 @@ def test_a_placement_the_sheet_did_not_honour_is_reported():
     not a layout input -- which is exactly the hole a future phase could
     fall into.
     """
-    fs = Flowsheet("moved-after-the-solve")
-    feed = fs.add(U.Feed("F"))
-    vessel = fs.add(U.Vessel("V-1"))
-    prod = fs.add(U.Product("P"))
-    fs.connect(feed.outlet, vessel.inlet)
-    fs.connect(vessel.outlet, prod.inlet)
+    fs, vessel = _drum_run("moved-after-the-solve")
     vessel.pin(x=300.0, y=300.0)
     fs.layout()
     fs.route()
@@ -571,12 +588,7 @@ def test_a_grid_pin_the_sheet_did_not_honour_is_reported():
     the one the sheet stood the unit in, and a pin naming one the frame does
     not is a pin nothing read.
     """
-    fs = Flowsheet("ranked")
-    feed = fs.add(U.Feed("F"))
-    vessel = fs.add(U.Vessel("V-1"))
-    prod = fs.add(U.Product("P"))
-    fs.connect(feed.outlet, vessel.inlet)
-    fs.connect(vessel.outlet, prod.inlet)
+    fs, vessel = _drum_run("ranked")
     fs.add_instrument("LI", 1, sensing=vessel).pin(col=3, row=1)
 
     assert "pin-not-honored" in _codes(fs)
@@ -593,12 +605,7 @@ def test_a_grid_pin_the_sheet_honoured_is_not_reported():
     is why the lane it was put in is recorded on the frame rather than
     inferred from the fact that a balloon was placed at all.
     """
-    fs = Flowsheet("ranked-ok")
-    feed = fs.add(U.Feed("F"))
-    vessel = fs.add(U.Vessel("V-1"))
-    prod = fs.add(U.Product("P"))
-    fs.connect(feed.outlet, vessel.inlet)
-    fs.connect(vessel.outlet, prod.inlet)
+    fs, _ = _drum_run("ranked-ok")
     fs.add_instrument("XI", 9).pin(col=3, row=1)
 
     assert "pin-not-honored" not in _codes(fs)
@@ -614,12 +621,7 @@ def test_a_rank_an_absolute_coordinate_supersedes_is_not_reported():
     reported a correct sheet twice, and an author who is warned about
     correct work stops reading the warnings.
     """
-    fs = Flowsheet("superseded")
-    feed = fs.add(U.Feed("F"))
-    vessel = fs.add(U.Vessel("V-1"))
-    prod = fs.add(U.Product("P"))
-    fs.connect(feed.outlet, vessel.inlet)
-    fs.connect(vessel.outlet, prod.inlet)
+    fs, _ = _drum_run("superseded")
     balloon = fs.add_instrument("XI", 9)
     balloon.pin(col=7, x=222.0, row=0, y=333.0)
 
@@ -641,12 +643,7 @@ def test_only_the_rank_of_an_attached_balloons_pin_goes_unread():
     balloon genuinely cannot stand in -- so it is the one thing reported.
     A grid is what a balloon does not have; an absolute position is not.
     """
-    fs = Flowsheet("superseded-attached")
-    feed = fs.add(U.Feed("F"))
-    vessel = fs.add(U.Vessel("V-1"))
-    prod = fs.add(U.Product("P"))
-    fs.connect(feed.outlet, vessel.inlet)
-    fs.connect(vessel.outlet, prod.inlet)
+    fs, vessel = _drum_run("superseded-attached")
     balloon = fs.add_instrument("LI", 1, sensing=vessel).pin(col=7, x=222.0, row=2)
 
     assert "pin-not-honored" in _codes(fs)
