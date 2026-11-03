@@ -1,7 +1,8 @@
 """Set pipe furniture on its routed pipe after placing the equipment.
 
-Furniture is every unpinned valve, reducer or fitting on a material
-line, and every valve station none of whose members is pinned.
+Furniture is every straight-through valve, reducer or fitting with no
+pinned position on a material line, and every valve station whose
+members state no position, turn, mirror or nozzle face.
 """
 
 from __future__ import annotations
@@ -59,9 +60,9 @@ class MountedRun:
     elements : tuple[Element, ...]
         Devices and station assemblies on the pipe, in flow order.
     places : tuple[tuple[Port, Port, float] or None, ...]
-        Each element's line end nozzles and fraction, or None if wired.
+        Each element's line ends and fraction; None unless set ``on=``.
     taps : tuple[tuple[Port, Port, float], ...]
-        Line end nozzles and fraction of each balloon sensing the pipe.
+        Line ends and fraction of each balloon on the pipe, by fraction.
     """
 
     segments: tuple[Stream, ...]
@@ -169,7 +170,7 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
 
     A pipe runs from a unit that is not furniture, through furniture, to
     the next unit that is not. A pipe that starts and ends on one unit,
-    or has a manual route, is skipped.
+    ends at furniture, or has a manual route, is skipped.
 
     Parameters
     ----------
@@ -447,7 +448,7 @@ def _candidate(unit: Unit, point: tuple[float, float], orientation: int,
     point : tuple[float, float]
         Centre.
     orientation : int
-        Clockwise turn in degrees.
+        Clockwise turn in degrees: 0, 90, 180 or 270.
     mirrored : bool
         Left-right flip.
 
@@ -469,7 +470,7 @@ def _candidate(unit: Unit, point: tuple[float, float], orientation: int,
 def _on_corridor(
     unit: Unit, candidate: Frame, direction: tuple[int, int], ordinate: float,
 ) -> bool:
-    """Return whether both nozzles lie on the leg, inlet upstream.
+    """Return whether both nozzles lie on the leg's line, in flow order.
 
     Parameters
     ----------
@@ -500,9 +501,9 @@ def _on_corridor(
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame on a leg point, piped in flow order.
 
-    Keep a stated turn or mirror, try the rest, and use the first pose
-    that puts both nozzles on the leg, inlet upstream. With none, centre
-    the device on the point.
+    Keep a stated turn or mirror, skip poses a stated nozzle face rules
+    out, and use the first that puts both nozzles on the leg, inlet
+    upstream. With none, centre the device on the point.
 
     Parameters
     ----------
@@ -679,7 +680,7 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
 
     Each frame keeps :data:`ALONG` along the pipe and :data:`GAP` across
     it from every obstacle and zone. Each signal exit stays off
-    obstacles, end units and pipes.
+    obstacles, zones, end units and pipes.
 
     Parameters
     ----------
@@ -690,9 +691,9 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
     level : bool
         Whether the pipe is horizontal here.
     zones : list[Box]
-        Ground covered by other pipes' stations.
+        Ground covered by stations, balloon taps and earlier elements.
     pipes : list[list[Point]]
-        Routed pipes the signal exits keep off.
+        Routed lines the signal exits keep off.
     ends : tuple[Unit, ...], optional
         The pipe's own end units.
 
@@ -851,7 +852,7 @@ def _wanted(run: MountedRun, total: float, along: Callable[[Port], float] | None
 
     An element with a place sits at its fraction of the author's line,
     between that line's end nozzles; any other is spread evenly. Extra
-    places follow the elements.
+    places follow; one that cannot be located sits mid-pipe.
 
     Parameters
     ----------
@@ -937,8 +938,8 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     """Return ways to put elements on legs in flow order, best first.
 
     Single legs that hold the whole chain come first, level before
-    upright, then nearest the wanted positions. The last way deals
-    elements onto legs in order, each on the first leg with room.
+    upright, then nearest the wanted middle. The last way deals elements
+    onto legs in order: the first leg with room, else the roomiest.
 
     Parameters
     ----------
@@ -1054,7 +1055,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     zones : list[Box]
         Ground covered by stations set so far; extended in place.
     pipes : list[list[Point]]
-        Every routed pipe, this one included.
+        Every routed line on the sheet, this pipe included.
 
     Returns
     -------
@@ -1095,7 +1096,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         assigned : list[int]
             Leg index of each element.
         strict : bool
-            Return None if an element finds no clear spot.
+            Return None if a leg's elements cannot fit or find room.
 
         Returns
         -------
@@ -1152,7 +1153,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
 
 
 def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
-    """Place the equipment, then set the furniture on its routed pipes.
+    """Place equipment and loose stations, then set pipe furniture.
 
     Each furnished pipe reserves its furniture's room in the equipment
     solve (:class:`pandid.layout.layered.Link`).

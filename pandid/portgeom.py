@@ -119,7 +119,7 @@ def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True
 
 
 def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
-    """Return the faces a port may be drawn on, best first.
+    """Return the faces a port may be drawn on.
 
     Parameters
     ----------
@@ -127,13 +127,13 @@ def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
         Unit that owns the port.
     port_name : str
         Port name.
-    placed : Pin, Frame or None, optional
+    placed : Pin, Frame, _Slot or None, optional
         Placement to answer for; defaults to the unit's pin, then frame.
 
     Returns
     -------
     list[str]
-        Compass faces.
+        Compass faces, the symbol's own face first.
     """
     if placed is None:
         placed = unit.pin_ if unit.pin_ is not None else unit.frame
@@ -172,7 +172,7 @@ def unreachable_face(unit: "Unit", port_name: str, face: str,
 def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
                       rot: int, mirrored: bool, mirror_y: bool
                       ) -> dict[str, tuple[float, float]]:
-    """Return a port's drawn point on each face it may take, best first.
+    """Return a port's drawn point on each face it may take.
 
     Parameters
     ----------
@@ -183,14 +183,14 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     w, h : float
         Placed box size.
     rot : int
-        Clockwise turn in degrees.
+        Clockwise turn in degrees: 0, 90, 180 or 270.
     mirrored, mirror_y : bool
         Left-right and top-bottom flips.
 
     Returns
     -------
     dict[str, tuple[float, float]]
-        Face to point, relative to the box's top-left corner.
+        Face to point from the box's top-left, own face first.
     """
     sym = _sym(unit)
     anchor = unit._symbol_anchor(port_name)
@@ -327,6 +327,11 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     -------
     tuple[tuple[float, float], tuple[float, float]]
         Midpoint and unit normal.
+
+    Raises
+    ------
+    KeyError
+        If ``face`` is not one of ``N``, ``S``, ``E`` and ``W``.
     """
     x0, y0, x1, y1 = unit_box(unit, frame)
     return {
@@ -359,13 +364,14 @@ def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
     """Return the size of a unit's placed box.
 
     An explicit ``width`` or ``height`` is the final size. A symbol size
-    swaps on a quarter turn. A flag is as wide as its tag or reference.
+    swaps on a quarter turn. A flag is as wide as its tag or reference,
+    and at least 80.
 
     Parameters
     ----------
     unit : Unit
         Unit to size.
-    placed : Pin, Frame or None, optional
+    placed : Pin, Frame, _Slot or None, optional
         Placement whose turn applies; defaults to the unit's pin.
 
     Returns
@@ -471,7 +477,7 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
     mirrored, mirror_y : bool
         Left-right and top-bottom flips.
     rot : int
-        Clockwise turn in degrees.
+        Clockwise turn in degrees: 0, 90, 180 or 270.
     want : str or None
         Face to use, or None for the symbol's own.
 
@@ -621,7 +627,7 @@ def port_offset(unit: "Unit", port_name: str, placed=None) -> tuple[float, float
         Unit that owns the port.
     port_name : str
         Port name.
-    placed : Pin, Frame or None, optional
+    placed : Pin, Frame, _Slot or None, optional
         Placement to use; defaults to the pin, then the frame.
 
     Returns
@@ -665,7 +671,7 @@ def _pinned(unit: "Unit", axis: str, port_name: str | None) -> float:
     Raises
     ------
     ValueError
-        If the unit is unpinned or not pinned in pixels on this axis.
+        If ``axis`` is unpinned or the port's face is unreachable.
     """
     pin = unit.pin_
     if pin is None:
@@ -708,7 +714,7 @@ def pinned_x(unit: "Unit", port_name: str | None = None) -> float:
     Raises
     ------
     ValueError
-        If the unit is unpinned or not pinned by ``x``.
+        If no ``x`` is pinned or the port's face is unreachable.
     """
     return _pinned(unit, "x", port_name)
 
@@ -731,7 +737,7 @@ def pinned_y(unit: "Unit", port_name: str | None = None) -> float:
     Raises
     ------
     ValueError
-        If the unit is unpinned or not pinned by ``y``.
+        If no ``y`` is pinned or the port's face is unreachable.
     """
     return _pinned(unit, "y", port_name)
 
@@ -747,7 +753,7 @@ def pin_intent(unit: "Unit") -> dict[str, tuple[str | None, float]]:
     Returns
     -------
     dict[str, tuple[str or None, float]]
-        Axis to ``(port, value)``, such as ``{"y": ("inlet", 440.0)}``.
+        Axis to ``(port or None, value)``; empty when nothing is pinned.
     """
     pin = getattr(unit, "_pin", None)
     if pin is None:
