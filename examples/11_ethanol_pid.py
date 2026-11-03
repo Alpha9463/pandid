@@ -289,8 +289,8 @@ def main():
     # --- Feed trip and local indication -------------------------------
     # Literal numbers here and on the three indicators below, not loop
     # handles: each is one reading with nothing else in its group.
-    fs.add_instrument("Z", 2, acting_on=xv, at="S", offset=26, variant="sis")
-    fs.add_instrument("FI", 314, sensing=meter, at="S", offset=36)
+    fs.add_instrument("Z", 2, acting_on=xv, face="S", offset=26, variant="sis")
+    fs.add_instrument("FI", 314, sensing=meter, face="S", offset=36)
     # The line and not the tower: a unit host taps a face *midpoint*,
     # and the tower's feed nozzle is that midpoint, so the balloon could
     # only be reached by a diagonal.
@@ -307,7 +307,7 @@ def main():
     cv3011_top = overhead_y - port_offset(st301.control, "inlet")[1]
     pt301 = fs.add_instrument("PT", press301, sensing=vapour, at=0.75,
                               offset=overhead_y - balloon_row_y)
-    pic301 = fs.add_instrument("PIC", press301, near=st301.control, at="N",
+    pic301 = fs.add_instrument("PIC", press301, near=st301.control, face="N",
                                variant="shared", offset=cv3011_top - balloon_row_y)
     pic301.nozzle("sig_out", "S")
     # The alarms are lettering in this balloon's own quadrants, high
@@ -323,13 +323,13 @@ def main():
     # not have.
     pt318 = fs.add_instrument("PT", 318, sensing=vapour, at=0.55,
                               offset=overhead_y - balloon_row_y)
-    fs.add_instrument("Z", 2, sensing=pt318, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 2, sensing=pt318, face="N", offset=40, variant="sis")
 
     # --- Loops 302/303: tower top temperature onto reflux flow -------
     # Tapped low on the riser, below the header that crosses it.
     tt302 = fs.add_instrument("TT", temp302, sensing=vapour, at=0.13, offset=80,
                               angle=-90)
-    tic302 = fs.add_instrument("TIC", temp302, near=tt302, at="E", offset=78,
+    tic302 = fs.add_instrument("TIC", temp302, near=tt302, face="E", offset=78,
                                variant="shared")
     tic302.nozzle("sig_out", "S")
     tic302.annotate(high="TAH", low="TAL")
@@ -340,9 +340,9 @@ def main():
     # FT-303 then stacks under that balloon, edge to edge, reading the
     # same element: near=, because nothing is drawn between two touching
     # balloons.
-    fe303_b = fs.add_balloon(fe303, at="N", offset=38)
-    ft303 = fs.add_instrument("FT", flow303, near=fe303_b, at="N", offset=23)
-    fic303 = fs.add_instrument("FIC", flow303, near=ft303, at="E", offset=70,
+    fe303_b = fs.add_balloon(fe303, face="N", offset=38)
+    ft303 = fs.add_instrument("FT", flow303, near=fe303_b, face="N", offset=23)
+    fic303 = fs.add_instrument("FIC", flow303, near=ft303, face="E", offset=70,
                                variant="shared")
     fic303.nozzle("sig_out", "E")   # the valve it strokes stands below and right
     # The measurement lands on pv and the master sets sig_in: a cascade
@@ -354,13 +354,13 @@ def main():
     # --- Loops 304/305: reflux drum level onto the distillate flow ----
     # Both faceplates stand over the valve, master above slave, so the
     # setpoint drops one balloon and the output drops onto the actuator.
-    lt304 = fs.add_instrument("LT", level304, sensing=drum, at="E", offset=60)
+    lt304 = fs.add_instrument("LT", level304, sensing=drum, face="E", offset=60)
     lic304_row_y = 325.0
     fic305_row_y = 417.0        # FT-305's row, so the measurement is straight
     cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
-    fic305 = fs.add_instrument("FIC", flow305, near=st305.control, at="N",
+    fic305 = fs.add_instrument("FIC", flow305, near=st305.control, face="N",
                                variant="shared", offset=cv305_top - fic305_row_y)
-    lic304 = fs.add_instrument("LIC", level304, near=st305.control, at="N",
+    lic304 = fs.add_instrument("LIC", level304, near=st305.control, face="N",
                                variant="shared", offset=cv305_top - lic304_row_y)
     lic304.nozzle("sig_out", "S")
     lic304.annotate(high="LAH", low="LAL")
@@ -370,9 +370,9 @@ def main():
     # On the transmitter and not teed off its run, as the sheet's other
     # two shutdown taps are: stacking two faceplates over the valve
     # leaves that run too short to tee off.
-    fs.add_instrument("Z", 1, sensing=lt304, at="S", offset=44, variant="sis")
-    fe305_b = fs.add_balloon(fe305, at="N", offset=38)
-    ft305 = fs.add_instrument("FT", flow305, near=fe305_b, at="N", offset=23)
+    fs.add_instrument("Z", 1, sensing=lt304, face="S", offset=44, variant="sis")
+    fe305_b = fs.add_balloon(fe305, face="N", offset=38)
+    ft305 = fs.add_instrument("FT", flow305, near=fe305_b, face="N", offset=23)
     fs.connect(ft305.sig_out, fic305.pv, kind="electric")
     fs.connect(lic304.sig_out, fic305.sig_in, kind="software")
     fs.connect(fic305.sig_out, st305.control.actuator, kind="pneumatic")
@@ -380,19 +380,19 @@ def main():
     # --- Loops 307/308: reboiler return temperature onto the steam ----
     tt307 = fs.add_instrument("TT", temp307, sensing=sump, at=0.05, offset=85,
                               angle=-90)
-    tic307 = fs.add_instrument("TIC", temp307, near=tt307, at="W", offset=96,
+    tic307 = fs.add_instrument("TIC", temp307, near=tt307, face="W", offset=96,
                                variant="shared")
     tic307.nozzle("sig_out", "W")   # the slave it sets stands beside it
     fs.add_instrument("TI", 321, sensing=boilup, at=0.05, offset=70, angle=-90)
     # The transmitter and not the controller: a trip reading the
     # controller reads what it last asked the valve for, so it stops
     # working the moment the loop is put on manual.
-    fs.add_instrument("Z", 1, sensing=tt307, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, sensing=tt307, face="N", offset=40, variant="sis")
     fs.connect(tt307.sig_out, tic307.sig_in, kind="electric")
 
-    fe308_b = fs.add_balloon(fe308, at="N", offset=38)
-    ft308 = fs.add_instrument("FT", flow308, near=fe308_b, at="N", offset=23)
-    fic308 = fs.add_instrument("FIC", flow308, near=ft308, at="E", offset=60,
+    fe308_b = fs.add_balloon(fe308, face="N", offset=38)
+    ft308 = fs.add_instrument("FT", flow308, near=fe308_b, face="N", offset=23)
+    fic308 = fs.add_instrument("FIC", flow308, near=ft308, face="E", offset=60,
                                variant="shared")
     fic308.nozzle("sig_out", "S")   # the valve it strokes stands below and right
     fs.connect(ft308.sig_out, fic308.pv, kind="electric")
@@ -400,11 +400,11 @@ def main():
     fs.connect(fic308.sig_out, st308.control.actuator, kind="pneumatic")
 
     # --- Loop 306: kettle level on the bottoms draw -------------------
-    lt306 = fs.add_instrument("LT", level306, sensing=reb, at="S", offset=68)
-    lic306 = fs.add_instrument("LIC", level306, near=lt306, at="E", offset=56,
+    lt306 = fs.add_instrument("LT", level306, sensing=reb, face="S", offset=68)
+    lic306 = fs.add_instrument("LIC", level306, near=lt306, face="E", offset=56,
                                variant="shared")
     lic306.nozzle("sig_out", "E")
-    fs.add_instrument("Z", 1, sensing=lt306, at="W", offset=44, variant="sis")
+    fs.add_instrument("Z", 1, sensing=lt306, face="W", offset=44, variant="sis")
     fs.connect(lt306.sig_out, lic306.sig_in, kind="electric")
     fs.connect(lic306.sig_out, cv306.actuator, kind="pneumatic")
 

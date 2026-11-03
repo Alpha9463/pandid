@@ -216,10 +216,10 @@ sheet title; `fs.stream_table_sections` adds section headers. Set
 ## Instrumentation
 
 `fs.add_instrument("FT", 101, sensing=stream)` adds an instrument with the tag
-`FT-101`. Use `near=`, `at=`, `offset=` and `angle=` to anchor a balloon to a
-stream or unit. `display=` selects field, central or subsidiary presentation;
-`variant=` selects the symbol. `fs.add_balloon(element)` gives a primary
-fitting its balloon.
+`FT-101`. Use `near=`, `offset=` and `angle=` to anchor a balloon to a stream
+or unit: `at=` how far along a line, `face=` which side of a unit. `display=`
+selects field, central or subsidiary presentation; `variant=` selects the
+symbol. `fs.add_balloon(element)` gives a primary fitting its balloon.
 
 ### Control loops
 

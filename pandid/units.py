@@ -3356,6 +3356,14 @@ _IMPLIED_DISPLAY = {"shared": "central"}
 # Variant spellings refused by name, and the display each means.
 _DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
 
+#: Deprecation of a unit face given as ``at=``.
+_AT_FACE = Deprecation(
+    what="at='N' (a unit face)",
+    instead="face='N', or face: N in a spec",
+    removed_in="0.1.7",
+    note="at= now means only a fraction along a line",
+)
+
 
 class Instrument(Unit):
     """ISA-5.1 instrument balloon: function letters over a loop number.
@@ -3389,7 +3397,12 @@ class Instrument(Unit):
         Symbol type as given, without the display.
     host : Stream, Unit or None
         What :meth:`attach` placed the balloon on.
-    at, offset, angle, relation
+    at : float or None
+        Fraction along a stream host; ``None`` on a unit host.
+    face : str or None
+        Face of a unit host, ``"N"``, ``"S"``, ``"E"`` or ``"W"``;
+        ``None`` on a stream host.
+    offset, angle, relation
         Attachment set by :meth:`attach`.
     quadrants : dict[str, tuple[str, ...]]
         Letter codes outside the symbol, set by :meth:`annotate`.
@@ -3455,7 +3468,8 @@ class Instrument(Unit):
         self._tag = name
         # Attachment intent, set only by attach().
         self.host: "Stream | Unit | None" = None
-        self.at: float | str | None = None
+        self.at: float | None = None
+        self.face: str | None = None
         self.offset: float = 45.0
         self.angle: float = 90.0
         self.relation: str = "sensing"
@@ -3693,6 +3707,7 @@ class Instrument(Unit):
         on: "Stream | Unit",
         *,
         at: float | str | None = None,
+        face: str | None = None,
         offset: float = 45.0,
         angle: float = 90.0,
         relation: str = "sensing",
@@ -3707,9 +3722,12 @@ class Instrument(Unit):
         on : Stream or Unit
             Host line or equipment.
         at : float or str, optional
-            Fraction from 0 to 1 inclusive along a stream (default 0.5),
-            or a unit face ``"N"``, ``"S"``, ``"E"`` or ``"W"`` (default
-            ``"E"``).
+            Fraction from 0 to 1 inclusive along a stream; default 0.5.
+            A unit face given here is deprecated; use ``face``.
+        face : str, optional
+            Face of a unit, ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or
+            ``"top"``, ``"bottom"``, ``"left"`` or ``"right"``; default
+            ``"E"``.
         offset : float, default=45.0
             Requested tap-to-centre distance in pixels; 0 on a stream
             draws the balloon in the line.
@@ -3729,8 +3747,55 @@ class Instrument(Unit):
         TypeError
             If ``on`` is not a Stream or Unit.
         ValueError
-            If ``on`` is this balloon, ``at`` does not suit the host,
-            ``offset`` is negative or ``relation`` is unknown.
+            If ``on`` is this balloon, ``at`` and ``face`` are both given
+            or do not suit the host, ``offset`` is negative or
+            ``relation`` is unknown.
+
+        Warns
+        -----
+        DeprecationWarning
+            If ``at`` names a face of a unit.
+        """
+        self._attach(on, at, face, offset, angle, relation, warn=True)
+        return self
+
+    def _deprecate_at(self, at: object, face: str | None, stacklevel: int = 4) -> None:
+        """Warn that ``at`` named the unit face ``face``, if it did.
+
+        Parameters
+        ----------
+        at : object
+            The ``at`` this balloon is attached with.
+        face : str or None
+            The face that ``at`` resolved to.
+        stacklevel : int, default=4
+            Warning stack level; 4 names the caller of this method's caller.
+        """
+        from dataclasses import replace
+
+        if isinstance(at, str):
+            replace(_AT_FACE, what=f"at={at!r} (a unit face)",
+                    instead=f"face={face!r}, or face: {face} in a spec",
+                    ).warn(self, where=self.name, stacklevel=stacklevel)
+
+    def _attach(self, on: "Stream | Unit", at: float | str | None, face: str | None,
+                offset: float, angle: float, relation: str, warn: bool = False) -> None:
+        """Anchor this balloon as :meth:`attach` does.
+
+        Parameters
+        ----------
+        on, at, face, offset, angle, relation
+            As for :meth:`attach`.
+        warn : bool, default=False
+            Warn the caller of :meth:`attach` for a face given as ``at``,
+            after every check and before any field changes.
+
+        Raises
+        ------
+        TypeError
+            If ``on`` is not a Stream or Unit.
+        ValueError
+            If an argument is refused, as for :meth:`attach`.
         """
         from pandid.streams import Stream
 
@@ -3740,25 +3805,45 @@ class Instrument(Unit):
             )
         if isinstance(on, Unit) and on is self:
             raise ValueError(f"{self.name} cannot be attached to itself")
-        if isinstance(on, Stream):
-            if at is None:
-                at = 0.5
+        stream = isinstance(on, Stream)
+        if at is not None and face is not None:
+            raise ValueError(
+                f"{self.name}: at= is a fraction along a line and face= a side of a "
+                f"unit; {on.name} is a {'line' if stream else 'unit'}, so give "
+                f"{'at' if stream else 'face'}= alone"
+            )
+        old = not stream and isinstance(at, str)
+        fraction: float | None = None
+        side: str | None = None
+        if stream:
+            if face is not None:
+                raise ValueError(
+                    f"{self.name}: face= is a side of a unit, and {on.name} is a line; "
+                    f"give at=, a fraction 0..1 along it"
+                )
             if isinstance(at, str):
                 raise ValueError(
                     f"{self.name}: at= on a stream is a fraction 0..1 along its "
                     f"routed path, got {at!r}"
                 )
-            if not 0.0 <= float(at) <= 1.0:
+            fraction = 0.5 if at is None else float(at)
+            if not 0.0 <= fraction <= 1.0:
                 raise ValueError(f"{self.name}: at= must be within 0..1, got {at!r}")
-            at = float(at)
         else:
-            if at is None:
-                at = "E"
-            if not isinstance(at, str) or at.upper() not in ("N", "S", "E", "W"):
+            if at is not None and not old:
                 raise ValueError(
-                    f"{self.name}: at= on a unit host is a face 'N'/'S'/'E'/'W', got {at!r}"
+                    f"{self.name}: at= is a fraction along a line, and {on.name} is a "
+                    f"unit; give face= 'N', 'S', 'E' or 'W'"
                 )
-            at = at.upper()
+            named = at if old else ("E" if face is None else face)
+            side = (_FACE_OF_SIDE.get(named.strip().lower(), named.strip().upper())
+                    if isinstance(named, str) else None)
+            if side not in ("N", "S", "E", "W"):
+                raise ValueError(
+                    f"{self.name}: face= is a side of {on.name}: 'N', 'S', 'E' or 'W', "
+                    f"or 'top', 'bottom', 'left' or 'right', got {named!r}"
+                )
+        offset, angle = float(offset), float(angle)
         if offset < 0:
             raise ValueError(f"{self.name}: offset= must not be negative, got {offset!r}")
         if relation not in RELATIONS:
@@ -3767,13 +3852,15 @@ class Instrument(Unit):
                 f"{getattr(on, 'name', on)!r}, one of "
                 f"{', '.join(repr(r) for r in RELATIONS)}, got {relation!r}"
             )
+        if warn:
+            self._deprecate_at(at, side, stacklevel=5)
         self.host = on
-        self.at = at
-        self.offset = float(offset)
-        self.angle = float(angle)
+        self.at = fraction
+        self.face = side
+        self.offset = offset
+        self.angle = angle
         self.relation = relation
         self._invalidate_layout()
-        return self
 
 
 def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
