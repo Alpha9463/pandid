@@ -4,7 +4,7 @@ import bisect
 import heapq
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional, Set, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 from pandid.routing.visibility import VisibilityGraph
 
 BEND_PENALTY = 500.0
@@ -270,7 +270,6 @@ def find_path(
     edge_penalties: Optional[Dict[Tuple[Tuple[float, float], Tuple[float, float]], float]] = None,
     is_recycle: bool = False,
     crossing_index: Optional[CrossingIndex] = None,
-    own_lanes: Optional[Tuple[Set[float], Set[float]]] = None,
 ) -> List[Tuple[float, float]]:
     """Return the cheapest orthogonal path on the graph.
 
@@ -288,9 +287,6 @@ def find_path(
         Favour recycle lanes and halve the bend cost.
     crossing_index : CrossingIndex or None, optional
         Routes drawn before this one.
-    own_lanes : tuple[set[float], set[float]] or None, optional
-        x and y lanes that only this route's own balloons add; each edge
-        along one costs ``BEND_PENALTY``.
 
     Returns
     -------
@@ -362,11 +358,6 @@ def find_path(
 
             dist = abs(neighbor[0] - current[0]) + abs(neighbor[1] - current[1])
             cost = g + dist + edge_penalties.get((current, neighbor), 0.0)
-            if own_lanes is not None and (
-                (current[0] == neighbor[0] and current[0] in own_lanes[0])
-                or (current[1] == neighbor[1] and current[1] in own_lanes[1])
-            ):
-                cost += BEND_PENALTY
 
             if crossing_index is not None:
                 crossing_queries += 1

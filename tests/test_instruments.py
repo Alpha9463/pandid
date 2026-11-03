@@ -2045,6 +2045,34 @@ def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
 
 
+def test_a_line_routes_past_a_balloon_chained_from_its_own_balloon():
+    """Settle a line whose chained balloon would otherwise add the lane it takes.
+
+    Returns
+    -------
+    None
+        Routing settles with TIC clear of every run of the line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("chained lane")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=500)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=400)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=70, angle=-90)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="N", offset=90, angle=90)
+    fs.route()
+
+    assert fs.route_converged
+    assert tic.frame is not None
+    x0, y0 = tic.frame.x, tic.frame.y
+    x1, y1 = x0 + tic.frame.w, y0 + tic.frame.h
+    points = stream_path(line)
+    for (ax, ay), (bx, by) in zip(points, points[1:]):
+        on = min(ax, bx) <= x1 and max(ax, bx) >= x0 and min(ay, by) <= y1 and max(ay, by) >= y0
+        assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
+
+
 def test_a_tap_balloon_on_a_bent_line_settles_with_its_tap_on_the_line():
     """Settle a slanted tap balloon whose lanes lie across its own line.
 

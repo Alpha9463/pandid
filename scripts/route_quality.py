@@ -206,8 +206,6 @@ class Call:
         Search effort and its limit.
     route_pass : int
         Router pass that made the search, counted from one.
-    own_lanes : tuple or None
-        Lanes the search charged the stream for.
     """
 
     sheet: Flowsheet
@@ -222,7 +220,6 @@ class Call:
     expansions: int
     budget: int
     route_pass: int
-    own_lanes: Optional[tuple] = None
 
 
 class Recorder:
@@ -308,8 +305,7 @@ class Recorder:
         return [call for call in self.calls if call.sheet is sheet and call.route_pass == last]
 
     def _record_path(self, graph, start, goal, start_dir=None, goal_dir=None,
-                     edge_penalties=None, is_recycle=False, crossing_index=None,
-                     own_lanes=None):
+                     edge_penalties=None, is_recycle=False, crossing_index=None):
         """Record one path search with its owning drawing.
 
         Parameters
@@ -326,8 +322,6 @@ class Recorder:
             Whether this stream is a recycle.
         crossing_index : object or None, optional
             Router crossing state.
-        own_lanes : tuple or None, optional
-            Lanes only the stream's own balloons add.
 
         Returns
         -------
@@ -336,20 +330,20 @@ class Recorder:
         """
         if self._active_sheet is None:
             return self._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
-                                  is_recycle, crossing_index, own_lanes)
+                                  is_recycle, crossing_index)
         self._count = 0
         self._original_heappop = heapq.heappop
         heapq.heappop = self._count_heappop
         try:
             result = self._original(graph, start, goal, start_dir, goal_dir, edge_penalties,
-                                    is_recycle, crossing_index, own_lanes)
+                                    is_recycle, crossing_index)
         finally:
             heapq.heappop = self._original_heappop
         budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
         self.calls.append(
             Call(self._active_sheet, graph, start, goal, start_dir, goal_dir,
                  dict(edge_penalties or {}), is_recycle, list(result), self._count, budget,
-                 self._active_pass, own_lanes)
+                 self._active_pass)
         )
         return result
 
@@ -639,8 +633,7 @@ def avoidable(call: Call, axis: str, coord: float) -> tuple[Optional[str], Optio
     banned = dict(call.edge_penalties)
     for edge in lane_edges(call.graph, axis, track):
         banned[edge] = banned.get(edge, 0.0) + 1e7
-    alt = find_path(call.graph, call.start, call.goal, call.start_dir, call.goal_dir, banned,
-                    call.is_recycle, own_lanes=call.own_lanes)
+    alt = find_path(call.graph, call.start, call.goal, call.start_dir, call.goal_dir, banned, call.is_recycle)
     if not alt:
         return "forced", None
     alt_len = path_length([call.start] + alt + [call.goal])

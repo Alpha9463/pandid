@@ -2,7 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Set, Tuple
+from typing import TYPE_CHECKING, Collection, Dict, List, Set, Tuple
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -184,6 +184,8 @@ class VisibilityGraph:
     ----------
     fs : Flowsheet
         Sheet with unit frames and port faces.
+    skip : Collection[Unit], optional
+        Units to leave out.
 
     Attributes
     ----------
@@ -201,9 +203,6 @@ class VisibilityGraph:
         Recycle lanes above and below the drawing.
     xs, ys : list[float]
         Sorted lane coordinates.
-    lane_units : dict[tuple[str, float], set[str]]
-        Names of the units that add each ``("x", x)`` or ``("y", y)`` lane;
-        ``""`` stands for anything other than a unit.
     nodes : set[tuple[float, float]]
         Lane intersections outside every obstacle's interior.
     edges : dict[tuple[float, float], list[tuple[float, float]]]
@@ -215,7 +214,7 @@ class VisibilityGraph:
         If a port's face cannot be reached under its placement.
     """
 
-    def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
+    def __init__(self, fs: "Flowsheet", skip: "Collection[Unit]" = ()):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
         from pandid.portgeom import COMPASS, port_anchor, tag_width, unit_box
 
@@ -225,7 +224,6 @@ class VisibilityGraph:
         self.body_obstacles: List[Tuple["Unit", Rect]] = []
         x_set: Set[float] = set()
         y_set: Set[float] = set()
-        self.lane_units: Dict[Tuple[str, float], Set[str]] = {}
 
         self.port_anchors: Dict[Tuple[str, str], Tuple[float, float]] = {}
         self.port_dirs: Dict[Tuple[str, str], str] = {}
@@ -233,10 +231,8 @@ class VisibilityGraph:
 
         for u in fs.units:
             f = u.frame
-            if f is None:
+            if f is None or u in skip:
                 continue
-            ux: Set[float] = set()
-            uy: Set[float] = set()
             u_width, u_height = f.w, f.h
 
             tap = getattr(u, "tap", None)
@@ -262,8 +258,8 @@ class VisibilityGraph:
                 if lpos == "top":
                     cx = f.x + u_width / 2
                     self.obstacles.append(Rect(cx - label_w / 2, cx + label_w / 2, f.y - 20, f.y))
-                    uy.add(f.y - 20.0 - margin)
-                    uy.add(f.y - 10.0)
+                    y_set.add(f.y - 20.0 - margin)
+                    y_set.add(f.y - 10.0)
                 elif lpos == "bottom":
                     cx = f.x + u_width / 2
                     self.obstacles.append(
@@ -272,25 +268,25 @@ class VisibilityGraph:
                             f.y + u_height, f.y + u_height + 25 + fail,
                         )
                     )
-                    uy.add(f.y + u_height + 25.0 + fail + margin)
-                    uy.add(f.y + u_height + 10.0)
+                    y_set.add(f.y + u_height + 25.0 + fail + margin)
+                    y_set.add(f.y + u_height + 10.0)
                 elif lpos == "left":
                     cy = f.y + u_height / 2
                     self.obstacles.append(Rect(f.x - label_w - 15, f.x, cy - 10, cy + 10))
-                    ux.add(f.x - label_w - 15.0 - margin)
-                    ux.add(f.x - 5.0)
+                    x_set.add(f.x - label_w - 15.0 - margin)
+                    x_set.add(f.x - 5.0)
                 elif lpos == "right":
                     cy = f.y + u_height / 2
                     self.obstacles.append(
                         Rect(f.x + u_width, f.x + u_width + label_w + 15 + fail, cy - 10, cy + 10)
                     )
-                    ux.add(f.x + u_width + label_w + 15.0 + fail + margin)
-                    ux.add(f.x + u_width + 5.0)
+                    x_set.add(f.x + u_width + label_w + 15.0 + fail + margin)
+                    x_set.add(f.x + u_width + 5.0)
 
-            ux.add(f.x - margin)
-            ux.add(f.x + u_width + margin)
-            uy.add(f.y - margin)
-            uy.add(f.y + u_height + margin)
+            x_set.add(f.x - margin)
+            x_set.add(f.x + u_width + margin)
+            y_set.add(f.y - margin)
+            y_set.add(f.y + u_height + margin)
 
             for name in u.ports:
                 ax, ay, o_dir = port_anchor(u, f, name)
@@ -301,13 +297,8 @@ class VisibilityGraph:
                 dx, dy = COMPASS[o_dir]
                 px_proj, py_proj = ax + proj_dist * dx, ay + proj_dist * dy
                 self.port_projs[(u.name, name)] = (px_proj, py_proj)
-                ux.add(px_proj)
-                uy.add(py_proj)
-            for axis, lanes in (("x", ux), ("y", uy)):
-                for value in lanes:
-                    self.lane_units.setdefault((axis, value), set()).add(u.name)
-            x_set |= ux
-            y_set |= uy
+                x_set.add(px_proj)
+                y_set.add(py_proj)
 
         for stream in fs.streams:
             src, dst = stream.source, stream.dest
@@ -325,15 +316,10 @@ class VisibilityGraph:
                 self.port_projs[d_key],
                 self.obstacles,
             )
-            for name, (x, y) in ((s_key[0], s_esc), (d_key[0], d_esc)):
-                self.lane_units.setdefault(("x", x), set()).add(name)
-                self.lane_units.setdefault(("y", y), set()).add(name)
+            for x, y in (s_esc, d_esc):
                 x_set.add(x)
                 y_set.add(y)
 
-        # Lanes no unit adds.
-        free_x: Set[float] = set()
-        free_y: Set[float] = set()
         self.recycle_y: List[float] = []
 
         if self.obstacles:
@@ -341,17 +327,12 @@ class VisibilityGraph:
             max_y = max(o.y_max for o in self.obstacles)
             self.recycle_y = [min_y - 40.0, max_y + 40.0]
             for y in self.recycle_y:
-                free_y.add(y)
+                y_set.add(y)
 
             min_x = min(o.x_min for o in self.obstacles)
             max_x = max(o.x_max for o in self.obstacles)
             for x in [min_x - 40.0, max_x + 40.0]:
-                free_x.add(x)
-        for axis, lanes in (("x", free_x), ("y", free_y)):
-            for value in lanes:
-                self.lane_units.setdefault((axis, value), set()).add("")
-        x_set |= free_x
-        y_set |= free_y
+                x_set.add(x)
 
         self.xs = sorted(list(x_set))
         self.ys = sorted(list(y_set))

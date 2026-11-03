@@ -12,7 +12,7 @@ from pandid.geometry import Route
 from pandid.streams import Stream
 from pandid.units import Feed, Fitting, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.portgeom import outward_dir
-from pandid.routing import DefaultRouter, _fallback_path, _own_lanes
+from pandid.routing import DefaultRouter, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import CrossingIndex, committed_segments, find_path
 from pandid.routing.visibility import TAG_CLEAR, Rect, VisibilityGraph, clear_gaps
@@ -677,43 +677,6 @@ def test_a_bend_and_length_tie_breaks_towards_the_route_that_does_not_cross():
     north = find_path(graph, (0, 0), (40, 0), "E", None, crossing_index=crosses_south)
     assert (20, -10) not in north, f"took the crossing route: {north}"
     assert (20, 10) in north, f"did not take the free alternative: {north}"
-
-
-def test_a_route_keeps_off_a_lane_only_its_own_balloons_add():
-    """Prefer the tied route that does not run along an own-balloon lane.
-
-    Returns
-    -------
-    None
-        The search avoids whichever side carries the named lane.
-    """
-    graph = _tie_graph()
-    south = find_path(graph, (0, 0), (40, 0), "E", None, own_lanes=(set(), {10.0}))
-    assert (20, 10) not in south and (20, -10) in south, south
-    north = find_path(graph, (0, 0), (40, 0), "E", None, own_lanes=(set(), {-10.0}))
-    assert (20, -10) not in north and (20, 10) in north, north
-
-
-def test_the_graph_names_the_balloon_behind_its_lanes():
-    """Attribute a tapping balloon's lanes to the balloon alone.
-
-    Returns
-    -------
-    None
-        The balloon's box lanes are its own lanes, and no other unit's are.
-    """
-    fs = Flowsheet("lanes")
-    feed = fs.add(Feed("F")).pin(port="outlet", x=100, y=300)
-    prod = fs.add(Product("P")).pin(port="inlet", x=600, y=300)
-    line = fs.connect(feed.outlet, prod.inlet)
-    tt = fs.add_instrument("TT", 1, sensing=line, offset=70)
-    fs.route()
-    graph = VisibilityGraph(fs)
-    assert tt.frame is not None and feed.frame is not None
-    xs, ys = _own_lanes(graph.lane_units, {tt.name})
-    assert {tt.frame.x - 15.0, tt.frame.x + tt.frame.w + 15.0} <= xs
-    assert tt.frame.y - 15.0 in ys
-    assert feed.frame.y - 15.0 not in ys
 
 
 def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
