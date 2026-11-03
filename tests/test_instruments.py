@@ -842,6 +842,19 @@ def test_a_hung_controller_clears_a_tap_line():
         assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
 
 
+def test_a_hung_controller_keeps_its_own_tap_line() -> None:
+    """A balloon tapped on LIC-1 hangs from it; LIC-1 settles and the tap
+    stays on its north face."""
+    from pandid.portgeom import face_point
+
+    fs, lic, _ = _hung_controller()
+    pi = fs.add_instrument("PI", 1, sensing=lic, at="N", offset=100)
+    fs.route()
+
+    assert fs.route_converged
+    assert pi.tap == pytest.approx(face_point(lic, _placed(lic), "N")[0])
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

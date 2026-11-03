@@ -79,8 +79,8 @@ def _place_free(fs: "Flowsheet") -> bool:
             w, h = resolve_size(u)
             clear.append((pin.x, pin.y, pin.x + w, pin.y + h))
     # Drawn lines it must clear too, each with the units it joins.
-    lines: list[tuple[tuple[Unit, ...], list[tuple[float, float]]]] = [
-        ((), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
+    lines: list[tuple[tuple[object, ...], list[tuple[float, float]]]] = [
+        ((u.host,), tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
     lines += [((s.source.owner, s.dest.owner), stream_path(s))
               for s in fs.streams if s.route is not None]
     segments = [(ends, (min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])))
