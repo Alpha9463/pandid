@@ -1011,7 +1011,7 @@ class _Boundary(Unit):
     """Base for the off-page flags :class:`Feed` and :class:`Product`.
 
     The flag's port takes any number of streams, all drawn from its tip.
-    ``pin(x=..., y=...)`` places the port, not the corner.
+    ``pin(x=..., y=...)`` places the port unless ``port=None``.
 
     Parameters
     ----------
@@ -1343,7 +1343,8 @@ class Valve(_NormallyPositioned):
         Raises
         ------
         ValueError
-            If the actuator is unknown or contradicts the variant.
+            If the actuator is unknown or contradicts the variant, or
+            the pairing is not drawn.
         """
         from pandid.render.symbols import ACTUATED, ACTUATORS, actuated_variant
 
@@ -1614,6 +1615,11 @@ class _FaceFamilies(Unit):
         -------
         tuple[Port, ...]
             Family ports on that face, ordered as in :meth:`order_on`.
+
+        Raises
+        ------
+        ValueError
+            If ``face`` is not a face.
         """
         wanted = _block_face(face, self.name)
         return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
@@ -1642,8 +1648,8 @@ class _FaceFamilies(Unit):
         TypeError
             If an item is not a Port.
         ValueError
-            If a port is on another unit or face, is repeated, or a
-            connection on the face is missing.
+            If ``face`` is not a face, a port is on another unit or face
+            or is repeated, or a connection on the face is missing.
         """
         wanted = _block_face(face, self.name)
         on_face = [name for name, on in self._faces.items() if on == wanted]
@@ -1872,6 +1878,11 @@ class _MultiPortVessel(_FaceFamilies):
         ----------
         inputs, outputs : int or Sequence[str]
             Count, or one face per port.
+
+        Raises
+        ------
+        ValueError
+            If a count or face is invalid, or a face has no room.
         """
         in_faces = _block_faces(inputs, self.default_input_face(), self.name, "inputs")
         out_faces = _block_faces(outputs, self.default_output_face(), self.name, "outputs")
@@ -1906,6 +1917,11 @@ class _MultiPortVessel(_FaceFamilies):
         -------
         Port
             The new port.
+
+        Raises
+        ------
+        ValueError
+            If the artwork offers no such face, or the face has no room.
         """
         self._validate_face(direction, name, face)
         port = self._add_port(name, direction, "process")
@@ -1933,8 +1949,11 @@ class _MultiPortVessel(_FaceFamilies):
 
         Raises
         ------
+        KeyError
+            If the port does not exist.
         ValueError
-            If the artwork offers no such face for the port.
+            If ``face`` is not a face, or the artwork offers no such
+            face or no room on it for the port.
         """
         canonical = self._canonical_port_name(port_name)
         if canonical not in self._faces:
@@ -1966,9 +1985,9 @@ class Vessel(_MultiPortVessel):
 
     ``"default"`` and ``"dished"`` stand upright; ``"horizontal"`` is a
     lying drum. Besides its inlets and outlets, a vessel has ``vent``
-    (top head), ``relief`` (top) and ``drain`` (low point). With one
-    inlet and one outlet, ``inlet`` and ``outlet`` name them; otherwise
-    use ``in_1``, ``in_2``, ... or :attr:`inlets`.
+    (top head), ``relief`` (top) and ``drain`` (low point). A single
+    inlet is also ``inlet`` and a single outlet ``outlet``; otherwise
+    use ``in_1``, ``out_1``, ... or :attr:`inlets` and :attr:`outlets`.
 
     Parameters
     ----------
@@ -1989,7 +2008,8 @@ class Vessel(_MultiPortVessel):
     Raises
     ------
     ValueError
-        If the variant cannot carry the support.
+        If a count or face is invalid, the support is unknown, or the
+        variant cannot carry it.
     """
 
     inlets: tuple[Port, ...]
@@ -2192,12 +2212,13 @@ class Tank(_MultiPortVessel):
 
     Variants are ``"default"`` (dished roof), ``"conical"``,
     ``"floating_roof"``, ``"sphere"``, ``"conical_bottom"``,
-    ``"conical_ends"`` and ``"dished_roof_conical_bottom"``. A tank has
-    :class:`Vessel`'s ports and ``inputs``/``outputs`` families.
+    ``"conical_ends"``, ``"dished_roof_conical_bottom"`` and
+    ``"gas_holder"``. A tank has :class:`Vessel`'s ports and
+    ``inputs``/``outputs`` families.
 
-    Flat-floored variants fill low on the shell and hopper-bottomed
-    ones at the crown; every variant but ``floating_roof`` also offers
-    the other face to :meth:`nozzle`.
+    Flat-floored variants fill low on the west shell and
+    hopper-bottomed ones at the crown; :meth:`nozzle` moves an inlet to
+    any other face the variant's artwork offers.
 
     Parameters
     ----------
@@ -2209,6 +2230,11 @@ class Tank(_MultiPortVessel):
         Tank drawing.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Raises
+    ------
+    ValueError
+        If a count or face is invalid.
     """
 
     inlets: tuple[Port, ...]
@@ -2660,6 +2686,12 @@ class Fitting(_NormallyPositioned):
     ``normal_position``: ``"open"`` (default) draws the bored disc,
     ``"closed"`` the solid disc. Parameters are those of
     :class:`_NormallyPositioned`.
+
+    Raises
+    ------
+    ValueError
+        If ``normal_position`` is invalid, or ``"closed"`` on a variant
+        other than ``blind``.
     """
 
     inlet: Port
@@ -2886,11 +2918,11 @@ class Centrifuge(Unit):
     """Centrifuge, ISO 10628-2 group 9.
 
     ``overflow`` is drawn high on the shell and ``underflow`` low.
-    Variants, by ISO item: ``"default"`` (decanter, 9.6), ``"disc"``
-    (9.4), ``"high_speed"`` (9.1), ``"perforated_shell"`` (9.2),
-    ``"solid_shell"`` (9.3), ``"screw_perforated"`` (9.5), ``"pusher"``
-    (9.7) and ``"skimmer"`` (9.8). Every variant may be turned or
-    mirrored. Parameters are those of :class:`Unit`.
+    Variants, by ISO item: ``"default"`` and ``"decanter"`` (9.6),
+    ``"disc"`` (9.4), ``"high_speed"`` (9.1), ``"perforated_shell"``
+    (9.2), ``"solid_shell"`` (9.3), ``"screw_perforated"`` (9.5),
+    ``"pusher"`` (9.7) and ``"skimmer"`` (9.8). Every variant may be
+    turned or mirrored. Parameters are those of :class:`Unit`.
     """
 
     feed: Port
@@ -2958,11 +2990,10 @@ class Feeder(Unit):
     """Proportional or metering feeder, ISO 10628-2 group 19.
 
     Solids enter at ``feed`` and leave metered at ``discharge``.
-    Variants, by ISO item: ``"default"`` (general, 19.1),
-    ``"rotary_valve"`` (19.2), ``"rotary_table"`` (19.3) and
-    ``"metering"`` (19.4). Drawn one way up; ``validate`` reports a
-    turned feeder as ``gravity-turned``. Parameters are those of
-    :class:`Unit`.
+    Variants, by ISO item: ``"general"`` (19.1), ``"rotary_valve"``
+    (19.2), ``"rotary_table"`` (19.3) and ``"metering"`` (19.4). Drawn
+    one way up; ``validate`` reports a turned feeder as
+    ``gravity-turned``. Parameters are those of :class:`Unit`.
     """
 
     feed: Port
@@ -2988,13 +3019,14 @@ class SprayNozzle(Unit):
 class ScreeningDevice(Unit):
     """Screening device: sieve, strainer or rake, ISO 10628-2 group 7.
 
-    ``feed`` enters from above, ``oversize`` leaves a side wall and
-    ``undersize`` the apex below. Variants, by ISO item: ``"default"``
-    (general, 7.1), ``"coarse_rake"`` (7.2), ``"fine_rake"`` (7.3),
-    ``"coarse_and_fine"`` (7.4), ``"vibrating"`` (7.5),
-    ``"rotating_drum"`` (7.6) and ``"basket_reel"`` (7.7). Drawn one
-    way up; ``validate`` reports a turned device as ``gravity-turned``.
-    Parameters are those of :class:`Unit`.
+    ``feed`` enters from above (from the west on ``"basket_reel"``),
+    ``oversize`` leaves a side wall and ``undersize`` the apex below.
+    Variants, by ISO item: ``"general"`` (7.1), ``"coarse_rake"``
+    (7.2), ``"fine_rake"`` (7.3), ``"coarse_and_fine"`` (7.4),
+    ``"vibrating"`` (7.5), ``"rotating_drum"`` (7.6) and
+    ``"basket_reel"`` (7.7). Drawn one way up; ``validate`` reports a
+    turned device as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
     """
 
     feed: Port
@@ -3044,9 +3076,9 @@ class Crusher(CrushingMachine):
 
     Variants, by ISO item: ``"default"`` (general, 11.2), ``"jaw"``
     (11.5), ``"cone"`` (11.7), ``"hammer"`` (11.3), ``"impact"`` (11.4)
-    and ``"roller"`` (11.6); ``"vibration"`` is refused. Drawn one way
-    up; ``validate`` reports a turned crusher as ``gravity-turned``.
-    Parameters are those of :class:`Unit`.
+    and ``"roller"`` (11.6). Drawn one way up; ``validate`` reports a
+    turned crusher as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
     """
 
     kind = "crusher"
@@ -3057,9 +3089,9 @@ class Mill(CrushingMachine):
 
     Variants, by ISO item: ``"default"`` (general, 11.8), ``"hammer"``
     (11.9), ``"impact"`` (11.10), ``"roller"`` (11.11) and
-    ``"vibration"`` (11.12); ``"jaw"`` and ``"cone"`` are refused.
-    Drawn one way up; ``validate`` reports a turned mill as
-    ``gravity-turned``. Parameters are those of :class:`Unit`.
+    ``"vibration"`` (11.12). Drawn one way up; ``validate`` reports a
+    turned mill as ``gravity-turned``. Parameters are those of
+    :class:`Unit`.
     """
 
     kind = "mill"
@@ -3093,8 +3125,8 @@ class Conveyor(Unit):
     Raises
     ------
     ValueError
-        If ``width`` or ``height`` is given, or the size is too small to
-        draw.
+        If ``width`` or ``height`` is given, ``diameter`` is not
+        positive, or ``length`` is below the minimum.
     """
 
     feed: Port
