@@ -36,7 +36,7 @@ class TitleBlock:
     Attributes
     ----------
     title, subtitle : str
-        Title lines; a blank title draws the flowsheet name.
+        Title lines; an empty title draws the flowsheet name.
     drawing_number : str
         Drawing number; a blank one draws a dash.
     project, client : str
@@ -48,12 +48,12 @@ class TitleBlock:
     sheet, of_sheets : str
         The ``SHEET n of m`` count; a blank one draws ``"1"``.
     scale : str
-        Scale, such as ``"1:100"``. A blank one shows the placed scale
-        when ``page_size`` fixes the page, and is blank otherwise.
+        Scale, such as ``"1:100"``. A blank one on a diagram shows the
+        placed scale when ``page_size`` fixes the page.
     drawn_by, checked_by, approved_by : str
         Initials for the newest revision row's blank cells.
     date : str
-        Issue date; a blank one draws today's.
+        Issue date; an empty one draws today's.
     revisions : list[Revision]
         Revision history.
     """
@@ -209,7 +209,7 @@ class _Box:
         ------
         TypeError
             If a numeric field or ``position`` entry is a bool or not
-            a real number, or ``position`` is not iterable.
+            a real number, or a given ``position`` is not iterable.
         ValueError
             If a numeric field or ``position`` entry is not finite.
         """
@@ -254,7 +254,7 @@ class Annotation(_Box):
     ------
     TypeError
         If a numeric field or ``position`` coordinate is a bool or
-        not a real number, or ``position`` is not iterable.
+        not a real number, or a given ``position`` is not iterable.
     ValueError
         If ``align`` is invalid or a number is not finite.
     """
@@ -304,7 +304,7 @@ class TableBox(_Box):
     ------
     TypeError
         If a numeric field or ``position`` coordinate is a bool or
-        not a real number, or ``position`` is not iterable.
+        not a real number, or a given ``position`` is not iterable.
     ValueError
         If ``align`` or ``col_align`` is bad or a number is not finite.
     """
@@ -336,7 +336,7 @@ class StreamTableOptions:
     Attributes
     ----------
     font_size : float or None
-        Positive type size, or ``None`` to choose one.
+        Positive type size or ``None`` to choose; scales the floors.
     label_width : float or "auto"
         Row-label column floor, 0 or more, or ``"auto"`` for none.
     column_width : float or "auto"
@@ -345,8 +345,8 @@ class StreamTableOptions:
         Subtitle of the table's own sheet.
     sheet_drawing_number : str
         Table sheet's number; the diagram's own raises ValueError on
-        a table-sheet render. Blank uses the diagram's number plus
-        :data:`TABLE_SHEET_SUFFIX`, or blank if the diagram has none.
+        a table-sheet render. Empty uses the diagram's number plus
+        :data:`TABLE_SHEET_SUFFIX`, or stays empty if that is empty.
     """
 
     font_size: float | None = None
@@ -374,7 +374,7 @@ def table_sheet_block(block: "TitleBlock | None",
     Returns
     -------
     TitleBlock
-        Copy of ``block`` with the table sheet's subtitle and number.
+        Shallow copy of ``block`` with the table's subtitle and number.
 
     Raises
     ------
@@ -467,7 +467,7 @@ class StreamLabelOptions:
     Attributes
     ----------
     enclosure : {"none", "diamond", "circle", "box"}
-        Shape ruled around every stream label.
+        Shape around each stream label, or ``"none"`` for a bare one.
 
     Raises
     ------
@@ -561,8 +561,8 @@ def _describe(unit):
 
     Returns
     -------
-    str
-        Equipment-list description.
+    Any
+        Stated description as given, else the kind's name.
     """
     return (getattr(unit, "description", "")
             or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
@@ -602,8 +602,8 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
         If an ``include`` name is not on the sheet, ``align`` is
         invalid, or a number is not finite.
     TypeError
-        If ``margin``, ``width`` or a ``position`` coordinate is a
-        bool or not a real number, or ``position`` is not iterable.
+        If ``margin``, ``width`` or a ``position`` coordinate is a bool
+        or not a real number, or a given ``position`` is not iterable.
     """
     if include is None:
         chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
@@ -655,8 +655,8 @@ def notes(items, *, title="NOTES", align="top-right", position=None,
     ValueError
         If ``align`` is invalid or a number is not finite.
     TypeError
-        If ``margin``, ``width`` or a ``position`` coordinate is a
-        bool or not a real number, or ``position`` is not iterable.
+        If ``margin``, ``width`` or a ``position`` coordinate is a bool
+        or not a real number, or a given ``position`` is not iterable.
     """
     rows = []
     for i, text in enumerate(items, start=1):
@@ -694,8 +694,8 @@ def legend(entries, *, title="LEGEND", align="top-left",
     ValueError
         If ``align`` is invalid or a number is not finite.
     TypeError
-        If ``margin``, ``width`` or a ``position`` coordinate is a
-        bool or not a real number, or ``position`` is not iterable.
+        If ``margin``, ``width`` or a ``position`` coordinate is a bool
+        or not a real number, or a given ``position`` is not iterable.
     """
     if isinstance(entries, dict):
         entries = list(entries.items())

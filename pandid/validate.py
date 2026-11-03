@@ -168,7 +168,7 @@ def _overlap_cure(a, b) -> str:
 def _is_control_function(letters: str, i: int) -> bool:
     """Return whether ``letters[i]`` is a sequenced control function.
 
-    The first letter and the ``C`` of a ``ZSC`` position tag are not.
+    A letter counts after the first, except the ``C`` of a ``ZSC`` tag.
 
     Parameters
     ----------
@@ -272,13 +272,13 @@ def _square(x1, y1, x2, y2) -> bool:
     Returns
     -------
     bool
-        Whether the segment is horizontal or vertical.
+        Whether it is horizontal or vertical within ``_SQUARE_TOL``.
     """
     return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
 
 
 def _corners(pts):
-    """Return a drawn path as its ends and turning points.
+    """Return a drawn path less repeats and axis-run midpoints.
 
     Parameters
     ----------
@@ -288,7 +288,7 @@ def _corners(pts):
     Returns
     -------
     list[tuple[float, float]]
-        Ends and corners, without repeated or collinear points.
+        The path less repeats and points inside a straight axis run.
     """
     out: list = []
     for p in pts:
@@ -373,7 +373,7 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     Returns
     -------
     tuple[float, float, bool] or None
-        ``(offset, span, source_is_shorter)``, or ``None`` for no miss.
+        ``(offset, span, source_is_shorter)`` for a miss, else ``None``.
     """
     from pandid.portgeom import unit_box
 
@@ -387,7 +387,7 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
 
     offset = abs(dp.point[1] - sp.point[1])
     if offset <= _TOL:
-        return None  # sub-pixel
+        return None  # 1 px or less
 
     # An offset under the shorter unit's height is a miss; one that
     # clears it is a change of elevation.
@@ -1098,7 +1098,7 @@ def _crowded_lines(fs: "Flowsheet") -> list["Issue"]:
     Returns
     -------
     list[Issue]
-        One warning per pair of crowded parallel runs.
+        One warning per pair of streams with crowded parallel runs.
     """
     from pandid.render.svg import stream_polyline, _stream_rung
     from pandid.render.weights import M
