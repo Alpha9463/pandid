@@ -553,6 +553,8 @@ class Flowsheet:
         self._may_hang = False
         self._hung: set[int] = set()
         self._unhung: tuple | None = None
+        # Whether a layout engine is running, which routes without hanging.
+        self._laying_out = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2033,7 +2035,11 @@ class Flowsheet:
         self._mounted_layout = False
         if engine is None:
             engine = default_layout_engine
-        engine.layout(self)
+        outer, self._laying_out = self._laying_out, True
+        try:
+            engine.layout(self)
+        finally:
+            self._laying_out = outer
         self._layout_stale = False
         self._route_stale = True
 
@@ -2080,7 +2086,8 @@ class Flowsheet:
         place()
         # Hang each controller it can off its actuator, and keep that only
         # if the sheet stays clean. The check assumes the default router.
-        if type(router) is DefaultRouter and any(_hangable(self, u) for u in self.units):
+        if (type(router) is DefaultRouter and not self._laying_out
+                and any(_hangable(self, u) for u in self.units)):
             unhung = self._geometry()
             before = _flaws(self)
             self._may_hang, self._hung = True, set()

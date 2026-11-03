@@ -296,7 +296,8 @@ def _shared(a: tuple[float, float], b: tuple[float, float],
         same track, and overlap by more than 1 along it.
     """
     for along, across in ((0, 1), (1, 0)):
-        if a[across] == b[across] and c[across] == d[across] and abs(a[across] - c[across]) < 1:
+        if (abs(a[across] - b[across]) < 0.01 and abs(c[across] - d[across]) < 0.01
+                and abs(a[across] - c[across]) < 1):
             lo = max(min(a[along], b[along]), min(c[along], d[along]))
             hi = min(max(a[along], b[along]), max(c[along], d[along]))
             return hi - lo > 1

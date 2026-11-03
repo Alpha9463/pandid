@@ -1582,6 +1582,58 @@ def test_hanging_lays_no_line_along_a_tap_line() -> None:
         assert not any(_shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(tp, tp[1:]))
 
 
+def test_hanging_lays_no_line_along_a_pipe_with_rounding_in_its_track() -> None:
+    """A hand-drawn pipe whose track carries rounding still counts as the
+    same track as the controller's line."""
+    from pandid.layout.attach import stream_path
+
+    def shared(
+        a: tuple[float, float],
+        b: tuple[float, float],
+        c: tuple[float, float],
+        d: tuple[float, float],
+    ) -> bool:
+        if max(abs(a[0] - b[0]), abs(c[0] - d[0]), abs(a[0] - c[0])) >= 1:
+            return False
+        low = max(min(a[1], b[1]), min(c[1], d[1]))
+        return min(max(a[1], b[1]), max(c[1], d[1])) - low > 1
+
+    fs = Flowsheet("overlap")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="S")
+    feed = fs.add(U.Feed("F")).pin(x=100, y=265)
+    prod = fs.add(U.Product("P")).pin(x=600, y=265)
+    pipe = fs.connect(feed.outlet, prod.inlet).via(
+        [(312.2, 265), (312.1 + 0.1, 275), (500, 275), (500, 265)]
+    )
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    sp, pp = stream_path(signal), stream_path(pipe)
+    assert not any(shared(a, b, c, d) for a, b in zip(sp, sp[1:]) for c, d in zip(pp, pp[1:]))
+
+
+def test_an_engine_that_routes_and_then_adjusts_keeps_its_adjustment() -> None:
+    """A layout engine that routes inside layout() and then moves a unit
+    keeps that move through the next route()."""
+    fs, _, _ = _hung_controller()
+    marker = fs.add(U.Vessel("marker"))
+
+    class Engine:
+        def layout(self, fs: Flowsheet) -> None:
+            fs.layout()
+            fs.route()
+            assert marker.frame is not None
+            marker.frame.x = marker.frame.y = 1200
+
+    fs.layout(Engine())
+    fs.route()
+
+    assert marker.frame is not None
+    assert (marker.frame.x, marker.frame.y) == (1200, 1200)
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 
