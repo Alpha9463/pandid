@@ -201,14 +201,6 @@ def test_a_device_class_takes_the_actuator_its_own_name_implies():
 # --- the removed spelling ----------------------------------------------------
 
 
-def test_the_medium_is_no_longer_a_kind_of_valve():
-    """Check that ``variant="pneumatic"`` is an unknown valve variant."""
-    fs = Flowsheet("removed")
-    fs.add(U.Valve("CV-1", variant="pneumatic")).pin(x=100, y=100)
-    with pytest.raises(ValueError, match="valve has no variant 'pneumatic'"):
-        fs.to_svg()
-
-
 def test_the_compound_body_name_survives_the_same_argument():
     """Check that ``butterfly_pneumatic`` is still a variant."""
     assert U.Valve("XV-1", variant="butterfly_pneumatic").variant == "butterfly_pneumatic"

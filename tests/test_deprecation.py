@@ -279,10 +279,11 @@ def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
 def test_the_package_declares_only_the_placement_hints_and_the_faces():
     """Check that the package declares only the placement-hint and face deprecations."""
     from pandid.flowsheet import _CONTROLLER_AT
-    from pandid.units import _AT_FACE, _PLACEMENT_HINTS
+    from pandid.units import _AT_FACE, _DEFAULT_FACES, _PLACEMENT_HINTS
 
     assert declarations() == {
         "pandid.flowsheet._CONTROLLER_AT": _CONTROLLER_AT,
         "pandid.units._AT_FACE": _AT_FACE,
+        "pandid.units._DEFAULT_FACES": _DEFAULT_FACES,
         "pandid.units._PLACEMENT_HINTS": _PLACEMENT_HINTS,
     }
