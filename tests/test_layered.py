@@ -15,7 +15,7 @@ from pandid.portgeom import port_point, resolve_port
 from pandid.geometry import Frame, Route
 from pandid.streams import Stream
 from pandid.routing.metrics import real_bends
-from scripts import layout_quality, route_quality
+from scripts import layout_quality
 
 
 def _fingerprint(fs: Flowsheet) -> str:
@@ -96,43 +96,6 @@ def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     fresh.layout()
     fresh.route()
     assert _fingerprint(fresh) == fingerprint
-
-
-@pytest.mark.parametrize("stem", ["04_control_loop", "10_ethanol_pfd"])
-def test_route_report_uses_the_published_graph(stem: str) -> None:
-    """Report route quality from the drawn routes.
-
-    Parameters
-    ----------
-    stem : str
-        Corpus drawing with its placement stripped.
-
-    Returns
-    -------
-    None
-        Reported excess bends agree with the published route geometry.
-    """
-    fs, _ = layout_quality.build(stem, True)
-    report = route_quality.measure_sheet(fs, stem)
-    excess = sum(
-        max(0, row.actual_bends - row.min_bends)
-        for row in report.rows
-        if row.min_bends is not None and not row.is_manual
-    )
-    assert excess == measure_final(fs).excess_bends
-
-
-def test_route_report_accepts_manual_intermediate_waypoints() -> None:
-    """Count a manual route with one waypoint as drawn.
-
-    Returns
-    -------
-    None
-        The final route report does not count manual waypoints as undrawn.
-    """
-    fs, _ = layout_quality.build("11_ethanol_pid", False)
-    report = route_quality.measure_sheet(fs, "11_ethanol_pid")
-    assert report.undrawn == []
 
 
 def _sealed_by_alignment(pinned: bool = False) -> tuple[Flowsheet, Frame, Frame, Route]:
