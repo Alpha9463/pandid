@@ -604,9 +604,6 @@ _INTERNALS_TOP, _INTERNALS_BOTTOM = 0.11, 0.89
 # Height of one deck: a 2 M band on an 18 M body.
 _DECK_BAND = 2.0 / 18.0
 
-# Deck inset from the shell wall.
-_DECK_INSET = 0.0
-
 
 def internals_overlays(name: str, count: int = 1) -> tuple:
     """Return ``count`` group-27 internals stacked down a vertical body.
@@ -638,18 +635,18 @@ def internals_overlays(name: str, count: int = 1) -> tuple:
             f"internals=None to draw a bare shell"
         )
     top, span = _INTERNALS_TOP, _INTERNALS_BOTTOM - _INTERNALS_TOP
-    width = 1.0 - 2 * _DECK_INSET
+    # Each internal spans the shell from wall to wall.
     if part.height <= DECK_H:
         # Decks: centre each on its share of the span.
         pitch = span / count
         return tuple(
-            Overlay(27, name, _DECK_INSET,
-                    top + (i + 0.5) * pitch - _DECK_BAND / 2, width, _DECK_BAND)
+            Overlay(27, name, 0.0,
+                    top + (i + 0.5) * pitch - _DECK_BAND / 2, 1.0, _DECK_BAND)
             for i in range(count))
     # Beds: leave a tenth of each band clear above and below.
     band = span / count
     return tuple(
-        Overlay(27, name, _DECK_INSET, top + (i + 0.1) * band, width, band * 0.8)
+        Overlay(27, name, 0.0, top + (i + 0.1) * band, 1.0, band * 0.8)
         for i in range(count))
 
 

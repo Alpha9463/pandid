@@ -52,11 +52,8 @@ _NO_STROKE = "none"
 
 _LINE_INK = "#000000"
 
-# draw.io ``jumpStyle`` for an arc hop.
-_JUMP_STYLE = "arc"
-
 # draw.io ``jumpStyle`` for each crossing style; ``"plain"`` has none.
-_JUMP_STYLES = {"arc": _JUMP_STYLE, "gap": "gap"}
+_JUMP_STYLES = {"arc": "arc", "gap": "gap"}
 
 # Style for edges that are not streams: they never hop.
 _NO_HOP = "noJump=1;"
@@ -838,11 +835,6 @@ class DrawioRenderer:
             diagram=diagram, page_size=page_size, connections=connections,
             jump_direction=jump_direction, crossing_style=crossing_style)
         table_sheet = wants_table_sheet(show_stream_table)
-        if not table_sheet:
-            for u in fs.units:
-                if u.frame is None:
-                    raise ValueError(
-                        f"Unit '{u.name}' lacks a frame even after layout was run.")
         if table_sheet and border is None:
             border = "zone"
         border, _diagram = _resolve_sheet(border, diagram)
