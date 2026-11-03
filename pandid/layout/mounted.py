@@ -920,7 +920,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
                        if used[index] + row[index] <= room[index]), None)
         if choice is None:
             usable = [index for index in range(cursor, len(legs)) if row[index] != float("inf")]
-            choice = max(usable or [max(range(len(legs)), key=lambda index: path_length(legs[index]))],
+            choice = max(usable or [max(range(len(legs)), key=lambda i: path_length(legs[i]))],
                          key=lambda index: room[index] - used[index])
         if row[choice] != float("inf"):
             used[choice] += row[choice]
