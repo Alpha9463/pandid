@@ -55,7 +55,7 @@ def test_overlapping_pins_raise():
         fs.to_svg()
 
 
-# --- unit-overlap says how to clear it (#434) ---------------------------------
+# --- unit-overlap says how to clear it ----------------------------------------
 
 
 def _overlap_message(fs: Flowsheet) -> str:
@@ -65,7 +65,7 @@ def _overlap_message(fs: Flowsheet) -> str:
 
 
 def _tapped_line() -> tuple[Flowsheet, U.Valve, U.Instrument]:
-    """A valve on a line, with a transmitter attached to the line before it."""
+    """Build a valve on a line with a transmitter attached to the line before it."""
     fs = Flowsheet("tapped")
     feed = fs.add(U.Feed("F"))
     fv = fs.add(U.Valve("FV-101"))
@@ -78,12 +78,7 @@ def _tapped_line() -> tuple[Flowsheet, U.Valve, U.Instrument]:
 
 
 def test_unit_overlap_moves_an_attached_balloon_with_at_and_offset():
-    """A balloon placed from its line is moved by where it hangs off it.
-
-    Dropping the balloon onto the valve stands in for a crowded sheet the
-    standoff resolver could not clear. The balloon is the one to move, and the
-    message says which knobs move it rather than naming both units' pins.
-    """
+    """Verify the overlap message tells an attached balloon to move by at= and offset=."""
     fs, fv, ft = _tapped_line()
     assert fv.frame is not None and ft.frame is not None
     ft.frame = replace(ft.frame, x=fv.frame.x, y=fv.frame.y)
@@ -96,7 +91,7 @@ def test_unit_overlap_moves_an_attached_balloon_with_at_and_offset():
 
 
 def test_unit_overlap_moves_a_pinned_balloon_by_its_pin():
-    """A pin outranks the standoff, so at= and offset= would not move it."""
+    """Check that the overlap message tells a pinned balloon to move by its pin."""
     fs, fv, ft = _tapped_line()
     assert fv.frame is not None
     ft.pin(x=fv.frame.x, y=fv.frame.y)
@@ -118,10 +113,7 @@ def test_unit_overlap_moves_one_of_two_pinned_units_by_its_pin():
 
 
 def test_unit_overlap_repins_by_the_port_a_unit_is_pinned_by():
-    """pin() without port= places the corner, so the remedy repeats the port.
-
-    The suggested call is applied as written, with only the placeholders
-    filled in, and each axis must still locate the port it did."""
+    """Check that the suggested pin() call repeats the port each axis is pinned by."""
     fs = Flowsheet("overlap")
     a = fs.add(U.Valve("V-1")).pin(x=100, y=100)
     b = fs.add(U.Valve("V-2")).pin(port="inlet", x=105, y=100)
@@ -149,7 +141,7 @@ def test_unit_overlap_repins_by_the_port_a_unit_is_pinned_by():
 
 
 def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
-    """Neither was placed by the author, so a pin is the way to say where."""
+    """Check that two units the layout placed are told to pin one of them."""
     fs, fv, _ = _tapped_line()
     pump = fs.add(U.Pump("P-101"))
     fs.route()
@@ -162,11 +154,7 @@ def test_unit_overlap_pins_one_of_two_units_the_layout_placed():
 
 
 def test_unit_overlap_suggests_an_attach_that_keeps_what_the_balloon_does():
-    """attach() resets angle= and relation= to their defaults, so a suggested
-    call without them would turn a ``near`` balloon into a ``sensing`` one and
-    draw a tap line it never had, and a rounded angle would turn it. The
-    arguments the message gives are applied here as written, with only the
-    two placeholders filled in."""
+    """Check that the suggested attach() call keeps the balloon's relation and angle."""
     fs, fv, _ = _tapped_line()
     fic = fs.add_instrument("FIC", 101, near=fv, angle=45.1234567)
     fs.route()
@@ -186,9 +174,7 @@ def test_unit_overlap_suggests_an_attach_that_keeps_what_the_balloon_does():
 
 
 def test_unit_overlap_does_not_offer_a_grid_pin_to_an_attached_balloon():
-    """An attached balloon is placed from its host whatever its col= and row=
-    say, so changing them would move nothing. at= and offset= do, and so does
-    an x= and y= pin."""
+    """Check that an attached balloon is offered attach() and an x/y pin, not col=."""
     fs, fv, ft = _tapped_line()
     ft.pin(col=1, row=1)
     fs.route()
@@ -232,12 +218,7 @@ def test_clean_flowsheet_has_no_errors():
 
 
 def _loop_with_a_balloon():
-    """A controller taking a signal in and driving a valve, plus its process tap.
-
-    A balloon is a circle, so all three of its connections offer all four faces
-    and the symbol-level duplicate-nozzle check must let those menus overlap.
-    Which placement each one actually took is only visible on a laid-out sheet.
-    """
+    """Build a valve loop with a transmitter and a controller balloon on signals."""
     fs = Flowsheet("loop")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=300, y=180)
@@ -253,8 +234,6 @@ def _loop_with_a_balloon():
 
 def test_two_live_connections_on_one_point_are_an_error():
     fs, lic = _loop_with_a_balloon()
-    # Both named, because an override is the only way onto one point: the engine
-    # picks a free face for anything the author leaves open.
     lic.nozzle("sig_in", "W")
     lic.nozzle("sig_out", "W")
     fs.layout()
@@ -273,9 +252,7 @@ def test_distinct_placements_on_the_same_balloon_are_fine():
 
 
 def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
-    """Ports a symbol does not anchor fall back to the centre of the box, so
-    they coincide by construction. That is a gap in the symbol, not a
-    contradiction on the sheet, and must not stop rendering."""
+    """Check that ports a symbol does not anchor coincide as a warning, not an error."""
     fs = Flowsheet("gapped")
     unit = fs.add(gapped_kind("G-1"))
     prod = fs.add(U.Product("P"))
@@ -290,19 +267,7 @@ def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
     fs.to_svg()  # must not raise
 
 
-# ---------------------------------------------------------------------------
-# A nozzle drawn off the body it belongs to (#488).
-#
-# 21_alumina_refinery_2 shipped with M-901's third inlet 8,9px below the bottom of
-# the tank: the stream was drawn to it correctly and it was not on the drawing,
-# so the line ended in blank paper beside a symbol it never reached. validate()
-# said nothing, and that silence is the half of the defect that must not recur.
-#
-# Every symbol the library ships now keeps its nozzles on its own box by
-# construction, so the rule is silent on the whole corpus and the sheet below is
-# built with a symbol registered here, which is exactly the case it is left in
-# for: artwork a third party wrote.
-# ---------------------------------------------------------------------------
+# --- a nozzle drawn off the body it belongs to --------------------------------
 
 
 class _StubbedTank(U.Unit):
@@ -312,7 +277,7 @@ class _StubbedTank(U.Unit):
 
 @pytest.fixture
 def off_body_kind():
-    """A symbol whose outlet is drawn 30 units below its own box."""
+    """Register a symbol whose outlet is drawn 30 units below its own box."""
     from pandid.render.symbols import Symbol
 
     default_registry.register(
@@ -340,8 +305,7 @@ def _sheet_with(kind):
 
 
 def test_a_nozzle_drawn_off_its_own_body_is_reported(off_body_kind):
-    """The finding the shipped sheet never got: the nozzle, the point it is
-    drawn at, and the box it is outside of."""
+    """Check that a nozzle outside its unit's box is a nozzle-off-body error."""
     fs = _sheet_with(off_body_kind)
     fs.layout()
     issues = _found(fs, "nozzle-off-body")
@@ -353,9 +317,7 @@ def test_a_nozzle_drawn_off_its_own_body_is_reported(off_body_kind):
 
 
 def test_a_nozzle_on_the_edge_of_its_body_is_not_off_it(off_body_kind):
-    """Every nozzle a well-drawn symbol has is *on* an edge of its box, so a
-    rule that cannot tell "on the edge" from "past it" reports the whole
-    registry."""
+    """Check that a nozzle on the edge of its box is not reported off it."""
     fs = _sheet_with(off_body_kind)
     fs.layout()
     issues = _found(fs, "nozzle-off-body")
@@ -363,8 +325,7 @@ def test_a_nozzle_on_the_edge_of_its_body_is_not_off_it(off_body_kind):
 
 
 def test_the_shipped_corpus_draws_no_nozzle_off_a_body():
-    """A tank fed three ways, which is the arrangement that was wrong: the
-    nozzles are on the shell and the rule is silent."""
+    """Check that a tank fed three ways reports no nozzle off its body."""
     fs = Flowsheet("three-fills")
     tank = U.Tank("TK-1", inputs=3)
     fs.add(tank)
@@ -376,8 +337,7 @@ def test_the_shipped_corpus_draws_no_nozzle_off_a_body():
 
 
 def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
-    """The solvent enters above the feed tray: two real nozzles down the shell,
-    not two streams landing on one point in the middle of the tower."""
+    """Check that a two-feed column gives each feed a nozzle of its own."""
     fs = Flowsheet("extractive")
     col = fs.add(U.Column("T-302", n_feeds=2))
     for port in ("feed_1", "feed_2"):
@@ -391,10 +351,7 @@ def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
 
 
 def test_two_feeds_pinned_to_the_same_stage_are_coincident():
-    """``feed_stages=`` is a placement rule like any other a
-    :class:`~pandid.render.symbols.PortSeries` resolves, so two feeds
-    asked for the same stage land on the same point and the existing
-    check catches it -- no code of its own is needed."""
+    """Check that two feeds on the same stage are reported as coincident ports."""
     fs = Flowsheet("same-stage")
     col = fs.add(
         U.Column("T-302", internals="valve_tray", trays=30, n_feeds=2, feed_stages=[12, 12])
@@ -411,8 +368,7 @@ def test_two_feeds_pinned_to_the_same_stage_are_coincident():
 
 
 def test_a_kettle_takes_its_bottoms_off_its_own_draw():
-    """The draw is a nozzle of the reboiler's, so a tower can hand it the sump
-    and take product back without an imaginary splitter in between."""
+    """Check that a kettle reboiler's bottoms draw is a nozzle of its own."""
     fs = Flowsheet("reboiler")
     col = fs.add(U.DistillationColumn("T-701"))
     reb = fs.add(U.HeatExchanger("E-702", variant="kettle"))
@@ -425,8 +381,7 @@ def test_a_kettle_takes_its_bottoms_off_its_own_draw():
 
 
 def test_a_mixers_extra_inlets_get_nozzles_of_their_own():
-    """A third inlet is a real nozzle on the flat face, not a third stream
-    landing in the middle of the symbol on the box-centre fallback."""
+    """Check that a four-inlet mixer gives each inlet a nozzle of its own."""
     fs = Flowsheet("wide-mixer")
     mix = fs.add(U.Mixer("M-1", n_inlets=4))
     prod = fs.add(U.Product("P"))
@@ -442,14 +397,7 @@ def test_a_mixers_extra_inlets_get_nozzles_of_their_own():
 
 
 def _corner_pinned_run(fv_y=180.0):
-    """The real bug, from an earlier draft of examples/04.
-
-    A control valve is 19.8 tall and carries its body under the diaphragm
-    actuator, so its nozzles sit 12.4 below the corner ``pin()`` reads; a vessel
-    takes its inlet at mid-height, 50 below. Pinning both to convenient corner
-    values silently puts the two nozzles on different elevations, and the router
-    draws a step into the valve and a step back out.
-    """
+    """Build a control valve and a drum corner-pinned onto different elevations."""
     fs = Flowsheet("corner-pinned")
     feed = fs.add(U.Feed("Feed")).pin(x=110, y=195)
     fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=270, y=fv_y)
@@ -465,14 +413,11 @@ def test_a_corner_pinned_inline_device_is_reported_off_the_run():
     issues = _found(fs, "run-off-elevation")
     assert [i.severity for i in issues] == ["warning", "warning"]
     assert "2.6px apart" in issues[0].message
-    # The finding is only worth making if it also says what to do about it, the
-    # way gravity-turned names the lying drum.
     assert "FV-101.pin(port='inlet', y=195)" in issues[0].message
 
 
 def test_pinning_the_nozzle_is_the_cure_the_message_names():
-    """Typing the message's own suggestion back in has to silence it, or the
-    advice is wrong. 195 is the drum's inlet and the feed flag's tip alike."""
+    """Check that pinning the nozzle as the message suggests silences the finding."""
     fs, fv = _corner_pinned_run()
     fv.pin(x=270, port="inlet", y=195)
     fs.layout()
@@ -480,8 +425,7 @@ def test_pinning_the_nozzle_is_the_cure_the_message_names():
 
 
 def test_a_deliberate_elevation_change_is_not_a_near_miss():
-    """Two vessels on genuinely different levels, with the run stepping 300px
-    between them. That is engineering, not arithmetic, and must stay silent."""
+    """Check that two vessels 300px apart in elevation are not reported."""
     fs = Flowsheet("two-levels")
     upper = fs.add(U.Vessel("V-1")).pin(x=100, y=100)
     lower = fs.add(U.Vessel("V-2")).pin(x=400, y=400)
@@ -491,9 +435,7 @@ def test_a_deliberate_elevation_change_is_not_a_near_miss():
 
 
 def test_an_eccentric_reducer_is_meant_to_change_centreline():
-    """Its small end is drawn higher than its large end on purpose -- that is
-    what keeps a pump suction from pocketing vapour against the roof of the
-    line. Straightening the run through it would undo the fitting."""
+    """Check that an eccentric reducer's centreline step is not reported."""
     fs = Flowsheet("eccentric")
     feed = fs.add(U.Feed("F")).pin(x=60, port="outlet", y=300)
     red = fs.add(U.Reducer("R-1", variant="eccentric")).pin(x=300, port="inlet", y=300)
@@ -505,28 +447,14 @@ def test_an_eccentric_reducer_is_meant_to_change_centreline():
 
 
 def test_a_concentric_reducer_in_the_same_run_is_not_exempt():
-    """The exemption is the eccentric fitting's, not the reducer kind's: a
-    concentric one keeps both ends on one centreline, so nothing about it needs
-    excusing and the sweep above would not notice if it were excused anyway."""
+    """Check that a concentric or default reducer is not in OFFSET_BY_DESIGN."""
     assert ("reducer", "concentric") not in OFFSET_BY_DESIGN
     assert ("reducer", "default") not in OFFSET_BY_DESIGN
 
 
 @pytest.mark.parametrize("variant", ["angle", "psv", "relief"])
 def test_a_relief_valve_needs_no_entry_in_the_exemption_set(variant):
-    """None of the three has a step to be excused for.
-
-    The angle valve and the PSV turn the run a quarter, so no placement puts
-    both their nozzles along one elevation at all and the face test in
-    ``_off_elevation`` never even reaches them. The relief valve is different
-    and worth the parametrize: laid on its side it *does* offer a horizontal
-    pair, and the pair is level, so there is still nothing to excuse.
-
-    That is the property OFFSET_BY_DESIGN would otherwise have to cover, and it
-    is asserted over every turn rather than taken on faith: a name in that set
-    is a rule with no geometry behind it, which is how such a set grows
-    silently. Compare the eccentric reducer, which fails this and is listed.
-    """
+    """Check that each relief valve variant keeps a horizontal nozzle pair level."""
     from pandid.geometry import Pin
     from pandid.portgeom import port_faces, port_offset
 
@@ -536,14 +464,13 @@ def test_a_relief_valve_needs_no_entry_in_the_exemption_set(variant):
         placed = Pin(x=0.0, y=0.0, orientation=turn)
         faces = {n: port_faces(valve, n, placed)[0] for n in ("inlet", "outlet")}
         if not set(faces.values()) <= {"E", "W"}:
-            continue  # a quarter-turn device: not a run at one elevation
+            continue  # a quarter-turn device
         ys = [port_offset(valve, n, placed)[1] for n in ("inlet", "outlet")]
         assert ys[0] == pytest.approx(ys[1]), (variant, turn, faces, ys)
 
 
 def test_the_eccentric_reducer_is_the_one_that_fails_that_test():
-    """The counterpart, and the reason the set is not empty: laid in a run its
-    two nozzles are both along it *and* on different centrelines."""
+    """Check that an eccentric reducer's run nozzles differ in elevation and are exempt."""
     from pandid.geometry import Pin
     from pandid.portgeom import port_faces, port_offset
 
@@ -556,9 +483,7 @@ def test_the_eccentric_reducer_is_the_one_that_fails_that_test():
 
 
 def test_an_unpinned_sheet_keeps_its_elevations_to_itself():
-    """Nothing here was placed by hand, so there is no arithmetic to have got
-    wrong and no pin to correct. Telling an author to pin a nozzle they never
-    positioned is telling them to hand-place a sheet that did not ask for it."""
+    """Check that a sheet with no pins reports no run-off-elevation."""
     fs = Flowsheet("auto")
     feed = fs.add(U.Feed("F"))
     fv = fs.add(U.Valve("FV-1", variant="control"))
@@ -570,8 +495,7 @@ def test_an_unpinned_sheet_keeps_its_elevations_to_itself():
 
 
 def test_a_signal_line_has_no_elevation_to_be_off():
-    """A signal carries a measurement, not a fluid. Its balloon end is placed by
-    add_instrument(), so there is no pin() to name either."""
+    """Check that a signal line to a valve actuator is not reported off elevation."""
     fs = Flowsheet("signal")
     fv = fs.add(U.Valve("FV-1", variant="control")).pin(x=270, y=180)
     drum = fs.add(U.Vessel("V-1")).pin(x=420, y=145)
@@ -585,12 +509,7 @@ def test_a_signal_line_has_no_elevation_to_be_off():
 
 
 def test_a_vertical_drop_is_a_runs_length_and_not_a_miss():
-    """A tank draining into the roof of the one below it. Both nozzles face
-    along the drop, so the difference in y is how far the line *falls*; a riser
-    reported as 300px off its elevation would be absurd. The 5px they are apart
-    in x is a plan offset and not an elevation at all, which is why the check
-    reads the faces rather than taking the smaller of the two differences.
-    """
+    """Check that a vertical drop between two tanks is not reported off elevation."""
     fs = Flowsheet("drop")
     upper = fs.add(U.Tank("TK-1")).pin(x=200, y=100)
     lower = fs.add(U.Tank("TK-2")).pin(x=205, y=500)
@@ -603,7 +522,7 @@ def test_a_vertical_drop_is_a_runs_length_and_not_a_miss():
 
 
 def _mixer(n_inlets, wired):
-    """A mixer built for *n_inlets* with only *wired* of them piped."""
+    """Build a mixer for *n_inlets* with only the *wired* inlets piped."""
     fs = Flowsheet("unpiped")
     mix = fs.add(U.Mixer("M-101", n_inlets=n_inlets))
     for i in wired:
@@ -613,11 +532,7 @@ def _mixer(n_inlets, wired):
 
 
 def test_the_off_by_one_that_started_this():
-    """Issue #183, written the way the user wrote it: ``m.inlets`` is indexed
-    from zero and the nozzles are numbered from one, so a loop over ``(1, 2, 3)``
-    meaning ``in_1``, ``in_2``, ``in_3`` wires ``in_2``, ``in_3`` and ``in_4``.
-    Before this finding the sheet drew, nothing raised and ``validate()`` was
-    empty."""
+    """Check that a mixer wired off by one reports its unpiped in_1 with both cures."""
     fs = Flowsheet("183")
     mix = fs.add(U.Mixer("M-101", n_inlets=4))
     for i in (1, 2, 3):
@@ -626,10 +541,8 @@ def test_the_off_by_one_that_started_this():
     issues = _found(fs, "nozzle-unconnected")
     assert [i.severity for i in issues] == ["warning"]
     assert "M-101.in_1 carries no stream" in issues[0].message
-    # The arithmetic, so the author can see which of the two things happened.
     assert "built with 4 numbered nozzles, in_1..in_4, and 3 of them are piped" in issues[0].message
     assert "asserts 4 connections and draws 3" in issues[0].message
-    # Both cures, because the finding cannot tell which was meant.
     assert "Connect it, or build M-101 with the 3 it uses." in issues[0].message
 
 
@@ -640,14 +553,12 @@ def test_either_cure_the_message_names_silences_it(n_inlets, wired):
 
 
 def test_it_is_reported_before_layout_has_run():
-    """A connectivity fact needs no frames, and the call in the issue is a bare
-    ``fs.validate()`` on a flowsheet nobody has laid out. Reporting it only
-    after a render would answer a different question from the one asked."""
+    """Check that nozzle-unconnected is reported before and after layout."""
     fs, mix = _mixer(4, (2, 3, 4))
     assert all(u.frame is None for u in fs.units)
     assert len(_found(fs, "nozzle-unconnected")) == 1
     fs.layout()
-    assert len(_found(fs, "nozzle-unconnected")) == 1  # and the same one afterwards
+    assert len(_found(fs, "nozzle-unconnected")) == 1
 
 
 @pytest.mark.parametrize(
@@ -690,37 +601,23 @@ def test_a_splitter_counts_its_outlets_the_same_way():
 
 
 def test_a_block_is_caught_though_its_symbol_has_no_series():
-    """The reason the check reads the *unit's* ports and not the symbol's
-    :class:`PortSeries`. A block's family is split across up to four faces and
-    one series cannot put ``in_3`` on a face its ``in_1`` is not on, so
-    ``block_symbol`` authors an anchor per connection and there is no series to
-    ask. A block's ``in_2`` is a counted nozzle all the same, and a block is the
-    one class whose *entire* connection list is counted."""
+    """Check that a block's unpiped nozzles are reported, one finding per family."""
     from pandid.render.symbols import default_registry
 
     fs = Flowsheet("bfd")
     blk = fs.add(U.Block("Reaction", inputs=["W", "W", "N"], outputs=2))
     fs.connect(fs.add(U.Feed("F")).outlet, blk.in_1)
     fs.connect(blk.out_1, fs.add(U.Product("P")).inlet)
-    assert default_registry.for_unit(blk).port_series == ()  # nothing to borrow
+    assert default_registry.for_unit(blk).port_series == ()
     issues = _found(fs, "nozzle-unconnected")
-    assert len(issues) == 2  # one per family, not one per unit
+    assert len(issues) == 2
     assert "Reaction.in_2 and Reaction.in_3 carry no stream" in issues[0].message
     assert "Reaction.out_2 carries no stream" in issues[1].message
 
 
 @pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
 def test_a_vessels_spare_relief_and_drain_are_not_reported(cls):
-    """The other half of "only counted nozzles", on the case #222 added.
-
-    A vessel and a tank each carry five connections and a sheet typically pipes
-    two. Those three are *offered* -- CHEE4001 p.7 says where a relief goes, not
-    that one must be drawn -- exactly as a vessel's ``vent`` has been offered
-    since 0.1.0 and is one of the 7 unpiped vents this finding was measured
-    against. Had #222 answered with a count instead (``Tank(outlets=3)``) every
-    one of them would report here, which is the concrete cost of the API this
-    file's rule would have made the wrong one.
-    """
+    """Check that an unpiped vent, relief and drain on a vessel or tank are not reported."""
     fs = Flowsheet("holdup")
     u = fs.add(cls("V-1"))
     fs.connect(fs.add(U.Feed("F")).outlet, u.inlet)
@@ -742,12 +639,7 @@ def test_a_column_counts_its_feeds():
 
 
 def test_the_singular_spelling_of_a_family_is_not_counted():
-    """A one-feed column's nozzle is really named ``feed_1``, the same as any
-    other count, but the bare alias ``feed`` still answers for it -- and that
-    alias, not the port's own name, is what tells the counted-nozzle rule no
-    count was ever written down. ``n_feeds`` past one is what spells the
-    family for real, dropping the alias, and only then is there a number to
-    have failed to meet."""
+    """Check that a one-feed column's unpiped feed is not counted."""
     fs = Flowsheet("col1")
     col = fs.add(U.Column("T-2"))
     fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
@@ -757,10 +649,7 @@ def test_the_singular_spelling_of_a_family_is_not_counted():
 
 
 def test_a_family_with_a_number_missing_is_listed_and_not_ranged():
-    """No constructor here can build one, but a hand-written ``PORTS`` list can,
-    and ``in_1..in_7`` said of four nozzles would be the message inventing three
-    the unit does not have. The range is only used where the run really is 1 to
-    n; anything else is named member by member."""
+    """Check that a numbered family with gaps is listed member by member, not ranged."""
 
     class Odd(U.Unit):
         kind = "unit"
@@ -779,8 +668,7 @@ def test_a_family_with_a_number_missing_is_listed_and_not_ranged():
 
 
 def test_a_spec_built_sheet_is_checked_too():
-    """``08_from_data`` builds its mixer from a mapping, and ``n_inlets`` is a
-    spec field like any other, so a count written in YAML is a count this reads."""
+    """Check that a spec-built mixer's count is checked and survives a round trip."""
     from pandid.spec import from_dict
 
     fs = from_dict(
@@ -798,9 +686,6 @@ def test_a_spec_built_sheet_is_checked_too():
         }
     )
     assert "M-1.in_2 and M-1.in_3 carry no stream" in _found(fs, "nozzle-unconnected")[0].message
-    # ...and it survives the round trip, since to_dict() writes the count back.
-    # stream-table-missing rides along too: F1 and P1 make this a PFD with
-    # material crossing its edge, and the fixture states no property.
     assert [i.code for i in from_dict(fs.to_dict()).validate()] == [
         "nozzle-unconnected",
         "stream-table-missing",
@@ -810,11 +695,7 @@ def test_a_spec_built_sheet_is_checked_too():
 @pytest.mark.parametrize(
     "build,bare",
     [
-        # The false positives, one per family, taken from what the 21 shipped
-        # examples actually leave open. Each is a nozzle its *class* declares --
-        # offered to every instance whether a sheet uses it or not -- so leaving it
-        # open is a drawing decision and not a count that went unmet.
-        (lambda fs: fs.add(U.HeatExchanger("E-1")), "tube_in"),  # 26 of them
+        (lambda fs: fs.add(U.HeatExchanger("E-1")), "tube_in"),
         (lambda fs: fs.add(U.Reactor("R-1")), "duty"),  # a duty
         (lambda fs: fs.add(U.Reactor("R-1")), "vent"),  # an off-gas
         (lambda fs: fs.add(U.Vessel("V-1")), "vent"),
@@ -822,10 +703,7 @@ def test_a_spec_built_sheet_is_checked_too():
         (lambda fs: fs.add(U.Valve("HV-1")), "outlet"),  # a drain leg
         (lambda fs: fs.add(U.Separator("S-1")), "vapor"),
         (lambda fs: fs.add(U.Ejector("EJ-1")), "motive"),
-        # The wash and the cake a cake-forming filter offers. Both are per
-        # variant rather than per class, which is a second way of being
-        # declared and not a count: no number was written down, so there is
-        # nothing for a bare one to have failed to meet.
+        # The wash and the cake a cake-forming filter offers.
         (lambda fs: fs.add(U.Filter("F-1", variant="press")), "wash_in"),
         (lambda fs: fs.add(U.Filter("F-1", variant="press")), "cake"),
         (lambda fs: fs.add(U.Filter("F-1", variant="ion_exchange")), "regenerant_in"),
@@ -841,19 +719,9 @@ def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
 
 
 def test_a_press_that_takes_no_wash_is_a_clean_sheet():
-    """The whole sheet, not just this finding, on the case adding the nozzles
-    could have broken.
-
-    Plenty of presses are run without a displacement wash, and plenty of sheets
-    draw the filtrate and let the cake fall to a bin off the drawing. Neither
-    author asked for a wash line, so neither should be told about one -- and a
-    warning nobody can act on is how a checker stops being read.
-    """
+    """Check that a press with no wash validates clean, with or without its cake piped."""
     fs = Flowsheet("press")
     press = fs.add(U.Filter("F-301", variant="press"))
-    # Tabulated, so stream-table-missing does not ride along and blur what
-    # this test is actually about: a sheet that tabulates nothing at all is
-    # its own finding (test_validate.py's stream-table-missing section).
     fs.connect(fs.add(U.Feed("Slurry")).outlet, press.port("inlet")).properties = {
         "Flow (kg/h)": "4200"
     }
@@ -862,8 +730,6 @@ def test_a_press_that_takes_no_wash_is_a_clean_sheet():
     }
     assert [n for n in press.ports if press.ports[n].stream is None] == ["wash_in", "cake"]
     assert fs.validate() == []
-    # ...and piping the cake and still no wash is equally quiet, which is the
-    # commoner sheet of the two.
     fs.connect(press.port("cake"), fs.add(U.Product("Cake")).inlet).properties = {
         "Flow (kg/h)": "100"
     }
@@ -871,12 +737,7 @@ def test_a_press_that_takes_no_wash_is_a_clean_sheet():
 
 
 def test_a_numbered_signal_family_is_out_of_scope():
-    """Signal ports are a different question and this finding does not answer
-    it. A balloon's ``pv`` is bare on 51 of those 252 because an instrument may
-    be *placed* against its equipment rather than drawn tapped off a line, and
-    an actuator with nothing on it is a hand valve; neither is settled by
-    counting. No shipped class numbers a signal port, so the scope is stated
-    against a unit of the kind ``docs/api.md`` tells a user to write."""
+    """Check that a numbered signal family is not reported while a process one is."""
 
     class Marshalling(U.Unit):
         kind = "marshalling"
@@ -890,8 +751,6 @@ def test_a_numbered_signal_family_is_out_of_scope():
     fs = Flowsheet("signals")
     box = fs.add(Marshalling("JB-1"))
     fs.connect(fs.add(U.Feed("F")).outlet, box.port("in_1"))
-    # Two counted families on one unit, both a nozzle short. Only the process
-    # one is reported, and the signal pair is not so much as named.
     issues = _found(fs, "nozzle-unconnected")
     assert len(issues) == 1
     assert "JB-1.in_2 carries no stream" in issues[0].message
@@ -919,10 +778,7 @@ def test_a_numbered_signal_family_is_out_of_scope():
     ],
 )
 def test_what_the_naming_rule_reads(name, stem):
-    """The one rule the finding turns on, held to the nozzle names the package
-    really ships. ``tube_in`` and ``sig_out`` are the pair worth pinning: both
-    end in a word after an underscore, and a rule that split on the underscore
-    without asking for digits would count them."""
+    """Check which nozzle names _family_stem reads as a numbered family."""
     from pandid.validate import _family_stem
 
     assert _family_stem(name) == stem
@@ -943,11 +799,7 @@ def test_what_the_naming_rule_reads(name, stem):
     ],
 )
 def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
-    """The five classes ``tests/test_port_annotations._DECLARED_FAMILIES`` pins,
-    against the rule this finding reads them with. A sixth class that numbered
-    its nozzles some other way would be invisible here, so the tie is made
-    rather than assumed -- the same reason the ``OFFSET_BY_DESIGN`` sweep
-    measures the geometry instead of taking the exemption on faith."""
+    """Check that _family_stem finds every member of each counted nozzle family."""
     from pandid.validate import _family_stem
 
     unit = build()
@@ -959,15 +811,7 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 
 
 def _fed_mixer(n_inlets=2, **box):
-    """A mixer taking its feeds on one face, which is where this defect lives.
-
-    The mixer symbol is 50px tall and spreads its inlet series 20px apart in its
-    own coordinates, and the drawn pitch is that scaled by the box: at the
-    default size two feeds land 20px apart, which is 8px of paper between two
-    12px arrowheads -- which since #490 is exactly the floor, no more. ``height=35``
-    is the same two nozzles in the short box an author gave them, 14px apart with
-    2px between the heads.
-    """
+    """Build a laid-out mixer taking its *n_inlets* feeds on one face."""
     fs = Flowsheet("crowded")
     mix = fs.add(U.Mixer("M-1", n_inlets=n_inlets, **box))
     for i in range(1, n_inlets + 1):
@@ -984,39 +828,25 @@ def test_two_heads_without_the_paper_between_them_are_reported():
     issues = _found(fs, "nozzles-crowded")
     assert [i.severity for i in issues] == ["warning"]
     assert "M-1.in_1 and M-1.in_2 are 14.0px apart on M-1's W face" in issues[0].message
-    # The measurement a reader can check: the white, against the standard.
     assert "leaves 2.0px of paper between two 12px arrowheads" in issues[0].message
-    # Read off the floor rather than typed, so moving a rung of the ladder
-    # moves what this expects rather than turning it red for the wrong reason.
     assert f"{MIN_HEAD_CLEARANCE:.0f}px ISO 128-20:1996 4.4" in issues[0].message
-    # The finding is only worth making if it also says what to do about it, the
-    # way run-off-elevation names the pin.
     assert "M-1.height = 40" in issues[0].message
 
 
 def test_the_box_the_message_names_is_the_cure():
-    """Typing the message's own suggestion back in has to silence it, or the
-    advice is wrong. 40 is the 35px box scaled by the 16/14 it fell short by."""
+    """Check that the height the message suggests silences nozzles-crowded."""
     fs, _ = _fed_mixer(height=40)
     assert _found(fs, "nozzles-crowded") == []
 
 
 def test_a_default_mixer_is_not_a_finding():
-    """The pitch this check must *not* report, and the reason it is stated as a
-    clearance rather than as a multiple of the head. Two heads 20px apart leave
-    8px of paper against a floor of 4 -- twice the width the sheet draws a main
-    flow line at, which is what ISO 128-20:1996 4.4 and ISO 10628-1 5.3.2 both
-    ask. #502 halved that margin by widening the line those heads end, putting a
-    default mixer exactly on the boundary; restoring the rung puts it clear
-    again."""
+    """Check that a default-size two-inlet mixer is not reported crowded."""
     fs, _ = _fed_mixer()
     assert _found(fs, "nozzles-crowded") == []
 
 
 def test_overlapping_heads_are_worded_as_the_overlap_they_are():
-    """Four inlets squeezed onto a 50px face land 11.7px apart, so the heads are
-    not merely close: they are drawn over each other. Quoting a clearance of
-    "-0.3px" would be arithmetic rather than a description."""
+    """Check that overlapping arrowheads are reported as an overlap, not a negative gap."""
     fs, _ = _fed_mixer(n_inlets=4)
     issues = _found(fs, "nozzles-crowded")
     assert len(issues) == 1
@@ -1025,8 +855,7 @@ def test_overlapping_heads_are_worded_as_the_overlap_they_are():
 
 
 def test_a_third_nozzle_on_one_face_is_still_one_finding():
-    """Three heads on one face is one crowded face with one thing to do about
-    it, so it is said once -- the way letter-sequence says a repeated tag once."""
+    """Check that three crowded nozzles on one face make one finding."""
     fs, _ = _fed_mixer(n_inlets=3, height=35)
     issues = _found(fs, "nozzles-crowded")
     assert len(issues) == 1
@@ -1034,11 +863,7 @@ def test_a_third_nozzle_on_one_face_is_still_one_finding():
 
 
 def test_nozzles_that_carry_no_arrowhead_are_not_crowded():
-    """A splitter's outlets in the same short box sit at the same 14px pitch a
-    mixer's inlets are reported at, and the sheet reads them without trouble: a
-    stream *leaving* takes its head at the far end of the branch, so the face
-    carries two bare lines rather than two 12px triangles. One pitch, two
-    drawings, and only the one with the heads on it is a drawing that misleads."""
+    """Check that a splitter's outlets at the crowded pitch are not reported."""
     from pandid.portgeom import port_point
 
     fs = Flowsheet("splitter")
@@ -1053,15 +878,11 @@ def test_nozzles_that_carry_no_arrowhead_are_not_crowded():
 
 
 def test_a_p_and_id_draws_no_head_to_be_crowded_by():
-    """The finding is about ink, and a P&ID draws none of it: ANSI/ISA-5.1 puts
-    no arrowhead on process piping, so nozzles inside a head that is not there
-    are not a defect. Reporting one would be advice to make a unit 50% taller to
-    fix a drawing that is already right."""
+    """Check that nozzles-crowded is reported on a PFD and not on a P&ID."""
     fs, _ = _fed_mixer(height=35)
-    assert len(_found(fs, "nozzles-crowded", diagram="pfd")) == 1  # the same sheet as a PFD
+    assert len(_found(fs, "nozzles-crowded", diagram="pfd")) == 1
     assert _found(fs, "nozzles-crowded", diagram="p&id") == []
     assert _found(fs, "nozzles-crowded", diagram="pid") == []  # the other spelling
-    # ...and the warnings a render leaves behind are about the sheet it drew.
     fs.to_svg(diagram="p&id")
     assert [w for w in fs.warnings if w.code == "nozzles-crowded"] == []
     assert "marker-end" not in fs.to_svg(diagram="p&id")
@@ -1070,10 +891,7 @@ def test_a_p_and_id_draws_no_head_to_be_crowded_by():
 
 
 def test_the_floor_is_the_arrowhead_the_renderer_actually_draws():
-    """Not a number this module picked. The head the marker is drawn at, the
-    clearance beside it and the weight the clearance is twice of are all read
-    back off the sheet or off the renderer, so redrawing any of them moves the
-    floor rather than leaving the two to drift apart."""
+    """Check that the floor matches the drawn arrowhead and twice the main flow width."""
     import re
 
     from pandid.render.weights import LineWeight
@@ -1093,25 +911,14 @@ def test_the_floor_is_the_arrowhead_the_renderer_actually_draws():
 
 
 def test_the_pitch_a_block_chooses_clears_the_floor_this_check_enforces():
-    """The two arrowhead-derived pitches say different things and are separate
-    names for that reason: ``MIN_NOZZLE_PITCH`` is where a drawing becomes wrong,
-    ``BLOCK_PITCH`` is what a symbol free to size itself picks. A target has to
-    clear its own floor, and a block flow diagram is the case that gathers the
-    most streams onto one face, so it is the one that would find out first.
-
-    Asserted rather than assumed: the two are edited by different concerns, and
-    lowering either without looking at the other is exactly the change that
-    would ship a symbol whose own nozzles this check then reports.
-    """
+    """Check that BLOCK_PITCH is at least MIN_NOZZLE_PITCH."""
     from pandid.render.symbols import BLOCK_PITCH, MIN_NOZZLE_PITCH
 
     assert BLOCK_PITCH >= MIN_NOZZLE_PITCH
 
 
 def test_a_block_gathering_streams_onto_one_face_is_not_crowded():
-    """The same claim on a drawn sheet rather than on the constants. A block is
-    the first unit for which N/S process connections are ordinary, and it sizes
-    itself to its nozzles, so a crowded one would mean the two rules disagree."""
+    """Check that a block with many streams on one face is not reported crowded."""
     fs = Flowsheet("bfd")
     block = fs.add(U.Block("U-100", inputs=["W"] * 4 + ["N"] * 3, outputs=["E"] * 2 + ["S"] * 2))
     for i in range(1, 8):
@@ -1123,7 +930,7 @@ def test_a_block_gathering_streams_onto_one_face_is_not_crowded():
 
 
 def _unit_classes():
-    """Every built-in Unit subclass, keyed by the ``kind`` its symbols answer to."""
+    """Return every built-in Unit subclass, keyed by the ``kind`` its symbols answer to."""
     from pandid import units as unit_types
 
     out = {}
@@ -1134,8 +941,7 @@ def _unit_classes():
     return out
 
 
-#: Every registered (kind, variant) that could be the middle of a run. Boundary
-#: flags have one port and instruments carry only signals, so neither can be.
+#: Every registered (kind, variant) except boundary flags and instruments.
 _REGISTERED = sorted(
     (kind, variant)
     for (kind, variant) in default_registry._symbols
@@ -1145,20 +951,7 @@ _REGISTERED = sorted(
 
 @pytest.mark.parametrize("kind,variant", _REGISTERED, ids=lambda v: str(v))
 def test_every_registered_symbol_is_quiet_on_a_nozzle_pinned_run(kind, variant):
-    """The sweep that fixes OFFSET_BY_DESIGN, run over the whole registry rather
-    than over the handful of symbols the examples happen to use.
-
-    Each symbol is put in a run with the arithmetic done *right*: the upstream
-    flag on the device's inlet and the downstream flag on the device's own
-    outlet, wherever the artwork carries it. A symbol that still fires is one
-    whose geometry the check cannot describe, and is either a bug in the check
-    or a fitting that belongs in OFFSET_BY_DESIGN with a reason beside it.
-
-    A device may legitimately step the run -- a pump's discharge is drawn above
-    its suction -- which is why the downstream end is pinned to the outlet and
-    not to the inlet's elevation. That step is real, and a *downstream unit*
-    that missed it is exactly what this finding is for.
-    """
+    """Check that every registered in-line symbol is quiet on a correctly pinned run."""
     from pandid.portgeom import port_point
 
     cls = _unit_classes().get(kind)
@@ -1189,16 +982,7 @@ def test_every_registered_symbol_is_quiet_on_a_nozzle_pinned_run(kind, variant):
 
 
 def _cyclic_balloons(pump_x=400, pump_y=100):
-    """Two balloons hung off each other, over a run that is otherwise fine.
-
-    ``place_attached`` resolves a host before whatever hangs on it, so a pair
-    that hosts each other is a chain with no end: neither is ever placed, both
-    keep ``frame = None``, and the sweep stops once a pass places nothing. That
-    give-up is the silent failure this section is about.
-
-    *pump_x*/*pump_y* put P-1 clear of T-1 or on top of it, so one builder
-    serves both the finding itself and the sheet it used to blind.
-    """
+    """Build two balloons hung off each other, with P-1 pinned at *pump_x*, *pump_y*."""
     fs = Flowsheet("cycle")
     tank = fs.add(U.Tank("T-1")).pin(x=100, y=100)
     pump = fs.add(U.Pump("P-1")).pin(x=pump_x, y=pump_y)
@@ -1211,25 +995,19 @@ def _cyclic_balloons(pump_x=400, pump_y=100):
 
 
 def test_a_balloon_no_host_could_place_is_reported():
-    """The give-up path used to return without a word, leaving two instruments
-    on the model that appear on no sheet and in no finding."""
+    """Check that two balloons hosting each other are each an instrument-unplaced error."""
     fs = _cyclic_balloons()
     fs.layout()
     issues = _found(fs, "instrument-unplaced")
     assert [i.severity for i in issues] == ["error", "error"]
     assert sorted(i.message.split()[0] for i in issues) == ["LIC-1", "LT-1"]
-    # Each names the host it is waiting on, so the cycle is readable off the
-    # two messages rather than guessed at.
     assert "hangs off LIC-1, which is unplaced itself" in issues[0].message
     assert "hangs off LT-1, which is unplaced itself" in issues[1].message
-    # And what to do about it, the way the surrounding findings do.
     assert "LT-1.attach(<stream or unit>)" in issues[0].message
 
 
 def test_an_unplaced_balloon_does_not_blind_the_rest_of_the_sheet():
-    """The regression that matters. T-1 and P-1 are pinned on top of each other,
-    which is a hard error; one unplaceable balloon used to take the whole
-    geometric block down with it and hand back a clean bill of health."""
+    """Check that unplaced balloons do not hide a unit overlap on the same sheet."""
     fs = _cyclic_balloons(pump_x=110, pump_y=110)
     fs.layout()
     codes = [i.code for i in fs.validate()]
@@ -1238,8 +1016,7 @@ def test_an_unplaced_balloon_does_not_blind_the_rest_of_the_sheet():
 
 
 def test_a_sheet_that_places_its_balloons_reports_nothing_here():
-    """The other half: the finding must not fire on the ordinary case, where a
-    balloon hangs off a unit the ranker positions."""
+    """Check that balloons hung off placed hosts report no instrument-unplaced."""
     fs = Flowsheet("placed")
     tank = fs.add(U.Tank("T-1"))
     pump = fs.add(U.Pump("P-1"))
@@ -1252,18 +1029,13 @@ def test_a_sheet_that_places_its_balloons_reports_nothing_here():
 
 
 def test_it_is_not_reported_before_layout_has_run():
-    """``frame is None`` alone cannot tell "layout has not run" from "layout gave
-    up", which is why the sweep records the ones it gave up on rather than
-    validate() looking for frameless units. A sheet nobody has laid out yet has
-    no unplaceable balloons on it, only unplaced ones."""
+    """Check that instrument-unplaced is not reported before layout runs."""
     fs = _cyclic_balloons()
     assert _found(fs, "instrument-unplaced") == []
 
 
 def test_a_balloon_tapping_a_line_with_an_unplaced_end_names_the_line():
-    """A stream host is not placed itself; what stops it anchoring a balloon is
-    an end that never was, so the message names that rather than claiming the
-    line is unplaced."""
+    """Check that a balloon on a line with an unplaced end names that line."""
     fs = _cyclic_balloons()
     by_name = {u.name: u for u in fs.units}
     sig = fs.connect(by_name["LT-1"].sig_out, by_name["LIC-1"].sig_in, kind="electric")
@@ -1275,30 +1047,17 @@ def test_a_balloon_tapping_a_line_with_an_unplaced_end_names_the_line():
 
 
 def test_render_refuses_the_sheet_by_the_finding_and_not_the_bounding_box():
-    """An error, not a warning: the renderer will not draw a frameless unit at
-    all, so there is no drawing to warn about. Raising it from validate() names
-    the balloon and the cure in place of a bare "lacks a frame"."""
+    """Check that rendering an unplaced balloon raises instrument-unplaced."""
     fs = _cyclic_balloons()
     with pytest.raises(ValueError, match="instrument-unplaced"):
         fs.to_svg()
 
 
 # --- stream-name-reused ---------------------------------------------------
-# Two streams answering to one name lose a stream-table column between
-# them, since the table is one column per distinct name. Sharing a name
-# is ordinary, though -- a run drawn in several connect() calls is one
-# stream, meant to be labelled once -- so only a name *auto-numbering*
-# chose is reported: nobody asked for that one, and the counter's whole
-# promise is that it hands out a free one.
 
 
 def _collided() -> Flowsheet:
-    """A sheet whose explicit name sits on a number the counter reaches.
-
-    The half of the defect numbering cannot fix: a name is free text, so
-    ``S102`` on a ``stream_number_start=100`` sheet meets the third
-    number however carefully the series is counted.
-    """
+    """Build a sheet whose explicit stream name is a number the counter reaches."""
     fs = Flowsheet("collide", stream_number_start=100)
     feeds = [fs.add(U.Feed(f"F{i}")) for i in range(3)]
     m = fs.add(U.Mixer("M-1", n_inlets=3))
@@ -1316,9 +1075,7 @@ def test_a_counted_name_landing_on_a_used_one_is_reported():
 
 
 def test_the_reused_name_costs_a_stream_table_column():
-    """The finding's whole content: the table is keyed by name, so two
-    runs sharing one are tabulated as one and a column of properties is
-    absent from the sheet."""
+    """Check that a reused stream name drops one stream-table column."""
     from pandid.render.furniture import _table_runs
 
     fs = _collided()
@@ -1327,31 +1084,26 @@ def test_the_reused_name_costs_a_stream_table_column():
 
 
 def test_a_run_drawn_in_segments_is_not_a_collision():
-    """``examples/10_ethanol_pfd.py``'s S-305 spans five connect() calls
-    around a reflux circuit. Its segments are one stream deliberately
-    labelled once, and the equipment between them is not inline, so they
-    do not even share a numbering group."""
+    """Check that one name given to two segments of a run is not reported."""
     fs = Flowsheet("segments")
     f = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-1"))
     p = fs.add(U.Product("P"))
     fs.connect(f.outlet, hx.tube_in, name="S-305")
     fs.connect(hx.tube_out, p.inlet, name="S-305")
-    assert len(fs._stream_groups()) == 2  # two groups, one name, no finding
+    assert len(fs._stream_groups()) == 2
     assert _found(fs, "stream-name-reused") == []
 
 
 def test_one_line_number_on_two_runs_is_not_a_collision():
-    """A line number is built out of components the author wrote down,
-    so two runs carrying it are the author naming one line twice --
-    which ``examples/11_ethanol_pid.py`` does four times."""
+    """Check that two runs with the same line number are not reported."""
     fs = Flowsheet("lines")
     f = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-1"))
     p = fs.add(U.Product("P"))
     a = fs.connect(f.outlet, hx.tube_in, size=6, service="P", spec="A1A", sequence=1001)
     b = fs.connect(hx.tube_out, p.inlet, size=6, service="P", spec="A1A", sequence=1001)
-    assert a.name == b.name  # same components, same line number
+    assert a.name == b.name
     assert _found(fs, "stream-name-reused") == []
 
 
@@ -1366,22 +1118,10 @@ def test_a_plainly_numbered_sheet_reports_nothing():
 
 
 # --- boundary-flow-missing ------------------------------------------------
-# ISO 10628-1:2014 4.3.2 d) makes the flow rates or quantities of ingoing
-# and outgoing materials something a process flow diagram *shall* contain,
-# where 4.3.3 a) leaves the flows between the process steps optional. So the
-# stream table drops an internal column with nothing in it and keeps a
-# boundary one (tests/test_titleblock.py), and this is the other half of
-# that: an empty column kept on the sheet is a shall unmet, and a column of
-# dashes is easy to read past.
-#
-# Only on a sheet that tabulates its other streams. One that tabulates none
-# of them has not left a feed out, it has taken none of it up -- and pandid
-# ships show_stream_table=False, so that is a decision above this finding's
-# head rather than an author's slip.
 
 
 def _partly_tabulated() -> Flowsheet:
-    """A sheet that states properties on its inlet and on nothing else."""
+    """Build a sheet that states properties on its inlet and on nothing else."""
     fs = Flowsheet("partly")
     feed = fs.add(U.Feed("Raw Feed"))
     pump = fs.add(U.Pump("P-101"))
@@ -1399,9 +1139,7 @@ def test_an_outgoing_line_with_nothing_on_it_is_reported():
 
 
 def test_the_reported_line_is_the_column_the_table_keeps_empty():
-    """The finding's whole content. Neither half is any use alone: the
-    column is what the reader sees and the finding is what says why it is
-    blank, so the two have to be about the same lines."""
+    """Check that the reported line is the stream-table column left empty."""
     from pandid.render.furniture import _table_runs
 
     fs = _partly_tabulated()
@@ -1410,50 +1148,37 @@ def test_the_reported_line_is_the_column_the_table_keeps_empty():
 
 
 def test_an_internal_line_with_nothing_on_it_is_not_reported():
-    """4.3.3 a) leaves it optional, so its column is dropped instead --
-    there is no clause to hold the sheet to and nothing to tell the author."""
+    """Check that an internal line with no properties is not reported."""
     fs = Flowsheet("internal")
     feed = fs.add(U.Feed("Raw Feed"))
     pump = fs.add(U.Pump("P-101"))
     hx = fs.add(U.HeatExchanger("E-101"))
     prod = fs.add(U.Product("To Storage"))
     fs.connect(feed.outlet, pump.suction).properties = {"Flow (kg/h)": "4200"}
-    fs.connect(pump.discharge, hx.tube_in)  # internal, and nothing on it
+    fs.connect(pump.discharge, hx.tube_in)
     fs.connect(hx.tube_out, prod.inlet).properties = {"Flow (kg/h)": "4200"}
     assert _found(fs, "boundary-flow-missing") == []
 
 
 def test_a_sheet_that_tabulates_nothing_is_not_reported():
-    """The narrowness that keeps this off seven of the 21 shipped examples --
-    counted as the sheets on which no stream carries a property at all. A sheet with no property on any stream has not omitted one
-    line's flow, it has recorded none of them, and pandid's own
-    show_stream_table=False is half of that decision."""
+    """Check that a sheet with no property on any stream reports no boundary-flow-missing."""
     fs = _partly_tabulated()
     fs.streams[0].properties = {}
     assert _found(fs, "boundary-flow-missing") == []
 
 
 def test_a_value_present_and_blank_is_a_report():
-    """The escape hatch the table honours, honoured here too: an empty
-    string is the author saying this line has nothing to report, which is a
-    report. An absent key is silence, which is what this finding is about."""
+    """Check that an empty-string property counts as a stated value."""
     fs = _partly_tabulated()
     fs.streams[1].properties = {"Flow (kg/h)": ""}
     assert _found(fs, "boundary-flow-missing") == []
 
 
 # --- stream-table-missing --------------------------------------------------
-# The other end of the same clause. boundary-flow-missing answers a sheet
-# that has taken up tabulating and left one column short; this answers one
-# that has not taken the practice up at all -- which pandid's own
-# show_stream_table=False default makes the common case, and which #365
-# named a silent breach: ISO 10628-1:2014 4.3.2 c) and d) do not stop
-# applying to a process flow diagram because show_stream_table was never
-# set to True or no stream was ever given a property.
 
 
 def _untabulated() -> Flowsheet:
-    """A PFD with material crossing its edge and no property anywhere."""
+    """Build a PFD with material crossing its edge and no property anywhere."""
     fs = Flowsheet("untabulated")
     feed = fs.add(U.Feed("Raw Feed"))
     pump = fs.add(U.Pump("P-101"))
@@ -1472,8 +1197,7 @@ def test_a_pfd_with_a_boundary_and_nothing_tabulated_is_reported():
 
 
 def test_an_internal_only_sheet_has_no_boundary_to_report():
-    """No Feed, no Product, nothing crosses the edge -- the clause is about
-    ingoing and outgoing material, and this sheet has none."""
+    """Check that a sheet with no feed or product reports no stream-table-missing."""
     fs = Flowsheet("internal-loop")
     a = fs.add(U.Pump("P-101"))
     b = fs.add(U.HeatExchanger("E-101"))
@@ -1482,9 +1206,7 @@ def test_an_internal_only_sheet_has_no_boundary_to_report():
 
 
 def test_a_sheet_that_has_started_tabulating_is_boundary_flow_missings_to_report():
-    """The moment one stream states a property, the sheet has taken up the
-    practice and the narrower, per-line finding is the one that answers --
-    the two are mutually exclusive by construction, not by an extra check."""
+    """Check that one stated property swaps stream-table-missing for boundary-flow-missing."""
     fs = _untabulated()
     fs.streams[0].properties = {"Flow (kg/h)": "4200"}
     assert _found(fs, "stream-table-missing") == []
@@ -1492,25 +1214,14 @@ def test_a_sheet_that_has_started_tabulating_is_boundary_flow_missings_to_report
 
 
 def test_a_pid_is_not_reported():
-    """4.3.2 governs a process flow diagram; a P&ID answers to 4.4.2
-    instead, which this finding does not attempt."""
+    """Check that the sheet as a P&ID has no findings and renders."""
     fs = _untabulated()
     assert fs.validate(diagram="p&id") == []
     fs.to_svg(diagram="p&id")  # does not raise or warn
 
 
 def test_a_bfd_is_not_reported():
-    """Nor does a block flow diagram, which answers 4.2.
-
-    4.2.2 is a block diagram's minimum content and the flow rate is not
-    in it; 4.2.3 is where it sits, and 4.2.3 is what a block diagram
-    *may* also carry. So a BFD whose edge tabulates nothing is short of
-    nothing, and ``12_block_flow_diagram`` -- a real ammonia plant drawn
-    one box per section -- was reported against a clause that does not
-    reach it. Inventing a boundary balance to satisfy the finding would
-    have put plant-scale stoichiometry the sheet does not model onto a
-    reference drawing.
-    """
+    """Check that the sheet as a BFD has no findings and renders without warnings."""
     fs = _untabulated()
     assert fs.validate(diagram="bfd") == []
     fs.to_svg(diagram="bfd")  # does not raise or warn
@@ -1518,18 +1229,7 @@ def test_a_bfd_is_not_reported():
 
 
 def test_the_bfd_owes_no_table_and_heads_its_lines_all_the_same():
-    """The two questions a diagram name is read for, and why there are two.
-
-    A P&ID answers no to both, so one boolean carried both facts for as
-    long as there were two kinds of sheet. A BFD answers yes to one and
-    no to the other, and no single boolean can say that: read as
-    ``arrows``, ``stream-table-missing`` had to report every BFD or
-    every sheet without arrowheads had to be excused the clause.
-
-    The arrowhead half is drawn and measured in
-    ``tests/test_render_api.py``; this is the pair that must not be
-    collapsed back into one.
-    """
+    """Check each diagram kind's answers on arrowheads and boundary-flow tabulation."""
     from pandid.render.svg import draws_arrowheads, tabulates_boundary_flows
 
     answers = {
@@ -1559,27 +1259,18 @@ def test_a_soft_finding_is_a_warning_and_the_sheet_still_draws(build, code, rend
 
 
 # --- validate() answers about the sheet that was drawn ------------------------
-# Two findings depend on which drawing a sheet is, and until this section
-# existed a caller had to say so twice -- once to `render()` and once to
-# `validate()` -- with nothing holding the two in step. Seven shipped
-# examples ended in a bare `validate()` print after rendering, and five of
-# them rendered a P&ID, so what they printed was a PFD's findings about a
-# drawing they had not made. The same argument spelled out twice is what
-# drifted, so the cure is not a third place to spell it: unsaid,
-# `validate()` answers about the last render, exactly as `fs.warnings`
-# already describes the last render and nothing earlier.
-#
+
+
 def test_a_bare_validate_follows_the_drawing_that_was_made():
     fs = _untabulated()
     fs.to_svg(diagram="p&id")
-    assert _found(fs, "stream-table-missing") == []  # 4.4.2, and this finding is 4.3.2 d)
+    assert _found(fs, "stream-table-missing") == []
     fs.to_svg(diagram="pfd")
-    assert len(_found(fs, "stream-table-missing")) == 1  # ...and back again
+    assert len(_found(fs, "stream-table-missing")) == 1
 
 
 def test_a_diagram_named_at_the_call_still_wins():
-    """So a caller can still ask what this model would report as some
-    other drawing, without rendering it as one."""
+    """Check that a diagram named to validate() overrides the last render's."""
     fs = _untabulated()
     fs.to_svg(diagram="p&id")
     assert len(fs.validate(diagram="pfd")) == 1
@@ -1587,8 +1278,7 @@ def test_a_diagram_named_at_the_call_still_wins():
 
 
 def test_the_render_leaves_the_findings_a_bare_validate_then_makes():
-    """The statement the examples rest on: what `validate()` prints after a
-    render is what that render put on `fs.warnings`."""
+    """Check that a bare validate() after a render matches that render's warnings."""
     fs = _untabulated()
     for kind in ("pfd", "p&id", "bfd"):
         fs.to_svg(diagram=kind)
@@ -1596,17 +1286,14 @@ def test_the_render_leaves_the_findings_a_bare_validate_then_makes():
 
 
 def test_an_unchecked_render_still_says_which_drawing_it_made():
-    """`check=False` skips the findings, not the sheet: it drew a P&ID, and
-    the next `validate()` is about a P&ID."""
+    """Check that a check=False render still sets the diagram a bare validate() uses."""
     fs = _untabulated()
     fs.to_svg(diagram="p&id", check=False)
     assert _found(fs, "stream-table-missing") == []
 
 
 def test_a_drawing_the_renderer_refused_is_not_remembered_as_the_one_made():
-    """A name that raises leaves no sheet behind, so a later bare
-    `validate()` must answer as a PFD rather than raise the render's error
-    a second time from a call that named nothing."""
+    """Check that a refused diagram leaves a bare validate() answering as a PFD."""
     fs = _untabulated()
     with pytest.raises(ValueError):
         fs.to_svg(diagram="isometric")
@@ -1614,33 +1301,15 @@ def test_a_drawing_the_renderer_refused_is_not_remembered_as_the_one_made():
 
 
 # --- the model is checked before any geometry is built ------------------------
-# A render used to lay out and route first and validate the result, so a
-# sheet the validator would refuse outright was handed to the engine
-# anyway. A NaN pin is the case that shows it: `pin-not-finite` names
-# the contradiction exactly, and the same coordinate is one the router
-# starts from and does not come back from, so the finding was made about a
-# drawing nobody could obtain. ``pin()`` now refuses one where it is written
-# (#574), so these tests set it through ``pin_``, the setter that restores a
-# stored placement.
-#
-# Every test below therefore runs with `no_geometry` in place. Without it a
-# regression would not fail this file, it would hang it.
 
 
 class _GeometryRan(AssertionError):
-    """Raised in place of layout or routing, so a test can prove neither ran."""
+    """Error raised in place of layout or routing."""
 
 
 @pytest.fixture
 def no_geometry(monkeypatch):
-    """Make ``layout()`` and ``route()`` fail loudly instead of running.
-
-    The guard these tests need, and the assertion they make. A model-only
-    error has to be raised before either is called, so replacing both with
-    a raise turns "the check came too late" from an open-ended wait into an
-    immediate, named failure -- and turns "the check came first" into an
-    ordinary ``pytest.raises(ValueError)`` that never touches the router.
-    """
+    """Make ``layout()`` and ``route()`` raise ``_GeometryRan`` instead of running."""
 
     def refuse(self, *args, **kwargs):
         raise _GeometryRan("layout/route ran before the model was checked")
@@ -1650,7 +1319,7 @@ def no_geometry(monkeypatch):
 
 
 def _off_sheet(value=float("nan"), axis="x"):
-    """A three-unit run whose middle unit is pinned at *value* on *axis*."""
+    """Build a three-unit run whose middle unit is pinned at *value* on *axis*."""
     fs = Flowsheet("not-finite")
     f = fs.add(U.Feed("F")).pin(x=60, y=100)
     hx = fs.add(U.HeatExchanger("E-101"))
@@ -1664,13 +1333,7 @@ def _off_sheet(value=float("nan"), axis="x"):
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 @pytest.mark.parametrize("axis", ["x", "y"])
 def test_a_pin_that_is_not_a_number_is_an_error(value, axis):
-    """`pin-not-finite` itself, on both axes and all three non-numbers.
-
-    ``-inf`` is deliberately here beside ``nan``: it is also negative, and
-    the finding must be that it is not finite rather than that it is off
-    the left edge, since ``pin-out-of-bounds`` would tell the author to
-    move it somewhere it cannot be moved to.
-    """
+    """Check that a NaN or infinite pin on either axis is a pin-not-finite error."""
     issues = _found(_off_sheet(value, axis), "pin-not-finite")
     assert [i.severity for i in issues] == ["error"]
     assert f"E-101 pinned {axis}={value!r} is not a finite number" == issues[0].message
@@ -1690,22 +1353,15 @@ def test_to_drawio_refuses_a_pin_that_is_not_a_number(no_geometry, value):
 
 @pytest.mark.parametrize("suffix", [".svg", ".drawio"])
 def test_render_to_a_file_refuses_a_pin_that_is_not_a_number(no_geometry, tmp_path, suffix):
-    """Both branches of ``render()``: the sheet backends and the model one."""
+    """Check that render() to .svg or .drawio refuses a non-finite pin and writes nothing."""
     out = tmp_path / f"sheet{suffix}"
     with pytest.raises(ValueError, match="pin-not-finite"):
         _off_sheet().render(out)
-    assert not out.exists()  # nothing half-written
+    assert not out.exists()
 
 
 def test_the_model_error_is_the_one_reported(no_geometry):
-    """A sheet wrong in both halves is refused for the model half.
-
-    T-1 and P-1 sit on top of each other, which is ``unit-overlap`` -- a
-    finding that needs frames. The message must name the pin and not the
-    overlap, because the overlap has not been looked for: this is the
-    assertion that the model check happens *first* rather than merely
-    happening.
-    """
+    """Check that a sheet with a bad pin and an overlap is refused for the pin."""
     fs = Flowsheet("both")
     a = fs.add(U.Tank("T-1"))
     a.pin_ = Pin(x=float("nan"), y=100)
@@ -1719,22 +1375,13 @@ def test_the_model_error_is_the_one_reported(no_geometry):
 
 
 def test_check_false_skips_the_model_check_too(no_geometry):
-    """``check=False`` still means *no* validation, not "the late half only".
-
-    With the geometry guard in place the proof is which exception comes
-    out: reaching layout at all says the model check was skipped, where a
-    ``ValueError`` would say it had quietly become unconditional.
-    """
+    """Check that check=False skips the model check and reaches layout."""
     with pytest.raises(_GeometryRan):
         _off_sheet().to_svg(check=False)
 
 
 def test_a_sound_model_still_reaches_the_geometry(no_geometry):
-    """The other half: the pre-flight refuses a sheet, it does not stop one.
-
-    A clean model must pass through the model check and go on to lay out,
-    so this asserts the guard fires rather than a ``ValueError``.
-    """
+    """Check that a clean model passes the model check and reaches layout."""
     fs = Flowsheet("clean")
     f = fs.add(U.Feed("F"))
     p = fs.add(U.Product("P"))
@@ -1744,12 +1391,7 @@ def test_a_sound_model_still_reaches_the_geometry(no_geometry):
 
 
 def test_the_two_halves_are_the_whole_of_validate():
-    """``validate()`` is still every finding, and still errors first.
-
-    The split is an order, not a subset: nothing may fall between the two
-    functions, and a caller who asks the sheet what is wrong with it gets
-    the same list as before.
-    """
+    """Check that validate() is model_issues() plus geometry_issues(), errors first."""
     from pandid.validate import geometry_issues, model_issues, validate
 
     fs = _cyclic_balloons(pump_x=110, pump_y=110)  # overlap, and two loose balloons
@@ -1763,12 +1405,7 @@ def test_the_two_halves_are_the_whole_of_validate():
 
 
 def test_warnings_from_both_halves_land_on_the_sheet_together():
-    """``fs.warnings`` is one sheet's findings, not one phase's.
-
-    ``letter-sequence`` is made by the model half and ``route-detour`` by
-    the geometric one, so a render that collected only the second list
-    would drop half the findings on the floor.
-    """
+    """Check that a render puts model and geometry warnings on fs.warnings together."""
     fs = Flowsheet("warnings")
     f = fs.add(U.Feed("F")).pin(x=60, y=100)
     p = fs.add(U.Product("P")).pin(x=400, y=100)
@@ -1783,7 +1420,7 @@ def test_warnings_from_both_halves_land_on_the_sheet_together():
 
 
 def _hand_routed(*waypoints):
-    """A pump discharge routed through hand-written points, its ends pinned."""
+    """Build a pump discharge routed through *waypoints*, its ends pinned."""
     fs = Flowsheet("via")
     f = fs.add(U.Feed("F"))
     p = fs.add(U.Pump("P-1")).pin(port="discharge", x=320, y=60)
@@ -1796,10 +1433,7 @@ def _hand_routed(*waypoints):
 
 
 def test_a_single_via_waypoint_that_squares_nothing_up_is_reported():
-    """`via()` states the middle of the path and nothing squares the ends
-    against it, so one point off the axis of both nozzles leaves a diagonal.
-    `tests/test_route_invariants` holds the shipped corpus orthogonal; an author
-    drawing their own sheet had nothing watching at all."""
+    """Check that a via() point off both nozzle axes is a route-diagonal warning."""
     from pandid.layout.attach import stream_path
 
     fs, run = _hand_routed((320.0, 200.0))
@@ -1807,8 +1441,6 @@ def test_a_single_via_waypoint_that_squares_nothing_up_is_reported():
     (found,) = _found(fs, "route-diagonal")
     assert found.severity == "warning"
     assert "(320, 200) to (440, 60)" in found.message
-    # The corner it turns at, and only the one that is not already on the path:
-    # turning at the source doubles the line back on itself.
     assert "Add the corner it turns at, (440, 200)" in found.message
 
 
@@ -1818,10 +1450,7 @@ def test_the_corner_it_names_is_the_cure():
 
 
 def test_neither_route_finding_beside_it_can_see_a_diagonal():
-    """`route-detour` measures Manhattan length, which a diagonal and the elbow
-    replacing it share exactly, and `segment_crosses_box` answers `False` for a
-    sloping segment whatever it runs over. So the finding could not be left to
-    either of them."""
+    """Check that route-detour and segment_crosses_box cannot detect a diagonal."""
     from pandid.layout.conflicts import segment_crosses_box
 
     def detour(fs):
@@ -1838,12 +1467,7 @@ def test_neither_route_finding_beside_it_can_see_a_diagonal():
 
 
 def test_a_label_side_nothing_places_is_refused_rather_than_topped():
-    """A misspelt ``label_pos`` used to mean "top" and mean it silently.
-
-    Two defects in one: the tag went to the wrong side, and a stated side is
-    read as deliberate, so ``_tag_item`` skipped the search that steps a tag
-    clear of the ink under it and nailed the typo where it landed.
-    """
+    """Check that a misspelt label_pos is a label-pos-unknown error naming the fix."""
     fs = Flowsheet("botom")
     f = fs.add(U.Feed("F"))
     p = fs.add(U.Pump("P-1", label_pos="botom"))
@@ -1857,8 +1481,7 @@ def test_a_label_side_nothing_places_is_refused_rather_than_topped():
 
 
 def test_the_label_sides_that_do_place_are_not_accused():
-    """Including ``center``, which no free face ever answers with: a symbol
-    asks for it or an author does, and it is drawn either way."""
+    """Check that every valid label side, None and empty raise no finding."""
     from pandid.render.svg import LABEL_POSITIONS
 
     for side in (*LABEL_POSITIONS, None, ""):
@@ -1868,9 +1491,7 @@ def test_the_label_sides_that_do_place_are_not_accused():
 
 
 def test_a_label_side_is_refused_before_anything_is_laid_out():
-    """A model finding, and hard: the side is the author's and needs no
-    geometry, and a render that reached the router would have drawn the wrong
-    sheet before anything could say so."""
+    """Check that model_issues() reports an unknown label side before layout."""
     from pandid.validate import model_issues
 
     fs = Flowsheet("early")
@@ -1882,12 +1503,7 @@ def test_a_label_side_is_refused_before_anything_is_laid_out():
 
 
 def test_a_kind_with_no_artwork_is_named_rather_than_drawn_blank():
-    """Two spellings of one mistake were handled oppositely.
-
-    An unregistered *variant* of a registered kind raises and names the
-    catalogue; the same typo one key up drew an empty 60x60 box with no ports,
-    under an id that looks like the author's symbol, and said nothing.
-    """
+    """Check that an unregistered kind warns once, naming the closest kind."""
 
     class Widget(U.Unit):
         kind = "pumpp"
@@ -1897,14 +1513,12 @@ def test_a_kind_with_no_artwork_is_named_rather_than_drawn_blank():
     fs.add(Widget("X-2"))
     fs.to_svg()
     found = [w for w in fs.warnings if w.code == "symbol-kind-unknown"]
-    # One per kind, not one per unit: two Widgets are one thing to fix.
     assert len(found) == 1
     assert "X-1" in found[0].message
     assert "'pumpp'" in found[0].message
     assert "did you mean 'pump'?" in found[0].message
     assert "60x60" in found[0].message
 
-    # ...and the registered kinds are not accused of anything.
     clean = Flowsheet("clean-kinds")
     f = clean.add(U.Feed("F"))
     p = clean.add(U.Product("P"))
@@ -1914,12 +1528,7 @@ def test_a_kind_with_no_artwork_is_named_rather_than_drawn_blank():
 
 
 def test_a_block_letters_its_name_out_of_a_box_it_was_given():
-    """A width the author set wins outright, so the name overflows it.
-
-    ``block_symbol`` widens a box it sizes itself, so this can only reach a
-    block given a ``width`` of its own -- and a section name centred on a
-    120-wide box hangs a long way out of each side of it, silently.
-    """
+    """Check that a block name wider than its given width warns label-overruns-symbol."""
     fs = Flowsheet("bfd")
     a = fs.add(U.Block("Fermentation and Beer Stripping Section", width=120))
     b = fs.add(U.Block("Recovery"))
@@ -1932,7 +1541,7 @@ def test_a_block_letters_its_name_out_of_a_box_it_was_given():
 
 
 def test_a_block_that_sizes_itself_always_fits_its_name():
-    """The other half of the rule, so the check cannot be firing on everything."""
+    """Check that a self-sized block does not warn label-overruns-symbol."""
     fs = Flowsheet("bfd-auto")
     a = fs.add(U.Block("Fermentation and Beer Stripping Section"))
     b = fs.add(U.Block("Recovery"))
@@ -1942,11 +1551,7 @@ def test_a_block_that_sizes_itself_always_fits_its_name():
 
 
 def test_warnings_describe_the_last_render_and_nothing_earlier():
-    """``fs.warnings`` was only ever *assigned* inside ``if check:``.
-
-    So after a ``check=False`` render it still held the previous render's
-    findings, and a caller could not tell a stale list from an empty one.
-    """
+    """Check that fs.warnings holds only the last render's findings."""
     fs = Flowsheet("stale")
     f = fs.add(U.Feed("F")).pin(x=60, y=100)
     p = fs.add(U.Product("P")).pin(x=400, y=100)
@@ -1955,15 +1560,12 @@ def test_warnings_describe_the_last_render_and_nothing_earlier():
 
     fs.to_svg()
     assert "letter-sequence" in [w.code for w in fs.warnings]
-    # A caller who wants two renders' findings keeps them; the sheet does not.
     kept = list(fs.warnings)
 
     fs.to_svg(check=False)
     assert fs.warnings == []
     assert kept, "the copy is the caller's, and is untouched by the next render"
 
-    # ...and a checked render fills it again rather than appending to a list
-    # that has been growing since the first one.
     fs.to_svg()
     fs.to_svg()
     assert [w.code for w in fs.warnings].count("letter-sequence") == 1
@@ -1979,27 +1581,19 @@ def _sized(name="R-1", **kw) -> Flowsheet:
 
 
 def test_the_box_that_shipped_a_seventy_percent_stretch_is_reported():
-    """``examples/10_ethanol_pfd.py``'s M-301, as it stood.
-
-    80 x 100 was right when a stirred reactor's box was 62 x 100. Composing
-    ISO item 20.6's motor above the crown took the box to 62 x 131,8 and left
-    the number behind, and nothing said so: the sheet scaled the artwork x1,29
-    across and x0,76 down and drew the motor as a flat oval.
-    """
+    """Check that an 80x100 stirred reactor is reported 70% out of aspect with a cure."""
     found = _found(_sized("M-301", n_feeds=2, width=80, height=100), "symbol-out-of-aspect")
     assert len(found) == 1
     assert found[0].severity == "warning"
     assert "M-301" in found[0].message
     assert "80x100" in found[0].message and "62x131.778" in found[0].message
     assert "70% out of shape" in found[0].message
-    # The part is named by the row of Table 2 it claims to be, and the cure is
-    # the width that goes with the height the author asked for.
     assert "ISO item 20.6 C0082" in found[0].message
     assert "M-301.width = 47.05" in found[0].message
 
 
 def test_the_width_the_message_offers_is_the_one_that_silences_it():
-    """The arithmetic in the message, checked rather than asserted in prose."""
+    """Check that the width the message suggests silences symbol-out-of-aspect."""
     fs = _sized("M-301", n_feeds=2, width=80, height=100)
     sym = default_registry.for_unit(fs.units[0])
     fixed = _sized("M-301", n_feeds=2, width=sym.width / sym.height * 100, height=100)
@@ -2008,39 +1602,25 @@ def test_the_width_the_message_offers_is_the_one_that_silences_it():
 
 @pytest.mark.parametrize("width,height", [(None, None), (72, 153), (124, 264), (36, 76.5)])
 def test_a_box_of_the_symbols_own_shape_is_quiet(width, height):
-    """At the artwork's own aspect, at any size, and unsized at all."""
+    """Check that a box at the symbol's own aspect, or unsized, is not reported."""
     kw = {k: v for k, v in (("width", width), ("height", height)) if v is not None}
     assert _found(_sized("M-301", n_feeds=2, **kw), "symbol-out-of-aspect") == []
 
 
 def test_a_quarter_turn_is_not_a_stretch():
-    """``FA-601`` reads 334 % against the symbol's box and is a rotation.
-
-    ``resolve_size`` swaps the symbol's own box for a quarter turn, so a
-    12 x 25 arrestor drawn 25 x 12 is measured against 25 x 12. Checked here on
-    the reactor, which is the only family the finding can reach at all -- and
-    turned, which is what makes the two boxes disagree if the swap is missed.
-    """
+    """Check that a quarter-turned reactor with swapped size is not out of aspect."""
     fs = Flowsheet("turned")
     rx = fs.add(U.Reactor("R-1", n_feeds=2))
     sym = default_registry.for_unit(rx)
     rx.pin(x=100, y=100, orientation=90)
     rx.width, rx.height = sym.height, sym.width
     assert _found(fs, "symbol-out-of-aspect") == []
-    # ...and the same numbers *un*-turned are the stretch they describe.
     rx.pin(x=100, y=100, orientation=0)
     assert len(_found(fs, "symbol-out-of-aspect")) == 1
 
 
 def test_a_boundary_flag_stretched_to_hold_its_label_is_not_reported():
-    """A pennant's own box is the wide one: it is sized to the text it carries.
-
-    Most of the boxes on the 21 shipped sheets that differ from a registered
-    symbol's are these, and every one is the flag doing its job. The exact
-    split was last counted before the corpus reached 21 and is deliberately
-    not restated here: what this test is for is that a stretched pennant is
-    never reported, which the assertion below states without a tally.
-    """
+    """Check that a feed flag widened by its label is not reported out of aspect."""
     fs = Flowsheet("pennant")
     f = fs.add(U.Feed("Cooling Water Supply Header", reference="P&ID-101"))
     p = fs.add(U.Product("P"))
@@ -2050,13 +1630,7 @@ def test_a_boundary_flag_stretched_to_hold_its_label_is_not_reported():
 
 
 def test_a_body_whose_marks_are_lines_may_be_any_shape():
-    """The narrowness is the measurement; see ``ROUND_PARTS``.
-
-    A packed bed and a trayed column are stretched hard on the shipped sheets
-    and are right: a deck is a line and a shell is drawn at the proportions the
-    plant has. A rule phrased as "the box is not the symbol's shape" would ask
-    for a 170 x 340 amine contactor.
-    """
+    """Check that stretched packed and trayed bodies are not reported out of aspect."""
     packed = _sized("R-301", internals="packing", width=90, height=200)
     assert _found(packed, "symbol-out-of-aspect") == []
 
@@ -2066,14 +1640,7 @@ def test_a_body_whose_marks_are_lines_may_be_any_shape():
 
 
 def test_the_motor_really_is_round_on_its_own_box_and_oval_off_it():
-    """``ROUND_PARTS`` is a rule with no geometry behind it, so measure it.
-
-    ``agitator_overlays`` sizes the motor's rectangle as a third of the shell's
-    width by *whatever fraction of this body's height that is*. This asserts the
-    consequence rather than the arithmetic: the rectangle is a square at the
-    natural box, and stops being one at a box of another shape -- by exactly the
-    amount the finding reports.
-    """
+    """Check that the agitator motor is square on the reactor's box and 1.3x off it."""
     from pandid.render.iso_parts import agitator_overlays
     from pandid.validate import ROUND_PARTS
 
@@ -2081,11 +1648,9 @@ def test_the_motor_really_is_round_on_its_own_box_and_oval_off_it():
         body = default_registry.get("reactor", variant)
         overlays = agitator_overlays("agitator", "reactor", variant)
         motor = next(o for o in overlays if (o.group, o.name) in ROUND_PARTS)
-        # Round at the body's own box: the rectangle is a square.
         rect_w, rect_h = motor.w * body.width, motor.h * body.height
         assert rect_w == pytest.approx(rect_h, rel=1e-9)
-        # ...and the composed drawing stretched into a box 30 % wider than its
-        # shape draws that square 30 % wider, which is the oval.
+        # A box 30 % wider than the symbol's own.
         sym = default_registry.for_unit(U.Reactor("R-1", variant=variant))
         drawn_w, drawn_h = 1.3 * sym.width, sym.height
         stretched = (rect_w * drawn_w / sym.width) / (rect_h * drawn_h / sym.height)
@@ -2093,12 +1658,7 @@ def test_the_motor_really_is_round_on_its_own_box_and_oval_off_it():
 
 
 def test_it_answers_before_anything_is_laid_out():
-    """A model finding: the box is the author's and needs no geometry.
-
-    ``resolve_size`` is what layout sizes the frame with, so the two agree, and
-    saying it early is the point -- the number is in the source and the artwork
-    it no longer matches is in the library.
-    """
+    """Check that model_issues() reports symbol-out-of-aspect before layout."""
     from pandid.validate import model_issues
 
     fs = _sized("M-301", n_feeds=2, width=80, height=100)
@@ -2110,7 +1670,7 @@ def test_it_answers_before_anything_is_laid_out():
 
 
 def _parallel_pair(gap_px: float):
-    """Two runs side by side, their centrelines *gap_px* apart."""
+    """Build two laid-out parallel runs with centrelines *gap_px* apart."""
     fs = Flowsheet("parallel")
     a = fs.add(U.Feed("A")).pin(x=60, y=200)
     ap = fs.add(U.Product("AP")).pin(x=600, y=200)
@@ -2123,13 +1683,7 @@ def _parallel_pair(gap_px: float):
 
 
 def test_two_runs_without_the_paper_between_them_are_reported():
-    """ISO 10628-1 5.3.2: twice the wider of the two, and never under 1 mm.
-
-    Both runs are main flow lines at 2 units, so the clause's two floors land on
-    the same number: twice the width is 4 units, and 1 mm is 4 units at 0,25 mm
-    to the unit. Centres 6 apart clear it exactly. At 5 apart they leave 3 and
-    are reported.
-    """
+    """Check that main flow lines 5px apart are reported lines-crowded."""
     issues = _found(_parallel_pair(5.0), "lines-crowded")
     assert [i.severity for i in issues] == ["warning"]
     assert "run parallel at y 200 and 205" in issues[0].message
@@ -2138,22 +1692,12 @@ def test_two_runs_without_the_paper_between_them_are_reported():
 
 
 def test_two_runs_far_enough_apart_are_not_a_finding():
-    """The other side of the floor, so the check is not simply always firing.
-
-    6 and not some comfortable number: it is the exact separation the floor
-    admits, so this fails if the floor moves in *either* direction rather than
-    only if it grows.
-    """
+    """Check that main flow lines 6px apart, the exact floor, are not reported."""
     assert _found(_parallel_pair(6.0), "lines-crowded") == []
 
 
 def test_the_clearance_floor_is_twice_the_widest_rung_the_pair_is_drawn_on():
-    """Stated as the ratio the clause states, not as the number it works out to.
-
-    Read off the message the finding writes, so the threshold a reader is told
-    about is the threshold that fired -- and both are the ladder's, so a rung
-    moving moves them together instead of leaving one behind.
-    """
+    """Check that the floor the message names is twice the main flow line width."""
     import re
 
     from pandid.render.weights import LineWeight
@@ -2164,11 +1708,7 @@ def test_the_clearance_floor_is_twice_the_widest_rung_the_pair_is_drawn_on():
 
 
 def test_two_runs_that_only_meet_end_to_end_are_not_parallel_lines():
-    """5.3.2 is about a pair a reader has to tell apart, so the two have to run
-    *together*. Two segments on nearby lines that share no length between them
-    are consecutive pieces of a path meeting a tap, not a crowded pair; two on
-    the shipped corpus are exactly that and were reported until the overlap was
-    required."""
+    """Check that nearby runs sharing no length are not reported crowded."""
     fs = Flowsheet("abut")
     a = fs.add(U.Feed("A")).pin(x=60, y=200)
     ap = fs.add(U.Product("AP")).pin(x=300, y=200)
@@ -2180,16 +1720,11 @@ def test_two_runs_that_only_meet_end_to_end_are_not_parallel_lines():
     assert _found(fs, "lines-crowded") == []
 
 
-# --- a line drawn through the unit it connects to (#468) -----------------------
+# --- a line drawn through the unit it connects to -----------------------------
 
 
 def _exchanger_run() -> tuple[Flowsheet, U.HeatExchanger, U.Feed, U.Product]:
-    """E-101 between a feed below it and a product to its right.
-
-    ``shell_in`` is on the N face and ``shell_out`` on the S face, so a line from
-    the feed has to come round to the top, and one to the product round from
-    the bottom.
-    """
+    """Build E-101 between a feed below it and a product to its right."""
     fs = Flowsheet("own unit")
     feed = fs.add(U.Feed("F")).pin(x=200, y=300)
     e = fs.add(U.HeatExchanger("E-101")).pin(x=300, y=100)
@@ -2209,8 +1744,7 @@ def _own_unit_findings(fs: Flowsheet) -> list[str]:
 
 
 def test_a_line_drawn_up_through_the_unit_it_runs_to_is_reported():
-    """The case from the amine sheet: the nozzle is on the N face and the line
-    comes up from the south, through the tube bundle, to reach it."""
+    """Check that a line run up through its unit to an N-face nozzle is reported."""
     fs, e, feed, _ = _exchanger_run()
     (x, _), (_, y) = port_point(e, e.frame, "shell_in"), port_point(feed, feed.frame, "outlet")
     fs.streams[0].via([(x, y)])
@@ -2221,8 +1755,7 @@ def test_a_line_drawn_up_through_the_unit_it_runs_to_is_reported():
 
 
 def test_a_line_that_leaves_through_the_wrong_face_of_its_source_is_reported():
-    """The same shape at the other end: out of the S nozzle, then up through
-    the exchanger to the product above it."""
+    """Check that a line leaving an S-face nozzle up through its unit is reported."""
     fs, e, _, prod = _exchanger_run()
     (x, _), (_, y) = port_point(e, e.frame, "shell_out"), port_point(prod, prod.frame, "inlet")
     fs.streams[1].via([(x, y)])
@@ -2233,16 +1766,13 @@ def test_a_line_that_leaves_through_the_wrong_face_of_its_source_is_reported():
 
 
 def test_a_line_that_reaches_its_nozzle_from_the_nozzle_face_is_not_reported():
-    """Every run ends inside its own box's outline at the nozzle; that is not
-    the line crossing the unit."""
+    """Check that lines reaching their nozzles from the nozzle face are not reported."""
     fs, *_ = _exchanger_run()
     assert _own_unit_findings(fs) == []
 
 
 def test_a_line_leaving_along_the_top_of_a_round_shell_is_not_reported():
-    """A condenser's top nozzle sits on the circle, below the corner of its box,
-    so a line leaving it sideways runs inside the box without entering the
-    shell. Example 19 draws its reflux line exactly so."""
+    """Check that a line leaving a round shell's top nozzle sideways is not reported."""
     fs = Flowsheet("round shell")
     feed = fs.add(U.Feed("F"))
     e = fs.add(Condenser("E-402", width=70, height=70)).pin(mirrored="y").pin(x=300, y=100)
@@ -2255,9 +1785,7 @@ def test_a_line_leaving_along_the_top_of_a_round_shell_is_not_reported():
 
 
 def test_a_branch_drawn_from_the_middle_of_its_tee_is_not_reported():
-    """A tee is drawn as lines meeting at its centre, so a branch that starts
-    there and doubles back out through its own nozzle is drawing the tee.
-    Example 20 draws its branches this way."""
+    """Check that a branch drawn from its tee's centre out its nozzle is not reported."""
     fs = Flowsheet("tee")
     tee = fs.add(U.Tee()).pin(x=300, y=200)
     side = fs.add(U.Product("B")).pin(x=500, y=400)
@@ -2272,9 +1800,7 @@ def test_a_branch_drawn_from_the_middle_of_its_tee_is_not_reported():
 
 
 def test_a_straight_line_drawn_through_the_unit_it_runs_to_is_reported():
-    """via([]) asks for no corners, and the sheet draws a straight line from
-    nozzle to nozzle -- here up through E-101 to the nozzle on its top. The
-    check reads that line, not only the waypoints."""
+    """Check that a straight via([]) line through its unit is reported."""
     fs = Flowsheet("direct")
     feed = fs.add(U.Feed("F")).pin(x=330, y=300)
     e = fs.add(U.HeatExchanger("E-101")).pin(x=300, y=100)

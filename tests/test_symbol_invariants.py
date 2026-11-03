@@ -1279,7 +1279,7 @@ def test_an_alternate_on_a_ports_own_home_face_is_rejected():
             width=91.5,
             height=30.0,
             ports={"feed": (0.0, 15.0)},
-            port_faces={"feed": {"W": (0.0, 12.0)}},  # the west head is already taken
+            port_faces={"feed": {"W": (0.0, 12.0)}},
         )
 
 
@@ -1316,7 +1316,7 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
         ports={"feed": (0.0, 15.0)},
         port_faces={"feed": {"W": (0.0, 15.0), "N": (20.0, 0.0)}},
     )
-    assert list(sym.port_faces["feed"]) == ["W", "N"]  # home stays most preferred
+    assert list(sym.port_faces["feed"]) == ["W", "N"]
 
 
 def test_every_port_menu_starts_from_its_home_placement():
@@ -1781,12 +1781,7 @@ def test_a_face_with_no_wall_is_refused_by_the_drawing_too():
 
 
 def test_an_inlet_and_an_outlet_on_a_face_with_no_wall_are_refused_by_the_drawing():
-    """Verify the drawing counts both families on a wall-less face (#507).
-
-    No shipped body offers both roles a point face, so the symbol is
-    registered here: an inlet and an outlet may both sit on a cone apex.
-    The symbol itself warns that the two roles share that point.
-    """
+    """Verify an inlet and an outlet on one wall-less face are refused."""
     from pandid.render.symbols import vessel_symbol
 
     variant = "cross_role_test"
@@ -1804,7 +1799,6 @@ def test_an_inlet_and_an_outlet_on_a_face_with_no_wall_are_refused_by_the_drawin
             bands={"N": (50.0, 50.0), "W": (30.0, 80.0)},
         )
     default_registry.register("tank", apex, variant)
-    # W has a wall, but only the outlet may use it, so neither path offers it (#580).
     try:
         with pytest.raises(ValueError, match="in_1 and out_1 are both on the N face") as drawn:
             vessel_symbol("tank", variant, (("in_1", "N"), ("out_1", "N")))
@@ -1836,7 +1830,6 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
                 units.Vessel("X-1", variant=variant, supports=supports)
             )
         except ValueError as exc:
-            # Refused when built, by the composition check (#574).
             assert "cannot carry supports=" in str(exc), f"vessel/{variant} + {supports}: {exc}"
             continue
         assert drawn.bands == sym.bands, (

@@ -1,34 +1,4 @@
-"""No two drawings this library ships are secretly the same drawing.
-
-The failure this guards against is #367's, and it is the quietest one the
-project has: a stencil that is a *placeholder* rather than a drawing. The
-draw.io P&ID set ships a shape called "Steam Trap" which is an empty
-50 x 50 rectangle, byte-for-byte identical to the same file's "Desuper
-Heater". Vendoring it would have registered one blank box under two
-device names, and a sheet asking for a steam trap would have come out
-showing a desuperheater -- with no warning, because nothing anywhere
-compares two drawings to each other.
-
-That is the general shape of it. A duplicate reaching the registry is not
-a crash and not a wrong number; it is a sheet that *draws*, and draws
-something else. So the check is on identity rather than on any one
-symbol: hash every drawing, and refuse a collision.
-
-Two levels, because the duplicate can enter at either:
-
-1. **The vendored stencil files**, where upstream's own duplicates live.
-   :data:`UPSTREAM_DUPLICATE_GROUPS` records every one of them, so a
-   re-vendor that brings in a new pair has to say so here.
-2. **The registry**, which is what actually ships, and where a hand-drawn
-   drawing could collide with a vendored one just as easily.
-
-Neither list is an allow-list of *defects*. Nothing pandid registers today
-draws a lie: the one upstream duplicate group with two registered members
-(Ball Valve / Globe Valve) is repaired on the way through by
-``vendor_symbols.STENCIL_PATCHES``, and the only two collisions in the
-registry are one Symbol object deliberately registered under two names.
-Both tests assert that, rather than tolerating an exception to it.
-"""
+"""Test that no two shipped drawings are the same and none is a bare placeholder box."""
 
 import collections
 import hashlib
@@ -43,86 +13,46 @@ from pandid.render.svg import _affine
 from pandid.render.symbols import Symbol, default_registry
 from test_symbol_invariants import _script
 
-#: Every group of byte-identical shapes in the vendored draw.io stencil
-#: files, as vendored, keyed by the file they are in.
-#:
-#: Recorded rather than derived, so that a re-vendor bringing in a *new*
-#: duplicate pair fails here and gets looked at. Each of these is
-#: upstream's, and none of them is pandid's to fix in the stencil data --
-#: the vendored XML stays exactly as vendored, which is
-#: ``scripts/vendor_symbols`` policy.
-#:
-#: What matters about each group is which of its members pandid
-#: *registers*, and that is what
-#: :func:`test_no_duplicate_group_reaches_the_registry_undistinguished`
-#: asks. Four of the five are registered zero-or-once and so cannot
-#: collide; the fifth is corrected by ``STENCIL_PATCHES``.
+#: Every group of byte-identical shapes in the vendored draw.io stencil files, by file.
 UPSTREAM_DUPLICATE_GROUPS: "dict[str, tuple[tuple[str, ...], ...]]" = {
     "filters": (
-        # Two filters drawn as the same box. Neither is registered: pandid
-        # draws a HEPA filter and a biological filter from other rows.
+        # Pairs of filters drawn as the same box; none is registered.
         ("Gas Filter", "Gas Filter (HEPA)"),
         ("Liquid Filter (Biological)", "Liquid Filter (Ion Exchanger)"),
     ),
     "piping": (
-        # #367. The steam trap placeholder, and the shape it is a copy of.
-        # Neither is registered, and the steam trap pandid draws is
-        # hand-drawn from ISO 10628-2 item 24.15 instead.
+        # The steam trap placeholder and its copy; neither is registered.
         ("Desuper Heater", "Steam Trap"),
-        # Three names, one drawing of a body with a mesh in it. pandid
-        # registers ``fitting/silencer`` from a different shape and draws
-        # its flame arrestors from the fittings file.
+        # One body-with-mesh drawing under three names; none is registered.
         ("Detonation Arrestor", "Flame Arrestor", "In-Line Silencer"),
     ),
     "valves": (
-        # The one group with two registered members, and the reason
-        # ``STENCIL_PATCHES`` exists: ISO 10628-2 draws the globe valve's
-        # seat solid and the ball valve's open, and upstream ships both
-        # open. The patch fills the globe valve's, quoting the stencil's
-        # own arcs.
+        # Both registered; STENCIL_PATCHES fills the globe valve's seat.
         ("Ball Valve", "Globe Valve"),
     ),
 }
 
 
 def _digest(shape: ET.Element) -> str:
-    """SHA-256 of one ``<shape>``'s canonical XML, with its *name* removed.
-
-    The name is what a duplicate differs in, and nothing else: strip it and
-    two placeholder entries hash alike, which is the whole question.
-    """
+    """Return the SHA-256 of one ``<shape>``'s canonical XML with its name removed."""
     clone = ET.fromstring(ET.tostring(shape, encoding="unicode"))
     clone.attrib.pop("name", None)
     return hashlib.sha256(ET.tostring(clone, encoding="utf-8")).hexdigest()
 
 
 def _shapes(path: pathlib.Path) -> "Iterator[tuple[str, ET.Element]]":
-    """``(name, element)`` for every shape in one stencil file."""
+    """Yield ``(name, element)`` for every shape in one stencil file."""
     root = ET.fromstring(path.read_text(encoding="utf-8"))
     for shape in root.findall("shape"):
         yield shape.get("name", "?"), shape
 
 
 #: Attributes that name a drawing rather than draw it.
-#:
-#: Every symbol wraps its ink in ``<g id="sym_...">`` so the renderer has
-#: a ``<defs>`` key to ``<use>``, and that id follows the *variant
-#: spelling*. Hashing it would mean two identical drawings under two
-#: device names hashed apart purely because they are under two device
-#: names -- which is precisely the case this file exists to catch, so it
-#: is precisely the attribute that must not be in the hash.
 _NAMING_ONLY = re.compile(r'\s(?:id|class)="[^"]*"')
 
 
 def _drawn(svg: str) -> "list[tuple[ET.Element, float]]":
-    """Every painted element in *svg*, with the uniform scale over it.
-
-    ``<g>`` is structure, not ink: the vendored symbols wrap their
-    artwork in ``<g transform="scale(0.25)">`` and the reader sees
-    through it. So the tree is flattened and each element carries the
-    scale that reaches it, which is what lets a drawing be measured
-    against its own box whether or not it was drawn at that box size.
-    """
+    """Return every painted element in *svg* with the uniform scale over it."""
     out: "list[tuple[ET.Element, float]]" = []
 
     def walk(node: "ET.Element", scale: float) -> None:
@@ -138,45 +68,16 @@ def _drawn(svg: str) -> "list[tuple[ET.Element, float]]":
 
 
 def _artwork(symbol: Symbol) -> str:
-    """The ink, and the box it is drawn in -- and nothing that only names it.
-
-    Not the whole ``Symbol``: two drawings that differ in a port name or
-    an ``iso_reg`` are still the same ink on the page, which is exactly
-    the confusion a placeholder causes. And not the raw markup either --
-    see :data:`_NAMING_ONLY`.
-    """
+    """Return a symbol's box and ink, without the attributes that only name it."""
     return f"{symbol.width}x{symbol.height}|{_NAMING_ONLY.sub('', symbol.svg)}"
 
 
-#: The one registered drawing that is legitimately nothing but its own box.
-#:
-#: A block flow diagram block **is** a rectangle: the stage is drawn as a
-#: box and what identifies it is the lettering inside, which the renderer
-#: puts there rather than the symbol. So it is the single exception
-#: :func:`test_no_registered_drawing_is_a_bare_box` allows, and it is
-#: named here rather than inferred, so that a second drawing arriving in
-#: this state has to be argued for.
+#: The registered drawings that are only their own box.
 BARE_BOX_BY_DESIGN = {("block", "default")}
 
 
 def _is_bare_box(symbol: Symbol) -> bool:
-    """Is the whole of this drawing one rectangle, coincident with its box?
-
-    That is what a placeholder converts to, and what it looks like at any
-    size: the draw.io "Steam Trap" is a 50 x 50 ``<rect>`` with an empty
-    foreground, which comes through this library's converter as a single
-    rect filling the symbol's box -- 12.5 x 12.5 once ``piping.xml``'s
-    own 0.25 is applied, and 60 x 60 for
-    ``SymbolRegistry._generic_symbol``. Comparing against either one of
-    those *artworks* catches only that one size, which is why this asks
-    the question structurally instead.
-
-    Deliberately narrow. Sixty-two shipped drawings are a single
-    ``<path>`` and every one of them says something -- a vessel's shell,
-    a valve's bowtie -- so "one element" is not the test. "One element,
-    and it is the bounding box" is: a drawing that traces only the extent
-    it was given has nothing in it a reader could read.
-    """
+    """Return whether the whole drawing is one rectangle coincident with its box."""
     drawn = _drawn(symbol.svg)
     if len(drawn) != 1:
         return False
@@ -193,13 +94,7 @@ def _is_bare_box(symbol: Symbol) -> bool:
 
 
 def test_the_vendored_stencils_hold_exactly_the_duplicate_groups_recorded_here():
-    """Upstream's duplicates are known, and a new one has to be noticed.
-
-    A re-vendor is a bulk data change, and a shape that quietly became a
-    copy of another between draw.io releases would otherwise arrive
-    unremarked -- and then be available for someone to map in KIND_MAP,
-    which is #367 happening a second time.
-    """
+    """Check that the vendored stencils hold exactly the recorded duplicate groups."""
     stencils = _script("vendor_symbols").STENCILS
     found: "dict[str, tuple[tuple[str, ...], ...]]" = {}
     for path in sorted(pathlib.Path(stencils).glob("*.xml")):
@@ -224,19 +119,7 @@ def test_the_vendored_stencils_hold_exactly_the_duplicate_groups_recorded_here()
 
 
 def test_no_duplicate_group_reaches_the_registry_undistinguished():
-    """Two members of one duplicate group may both be registered only if
-    something told them apart on the way through.
-
-    This is the test that would have caught #367 had the steam trap been
-    vendored: mapping both "Steam Trap" and "Desuper Heater" in KIND_MAP
-    with nothing in ``STENCIL_PATCHES`` to separate them puts two device
-    names on one blank box.
-
-    Asked after ``patch_shape``, because that is the stencil the generator
-    actually converts. The globe valve is the live case: identical to the
-    ball valve as vendored, and a different drawing by the time it is
-    registered.
-    """
+    """Check that registered members of a duplicate group differ after ``patch_shape``."""
     vendor = _script("vendor_symbols")
     registered: "dict[tuple[str, str], list[str]]" = collections.defaultdict(list)
     for (kind, variant), entry in vendor.KIND_MAP.items():
@@ -261,36 +144,7 @@ def test_no_duplicate_group_reaches_the_registry_undistinguished():
 
 
 def test_no_two_registered_drawings_are_byte_identical():
-    """The invariant #367 asks for, on the thing that actually ships.
-
-    Every registered ``(kind, variant)`` is a drawing a user can ask for by
-    name, and two names resolving to the same ink means one of them is
-    drawing the other one's equipment -- unless the library *said* they
-    were the same drawing. There are two ways of saying it, and both are
-    a statement in the data rather than a coincidence in the output:
-
-    1. **One ``Symbol`` object under two keys.** ``Centrifuge(...)`` and
-       ``variant="decanter"`` are the one drawing, and so are
-       ``instrument/sis`` and ``instrument/logic``; registering the same
-       object twice is what stops them drifting apart.
-    2. **One vendored stencil under two names.** A bare ``Valve`` is a
-       gate valve, a bare ``Separator`` is the same drum a bare ``Vessel``
-       is, and each pair maps to one shape in
-       ``scripts/vendor_symbols.KIND_MAP``. The generator emits a
-       ``Symbol`` per entry, so these are separate objects -- but they
-       carry the same :attr:`~pandid.render.symbols.Symbol.drawio_shape`,
-       and that key is derived from the stencil itself. Two drawings that
-       name one stencil are one drawing by construction.
-
-    Anything else is two drawings that merely *happen* to match, which is
-    exactly what a placeholder is: draw.io's "Steam Trap" and its
-    "Desuper Heater" are byte-identical and are two different shapes with
-    two different keys, so vendoring both would fail here.
-
-    No allow-list. Every collision in the shipped registry is declared by
-    one of the two rules above, and a drawing that cannot say which is a
-    drawing nobody has decided about.
-    """
+    """Check that identical registered artwork is one Symbol object or one vendored stencil."""
     symbols = default_registry._symbols
     by_artwork: "dict[str, list[tuple[str, str]]]" = collections.defaultdict(list)
     for key, symbol in symbols.items():
@@ -324,20 +178,7 @@ def test_no_two_registered_drawings_are_byte_identical():
 
 @pytest.mark.parametrize("kind,variant", sorted(default_registry._symbols))
 def test_no_registered_drawing_is_a_bare_box(kind: str, variant: str):
-    """A registered drawing always draws something.
-
-    This is #367's defect reached from the direction that actually
-    happens. The duplicate guards above need **two** drawings to compare;
-    a placeholder mapped on its own has nothing to collide with, and that
-    was the original defect -- the draw.io "Steam Trap" registered alone
-    would have drawn an empty box under a device name and nothing would
-    have said so.
-
-    So this asks what the drawing *is* rather than what it equals. A kind
-    with no artwork must stay unregistered, so that asking for it is
-    refused (``SymbolRegistry.get`` raises) rather than answered with a
-    blank -- which is the difference between a gap and a lie.
-    """
+    """Check that no registered drawing outside BARE_BOX_BY_DESIGN is a bare box."""
     if (kind, variant) in BARE_BOX_BY_DESIGN:
         return
     assert not _is_bare_box(default_registry.get(kind, variant)), (
@@ -350,15 +191,7 @@ def test_no_registered_drawing_is_a_bare_box(kind: str, variant: str):
 
 
 def test_the_bare_box_guard_still_has_a_placeholder_to_catch():
-    """The guard above is only worth having if it fires, and what it has
-    to fire on is not hypothetical: it is a shape sitting in the vendored
-    data today.
-
-    So the placeholder is put through the real converter and asked. This
-    is the non-vacuity proof kept in the suite rather than done once by
-    hand -- if the converter ever started producing something with ink in
-    it, or ``_is_bare_box`` stopped recognising a blank, this says so.
-    """
+    """Check that the converted draw.io Steam Trap is a bare box and the shipped one is not."""
     vendor = _script("vendor_symbols")
     index = dict(_shapes(pathlib.Path(vendor.STENCILS) / "piping.xml"))
     body, width, height, *_rest = _script("mxgraph_to_svg").convert_shape(index["Steam Trap"])
@@ -368,5 +201,4 @@ def test_the_bare_box_guard_still_has_a_placeholder_to_catch():
         "that catches a placeholder registered on its own is no longer known "
         "to catch anything. Check what it draws now."
     )
-    # And the drawing pandid ships instead is not one.
     assert not _is_bare_box(default_registry.get("fitting", "steam_trap"))

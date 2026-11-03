@@ -1,11 +1,4 @@
-"""The declarative spec format: round-tripping, feature coverage, and the
-quality of the errors a hand-written file gets back.
-
-The error tests assert on the *message*, not just the type. Whoever writes one
-of these files is a process engineer with a typo, not a programmer with a
-traceback, so "unknown key 'varient'" that goes on to name the real key is the
-feature. A bare ValueError is a bug report waiting to happen.
-"""
+"""Test the declarative spec format: round-tripping, feature coverage and error messages."""
 
 import json
 import sys
@@ -18,16 +11,16 @@ from pandid import Flowsheet, units
 from pandid.document import Annotation, TableBox, legend
 from pandid.spec import SpecError
 
-try:  # PyYAML is an optional extra, so the YAML tests skip without it
+try:
     import yaml  # noqa: F401
 
     _HAS_YAML = True
-except ImportError:  # pragma: no cover - exercised only on a bare install
+except ImportError:  # pragma: no cover
     _HAS_YAML = False
 
 
 def _spec(**overrides):
-    """A minimal valid spec, with one section swapped in per test."""
+    """Return a minimal valid spec with the given sections swapped in."""
     spec = {
         "name": "T",
         "units": [
@@ -48,15 +41,14 @@ def _spec(**overrides):
 
 
 def test_round_trip_keeps_whole_number_coordinates_whole():
-    """pin(x=60) must not come back as 60.0 -- it changes every path string."""
+    """Check that a whole-number pin is written back as an int, not a float."""
     fs = Flowsheet("T")
     fs.add(units.Pump("P-1")).pin(x=60, y=105)
     assert fs.to_dict()["units"][0]["pin"] == {"x": 60, "y": 105}
 
 
 def test_a_flag_comes_back_where_it_was_pinned():
-    """A written pin is a corner, including a flag's, so reading it back must not
-    take it for the nozzle ``pin(x=...)`` places there and shift it again."""
+    """Check that a pinned feed flag reads back at the same pin."""
     fs = Flowsheet("T")
     fs.add(units.Feed("F")).pin(x=60, y=105)
     assert Flowsheet.from_dict(fs.to_dict()).units[0].pin_ == fs.units[0].pin_
@@ -99,8 +91,6 @@ def test_unit_fields():
 
 
 def test_reference_on_equipment_is_refused():
-    # An off-page reference belongs to the sheet boundary, and a valve is not
-    # one: honouring the key on equipment would draw nothing.
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
             _spec(units=[{"kind": "Valve", "name": "FV-1", "reference": "PFD-100"}])
@@ -123,9 +113,7 @@ def test_variable_port_units():
 
 
 def test_exchanger_side_nozzles_round_trip():
-    """An exchanger's nozzles are named for its sides, and the sides depend on
-    the variant, so the reader has to build the right four before it can resolve
-    a connection to them, and the writer has to name them back."""
+    """Check that each exchanger variant gets its side nozzles and they round-trip."""
     spec = {
         "name": "T",
         "units": [
@@ -171,17 +159,7 @@ def test_exchanger_side_nozzles_round_trip():
 
 
 def test_a_filters_wash_and_cake_round_trip():
-    """The nozzles a filter has depend on its variant, exactly as an
-    exchanger's do -- and per-variant ports are a different axis from the
-    composition keywords the spec learned in 0.1.3.
-
-    Nothing writes a port list: what carries these four across is ``variant``,
-    which is written because it is not ``default``, and the constructor laying
-    the table down again on the way back. The trip is made from a built sheet
-    rather than from a hand-written spec so the *writer* is under test too; a
-    dropped variant would read back as a two-nozzle bag filter and take the wash
-    and the cake with it.
-    """
+    """Check that a filter press's wash and cake nozzles round-trip with their streams."""
     fs = Flowsheet("dewatering")
     slurry = fs.add(units.Feed("Slurry"))
     wash = fs.add(units.Feed("Wash Water"))
@@ -205,7 +183,6 @@ def test_a_filters_wash_and_cake_round_trip():
     rebuilt = Flowsheet.from_dict(spec)
     back = next(u for u in rebuilt.units if u.name == "F-301")
     assert sorted(back.ports) == ["cake", "inlet", "outlet", "wash_in"]
-    # Both new ones came back carrying a stream, not merely existing.
     assert back.port("wash_in").stream is not None
     assert back.port("cake").stream is not None
     assert rebuilt.to_dict() == spec
@@ -213,10 +190,7 @@ def test_a_filters_wash_and_cake_round_trip():
 
 
 def test_an_ion_exchangers_regenerant_round_trips():
-    """The variant that is its own case has to survive the trip under its own
-    two names. Reading it back as a filter press would offer ``wash_in`` and
-    silently lose the line.
-    """
+    """Check that an ion exchanger's regenerant nozzles round-trip with their streams."""
     fs = Flowsheet("demin")
     regen = fs.add(units.Feed("Caustic"))
     ix = fs.add(units.Filter("F-802", variant="ion_exchange"))
@@ -253,12 +227,11 @@ def test_a_column_or_reactor_feed_count_round_trips():
     assert fs.units[1].feed is fs.units[1].feed_1
     written = {u["name"]: u for u in fs.to_dict()["units"]}
     assert written["T-302"]["n_feeds"] == 2
-    # One feed is the class's own shape, so the count is not written down.
     assert "n_feeds" not in written["R-1"]
 
 
 def test_a_two_feed_separator_round_trips():
-    """A stream on ``feed_2`` needs the count written and read back (#579)."""
+    """Check that a two-feed separator writes ``n_feeds`` and round-trips."""
     fs = Flowsheet("T")
     sep = fs.add(units.Separator("V-1", n_feeds=2))
     wash = fs.add(units.Feed("F-2"))
@@ -269,9 +242,7 @@ def test_a_two_feed_separator_round_trips():
 
 
 def test_absorber_and_stripper_kind_round_trips():
-    """``kind: Absorber``/``Stripper`` is a fact about which nozzles the
-    drawing has, and it is the class name -- not ``Column`` plus a variant
-    -- that carries it, so it has to survive the trip unchanged."""
+    """Check that ``kind: Absorber`` and ``Stripper`` load their own class and round-trip."""
     fs = Flowsheet.from_dict(
         {
             "name": "T",
@@ -291,19 +262,14 @@ def test_absorber_and_stripper_kind_round_trips():
 
 
 def test_a_bare_column_kind_still_loads_as_the_general_tower():
-    """#400: four classes now share ``kind == "column"`` and a bare
-    ``kind: column`` still has to mean the one that draws every variant
-    of it -- the general tower, not whichever of the four happened to
-    iterate last building ``_ALIASES``."""
+    """Check that a bare ``kind: column`` loads as the general ``Column``."""
     fs = Flowsheet.from_dict({"name": "T", "units": [{"kind": "column", "name": "T-101"}]})
     assert type(fs.units[0]).__name__ == "Column"
     assert set(fs.units[0].ports) == {"feed_1", "overhead", "bottoms"}
 
 
 def test_a_distillation_column_kind_round_trips():
-    """``kind: distillation_column`` is the fourth spelling the same
-    collision resolves, and it has to survive the trip unchanged, exactly
-    as ``Absorber``/``Stripper`` do above."""
+    """Check that ``kind: distillation_column`` loads its own class and round-trips."""
     fs = Flowsheet.from_dict(
         {
             "name": "T",
@@ -333,19 +299,11 @@ def test_a_distillation_column_kind_round_trips():
 
 
 def test_an_absorbers_packing_default_round_trips_silently():
-    """``internals="packing"`` is :class:`~pandid.units.Absorber`'s own
-    default, not :class:`~pandid.units.Column`'s, so a bare
-    ``{kind: Absorber}`` has to read back packed rather than bare -- the
-    silent-failure shape this project has already been bitten by three
-    times: a default that depends on the *class* the spec names has to be
-    asked of that class, not of its base's.
-    """
+    """Check that an Absorber's packing default is not written and a null one stays null."""
     fs = Flowsheet.from_dict({"name": "T", "units": [{"kind": "Absorber", "name": "V-501"}]})
     assert fs.units[0].internals == "packing"
     written = fs.to_dict()["units"][0]
-    # Nothing is written: packing is what an unstated Absorber already means.
     assert "internals" not in written
-    # A bare absorber -- one that really carries no internal -- still says so.
     bare = Flowsheet.from_dict(
         {"name": "T", "units": [{"kind": "Absorber", "name": "V-502", "internals": None}]}
     )
@@ -354,10 +312,7 @@ def test_an_absorbers_packing_default_round_trips_silently():
 
 
 def test_absorber_and_stripper_still_take_n_feeds_and_feed_stages():
-    """The reduced port set is only the four return nozzles; the feed
-    family Column already has is untouched, and a spec has to be able to
-    say where an absorber's two counter-current feeds land exactly as it
-    would on a plain Column."""
+    """Check that an Absorber takes ``n_feeds`` and ``feed_stages`` and round-trips."""
     fs = Flowsheet.from_dict(
         {
             "name": "T",
@@ -470,9 +425,7 @@ def test_a_family_key_on_a_kind_with_no_such_family_is_rejected(key, value, owne
 
 
 def test_a_columns_draw_count_round_trips():
-    """``n_draws`` the other way round: unlike ``n_feeds``, zero -- not one
-    -- is the shape that writes nothing down, since most columns have no
-    side draw at all."""
+    """Check that ``n_draws`` is written when set and left out of a column with none."""
     fs = Flowsheet.from_dict(
         {"name": "T", "units": [{"kind": "Column", "name": "T-301", "n_draws": 2}]}
     )
@@ -484,9 +437,7 @@ def test_a_columns_draw_count_round_trips():
 
 
 def test_a_column_with_both_feed_and_draw_families_round_trips():
-    """The intersection ``Column.__new__``'s comment names: both counts
-    above one, resolving to the untyped base class at the type level but
-    drawing and round-tripping exactly like any other column."""
+    """Check that a column with both a feed and a draw family round-trips."""
     fs = Flowsheet.from_dict(
         {
             "name": "T",
@@ -512,16 +463,7 @@ def test_a_column_with_both_feed_and_draw_families_round_trips():
 
 @pytest.mark.parametrize("kind", ["Vessel", "Tank"])
 def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
-    """The spec carries #222's nozzles by carrying nothing.
-
-    This is the round trip the design was partly chosen for. A counted family
-    or a set of constructor flags would each have needed a new key here, a new
-    entry in the ``_UNIT_KWARGS`` table that says which classes accept it, and
-    a rule for when it is written out and when it is left off -- the three
-    things ``n_feeds`` above costs. A port set that follows from the class
-    follows from ``kind:``, which the spec already writes, so a sheet drawn
-    against a relief connection round-trips with no format change at all.
-    """
+    """Check that a vessel's relief and drain round-trip with no key of their own."""
     fs = Flowsheet.from_dict(
         {
             "name": "T",
@@ -542,32 +484,24 @@ def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
 
 
 # --- composition: what a body carries -----------------------------------------
-#
-# ``variant`` chooses the body and these keywords choose the ISO 10628-2 parts
-# drawn in it. Every assertion below is on the **resolved symbol's overlays**,
-# never on a count of them, because a count is what let the regression through:
-# a reactor whose anchor stirrer had been swapped for the general one draws one
-# overlay either way. Nor is a comparison of the two specs enough -- the
-# keywords were dropped on the way *out*, so both directions agreed on a file
-# that had already lost the drawing.
 
 
 def _drawn(unit):
-    """The parts really drawn on a unit: group, name and hand, in order."""
+    """Return the overlays drawn on a unit as (group, name, mirror), in order."""
     from pandid.render.symbols import default_registry
 
     return [(o.group, o.name, o.mirror) for o in default_registry.for_unit(unit).overlays]
 
 
 def _artwork(unit):
-    """The composed drawing itself, which settles placement as well as parts."""
+    """Return the composed SVG of a unit's symbol."""
     from pandid.render.symbols import default_registry
 
     return default_registry.for_unit(unit).svg
 
 
 def _round_trip(unit):
-    """One unit out through ``to_dict`` and back: its entry, and the unit read."""
+    """Write one unit through ``to_dict``, read it back, and return its entry and the unit."""
     fs = Flowsheet("T")
     fs.add(unit)
     spec = fs.to_dict()
@@ -579,14 +513,8 @@ def _round_trip(unit):
     ("make", "expected"),
     [
         (lambda: units.Vessel("D-301", supports="skirt"), {"supports": "skirt"}),
-        # Chiral, and drawn as a mirrored pair: a hand lost is a lug on one wall.
         (lambda: units.Vessel("D-302", supports="bracket"), {"supports": "bracket"}),
         (lambda: units.Reactor("R-101", agitator="anchor"), {"agitator": "anchor"}),
-        # No ``agitator`` in the entry: a reactor with internals is not
-        # stirred unless it says so, so the empty agitator *is* the
-        # default here and writing it would be noise. The stated empty
-        # that is not a default still gets its ``null`` -- see
-        # ``test_a_body_asked_for_bare_comes_back_bare``.
         (
             lambda: units.Reactor("R-201", internals="packing"),
             {"internals": "packing"},
@@ -602,12 +530,7 @@ def _round_trip(unit):
     ],
 )
 def test_every_composition_keyword_round_trips(make, expected):
-    """Each keyword is written under its own name and read back as itself.
-
-    The entry is compared whole, so a keyword that arrived as something else --
-    a separator's characteristic folded back into ``variant`` -- fails here
-    rather than in the drawing.
-    """
+    """Check that each composition keyword is written under its own name and read back."""
     unit = make()
     entry, rebuilt = _round_trip(unit)
     assert {key: value for key, value in entry.items() if key not in ("kind", "name")} == expected
@@ -616,13 +539,7 @@ def test_every_composition_keyword_round_trips(make, expected):
 
 
 def test_a_columns_tray_count_survives_the_trip():
-    """Eighteen sieve trays, and eighteen of them.
-
-    The count and the part are two ways to lose the same tower: dropping
-    ``internals`` draws generic decks and dropping ``trays`` draws the eight ISO
-    item 2.6 X8011 does, so the tower came back as eight generic decks with
-    neither direction of the spec able to see it.
-    """
+    """Check that a column's internals and tray count survive the round trip."""
     unit = units.Column("T-102", internals="sieve_tray", trays=18)
     entry, rebuilt = _round_trip(unit)
     assert (entry["internals"], entry["trays"]) == ("sieve_tray", 18)
@@ -633,18 +550,10 @@ def test_a_columns_tray_count_survives_the_trip():
 
 
 def test_a_body_carrying_two_parts_keeps_both_and_their_order():
-    """The bed first and the stirrer over it.
-
-    Order is drawing order, so the shaft is drawn on top of whatever it turns in
-    rather than under it; a round trip that kept both parts and swapped them
-    would draw the reactor inside out.
-    """
+    """Check that a reactor's bed and stirrer round-trip in drawing order."""
     unit = units.Reactor("R-301", internals="fluidised_bed", agitator="turbine")
     entry, rebuilt = _round_trip(unit)
     assert (entry["internals"], entry["agitator"]) == ("fluidised_bed", "turbine")
-    # ...and the motor on the end of the stirrer's shaft, which comes with it:
-    # ISO item 1.27 X8006 draws the two together and there is no keyword for
-    # the second, so nothing about it is written down either.
     assert _drawn(unit) == [
         (27, "fluidised_bed", False),
         (28, "turbine", False),
@@ -661,18 +570,12 @@ def test_a_body_carrying_two_parts_keeps_both_and_their_order():
         lambda: units.Vessel("D-101"),  # one that can, and was not asked to
         lambda: units.Separator("V-101"),
         lambda: units.Tank("TK-101"),
-        # ISO item 2.1 X8100: the general column carries no internal, so an
-        # unfurnished tower is a body that composes nothing rather than one
-        # whose default part goes unwritten.
+        # ISO item 2.1 X8100: the general column carries no internal.
         lambda: units.Column("T-101"),
     ],
 )
 def test_a_unit_that_composes_nothing_gains_nothing(make):
-    """The other half of the round trip, and the one a golden would catch late.
-
-    A writer that stated every keyword would put a part on a plain drum, and a
-    reader that defaulted one would do the same on the way back.
-    """
+    """Check that a unit with no composed part writes and draws none after a round trip."""
     unit = make()
     entry, rebuilt = _round_trip(unit)
     assert set(entry) == {"kind", "name"}
@@ -687,15 +590,7 @@ def test_a_unit_that_composes_nothing_gains_nothing(make):
     ],
 )
 def test_the_part_a_class_draws_by_itself_is_not_written_down(make, drawn):
-    """A reactor is a stirred tank without being told.
-
-    Only what differs from a default is written, here as everywhere else in the
-    format, so the entry for an ordinary reactor is the entry it always was.
-
-    The reactor draws *two* parts and still writes nothing: the motor is item
-    1.27 X8006's, it arrives with the stirrer, and a part no keyword asks for
-    is a part no keyword records.
-    """
+    """Check that a reactor's default agitator and motor are drawn but not written."""
     unit = make()
     entry, rebuilt = _round_trip(unit)
     assert set(entry) == {"kind", "name"}
@@ -710,15 +605,7 @@ def test_the_part_a_class_draws_by_itself_is_not_written_down(make, drawn):
     ],
 )
 def test_a_body_asked_for_bare_comes_back_bare(make, key):
-    """Stated empty is not the same as not stated, and ``null`` is how it is said.
-
-    Leave the keyword off and the class puts its own part back: an unstated
-    agitator reads as the stirrer a reactor turns when nobody says otherwise.
-
-    A reactor is the only class this still bites. A column's unfurnished
-    default *is* bare -- ISO item 2.1 X8100 -- so for that one the two spellings
-    genuinely mean the same thing and neither is written down.
-    """
+    """Check that a part set to None is written as null and draws nothing after a round trip."""
     unit = make()
     entry, rebuilt = _round_trip(unit)
     assert entry[key] is None
@@ -727,13 +614,7 @@ def test_a_body_asked_for_bare_comes_back_bare(make, key):
 
 
 def test_a_separators_characteristic_is_written_as_itself_not_as_the_variant():
-    """The fold into ``variant`` is an implementation detail, and a time bomb.
-
-    ``characteristic=`` sets ``variant=`` because the mark inside a separating
-    vessel *is* which drawing it is. Writing the fold back out hands the reader
-    a variant spelling it refuses. ``_write_instrument`` drops a folded variant
-    for the same reason.
-    """
+    """Check that a separator's characteristic is written as itself, not as ``variant``."""
     entry, _ = _round_trip(units.Separator("V-201", characteristic="gravity"))
     assert entry == {"kind": "Separator", "name": "V-201", "characteristic": "gravity"}
     rebuilt = Flowsheet.from_dict({"name": "T", "units": [entry]}).units[0]
@@ -760,17 +641,14 @@ def test_composition_keywords_read_from_a_hand_written_spec():
 
 
 def test_a_composition_keyword_on_a_kind_with_no_such_part_is_rejected():
-    """The message names every class that does take it, so a second class
-    picking the keyword up widens the message rather than breaking it --
-    ``Evaporator`` took ``supports`` in 0.1.4 and this is what that reads
-    like from the wrong end."""
+    """Check that ``supports`` on a pump is refused, naming every class that takes it."""
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(_spec(units=[{"kind": "Pump", "name": "P-1", "supports": "skirt"}]))
     assert "only a Evaporator or a Vessel takes 'supports', not a Pump" in str(excinfo.value)
 
 
 def test_a_part_no_such_group_has_names_the_ones_it_does():
-    """Resolved where the author typed it, not when the sheet is finally drawn."""
+    """Check that a misspelt agitator is refused on read, naming the part meant."""
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
             {"name": "T", "units": [{"kind": "Reactor", "name": "R-1", "agitator": "turbin"}]}
@@ -795,29 +673,7 @@ def test_a_tray_count_that_is_not_a_number_is_refused():
 
 
 def test_no_constructor_argument_is_unreachable_from_a_spec():
-    """The guard the composition keywords went without.
-
-    Five keywords landed on four equipment classes and none of this module's
-    tables heard about them, so ``to_dict`` wrote a composed unit as
-    ``{kind, name}`` and ``from_dict`` read the class's own part back in their
-    place -- a different drawing, and one no comparison of the two specs could
-    see. Derived from the constructors rather than listed, because a list
-    restated is exactly what drifted: an argument added to a class tomorrow
-    fails here on the day it lands.
-
-    ``Instrument`` is excluded because it has a section of its own, a tag and an
-    attachment instead of a kind, and ``_INSTRUMENT_KEYS`` to match.
-
-    ``Valve(actuator=)`` is excluded because it is a **spelling of** ``variant``
-    and nothing more: the constructor resolves the body and the operator to the
-    one registered variant that draws both -- ``variant="gate",
-    actuator="diaphragm"`` *is* ``variant="control"`` -- and leaves nothing
-    behind under its own name, since ``valve.actuator`` is the signal
-    connection. The spec already writes that variant, so the argument is
-    reachable, just not by that word. Contrast ``Separator(characteristic=)``,
-    which folds the same way but *is* kept on the unit and whose variant
-    spelling is refused, so it has to be written as itself.
-    """
+    """Check that every non-Instrument constructor argument but ``actuator`` is a spec key."""
     import inspect
 
     from pandid import spec as spec_module
@@ -833,12 +689,7 @@ def test_no_constructor_argument_is_unreachable_from_a_spec():
 
 
 def test_no_class_leaves_a_variant_dependent_default_unresolved():
-    """``_UNSTATED`` is a sentinel, and the writer compares against it.
-
-    A class that declares one and forgets the ``composition_defaults`` override
-    would write the sentinel object itself into the file, which is neither
-    JSON-safe nor anything the reader could take back.
-    """
+    """Check that no class's ``composition_defaults`` holds the ``_UNSTATED`` sentinel."""
     from pandid import spec as spec_module
     from pandid.render.symbols import default_registry
     from pandid.units import _UNSTATED
@@ -878,28 +729,15 @@ def test_port_faces():
             ],
         }
     )
-    # Stored under the canonical name: ``inlet`` is a live alias for
-    # ``in_1`` and never a second key of its own -- see
-    # ``Unit._canonical_port_name``.
+    # ``inlet`` is stored under its canonical name ``in_1``.
     assert fs.units[0]._port_faces == {"in_1": "N"}
 
 
 def test_a_tanks_face_list_round_trips_through_a_spec():
-    """#342's own face list, over :class:`~pandid.units.Tank`'s mechanism
-    rather than :class:`~pandid.units.Block`'s -- the shape
-    ``test_block.py``'s own ``test_a_block_round_trips_through_a_spec``
-    pins for the class this one is borrowed from. A face list dropped on
-    write is the silent-failure class this project has been bitten by
-    three times, so this is checked directly rather than assumed from
-    the two classes sharing a mechanism.
-    """
+    """Check that a tank's input face list round-trips and its default outlet is not written."""
     from pandid.spec import from_dict, to_dict
 
     fs = Flowsheet("tanks")
-    # A ``list``, not a ``tuple``: the spelling that keeps this on the
-    # untyped ``Tank`` return (see ``units.Tank.__new__``'s overloads),
-    # so ``.port("in_2")`` and not ``.in_2`` reaches the second inlet --
-    # a checker cannot resolve the numbered attribute on this arm either.
     tk = fs.add(units.Tank("TK-1", inputs=["W", "W", "N"]))
     feed = fs.add(units.Feed("F"))
     prod = fs.add(units.Product("P"))
@@ -909,9 +747,6 @@ def test_a_tanks_face_list_round_trips_through_a_spec():
     spec = to_dict(fs)
     (entry,) = [u for u in spec["units"] if u["kind"] == "Tank"]
     assert entry["inputs"] == ["W", "W", "N"]
-    # A single outlet on its own default face is the shorthand every
-    # ``Tank("TK-1")`` already means, so it is not written down at all --
-    # unlike a Block, which has no connection-free shape to default to.
     assert "outputs" not in entry
 
     read = from_dict(spec)
@@ -923,29 +758,10 @@ def test_a_tanks_face_list_round_trips_through_a_spec():
 
 
 def test_a_vessels_moved_nozzle_and_reordered_face_round_trip():
-    """The other two connection-family calls, over :class:`Vessel`: an
-    explicit :meth:`~pandid.units._MultiPortVessel.nozzle` move and an
-    :meth:`~pandid.units._MultiPortVessel.order_on` reordering, each
-    written back and read to the same declaration.
-
-    ``horizontal`` because the default variant's inlet has no menu at
-    all -- a single anchored face, so there is nowhere for ``nozzle()``
-    to move two connections *to* and nothing for ``order_on()`` to
-    reorder.
-
-    The two start one per head rather than both on the west one: this
-    drum's W and E faces are its dished heads, which meet the box at a
-    single point each, so two connections on either is refused (#488).
-    One apiece is the legal starting arrangement, and moving both onto
-    the roof is still the two explicit ``nozzle()`` calls this is here
-    to round-trip.
-    """
+    """Check that a vessel's ``nozzle()`` moves and ``order_on()`` order round-trip."""
     from pandid.spec import from_dict, to_dict
 
     fs = Flowsheet("vessels")
-    # A tuple and not a list, so the literal pair still hands a checker the
-    # ``Vessel2`` that declares ``in_1``/``in_2``; a computed ``Sequence[str]``
-    # cannot say how many nozzles it made.
     v = fs.add(units.Vessel("V-1", variant="horizontal", inputs=("W", "E"), width=130, height=42))
     v.nozzle("in_1", "N")
     v.nozzle("in_2", "N")
@@ -959,8 +775,6 @@ def test_a_vessels_moved_nozzle_and_reordered_face_round_trip():
     read = from_dict(spec)
     (got,) = [u for u in read.units if isinstance(u, units.Vessel)]
     assert got.input_faces == v.input_faces == ("N", "N")
-    # Objects of two different flowsheets, so it is the names that have
-    # to agree, not the ``Port``s themselves.
     assert (
         [p.name for p in got.ports_on("N")]
         == [p.name for p in v.ports_on("N")]
@@ -986,7 +800,7 @@ def test_flowsheet_level_options():
 
 
 def test_a_valve_station_tag_scheme_survives_a_round_trip():
-    """The third numbering scheme is read and written like the other two."""
+    """Check that ``valve_station_tag_scheme`` is read, written, and left out when unset."""
     fs = Flowsheet("T", valve_station_tag_scheme="{letters}{number}{suffix}")
     spec = fs.to_dict()
     assert spec["valve_station_tag_scheme"] == "{letters}{number}{suffix}"
@@ -1004,8 +818,7 @@ def test_a_callable_valve_station_tag_scheme_cannot_be_written_out():
 
 
 def test_auto_faces_off_survives_a_round_trip():
-    """A sheet whose faces were settled by hand has to come back settled by
-    hand; silently re-enabling the selector would redraw it on reload."""
+    """Check that ``auto_faces: false`` round-trips and the default writes nothing."""
     fs = Flowsheet.from_dict({"name": "T", "auto_faces": False})
     assert fs.auto_faces is False
     assert fs.to_dict()["auto_faces"] is False
@@ -1013,7 +826,7 @@ def test_auto_faces_off_survives_a_round_trip():
 
 
 def test_retired_direction_key_is_refused():
-    """A file written against the old format is told what happened, not ignored."""
+    """Check that the retired ``direction`` key is refused with a message saying so."""
     with pytest.raises(SpecError) as e:
         Flowsheet.from_dict(_spec(direction="TB"))
     assert "'direction' is no longer part of the spec" in str(e.value)
@@ -1164,8 +977,7 @@ def test_a_side_given_as_at_still_loads_and_is_reported(entry):
 
 
 def test_a_balloon_entry_refused_after_its_old_face_warns_nothing():
-    """The deprecation is said once the entry is read, so a refusal later in
-    the same entry comes alone."""
+    """Check that a balloon entry refused after its deprecated ``at`` side warns nothing."""
     entry = {"balloon_of": "FE-303", "at": "S", "port_faces": {"missing": "N"}}
     spec = _spec(units=_WITH_ELEMENT, instruments=[entry])
     with warnings.catch_warnings(record=True) as caught:
@@ -1228,8 +1040,7 @@ def test_unattached_instrument_is_laid_out_like_any_unit():
 
 @pytest.mark.parametrize("relation", ["sensing", "acting_on", "near"])
 def test_each_relation_is_read_back_and_written_out_again(relation):
-    """Which keyword named the anchor is what decides what is drawn between the
-    two, so it is part of the sheet and has to survive being written down."""
+    """Check that each anchor relation is read, written back, and round-trips."""
     entry = {"type": "I", "number": 1, "variant": "sis", relation: "P-101", "face": "S"}
     fs = Flowsheet.from_dict(_spec(instruments=[entry]))
     assert (fs.units[-1].host.name, fs.units[-1].relation) == ("P-101", relation)
@@ -1238,14 +1049,7 @@ def test_each_relation_is_read_back_and_written_out_again(relation):
 
 
 def test_a_sheet_using_the_whole_instrument_vocabulary_round_trips():
-    """Every part of a balloon that is a *decision* has to be in the file.
-
-    The relation decides what is drawn between the balloon and its host, the
-    display decides whether it carries a bar, the quadrants are lettering on the
-    paper and a primary element's balloon is where its tag went. A sheet that
-    lost any of them on the way through a spec would come back a different
-    drawing under the same name.
-    """
+    """Check that relations, display, quadrants and an element's balloon tag round-trip."""
     fs = Flowsheet("vocabulary")
     feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
     fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, port="inlet", y=195)
@@ -1282,16 +1086,7 @@ def test_a_sheet_using_the_whole_instrument_vocabulary_round_trips():
 
 
 def test_a_balloons_placement_reaches_the_file_and_comes_back():
-    """A pinned balloon is a balloon the author put somewhere on purpose.
-
-    The assertions are on the rebuilt *object*, and deliberately not on the two
-    dicts. The writer used to leave the balloon branch before it wrote the
-    placement down, so the pin and the port faces reached neither the file nor
-    the reader -- and a field that neither direction carries makes the sheet
-    read back compare *equal* to the file it came from while the drawing has
-    moved. Comparing specs is blind to exactly this, which is why it is not the
-    test.
-    """
+    """Check that a balloon's pin and port faces are written and read back onto it."""
     fs = Flowsheet("placed")
     fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, y=195)
     balloon = fs.add_balloon(fe, face="S")
@@ -1309,14 +1104,7 @@ def test_a_balloons_placement_reaches_the_file_and_comes_back():
 
 
 def test_a_balloon_carrying_every_field_it_takes_round_trips():
-    """Whatever ``add_balloon`` accepts has to survive being written down.
-
-    Its keywords go straight into the balloon, so one reaches the spec with a
-    description, a size, a label position, a display and lettering in its
-    quadrants on it -- all written by the same code that writes them for any
-    other unit. The reader's key list knew only about the placement, so a
-    balloon given any of them was refused by its own writer's output.
-    """
+    """Check that every field ``add_balloon`` accepts survives a round trip."""
     fs = Flowsheet("vocabulary")
     fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, y=195)
     balloon = fs.add_balloon(
@@ -1359,8 +1147,7 @@ def test_a_balloon_carrying_every_field_it_takes_round_trips():
 
 
 def test_an_instruments_new_line_number_is_read_back():
-    """The flag is written for an instrument exactly as it is for any other
-    unit, so the reader has to accept the key its own writer emits."""
+    """Check that an instrument's ``new_line_number`` is read and round-trips."""
     fs = Flowsheet.from_dict(
         _spec(instruments=[{"type": "PI", "number": 7, "new_line_number": True}])
     )
@@ -1369,8 +1156,7 @@ def test_an_instruments_new_line_number_is_read_back():
 
 
 def test_an_entry_naming_two_anchors_is_refused():
-    """A balloon is placed against one thing. Two keywords are two placements,
-    and the reader says which two rather than silently taking the first."""
+    """Check that an entry naming two anchors is refused, naming both keywords."""
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
             _spec(instruments=[{"type": "FT", "number": 101, "sensing": "P-101", "near": "F"}])
@@ -1453,8 +1239,7 @@ def test_annotation_boxes():
 
 
 def test_table_cells_and_legend_entries_read_as_the_text_drawn():
-    """A null cell is blank and a number is its text, as in an annotation row,
-    so a box does not draw ``None`` or ``101.0`` where the file left a gap."""
+    """Check that null cells read as blank and numbers as their text in every box."""
     fs = Flowsheet.from_dict(
         _spec(
             annotations=[
@@ -1473,8 +1258,7 @@ def test_table_cells_and_legend_entries_read_as_the_text_drawn():
 
 
 def test_a_null_cell_draws_blank_from_python_and_through_a_spec():
-    """A ``None`` cell or legend meaning is blank in the box itself, so the
-    sheet a spec reads back draws what the Python one did (#574)."""
+    """Check that a ``None`` cell draws blank from Python and through a spec."""
     fs = Flowsheet("T")
     fs.annotations += [TableBox(rows=[["Insulation", None]]), legend([("SS", None)])]
     svg = fs.to_svg()
@@ -1501,8 +1285,7 @@ def test_stream_table_options_round_trip():
 
 
 def test_a_table_left_alone_writes_no_section():
-    """So a spec written by a sheet that says nothing about its table is the
-    same file it was before these options existed."""
+    """Check that a sheet with default table options writes no ``stream_table``."""
     assert "stream_table" not in Flowsheet.from_dict(_spec()).to_dict()
 
 
@@ -1525,8 +1308,7 @@ def test_the_column_widths_round_trip():
 
 @pytest.mark.parametrize("value", ["fit", None, True, [52]])
 def test_a_column_width_that_is_neither_a_number_nor_auto_is_refused(value):
-    """``null`` included: unlike ``font_size``, whose default *is* unset,
-    these two default to a number and have no spelling for 'leave it'."""
+    """Check that a column width other than a number or ``"auto"``, null included, is refused."""
     with pytest.raises(SpecError, match='must be a number or "auto"'):
         Flowsheet.from_dict(_spec(stream_table={"column_width": value}))
 
@@ -1561,11 +1343,7 @@ def test_from_yaml(tmp_path):
 
 @pytest.mark.skipif(not _HAS_YAML, reason="PyYAML is an optional extra")
 def test_yaml_reads_the_keys_that_were_written(tmp_path):
-    """YAML 1.1 makes ``N`` the boolean False and a bare date a date object.
-
-    Both traps are sprung by writing the format exactly as documented, so the
-    loader follows the YAML 1.2 core schema instead.
-    """
+    """Check that YAML reads ``N`` as text and a bare date as a string."""
     path = tmp_path / "fs.yaml"
     path.write_text(
         "name: T\n"
@@ -1586,13 +1364,7 @@ def test_yaml_reads_the_keys_that_were_written(tmp_path):
 
 @pytest.mark.skipif(not _HAS_YAML, reason="PyYAML is an optional extra")
 def test_yaml_reads_a_leading_zero_or_a_colon_as_written(tmp_path):
-    """YAML 1.1 reads ``0101`` as octal 65 and ``1:30`` as base 60, 90.
-
-    A loop number, a line sequence and a size are written that way on real
-    drawings, so each reads as the text written, as do ``1_000``, ``0x1F``
-    and ``0o17``. Decimals still read as numbers, ``1e3`` included, as
-    YAML 1.2's core schema reads them.
-    """
+    """Check that YAML reads ``0101``, ``1:30`` and kin as text and decimals as numbers."""
     path = tmp_path / "fs.yaml"
     path.write_text(
         "name: T\n"
@@ -1615,7 +1387,7 @@ def test_yaml_reads_a_leading_zero_or_a_colon_as_written(tmp_path):
 
 
 def test_a_key_written_twice_in_json_is_refused(tmp_path):
-    """JSON keeps the last of two equal keys, silently dropping the first."""
+    """Check that a key written twice in JSON is refused."""
     path = tmp_path / "fs.json"
     path.write_text(
         '{"name": "T", "units": [{"kind": "Pump", "name": "P-1", "name": "P-2"}]}',
@@ -1627,7 +1399,7 @@ def test_a_key_written_twice_in_json_is_refused(tmp_path):
 
 @pytest.mark.skipif(not _HAS_YAML, reason="PyYAML is an optional extra")
 def test_a_key_written_twice_in_yaml_is_refused(tmp_path):
-    """YAML keeps the last of two equal keys, silently dropping the first."""
+    """Check that a key written twice in YAML is refused, merge sources included."""
     path = tmp_path / "fs.yaml"
     path.write_text(
         "name: T\nunits:\n  - kind: Pump\n    name: P-1\n    name: P-2\n",
@@ -1658,7 +1430,7 @@ def test_from_yaml_without_pyyaml_says_exactly_what_to_install(tmp_path, monkeyp
     message = str(excinfo.value)
     assert "PyYAML" in message
     assert "pip install 'pandid[yaml]'" in message
-    assert "from_json" in message  # and the way out that needs nothing
+    assert "from_json" in message
 
 
 # --- errors: the spec is validated, never guessed ------------------------------
@@ -1686,11 +1458,7 @@ def test_unknown_port_lists_that_unit_s_ports():
 
 @pytest.mark.parametrize("name", ["liquid", "vapour"])
 def test_a_spec_file_naming_a_removed_port_is_refused(name):
-    """``Separator(variant="cyclone")`` called its draws ``vapor`` and
-    ``liquid`` up to 0.1.1 and ``overflow``/``underflow`` since; the old pair
-    was read for 0.1.2 and is gone in 0.1.3. A file written then gets the
-    message any other name off the unit gets, which names the nozzles it has.
-    """
+    """Check that a removed cyclone port name is refused, listing the ports it has."""
     spec = {
         "name": "an 0.1.1 file",
         "units": [
@@ -1725,8 +1493,6 @@ def test_fixed_nozzle_cannot_be_moved():
                 "units": [{"kind": "Column", "name": "T-1", "port_faces": {"bottoms": "N"}}],
             }
         )
-    # A column's bottoms leaves the bottom because gravity put it there, so its
-    # menu has one entry. The message names the drawn faces actually on offer.
     message = str(excinfo.value)
     assert "T-1.bottoms" in message
     assert "can be piped from S as drawn" in message
@@ -1855,9 +1621,7 @@ def test_library_errors_are_reported_against_the_entry_that_caused_them():
 
 
 def test_reusing_a_port_is_reported_against_the_second_connection():
-    """Named on a pump nozzle rather than on the feed flag it used to be named
-    on: a flag's connection takes as many lines as the sheet gives it (#454),
-    and a process nozzle still takes one."""
+    """Check that piping a pump nozzle twice is reported against the second stream."""
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
             _spec(
@@ -1887,8 +1651,7 @@ def test_bad_alignment_is_reported_with_the_valid_ones():
 
 
 def test_bad_col_align_is_reported_with_the_valid_ones():
-    """The spelled-out word is the obvious guess, and used to be taken as
-    an unrecognised alignment and silently centred rather than refused."""
+    """Check that a spelled-out ``col_align`` word is refused in Python and in a spec."""
     with pytest.raises(ValueError, match=r"col_align\[0\] must be one of"):
         TableBox(headers=["A", "B"], rows=[["1", "2"]], col_align=["left", "r"])
     with pytest.raises(SpecError) as excinfo:
@@ -1949,20 +1712,16 @@ def _two_vessels(**stream):
 
 
 def test_a_streams_joints_survive_a_round_trip():
-    """A joint stated on one line is the author overruling the sheet, so losing
-    it on reload redraws that line as whatever the sheet says instead."""
+    """Check that a stream's ``ends`` round-trips and an unset one writes nothing."""
     fs = Flowsheet.from_dict(_two_vessels(ends="flanged"))
     assert fs.streams[0].ends == "flanged"
     assert fs.to_dict()["streams"][0]["ends"] == "flanged"
-    # ...and a line that says nothing writes nothing, so an unmarked sheet's
-    # spec does not grow a key per stream.
     assert "ends" not in Flowsheet.from_dict(_two_vessels()).to_dict()["streams"][0]
 
 
 def test_two_joints_stated_apart_survive_a_round_trip_in_order():
     fs = Flowsheet.from_dict(_two_vessels(ends=["flanged", "none"]))
     assert fs.streams[0].ends == ("flanged", "none")
-    # Out as a list, which is what YAML and JSON both write a pair as.
     assert fs.to_dict()["streams"][0]["ends"] == ["flanged", "none"]
 
 

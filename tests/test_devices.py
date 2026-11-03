@@ -1,24 +1,4 @@
-"""``pandid.devices``: the generated equipment classes, and what they promise.
-
-Four promises, and this file is each of them:
-
-1. the committed module is what the generator emits today, so a hand edit to it
-   is caught rather than lost the next time anyone runs the script;
-2. every registered ``(kind, variant)`` is claimed exactly once, so vendoring a
-   stencil cannot quietly add a drawing nobody has said what to call;
-3. every class's declared nozzles are ones its drawing actually anchors, and are
-   visible to a type checker;
-4. a sheet built from device classes round-trips through ``to_dict`` /
-   ``from_dict``, which is where the four quiet integration edges in
-   ``pandid.spec`` show up.
-
-The compatibility half -- that every shipped ``(kind, variant)`` pair still
-builds and draws exactly what it always did -- is ``tests/test_variants.py``,
-which sweeps the base classes and only the base classes. That sweep is 238
-``(class, variant)`` cases over the 52 classes ``pandid.units`` defines, which
-is more than the registry's 225 pairs rather than fewer: a kind with no artwork
-still has ``"default"``, and a kind two classes own is swept once for each.
-"""
+"""Test the generated ``pandid.devices`` classes against the generator, registry and spec."""
 
 import ast
 import pathlib
@@ -36,19 +16,11 @@ DEVICE_CLASSES = [getattr(devices, name) for name in devices.__all__]
 IDS = [cls.__name__ for cls in DEVICE_CLASSES]
 
 
-# ---------------------------------------------------------------------------
-# The generated file, against the generator that emits it
-# ---------------------------------------------------------------------------
+# --- The generated file, against the generator that emits it ---
 
 
 def test_the_committed_module_matches_the_generator():
-    """A hand edit to devices.py is lost the next time anyone runs the generator.
-
-    The same rule ``_vendored_symbols.py`` is held to, for the same reason: a
-    stale generated file still imports and still draws, so nothing else notices.
-    The difference is what the drift would be *about* -- there, artwork; here,
-    which piece of equipment a drawing is.
-    """
+    """Check that pandid/devices.py matches what the generator emits today."""
     generator = _script("gen_devices")
     committed = generator.OUT.read_text(encoding="utf-8")
     if generator.render() != committed:
@@ -64,24 +36,13 @@ def test_the_committed_module_matches_the_generator():
 
 
 def test_every_registered_symbol_is_claimed_exactly_once():
-    """The anti-drift check, run against the live registry.
-
-    ``claims()`` raises rather than returning on any of the three failures, so
-    this is really an assertion that the generator's own gate is satisfied by
-    the library as it stands: nothing registered is unclassified, nothing
-    classified has lost its drawing, and no drawing is claimed twice.
-    """
+    """Check that the generator claims every registered symbol exactly once."""
     claimed = _script("gen_devices").claims()
     assert claimed.keys() == set(default_registry._symbols)
 
 
 def test_the_generator_refuses_a_drawing_nobody_has_classified():
-    """Vendor a stencil and this layer stops until someone says what it is.
-
-    The failure the whole design exists to force. Faked by dropping a claim
-    rather than by registering a symbol, because the registry is a module-level
-    singleton and the two ways round are the same assertion.
-    """
+    """Check that the generator refuses a registered drawing no entry classifies."""
     generator = _script("gen_devices")
     key, why = next(iter(generator.STAYS_ON_BASE.items()))
     del generator.STAYS_ON_BASE[key]
@@ -93,7 +54,7 @@ def test_the_generator_refuses_a_drawing_nobody_has_classified():
 
 
 def test_the_generator_refuses_two_claims_on_one_drawing():
-    """A drawing is one device, so two classes claiming it is a question, not a fact."""
+    """Check that the generator refuses two claims on one drawing."""
     generator = _script("gen_devices")
     key = ("separator", "cyclone")
     generator.STAYS_ON_BASE[key] = "a second claim, for the test"
@@ -106,13 +67,7 @@ def test_the_generator_refuses_two_claims_on_one_drawing():
 
 @pytest.mark.parametrize("kind", ["instrument", "feed", "product"])
 def test_the_generator_refuses_the_three_kinds_that_may_not_have_classes(kind):
-    """Refused by name, because each would be *silently* wrong.
-
-    An Instrument's variants are functions rather than devices, and
-    ``_Boundary.repeats`` tests ``type(other) is type(self)``, which any
-    subclass defeats without a word: a utility header tapped twice would be
-    reported as two services the reader cannot tell apart.
-    """
+    """Check that the generator refuses a class for an instrument, feed or product."""
     generator = _script("gen_devices")
     assert kind in generator.REFUSED_KINDS
     generator.DEVICES[(kind, "default")] = ("Bogus", "...")
@@ -123,26 +78,12 @@ def test_the_generator_refuses_the_three_kinds_that_may_not_have_classes(kind):
         del generator.DEVICES[(kind, "default")]
 
 
-# ---------------------------------------------------------------------------
-# What each class declares, against what its drawing anchors
-# ---------------------------------------------------------------------------
+# --- What each class declares, against what its drawing anchors ---
 
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_every_variant_a_class_owns_anchors_the_same_nozzles(cls):
-    """``PORTS`` is read once, so a class is one nozzle set across its drawings.
-
-    A class owning two variants that anchor differently would be two devices
-    sharing a name, and the second variant's user would meet it as a stream
-    drawn to the middle of the equipment.
-
-    ``PORTS`` is a subset of what is built rather than the whole of it, because
-    a base whose ``__init__`` adds a nozzle by hand still does:
-    ``StirredTankReactor`` declares the three fixed ones and ``Reactor``'s
-    constructor lays down the charge nozzle on top, exactly as it does for its
-    base. Restating that one in ``PORTS`` would hand ``_add_port`` a name it
-    already has.
-    """
+    """Check that every variant of a class builds one anchored nozzle set covering ``PORTS``."""
     built = {variant: set(cls("X-1", **_drawing(cls, variant)).ports) for variant in cls.VARIANTS}
     assert len(set(map(frozenset, built.values()))) == 1
     for variant, names in built.items():
@@ -153,14 +94,7 @@ def test_every_variant_a_class_owns_anchors_the_same_nozzles(cls):
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_every_declared_nozzle_is_visible_to_a_type_checker(cls):
-    """The half of this layer a test can only approximate.
-
-    ``get_type_hints`` resolves what mypy resolves, so a nozzle missing here is
-    one an editor cannot complete and a checker cannot answer for -- which is
-    the state the whole change exists to leave behind. It says nothing about
-    ``fs.add`` keeping the subclass; that is ``Flowsheet.add``'s TypeVar, and
-    only a real checker run proves it.
-    """
+    """Check that every declared nozzle has a ``Port`` type hint on the class."""
     declared = {name for name, _, _ in cls.PORTS}
     hints = typing.get_type_hints(cls)
     assert declared <= hints.keys()
@@ -168,13 +102,7 @@ def test_every_declared_nozzle_is_visible_to_a_type_checker(cls):
 
 
 def _family_device_classes():
-    """Device classes whose base is a variable-port family -- ``StirredTankReactor``
-    (:class:`~pandid.units.Reactor`) alone today, and whichever earns it next.
-
-    Asked of the generator rather than named, for the reason
-    ``tests/test_port_annotations.py``'s ``_EXACT_ARITY`` gives for ``Reactor``: a
-    device that subclasses a family base tomorrow gets this test for free.
-    """
+    """Return the device classes whose base is a variable-port family."""
     generator = _script("gen_devices")
     return [cls for cls in DEVICE_CLASSES if generator.arity_family(cls.__mro__[1])]
 
@@ -185,18 +113,7 @@ _FAMILY_IDS = [cls.__name__ for cls in _FAMILY_DEVICE_CLASSES]
 
 @pytest.mark.parametrize("cls", _FAMILY_DEVICE_CLASSES, ids=_FAMILY_IDS)
 def test_a_generated_family_subclass_gets_its_own_exact_arity_classes(cls):
-    """The mirror, for generated classes, of
-    ``test_port_annotations.test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles``.
-
-    ``StirredTankReactor`` is the case there is today: a literal ``n_feeds`` has
-    to resolve to *its own* arity class, ``StirredTankReactor2``, and not
-    ``Reactor2`` -- a checker handed the base's class there would no longer
-    consider the result a ``StirredTankReactor`` at all. This is what would miss
-    a generator bug that ``test_the_committed_module_matches_the_generator``
-    cannot: that test only compares the committed file against another run of
-    the same generator, so a wrong ``emit()`` agrees with itself. This instead
-    builds the real unit and checks its ports.
-    """
+    """Check that each generated arity class declares exactly the family nozzles it builds."""
     generator = _script("gen_devices")
     keyword, member, _default, max_n = generator.arity_family(cls.__mro__[1])
     module = ast.parse(pathlib.Path(devices.__file__).read_text(encoding="utf-8"))
@@ -225,31 +142,19 @@ def test_a_generated_family_subclass_gets_its_own_exact_arity_classes(cls):
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_naming_a_class_alone_asks_for_that_class_s_drawing(cls):
-    """``Cyclone("S-1")`` draws a cyclone, not the flash drum ``Separator`` defaults to.
-
-    ``variant`` defaults to ``"default"``, so a class that names its variants and
-    left that one out would refuse to be built by name at all. Listing it and
-    aliasing it is the whole answer, and this is the assertion that it was done.
-    """
+    """Check that every class accepts ``"default"`` and resolves it to a registered drawing."""
     assert "default" in cls.VARIANTS
     assert (cls.kind, cls("X-1").variant) in default_registry._symbols
 
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_a_class_refuses_a_drawing_another_device_owns(cls):
-    """The refusal, with the low-level form the message has to offer.
-
-    A variant this class does not draw belongs to some other device, and the
-    base that owns the whole kind draws every one of them -- so the message is
-    "ask for it this way" rather than "you cannot have this".
-    """
+    """Check that a class refuses a variant it does not own."""
     with pytest.raises(ValueError, match="belongs to whichever class draws it"):
         cls("X-1", variant="not_a_registered_variant")
 
 
-# ---------------------------------------------------------------------------
-# One drawing, one nozzle vocabulary
-# ---------------------------------------------------------------------------
+# --- One drawing, one nozzle vocabulary ---
 
 
 _COLLECTORS = [
@@ -261,15 +166,7 @@ _COLLECTORS = [
 
 @pytest.mark.parametrize(("cls", "variant"), _COLLECTORS, ids=lambda x: getattr(x, "__name__", x))
 def test_a_collector_draws_the_same_nozzles_whichever_way_it_was_built(cls, variant):
-    """The whole of #138, in one assertion.
-
-    These three collect *dust*, and their drawings have anchored the catch
-    ``liquid`` since 0.1.0. The classes corrected it to ``underflow``; up to
-    0.1.1 ``Separator(variant=...)`` did not, so one drawing answered to two
-    vocabularies and which you got depended on which class you constructed.
-    That was written down as permanent and is not, and this is where the two
-    forms are held to one another.
-    """
+    """Check that a collector builds the same nozzles as ``Separator`` with its variant."""
     assert set(cls("S-1").ports) == {"feed_1", "overflow", "underflow"}
     assert set(units.Separator("X-1", **_drawing(units.Separator, variant)).ports) == set(
         cls("S-3").ports
@@ -278,14 +175,7 @@ def test_a_collector_draws_the_same_nozzles_whichever_way_it_was_built(cls, vari
 
 @pytest.mark.parametrize(("cls", "variant"), _COLLECTORS, ids=lambda x: getattr(x, "__name__", x))
 def test_a_renamed_draw_lands_where_the_drawing_puts_the_nozzle_it_renamed(cls, variant):
-    """The rename is a name and nothing else: same point, same faces, same ink.
-
-    Against the *artwork's* own names, which never changed: the stencils still
-    anchor ``vapor`` and ``liquid``, and both spellings of the class reach them
-    through ``Separator._VARIANT_ANCHORS``. A nozzle whose anchor went missing
-    would fall back to the centre of the box, which is how this would show up as
-    a moved drawing rather than as a failure here.
-    """
+    """Check that a renamed draw keeps the low-level faces and maps to the artwork's anchor."""
     renamed = cls("S-1")
     low_level = units.Separator("X-1", **_drawing(units.Separator, variant))
     symbol = default_registry.for_unit(renamed)
@@ -295,22 +185,12 @@ def test_a_renamed_draw_lands_where_the_drawing_puts_the_nozzle_it_renamed(cls, 
         assert old in symbol.ports
 
 
-# ---------------------------------------------------------------------------
-# pandid.spec: the four edges that break quietly
-# ---------------------------------------------------------------------------
+# --- pandid.spec round trips ---
 
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_a_device_round_trips_through_a_spec(cls):
-    """``from_dict(to_dict(fs))`` for a sheet built from each class.
-
-    The edge this covers is ``spec._CLASSES``, which was built from
-    ``units.__all__`` alone: ``_write_unit`` writes ``type(unit).__name__``, so
-    every one of these would have raised on the way *out*. It also covers the
-    variant round trip, which is the reason a renamed variant lists both
-    spellings: what is stored is the registry's name, so that is what the file
-    carries and what the class has to accept when the file is read back.
-    """
+    """Check that a sheet built from each device class round-trips through a spec."""
     sheet = Flowsheet("round trip")
     original = sheet.add(cls("X-1"))
     written = sheet.to_dict()
@@ -324,38 +204,15 @@ def test_a_device_round_trips_through_a_spec(cls):
 
 
 def test_a_spec_may_name_a_device_class_in_either_spelling():
-    """The class name from the docs, and its snake_case spelling.
-
-    Both, because a spec is hand-written and a reader who has seen
-    ``devices.KettleReboiler`` and a reader who has seen ``kind: kettle_reboiler``
-    are asking for the same thing.
-    """
+    """Check that a spec accepts a device class name in CamelCase, snake_case or upper case."""
     for written in ("KettleReboiler", "kettle_reboiler", "KETTLEREBOILER"):
         sheet = Flowsheet.from_dict({"name": "s", "units": [{"kind": written, "name": "E-1"}]})
         assert type(sheet.units[0]) is devices.KettleReboiler
 
 
 def test_a_kind_tag_still_names_the_class_that_owns_the_whole_kind():
-    """The sharpest of the four edges.
-
-    ``_ALIASES`` maps the internal ``kind`` tag onto a class name, and six of
-    the 75 classes in ``pandid.devices`` carry ``kind == "pump"``. Built from both layers, ``kind:
-    pump`` would mean whichever of them iterated last -- and the answer would
-    move about as classes were added, which is the worst kind of quiet. It is
-    built from ``units`` alone, so a kind tag names the class that draws every
-    variant of that kind, exactly as it did before this layer existed.
-
-    ``Absorber``, ``Stripper`` and ``DistillationColumn`` are the one place
-    several ``units`` classes themselves share a ``kind`` -- all four are
-    ``"column"``, the same as ``Column`` -- because none is a distinct
-    drawing, only a narrower or wider port set on the one shell. ``kind:
-    column`` still has to mean the class that draws every variant of it,
-    which is ``Column`` and not the one of the four that happened to
-    iterate last, so they are the named exception rather than the rule
-    this test checks.
-    """
-    # Shares its kind with Column, and is not what a bare `kind: column`
-    # should resolve to; see the docstring.
+    """Check that each ``kind`` tag aliases the ``units`` class that owns the whole kind."""
+    # Share their kind with Column.
     shares_a_kind = {"Absorber", "Stripper", "DistillationColumn"}
     for name in units.__all__:
         if name == "Unit" or name in shares_a_kind:
@@ -365,13 +222,7 @@ def test_a_kind_tag_still_names_the_class_that_owns_the_whole_kind():
 
 
 def test_a_device_class_takes_the_arguments_its_base_declares():
-    """``normal_position`` and ``fail`` on a valve device, ``n_feeds`` on a reactor.
-
-    ``spec`` keys those arguments to the class that declares them, and it
-    matched on the class *name*, so every device class would have been refused
-    the argument its own constructor accepts -- a spec refusing to read back
-    what it had just written.
-    """
+    """Check that a spec passes each device class the arguments its base declares."""
     sheet = Flowsheet.from_dict(
         {
             "name": "s",
@@ -390,24 +241,17 @@ def test_a_device_class_takes_the_arguments_its_base_declares():
 
 
 def test_an_instrument_is_still_refused_in_the_units_section():
-    """No device class was generated for it, and the older refusal still fires."""
+    """Check that no device class is an instrument and a spec refuses one in ``units``."""
     assert not any(getattr(devices, name).kind == "instrument" for name in devices.__all__)
     with pytest.raises(spec.SpecError, match="instruments go in the top-level"):
         Flowsheet.from_dict({"name": "s", "units": [{"kind": "Instrument", "name": "FT-1"}]})
 
 
-# ---------------------------------------------------------------------------
-# The layer as API
-# ---------------------------------------------------------------------------
+# --- The layer as API ---
 
 
 def test_every_device_class_is_on_the_package():
-    """``pandid.Cyclone`` and ``pandid.devices.Cyclone`` are one class.
-
-    The star import in ``pandid/__init__.py`` takes its list from
-    ``devices.__all__``, which the generator writes, so there is no second list
-    to fall out of step.
-    """
+    """Check that every device class is exported from ``pandid`` as the same object."""
     import pandid
 
     for name in devices.__all__:
@@ -416,18 +260,13 @@ def test_every_device_class_is_on_the_package():
 
 
 def test_no_device_class_shadows_a_unit_class():
-    """Both layers are re-exported from the package, so one name is one class."""
+    """Check that no device class name is also a ``units`` class name."""
     assert set(devices.__all__).isdisjoint(units.__all__)
 
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)
 def test_every_device_is_a_subclass_of_the_class_that_owns_its_kind(cls):
-    """Which is what keeps ``isinstance(u, units.Pump)`` true of a GearPump.
-
-    ``pandid.document``, ``pandid.validate`` and ``spec._write_unit`` all ask
-    that question, and a device layer that answered no would have needed each of
-    them changed -- and would have left every third-party check quietly wrong.
-    """
+    """Check that every device subclasses the ``units`` class that owns its kind."""
     base = next(
         getattr(units, name)
         for name in units.__all__
