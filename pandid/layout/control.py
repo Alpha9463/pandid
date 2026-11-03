@@ -24,7 +24,18 @@ REACH = 40
 
 
 def place_control(fs: "Flowsheet") -> bool:
-    """Place every balloon and return whether any moved."""
+    """Place every balloon and return whether any moved.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed process units.
+
+    Returns
+    -------
+    bool
+        True if any balloon's frame moved.
+    """
     from pandid.layout.attach import place_attached
 
     moved = place_attached(fs)
@@ -32,7 +43,18 @@ def place_control(fs: "Flowsheet") -> bool:
 
 
 def _place_free(fs: "Flowsheet") -> bool:
-    """Place free-standing balloons and return whether any moved."""
+    """Place free-standing balloons and return whether any moved.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed process units.
+
+    Returns
+    -------
+    bool
+        True if any balloon's frame moved.
+    """
     from pandid.geometry import Frame
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size, unit_box
@@ -74,6 +96,24 @@ def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
 
     A pinned axis is fixed; an unpinned axis is searched outward from
     the centre of the units the balloon is wired to.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being laid out.
+    inst : Unit
+        Balloon to place.
+    w : float
+        Balloon width.
+    h : float
+        Balloon height.
+    taken : list[_Box]
+        Boxes already drawn.
+
+    Returns
+    -------
+    tuple[float, float]
+        Top-left corner of the balloon.
     """
     pin = inst.pin_
     centre = _centroid(fs, inst)
@@ -98,8 +138,15 @@ def _lane(grid: dict[int, tuple[float, float]], index: int | None,
     ----------
     grid : dict[int, tuple[float, float]]
         Start and size of each used grid line.
+    index : int or None
+        Grid line to find.
     gap : float
         Gap between lines, used when a one-line grid gives no pitch.
+
+    Returns
+    -------
+    float or None
+        Start of the line, or None if ``index`` or ``grid`` is empty.
     """
     if index is None or not grid:
         return None
@@ -122,7 +169,18 @@ def _lane(grid: dict[int, tuple[float, float]], index: int | None,
 
 def _grid(fs: "Flowsheet") -> tuple[dict[int, tuple[float, float]],
                                     dict[int, tuple[float, float]]]:
-    """Return the start and largest size of each column and row."""
+    """Return the start and largest size of each column and row.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed process units.
+
+    Returns
+    -------
+    tuple[dict[int, tuple], dict[int, tuple]]
+        Columns and rows, each keyed by index.
+    """
     from pandid.layout.stages import process_units
 
     cols: dict[int, tuple[float, float]] = {}
@@ -142,7 +200,20 @@ def _grid(fs: "Flowsheet") -> tuple[dict[int, tuple[float, float]],
 
 
 def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
-    """Return the centre of the placed units a balloon is wired to."""
+    """Return the centre of the placed units a balloon is wired to.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being laid out.
+    inst : Unit
+        Balloon to place.
+
+    Returns
+    -------
+    tuple[float, float]
+        Centre point, or a point below the drawing if none is wired.
+    """
     points = []
     for port in inst.ports.values():
         stream = port.stream
@@ -167,8 +238,25 @@ def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
 
     Parameters
     ----------
-    free_x, free_y : bool
-        Whether the search may move along each axis.
+    x : float
+        Preferred left edge.
+    y : float
+        Preferred top edge.
+    w : float
+        Box width.
+    h : float
+        Box height.
+    taken : list[_Box]
+        Boxes already drawn.
+    free_x : bool
+        Whether the search may move along x.
+    free_y : bool
+        Whether the search may move along y.
+
+    Returns
+    -------
+    tuple[float, float]
+        Top-left corner.
     """
     if not (free_x or free_y):
         return x, y
@@ -183,7 +271,18 @@ def _nearest_free(x: float, y: float, w: float, h: float, taken: list[_Box],
 
 
 def _ring(radius: int) -> list[tuple[int, int]]:
-    """Return the lattice offsets at one Chebyshev radius, clockwise."""
+    """Return the lattice offsets at one Chebyshev radius, clockwise.
+
+    Parameters
+    ----------
+    radius : int
+        Ring radius in lattice steps.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        Offsets on the ring.
+    """
     if radius == 0:
         return [(0, 0)]
     out = [(dx, -radius) for dx in range(-radius, radius + 1)]
@@ -194,7 +293,26 @@ def _ring(radius: int) -> list[tuple[int, int]]:
 
 
 def _hits(x: float, y: float, w: float, h: float, taken: list[_Box]) -> bool:
-    """Return whether a box is within the clearance of a drawn box."""
+    """Return whether a box is within the clearance of a drawn box.
+
+    Parameters
+    ----------
+    x : float
+        Box left edge.
+    y : float
+        Box top edge.
+    w : float
+        Box width.
+    h : float
+        Box height.
+    taken : list[_Box]
+        Boxes already drawn.
+
+    Returns
+    -------
+    bool
+        True if the box is too close to any drawn box.
+    """
     for x0, y0, x1, y1 in taken:
         if (x < x1 + CLEARANCE and x + w + CLEARANCE > x0
                 and y < y1 + CLEARANCE and y + h + CLEARANCE > y0):

@@ -24,7 +24,13 @@ class LayoutEngine(Protocol):
 
 
 def _seed_slots(fs: "Flowsheet") -> None:
-    """Replace each unit's solver slot with one seeded from its pin."""
+    """Replace each unit's solver slot with one seeded from its pin.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose units to seed.
+    """
     from pandid.geometry import _Slot
     from pandid.portgeom import resolve_size
 

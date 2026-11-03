@@ -18,7 +18,19 @@ CLEARANCE = 80.0
 
 
 class Pad(NamedTuple):
-    """Clear space a unit needs on each side of its box."""
+    """Clear space a unit needs on each side of its box.
+
+    Attributes
+    ----------
+    north : float
+        Space above the box.
+    south : float
+        Space below the box.
+    east : float
+        Space right of the box.
+    west : float
+        Space left of the box.
+    """
 
     north: float = 0.0
     south: float = 0.0
@@ -30,10 +42,17 @@ class Pad(NamedTuple):
 
         Parameters
         ----------
+        face : str
+            Compass face, ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
         reach : float
             Distance out from the face.
         girth : float, default=0.0
             Half-width across the face, added to the faces beside it.
+
+        Returns
+        -------
+        Pad
+            The widened pad.
         """
         n, s, e, w = self
         if face in ("N", "S"):
@@ -48,7 +67,18 @@ class Pad(NamedTuple):
 
 
 def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
-    """Return the pad each unit needs for the balloons it hosts."""
+    """Return the pad each unit needs for the balloons it hosts.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with attached balloons.
+
+    Returns
+    -------
+    dict[Unit, Pad]
+        Pads keyed by host unit.
+    """
     from pandid.layout.stages import is_control
 
     pads: dict["Unit", Pad] = {}
@@ -65,7 +95,18 @@ def balloon_pads(fs: "Flowsheet") -> dict["Unit", Pad]:
 
 
 def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
-    """Return a chain's reach, girth, face and hosts, or None."""
+    """Return a chain's reach, girth, face and hosts, or None.
+
+    Parameters
+    ----------
+    inst : Unit
+        Balloon at the end of the chain.
+
+    Returns
+    -------
+    tuple[float, float, str, list[Unit]] or None
+        The chain's charge, or None for a loop or an unplaced host.
+    """
     from pandid.layout.attach import _rotate_ccw
     from pandid.layout.stages import is_control
     from pandid.portgeom import resolve_size
@@ -105,13 +146,37 @@ def _charge(inst: "Unit") -> tuple[float, float, str, list["Unit"]] | None:
 
 
 def _face_normal(face: str) -> tuple[float, float]:
-    """Return a compass face's outward normal, ``"E"`` by default."""
+    """Return a compass face's outward normal, ``"E"`` by default.
+
+    Parameters
+    ----------
+    face : str
+        Compass face, in any case.
+
+    Returns
+    -------
+    tuple[float, float]
+        Unit outward normal.
+    """
     return {"N": (0.0, -1.0), "S": (0.0, 1.0),
             "W": (-1.0, 0.0), "E": (1.0, 0.0)}.get(face.upper(), (1.0, 0.0))
 
 
 def _run_direction(src: "Unit", dst: "Unit") -> tuple[float, float]:
-    """Return the direction a stream runs, from its ends' grid ranks."""
+    """Return the direction a stream runs, from its ends' grid ranks.
+
+    Parameters
+    ----------
+    src : Unit
+        Source unit.
+    dst : Unit
+        Destination unit.
+
+    Returns
+    -------
+    tuple[float, float]
+        Unit direction along x or y.
+    """
     across = (slot(dst).col or 0) - (slot(src).col or 0)
     if across:
         return (1.0 if across > 0 else -1.0, 0.0)

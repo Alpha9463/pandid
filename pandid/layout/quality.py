@@ -26,12 +26,26 @@ _HARD_CODES = (
 
 @dataclass(frozen=True)
 class Quality:
-    """Hard findings and measured costs of one settled drawing.
+    """Hold the hard findings and measured costs of one drawing.
 
     Attributes
     ----------
     hard : tuple[int, ...]
         Error, fallback, finding-code and undrawn-stream counts.
+    crossings : int
+        Proper crossings between routed paths.
+    bends : int
+        Direction changes on all routed paths.
+    excess_bends : int
+        Bends beyond each automatic route's minimum.
+    length : float
+        Total route length.
+    area : float
+        Bounding-box area of the unit frames.
+    hard_conflicts : frozenset[Conflict]
+        Routing and placement defects other than crossings.
+    crossing_pairs : frozenset[tuple[int, int]]
+        Stream index pairs that cross.
     """
 
     hard: tuple[int, ...]
@@ -45,7 +59,23 @@ class Quality:
 
 
 def measure_final(fs: Flowsheet) -> Quality:
-    """Measure the frames and routes of a laid-out and routed sheet."""
+    """Measure the frames and routes of a laid-out and routed sheet.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with completed layout and routing.
+
+    Returns
+    -------
+    Quality
+        Findings and costs of the drawing.
+
+    Raises
+    ------
+    ValueError
+        If layout or routing is stale.
+    """
     if fs._layout_stale or fs._route_stale:
         raise ValueError("measure_final requires completed layout and routing")
     issues = fs.validate()

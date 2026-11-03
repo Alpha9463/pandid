@@ -26,7 +26,19 @@ _DIRECTION = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}
 
 @dataclass(frozen=True, order=True)
 class Conflict:
-    """A geometric defect and the streams and units it involves."""
+    """A geometric defect and the streams and units it involves.
+
+    Attributes
+    ----------
+    kind : str
+        Category of the defect.
+    streams : tuple[int, ...]
+        Stream indices in flowsheet order.
+    units : tuple[int, ...]
+        Unit indices in flowsheet order.
+    port : str or None
+        Port name when the defect is at a nozzle.
+    """
 
     kind: str
     streams: tuple[int, ...] = ()
@@ -37,7 +49,20 @@ class Conflict:
 def boxes_overlap(
     a: tuple[float, float, float, float], b: tuple[float, float, float, float]
 ) -> bool:
-    """Return whether two boxes overlap beyond the edge tolerance."""
+    """Return whether two boxes overlap beyond the edge tolerance.
+
+    Parameters
+    ----------
+    a : tuple[float, float, float, float]
+        First box as left, top, right, bottom.
+    b : tuple[float, float, float, float]
+        Second box as left, top, right, bottom.
+
+    Returns
+    -------
+    bool
+        True if the box interiors overlap.
+    """
     return not (
         a[2] - _BODY_TOL <= b[0]
         or b[2] - _BODY_TOL <= a[0]
@@ -49,7 +74,22 @@ def boxes_overlap(
 def segment_crosses_box(
     a: tuple[float, float], b: tuple[float, float], box: tuple[float, float, float, float]
 ) -> bool:
-    """Return whether an orthogonal segment enters a box interior."""
+    """Return whether an orthogonal segment enters a box interior.
+
+    Parameters
+    ----------
+    a : tuple[float, float]
+        Segment start.
+    b : tuple[float, float]
+        Segment end.
+    box : tuple[float, float, float, float]
+        Box as left, top, right, bottom.
+
+    Returns
+    -------
+    bool
+        True if the segment enters the box; False for a diagonal.
+    """
     bx0, by0, bx1, by1 = box
     if abs(a[0] - b[0]) < _SQUARE_TOL:
         return (
@@ -67,12 +107,40 @@ def segment_crosses_box(
 
 
 def _same_point(a: tuple[float, float], b: tuple[float, float]) -> bool:
-    """Return whether two points match within tolerance."""
+    """Return whether two points match within tolerance.
+
+    Parameters
+    ----------
+    a : tuple[float, float]
+        First point.
+    b : tuple[float, float]
+        Second point.
+
+    Returns
+    -------
+    bool
+        True if the points coincide.
+    """
     return abs(a[0] - b[0]) <= _POINT_TOL and abs(a[1] - b[1]) <= _POINT_TOL
 
 
 def _outward(a: tuple[float, float], b: tuple[float, float], face: str) -> bool:
-    """Return whether a leg runs orthogonally out of a face."""
+    """Return whether a leg runs orthogonally out of a face.
+
+    Parameters
+    ----------
+    a : tuple[float, float]
+        Leg start, on the face.
+    b : tuple[float, float]
+        Leg end.
+    face : str
+        Compass face, ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+
+    Returns
+    -------
+    bool
+        True if the leg leaves the face square to it.
+    """
     direction = _DIRECTION.get(face)
     if direction is None:
         return False
@@ -95,14 +163,25 @@ def _exit_conflicts(
 
     Parameters
     ----------
+    fs : Flowsheet
+        Placed and routed sheet.
+    stream_index : int
+        Index of the stream in ``fs.streams``.
     boxes : list[tuple[int, tuple[float, float, float, float]]]
         Placed unit boxes with their unit indices.
     index_by_id : dict[int, int]
         Unit indices keyed by object id.
     at_source : bool
         Whether to inspect the source end.
+    points : list[tuple[float, float]]
+        Route waypoints.
     hosts : Sequence[object]
         Each unit's ``host``, by unit index.
+
+    Returns
+    -------
+    set[Conflict]
+        Conflicts found at that end.
     """
     stream = fs.streams[stream_index]
     port = stream.source if at_source else stream.dest
@@ -133,7 +212,18 @@ def _exit_conflicts(
 
 
 def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
-    """Return a flowsheet's geometric conflicts, sorted."""
+    """Return a flowsheet's geometric conflicts, sorted.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Placed and routed sheet.
+
+    Returns
+    -------
+    tuple[Conflict, ...]
+        Every conflict, in sorted order.
+    """
     index_by_id = {id(unit): index for index, unit in enumerate(fs.units)}
     hosts = [getattr(unit, "host", None) for unit in fs.units]
     boxes = [

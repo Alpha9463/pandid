@@ -13,7 +13,18 @@ LABEL_SIDES = ("top", "bottom", "right", "left")
 
 
 def free_label_sides(u) -> list[str]:
-    """Return a placed unit's sides that no connected nozzle uses."""
+    """Return a placed unit's sides that no connected nozzle uses.
+
+    Parameters
+    ----------
+    u : Unit
+        Placed unit.
+
+    Returns
+    -------
+    list[str]
+        Free sides, in :data:`LABEL_SIDES` order.
+    """
     from pandid.portgeom import port_anchor
 
     if u.frame is None:
@@ -32,6 +43,11 @@ def assign_labels(fs: "Flowsheet") -> None:
 
     An explicit ``label_pos`` wins, then the symbol's default, then the
     first side free of connected nozzles.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose units to label.
     """
     from pandid.render.symbols import default_registry
 

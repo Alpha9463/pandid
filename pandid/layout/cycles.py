@@ -13,6 +13,11 @@ def break_cycles(fs: "Flowsheet") -> None:
 
     The depth-first walk starts from units with no incoming process
     stream, then from any unit not yet reached.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet whose streams to mark.
     """
     from pandid.layout.stages import process_streams, process_units
 
@@ -40,7 +45,13 @@ def break_cycles(fs: "Flowsheet") -> None:
     stack: set["Unit"] = set()
 
     def dfs(start: "Unit") -> None:
-        """Walk depth first from one unit, marking back edges."""
+        """Walk depth first from one unit, marking back edges.
+
+        Parameters
+        ----------
+        start : Unit
+            Unit to start from.
+        """
         visited.add(start)
         stack.add(start)
         frames: list[tuple["Unit", int]] = [(start, 0)]

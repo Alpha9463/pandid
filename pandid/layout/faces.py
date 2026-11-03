@@ -17,7 +17,22 @@ _ESCAPE = 25.0
 
 
 def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, ...]:
-    """Return the faces a connected port may move between, or ``()``."""
+    """Return the faces a connected port may move between, or ``()``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being laid out.
+    unit : Unit
+        Placed unit.
+    port_name : str
+        Port to test.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The face menu, or ``()`` if the port's face is fixed.
+    """
     from pandid.portgeom import pin_intent, port_faces
 
     frame = unit.frame
@@ -39,6 +54,8 @@ def select_faces(
 
     Parameters
     ----------
+    fs : Flowsheet
+        Sheet with placed units.
     preferred : Mapping[tuple[int, str], str] or None, optional
         Face to try first, keyed by unit index and port name.
     """
@@ -81,6 +98,24 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
 
     A face is blocked when its outward stub crosses another unit. The
     menu is returned unchanged when every face is blocked.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+    unit : Unit
+        Unit owning the port.
+    frame : Frame
+        The unit's frame.
+    port_name : str
+        Port to choose a face for.
+    menu : list[str]
+        Faces the port may take.
+
+    Returns
+    -------
+    list[str]
+        Usable faces, in menu order.
     """
     from pandid.layout.attach import is_attached
     from pandid.layout.conflicts import segment_crosses_box
@@ -132,7 +167,22 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
 
 
 def _point(unit: "Unit", frame, port_name: str) -> tuple[float, ...]:
-    """Return a port's drawn point, rounded to three decimals."""
+    """Return a port's drawn point, rounded to three decimals.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit owning the port.
+    frame : Frame
+        The unit's frame.
+    port_name : str
+        Port to locate.
+
+    Returns
+    -------
+    tuple[float, ...]
+        Rounded point.
+    """
     from pandid.portgeom import resolve_port
 
     return tuple(round(v, 3) for v in resolve_port(unit, frame, port_name).point)
@@ -143,6 +193,16 @@ def _reference(port: "Port") -> tuple[float, float] | None:
 
     This is the peer's nozzle anchor if that nozzle has one face, else
     the centre of the peer unit.
+
+    Parameters
+    ----------
+    port : Port
+        Connected port.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Target point, or None if the port or its peer is unplaced.
     """
     from pandid.portgeom import port_faces, resolve_port, unit_box
 
@@ -161,7 +221,28 @@ def _reference(port: "Port") -> tuple[float, float] | None:
 
 def _best(unit: "Unit", frame, port_name: str, menu: list[str],
           target: tuple[float, float], taken: set[tuple[float, ...]]) -> str | None:
-    """Return the cheapest untaken face toward the target, or None."""
+    """Return the cheapest untaken face toward the target, or None.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit owning the port.
+    frame : Frame
+        The unit's frame.
+    port_name : str
+        Port to choose a face for.
+    menu : list[str]
+        Faces to score.
+    target : tuple[float, float]
+        Point the port should face.
+    taken : set[tuple[float, ...]]
+        Rounded points already used by other ports.
+
+    Returns
+    -------
+    str or None
+        Best face, or None if every face lands on a taken point.
+    """
     from pandid.portgeom import face_point, resolve_port, unit_box
 
     x0, y0, x1, y1 = unit_box(unit, frame)
@@ -182,7 +263,22 @@ def _best(unit: "Unit", frame, port_name: str, menu: list[str],
 
 def _cost(anchor: tuple[float, float], normal: tuple[float, float],
           target: tuple[float, float]) -> float:
-    """Return the Manhattan distance, plus a penalty for facing away."""
+    """Return the Manhattan distance, plus a penalty for facing away.
+
+    Parameters
+    ----------
+    anchor : tuple[float, float]
+        Nozzle anchor.
+    normal : tuple[float, float]
+        Outward face normal.
+    target : tuple[float, float]
+        Point the port should face.
+
+    Returns
+    -------
+    float
+        Cost of the face.
+    """
     (ax, ay), (nx, ny), (tx, ty) = anchor, normal, target
     reach = (tx - ax) * nx + (ty - ay) * ny
     return abs(tx - ax) + abs(ty - ay) + (0.0 if reach >= 0.0 else 2.0 * _ESCAPE)
@@ -190,5 +286,20 @@ def _cost(anchor: tuple[float, float], normal: tuple[float, float],
 
 def _aim(centre: tuple[float, float], normal: tuple[float, float],
          target: tuple[float, float]) -> float:
-    """Return the centre-to-target vector projected on a face normal."""
+    """Return the centre-to-target vector projected on a face normal.
+
+    Parameters
+    ----------
+    centre : tuple[float, float]
+        Centre of the unit box.
+    normal : tuple[float, float]
+        Outward face normal.
+    target : tuple[float, float]
+        Point the port should face.
+
+    Returns
+    -------
+    float
+        Projection length.
+    """
     return (target[0] - centre[0]) * normal[0] + (target[1] - centre[1]) * normal[1]

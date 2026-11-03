@@ -22,8 +22,21 @@ def _frame(unit: Unit, x: float, y: float, *, mirror: bool | str = False,
 
     Parameters
     ----------
+    unit : Unit
+        Placed unit.
+    x : float
+        New left edge.
+    y : float
+        New top edge.
     mirror : bool or str
         ``True``, ``"x"``, ``"y"`` or ``"xy"`` mirrors on those axes.
+    orientation : float
+        Rotation in degrees.
+
+    Returns
+    -------
+    Frame
+        The moved frame, with no label side or port faces.
     """
     old = unit.frame
     assert old is not None
@@ -40,10 +53,24 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
 
     Parameters
     ----------
-    left, y : float
-        Footprint left edge and centerline.
+    assembly : StationAssembly
+        Station to lay out.
+    left : float
+        Footprint left edge.
+    y : float
+        Centerline.
     mirrored : bool
         Whether flow runs right to left.
+
+    Returns
+    -------
+    dict[Unit, Frame]
+        Frame of each member.
+
+    Raises
+    ------
+    ValueError
+        If a member's stated nozzle face cannot be drawn in the station.
     """
     station = assembly.station
     branch = {station.bypass, station.upstream_drain, station.downstream_drain}
@@ -89,7 +116,20 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
 
 
 def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
-    """Return whether frames keep their pins and clear obstacles."""
+    """Return whether frames keep their pins and clear obstacles.
+
+    Parameters
+    ----------
+    frames : dict[Unit, Frame]
+        Proposed member frames.
+    obstacles : list[Unit]
+        Units the members must clear.
+
+    Returns
+    -------
+    bool
+        True if every frame keeps its pin and clears every obstacle.
+    """
     for unit, frame in frames.items():
         pin = unit.pin_
         if pin is not None and (
@@ -116,7 +156,29 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
 
 def _anchored_origin(assembly: StationAssembly, preferred_left: float,
                      centerline: float, mirrored: bool) -> tuple[float, float] | None:
-    """Return a station origin that meets its members' pins, or None."""
+    """Return a station origin that meets its members' pins, or None.
+
+    Parameters
+    ----------
+    assembly : StationAssembly
+        Station to place.
+    preferred_left : float
+        Left edge to use when no member pins x.
+    centerline : float
+        Centerline to use when no member pins y.
+    mirrored : bool
+        Whether flow runs right to left.
+
+    Returns
+    -------
+    tuple[float, float] or None
+        Left edge and centerline, or None if the pins conflict.
+
+    Raises
+    ------
+    ValueError
+        If a member's stated nozzle face cannot be drawn in the station.
+    """
     base = _station_frames(assembly, 0.0, 0.0, mirrored)
     left, y = preferred_left, centerline
     pinned_x: float | None = None
@@ -148,7 +210,20 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
 
 
 def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
-    """Return whether two stations' member boxes keep clear."""
+    """Return whether two stations' member boxes keep clear.
+
+    Parameters
+    ----------
+    first : dict[Unit, Frame]
+        One station's member frames.
+    second : dict[Unit, Frame]
+        The other station's member frames.
+
+    Returns
+    -------
+    bool
+        True if no two boxes come within 8 of each other.
+    """
     for unit, frame in first.items():
         left, top, right, bottom = unit_box(unit, frame)
         for other, other_frame in second.items():
@@ -161,7 +236,28 @@ def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
 def _station_centerline(source: Unit, source_port: str, dest: Unit,
                         dest_port: str, start: tuple[float, float],
                         end: tuple[float, float]) -> float | None:
-    """Return the y of a station's horizontal leg, or None."""
+    """Return the y of a station's horizontal leg, or None.
+
+    Parameters
+    ----------
+    source : Unit
+        Unit at the start of the line.
+    source_port : str
+        Port name on ``source``.
+    dest : Unit
+        Unit at the end of the line.
+    dest_port : str
+        Port name on ``dest``.
+    start : tuple[float, float]
+        Source nozzle point.
+    end : tuple[float, float]
+        Destination nozzle point.
+
+    Returns
+    -------
+    float or None
+        The leg's y, or None if no horizontal leg fits.
+    """
     axis = horizontal_centerline(source, source_port, dest, dest_port, start, end)
     if axis is not None:
         return axis
@@ -196,7 +292,18 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
 
 
 def _fraction(assembly: StationAssembly) -> float:
-    """Return a station's fraction along its line, 0.5 by default."""
+    """Return a station's fraction along its line, 0.5 by default.
+
+    Parameters
+    ----------
+    assembly : StationAssembly
+        Station on a line.
+
+    Returns
+    -------
+    float
+        Fraction from 0 to 1.
+    """
     from pandid.inline import position
 
     incoming = assembly.station.inlet.stream
@@ -209,8 +316,15 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
 
     Parameters
     ----------
+    fs : Flowsheet
+        Sheet with placed process units.
     assemblies : list[StationAssembly] or None, optional
         Stations to place; every station on the sheet by default.
+
+    Returns
+    -------
+    int
+        Number of stations placed.
     """
     chosen = fs._station_assemblies if assemblies is None else assemblies
     if not chosen:
