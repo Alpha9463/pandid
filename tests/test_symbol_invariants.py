@@ -735,8 +735,6 @@ def test_drawn_nozzles_and_ports_agree(entry):
 
 _ODD_BOXES = ((300.0, 60.0), (60.0, 300.0))
 
-_PLACEMENTS = ({},)
-
 _ROUNDTRIP_EPS = 1e-9
 
 _UNBOXABLE_KINDS = {"conveyor"}
@@ -930,26 +928,25 @@ def odd_box_sheets():
     Returns
     -------
     dict
-        Units and placement transforms by box and placement.
+        Units and placement transforms by box.
     """
     from pandid import Flowsheet
 
     sheets: dict[tuple, dict[tuple[str, str], tuple]] = {}
     for box in _ODD_BOXES:
-        for turn, placement in enumerate(_PLACEMENTS):
-            fs = Flowsheet("odd boxes")
-            placed = {}
-            for i, ((kind, variant), _) in enumerate(_SYMBOLS):
-                if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
-                    continue
-                unit = _sized_unit(kind, variant, i, *box)
-                fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8), **placement)
-                placed[(kind, variant)] = unit
-            matrices = _placements(fs.to_svg(), _natives(fs))
-            sheets[(box, turn)] = {
-                key: (unit, matrices[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))])
-                for key, unit in placed.items()
-            }
+        fs = Flowsheet("odd boxes")
+        placed = {}
+        for i, ((kind, variant), _) in enumerate(_SYMBOLS):
+            if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
+                continue
+            unit = _sized_unit(kind, variant, i, *box)
+            fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8))
+            placed[(kind, variant)] = unit
+        matrices = _placements(fs.to_svg(), _natives(fs))
+        sheets[box] = {
+            key: (unit, matrices[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))])
+            for key, unit in placed.items()
+        }
     return sheets
 
 
@@ -985,13 +982,10 @@ def test_ports_stay_on_the_drawing_at_any_box_shape(entry, odd_box_sheets):
     segments = _collect_segments(default_registry.for_unit(first).svg)
     corners = [(0.0, 0.0), (sym.width, 0.0), (sym.width, sym.height), (0.0, sym.height)]
     outline = list(zip(corners, corners[1:] + corners[:1]))
-    for key, sheet in odd_box_sheets.items():
+    for (w, h), sheet in odd_box_sheets.items():
         unit, matrix = sheet[(kind, variant)]
         for name in unit.ports:
-            where = (
-                f"{kind}/{variant} port {name!r} in a {key[0][0]:g}x{key[0][1]:g} box at "
-                f"{_PLACEMENTS[key[1]] or 'no turn'}"
-            )
+            where = f"{kind}/{variant} port {name!r} in a {w:g}x{h:g} box"
             point = _resolved_in_symbol_space(unit, matrix, name)
             if (kind, name) in _SIGNAL_PORTS:
                 d = _nearest_distance(point, outline)
@@ -1037,16 +1031,17 @@ def test_a_directional_symbol_carries_no_lettering_of_its_own(entry):
     )
 
 
-_HOLDUP = [(units.Vessel, "vessel"), (units.Tank, "tank")]
+_HOLDUP_CASES = [
+    (cls, kind, variant)
+    for cls, kind in ((units.Vessel, "vessel"), (units.Tank, "tank"))
+    for variant in sorted(default_registry.variants(kind))
+]
+_HOLDUP_CASE_IDS = [f"{kind}/{variant}" for _, kind, variant in _HOLDUP_CASES]
 
 _ROLE_FACE = {"vent": "N", "relief": "N", "drain": "S"}
 
 
-@pytest.mark.parametrize(
-    "cls,kind,variant",
-    [(cls, kind, v) for cls, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-    ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-)
+@pytest.mark.parametrize("cls,kind,variant", _HOLDUP_CASES, ids=_HOLDUP_CASE_IDS)
 def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind, variant):
     """Verify holdup variants anchor every declared nozzle."""
     from pandid.portgeom import is_anchored
@@ -1059,11 +1054,7 @@ def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind,
         )
 
 
-@pytest.mark.parametrize(
-    "cls,kind,variant",
-    [(cls, kind, v) for cls, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-    ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-)
+@pytest.mark.parametrize("cls,kind,variant", _HOLDUP_CASES, ids=_HOLDUP_CASE_IDS)
 def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, variant):
     """Verify relief and drain ports occupy their prescribed positions."""
     from pandid.portgeom import port_faces
@@ -1190,28 +1181,22 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
 
     (kind, variant), _, turned = entry
     segments = _collect_segments(turned.svg)
-    for box in _ODD_BOXES:
-        for placement in _PLACEMENTS:
-            fs = Flowsheet("odd boxes, turned end for end")
-            unit = units.Reducer(
-                f"{kind}-{variant}",
-                variant=variant,
-                large_end="outlet",
-                width=box[0],
-                height=box[1],
+    for w, h in _ODD_BOXES:
+        fs = Flowsheet("odd boxes, turned end for end")
+        unit = units.Reducer(
+            f"{kind}-{variant}", variant=variant, large_end="outlet", width=w, height=h
+        )
+        fs.add(unit).pin(x=200, y=200)
+        matrix = _placements(fs.to_svg(), _natives(fs))[
+            (round(unit.frame.cx, 6), round(unit.frame.cy, 6))
+        ]
+        for name in unit.ports:
+            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
+            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
+                f"{kind}/{variant} turned end for end: port {name!r} in a {w:g}x{h:g} box "
+                f"is {d:.1f}u from the nearest drawn stroke once the artwork's own "
+                f"placement is undone (tolerance {GEOM_TOL})"
             )
-            fs.add(unit).pin(x=200, y=200, **placement)
-            matrix = _placements(fs.to_svg(), _natives(fs))[
-                (round(unit.frame.cx, 6), round(unit.frame.cy, 6))
-            ]
-            for name in unit.ports:
-                d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
-                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
-                    f"{kind}/{variant} turned end for end: port {name!r} in a "
-                    f"{box[0]:g}x{box[1]:g} box at {placement or 'no turn'} is "
-                    f"{d:.1f}u from the nearest drawn stroke once the artwork's own "
-                    f"placement is undone (tolerance {GEOM_TOL})"
-                )
 
 
 # Port-placement menu invariants
@@ -2480,14 +2465,10 @@ _STRAIGHT_VALVES = sorted(
 )
 
 
-_OFF_THE_RUN_BY_DESIGN = {
+_OFF_THE_RUN = {
     "three_way": "The branch extends the box below the top-aligned process run.",
     "knife": "The gate housing extends below the process run.",
 }
-
-_OFF_THE_RUN_BY_DEFECT: dict[str, str] = {}
-
-_OFF_THE_RUN = {**_OFF_THE_RUN_BY_DESIGN, **_OFF_THE_RUN_BY_DEFECT}
 
 
 def _run_heights(sym: Symbol) -> dict[tuple[str, str], float]:
@@ -2561,7 +2542,6 @@ def test_exactly_the_valves_named_above_leave_the_run():
         )
     }
     assert strayed == set(_OFF_THE_RUN)
-    assert set(_OFF_THE_RUN_BY_DESIGN) & set(_OFF_THE_RUN_BY_DEFECT) == set()
     assert all(_OFF_THE_RUN.values()), "an exception without a reason is a list of names"
 
 
@@ -2576,13 +2556,13 @@ def test_the_valves_the_run_does_not_cross_are_out_of_scope():
     assert len(_OFF_THE_RUN) * 2 < len(_STRAIGHT_VALVES), "the exceptions would be the rule"
 
 
-@pytest.mark.parametrize("variant", sorted(_OFF_THE_RUN_BY_DESIGN))
+@pytest.mark.parametrize("variant", sorted(_OFF_THE_RUN))
 def test_a_valve_drawn_below_the_run_is_drawn_there_in_ink(variant):
     """Verify below-run valves render at their declared offset."""
     plain = default_registry.get("valve", "gate")
     assert _ink_below_the_run(plain) == pytest.approx(_VALVE_RUN_HEIGHT)
     sym = default_registry.get("valve", variant)
-    assert _ink_below_the_run(sym) > _ink_below_the_run(plain), _OFF_THE_RUN_BY_DESIGN[variant]
+    assert _ink_below_the_run(sym) > _ink_below_the_run(plain), _OFF_THE_RUN[variant]
     assert _ink_below_the_run(sym) == pytest.approx(
         sym.height - sym.ports["inlet"][1], abs=_VALVE_RUN_TOL
     ), f"valve/{variant} has whitespace under it, not a deeper drawing"
