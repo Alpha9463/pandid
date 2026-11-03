@@ -2029,11 +2029,11 @@ class Flowsheet:
         """
         from pandid.layout import default_layout_engine
 
+        self._unhang()
         self._mounted_layout = False
         if engine is None:
             engine = default_layout_engine
         engine.layout(self)
-        self._unhung = None
         self._layout_stale = False
         self._route_stale = True
 
@@ -2073,50 +2073,15 @@ class Flowsheet:
                     break
                 router.route(self)
 
-        def save() -> tuple:
-            """Return each unit's frame and tap, each automatic route, and
-            the settled flag."""
-            return ([(u, copy.deepcopy(u.frame), copy.deepcopy(getattr(u, "tap", None)))
-                     for u in self.units],
-                    [(st, copy.deepcopy(st.route)) for st in self.streams
-                     if st.route is None or not st.route.manual],
-                    self.route_converged)
-
-        def restore(state: tuple, keep_manual: bool) -> None:
-            """Put back what save() returned, for units and streams still here.
-
-            Parameters
-            ----------
-            state : tuple
-                What save() returned.
-            keep_manual : bool
-                Keep a route now drawn by hand rather than the saved one.
-            """
-            frames, routes, converged = state
-            units = {id(u) for u in self.units}
-            streams = {id(st) for st in self.streams}
-            for u, frame, tap in frames:
-                if id(u) in units:
-                    u.frame = frame
-                    if hasattr(u, "tap"):
-                        u.tap = tap
-            for st, route in routes:
-                manual = st.route is not None and st.route.manual
-                if id(st) in streams and not (keep_manual and manual):
-                    st.route = route
-            self.route_converged = converged
-
         # Start from the sheet as routed without hanging, not from a hung
         # controller left by the last route().
-        if self._unhung is not None:
-            restore(self._unhung, keep_manual=True)
-            self._unhung = None
+        self._unhang()
         router.route(self)
         place()
         # Hang each controller it can off its actuator, and keep that only
         # if the sheet stays clean. The check assumes the default router.
         if type(router) is DefaultRouter and any(_hangable(self, u) for u in self.units):
-            unhung = save()
+            unhung = self._geometry()
             self._may_hang, self._hung = True, set()
             try:
                 place()
@@ -2126,11 +2091,56 @@ class Flowsheet:
             finally:
                 self._may_hang = False
             if clash or not self._hung:
-                restore(unhung, keep_manual=False)
+                self._put_geometry(unhung, keep_manual=False)
             else:
                 self._unhung = unhung
         # Mark the routes current.
         self._route_stale = False
+
+    def _geometry(self) -> tuple:
+        """Return each unit's frame and tap, each automatic route, and
+        whether routing settled.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_geometry`.
+        """
+        return ([(u, copy.deepcopy(u.frame), copy.deepcopy(getattr(u, "tap", None)))
+                 for u in self.units],
+                [(st, copy.deepcopy(st.route)) for st in self.streams
+                 if st.route is None or not st.route.manual],
+                self.route_converged)
+
+    def _put_geometry(self, state: tuple, keep_manual: bool) -> None:
+        """Put back what :meth:`_geometry` returned, for what is still here.
+
+        Parameters
+        ----------
+        state : tuple
+            What :meth:`_geometry` returned.
+        keep_manual : bool
+            Keep a route now drawn by hand rather than the saved one.
+        """
+        frames, routes, converged = state
+        units = {id(u) for u in self.units}
+        streams = {id(st) for st in self.streams}
+        for u, frame, tap in frames:
+            if id(u) in units:
+                u.frame = frame
+                if hasattr(u, "tap"):
+                    u.tap = tap
+        for st, route in routes:
+            manual = st.route is not None and st.route.manual
+            if id(st) in streams and not (keep_manual and manual):
+                st.route = route
+        self.route_converged = converged
+
+    def _unhang(self) -> None:
+        """Return the sheet to its state as routed without hanging."""
+        if self._unhung is not None:
+            self._put_geometry(self._unhung, keep_manual=True)
+            self._unhung = None
 
     def _resolve_geometry(self) -> None:
         """Lay out and route where the geometry is missing or stale."""

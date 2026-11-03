@@ -1490,6 +1490,32 @@ def test_a_copied_sheet_routes_from_its_own_unhung_state() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
+def test_a_balloon_added_after_hanging_is_laid_out_from_the_unhung_sheet() -> None:
+    """A balloon put on a hung controller's line after routing is laid out
+    and routed from the sheet as routed without hanging, so it settles
+    with its tap on the line."""
+    from pandid.layout.attach import stream_path
+
+    fs, lic, _ = _hung_controller()
+    signal = lic.sig_out.stream
+    assert signal is not None
+    fs.route()
+    pi = fs.add_instrument("PI", 1, sensing=signal, at=0.1, offset=30)
+    fs.route()
+
+    assert fs.route_converged
+    assert pi.tap is not None
+    x, y = pi.tap
+
+    def gap(a: tuple[float, float], b: tuple[float, float]) -> float:
+        near_x = min(max(x, min(a[0], b[0])), max(a[0], b[0]))
+        near_y = min(max(y, min(a[1], b[1])), max(a[1], b[1]))
+        return math.hypot(x - near_x, y - near_y)
+
+    points = stream_path(signal)
+    assert min(gap(a, b) for a, b in zip(points, points[1:])) < 0.5
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 
