@@ -116,26 +116,6 @@ def _station_frames(assembly: StationAssembly, left: float, y: float,
     return frames
 
 
-def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
-    """Return whether frames clear obstacles.
-
-    Parameters
-    ----------
-    frames : dict[Unit, Frame]
-        Proposed member frames.
-    obstacles : list[Unit]
-        Units the members must clear.
-
-    Returns
-    -------
-    bool
-        True if every box clears obstacles by 8.
-    """
-    return not any(boxes_overlap(unit_box(unit, frame), unit_box(other, other.frame), 8)
-                   for unit, frame in frames.items()
-                   for other in obstacles if other.frame is not None)
-
-
 def _anchored_origin(assembly: StationAssembly, preferred_left: float,
                      centerline: float, mirrored: bool) -> tuple[float, float] | None:
     """Return a station origin that meets its members' pins, or None.
@@ -193,14 +173,14 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
 
 
 def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
-    """Return whether two stations' member boxes keep clear.
+    """Return whether two sets of member boxes keep clear.
 
     Parameters
     ----------
     first : dict[Unit, Frame]
-        One station's member frames.
+        Proposed member frames.
     second : dict[Unit, Frame]
-        The other station's member frames.
+        Frames to clear.
 
     Returns
     -------
@@ -348,6 +328,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
                if stream.source.owner in members or stream.dest.owner in members):
             continue
         obstacles = [unit for unit in units if unit not in members]
+        placed = {unit: unit.frame for unit in obstacles if unit.frame is not None}
         proposed: list[dict[Unit, Frame]] = []
         for assembly in group:
             if assembly.mirrored and not mirrored:
@@ -366,9 +347,7 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
             except ValueError:
                 # Stop at a stated nozzle face the station cannot draw.
                 break
-            if not _fits(frames, obstacles) or any(
-                not _separated(frames, earlier) for earlier in proposed
-            ):
+            if not all(_separated(frames, other) for other in (placed, *proposed)):
                 break
             for unit, frame in frames.items():
                 pin = unit.pin_
