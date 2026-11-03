@@ -12,6 +12,7 @@ import math
 from typing import TYPE_CHECKING, NamedTuple, Sequence
 
 from pandid.render.escape import escaped, fmt
+from pandid.render.furniture import text_width
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -44,9 +45,7 @@ _FONT = "sans-serif"
 # Dash pattern of the grid rules.
 _DASH = "4,4"
 
-# Label placement: advance width, ascent and descent as fractions of
-# type size.
-_ADV = 0.56
+# Label placement: ascent and descent as fractions of type size.
 _ASC, _DESC = 0.75, 0.2
 
 # Search steps in type sizes: across the text and along it.
@@ -267,7 +266,7 @@ def _box(x: float, y: float, text: str, size: float, lead: float
     tuple[float, float, float, float]
         ``(x0, y0, x1, y1)``.
     """
-    w = _ADV * size * len(text)
+    w = text_width(text, size)
     x0 = x if lead >= 0 else x - w
     return (x0, y - _ASC * size, x0 + w, y + _DESC * size)
 
@@ -312,8 +311,8 @@ def _window(lab: "_Label") -> "tuple[float, float, float, float]":
     tuple[float, float, float, float]
         ``(x0, y0, x1, y1)``.
     """
-    span = lab.size * (max(max(abs(dx), abs(dy)) for dx, dy in lab.spots)
-                       + _ADV * len(lab.text) + _ASC)
+    span = (lab.size * (max(max(abs(dx), abs(dy)) for dx, dy in lab.spots) + _ASC)
+            + text_width(lab.text, lab.size))
     return (lab.px - span, lab.py - span, lab.px + span, lab.py + span)
 
 

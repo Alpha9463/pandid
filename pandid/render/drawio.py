@@ -1849,7 +1849,7 @@ class DrawioRenderer:
             # The table container draws the border and every rule.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
-                          x, y, w, h, col_w, (size + 10) if title else 0.0,
+                          x, y, w, h, col_w, (size + F._TABLE_TITLE) if title else 0.0,
                           font=size, keys=f"strokeWidth={F._CELL_RULE:g};",
                           col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
@@ -2250,15 +2250,16 @@ def _line_box(size: float) -> float:
     """
     return size * _LINE_BOX
 
-# Style keys for TableBox column alignment.
-_ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4;",
-              "c": "align=center;"}
-
 # Baseline depth within a line box, as a fraction of font size.
 _BASELINE = 0.9
 
 # Inset draw.io applies on every side of a cell before its text.
 _TEXT_INSET = 2.0
+
+# Style keys for TableBox column alignment.
+_ALIGN_KEY = {"l": f"align=left;spacingLeft={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
+              "r": f"align=right;spacingRight={fmt(F._TABLE_PAD - _TEXT_INSET, 2)};",
+              "c": "align=center;"}
 
 
 def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
@@ -2484,13 +2485,13 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
     out = _rect(cid, x, y, w, h, box)
     if title:
         # Centred, bold, one point larger.
-        out += _strip_label(f"{cid}-t", ("text", x + w / 2, y + title_h - 6,
+        out += _strip_label(f"{cid}-t", ("text", x + w / 2, y + title_h - F._TITLE_RISE,
                                          title, font + 1, "middle", True, "black"))
         out += _segment(f"{cid}-r", x, y + title_h, x + w, y + title_h,
                         _INK, F._BOX_UNDERLINE)
-    # Body gutter of 9 less _TEXT_INSET.
     body = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
-            f"align=left;verticalAlign=top;spacingLeft=7;fontSize={font:g};"
+            f"align=left;verticalAlign=top;spacingLeft={fmt(F._ANN_PAD - _TEXT_INSET, 2)};"
+            f"fontSize={font:g};"
             f"fontColor={_LINE_INK};")
     return out + _rect(f"{cid}-b", x, y + title_h, w, h - title_h, body,
                        "<br>".join(_html_text(r) for r in rows))
@@ -2692,7 +2693,8 @@ def _rev_table(cid: str, grid) -> list[str]:
                  [cw for _heading, cw in grid.cols], header_last=True,
                  font=F._REV_TYPE, heights=heights,
                  keys=f"rowLines=0;strokeWidth={F._STRIP_HAIRLINE:g};",
-                 col_keys=["align=left;spacingLeft=3;"] * len(headings))
+                 col_keys=[f"align=left;spacingLeft={fmt(F._REV_PAD - _TEXT_INSET, 2)};"]
+                 * len(headings))
     return out + _segment(f"{cid}-rule", grid.x, grid.header_y,
                           grid.x + grid.w, grid.header_y, _LINE_INK,
                           F._BOX_UNDERLINE)

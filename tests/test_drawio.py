@@ -1999,7 +1999,9 @@ def test_the_title_strip_carries_the_same_ink_the_sheet_rules():
             top = float(geo.get("y")) + float(row.find("mxGeometry").get("y"))
             depth = float(row.find("mxGeometry").get("height"))
             left = at + float(box.get("x"))
-            written.append((value, size, left + 5, top + depth / 2 + size * (_BASELINE - 0.6)))
+            written.append(
+                (value, size, left + F._REV_PAD, top + depth / 2 + size * (_BASELINE - 0.6))
+            )
             continue
         top, left = float(box.get("y")), float(box.get("x"))
         align = style.get("align", "center")
@@ -2473,6 +2475,86 @@ def test_annotation_text_starts_in_drawio_where_the_sheet_writes_it():
         assert (_style(cell).get("fontStyle") == "1") == bold, value
         seen += 1
     assert seen == 3
+
+
+def test_tablebox_text_sits_in_drawio_where_the_sheet_writes_it():
+    """Inset left- and right-aligned TableBox text as the sheet does.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.document import TableBox
+    from pandid.render.drawio import _TEXT_INSET
+
+    fs = Flowsheet("schedule")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.add_annotation(
+        TableBox(
+            title="SCHEDULE",
+            headers=["Tag", "Duty"],
+            rows=[["P-101A", "Feed pump"]],
+            col_align=["l", "r"],
+        )
+    )
+    fs.layout()
+    svg = fs.to_svg(check=False)
+    seen = 0
+    for cell, row, table in _table_cells(_cells(fs, check=False)):
+        geo, row_geo, table_geo = (e.find("mxGeometry") for e in (cell, row, table))
+        assert geo is not None and row_geo is not None and table_geo is not None
+        left = sum(float(g.get("x", "0")) for g in (table_geo, row_geo, geo))
+        style = _style(cell)
+        if style.get("align") == "right":
+            right = left + float(geo.get("width", "0"))
+            edge = right - float(style.get("spacingRight", "0")) - _TEXT_INSET
+        else:
+            edge = left + float(style.get("spacingLeft", "0")) + _TEXT_INSET
+        value = cell.get("value", "")
+        drawn = re.search(r'<text x="([-\d.]+)"[^>]*>' + re.escape(value) + "</text>", svg)
+        assert drawn is not None, value
+        assert edge == pytest.approx(float(drawn.group(1)), abs=0.1), value
+        seen += 1
+    assert seen == 4
+
+
+def test_revision_text_sits_in_drawio_where_the_sheet_writes_it():
+    """Inset each revision cell's text as the sheet does.
+
+    Returns
+    -------
+    None
+        No value is returned; pytest records assertion failures.
+    """
+    from pandid.render import furniture as F
+    from pandid.render.drawio import _TEXT_INSET
+
+    block = _titled().title_block
+    assert block is not None
+    x, y, w, h = 400.0, 300.0, *F.measure_title_strip(block)
+    sheet = "\n".join(F.draw_title_strip(block, "titled", "2026-01-02", x + w, y + h, "1:1"))
+    root = ET.fromstring(
+        "<root>"
+        + "\n".join(
+            DrawioRenderer()._title_strip("t", block, x, y, w, h, "titled", "2026-01-02", "1:1")
+        )
+        + "</root>"
+    )
+    cells = {c.get("id"): c for c in root.iter("mxCell")}
+    # Compare decoded text because SVG and XML escape apostrophes differently.
+    lettered = rf'<text x="([-\d.]+)"[^>]*font-size="{F._REV_TYPE:.1f}"[^>]*>([^<]*)</text>'
+    drawn = {html.unescape(m.group(2)): float(m.group(1)) for m in re.finditer(lettered, sheet)}
+    seen = set()
+    for cell, row, table in _table_cells(cells):
+        geo, row_geo, table_geo = (e.find("mxGeometry") for e in (cell, row, table))
+        assert geo is not None and row_geo is not None and table_geo is not None
+        left = sum(float(g.get("x", "0")) for g in (table_geo, row_geo, geo))
+        start = left + float(_style(cell).get("spacingLeft", "0")) + _TEXT_INSET
+        value = html.unescape(cell.get("value", ""))
+        assert start == pytest.approx(drawn[value], abs=0.1), value
+        seen.add(value)
+    assert {"REV", "DATE", "DESCRIPTION", "A", "2026-01-02", "Issued"} <= seen
 
 
 def test_a_bold_first_column_is_measured_bold():
