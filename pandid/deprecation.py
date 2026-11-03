@@ -1,35 +1,9 @@
-"""Declare deprecated API spellings and report them two ways.
+"""Deprecated API spellings, reported as a warning and a finding.
 
-A deprecated spelling works for the release that announces it and is
-removed in the next (see ``CONTRIBUTING.md``). One :class:`Deprecation`,
-declared as a module constant beside the code that honours it, emits:
-
-- a :class:`DeprecationWarning`; and
-- a ``deprecated`` finding from :func:`pandid.validate.validate`, since
-  Python hides :class:`DeprecationWarning` outside ``__main__`` by
-  default.
-
-Both carry the same sentence::
-
-    RETIRED = Deprecation(
-        what="Pump(cooled=True)",
-        instead="Pump(jacket='cooling')",
-        removed_in="0.1.3",
-    )
-
-    class Pump(Unit):
-        def __init__(self, name, cooled=False, **kwargs):
-            ...
-            if cooled:
-                RETIRED.warn(self, where=name)
-
-The spellings in this example are invented.
-
-A deprecated call often happens before the object is added to a sheet,
-so the finding is stored on a carrier: the flowsheet, or a unit, stream,
-loop, component or annotation it holds. :func:`findings` collects them
-when ``validate()`` runs. A carrier never added to a sheet is never
-reported.
+A :class:`Deprecation` is a module constant beside the code that
+honours it. :meth:`Deprecation.warn` emits a
+:class:`DeprecationWarning` and stores a ``deprecated`` finding on a
+carrier; :func:`findings` collects them when ``validate()`` runs.
 """
 
 from __future__ import annotations
@@ -46,7 +20,7 @@ if TYPE_CHECKING:
 #: Validation code for every deprecation finding.
 CODE = "deprecated"
 
-#: Instance attribute holding a carrier's findings; private to this module.
+#: Instance attribute holding a carrier's findings.
 _ATTR = "_deprecations"
 
 #: Flowsheet lists whose members can carry a finding.
@@ -57,22 +31,16 @@ _HELD = ("units", "streams", "loops", "components", "annotations")
 class Deprecation:
     """One deprecated spelling, its replacement and its removal release.
 
-    Frozen, so it is hashable.
-
     Parameters
     ----------
     what : str
-        The deprecated call as an author types it, such as
-        ``"Valve(variant='control')"``.
+        The deprecated call, such as ``"Valve(variant='control')"``.
     instead : str
-        The replacement call, spelled the same way.
+        The replacement call.
     removed_in : str
-        Release in which the old spelling stops working: the one after the
-        announcing release.
+        Release in which the old spelling stops working.
     note : str, default=""
-        What else changes when the replacement is not a drop-in. It is
-        printed before the replacement, so the message still ends on the
-        call to type.
+        What else changes, printed before the replacement.
 
     Raises
     ------
@@ -86,7 +54,7 @@ class Deprecation:
     note: str = ""
 
     def __post_init__(self) -> None:
-        """Validate the required fields; ``note`` may be empty."""
+        """Raise if a required field is empty."""
         for field, value in (("what", self.what), ("instead", self.instead),
                              ("removed_in", self.removed_in)):
             if not str(value).strip():
@@ -97,13 +65,12 @@ class Deprecation:
                 )
 
     def message(self, where: str = "") -> str:
-        """Return the sentence both signals carry.
+        """Return the sentence the warning and the finding carry.
 
         Parameters
         ----------
         where : str, default=""
-            Item to edit, such as a unit tag or stream name; omitted when
-            empty.
+            Item to edit, such as a unit tag; omitted when empty.
 
         Returns
         -------
@@ -118,21 +85,18 @@ class Deprecation:
 
     def warn(self, carrier: object, *, where: str = "",
              stacklevel: int = 3) -> None:
-        """Emit the warning and record the finding for one deprecated call.
+        """Emit the warning and record the finding on ``carrier``.
 
-        The same string is used for both. A carrier records each distinct
-        sentence once; the warning is emitted every time.
+        A carrier records each distinct sentence once.
 
         Parameters
         ----------
         carrier : object
-            Object the finding is stored on until ``validate()`` runs: the
-            unit being built, the stream or the flowsheet.
+            Unit, stream or flowsheet the finding is stored on.
         where : str, default=""
             Item to edit, passed to :meth:`message`.
         stacklevel : int, default=3
-            Warning stack level. 3 points at the author's call through one
-            library frame; a helper adding a frame passes 4.
+            Warning stack level; 3 skips one library frame.
 
         Raises
         ------
@@ -153,37 +117,12 @@ class Deprecation:
 
 
 def _recorded(obj: object) -> list[Issue]:
-    """Return the findings stored on one carrier.
-
-    Reads ``__dict__`` directly, so a class attribute of the same name is
-    ignored and :meth:`pandid.units.Unit.__getattr__` is never called.
-
-    Parameters
-    ----------
-    obj : object
-        Possible carrier.
-
-    Returns
-    -------
-    list[Issue]
-        Stored findings, possibly empty.
-    """
+    """Return the findings stored in one carrier's ``__dict__``."""
     return list(getattr(obj, "__dict__", {}).get(_ATTR, ()))
 
 
 def findings(fs: "Flowsheet") -> list[Issue]:
-    """Return every deprecation finding this sheet's objects carry.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet being validated.
-
-    Returns
-    -------
-    list[Issue]
-        Findings on the flowsheet and on the objects it holds.
-    """
+    """Return the deprecation findings on a sheet and its objects."""
     out = _recorded(fs)
     for held in _HELD:
         for obj in getattr(fs, held, ()):
@@ -192,17 +131,10 @@ def findings(fs: "Flowsheet") -> list[Issue]:
 
 
 def declarations() -> dict[str, Deprecation]:
-    """Return every deprecation this version declares.
+    """Return every module-level :class:`Deprecation` in pandid.
 
-    Imports each pandid module and collects its module-level
-    :class:`Deprecation` constants. ``tests/test_deprecation.py`` uses this
-    to check that no ``removed_in`` release has shipped.
-
-    Returns
-    -------
-    dict[str, Deprecation]
-        Declarations keyed by ``"module.NAME"``. A constant imported into a
-        second module appears under both names.
+    Keys are ``"module.NAME"``; a constant imported into a second module
+    appears under both names.
     """
     import importlib
     import pkgutil
