@@ -163,6 +163,14 @@ _PLACEMENT_HINTS = Deprecation(
 )
 
 
+#: Deprecation of a vessel's default_input_face() and default_output_face().
+_DEFAULT_FACES = Deprecation(
+    what="default_input_face() or default_output_face()",
+    instead="input_faces or output_faces, the face each inlet and outlet is drawn on",
+    removed_in="0.1.7",
+)
+
+
 class Unit:
     """A piece of equipment, flag, fitting or instrument on a flowsheet.
 
@@ -1707,14 +1715,6 @@ class _FaceFamilies(Unit):
         }
         self._invalidate_layout()
         return self
-
-
-#: Deprecation of a vessel's default_input_face() and default_output_face().
-_DEFAULT_FACES = Deprecation(
-    what="default_input_face() or default_output_face()",
-    instead="input_faces or output_faces, the face each inlet and outlet is drawn on",
-    removed_in="0.1.7",
-)
 
 
 # Self type for _MultiPortVessel methods.
