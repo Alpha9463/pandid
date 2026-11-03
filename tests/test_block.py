@@ -1,13 +1,4 @@
-"""The generic ``Block``: the one symbol a block flow diagram is drawn from.
-
-A block is unlike every other kind here in one way that all of these tests turn
-on: its drawing is not authored in advance. The count on each face is the
-author's, so the symbol is *built* from the unit, and the box is sized to what
-it has to hold rather than the connections being squeezed into a box drawn for
-some other count. So the invariants the shipped registry is held to --
-``tests/test_symbol_invariants.py`` -- reach only the one shape a ``Block``
-asked for by name is drawn in, and every other shape is checked here.
-"""
+"""Check the generic ``Block``, the symbol a block flow diagram is drawn from."""
 
 from __future__ import annotations
 
@@ -100,8 +91,7 @@ def test_a_block_with_no_connections_at_all_is_refused():
 
 @pytest.mark.parametrize("bad", ["W", "WN", 1.5, None, True, ["W", "Q"], ["W", 2]])
 def test_a_declaration_that_is_neither_a_count_nor_faces_is_refused(bad):
-    """A bare string is the one worth naming: ``inputs="W"`` is a sequence of one
-    face and would read as exactly what was meant, right up until ``"WN"``."""
+    """Check that a declaration that is neither a count nor a list of faces is refused."""
     with pytest.raises(ValueError):
         units.Block("B", inputs=bad)
 
@@ -112,14 +102,7 @@ def test_a_negative_count_is_refused():
 
 
 def test_the_connections_and_the_faces_they_are_on_are_two_different_accessors():
-    """``inlets`` is the ports; ``input_faces`` is the compass letters.
-
-    The rename this pair exists for. ``b.inputs`` returned ``['W', 'W', 'N']``,
-    and any reader of that name expects the connections themselves. ``Block``
-    was unreleased, so the two are now named for what they return, and the
-    constructor keeps ``inputs=`` because "the inputs are on these faces" is
-    what the argument says.
-    """
+    """Check that ``inlets``/``outlets`` hold the ports and ``*_faces`` the faces."""
     b = units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"])
     assert [p.name for p in b.inlets] == ["in_1", "in_2", "in_3"]
     assert [p.name for p in b.outlets] == ["out_1", "out_2"]
@@ -130,19 +113,14 @@ def test_the_connections_and_the_faces_they_are_on_are_two_different_accessors()
 
 
 def test_a_moved_connection_keeps_its_place_in_the_family_and_changes_its_face():
-    """Two accessors, one record. ``nozzle()`` rewrites the declaration, so the
-    face moves and the family does not: the whole reason a block's connections
-    are numbered across the family rather than per face is that moving one never
-    renames it."""
+    """Check that ``nozzle()`` changes a connection's face and keeps its name."""
     b = units.Block("B", inputs=1, outputs=2).nozzle("out_2", "S")
     assert [p.name for p in b.outlets] == ["out_1", "out_2"]
     assert b.output_faces == ("E", "S")
 
 
 def test_a_block_with_nothing_arriving_has_an_empty_inlet_family():
-    """``()`` and not ``None``: a section at the edge of a sheet is a legitimate
-    thing to draw, and a caller iterating its inlets should get no iterations
-    rather than a ``TypeError``."""
+    """Check that a block with no inputs has an empty ``inlets`` tuple."""
     edge = units.Block("Import", inputs=0, outputs=2)
     assert edge.inlets == ()
     assert [p.name for p in edge.outlets] == ["out_1", "out_2"]
@@ -150,8 +128,7 @@ def test_a_block_with_nothing_arriving_has_an_empty_inlet_family():
 
 
 def test_a_block_declares_no_variants_and_owns_its_whole_kind():
-    """No device subclass: a block is a block, and there is nothing about a
-    section of plant for a second drawing to say."""
+    """Check that ``Block`` has no variants and owns the ``block`` kind."""
     assert units.Block.VARIANTS == ()
     assert units.Block._generic_class() is units.Block
     assert default_registry.variants("block") == ["default"]
@@ -163,10 +140,7 @@ def test_a_block_declares_no_variants_and_owns_its_whole_kind():
 
 
 def test_the_pitch_is_measured_off_the_arrowhead_the_renderer_draws():
-    """Not a guessed constant. The renderer emits the head at
-    ``markerUnits="userSpaceOnUse"``, so its ``markerWidth`` is its real size on
-    the sheet, and this reads that back out of a rendered sheet rather than
-    trusting the two to have stayed in step."""
+    """Check that the block pitch is 2.5 rendered arrowheads."""
     fs = Flowsheet("one line")
     f = fs.add(units.Feed("F"))
     p = fs.add(units.Product("P"))
@@ -177,9 +151,7 @@ def test_the_pitch_is_measured_off_the_arrowhead_the_renderer_draws():
 
 
 def test_a_default_block_is_drawn_at_the_registered_size():
-    """The registry answers for a ``(kind, variant)``, and what it answers for a
-    block has to be the drawing a ``Block("X")`` really gets -- that is what lets
-    the shared symbol-invariant suite measure a block at all."""
+    """Check that ``Block("X")`` is drawn as the registered block symbol."""
     registered = default_registry.get("block")
     assert (registered.width, registered.height) == (BLOCK_MIN_WIDTH, BLOCK_MIN_HEIGHT)
     assert units.Block("X").symbol().ports == registered.ports
@@ -189,10 +161,7 @@ def test_a_default_block_is_drawn_at_the_registered_size():
 @pytest.mark.parametrize("count", range(1, 13))
 @pytest.mark.parametrize("face", FACES)
 def test_the_box_grows_so_a_run_of_connections_keeps_its_pitch(count, face):
-    """The whole point. ``PortSeries`` squeezes a family that runs out of room,
-    which is right for a mixer -- its triangle is a piece of plant drawn at the
-    size a mixer is drawn at -- and wrong for a block, whose box means nothing
-    and so has nothing to trade against legibility."""
+    """Check that the box grows so a run of connections keeps its pitch."""
     b = units.Block("B", inputs=[face] * count, outputs=0)
     sym = b.symbol()
     along = sym.height if face in ("W", "E") else sym.width
@@ -204,8 +173,7 @@ def test_the_box_grows_so_a_run_of_connections_keeps_its_pitch(count, face):
 
 
 def test_eight_inputs_over_two_faces_makes_a_bigger_block_not_a_crushed_one():
-    """The case a block flow diagram is actually for: one box gathering many
-    streams. Five on one wall and three on another, each still a pitch apart."""
+    """Check that five and three inputs on two faces size the box with no coincident ports."""
     b = units.Block("Utilities", inputs=["W"] * 5 + ["N"] * 3, outputs=["E"] * 2 + ["S"] * 2)
     sym = b.symbol()
     assert sym.height == block_span(5)
@@ -214,8 +182,7 @@ def test_eight_inputs_over_two_faces_makes_a_bigger_block_not_a_crushed_one():
 
 
 def test_a_lone_connection_sits_in_the_middle_of_its_face():
-    """One in and one out is the commonest block there is, and a nozzle a quarter
-    of the way down its wall would step every stream on a BFD down the sheet."""
+    """Check that a lone connection sits in the middle of its face."""
     sym = units.Block("B").symbol()
     assert sym.ports["in_1"] == (0.0, sym.height / 2)
     assert sym.ports["out_1"] == (sym.width, sym.height / 2)
@@ -230,9 +197,7 @@ def test_the_box_clears_the_name_it_letters_inside_itself():
 
 
 def test_a_width_the_author_gave_wins_over_the_name():
-    """An explicit width is the author's answer to the same question, as
-    ``resolve_size`` has it everywhere else. It is also what keeps one port
-    layout to one drawing however the block is named."""
+    """Check that an explicit width sets the box but not the artwork."""
     named = units.Block("Product Recovery and Refrigeration", width=140)
     assert named.symbol().width == BLOCK_MIN_WIDTH  # the artwork, before the box
     assert resolve_size(named) == (140, BLOCK_MIN_HEIGHT)
@@ -257,8 +222,7 @@ def test_the_refusal_says_what_to_give_instead():
 
 
 def test_a_box_big_enough_is_taken_and_spreads_the_run_wider():
-    """The artwork is stretched into the box, so a taller box than the block
-    sized itself to opens the run out rather than leaving it bunched."""
+    """Check that a box taller than needed spreads the run at least a pitch apart."""
     b = units.Block("B", inputs=3, height=300)
     frame = _frame(b)
     y = [port_point(b, frame, f"in_{i}")[1] for i in (1, 2, 3)]
@@ -266,17 +230,13 @@ def test_a_box_big_enough_is_taken_and_spreads_the_run_wider():
 
 
 def test_one_connection_on_a_face_has_no_spacing_to_crush():
-    """The three extreme box shapes the invariant suite forces every symbol into
-    are all smaller than a block on one axis, and a lone nozzle in a short box is
-    not a defect -- there is nothing for it to be too close to."""
+    """Check that a block with one connection per face takes any box."""
     for box in ((300.0, 60.0), (60.0, 300.0), (140.0, 140.0)):
         assert resolve_size(units.Block("B", width=box[0], height=box[1])) == box
 
 
 def test_a_box_shrunk_after_construction_is_refused_where_it_is_set():
-    """The size and the drawing are one question here, so ``width``/``height``
-    are properties and a size the drawing cannot be made at is refused on the
-    assignment -- the guard ``Conveyor.length`` has, for the same reason."""
+    """Check that shrinking the box below its connections is refused on assignment."""
     b = units.Block("B", inputs=4)
     with pytest.raises(ValueError, match="4 connections on the W face"):
         b.height = 60
@@ -285,13 +245,7 @@ def test_a_box_shrunk_after_construction_is_refused_where_it_is_set():
 
 @pytest.mark.parametrize("box", [(60.0, 150.0), (120.0, 150.0)])
 def test_a_quarter_turn_cannot_smuggle_a_crushed_run_past_the_guard(box):
-    """The reported hole, and the reason the check goes through ``resolve_size``
-    rather than comparing ``width``/``height`` in symbol axes.
-
-    A turn draws the box's upright faces *across* the sheet while an explicit
-    width/height stays the final box, so five inlets that fit the 150 height
-    standing up were squeezed into the 60 width lying down: 12 apart, exactly
-    one arrowhead, five heads touching."""
+    """Check that a quarter turn that crushes a run is refused and not committed."""
     b = units.Block("R", inputs=5, outputs=1, width=box[0], height=box[1])
     with pytest.raises(ValueError, match="turned a quarter"):
         b.pin(x=1000, y=140, orientation=90)
@@ -301,9 +255,7 @@ def test_a_quarter_turn_cannot_smuggle_a_crushed_run_past_the_guard(box):
 @pytest.mark.parametrize("placement", [{}, {"orientation": 90}, {"orientation": 270}])
 @pytest.mark.parametrize("mirror", [{}, {"mirrored": "x"}, {"mirrored": "y"}])
 def test_an_auto_sized_block_keeps_its_pitch_at_every_placement(placement, mirror):
-    """Safe by construction, and this is what says so: ``resolve_size`` swaps
-    the symbol's own axes with the turn, so the box and the artwork are the same
-    shape however the block is placed."""
+    """Check that an auto-sized block keeps its pitch turned and mirrored."""
     fs = Flowsheet("turned")
     b = fs.add(units.Block("R", inputs=5, outputs=1)).pin(x=400, y=400, **placement, **mirror)
     fs.layout()
@@ -313,8 +265,7 @@ def test_an_auto_sized_block_keeps_its_pitch_at_every_placement(placement, mirro
 
 
 def test_a_turn_that_still_fits_is_allowed():
-    """The guard is about the pitch, not about turning: a square-enough box
-    holds the run either way up."""
+    """Check that a quarter turn the box still fits is allowed."""
     b = units.Block("R", inputs=5, outputs=1, width=200, height=200)
     b.pin(x=100, y=100, orientation=90)
     assert b.pin_.orientation == 90
@@ -324,8 +275,7 @@ def test_a_turn_that_still_fits_is_allowed():
 # Every nozzle on drawn ink, on every face, at every count and box shape.
 # ---------------------------------------------------------------------------
 
-#: The same three shapes ``tests/test_symbol_invariants.py`` forces every symbol
-#: into, and the same tolerance. One of them is the wrong shape for any block.
+#: The three box shapes and the tolerance ``tests/test_symbol_invariants.py`` uses.
 _ODD_BOXES = ((300.0, 300.0), (400.0, 160.0), (200.0, 400.0))
 _GEOM_TOL = 2.0
 
@@ -345,9 +295,7 @@ def test_every_nozzle_lands_on_the_rectangle_at_every_count(count):
     "placement", ({}, {"orientation": 90, "mirrored": "x"}, {"orientation": 270, "mirrored": "y"})
 )
 def test_every_nozzle_follows_the_artwork_into_a_box_of_any_shape(box, placement):
-    """A block given a box of its own is drawn at that box, so this is where the
-    artwork and the nozzles could drift apart. Measured against the *placed*
-    rectangle read back off the frame, which is the box the renderer drew."""
+    """Check that every nozzle lands on the placed outline in a box of any shape."""
     fs = Flowsheet("odd boxes")
     b = units.Block(
         "B", inputs=["W", "W", "N", "N"], outputs=["E", "S", "S"], width=box[0], height=box[1]
@@ -368,9 +316,7 @@ def test_every_nozzle_follows_the_artwork_into_a_box_of_any_shape(box, placement
 
 
 def test_no_two_connections_ever_land_on_one_point():
-    """Two nozzles at one coordinate stack two streams on one pixel. A block is
-    the kind most exposed to it, since every one of its connections is placed by
-    the same rule on one of only four faces."""
+    """Check that no two connections share a point at any count up to five per side."""
     for n in range(0, 6):
         for m in range(0, 6):
             if not n and not m:
@@ -383,9 +329,7 @@ def test_no_two_connections_ever_land_on_one_point():
 
 
 def test_a_declared_face_is_the_boxs_own_side_and_a_turn_moves_it():
-    """The documented divergence from ``Unit.nozzle``, pinned so it stays
-    documented: ``face()`` answers about the box and ``port_faces()`` about the
-    sheet, and a turned block is where the two part company."""
+    """Check that ``face()`` answers for the box and ``port_faces()`` for the turned sheet."""
     fs = Flowsheet("turned")
     b = fs.add(units.Block("B", inputs=["N"], outputs=["E"])).pin(x=200, y=200, orientation=90)
     assert b.face("in_1") == "N"  # the side of the box it was declared on...
@@ -402,29 +346,19 @@ def test_ports_on_answers_the_lookup_face_does_not():
 
 
 def test_ports_on_hands_back_the_ports_and_not_their_names():
-    """The third way of asking for a family, and it answers in the same currency.
-
-    Names would put a caller through ``[b.port(n) for n in b.ports_on("N")]`` --
-    out to a string and back through the very dict ``inlets`` exists to spare
-    them, under a name that says "ports". The same defect the ``inputs``
-    rename fixes, in the same unreleased class.
-    """
+    """Check that ``ports_on`` returns a tuple of the block's own ports."""
     b = units.Block("B", inputs=["W", "N", "W"], outputs=["N"])
     on_north = b.ports_on("N")
     assert isinstance(on_north, tuple)
     assert all(isinstance(p, Port) for p in on_north)
     assert on_north[0] is b.in_2
-    # ...and the same ports the families hold, reached the other way round.
     assert all(p is b.ports[p.name] for p in on_north)
     # ``Port`` is an unhashable dataclass, so identity by hand rather than sets.
     assert all(any(p is q for q in b.inlets) for p in b.ports_on("W"))
 
 
 def test_a_connection_is_offered_the_one_face_it_was_declared_with():
-    """There is no menu, and that is the answer to the question the issue asked:
-    a ``PortSeries`` names a single face, so a series member has exactly one
-    placement and ``nozzle()`` cannot pick between placements that do not exist.
-    A block does not need it to, because its face is a declaration."""
+    """Check that each connection is offered only the face it was declared on."""
     b = units.Block("B", inputs=["W", "N"], outputs=["E"])
     assert port_faces(b, "in_1") == ["W"]
     assert port_faces(b, "in_2") == ["N"]
@@ -432,9 +366,7 @@ def test_a_connection_is_offered_the_one_face_it_was_declared_with():
 
 
 def test_a_series_member_really_does_offer_only_its_series_face():
-    """The finding above, checked against the machinery it is a claim about: a
-    Mixer's inlets are a ``PortSeries`` on the west, and no amount of asking
-    moves one to the south."""
+    """Check that a mixer's inlet is offered only its series face and cannot be moved."""
     m = units.Mixer("M-1", n_inlets=3)
     assert port_faces(m, "in_2") == ["W"]
     with pytest.raises(ValueError, match="can be piped from W as drawn"):
@@ -457,9 +389,7 @@ def test_nozzle_moves_a_connection_and_the_ink_follows():
 
 
 def test_nozzle_keeps_one_record_of_where_a_connection_is():
-    """It writes the declaration, not ``Unit._port_faces``: the latter overrides
-    a placement the symbol authored, and here the declaration *is* the placement.
-    Two records would be two answers about one nozzle."""
+    """Check that ``nozzle()`` rewrites the declaration and not ``_port_faces``."""
     b = units.Block("B", inputs=1, outputs=1).nozzle("out_1", "top")
     assert b._port_faces == {}
     assert b.output_faces == ("N",)
@@ -485,8 +415,7 @@ def test_a_move_that_would_crush_the_destination_face_leaves_the_block_alone():
 
 
 def test_the_layout_engine_never_moves_a_connection_off_its_declared_face():
-    """A block's faces are the author's statement, and the face selector only
-    ever chooses between placements a symbol offers more than one of."""
+    """Check that layout keeps a connection on its declared face."""
     fs = Flowsheet("faces")
     src = fs.add(units.Feed("F")).pin(x=100, y=600)
     b = fs.add(units.Block("B", inputs=["N"], outputs=["E"])).pin(x=400, y=300)
@@ -497,13 +426,7 @@ def test_the_layout_engine_never_moves_a_connection_off_its_declared_face():
 
 
 # ---------------------------------------------------------------------------
-# order_on(): where a connection sits *along* the face it is on.
-#
-# The face says which wall; this says where on it. Without it a face carrying
-# both kinds draws every input before every output, because ``_faces`` is filled
-# inputs-first and ``block_symbol`` groups it in insertion order -- which made
-# the ordinary BFD recycle (in on the side nearer its source) inexpressible.
-# Issue #192; ``examples/12_block_flow_diagram.py`` is the sheet.
+# order_on(): where a connection sits along the face it is on.
 # ---------------------------------------------------------------------------
 
 
@@ -525,15 +448,13 @@ def test_order_on_puts_the_connections_along_the_face_in_the_order_given():
     assert b.order_on("S", [b.out_2, b.in_2]) is b  # chains, like pin() and nozzle()
     placed = _along(b, "S")
     assert [name for name, _ in placed] == ["out_2", "in_2"]
-    # ...and it is the *drawing* that moved, not just the bookkeeping: first is
-    # the low end of the face, and the two are still a full pitch apart.
+    # The first is at the low end of the face, a full pitch from the second.
     assert placed[0][1] < placed[1][1]
     assert placed[1][1] - placed[0][1] == pytest.approx(BLOCK_PITCH)
 
 
 def test_order_on_is_ports_ons_writer_and_takes_what_it_hands_back():
-    """The pair is worth having only if the two speak one currency, which is why
-    this takes ports: reversing a wall is then one expression."""
+    """Check that ``order_on`` takes the tuple ``ports_on`` returns."""
     b = units.Block("B", inputs=["S", "S"], outputs=["S"])
     b.order_on("S", b.ports_on("S")[::-1])
     assert [p.name for p in b.ports_on("S")] == ["out_1", "in_2", "in_1"]
@@ -542,8 +463,7 @@ def test_order_on_is_ports_ons_writer_and_takes_what_it_hands_back():
 
 @pytest.mark.parametrize("face", FACES)
 def test_the_order_runs_the_way_the_family_is_numbered_on_every_face(face):
-    """West first on N/S, north first on W/E -- the direction ``spread`` lays a
-    family out in, so an ordered face reads like a declared one."""
+    """Check that an ordered face runs west to east or north to south."""
     b = units.Block("B", inputs=[face, face], outputs=[face])
     b.order_on(face, [b.out_1, b.in_2, b.in_1])
     placed = _along(b, face)
@@ -565,10 +485,7 @@ def test_ordering_one_face_leaves_every_other_face_where_it_was():
 
 
 def test_the_order_is_the_boxs_own_and_a_mirror_moves_the_box_with_it():
-    """The same contract the face itself has: ``order_on`` is a declaration, so
-    it cannot be about a ``pin()`` that has not happened. A mirrored block draws
-    the first member on the *right* of the sheet, and that is not a bug in the
-    ordering -- it is the mirror doing what ``Block`` says a mirror does."""
+    """Check that a mirror reverses an ordered face on the sheet and not the declaration."""
     fs = Flowsheet("mirrored")
     b = fs.add(units.Block("B", inputs=["W", "S"], outputs=["E", "S"])).pin(x=400, y=300)
     b.order_on("S", [b.out_2, b.in_2])
@@ -580,14 +497,11 @@ def test_the_order_is_the_boxs_own_and_a_mirror_moves_the_box_with_it():
     fs.layout()
     flipped = {name: port_point(b, b.frame, name)[0] for name in ("out_2", "in_2")}
     assert flipped["out_2"] > flipped["in_2"]
-    # The declaration is untouched by the transform, which is what lets the two
-    # be set in either order.
     assert [p.name for p in b.ports_on("S")] == ["out_2", "in_2"]
 
 
 def test_the_order_survives_a_quarter_turn_onto_the_faces_it_draws_across():
-    """A turn draws the south wall up the sheet's east side; the order the box
-    declared is still the order along it."""
+    """Check that the declared order holds on a turned block."""
     fs = Flowsheet("turned")
     b = fs.add(units.Block("B", inputs=["S", "S"], outputs=["N"])).pin(x=400, y=300, orientation=90)
     b.order_on("S", [b.in_2, b.in_1])
@@ -598,9 +512,7 @@ def test_the_order_survives_a_quarter_turn_onto_the_faces_it_draws_across():
 
 
 def test_a_connection_moved_onto_an_ordered_face_lands_in_declaration_order():
-    """``nozzle`` says which side and nothing about where along it, so a late
-    arrival takes its declared place rather than joining the end. Documented
-    rather than special-cased: order the face once it has its members."""
+    """Check that a connection moved onto an ordered face takes its declaration place."""
     b = units.Block("B", inputs=["W", "S"], outputs=["E", "S"])
     b.order_on("S", [b.out_2, b.in_2])
     b.nozzle("in_1", "S")
@@ -610,9 +522,7 @@ def test_a_connection_moved_onto_an_ordered_face_lands_in_declaration_order():
 
 
 def test_two_blocks_of_one_shape_ordered_differently_are_drawn_differently():
-    """The symbol is cached on the faces tuple, which the order is part of, and
-    the ``<defs>`` entry is keyed on the box -- so the two share one rectangle
-    and keep their own nozzles, which is what both of those are for."""
+    """Check that two blocks of one shape share a definition and keep their own order."""
     fs = Flowsheet("twins")
     a = fs.add(units.Block("A", inputs=["W", "S"], outputs=["E", "S"])).pin(x=200, y=200)
     b = fs.add(units.Block("B", inputs=["W", "S"], outputs=["E", "S"])).pin(x=600, y=200)
@@ -656,8 +566,7 @@ def test_a_connection_on_another_face_names_the_nozzle_call_that_moves_it():
 
 
 def test_another_units_port_is_refused_by_identity_and_not_by_name():
-    """Both blocks have an ``in_1``; matching on the name would have quietly
-    ordered this one's by the other one's port object."""
+    """Check that another unit's port of the same name is refused."""
     b = units.Block("B", inputs=["S"], outputs=["S"])
     other = units.Block("Other", inputs=["S"], outputs=["S"])
     with pytest.raises(ValueError, match="is a connection of 'Other'"):
@@ -665,8 +574,7 @@ def test_another_units_port_is_refused_by_identity_and_not_by_name():
 
 
 def test_the_names_are_refused_and_the_message_points_at_the_ports():
-    """A ``Sequence[Port]`` is what a checker can see through; strings are the
-    spelling this API exists not to go back to."""
+    """Check that port names given as strings are refused."""
     b = units.Block("B", inputs=["S"], outputs=["S"])
     with pytest.raises(TypeError, match="takes the connections themselves"):
         b.order_on("S", ["out_1", "in_1"])
@@ -695,8 +603,7 @@ def test_an_empty_face_has_nothing_to_order_and_says_so_by_doing_nothing():
 
 
 def test_ordering_a_face_cannot_make_a_block_undrawable():
-    """The one mutator that never re-checks the box, because it changes no
-    face's count -- the box that held the run a moment ago still does."""
+    """Check that ordering a full face is accepted."""
     b = units.Block("B", inputs=3, outputs=1, width=200, height=block_span(3))
     b.order_on("W", [b.in_3, b.in_1, b.in_2])
     assert [p.name for p in b.ports_on("W")] == ["in_3", "in_1", "in_2"]
@@ -721,8 +628,7 @@ def test_an_ordered_face_round_trips_through_a_spec():
 
 
 def test_a_block_nobody_reordered_writes_no_order_at_all():
-    """The key is absent from every sheet until somebody asks for it, so an
-    ordinary block's entry reads the way a hand-written one would."""
+    """Check that an unordered block writes no ``port_order``."""
     from pandid.spec import to_dict
 
     fs = Flowsheet("bfd")
@@ -761,8 +667,7 @@ def test_only_a_block_or_a_tank_or_a_vessel_takes_an_order_and_a_bad_one_names_t
 @pytest.mark.parametrize("count", range(1, 9))
 @pytest.mark.parametrize("extent", [0.7, 1.0])
 def test_a_port_series_spreads_its_members_with_the_shared_rule(count, extent):
-    """``PortSeries.placement`` and ``block_symbol`` are one rule with two
-    callers, so a mixer's inlets and a block's connections cannot drift apart."""
+    """Check that ``PortSeries.placement`` uses the shared ``spread`` rule."""
     series = PortSeries("in_", "W", pitch=20.0, extent=extent, at=None)
     for i in range(count):
         assert series.placement(i, count, 50.0, 96.0)[1] == pytest.approx(
@@ -776,9 +681,7 @@ def test_a_port_series_spreads_its_members_with_the_shared_rule(count, extent):
 
 
 def test_a_block_is_not_scheduled_equipment():
-    """A BFD box stands for a whole section of plant, whose equipment list is a
-    document of its own. Scheduling one would say that "Reaction" is a thing
-    somebody buys."""
+    """Check that a block is left off the equipment list unless named."""
     from pandid.document import _MAJOR_EQUIPMENT, equipment_list
 
     assert "block" not in _MAJOR_EQUIPMENT
@@ -786,7 +689,6 @@ def test_a_block_is_not_scheduled_equipment():
     fs.add(units.Block("Reaction"))
     fs.add(units.Pump("P-101"))
     assert [row[0] for row in equipment_list(fs).rows] == ["P-101"]
-    # ...but an author who wants a block index can still ask for one by name.
     assert equipment_list(fs, include=["Reaction"]).rows == [("Reaction", "Process Block")]
 
 
@@ -814,9 +716,7 @@ def test_a_block_round_trips_through_a_spec():
 
 
 def test_a_connection_moved_by_nozzle_is_written_back_where_it_was_moved_to():
-    """The single record earns its keep here: a spec writes the declaration, so
-    a block read back is the block that was drawn and not the one first asked
-    for."""
+    """Check that a spec writes a moved connection's face in the declaration."""
     from pandid.spec import from_dict, to_dict
 
     fs = Flowsheet("bfd")
@@ -838,8 +738,7 @@ def test_a_source_only_block_survives_the_round_trip():
 
 
 def test_a_spec_writes_the_bare_count_where_every_face_is_the_default():
-    """The shorthand the constructor takes, so the file a sheet writes reads the
-    way a hand-written one would."""
+    """Check that a spec writes a bare count when every face is the default."""
     from pandid.spec import from_dict, to_dict
 
     fs = Flowsheet("bfd")
