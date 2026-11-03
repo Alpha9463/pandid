@@ -2143,3 +2143,30 @@ def test_a_slanted_chain_on_a_bent_line_settles():
     fs.route()
 
     assert fs.route_converged
+
+
+def test_a_chain_on_a_tap_balloon_sitting_on_its_line_settles_with_the_tap_on_the_line():
+    """Settle a chain whose tap balloon sits on the line it taps.
+
+    Returns
+    -------
+    None
+        Routing settles and TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("on its line")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=500)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.4, offset=50, angle=0)
+    fs.add_instrument("TIC", 1, near=tt, face="W", offset=70, angle=0)
+    fs.route()
+
+    assert fs.route_converged
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)

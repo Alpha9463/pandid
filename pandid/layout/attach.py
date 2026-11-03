@@ -417,19 +417,28 @@ def _tapped_runs(inst: "Instrument") -> tuple[Box, ...]:
     -------
     tuple[Box, ...]
         Each straight run as a flat box; ``()`` for a balloon hung from
-        the line itself, a chain that taps no line, or a slanted line.
+        the line itself, a chain that taps no line, a slanted line, or a
+        line that runs through the box of the unit the balloon hangs from.
     """
+    from pandid.portgeom import unit_box
     from pandid.routing.astar import committed_segments
+    from pandid.streams import Stream
 
     stream = _tapped_stream(inst)
-    if stream is None or inst.host is stream:
+    host = inst.host
+    if stream is None or host is None or isinstance(host, Stream) or host.frame is None:
         return ()
     try:
         segments = committed_segments(logical_stream_path(stream))
     except ValueError:  # an undrawn or slanted line has no runs to keep off
         return ()
-    return tuple((lo, fixed, hi, fixed) if axis == "h" else (fixed, lo, fixed, hi)
+    runs = tuple((lo, fixed, hi, fixed) if axis == "h" else (fixed, lo, fixed, hi)
                  for axis, fixed, lo, hi in segments)
+    # The line is rerouted round its own host, so these runs will move.
+    host_box = unit_box(host, host.frame)
+    if any(_intrusion(host_box, r, TOUCHING) > 0.0 for r in runs):
+        return ()
+    return runs
 
 
 def place_attached(fs: "Flowsheet") -> bool:
