@@ -464,7 +464,9 @@ class Symbol:
     gravity_fixed : bool
         The function depends on gravity; turning it is reported.
     directional : bool
-        The artwork states a direction and is never mirrored.
+        The artwork states a direction and is held still under
+        reflections. Its ports must stay on ink under any flip, and it
+        must carry no lettering.
     drawio_shape : str
         draw.io stencil key; empty for hand-drawn symbols.
     drawio_flip_h : bool
