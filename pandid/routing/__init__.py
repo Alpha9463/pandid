@@ -246,7 +246,8 @@ class DefaultRouter:
         Warns
         -----
         UserWarning
-            If an end has no frame or anchor; the stream stays unrouted.
+            If an end has no frame or anchor; the stream is skipped
+            and keeps any route it already had.
         """
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path

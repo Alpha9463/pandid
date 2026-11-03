@@ -523,7 +523,7 @@ class Flowsheet:
         self.line_numbering_scheme = line_numbering_scheme
         self.line_number_start = line_number_start
         self.loop_number_start = loop_number_start
-        # Count of loop numbers add_loop() has allocated.
+        # Offset past loop_number_start of add_loop()'s next number.
         self._loops_allocated = 0
         self.valve_station_tag_scheme = valve_station_tag_scheme
         self.auto_faces = auto_faces
