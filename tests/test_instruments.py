@@ -1159,6 +1159,24 @@ def test_a_router_that_freezes_its_routes_still_gets_the_fallback() -> None:
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
+def test_a_custom_router_routes_the_sheet_without_hanging() -> None:
+    """Check that a router freezing only its straight routes leaves no slanted line."""
+    from pandid.routing import DefaultRouter
+
+    class FreezeStraightRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for stream in fs.streams:
+                assert stream.route is not None
+                if len({x for x, _ in stream.route.waypoints}) == 1:
+                    stream.route.manual = True
+
+    fs, _, _ = _hung_controller()
+    fs.route(FreezeStraightRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
 def test_the_fallback_lays_out_with_an_engine_that_wraps_the_default() -> None:
     """Check that the fallback reruns an engine that wraps ``fs.layout()`` and moves a unit."""
 
