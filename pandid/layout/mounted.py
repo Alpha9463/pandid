@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Callable, Iterator, Union
 
 from pandid.geometry import Frame
+from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.portgeom import port_point, resolve_size, unit_box
 
@@ -718,7 +719,7 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
     lines = [(a, b) for line in pipes for a, b in zip(line, line[1:])]
     boxes += [unit_box(unit, unit.frame) for unit in ends if unit.frame is not None]
     for left, top, right, bottom in _signal_exits(frames):
-        if any(right > o[0] and o[2] > left and bottom > o[1] and o[3] > top for o in boxes):
+        if any(boxes_overlap((left, top, right, bottom), o) for o in boxes):
             return False
         if any(max(a[0], b[0]) >= left and right >= min(a[0], b[0])
                and max(a[1], b[1]) >= top and bottom >= min(a[1], b[1]) for a, b in lines):

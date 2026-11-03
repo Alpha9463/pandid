@@ -13,6 +13,7 @@ import pytest
 
 from pandid import Feed, Flowsheet, Pump, ShellAndTubeExchanger, Tank, Vessel
 from pandid.document import StreamLabelOptions
+from pandid.layout.conflicts import boxes_overlap
 from pandid.render.drawio import _tag_pass
 from pandid.render.symbols import default_registry
 from pandid.render.svg import (
@@ -21,7 +22,6 @@ from pandid.render.svg import (
     _HALO_PAD,
     _ink,
     _LABEL_CODES,
-    _meets,
     _shape_hits,
     _shapes_meet,
     enclosure_box,
@@ -1097,7 +1097,7 @@ def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape, settled_galle
             assert plate(would_be) not in svg
             assert plate(number.box) not in svg
             # Crossing runs prevent a safe plate.
-            assert any(_meets(would_be, b) for b in foreign(fs, number.name))
+            assert any(boxes_overlap(would_be, b) for b in foreign(fs, number.name))
         else:
             assert number.words == pytest.approx(would_be)
             assert svg.count(plate(number.words)) == 1
@@ -1499,7 +1499,7 @@ def test_two_shapes_that_do_not_touch_are_not_called_a_collision():
     """
     a = (753.6273224043716, 647.0, 976.4273224043716, 673.0)
     b = (533.6382513661202, 642.0, 756.4382513661202, 668.0)
-    assert _meets(a, b), "the boxes do overlap, which is what made this hard"
+    assert boxes_overlap(a, b), "the boxes do overlap, which is what made this hard"
     assert _shape_hits("diamond", a, b) and _shape_hits("diamond", b, a)
     assert shared("diamond", a, b) == 0
     assert not _shapes_meet("diamond", a, b)

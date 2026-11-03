@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
+from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.corridor import horizontal_centerline
 from pandid.layout.stages import process_units, slot
 from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
@@ -130,15 +131,9 @@ def _fits(frames: dict[Unit, Frame], obstacles: list[Unit]) -> bool:
     bool
         True if every box clears obstacles by 8.
     """
-    for unit, frame in frames.items():
-        left, top, right, bottom = unit_box(unit, frame)
-        for other in obstacles:
-            if other.frame is None:
-                continue
-            o_left, o_top, o_right, o_bottom = unit_box(other, other.frame)
-            if right + 8 > o_left and o_right + 8 > left and bottom + 8 > o_top and o_bottom + 8 > top:
-                return False
-    return True
+    return not any(boxes_overlap(unit_box(unit, frame), unit_box(other, other.frame), 8)
+                   for unit, frame in frames.items()
+                   for other in obstacles if other.frame is not None)
 
 
 def _anchored_origin(assembly: StationAssembly, preferred_left: float,
@@ -212,13 +207,8 @@ def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
     bool
         True if no two boxes come within 8 of each other.
     """
-    for unit, frame in first.items():
-        left, top, right, bottom = unit_box(unit, frame)
-        for other, other_frame in second.items():
-            o_left, o_top, o_right, o_bottom = unit_box(other, other_frame)
-            if right + 8 > o_left and o_right + 8 > left and bottom + 8 > o_top and o_bottom + 8 > top:
-                return False
-    return True
+    return not any(boxes_overlap(unit_box(unit, frame), unit_box(other, other_frame), 8)
+                   for unit, frame in first.items() for other, other_frame in second.items())
 
 
 def _station_centerline(source: Unit, source_port: str, dest: Unit,

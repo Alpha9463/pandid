@@ -47,9 +47,10 @@ class Conflict:
 
 
 def boxes_overlap(
-    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float],
+    gap: float = 0.0,
 ) -> bool:
-    """Return whether two boxes overlap beyond the edge tolerance.
+    """Return whether two boxes come closer than a gap.
 
     Parameters
     ----------
@@ -57,18 +58,17 @@ def boxes_overlap(
         First box as left, top, right, bottom.
     b : tuple[float, float, float, float]
         Second box as left, top, right, bottom.
+    gap : float, default=0.0
+        Clearance the boxes must keep; a negative gap lets them overlap
+        by that much.
 
     Returns
     -------
     bool
-        True if they overlap by more than the tolerance.
+        True if they come closer than ``gap`` on both axes.
     """
-    return not (
-        a[2] - _BODY_TOL <= b[0]
-        or b[2] - _BODY_TOL <= a[0]
-        or a[3] - _BODY_TOL <= b[1]
-        or b[3] - _BODY_TOL <= a[1]
-    )
+    return (a[2] + gap > b[0] and b[2] + gap > a[0]
+            and a[3] + gap > b[1] and b[3] + gap > a[1])
 
 
 def segment_crosses_box(
@@ -236,7 +236,7 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
     conflicts: set[Conflict] = set()
     for position, (first, first_box) in enumerate(boxes):
         for second, second_box in boxes[position + 1 :]:
-            if boxes_overlap(first_box, second_box):
+            if boxes_overlap(first_box, second_box, -_BODY_TOL):
                 conflicts.add(Conflict("unit-overlap", units=(first, second)))
 
     for stream_index, stream in enumerate(fs.streams):

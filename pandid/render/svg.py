@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 from functools import lru_cache
 
+from pandid.layout.conflicts import boxes_overlap
 from pandid.portgeom import tag_width
 from pandid.render import furniture as F
 from pandid.render.escape import escaped, fmt, ident
@@ -507,23 +508,6 @@ def _ink(fs, direction: str) -> "list[_Ink]":
     return out
 
 
-def _meets(box, region) -> bool:
-    """Return whether two rectangles share area.
-
-    Parameters
-    ----------
-    box, region : tuple[float, float, float, float]
-        Rectangles ``(x0, y0, x1, y1)``.
-
-    Returns
-    -------
-    bool
-        Whether they overlap; touching edges do not count.
-    """
-    return (box[2] > region[0] and box[0] < region[2]
-            and box[3] > region[1] and box[1] < region[3])
-
-
 def _erases(box, ink, symbols=()) -> "tuple[int, int, int]":
     """Return the symbols, taps and pipes a halo at ``box`` would erase.
 
@@ -541,10 +525,10 @@ def _erases(box, ink, symbols=()) -> "tuple[int, int, int]":
     tuple[int, int, int]
         Symbols, impulse lines and pipe pieces hit, ordered by cost.
     """
-    hits = sum(1 for b in symbols if _meets(box, b))
+    hits = sum(1 for b in symbols if boxes_overlap(box, b))
     taps = pipes = 0
     for line in ink:
-        if _meets(box, line.box):
+        if boxes_overlap(box, line.box):
             if line.kind == "tap":
                 taps += 1
             else:
@@ -571,10 +555,10 @@ def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
     tuple[int, int]
         Symbols covered and other boxes covered.
     """
-    hits = sum(1 for b in symbols if _meets(box, b))
+    hits = sum(1 for b in symbols if boxes_overlap(box, b))
     n = 0
     for p in occupied:
-        if _meets(box, p):
+        if boxes_overlap(box, p):
             n += 1
             if limit is not None and (hits, n) > limit:
                 break
@@ -1302,14 +1286,14 @@ def stream_numbers(fs, placed: list, joints: "str | None",
                 run_lo = min(run_lo, line.y0 if vertical else line.x0)
                 run_hi = max(run_hi, line.y1 if vertical else line.x1)
 
-        near_symbols = [p for p in symbols if _meets(p, window)]
-        occupied = [p for p in placed if _meets(p, window)]
+        near_symbols = [p for p in symbols if boxes_overlap(p, window)]
+        occupied = [p for p in placed if boxes_overlap(p, window)]
         occupied += [line.box for line in ink
                      if not (line.axis == axis and abs(line.at - at) < 0.5)
-                     and _meets(line.box, window)]
+                     and boxes_overlap(line.box, window)]
         # Other runs' ink, by name, and every tap.
         foreign = [line for line in ink
-                   if line.line != name and _meets(line.box, window)]
+                   if line.line != name and boxes_overlap(line.box, window)]
         everything = near_symbols + occupied
 
         # The first clear spot wins, otherwise the least damaging.
@@ -1322,7 +1306,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
             box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
             paper = (box if shape == "none" else
                      (ux - lw / 2, uy - lh / 2, ux + lw / 2, uy + lh / 2))
-            erased = sum(1 for line in foreign if _meets(paper, line.box))
+            erased = sum(1 for line in foreign if boxes_overlap(paper, line.box))
             limit = None
             if damage is not None:
                 if erased > damage[0]:
@@ -1348,7 +1332,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
         words = None if damage[0] else paper
         crossed = () if words is not None else tuple(sorted(
             {line.line or "an instrument connection" for line in foreign
-             if _meets(paper, line.box)}))
+             if boxes_overlap(paper, line.box)}))
         placed.append(halo)
         if leader is not None:
             (ax0, ay0), (ax1, ay1) = leader
@@ -1381,7 +1365,7 @@ def _shape_hits(shape: str, box, rect) -> bool:
     bool
         Whether the shape and the rectangle share area.
     """
-    if not _meets(box, rect):
+    if not boxes_overlap(box, rect):
         return False
     x0, y0, x1, y1 = box
     if shape == "box":
@@ -1410,7 +1394,7 @@ def _shapes_meet(shape: str, box, other) -> bool:
     bool
         Whether the shapes share area.
     """
-    if not _meets(box, other):
+    if not boxes_overlap(box, other):
         return False
     if shape == "box":
         return True
@@ -4164,10 +4148,10 @@ class SvgRenderer:
         # Test only ink near the unit.
         pad = max(u_width, u_height) + (box[2] - box[0])
         window = (x - pad, y - pad, x + u_width + pad, y + u_height + pad)
-        near = [line for line in ink if _meets(line.box, window)]
+        near = [line for line in ink if boxes_overlap(line.box, window)]
         # Every other symbol box, grown to its ink.
         others = [_obstacle(b) for v, b in symbols
-                  if v is not u and _meets(_obstacle(b), window)]
+                  if v is not u and boxes_overlap(_obstacle(b), window)]
 
         clear = (0, 0, 0)
         best, damage = item, _erases(box, near, others)
@@ -4214,7 +4198,7 @@ class SvgRenderer:
             u, f, x, y, u_width, u_height, u.tag))
         nc = _unit_label_box(item)
         if tag is not None and nc is not None and (
-                tag[0] < nc[2] and tag[2] > nc[0] and tag[1] < nc[3] and tag[3] > nc[1]):
+                boxes_overlap(tag, nc)):
             lx, ly, anchor, baseline, lpos, text = item
             item = (lx + tag[2] - nc[0] + 6, ly, anchor, baseline, lpos, text)
         return item
@@ -4256,7 +4240,7 @@ class SvgRenderer:
             u, f, x, y, u_width, u_height, u.tag))
         fail = _unit_label_box(item)
         if tag is not None and fail is not None and (
-                tag[0] < fail[2] and tag[2] > fail[0] and tag[1] < fail[3] and tag[3] > fail[1]):
+                boxes_overlap(tag, fail)):
             lx, ly, anchor, baseline, lpos, text = item
             # Step past the tag by the overlap plus a gap.
             if upright:

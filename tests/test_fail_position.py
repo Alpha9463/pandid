@@ -314,7 +314,8 @@ def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
     what clears a tag -- follows the line down instead of getting off it.
     """
     from pandid.portgeom import unit_box
-    from pandid.render.svg import SvgRenderer, _ink, _meets, _unit_label_box
+    from pandid.layout.conflicts import boxes_overlap
+    from pandid.render.svg import SvgRenderer, _ink, _unit_label_box
 
     fs = Flowsheet("a trip square below a failing valve")
     feed = fs.add(units.Feed("FEED"))
@@ -338,7 +339,7 @@ def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
             valve, frame, frame.x, frame.y, frame.w, frame.h, "FC", None, ink, symbols
         )
     )
-    assert not _meets(plate, taps[0].box), "and the plate is clear of it"
+    assert not boxes_overlap(plate, taps[0].box), "and the plate is clear of it"
     assert plate[1] > frame.y + frame.h, "still below the valve"
     assert plate[0] < frame.x + frame.w, "and still lying against its body"
 
