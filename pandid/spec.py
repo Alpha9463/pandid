@@ -2692,7 +2692,11 @@ _YAML_LOADER: Any = None
 
 
 def _core_schema_loader(yaml_module) -> Any:
-    """Return the cached safe YAML loader with YAML 1.2 scalars.
+    """Return the cached safe YAML loader for spec files.
+
+    Only ``true`` and ``false`` are booleans, integers are decimal
+    with no leading zero, and floats follow the YAML 1.2 core
+    schema. Anything else, such as ``0101`` or ``0x1F``, stays text.
 
     Parameters
     ----------
