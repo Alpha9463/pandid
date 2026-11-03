@@ -86,7 +86,7 @@ def _place_free(fs: "Flowsheet") -> bool:
     for inst in sorted(pending, key=lambda u: u.pin_ is None):
         w, h = resolve_size(inst)
         crossed = [box for ends, box in segments if inst not in ends]
-        x, y = (_actuator_spot(fs, inst, w, h, taken + clear + crossed)
+        x, y = (_actuator_spot(fs, inst, w, h, taken + clear + crossed, taken)
                 or _spot(fs, inst, w, h, taken))
         old = inst.frame
         if old is None or abs(old.x - x) > 0.01 or abs(old.y - y) > 0.01:
@@ -108,14 +108,15 @@ def _place_free(fs: "Flowsheet") -> bool:
 
 
 def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
-                   blocked: list[_Box]) -> tuple[float, float] | None:
+                   blocked: list[_Box], solid: list[_Box]) -> tuple[float, float] | None:
     """Return the corner of a balloon hung off the one actuator it drives.
 
-    An unpinned balloon that carries no attached balloon, has no
-    hand-routed line, and whose signal lines drive exactly one placed
-    valve's actuator stands :data:`ACTUATOR_OFFSET` out from that
-    actuator, square to its face. It steps out and swings as an attached
-    balloon does until it clears every blocked box.
+    An unpinned balloon that, with its lines, carries no attached
+    balloon, has no hand-routed line, and whose signal lines drive
+    exactly one placed valve's actuator stands :data:`ACTUATOR_OFFSET`
+    out from that actuator, square to its face. It steps out and swings
+    as an attached balloon does until it clears every blocked box, and
+    the line from the actuator to it crosses no solid box.
 
     Parameters
     ----------
@@ -129,6 +130,8 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
         Balloon height.
     blocked : list[_Box]
         Boxes the balloon must clear.
+    solid : list[_Box]
+        Unit and balloon boxes its line must not cross.
 
     Returns
     -------
@@ -139,11 +142,15 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     from pandid.layout.attach import (
         RESOLVED_CLEARANCE, STANDOFF_STEP, STANDOFF_STEPS, _branch_angles, _intrusion,
         _standoff_box)
-    from pandid.portgeom import face_point, port_anchor
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import face_point, port_anchor, unit_box
 
-    if inst.pin_ is not None or any(getattr(u, "host", None) is inst for u in fs.units):
+    if inst.pin_ is not None:
         return None
     wired = [(p, s) for p in inst.ports.values() if (s := p.stream) is not None]
+    hosts = {id(inst), *(id(s) for _, s in wired)}
+    if any(id(getattr(u, "host", None)) in hosts for u in fs.units):
+        return None
     if any(s.route is not None and s.route.manual for _, s in wired):
         return None
     driven = [s.dest.owner for p, s in wired if s.source is p and s.dest.name == "actuator"]
@@ -152,11 +159,19 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     valve = driven[0]
     ax, ay, face = port_anchor(valve, valve.frame, "actuator")
     _, (nx, ny) = face_point(valve, valve.frame, face)
+    others = [b for b in solid if b != unit_box(valve, valve.frame)]
     for ring in range(STANDOFF_STEPS + 1):
         for angle in _branch_angles(90.0):
             box = _standoff_box((ax, ay), (-ny, nx), ACTUATOR_OFFSET + ring * STANDOFF_STEP,
                                 angle, w, h)
-            if not any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
+            if any(_intrusion(box, b, RESOLVED_CLEARANCE) > 0.0 for b in blocked):
+                continue
+            # The line leaves the actuator square, then turns onto the balloon.
+            cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+            corner = (ax, cy) if abs(ny) > abs(nx) else (cx, ay)
+            path = [(ax, ay), corner, (cx, cy)]
+            if not any(segment_crosses_box(a, b, o)
+                       for a, b in zip(path, path[1:]) if a != b for o in others):
                 return box[0], box[1]
     return None
 

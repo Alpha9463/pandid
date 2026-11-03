@@ -931,12 +931,12 @@ def test_a_controller_driving_no_actuator_is_not_hung():
     from pandid.layout.control import _actuator_spot
 
     fs, lic, lv = _level_loop()
-    ly = fs.add_instrument("LY", 101, near=lv, at="N")
+    ly = fs.add_instrument("LY", 101, near=lv, face="N")
     fs.connect(lic.sig_out, ly.sig_in, kind="electric")
     fs.connect(ly.sig_out, lv.actuator, kind="pneumatic")
     fs.route()
 
-    assert _actuator_spot(fs, lic, 44.0, 44.0, []) is None
+    assert _actuator_spot(fs, lic, 44.0, 44.0, [], []) is None
 
 
 def test_a_controller_too_big_for_the_actuator_spot_is_placed_free():
@@ -1043,7 +1043,7 @@ def test_a_hung_controller_clears_a_tap_line():
 
     fs, lic, valve = _hung_controller()
     fs.route()
-    fs.add_instrument("PI", 1, sensing=valve, at="N", offset=100)
+    fs.add_instrument("PI", 1, sensing=valve, face="N", offset=100)
     fs.layout()
     fs.route()
 
@@ -1060,7 +1060,7 @@ def test_a_hung_controller_keeps_its_own_tap_line() -> None:
     from pandid.portgeom import face_point
 
     fs, lic, _ = _hung_controller()
-    pi = fs.add_instrument("PI", 1, sensing=lic, at="N", offset=100)
+    pi = fs.add_instrument("PI", 1, sensing=lic, face="N", offset=100)
     fs.route()
 
     assert fs.route_converged
@@ -1087,7 +1087,7 @@ def test_a_controller_carrying_a_balloon_is_not_hung() -> None:
     from pandid.render.svg import tap_lines, tap_route
 
     fs, lic, valve = _hung_controller()
-    fs.add_instrument("PI", 1, sensing=lic, at="S", offset=140)
+    fs.add_instrument("PI", 1, sensing=lic, face="S", offset=140)
     fs.route()
 
     box = unit_box(valve, _placed(valve))
@@ -1106,6 +1106,29 @@ def test_a_controller_with_a_hand_routed_line_is_not_hung() -> None:
     fs.route()
 
     assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_hung_controllers_line_clears_a_balloon_on_the_actuator() -> None:
+    """PI-1 hangs between the actuator and the spot above it, so LIC-1
+    stands where its own line to the actuator misses PI-1."""
+    fs, _, valve = _hung_controller()
+    fs.add_instrument("PI", 1, sensing=valve, face="N", offset=46)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "route-crosses-unit"] == []
+
+
+def test_a_controller_with_a_balloon_on_its_line_is_not_hung() -> None:
+    """ZI-1 sits in LIC-1's signal line near the actuator, so LIC-1 is
+    placed from its wiring and ZI-1 stays off the valve."""
+    fs = Flowsheet("inline")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=270)
+    lic = fs.add_instrument("LIC", 1)
+    signal = fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.add_instrument("ZI", 1, sensing=signal, at=0.9, offset=0)
+    fs.route()
+
+    assert [i.code for i in fs.validate() if i.code == "unit-overlap"] == []
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
