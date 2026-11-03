@@ -1709,6 +1709,14 @@ class _FaceFamilies(Unit):
         return self
 
 
+#: Deprecation of a vessel's default_input_face() and default_output_face().
+_DEFAULT_FACES = Deprecation(
+    what="default_input_face() or default_output_face()",
+    instead="input_faces or output_faces, the face each inlet and outlet is drawn on",
+    removed_in="0.1.7",
+)
+
+
 # Self type for _MultiPortVessel methods.
 _MultiPortVesselT = TypeVar("_MultiPortVesselT", bound="_MultiPortVessel")
 
@@ -1858,7 +1866,13 @@ class _MultiPortVessel(_FaceFamilies):
         -------
         str
             The artwork's inlet face.
+
+        Warns
+        -----
+        DeprecationWarning
+            Always.
         """
+        _DEFAULT_FACES.warn(self, where=self.name)
         return self._home_face("inlet")
 
     def default_output_face(self) -> str:
@@ -1868,7 +1882,13 @@ class _MultiPortVessel(_FaceFamilies):
         -------
         str
             The artwork's outlet face.
+
+        Warns
+        -----
+        DeprecationWarning
+            Always.
         """
+        _DEFAULT_FACES.warn(self, where=self.name)
         return self._home_face("outlet")
 
     def _init_connections(
@@ -1886,8 +1906,8 @@ class _MultiPortVessel(_FaceFamilies):
         ValueError
             If a count or face is invalid, or a face has no room.
         """
-        in_faces = _block_faces(inputs, self.default_input_face(), self.name, "inputs")
-        out_faces = _block_faces(outputs, self.default_output_face(), self.name, "outputs")
+        in_faces = _block_faces(inputs, self._home_face("inlet"), self.name, "inputs")
+        out_faces = _block_faces(outputs, self._home_face("outlet"), self.name, "outputs")
         self._faces = {}
         self.inlets = tuple(
             self._connect(f"in_{i}", "inlet", face)

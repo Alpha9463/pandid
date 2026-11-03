@@ -1,4 +1,6 @@
+import os
 import re
+import warnings
 
 import pytest
 from pandid.units import Unit
@@ -1330,6 +1332,37 @@ def test_the_three_fixed_nozzles_are_never_numbered(cls):
         for n in cls("X-1").ports
         if _family_stem(n) is not None and not n.startswith(("in_", "out_"))
     ] == []
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank]) -> None:
+    """Each warns at the caller's line, is reported, and still answers the face."""
+    from pandid import Flowsheet
+
+    fs = Flowsheet("faces")
+    unit = fs.add(cls("X-1"))
+    with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
+        faces = (unit.default_input_face(), unit.default_output_face())
+    assert faces == unit.input_faces + unit.output_faces
+    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
+        os.path.normcase(os.path.realpath(__file__))
+    }
+    found = [issue.message for issue in fs.validate() if issue.code == "deprecated"]
+    assert found == [str(caught[0].message)]
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_building_and_writing_a_vessel_raises_no_deprecation(
+    cls: type[U.Vessel | U.Tank],
+) -> None:
+    """Construction and the spec round trip use the faces without the deprecated calls."""
+    from pandid import Flowsheet
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        fs = Flowsheet("quiet")
+        fs.add(cls("X-1", inputs=2))
+        Flowsheet.from_dict(fs.to_dict())
 
 
 def test_mixer_rejects_zero_inlets():

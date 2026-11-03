@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A unit's side given as `at=` (#438).** Use `face="N"` in
   `add_instrument()`, `add_balloon()`, `add_control_loop()` and `attach()`,
   `face: N` in a spec, and `controller_face=` for `controller_at=`.
+- **`default_input_face()` and `default_output_face()` on `Tank` and
+  `Vessel` (#624).** Read the faces from `input_faces` and `output_faces`.
 
 ### Removed
 
@@ -99,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.check()` (#579).** Use them on `ControlLoop.loop`. `add_instrument()`
   still takes a `ControlLoop`.
 - **`DEFAULT_INPUT_FACE` and `DEFAULT_OUTPUT_FACE` on `Tank` and `Vessel`
-  (#579).** Use `default_input_face()` and `default_output_face()`.
+  (#579).** Use `input_faces` and `output_faces`.
 
 ### Fixed
 

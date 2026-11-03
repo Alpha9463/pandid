@@ -2365,8 +2365,8 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     if isinstance(unit, unit_types.Block):
         _write_connection_faces(unit, entry, unit.DEFAULT_INPUT_FACE, unit.DEFAULT_OUTPUT_FACE)
     elif isinstance(unit, (unit_types.Tank, unit_types.Vessel)):
-        _write_connection_faces(unit, entry, unit.default_input_face(),
-                                unit.default_output_face(), omit_bare_single=True)
+        _write_connection_faces(unit, entry, unit._home_face("inlet"),
+                                unit._home_face("outlet"), omit_bare_single=True)
     elif isinstance(unit, unit_types.Mixer):
         entry["n_inlets"] = len(unit.inlets)
     elif isinstance(unit, unit_types.Splitter):
