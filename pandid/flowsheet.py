@@ -4,6 +4,7 @@ A flowsheet also lays out, routes, validates and renders its drawing.
 """
 
 from __future__ import annotations
+import copy
 from contextlib import contextmanager
 from math import isfinite
 from numbers import Integral
@@ -548,6 +549,13 @@ class Flowsheet:
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
+        # Whether route() may hang a controller off its actuator, the
+        # controllers it hung, and the sheet as routed without them.
+        self._may_hang = False
+        self._hung: set[int] = set()
+        self._unhung: tuple | None = None
+        # Whether a layout engine is running, which routes without hanging.
+        self._laying_out = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2008,10 +2016,15 @@ class Flowsheet:
         """
         from pandid.layout import default_layout_engine
 
+        self._unhang()
         self._mounted_layout = False
         if engine is None:
             engine = default_layout_engine
-        engine.layout(self)
+        outer, self._laying_out = self._laying_out, True
+        try:
+            engine.layout(self)
+        finally:
+            self._laying_out = outer
         self._layout_stale = False
         self._route_stale = True
 
@@ -2035,22 +2048,92 @@ class Flowsheet:
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
+        from pandid.routing import DefaultRouter
+
         if router is None:
-            from pandid.routing import DefaultRouter
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
-        from pandid.layout.control import place_control
+        from pandid.layout.control import _flaws, _hangable, place_control
+
+        def place() -> None:
+            """Place balloons and re-route until nothing moves."""
+            self.route_converged = False
+            for _ in range(MAX_PLACEMENT_PASSES):
+                if not place_control(self):
+                    self.route_converged = True
+                    break
+                router.route(self)
+
+        # Start from the sheet as routed without hanging, not from a hung
+        # controller left by the last route().
+        self._unhang()
         router.route(self)
-        # Place balloons and re-route until nothing moves; end on a
-        # route.
-        self.route_converged = False
-        for _ in range(MAX_PLACEMENT_PASSES):
-            if not place_control(self):
-                self.route_converged = True
-                break
-            router.route(self)
+        place()
+        # Hang each controller it can off its actuator, and keep that only
+        # if the sheet stays clean. The check assumes the default router.
+        if (type(router) is DefaultRouter and not self._laying_out
+                and any(_hangable(self, u) for u in self.units)):
+            unhung = self._geometry()
+            before = _flaws(self)
+            self._may_hang, self._hung = True, set()
+            try:
+                place()
+                clash = any(n > before[k] for k, n in _flaws(self).items())
+            except Exception:
+                clash = True
+            finally:
+                self._may_hang = False
+            if clash or not self._hung:
+                self._put_geometry(unhung, keep_manual=False)
+            else:
+                self._unhung = unhung
         # Mark the routes current.
         self._route_stale = False
+
+    def _geometry(self) -> tuple:
+        """Return each unit's frame and tap, each automatic route, and
+        whether routing settled.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_geometry`.
+        """
+        return ([(u, copy.deepcopy(u.frame), copy.deepcopy(getattr(u, "tap", None)))
+                 for u in self.units],
+                [(st, copy.deepcopy(st.route)) for st in self.streams
+                 if st.route is None or not st.route.manual],
+                self.route_converged)
+
+    def _put_geometry(self, state: tuple, keep_manual: bool) -> None:
+        """Put back what :meth:`_geometry` returned, for what is still here.
+
+        Parameters
+        ----------
+        state : tuple
+            What :meth:`_geometry` returned.
+        keep_manual : bool
+            Keep a route now drawn by hand rather than the saved one.
+        """
+        frames, routes, converged = state
+        units = {id(u) for u in self.units}
+        streams = {id(st) for st in self.streams}
+        for u, frame, tap in frames:
+            if id(u) in units:
+                u.frame = frame
+                if hasattr(u, "tap"):
+                    u.tap = tap
+        for st, route in routes:
+            manual = st.route is not None and st.route.manual
+            if id(st) in streams and not (keep_manual and manual):
+                st.route = route
+        self.route_converged = converged
+
+    def _unhang(self) -> None:
+        """Return the sheet to its state as routed without hanging."""
+        if self._unhung is not None:
+            self._put_geometry(self._unhung, keep_manual=True)
+            self._unhung = None
 
     def _resolve_geometry(self) -> None:
         """Lay out and route where the geometry is missing or stale."""
