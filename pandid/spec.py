@@ -1,9 +1,8 @@
 """Read and write flowsheets as declarative data.
 
 A spec is a plain mapping that :func:`from_dict` reads and
-:func:`to_dict` writes. An unknown key or bad value raises
-:class:`SpecError` naming its entry; a bad ``stream_naming_scheme``
-raises ValueError.
+:func:`to_dict` writes. A bad entry raises :class:`SpecError` naming
+it, or another error :func:`from_dict` lists.
 
 The format::
 
@@ -236,7 +235,7 @@ def _shown(value: Any) -> bool:
     Returns
     -------
     bool
-        True for text, a real number or a Decimal.
+        True for text, a Decimal or a number ``is_real`` accepts.
     """
     return isinstance(value, (str, Decimal)) or _is_real(value)
 
@@ -267,7 +266,7 @@ def _drawn(value: Any, where: str) -> str:
 
 
 def _number(value: Any, where: str) -> float:
-    """Check that a value is a finite real number.
+    """Check that a value is a finite number ``is_real`` accepts.
 
     Parameters
     ----------
@@ -284,7 +283,7 @@ def _number(value: Any, where: str) -> float:
     Raises
     ------
     SpecError
-        If it is not a finite real number.
+        If ``is_real`` refuses it or it is not finite.
     """
     if not _is_real(value):
         raise SpecError(f"{where} must be a number, got {value!r}")
@@ -311,7 +310,7 @@ def _column_width(value: Any, where: str) -> float | Literal["auto"]:
     Raises
     ------
     SpecError
-        If it is neither a finite number nor ``"auto"``.
+        If it is not ``"auto"`` and ``_number`` refuses it.
     """
     if value == "auto":
         return "auto"
@@ -388,7 +387,8 @@ def _faces(value: Any, where: str) -> int | list[str]:
     Raises
     ------
     SpecError
-        If it is a bool, or neither a whole number nor a list of text.
+        If it is a bool, or neither a whole number nor a sequence of
+        text.
     """
     if isinstance(value, bool) or _is_integral(value):
         return _integer(value, where)
@@ -529,7 +529,7 @@ def _blame(where: str, errors: tuple[type[Exception], ...] = (ValueError,)) -> I
 def _read_fields(data: Mapping[str, Any], where: str,
                  readers: Sequence[tuple[Iterable[str], Callable[[Any, str], Any]]]
                  ) -> dict[str, Any]:
-    """Read each key in ``data`` with its reader, in table order.
+    """Read each listed key ``data`` has with its reader, in order.
 
     Parameters
     ----------
@@ -543,7 +543,7 @@ def _read_fields(data: Mapping[str, Any], where: str,
     Returns
     -------
     dict[str, Any]
-        Read value per key present.
+        Read value per listed key present.
 
     Raises
     ------
@@ -712,7 +712,7 @@ _KIND_FACES = {
 _KIND_ORDER = {
     "port_order": ("Block", "Tank", "Vessel"),
 }
-# A header flag: a utility service tapped more than once.
+# A header flag: a utility flag that may repeat.
 _KIND_FLAGS = {
     "header": ("Feed", "Product"),
 }
@@ -748,6 +748,8 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     ------
     SpecError
         If an entry is invalid; the message names it.
+    TypeError
+        If an annotation ``type`` is unhashable.
     ValueError
         If ``stream_naming_scheme`` cannot format a stream number.
     """
@@ -851,7 +853,7 @@ def _read_component(entry: Any, where: str) -> Component:
     Parameters
     ----------
     entry : Any
-        Name, or mapping with ``name`` and ``formula``.
+        Name, or mapping with ``name`` and optional ``formula``.
     where : str
         Entry path for error messages.
 
@@ -1102,7 +1104,8 @@ def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
     Raises
     ------
     SpecError
-        If a field is missing or invalid, or the loop is refused.
+        If ``variable`` is missing, a field is invalid, or the loop
+        is refused.
     """
     data = _mapping(entry, where)
     _check_keys(data, _LOOP_KEYS, where)
@@ -1686,7 +1689,7 @@ def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
     Raises
     ------
     SpecError
-        If it is not a list of ``[x, y]`` pairs of finite numbers.
+        If it is not a sequence of ``[x, y]`` pairs of finite numbers.
     """
     points = []
     for i, item in enumerate(_sequence(entry, where)):
@@ -1842,7 +1845,8 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
     Raises
     ------
     SpecError
-        If it is not a mapping, a key is unknown or a value is invalid.
+        If it is not a mapping, a key is unknown, or a value has the
+        wrong type or is not finite.
     """
     data = _mapping(entry, where)
     _check_keys(data, {f.name for f in dataclass_fields(StreamTableOptions)}, where)
@@ -1953,7 +1957,8 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
     Raises
     ------
     SpecError
-        If a value is invalid or ``position`` is not a pair.
+        If a value has the wrong type or is not finite, or
+        ``position`` is not a pair.
     """
     out: dict[str, Any] = {}
     if "align" in data:
@@ -2022,6 +2027,8 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
     ------
     SpecError
         If the type or a key is unknown, or a value is refused.
+    TypeError
+        If an annotation ``type`` is unhashable.
     """
     data = _mapping(entry, where)
     kind = data.get("type", "annotation")
@@ -2627,6 +2634,8 @@ def from_json(path: str | Path) -> Flowsheet:
         If the file cannot be read.
     SpecError
         If the file is not valid JSON or the spec is invalid.
+    TypeError
+        If an annotation ``type`` is unhashable.
     ValueError
         If the file is not UTF-8 or ``stream_naming_scheme`` is invalid.
     """
@@ -2694,9 +2703,10 @@ _YAML_LOADER: Any = None
 def _core_schema_loader(yaml_module) -> Any:
     """Return the cached safe YAML loader for spec files.
 
-    Only ``true`` and ``false`` are booleans, integers are decimal
-    with no leading zero, and floats follow the YAML 1.2 core
-    schema. Anything else, such as ``0101`` or ``0x1F``, stays text.
+    Untagged booleans are ``true`` or ``false`` in lower, title or
+    upper case, untagged integers are decimal with no leading zero,
+    and floats follow the YAML 1.2 core schema; ``0101`` and
+    ``0x1F`` stay text.
 
     Parameters
     ----------
@@ -2717,7 +2727,7 @@ def _core_schema_loader(yaml_module) -> Any:
             """Safe loader with YAML 1.2 booleans and numbers."""
 
             def flatten_mapping(self, node):
-                """Refuse a repeated key, then merge the mapping.
+                """Refuse a repeated key but ``<<``, then merge.
 
                 Parameters
                 ----------
@@ -2727,7 +2737,7 @@ def _core_schema_loader(yaml_module) -> Any:
                 Raises
                 ------
                 SpecError
-                    If a key is written twice.
+                    If a key other than ``<<`` is written twice.
                 """
                 checked = self.__dict__.setdefault("_checked", set())
                 # Check each node once, before merging rewrites it.
@@ -2797,6 +2807,8 @@ def from_yaml(path: str | Path) -> Flowsheet:
         If the file cannot be read.
     SpecError
         If the file is not valid YAML, is empty, or the spec is invalid.
+    TypeError
+        If an annotation ``type`` is unhashable.
     ValueError
         If the file is not UTF-8 or ``stream_naming_scheme`` is invalid.
     """
