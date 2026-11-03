@@ -194,7 +194,7 @@ class Unit:
     PORT_ANCHORS : dict[str, str]
         Port name to the name the symbol anchors it under.
     LAYOUT_CONFIDENCE, PLACES
-        Deprecated; a subclass that sets either is reported.
+        Deprecated; a subclass that changes either is reported.
     ONE_NOZZLE_MANY_RUNS : bool
         Whether validation skips the check for ports drawn at one point.
     COMPOSITION : dict[str, Any]
@@ -216,6 +216,9 @@ class Unit:
 
     Raises
     ------
+    TypeError
+        If ``width`` or ``height`` is neither ``None`` nor a real
+        number.
     ValueError
         If the name is empty, the variant is not drawn by this class, a
         size is not positive and finite, or ``reference`` is given on
@@ -395,7 +398,7 @@ class Unit:
             _PLACEMENT_HINTS.warn(self, where=name)
 
     def _invalidate_layout(self) -> None:
-        """Mark the sheet's cached geometry stale."""
+        """Mark the sheet's cached geometry stale, if on a sheet."""
         fs = getattr(self, "flowsheet", None)
         if fs is not None:
             fs._invalidate_layout()
@@ -413,11 +416,13 @@ class Unit:
         Raises
         ------
         TypeError
-            If ``width`` or ``height`` is not a real number.
+            If ``width`` or ``height`` is neither ``None`` nor a real
+            number.
         ValueError
-            If ``width`` or ``height`` is not positive and finite.
+            If ``width`` or ``height`` is a number that is not positive
+            and finite.
         AttributeError
-            If the attribute is fixed at construction.
+            If an attribute fixed at construction is reassigned.
         """
         if name in ("width", "height") and value is not None:
             where = self.__dict__.get("name", "?")
@@ -479,7 +484,7 @@ class Unit:
 
     @new_line_number.setter
     def new_line_number(self, value: bool) -> None:
-        """Set the line-number break and renumber the sheet.
+        """Set the line-number break and renumber the unit's sheet.
 
         Parameters
         ----------
@@ -543,7 +548,9 @@ class Unit:
 
         Omitted arguments keep their current value. With ``port``, ``x``
         and ``y`` place that port rather than the corner. On a Feed or
-        Product they place the flag's port unless ``port=None``.
+        Product they place the flag's port unless ``port=None``. On an
+        attached Instrument, ``x`` and ``y`` are absolute on their axes,
+        and a ``col`` or ``row`` pin is reported as ``pin-not-honored``.
 
         Parameters
         ----------
@@ -552,7 +559,7 @@ class Unit:
         x, y : float or None, optional
             Pixel coordinate of the corner, or of ``port``.
         orientation : float, optional
-            Clockwise turn: 0, 90, 180 or 270.
+            Clockwise turn in degrees, a multiple of 90.
         mirrored : bool or str, optional
             ``True`` or ``"x"`` flips E and W, ``"y"`` N and S, ``"xy"``
             both.
@@ -569,11 +576,12 @@ class Unit:
         KeyError
             If ``port`` is not a port of this unit.
         TypeError
-            If ``x`` or ``y`` is not a number, or ``col`` or ``row`` is
-            not a whole number.
+            If ``x`` or ``y`` is not a real number, or ``col`` or
+            ``row`` is not a whole number.
         ValueError
-            If the port locates no coordinate, or a face set with
-            :meth:`nozzle` is unreachable under the new transform.
+            If ``x`` or ``y`` is not finite, ``orientation`` or
+            ``mirrored`` is invalid, ``port`` locates no coordinate,
+            or a face set with :meth:`nozzle` becomes unreachable.
         """
         from dataclasses import replace
 
@@ -686,7 +694,7 @@ class Unit:
         KeyError
             If the port does not exist.
         ValueError
-            If the symbol offers no placement on that face.
+            If the port cannot be drawn on ``face``.
         """
         from pandid.portgeom import port_faces
 
