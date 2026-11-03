@@ -200,7 +200,7 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     elif (placed := _series_point(unit, sym, port_name)) is not None:
         coords = [placed]
     else:
-        # An unanchored port falls back to the box centre.
+        # An unanchored port falls back to the symbol's centre.
         coords = [sym.ports.get(anchor, (sym.width / 2, sym.height / 2))]
     out: dict[str, tuple[float, float]] = {}
     for px, py in coords:
@@ -262,7 +262,7 @@ def is_anchored(unit: "Unit", port_name: str) -> bool:
     Returns
     -------
     bool
-        True if the port has a drawn position.
+        True if the symbol or a port series places the port.
     """
     sym = _sym(unit)
     return (unit._symbol_anchor(port_name) in sym.ports
@@ -331,7 +331,7 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     Raises
     ------
     KeyError
-        If ``face`` is not one of ``N``, ``S``, ``E`` and ``W``.
+        If ``face.upper()`` is not ``N``, ``S``, ``E`` or ``W``.
     """
     x0, y0, x1, y1 = unit_box(unit, frame)
     return {
@@ -364,8 +364,8 @@ def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
     """Return the size of a unit's placed box.
 
     An explicit ``width`` or ``height`` is the final size. A symbol size
-    swaps on a quarter turn. A flag is as wide as its tag or reference,
-    and at least 80.
+    swaps on a quarter turn. A flag's default width fits its tag or
+    reference, and is at least 80.
 
     Parameters
     ----------
@@ -574,7 +574,7 @@ def port_point(unit: "Unit", frame, port_name: str) -> tuple[float, float]:
     ----------
     unit : Unit
         Unit that owns the port.
-    frame : Frame
+    frame : Frame or _Slot
         Its placement.
     port_name : str
         Port name.
@@ -638,7 +638,7 @@ def port_offset(unit: "Unit", port_name: str, placed=None) -> tuple[float, float
     Raises
     ------
     ValueError
-        If the chosen face cannot be reached under the placement.
+        If a face set with ``nozzle()`` cannot be reached when placed.
     """
     from pandid.geometry import Frame
 
@@ -696,8 +696,6 @@ def _pinned(unit: "Unit", axis: str, port_name: str | None) -> float:
 
 def pinned_x(unit: "Unit", port_name: str | None = None) -> float:
     """Return the pinned ``x`` of a unit's corner or one of its ports.
-
-    After layout, use :func:`port_point` on the frame.
 
     Parameters
     ----------
@@ -785,7 +783,7 @@ def port_refusal(port_name: "str | None", axes: "Sequence[str]",
     Returns
     -------
     str or None
-        The refusal message, or None if the port locates a coordinate.
+        Message, or None if ``axes`` is empty or meets ``measured``.
     """
     if not axes or set(axes) & set(measured):
         return None
