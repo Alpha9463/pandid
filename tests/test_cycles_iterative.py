@@ -12,6 +12,7 @@ real, current ``break_cycles`` over many generated topologies.
 
 from __future__ import annotations
 
+import inspect
 import random
 import sys
 
@@ -33,13 +34,34 @@ def _build_chain(n: int) -> Flowsheet:
     return fs
 
 
+#: Units in each long chain; more than ``HEADROOM``, so a walk that recurses
+#: once per unit overflows.
+CHAIN = 200
+
+#: Stack frames ``layout()`` is given beyond its caller's; it needs 15.
+HEADROOM = 50
+
+
+def _layout_with_little_stack(fs: Flowsheet) -> None:
+    """Lay a sheet out with the recursion limit ``HEADROOM`` above the caller's depth.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to lay out.
+    """
+    limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(len(inspect.stack(0)) + HEADROOM)
+    try:
+        fs.layout()
+    finally:
+        sys.setrecursionlimit(limit)
+
+
 def test_long_chain_lays_out_without_recursion_error():
-    """A chain well past both the default recursion limit and the
-    1500-unit chain #413 crashed on now lays out cleanly."""
-    n = 5000
-    assert n > sys.getrecursionlimit()
-    fs = _build_chain(n)
-    fs.layout()  # must not raise RecursionError
+    """Lay out a chain longer than the stack allows without recursing per unit."""
+    fs = _build_chain(CHAIN)
+    _layout_with_little_stack(fs)
     recycles = [s for s in fs.streams if s.is_recycle]
     assert recycles == []  # a plain chain closes no loop
 
@@ -50,15 +72,14 @@ def test_long_chain_with_a_recycle_still_marks_it():
     recycle has a nozzle of its own, and a splitter partway down so the
     tap feeding it back is a fresh outlet, not one the forward chain is
     already using."""
-    n = 3000
     fs2 = Flowsheet("chain-with-recycle")
     feed = fs2.add(U.Feed("F"))
     head = fs2.add(U.Mixer("M", n_inlets=2))
     fs2.connect(feed.outlet, head.in_1)
     prev_port = head.outlet
     tap = None
-    for i in range(n):
-        if i == 1500:
+    for i in range(CHAIN):
+        if i == CHAIN // 2:
             u = fs2.add(U.Splitter(f"SP-{i}", n_outlets=2))
             fs2.connect(prev_port, u.inlet)
             tap = u.out_2
@@ -71,7 +92,7 @@ def test_long_chain_with_a_recycle_still_marks_it():
     assert tap is not None
     fs2.connect(tap, head.in_2)  # recycle, back to the mixer's second inlet
 
-    fs2.layout()
+    _layout_with_little_stack(fs2)
     recycles = [s for s in fs2.streams if s.is_recycle]
     assert len(recycles) == 1
     assert recycles[0].dest.owner is head
