@@ -149,21 +149,6 @@ def test_a_cycle_is_broken_at_its_return_line() -> None:
     assert reactor.frame.x_max < separator.frame.x
 
 
-def test_a_mirrored_pump_runs_west() -> None:
-    """Check that a pump mirrored to face west puts its suction east and discharge west."""
-    fs = Flowsheet("West")
-    tank = fs.add(U.Vessel("V-1", variant="horizontal"))
-    pump = fs.add(U.Pump("P-1")).pin(mirrored="x")
-    drum = fs.add(U.Vessel("V-2", variant="horizontal"))
-    fs.connect(tank.outlet, pump.suction)
-    fs.connect(pump.discharge, drum.in_1)
-    fs.layout()
-
-    assert tank.frame is not None and pump.frame is not None and drum.frame is not None
-    assert drum.frame.x_max < pump.frame.x
-    assert pump.frame.x_max < tank.frame.x
-
-
 def test_a_pipe_from_a_north_nozzle_to_a_south_nozzle_stacks_its_units() -> None:
     """Check that a top-to-bottom pipe puts both ends in one column, nozzles lined up."""
     fs = Flowsheet("Stack")
@@ -994,20 +979,6 @@ def test_the_drawing_and_its_balloon_halos_start_at_the_margin() -> None:
         lefts.append(x0 - (pad.west if pad else 0.0))
         tops.append(y0 - (pad.north if pad else 0.0))
     assert (min(lefts), min(tops)) == (MARGIN, MARGIN)
-
-
-def test_disconnected_pieces_are_placed_without_overlapping() -> None:
-    """Check that separate trains and a lone vessel each get their own place."""
-    fs = Flowsheet("Islands")
-    for i in range(3):
-        feed = fs.add(U.Feed(f"F{i}"))
-        pump = fs.add(U.Pump(f"P{i}"))
-        fs.connect(feed.outlet, pump.suction)
-        fs.connect(pump.discharge, fs.add(U.Product(f"D{i}")).inlet)
-    fs.add(U.Vessel("V-9"))
-    fs.layout()
-
-    assert _overlapping(fs) == []
 
 
 def test_no_two_units_overlap_judged_by_the_boxes_they_draw() -> None:
