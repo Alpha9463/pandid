@@ -14,11 +14,43 @@ from pandid.validate import OFFSET_BY_DESIGN
 from test_symbol_invariants import _drawing
 
 
-def test_overlapping_pins_raise():
+def _found(fs: Flowsheet, code: str, **kw: Any) -> list:
+    """Return the findings of one code.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet to validate.
+    code : str
+        Finding code.
+    **kw : Any
+        Arguments for ``validate()``.
+
+    Returns
+    -------
+    list
+        The findings with that code, in order.
+    """
+    return [i for i in fs.validate(**kw) if i.code == code]
+
+
+def _overlapping_reactors() -> Flowsheet:
+    """Build two reactors pinned on top of each other.
+
+    Returns
+    -------
+    Flowsheet
+        The sheet, not yet laid out.
+    """
     fs = Flowsheet("overlap")
     a = fs.add(U.Reactor("R1")).pin(x=100, y=100)
-    b = fs.add(U.Reactor("R2")).pin(x=110, y=110)  # sits on top of R1
+    b = fs.add(U.Reactor("R2")).pin(x=110, y=110)
     fs.connect(a.outlet, b.feed)
+    return fs
+
+
+def test_overlapping_pins_raise():
+    fs = _overlapping_reactors()
     with pytest.raises(ValueError, match="overlap"):
         fs.to_svg()
 
@@ -77,10 +109,7 @@ def test_unit_overlap_moves_a_pinned_balloon_by_its_pin():
 
 
 def test_unit_overlap_moves_one_of_two_pinned_units_by_its_pin():
-    fs = Flowsheet("overlap")
-    a = fs.add(U.Reactor("R1")).pin(x=100, y=100)
-    b = fs.add(U.Reactor("R2")).pin(x=110, y=110)
-    fs.connect(a.outlet, b.feed)
+    fs = _overlapping_reactors()
     fs.route()
 
     said = _overlap_message(fs)
@@ -182,11 +211,7 @@ def test_negative_pin_raises():
 
 
 def test_check_false_bypasses_validation():
-    fs = Flowsheet("overlap-bypass")
-    a = fs.add(U.Reactor("R1")).pin(x=100, y=100)
-    b = fs.add(U.Reactor("R2")).pin(x=110, y=110)
-    fs.connect(a.outlet, b.feed)
-    svg = fs.to_svg(check=False)  # must not raise
+    svg = _overlapping_reactors().to_svg(check=False)  # must not raise
     assert "<svg" in svg
 
 
@@ -244,7 +269,7 @@ def test_distinct_placements_on_the_same_balloon_are_fine():
     fs, lic = _loop_with_a_balloon()
     lic.nozzle("sig_out", "N")
     fs.layout()
-    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
+    assert _found(fs, "coincident-ports") == []
 
 
 def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
@@ -259,7 +284,7 @@ def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
         fs.connect(feed.outlet, unit.ports[port])
     fs.connect(unit.outlet, prod.inlet)
     fs.layout()
-    issues = [i for i in fs.validate() if i.code == "coincident-ports"]
+    issues = _found(fs, "coincident-ports")
     assert [i.severity for i in issues] == ["warning"]
     assert "anchors no nozzle" in issues[0].message
     fs.to_svg()  # must not raise
@@ -319,7 +344,7 @@ def test_a_nozzle_drawn_off_its_own_body_is_reported(off_body_kind):
     drawn at, and the box it is outside of."""
     fs = _sheet_with(off_body_kind)
     fs.layout()
-    issues = [i for i in fs.validate() if i.code == "nozzle-off-body"]
+    issues = _found(fs, "nozzle-off-body")
     assert [i.severity for i in issues] == ["error"]
     assert "X-1.outlet" in issues[0].message
     assert "outside X-1's own box" in issues[0].message
@@ -333,7 +358,7 @@ def test_a_nozzle_on_the_edge_of_its_body_is_not_off_it(off_body_kind):
     registry."""
     fs = _sheet_with(off_body_kind)
     fs.layout()
-    issues = [i for i in fs.validate() if i.code == "nozzle-off-body"]
+    issues = _found(fs, "nozzle-off-body")
     assert [i for i in issues if "X-1.inlet" in i.message] == []
 
 
@@ -347,7 +372,7 @@ def test_the_shipped_corpus_draws_no_nozzle_off_a_body():
         fs.connect(fs.add(U.Feed(f"F-{i}")).outlet, tank.ports[f"in_{i}"])
     fs.connect(tank.outlet, fs.add(U.Product("P")).inlet)
     fs.layout()
-    assert [i for i in fs.validate() if i.code == "nozzle-off-body"] == []
+    assert _found(fs, "nozzle-off-body") == []
 
 
 def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
@@ -361,7 +386,7 @@ def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
     fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
     fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
     fs.layout()
-    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
+    assert _found(fs, "coincident-ports") == []
     fs.to_svg()  # must not raise
 
 
@@ -395,7 +420,7 @@ def test_a_kettle_takes_its_bottoms_off_its_own_draw():
     fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
     fs.connect(reb.bottoms, fs.add(U.Product("Bottoms")).inlet)
     fs.layout()
-    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
+    assert _found(fs, "coincident-ports") == []
     fs.to_svg()  # must not raise
 
 
@@ -410,14 +435,10 @@ def test_a_mixers_extra_inlets_get_nozzles_of_their_own():
         fs.connect(feed.outlet, mix.ports[f"in_{i}"])
     fs.connect(mix.outlet, prod.inlet)
     fs.layout()
-    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
+    assert _found(fs, "coincident-ports") == []
 
 
 # --- near-miss run elevations -------------------------------------------------
-
-
-def _off_elevation(fs):
-    return [i for i in fs.validate() if i.code == "run-off-elevation"]
 
 
 def _corner_pinned_run(fv_y=180.0):
@@ -441,7 +462,7 @@ def _corner_pinned_run(fv_y=180.0):
 def test_a_corner_pinned_inline_device_is_reported_off_the_run():
     fs, _ = _corner_pinned_run()
     fs.layout()
-    issues = _off_elevation(fs)
+    issues = _found(fs, "run-off-elevation")
     assert [i.severity for i in issues] == ["warning", "warning"]
     assert "2.6px apart" in issues[0].message
     # The finding is only worth making if it also says what to do about it, the
@@ -455,7 +476,7 @@ def test_pinning_the_nozzle_is_the_cure_the_message_names():
     fs, fv = _corner_pinned_run()
     fv.pin(x=270, port="inlet", y=195)
     fs.layout()
-    assert _off_elevation(fs) == []
+    assert _found(fs, "run-off-elevation") == []
 
 
 def test_a_deliberate_elevation_change_is_not_a_near_miss():
@@ -466,7 +487,7 @@ def test_a_deliberate_elevation_change_is_not_a_near_miss():
     lower = fs.add(U.Vessel("V-2")).pin(x=400, y=400)
     fs.connect(upper.outlet, lower.inlet)
     fs.layout()
-    assert _off_elevation(fs) == []
+    assert _found(fs, "run-off-elevation") == []
 
 
 def test_an_eccentric_reducer_is_meant_to_change_centreline():
@@ -480,7 +501,7 @@ def test_an_eccentric_reducer_is_meant_to_change_centreline():
     fs.connect(feed.outlet, red.inlet)
     fs.connect(red.outlet, prod.inlet)
     fs.layout()
-    assert _off_elevation(fs) == []
+    assert _found(fs, "run-off-elevation") == []
 
 
 def test_a_concentric_reducer_in_the_same_run_is_not_exempt():
@@ -545,7 +566,7 @@ def test_an_unpinned_sheet_keeps_its_elevations_to_itself():
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
     fs.layout()
-    assert _off_elevation(fs) == []
+    assert _found(fs, "run-off-elevation") == []
 
 
 def test_a_signal_line_has_no_elevation_to_be_off():
@@ -560,7 +581,7 @@ def test_a_signal_line_has_no_elevation_to_be_off():
     lic = fs.add_instrument("LIC", 101, sensing=drum, face="S", offset=90, display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     fs.layout()
-    assert [i.message for i in _off_elevation(fs) if "LIC" in i.message] == []
+    assert [i.message for i in _found(fs, "run-off-elevation") if "LIC" in i.message] == []
 
 
 def test_a_vertical_drop_is_a_runs_length_and_not_a_miss():
@@ -575,14 +596,10 @@ def test_a_vertical_drop_is_a_runs_length_and_not_a_miss():
     lower = fs.add(U.Tank("TK-2")).pin(x=205, y=500)
     fs.connect(upper.outlet, lower.inlet)
     fs.layout()
-    assert _off_elevation(fs) == []
+    assert _found(fs, "run-off-elevation") == []
 
 
 # --- a counted nozzle with no line on it --------------------------------------
-
-
-def _unpiped(fs, **kw):
-    return [i for i in fs.validate(**kw) if i.code == "nozzle-unconnected"]
 
 
 def _mixer(n_inlets, wired):
@@ -606,7 +623,7 @@ def test_the_off_by_one_that_started_this():
     for i in (1, 2, 3):
         fs.connect(fs.add(U.Feed(f"F-{i}")).outlet, mix.inlets[i])
     fs.connect(mix.outlet, fs.add(U.Product("P")).inlet)
-    issues = _unpiped(fs)
+    issues = _found(fs, "nozzle-unconnected")
     assert [i.severity for i in issues] == ["warning"]
     assert "M-101.in_1 carries no stream" in issues[0].message
     # The arithmetic, so the author can see which of the two things happened.
@@ -616,15 +633,10 @@ def test_the_off_by_one_that_started_this():
     assert "Connect it, or build M-101 with the 3 it uses." in issues[0].message
 
 
-def test_wiring_the_nozzle_is_the_cure():
-    """Doing what the message says has to silence it, or the advice is wrong."""
-    assert _unpiped(_mixer(4, (1, 2, 3, 4))[0]) == []
-
-
-def test_the_other_cure_is_the_count():
-    """The second half of the same sentence: a mixer built for the three it
-    uses is the same sheet with nothing left over to report."""
-    assert _unpiped(_mixer(3, (1, 2, 3))[0]) == []
+@pytest.mark.parametrize(("n_inlets", "wired"), [(4, (1, 2, 3, 4)), (3, (1, 2, 3))])
+def test_either_cure_the_message_names_silences_it(n_inlets, wired):
+    """Check that wiring the nozzle, or building for the count used, leaves no finding."""
+    assert _found(_mixer(n_inlets, wired)[0], "nozzle-unconnected") == []
 
 
 def test_it_is_reported_before_layout_has_run():
@@ -633,32 +645,37 @@ def test_it_is_reported_before_layout_has_run():
     after a render would answer a different question from the one asked."""
     fs, mix = _mixer(4, (2, 3, 4))
     assert all(u.frame is None for u in fs.units)
-    assert len(_unpiped(fs)) == 1
+    assert len(_found(fs, "nozzle-unconnected")) == 1
     fs.layout()
-    assert len(_unpiped(fs)) == 1  # and the same one afterwards
+    assert len(_found(fs, "nozzle-unconnected")) == 1  # and the same one afterwards
 
 
-def test_two_loose_nozzles_on_one_unit_are_one_finding():
-    """One wrong count with one thing to do about it, said once -- the way
-    ``letter-sequence`` says a repeated tag once and ``nozzles-crowded``
-    reports a face rather than each pair on it."""
-    fs, _ = _mixer(4, (2, 3))
-    issues = _unpiped(fs)
+@pytest.mark.parametrize(
+    ("n_inlets", "wired", "said"),
+    [
+        (
+            4,
+            (2, 3),
+            [
+                "M-101.in_1 and M-101.in_4 carry no stream",
+                "Connect them, or build M-101 with the 2 it uses.",
+            ],
+        ),
+        (
+            2,
+            (),
+            ["0 of them are piped", "Connect them: nothing is piped to M-101 at all."],
+        ),
+        (1, (), ["built with 1 numbered nozzle, in_1"]),
+    ],
+)
+def test_a_mixer_short_of_its_count_is_one_finding(n_inlets, wired, said):
+    """Check that a mixer's unpiped nozzles make one finding with the right sentence."""
+    fs, _ = _mixer(n_inlets, wired)
+    issues = _found(fs, "nozzle-unconnected")
     assert len(issues) == 1
-    assert "M-101.in_1 and M-101.in_4 carry no stream" in issues[0].message
-    assert "Connect them, or build M-101 with the 2 it uses." in issues[0].message
-
-
-def test_a_family_with_nothing_on_it_is_not_offered_a_count():
-    """Telling an author to build M-101 with the 0 it uses is not advice. A
-    mixer nothing is piped to has a different problem from a mixer that is one
-    line short, so the sentence changes rather than doing the arithmetic and
-    reading a zero out of it."""
-    fs, _ = _mixer(2, ())
-    issues = _unpiped(fs)
-    assert len(issues) == 1
-    assert "0 of them are piped" in issues[0].message
-    assert "Connect them: nothing is piped to M-101 at all." in issues[0].message
+    for text in said:
+        assert text in issues[0].message
 
 
 def test_a_splitter_counts_its_outlets_the_same_way():
@@ -667,7 +684,7 @@ def test_a_splitter_counts_its_outlets_the_same_way():
     fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
     for i in (1, 2):
         fs.connect(sp.ports[f"out_{i}"], fs.add(U.Product(f"P{i}")).inlet)
-    issues = _unpiped(fs)
+    issues = _found(fs, "nozzle-unconnected")
     assert len(issues) == 1
     assert "SP-1.out_3 carries no stream" in issues[0].message
 
@@ -686,7 +703,7 @@ def test_a_block_is_caught_though_its_symbol_has_no_series():
     fs.connect(fs.add(U.Feed("F")).outlet, blk.in_1)
     fs.connect(blk.out_1, fs.add(U.Product("P")).inlet)
     assert default_registry.for_unit(blk).port_series == ()  # nothing to borrow
-    issues = _unpiped(fs)
+    issues = _found(fs, "nozzle-unconnected")
     assert len(issues) == 2  # one per family, not one per unit
     assert "Reaction.in_2 and Reaction.in_3 carry no stream" in issues[0].message
     assert "Reaction.out_2 carries no stream" in issues[1].message
@@ -708,7 +725,7 @@ def test_a_vessels_spare_relief_and_drain_are_not_reported(cls):
     u = fs.add(cls("V-1"))
     fs.connect(fs.add(U.Feed("F")).outlet, u.inlet)
     fs.connect(u.outlet, fs.add(U.Product("P")).inlet)
-    assert _unpiped(fs) == []
+    assert _found(fs, "nozzle-unconnected") == []
     assert [n for n in u.ports if u.ports[n].stream is None] == ["vent", "relief", "drain"]
 
 
@@ -718,7 +735,7 @@ def test_a_column_counts_its_feeds():
     fs.connect(fs.add(U.Feed("F")).outlet, col.feeds[0])
     fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
     fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
-    issues = _unpiped(fs)
+    issues = _found(fs, "nozzle-unconnected")
     assert len(issues) == 1
     assert "T-1.feed_2 and T-1.feed_3 carry no stream" in issues[0].message
     assert "feed_1..feed_3, and 1 of them is piped" in issues[0].message
@@ -736,17 +753,7 @@ def test_the_singular_spelling_of_a_family_is_not_counted():
     fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
     fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
     assert "feed_1" in col.ports and col.feed is col.feed_1
-    assert _unpiped(fs) == []
-
-
-def test_a_family_of_one_is_still_a_family():
-    """``n_inlets=1`` is a count somebody wrote, and the nozzle it produces is
-    spelled ``in_1``. The singular exemption above is about the *name*, which is
-    what records whether a count was asked for, and not about the arity."""
-    fs, _ = _mixer(1, ())
-    issues = _unpiped(fs)
-    assert len(issues) == 1
-    assert "built with 1 numbered nozzle, in_1" in issues[0].message
+    assert _found(fs, "nozzle-unconnected") == []
 
 
 def test_a_family_with_a_number_missing_is_listed_and_not_ranged():
@@ -766,7 +773,7 @@ def test_a_family_with_a_number_missing_is_listed_and_not_ranged():
 
     fs = Flowsheet("ragged")
     fs.add(Odd("X-1"))
-    message = _unpiped(fs)[0].message
+    message = _found(fs, "nozzle-unconnected")[0].message
     assert "4 numbered nozzles, in_1, in_2, in_4 and in_7" in message
     assert ".." not in message
 
@@ -790,7 +797,7 @@ def test_a_spec_built_sheet_is_checked_too():
             ],
         }
     )
-    assert "M-1.in_2 and M-1.in_3 carry no stream" in _unpiped(fs)[0].message
+    assert "M-1.in_2 and M-1.in_3 carry no stream" in _found(fs, "nozzle-unconnected")[0].message
     # ...and it survives the round trip, since to_dict() writes the count back.
     # stream-table-missing rides along too: F1 and P1 make this a PFD with
     # material crossing its edge, and the fixture states no property.
@@ -830,7 +837,7 @@ def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
     fs = Flowsheet("declared")
     unit = build(fs)
     assert unit.ports[bare].stream is None
-    assert _unpiped(fs) == []
+    assert _found(fs, "nozzle-unconnected") == []
 
 
 def test_a_press_that_takes_no_wash_is_a_clean_sheet():
@@ -885,7 +892,7 @@ def test_a_numbered_signal_family_is_out_of_scope():
     fs.connect(fs.add(U.Feed("F")).outlet, box.port("in_1"))
     # Two counted families on one unit, both a nozzle short. Only the process
     # one is reported, and the signal pair is not so much as named.
-    issues = _unpiped(fs)
+    issues = _found(fs, "nozzle-unconnected")
     assert len(issues) == 1
     assert "JB-1.in_2 carries no stream" in issues[0].message
     assert "sig_" not in issues[0].message
@@ -951,10 +958,6 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 # --- nozzles crowded under their own arrowheads -------------------------------
 
 
-def _crowded(fs, **kw):
-    return [i for i in fs.validate(**kw) if i.code == "nozzles-crowded"]
-
-
 def _fed_mixer(n_inlets=2, **box):
     """A mixer taking its feeds on one face, which is where this defect lives.
 
@@ -978,7 +981,7 @@ def test_two_heads_without_the_paper_between_them_are_reported():
     from pandid.render.symbols import MIN_HEAD_CLEARANCE
 
     fs, _ = _fed_mixer(height=35)
-    issues = _crowded(fs)
+    issues = _found(fs, "nozzles-crowded")
     assert [i.severity for i in issues] == ["warning"]
     assert "M-1.in_1 and M-1.in_2 are 14.0px apart on M-1's W face" in issues[0].message
     # The measurement a reader can check: the white, against the standard.
@@ -995,7 +998,7 @@ def test_the_box_the_message_names_is_the_cure():
     """Typing the message's own suggestion back in has to silence it, or the
     advice is wrong. 40 is the 35px box scaled by the 16/14 it fell short by."""
     fs, _ = _fed_mixer(height=40)
-    assert _crowded(fs) == []
+    assert _found(fs, "nozzles-crowded") == []
 
 
 def test_a_default_mixer_is_not_a_finding():
@@ -1007,7 +1010,7 @@ def test_a_default_mixer_is_not_a_finding():
     default mixer exactly on the boundary; restoring the rung puts it clear
     again."""
     fs, _ = _fed_mixer()
-    assert _crowded(fs) == []
+    assert _found(fs, "nozzles-crowded") == []
 
 
 def test_overlapping_heads_are_worded_as_the_overlap_they_are():
@@ -1015,7 +1018,7 @@ def test_overlapping_heads_are_worded_as_the_overlap_they_are():
     not merely close: they are drawn over each other. Quoting a clearance of
     "-0.3px" would be arithmetic rather than a description."""
     fs, _ = _fed_mixer(n_inlets=4)
-    issues = _crowded(fs)
+    issues = _found(fs, "nozzles-crowded")
     assert len(issues) == 1
     assert "overlaps two 12px arrowheads by 0.3px" in issues[0].message
     assert "the tightest of the 4 it carries there" in issues[0].message
@@ -1025,7 +1028,7 @@ def test_a_third_nozzle_on_one_face_is_still_one_finding():
     """Three heads on one face is one crowded face with one thing to do about
     it, so it is said once -- the way letter-sequence says a repeated tag once."""
     fs, _ = _fed_mixer(n_inlets=3, height=35)
-    issues = _crowded(fs)
+    issues = _found(fs, "nozzles-crowded")
     assert len(issues) == 1
     assert "the tightest of the 3 it carries there" in issues[0].message
 
@@ -1046,7 +1049,7 @@ def test_nozzles_that_carry_no_arrowhead_are_not_crowded():
     fs.layout()
     ys = [port_point(sp, sp.frame, f"out_{i}")[1] for i in (1, 2)]
     assert abs(ys[1] - ys[0]) == 14.0  # the pitch the mixer above is reported at
-    assert _crowded(fs) == []
+    assert _found(fs, "nozzles-crowded") == []
 
 
 def test_a_p_and_id_draws_no_head_to_be_crowded_by():
@@ -1055,9 +1058,9 @@ def test_a_p_and_id_draws_no_head_to_be_crowded_by():
     are not a defect. Reporting one would be advice to make a unit 50% taller to
     fix a drawing that is already right."""
     fs, _ = _fed_mixer(height=35)
-    assert len(_crowded(fs, diagram="pfd")) == 1  # the same sheet as a PFD
-    assert _crowded(fs, diagram="p&id") == []
-    assert _crowded(fs, diagram="pid") == []  # the other spelling
+    assert len(_found(fs, "nozzles-crowded", diagram="pfd")) == 1  # the same sheet as a PFD
+    assert _found(fs, "nozzles-crowded", diagram="p&id") == []
+    assert _found(fs, "nozzles-crowded", diagram="pid") == []  # the other spelling
     # ...and the warnings a render leaves behind are about the sheet it drew.
     fs.to_svg(diagram="p&id")
     assert [w for w in fs.warnings if w.code == "nozzles-crowded"] == []
@@ -1116,7 +1119,7 @@ def test_a_block_gathering_streams_onto_one_face_is_not_crowded():
     for i in range(1, 5):
         fs.connect(block.ports[f"out_{i}"], fs.add(U.Product(f"P{i}")).inlet)
     fs.layout()
-    assert _crowded(fs) == []
+    assert _found(fs, "nozzles-crowded") == []
 
 
 def _unit_classes():
@@ -1179,14 +1182,10 @@ def test_every_registered_symbol_is_quiet_on_a_nozzle_pinned_run(kind, variant):
     fs.layout()
     prod.pin(x=700, port="inlet", y=port_point(unit, unit.frame, outs[0])[1])
     fs.layout()
-    assert _off_elevation(fs) == []
+    assert _found(fs, "run-off-elevation") == []
 
 
 # --- a balloon nothing could place --------------------------------------------
-
-
-def _unplaced(fs, **kw):
-    return [i for i in fs.validate(**kw) if i.code == "instrument-unplaced"]
 
 
 def _cyclic_balloons(pump_x=400, pump_y=100):
@@ -1216,7 +1215,7 @@ def test_a_balloon_no_host_could_place_is_reported():
     on the model that appear on no sheet and in no finding."""
     fs = _cyclic_balloons()
     fs.layout()
-    issues = _unplaced(fs)
+    issues = _found(fs, "instrument-unplaced")
     assert [i.severity for i in issues] == ["error", "error"]
     assert sorted(i.message.split()[0] for i in issues) == ["LIC-1", "LT-1"]
     # Each names the host it is waiting on, so the cycle is readable off the
@@ -1249,7 +1248,7 @@ def test_a_sheet_that_places_its_balloons_reports_nothing_here():
     fs.add_instrument("LIC", 1, near=lt, display="central")
     fs.layout()
     assert fs.unplaced_instruments == []
-    assert _unplaced(fs) == []
+    assert _found(fs, "instrument-unplaced") == []
 
 
 def test_it_is_not_reported_before_layout_has_run():
@@ -1258,7 +1257,7 @@ def test_it_is_not_reported_before_layout_has_run():
     validate() looking for frameless units. A sheet nobody has laid out yet has
     no unplaceable balloons on it, only unplaced ones."""
     fs = _cyclic_balloons()
-    assert _unplaced(fs) == []
+    assert _found(fs, "instrument-unplaced") == []
 
 
 def test_a_balloon_tapping_a_line_with_an_unplaced_end_names_the_line():
@@ -1270,7 +1269,7 @@ def test_a_balloon_tapping_a_line_with_an_unplaced_end_names_the_line():
     sig = fs.connect(by_name["LT-1"].sig_out, by_name["LIC-1"].sig_in, kind="electric")
     fs.add_instrument("LY", 1, sensing=sig)
     fs.layout()
-    ly = [i for i in _unplaced(fs) if i.message.startswith("LY-1")]
+    ly = [i for i in _found(fs, "instrument-unplaced") if i.message.startswith("LY-1")]
     assert len(ly) == 1
     assert f"hangs off stream {sig.name}, which has an end nothing placed" in ly[0].message
 
@@ -1293,10 +1292,6 @@ def test_render_refuses_the_sheet_by_the_finding_and_not_the_bounding_box():
 # promise is that it hands out a free one.
 
 
-def _reused(fs) -> list:
-    return [i for i in fs.validate() if i.code == "stream-name-reused"]
-
-
 def _collided() -> Flowsheet:
     """A sheet whose explicit name sits on a number the counter reaches.
 
@@ -1314,7 +1309,7 @@ def _collided() -> Flowsheet:
 
 
 def test_a_counted_name_landing_on_a_used_one_is_reported():
-    found = _reused(_collided())
+    found = _found(_collided(), "stream-name-reused")
     assert len(found) == 1
     assert "2 streams answer to 'S102'" in found[0].message
     assert "F2 to M-1" in found[0].message  # which run took the counted name
@@ -1328,15 +1323,7 @@ def test_the_reused_name_costs_a_stream_table_column():
 
     fs = _collided()
     assert len(_table_runs(fs)) == len(fs.streams) - 1
-    assert _reused(fs)
-
-
-def test_the_collision_is_soft_so_the_sheet_still_draws():
-    """Every line is drawn and the sheet reads; what was wrong with it
-    was the silence. The cure is a rename only the author can choose."""
-    fs = _collided()
-    assert [i.severity for i in _reused(fs)] == ["warning"]
-    fs.to_svg()  # does not raise
+    assert _found(fs, "stream-name-reused")
 
 
 def test_a_run_drawn_in_segments_is_not_a_collision():
@@ -1351,7 +1338,7 @@ def test_a_run_drawn_in_segments_is_not_a_collision():
     fs.connect(f.outlet, hx.tube_in, name="S-305")
     fs.connect(hx.tube_out, p.inlet, name="S-305")
     assert len(fs._stream_groups()) == 2  # two groups, one name, no finding
-    assert _reused(fs) == []
+    assert _found(fs, "stream-name-reused") == []
 
 
 def test_one_line_number_on_two_runs_is_not_a_collision():
@@ -1365,7 +1352,7 @@ def test_one_line_number_on_two_runs_is_not_a_collision():
     a = fs.connect(f.outlet, hx.tube_in, size=6, service="P", spec="A1A", sequence=1001)
     b = fs.connect(hx.tube_out, p.inlet, size=6, service="P", spec="A1A", sequence=1001)
     assert a.name == b.name  # same components, same line number
-    assert _reused(fs) == []
+    assert _found(fs, "stream-name-reused") == []
 
 
 def test_a_plainly_numbered_sheet_reports_nothing():
@@ -1375,7 +1362,7 @@ def test_a_plainly_numbered_sheet_reports_nothing():
     p = fs.add(U.Product("P"))
     fs.connect(f.outlet, v.inlet)
     fs.connect(v.outlet, p.inlet)
-    assert _reused(fs) == []
+    assert _found(fs, "stream-name-reused") == []
 
 
 # --- boundary-flow-missing ------------------------------------------------
@@ -1393,10 +1380,6 @@ def test_a_plainly_numbered_sheet_reports_nothing():
 # head rather than an author's slip.
 
 
-def _missing(fs) -> list:
-    return [i for i in fs.validate() if i.code == "boundary-flow-missing"]
-
-
 def _partly_tabulated() -> Flowsheet:
     """A sheet that states properties on its inlet and on nothing else."""
     fs = Flowsheet("partly")
@@ -1409,7 +1392,7 @@ def _partly_tabulated() -> Flowsheet:
 
 
 def test_an_outgoing_line_with_nothing_on_it_is_reported():
-    found = _missing(_partly_tabulated())
+    found = _found(_partly_tabulated(), "boundary-flow-missing")
     assert len(found) == 1
     assert found[0].message.startswith("S2 crosses the sheet edge at To Storage")
     assert "4.3.2 d)" in found[0].message
@@ -1423,7 +1406,7 @@ def test_the_reported_line_is_the_column_the_table_keeps_empty():
 
     fs = _partly_tabulated()
     kept = [run[0].name for run in _table_runs(fs) if not run[0].properties]
-    assert kept == [i.message.split()[0] for i in _missing(fs)] == ["S2"]
+    assert kept == [i.message.split()[0] for i in _found(fs, "boundary-flow-missing")] == ["S2"]
 
 
 def test_an_internal_line_with_nothing_on_it_is_not_reported():
@@ -1437,7 +1420,7 @@ def test_an_internal_line_with_nothing_on_it_is_not_reported():
     fs.connect(feed.outlet, pump.suction).properties = {"Flow (kg/h)": "4200"}
     fs.connect(pump.discharge, hx.tube_in)  # internal, and nothing on it
     fs.connect(hx.tube_out, prod.inlet).properties = {"Flow (kg/h)": "4200"}
-    assert _missing(fs) == []
+    assert _found(fs, "boundary-flow-missing") == []
 
 
 def test_a_sheet_that_tabulates_nothing_is_not_reported():
@@ -1447,7 +1430,7 @@ def test_a_sheet_that_tabulates_nothing_is_not_reported():
     show_stream_table=False is half of that decision."""
     fs = _partly_tabulated()
     fs.streams[0].properties = {}
-    assert _missing(fs) == []
+    assert _found(fs, "boundary-flow-missing") == []
 
 
 def test_a_value_present_and_blank_is_a_report():
@@ -1456,15 +1439,7 @@ def test_a_value_present_and_blank_is_a_report():
     report. An absent key is silence, which is what this finding is about."""
     fs = _partly_tabulated()
     fs.streams[1].properties = {"Flow (kg/h)": ""}
-    assert _missing(fs) == []
-
-
-def test_the_finding_is_soft_so_the_sheet_still_draws():
-    """The column is drawn and the line is named on it; what is missing is
-    a number only the author has."""
-    fs = _partly_tabulated()
-    assert [i.severity for i in _missing(fs)] == ["warning"]
-    fs.to_svg(show_stream_table=True)  # does not raise
+    assert _found(fs, "boundary-flow-missing") == []
 
 
 # --- stream-table-missing --------------------------------------------------
@@ -1475,10 +1450,6 @@ def test_the_finding_is_soft_so_the_sheet_still_draws():
 # named a silent breach: ISO 10628-1:2014 4.3.2 c) and d) do not stop
 # applying to a process flow diagram because show_stream_table was never
 # set to True or no stream was ever given a property.
-
-
-def _no_table(fs) -> list:
-    return [i for i in fs.validate() if i.code == "stream-table-missing"]
 
 
 def _untabulated() -> Flowsheet:
@@ -1493,19 +1464,10 @@ def _untabulated() -> Flowsheet:
 
 
 def test_a_pfd_with_a_boundary_and_nothing_tabulated_is_reported():
-    found = _no_table(_untabulated())
+    found = _found(_untabulated(), "stream-table-missing")
     assert len(found) == 1
     assert "4.3.2 d)" in found[0].message
     assert "S1" in found[0].message and "S2" in found[0].message
-
-
-def test_the_finding_names_every_boundary_run_once_and_not_per_line():
-    """One finding for the sheet, not one per crossing: unlike
-    boundary-flow-missing there is no other column to contrast an empty one
-    against, so there is one thing to say about the sheet rather than one
-    per line that says it."""
-    found = _no_table(_untabulated())
-    assert len(found) == 1
     assert found[0].message.startswith("S1 and S2 cross")
 
 
@@ -1516,7 +1478,7 @@ def test_an_internal_only_sheet_has_no_boundary_to_report():
     a = fs.add(U.Pump("P-101"))
     b = fs.add(U.HeatExchanger("E-101"))
     fs.connect(a.discharge, b.tube_in)
-    assert _no_table(fs) == []
+    assert _found(fs, "stream-table-missing") == []
 
 
 def test_a_sheet_that_has_started_tabulating_is_boundary_flow_missings_to_report():
@@ -1525,8 +1487,8 @@ def test_a_sheet_that_has_started_tabulating_is_boundary_flow_missings_to_report
     the two are mutually exclusive by construction, not by an extra check."""
     fs = _untabulated()
     fs.streams[0].properties = {"Flow (kg/h)": "4200"}
-    assert _no_table(fs) == []
-    assert len(_missing(fs)) == 1  # S2 is the column left empty
+    assert _found(fs, "stream-table-missing") == []
+    assert len(_found(fs, "boundary-flow-missing")) == 1  # S2 is the column left empty
 
 
 def test_a_pid_is_not_reported():
@@ -1581,10 +1543,19 @@ def test_the_bfd_owes_no_table_and_heads_its_lines_all_the_same():
     }
 
 
-def test_the_finding_is_soft_and_the_default_render_still_draws():
-    fs = _untabulated()
-    assert [i.severity for i in _no_table(fs)] == ["warning"]
-    fs.to_svg()  # show_stream_table stays False; does not raise
+@pytest.mark.parametrize(
+    ("build", "code", "render"),
+    [
+        (_collided, "stream-name-reused", {}),
+        (_partly_tabulated, "boundary-flow-missing", {"show_stream_table": True}),
+        (_untabulated, "stream-table-missing", {}),
+    ],
+)
+def test_a_soft_finding_is_a_warning_and_the_sheet_still_draws(build, code, render):
+    """Check that each of these findings is a warning and the sheet still renders."""
+    fs = build()
+    assert [i.severity for i in _found(fs, code)] == ["warning"]
+    fs.to_svg(**render)
 
 
 # --- validate() answers about the sheet that was drawn ------------------------
@@ -1598,17 +1569,12 @@ def test_the_finding_is_soft_and_the_default_render_still_draws():
 # `validate()` answers about the last render, exactly as `fs.warnings`
 # already describes the last render and nothing earlier.
 #
-def test_a_sheet_nothing_has_drawn_yet_answers_as_a_pfd():
-    """The default is unchanged where there is no render to read."""
-    assert len(_no_table(_untabulated())) == 1
-
-
 def test_a_bare_validate_follows_the_drawing_that_was_made():
     fs = _untabulated()
     fs.to_svg(diagram="p&id")
-    assert _no_table(fs) == []  # 4.4.2, and this finding is 4.3.2 d)
+    assert _found(fs, "stream-table-missing") == []  # 4.4.2, and this finding is 4.3.2 d)
     fs.to_svg(diagram="pfd")
-    assert len(_no_table(fs)) == 1  # ...and back again
+    assert len(_found(fs, "stream-table-missing")) == 1  # ...and back again
 
 
 def test_a_diagram_named_at_the_call_still_wins():
@@ -1634,7 +1600,7 @@ def test_an_unchecked_render_still_says_which_drawing_it_made():
     the next `validate()` is about a P&ID."""
     fs = _untabulated()
     fs.to_svg(diagram="p&id", check=False)
-    assert _no_table(fs) == []
+    assert _found(fs, "stream-table-missing") == []
 
 
 def test_a_drawing_the_renderer_refused_is_not_remembered_as_the_one_made():
@@ -1644,7 +1610,7 @@ def test_a_drawing_the_renderer_refused_is_not_remembered_as_the_one_made():
     fs = _untabulated()
     with pytest.raises(ValueError):
         fs.to_svg(diagram="isometric")
-    assert len(_no_table(fs)) == 1
+    assert len(_found(fs, "stream-table-missing")) == 1
 
 
 # --- the model is checked before any geometry is built ------------------------
@@ -1705,7 +1671,7 @@ def test_a_pin_that_is_not_a_number_is_an_error(value, axis):
     the left edge, since ``pin-out-of-bounds`` would tell the author to
     move it somewhere it cannot be moved to.
     """
-    issues = [i for i in _off_sheet(value, axis).validate() if i.code == "pin-not-finite"]
+    issues = _found(_off_sheet(value, axis), "pin-not-finite")
     assert [i.severity for i in issues] == ["error"]
     assert f"E-101 pinned {axis}={value!r} is not a finite number" == issues[0].message
 
@@ -1838,7 +1804,7 @@ def test_a_single_via_waypoint_that_squares_nothing_up_is_reported():
 
     fs, run = _hand_routed((320.0, 200.0))
     assert stream_path(run) == [(320.0, 60.0), (320.0, 200.0), (440.0, 60.0)]
-    (found,) = [i for i in fs.validate() if i.code == "route-diagonal"]
+    (found,) = _found(fs, "route-diagonal")
     assert found.severity == "warning"
     assert "(320, 200) to (440, 60)" in found.message
     # The corner it turns at, and only the one that is not already on the path:
@@ -2006,10 +1972,6 @@ def test_warnings_describe_the_last_render_and_nothing_earlier():
 # --- a round mark drawn as an oval ---------------------------------------------
 
 
-def _out_of_aspect(fs) -> list:
-    return [i for i in fs.validate() if i.code == "symbol-out-of-aspect"]
-
-
 def _sized(name="R-1", **kw) -> Flowsheet:
     fs = Flowsheet("aspect")
     fs.add(U.Reactor(name, **kw))
@@ -2024,7 +1986,7 @@ def test_the_box_that_shipped_a_seventy_percent_stretch_is_reported():
     the number behind, and nothing said so: the sheet scaled the artwork x1,29
     across and x0,76 down and drew the motor as a flat oval.
     """
-    found = _out_of_aspect(_sized("M-301", n_feeds=2, width=80, height=100))
+    found = _found(_sized("M-301", n_feeds=2, width=80, height=100), "symbol-out-of-aspect")
     assert len(found) == 1
     assert found[0].severity == "warning"
     assert "M-301" in found[0].message
@@ -2041,14 +2003,14 @@ def test_the_width_the_message_offers_is_the_one_that_silences_it():
     fs = _sized("M-301", n_feeds=2, width=80, height=100)
     sym = default_registry.for_unit(fs.units[0])
     fixed = _sized("M-301", n_feeds=2, width=sym.width / sym.height * 100, height=100)
-    assert _out_of_aspect(fixed) == []
+    assert _found(fixed, "symbol-out-of-aspect") == []
 
 
 @pytest.mark.parametrize("width,height", [(None, None), (72, 153), (124, 264), (36, 76.5)])
 def test_a_box_of_the_symbols_own_shape_is_quiet(width, height):
     """At the artwork's own aspect, at any size, and unsized at all."""
     kw = {k: v for k, v in (("width", width), ("height", height)) if v is not None}
-    assert _out_of_aspect(_sized("M-301", n_feeds=2, **kw)) == []
+    assert _found(_sized("M-301", n_feeds=2, **kw), "symbol-out-of-aspect") == []
 
 
 def test_a_quarter_turn_is_not_a_stretch():
@@ -2064,10 +2026,10 @@ def test_a_quarter_turn_is_not_a_stretch():
     sym = default_registry.for_unit(rx)
     rx.pin(x=100, y=100, orientation=90)
     rx.width, rx.height = sym.height, sym.width
-    assert _out_of_aspect(fs) == []
+    assert _found(fs, "symbol-out-of-aspect") == []
     # ...and the same numbers *un*-turned are the stretch they describe.
     rx.pin(x=100, y=100, orientation=0)
-    assert len(_out_of_aspect(fs)) == 1
+    assert len(_found(fs, "symbol-out-of-aspect")) == 1
 
 
 def test_a_boundary_flag_stretched_to_hold_its_label_is_not_reported():
@@ -2096,11 +2058,11 @@ def test_a_body_whose_marks_are_lines_may_be_any_shape():
     for a 170 x 340 amine contactor.
     """
     packed = _sized("R-301", internals="packing", width=90, height=200)
-    assert _out_of_aspect(packed) == []
+    assert _found(packed, "symbol-out-of-aspect") == []
 
     fs = Flowsheet("column")
     fs.add(U.Column("T-401", internals="valve_tray", trays=20, width=110, height=340))
-    assert _out_of_aspect(fs) == []
+    assert _found(fs, "symbol-out-of-aspect") == []
 
 
 def test_the_motor_really_is_round_on_its_own_box_and_oval_off_it():
@@ -2160,10 +2122,6 @@ def _parallel_pair(gap_px: float):
     return fs
 
 
-def _crowded_lines(fs, **kw):
-    return [i for i in fs.validate(**kw) if i.code == "lines-crowded"]
-
-
 def test_two_runs_without_the_paper_between_them_are_reported():
     """ISO 10628-1 5.3.2: twice the wider of the two, and never under 1 mm.
 
@@ -2172,7 +2130,7 @@ def test_two_runs_without_the_paper_between_them_are_reported():
     to the unit. Centres 6 apart clear it exactly. At 5 apart they leave 3 and
     are reported.
     """
-    issues = _crowded_lines(_parallel_pair(5.0))
+    issues = _found(_parallel_pair(5.0), "lines-crowded")
     assert [i.severity for i in issues] == ["warning"]
     assert "run parallel at y 200 and 205" in issues[0].message
     assert "leaving 3.0px (0.75 mm) of paper between them" in issues[0].message
@@ -2186,7 +2144,7 @@ def test_two_runs_far_enough_apart_are_not_a_finding():
     admits, so this fails if the floor moves in *either* direction rather than
     only if it grows.
     """
-    assert _crowded_lines(_parallel_pair(6.0)) == []
+    assert _found(_parallel_pair(6.0), "lines-crowded") == []
 
 
 def test_the_clearance_floor_is_twice_the_widest_rung_the_pair_is_drawn_on():
@@ -2200,7 +2158,7 @@ def test_the_clearance_floor_is_twice_the_widest_rung_the_pair_is_drawn_on():
 
     from pandid.render.weights import LineWeight
 
-    (issue,) = _crowded_lines(_parallel_pair(5.0))
+    (issue,) = _found(_parallel_pair(5.0), "lines-crowded")
     asked = float(re.search(r"under the ([\d.]+)px ISO 10628-1 5\.3\.2", issue.message).group(1))
     assert asked / LineWeight.MAIN_FLOW.width == pytest.approx(2.0)
 
@@ -2219,7 +2177,7 @@ def test_two_runs_that_only_meet_end_to_end_are_not_parallel_lines():
     fs.connect(a.outlet, ap.inlet)
     fs.connect(b.outlet, bp.inlet)
     fs.layout()
-    assert _crowded_lines(fs) == []
+    assert _found(fs, "lines-crowded") == []
 
 
 # --- a line drawn through the unit it connects to (#468) -----------------------
