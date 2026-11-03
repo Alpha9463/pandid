@@ -29,7 +29,8 @@ def _compute_offsets(
     Returns
     -------
     tuple[dict, dict]
-        Horizontal and vertical offsets by ``(id(stream), segment)``.
+        Y offsets of horizontal segments, then x offsets of vertical
+        segments, each keyed by ``(id(stream), segment)``.
     """
     # A run is a maximal chain of consecutive segments on one axis.
     h_runs: list[dict[str, Any]] = []
