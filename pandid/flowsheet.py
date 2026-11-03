@@ -551,6 +551,8 @@ class Flowsheet:
         # whether hanging is refused while route() places again.
         self._hung: set[int] = set()
         self._hang_refused = False
+        # Engine of the last layout(), for laying out again.
+        self._layout_engine: object = None
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2030,6 +2032,7 @@ class Flowsheet:
         self._mounted_layout = False
         if engine is None:
             engine = default_layout_engine
+        self._layout_engine = engine
         engine.layout(self)
         self._layout_stale = False
         self._route_stale = True
@@ -2059,7 +2062,6 @@ class Flowsheet:
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
         from pandid.layout.control import _clashes, place_control
-        from pandid.layout.faces import select_faces
 
         def settle() -> None:
             """Route, then place balloons and re-route until nothing moves."""
@@ -2072,15 +2074,20 @@ class Flowsheet:
                 router.route(self)
 
         settle()
-        # A controller hung off its actuator that leaves a clash is placed
-        # from its wiring, with faces chosen again, as layout() would.
+        # A controller hung off its actuator that leaves a clash: lay out
+        # and route again without hanging.
         if self._hung and _clashes(self):
+            from pandid.layout.stages import is_control
+
             self._hang_refused = True
             try:
-                for _ in range(MAX_PLACEMENT_PASSES):
-                    select_faces(self)
-                    if not place_control(self):
-                        break
+                # Start the balloons afresh, as on a sheet never laid out.
+                for u in self.units:
+                    if is_control(u):
+                        u.frame = None
+                        if hasattr(u, "tap"):
+                            u.tap = None
+                self.layout(self._layout_engine)
                 settle()
             finally:
                 self._hang_refused = False

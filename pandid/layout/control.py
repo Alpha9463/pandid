@@ -115,10 +115,11 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     """Return the corner of a balloon hung off the one actuator it drives.
 
     An unpinned balloon that, with its lines, carries no attached
-    balloon, and whose signal lines drive exactly one placed valve's
-    actuator, stands :data:`ACTUATOR_OFFSET` out from that actuator,
-    square to its face. It steps out and swings as an attached balloon
-    does until it clears every blocked box.
+    balloon, has no hand-routed line, and whose signal lines drive
+    exactly one placed valve's actuator, stands
+    :data:`ACTUATOR_OFFSET` out from that actuator, square to its face.
+    It steps out and swings as an attached balloon does until it clears
+    every blocked box.
 
     Parameters
     ----------
@@ -150,6 +151,8 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
     hosts = {id(inst), *(id(s) for _, s in wired)}
     if any(id(getattr(u, "host", None)) in hosts for u in fs.units):
         return None
+    if any(s.route is not None and s.route.manual for _, s in wired):
+        return None
     driven = [s.dest.owner for p, s in wired if s.source is p and s.dest.name == "actuator"]
     if len(driven) != 1 or driven[0].frame is None:
         return None
@@ -166,7 +169,10 @@ def _actuator_spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
 
 
 def _clashes(fs: "Flowsheet") -> bool:
-    """Return whether two units overlap or a line crosses a unit.
+    """Return whether the routed sheet has a clash.
+
+    A clash is an error finding, a line through a unit, a slanted line,
+    unsettled placement, or a tap line through a unit other than its own.
 
     Parameters
     ----------
@@ -176,31 +182,21 @@ def _clashes(fs: "Flowsheet") -> bool:
     Returns
     -------
     bool
-        True if any unit boxes overlap, or any routed line crosses a unit
-        other than the balloons on it, counting its end units only away
-        from their nozzles.
+        True if the sheet has a clash.
     """
-    from itertools import combinations
-
-    from pandid.layout.attach import stream_path
-    from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
+    from pandid.layout.conflicts import segment_crosses_box
     from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
 
-    boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    if any(boxes_overlap(a, b, -_BODY_TOL) for (_, a), (_, b) in combinations(boxes, 2)):
+    codes = ("route-crosses-unit", "route-diagonal", "route-not-settled")
+    if any(i.severity == "error" or i.code in codes for i in fs.validate()):
         return True
-    for s in fs.streams:
-        if s.route is None:
-            continue
-        points = stream_path(s)
-        last = len(points) - 2
-        for k, (a, b) in enumerate(zip(points, points[1:])):
-            # The first and last legs meet their own unit at the nozzle.
-            ends = {s.source.owner} if k == 0 else set()
-            ends |= {s.dest.owner} if k == last else set()
-            if any(segment_crosses_box(a, b, box) for u, box in boxes
-                   if u not in ends and getattr(u, "host", None) is not s):
-                return True
+    boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    for inst, tap, centre in tap_lines(fs):
+        route = tap_route(inst, tap, centre)
+        if any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:])
+               for u, box in boxes if u is not inst and u is not inst.host):
+            return True
     return False
 
 

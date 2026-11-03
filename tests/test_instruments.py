@@ -1183,16 +1183,80 @@ def _cascade() -> Flowsheet:
     return fs
 
 
-@pytest.mark.parametrize("build", [_close_transmitter, _two_transmitters, _cascade])
+def _crossed_cascade() -> Flowsheet:
+    """Two turned valves, their controllers wired in cascade, and LT-1 and
+    PI-1 close by."""
+    fs = Flowsheet("fallback")
+    va = fs.add(U.Valve("VA", variant="control")).pin(x=300, y=500, orientation=270)
+    vb = fs.add(U.Valve("VB", variant="control")).pin(x=350, y=550, orientation=90)
+    lic = fs.add_instrument("LIC", 1)
+    fic = fs.add_instrument("FIC", 1)
+    fs.connect(lic.sig_out, va.actuator, kind="electric")
+    fs.connect(fic.sig_out, vb.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=450, y=500)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.connect(lic.signal_port("sig_out_2"), fic.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=vb, face="S", offset=60)
+    return fs
+
+
+def _tap_past_a_transmitter() -> Flowsheet:
+    """PI-1 hangs off a turned valve, near LT-1 which LIC-1 reads."""
+    fs = Flowsheet("tap")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300, orientation=180)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=250, y=350)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=valve, face="S", offset=100, angle=45)
+    return fs
+
+
+def _drawn_by_hand() -> Flowsheet:
+    """LIC-1's line to the actuator is drawn by hand from its east face."""
+    fs = Flowsheet("manual")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    lic.nozzle("sig_out", face="E")
+    fs.connect(lic.sig_out, valve.actuator, kind="electric").via(
+        [(284.25, 234.9), (312.2, 234.9), (312.2, 275)]
+    )
+    return fs
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        _close_transmitter,
+        _two_transmitters,
+        _cascade,
+        _crossed_cascade,
+        _tap_past_a_transmitter,
+        _drawn_by_hand,
+    ],
+)
 def test_a_hung_controller_that_leaves_a_clash_is_placed_from_its_wiring(
     build: Callable[[], Flowsheet],
 ) -> None:
-    """Hanging that leaves a line through a unit, or two units overlapping,
-    gives way to the placement from the controller's wiring."""
+    """Hanging that leaves a clash gives way to the placement from the
+    controller's wiring: no error, no line through a unit or on the
+    slant, and no tap line through a unit."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import tap_lines, tap_route
+
     fs = build()
     fs.route()
 
-    assert [i.code for i in fs.validate() if i.code in ("route-crosses-unit", "unit-overlap")] == []
+    codes = ("route-crosses-unit", "route-diagonal")
+    assert [i.code for i in fs.validate() if i.severity == "error" or i.code in codes] == []
+    for inst, tap, centre in tap_lines(fs):
+        route = tap_route(inst, tap, centre)
+        for u in fs.units:
+            if u is inst or u is inst.host or u.frame is None:
+                continue
+            box = unit_box(u, u.frame)
+            assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
