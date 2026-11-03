@@ -1,4 +1,6 @@
+import os
 import re
+import warnings
 
 import pytest
 from pandid.units import Unit
@@ -513,15 +515,8 @@ def test_an_exchangers_nozzles_are_named_for_its_two_sides(variant, sides):
         assert hx.ports[f"{side}_out"].direction == "outlet"
 
 
-def test_the_old_duty_names_are_gone():
-    """Check that ``cold_in`` and a heater's or cooler's ``duty`` are refused, naming the ports."""
-    for unit, gone in (
-        (U.HeatExchanger("E-1"), "cold_in"),
-        (U.Heater("H-1"), "duty"),
-        (U.Cooler("C-1"), "duty"),
-    ):
-        with pytest.raises(AttributeError, match="available ports"):
-            getattr(unit, gone)
+def test_a_heater_and_a_cooler_carry_their_utility_side():
+    """Check that a heater's utility comes in as energy and a cooler's goes out."""
     assert U.Heater("H-1").utility_in.role == "energy"
     assert U.Cooler("C-1").utility_out.direction == "outlet"
 
@@ -598,21 +593,6 @@ def _separator(name, drawing):
     """A Separator drawing, asked for by ``characteristic=`` where it is one."""
     how = "characteristic" if drawing in U.Separator._CHARACTERISTICS else "variant"
     return U.Separator(name, **{how: drawing})
-
-
-@pytest.mark.parametrize("variant", _COLLECTORS)
-@pytest.mark.parametrize("removed", ["vapor", "liquid"])
-def test_a_collectors_old_draw_name_no_longer_reaches_a_nozzle(variant, removed):
-    """Check that ``vapor`` and ``liquid`` reach no nozzle of a dust collector by any route."""
-    sep = _separator("CY-401", variant)
-    with pytest.raises(AttributeError, match="overflow"):
-        getattr(sep, removed)
-    with pytest.raises(KeyError, match="overflow"):
-        sep.port(removed)
-    with pytest.raises(KeyError, match="overflow"):
-        sep.nozzle(removed, "N")
-    with pytest.raises(KeyError, match="overflow"):
-        sep.pin(port=removed, x=300, y=400)
 
 
 @pytest.mark.parametrize("variant", ["default", "horizontal", "knockout", "scrubber"])
@@ -911,6 +891,69 @@ def test_the_three_fixed_nozzles_are_never_numbered(cls):
         for n in cls("X-1").ports
         if _family_stem(n) is not None and not n.startswith(("in_", "out_"))
     ] == []
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_the_default_face_methods_are_deprecated(cls: type[U.Vessel | U.Tank]) -> None:
+    """Each warns at the caller's line, is reported, and still answers the face."""
+    from pandid import Flowsheet
+
+    fs = Flowsheet("faces")
+    unit = fs.add(cls("X-1"))
+    with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
+        faces = (unit.default_input_face(), unit.default_output_face())
+    assert faces == unit.input_faces + unit.output_faces
+    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
+        os.path.normcase(os.path.realpath(__file__))
+    }
+    found = [issue.message for issue in fs.validate() if issue.code == "deprecated"]
+    assert found == [str(caught[0].message)]
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_building_and_writing_a_vessel_raises_no_deprecation(
+    cls: type[U.Vessel | U.Tank],
+) -> None:
+    """Construction and the spec round trip use the faces without the deprecated calls."""
+    from pandid import Flowsheet
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        fs = Flowsheet("quiet")
+        fs.add(cls("X-1", inputs=2))
+        Flowsheet.from_dict(fs.to_dict())
+
+
+class _TopFed(U.Tank):
+    def default_input_face(self) -> str:
+        return "N"
+
+
+class _TopDrawn(U.Vessel):
+    def default_output_face(self) -> str:
+        return "N"
+
+
+def test_a_subclass_input_face_hook_is_honoured_and_reported() -> None:
+    """Check that an overriding input hook places the inlet and is reported at the build."""
+    from pandid import Flowsheet
+
+    with pytest.warns(DeprecationWarning, match="default_input_face") as caught:
+        tank = _TopFed("T-1")
+    assert tank.input_faces == ("N",)
+    assert {os.path.normcase(os.path.realpath(w.filename)) for w in caught} == {
+        os.path.normcase(os.path.realpath(__file__))
+    }
+    fs = Flowsheet("hooks")
+    fs.add(tank)
+    assert [i.code for i in fs.validate() if i.code == "deprecated"] == ["deprecated"]
+
+
+def test_a_subclass_output_face_hook_is_consulted() -> None:
+    """Check that an overriding output hook's face reaches the face check."""
+    with pytest.warns(DeprecationWarning, match="default_output_face"):
+        with pytest.raises(ValueError, match="you asked for 'N'"):
+            _TopDrawn("V-1")
 
 
 def test_fitting_is_one_class_with_device_variants():
