@@ -546,12 +546,9 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     d, (px, py) = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot, want)
 
     if unit.kind in ("feed", "product"):
-        # An unmirrored feed's lead is 50 from the frame origin.
-        if unit.kind == "feed":
-            ax = frame.x if mirrored else frame.x + 50.0
-        else:
-            ax = frame.x + w if mirrored else frame.x
-        tip = (ax, frame.y + py)
+        # The port is the end of the flag's box that the line meets.
+        x0, _, x1, _ = unit_box(unit, frame)
+        tip = (x1 if (unit.kind == "feed") != mirrored else x0, frame.y + py)
         return ResolvedPort(tip, tip, d)
 
     point = (frame.x + px, frame.y + py)
