@@ -122,16 +122,33 @@ _LAYOUT_INPUTS = frozenset(
 
 
 class _NoSuchAttribute(AttributeError):
-    """Error for a missing attribute or port, worded only when shown."""
+    """Error for a missing attribute or port, worded only when shown.
 
-    def __init__(self, cls_name: str, where: str, name: str,
+    Parameters
+    ----------
+    cls_name : str
+        Name of the unit's class.
+    where : str
+        Tag of the unit.
+    name : str
+        Attribute asked for.
+    ports : Mapping[str, Port]
+        The unit's ports, listed in the message.
+    """
+
+    def __init__(self, cls_name: str, where: str, name: str,  # numpydoc ignore=GL08
                  ports: "Mapping[str, Port]") -> None:
-        """Store the parts of the message."""
         super().__init__(name)
         self._parts = (cls_name, where, name, ports)
 
     def __str__(self) -> str:
-        """Return the message, listing the unit's ports."""
+        """Return the message, listing the unit's ports.
+
+        Returns
+        -------
+        str
+            Message naming the attribute and the available ports.
+        """
         cls_name, where, name, ports = self._parts
         return (f"{cls_name} {where!r} has no attribute or port {name!r}; "
                 f"available ports: {sorted(ports)}")
@@ -179,7 +196,7 @@ class Unit:
     LAYOUT_CONFIDENCE, PLACES
         Deprecated; a subclass that sets either is reported.
     ONE_NOZZLE_MANY_RUNS : bool
-        Whether several streams may meet at one port.
+        Whether validation skips the check for ports drawn at one point.
     COMPOSITION : dict[str, Any]
         Composition keywords and their defaults.
     COMPOSITION_VARIANT : str
@@ -237,7 +254,13 @@ class Unit:
 
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
-        """Return PORTS from the nearest class that declares it."""
+        """Return PORTS from the nearest class that declares it.
+
+        Returns
+        -------
+        list[tuple[str, str, str]]
+            Port specs as ``(name, direction, role)``.
+        """
         for klass in cls.__mro__:
             if "PORTS" in klass.__dict__:
                 return list(klass.__dict__["PORTS"])
@@ -245,7 +268,18 @@ class Unit:
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
-        """Return a variant's ports, none if this class sets PORTS."""
+        """Return a variant's ports, none if this class sets PORTS.
+
+        Parameters
+        ----------
+        variant : str
+            Resolved variant.
+
+        Returns
+        -------
+        list[tuple[str, str, str]]
+            Port specs as ``(name, direction, role)``.
+        """
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._DEFAULT_PORTS)
 
     @classmethod
@@ -270,7 +304,13 @@ class Unit:
 
     @classmethod
     def _generic_class(cls) -> type["Unit"] | None:
-        """Return the ancestor that draws every variant of this kind."""
+        """Return the ancestor that draws every variant of this kind.
+
+        Returns
+        -------
+        type[Unit] or None
+            Nearest ancestor with no :attr:`VARIANTS` and the same kind.
+        """
         for klass in cls.__mro__:
             if issubclass(klass, Unit) and not klass.VARIANTS and klass.kind == cls.kind:
                 return klass
@@ -278,7 +318,20 @@ class Unit:
 
     @classmethod
     def _unknown_variant(cls, name: str, variant: str) -> ValueError:
-        """Return the error for a variant this class does not draw."""
+        """Return the error for a variant this class does not draw.
+
+        Parameters
+        ----------
+        name : str
+            Unit tag, for the message.
+        variant : str
+            Requested variant.
+
+        Returns
+        -------
+        ValueError
+            The error to raise.
+        """
         suggestion = suggest(variant, cls.VARIANTS)
         generic = cls._generic_class()
         escape = (
@@ -296,7 +349,7 @@ class Unit:
             f"whichever class draws it.{escape}"
         )
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -348,7 +401,24 @@ class Unit:
             fs._invalidate_layout()
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Set an attribute, marking layout stale for a layout input."""
+        """Set an attribute, marking layout stale for a layout input.
+
+        Parameters
+        ----------
+        name : str
+            Attribute name.
+        value : Any
+            New value.
+
+        Raises
+        ------
+        TypeError
+            If ``width`` or ``height`` is not a real number.
+        ValueError
+            If ``width`` or ``height`` is not positive and finite.
+        AttributeError
+            If the attribute is fixed at construction.
+        """
         if name in ("width", "height") and value is not None:
             where = self.__dict__.get("name", "?")
             check_real(value, f"{where}: {name}")
@@ -372,21 +442,50 @@ class Unit:
 
     @property
     def tag(self) -> str:
-        """Return the drawn tag; empty once a balloon carries it."""
+        """Return the drawn tag; empty once a balloon carries it.
+
+        Returns
+        -------
+        str
+            Tag, or ``""``.
+        """
         return "" if self.balloon is not None else self.name
 
     def repeats(self, other: "Unit") -> bool:
-        """Return whether this unit is another drawing of ``other``."""
+        """Return whether this unit is another drawing of ``other``.
+
+        Parameters
+        ----------
+        other : Unit
+            Unit with the same tag.
+
+        Returns
+        -------
+        bool
+            Whether the shared tag is allowed.
+        """
         return False
 
     @property
     def new_line_number(self) -> bool:
-        """Return whether a new line number starts after this unit."""
+        """Return whether a new line number starts after this unit.
+
+        Returns
+        -------
+        bool
+            Whether the line number breaks here.
+        """
         return self._new_line_number
 
     @new_line_number.setter
     def new_line_number(self, value: bool) -> None:
-        """Set the line-number break and renumber the sheet."""
+        """Set the line-number break and renumber the sheet.
+
+        Parameters
+        ----------
+        value : bool
+            Whether a new line number starts after this unit.
+        """
         self._new_line_number = value
         if self.flowsheet is not None:
             self.flowsheet._invalidate_layout()
@@ -394,7 +493,13 @@ class Unit:
 
     @property
     def pin_(self) -> Pin | None:
-        """Return the pin with ``x`` and ``y`` set to the corner."""
+        """Return the pin with ``x`` and ``y`` set to the corner.
+
+        Returns
+        -------
+        Pin or None
+            Placement intent, or ``None`` when unpinned.
+        """
         pin = self._pin
         if pin is None or not self._pin_ports:
             return pin
@@ -411,7 +516,13 @@ class Unit:
 
     @pin_.setter
     def pin_(self, value: Pin | None) -> None:
-        """Replace the placement, dropping any port relation."""
+        """Replace the placement and drop any port relation.
+
+        Parameters
+        ----------
+        value : Pin or None
+            New placement intent; ``None`` clears the placement.
+        """
         self._pin_ports = {}
         self._pin = value
         self._turn_stated = value is not None and value.orientation != 0
@@ -526,7 +637,23 @@ class Unit:
         return self
 
     def _pin_port(self, port_name: str) -> str:
-        """Return the real port name for a name given to :meth:`pin`."""
+        """Return the real port name for a name given to :meth:`pin`.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name or alias.
+
+        Returns
+        -------
+        str
+            Port name.
+
+        Raises
+        ------
+        KeyError
+            If the unit has no such port.
+        """
         canonical = self._canonical_port_name(port_name)
         if canonical not in self.ports:
             raise KeyError(
@@ -576,14 +703,49 @@ class Unit:
         return self
 
     def _check_face(self, port_name: str, face: str, options: list[str]) -> None:
-        """Raise ValueError if ``face`` is not in ``options``."""
+        """Raise if ``face`` is not one of ``options``.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name, for the message.
+        face : str
+            Requested face.
+        options : list[str]
+            Faces the port can take.
+
+        Raises
+        ------
+        ValueError
+            If ``face`` is not in ``options``.
+        """
         if face not in options:
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, options)
 
     def _add_port(self, name: str, direction: str, role: str) -> Port:
-        """Create a port and expose it as an attribute."""
+        """Create a port and expose it as an attribute.
+
+        Parameters
+        ----------
+        name : str
+            Port name.
+        direction : str
+            ``"inlet"`` or ``"outlet"``.
+        role : str
+            Port role, one of :data:`_VALID_ROLES`.
+
+        Returns
+        -------
+        Port
+            The new port.
+
+        Raises
+        ------
+        ValueError
+            If the name is taken or the role is unknown.
+        """
         if name in self.ports:
             raise ValueError(f"{type(self).__name__!r} already has a port named {name!r}")
         if role not in _VALID_ROLES:
@@ -597,11 +759,33 @@ class Unit:
         return port
 
     def has_another_port(self, port: "Port") -> bool:
-        """Return whether a connected port can take another stream."""
+        """Return whether a connected port can take another stream.
+
+        Parameters
+        ----------
+        port : Port
+            Port on this unit.
+
+        Returns
+        -------
+        bool
+            Whether the port belongs to a pool.
+        """
         return self._pool_of(port.name) is not None
 
     def another_port(self, port: "Port") -> "Port":
-        """Return a free member of ``port``'s pool, or ``port``."""
+        """Return a free member of ``port``'s pool, or ``port``.
+
+        Parameters
+        ----------
+        port : Port
+            Port on this unit.
+
+        Returns
+        -------
+        Port
+            Free pool member, or ``port`` when it has no pool.
+        """
         base = self._pool_of(port.name)
         if base is None:
             return port
@@ -609,7 +793,22 @@ class Unit:
         return self._next_member(base, first.direction, first.role)
 
     def _next_member(self, base: str, direction: str, role: str) -> "Port":
-        """Return a free pool member, adding one if all are used."""
+        """Return a free pool member, adding one if all are used.
+
+        Parameters
+        ----------
+        base : str
+            Pool name.
+        direction : str
+            Direction of a new member.
+        role : str
+            Role of a new member.
+
+        Returns
+        -------
+        Port
+            Free member.
+        """
         members = self._pool_members(base)
         for member in members:
             if member.stream is None:
@@ -620,15 +819,48 @@ class Unit:
         return self._add_port(f"{base}_{n}", direction, role)
 
     def _pool_of(self, port_name: str) -> str | None:
-        """Return the pool a port belongs to, or ``None``."""
+        """Return the pool a port belongs to, or ``None``.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        str or None
+            Pool name.
+        """
         return None
 
     def _pool_members(self, base: str) -> list["Port"]:
-        """Return the ports in a pool, in port order."""
+        """Return the ports in a pool, in port order.
+
+        Parameters
+        ----------
+        base : str
+            Pool name.
+
+        Returns
+        -------
+        list[Port]
+            Pool members.
+        """
         return [p for name, p in self.ports.items() if self._pool_of(name) == base]
 
     def _mint_port(self, name: str) -> "Port | None":
-        """Create the named pool member, or return ``None``."""
+        """Create the named pool member, or return ``None``.
+
+        Parameters
+        ----------
+        name : str
+            Member name, such as ``"sig_in_3"``.
+
+        Returns
+        -------
+        Port or None
+            New member, or ``None`` if the name is in no pool.
+        """
         base = self._pool_of(name)
         if base is None:
             return None
@@ -636,15 +868,48 @@ class Unit:
         return self._add_port(name, first.direction, first.role)
 
     def _symbol_anchor(self, port_name: str) -> str:
-        """Return the name the symbol anchors a port under."""
+        """Return the name the symbol anchors a port under.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        str
+            Pool name, :attr:`PORT_ANCHORS` entry or the port name.
+        """
         return self._pool_of(port_name) or type(self).PORT_ANCHORS.get(port_name, port_name)
 
     def _series_pin(self, port_name: str) -> float | None:
-        """Return a port's fraction along its series, or ``None``."""
+        """Return a port's fraction along its series, or ``None``.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        float or None
+            Fraction along the series, or ``None`` if unpinned.
+        """
         return None
 
     def _series_members(self, series: "PortSeries") -> dict[str, int]:
-        """Return the ports in a series and their order."""
+        """Return the ports in a series and their order.
+
+        Parameters
+        ----------
+        series : PortSeries
+            Symbol port series.
+
+        Returns
+        -------
+        dict[str, int]
+            Port name to index within the series.
+        """
         cache = self.__dict__.setdefault("_series_members_cache", {})
         members = cache.get(id(series))
         if members is None:
@@ -653,7 +918,18 @@ class Unit:
         return members
 
     def _canonical_port_name(self, name: str) -> str:
-        """Return the real port name for a name or alias."""
+        """Return the real port name for a name or alias.
+
+        Parameters
+        ----------
+        name : str
+            Port name or alias.
+
+        Returns
+        -------
+        str
+            Port name, or ``name`` when nothing matches.
+        """
         if name in self.ports:
             return name
         aliased = getattr(self, name, None)
@@ -686,14 +962,31 @@ class Unit:
         )
 
     def __repr__(self) -> str:
-        """Return ``ClassName('tag')``."""
+        """Return ``ClassName('tag')``.
+
+        Returns
+        -------
+        str
+            Representation.
+        """
         return f"{type(self).__name__}({self.name!r})"
 
     # Hidden from type checkers.
     if not TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any:
-            """Raise an AttributeError that lists the unit's ports."""
+            """Raise an AttributeError that lists the unit's ports.
+
+            Parameters
+            ----------
+            name : str
+                Attribute asked for.
+
+            Raises
+            ------
+            AttributeError
+                Always; it lists the ports for a public name.
+            """
             ports = self.__dict__.get("ports")
             if ports is not None and not name.startswith("_"):
                 where = self.__dict__.get("name", "?")
