@@ -49,8 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives
   exactly one valve's `actuator` stands 100 out from it, on its axis, or at
   the nearest clear standoff, when the default router runs. If no standoff
-  is clear, or the routed sheet then has an error or a line through a unit
-  or a tag, the sheet is routed as it was before this rule.
+  is clear, or hanging adds any finding or any line or balloon over a unit
+  or tag, the sheet is routed as it was before this rule.
 
 ### Deprecated
 

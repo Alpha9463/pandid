@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from pandid.layout.layered import COL_GAP, ROW_GAP
 
 if TYPE_CHECKING:
+    from collections import Counter
+
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
 
@@ -217,12 +219,8 @@ def _halos(fs: "Flowsheet") -> list[_Box]:
             if id(r) not in bodies]
 
 
-def _clashes(fs: "Flowsheet") -> bool:
-    """Return whether the routed sheet has a clash.
-
-    A clash is an error finding, a unit over a tag halo, a line through
-    a unit or a tag halo, a slanted line, unsettled placement, or a tap
-    line through a unit other than its own.
+def _flaws(fs: "Flowsheet") -> "Counter[str]":
+    """Count the routed sheet's findings and drawn clashes.
 
     Parameters
     ----------
@@ -231,34 +229,47 @@ def _clashes(fs: "Flowsheet") -> bool:
 
     Returns
     -------
-    bool
-        True if the sheet has a clash.
+    Counter[str]
+        Each validate() finding by code, plus units on tag halos, lines
+        through tag halos, and tap lines through units or tag halos.
     """
+    from collections import Counter
+
     from pandid.layout.attach import stream_path
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
 
-    codes = ("route-crosses-unit", "route-diagonal", "route-not-settled")
-    if any(i.severity == "error" or i.code in codes for i in fs.validate()):
-        return True
+    def crosses(points: list, box: _Box) -> bool:
+        """Return whether a polyline crosses a box.
+
+        Parameters
+        ----------
+        points : list
+            Polyline points.
+        box : _Box
+            Box to test.
+
+        Returns
+        -------
+        bool
+            True if any segment crosses the box.
+        """
+        return any(segment_crosses_box(a, b, box) for a, b in zip(points, points[1:]))
+
+    flaws = Counter(i.code for i in fs.validate())
     halos = _halos(fs)
     boxes = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    if any(boxes_overlap(box, h, -_BODY_TOL) for _, box in boxes for h in halos):
-        return True
-    for s in fs.streams:
-        if s.route is None:
-            continue
-        points = stream_path(s)
-        if any(segment_crosses_box(a, b, h) for a, b in zip(points, points[1:])
-               for h in halos):
-            return True
+    flaws["unit-on-tag"] = sum(boxes_overlap(box, h, -_BODY_TOL)
+                               for _, box in boxes for h in halos)
+    lines = [stream_path(s) for s in fs.streams if s.route is not None]
+    flaws["line-through-tag"] = sum(crosses(points, h) for points in lines for h in halos)
     for inst, tap, centre in tap_lines(fs):
         route = tap_route(inst, tap, centre)
-        if any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:])
-               for u, box in boxes if u is not inst and u is not inst.host):
-            return True
-    return False
+        flaws["tap-through-unit"] += sum(crosses(route, box) for u, box in boxes
+                                         if u is not inst and u is not inst.host)
+        flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
+    return flaws
 
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,

@@ -1516,6 +1516,26 @@ def test_a_balloon_added_after_hanging_is_laid_out_from_the_unhung_sheet() -> No
     assert min(gap(a, b) for a, b in zip(points, points[1:])) < 0.5
 
 
+def test_hanging_adds_no_tap_line_through_a_tag_halo() -> None:
+    """PI-1's tap, on a balloon wired to the hung controller, runs through
+    no more tag halos than without hanging."""
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.layout.control import _halos
+    from pandid.render.svg import tap_lines, tap_route
+
+    fs, lic, _ = _hung_controller()
+    xi = fs.add_instrument("XI", 1)
+    fs.connect(lic.signal_port("sig_out_2"), xi.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=xi, face="N", offset=100)
+    fs.add(U.Pump("P-101", width=44, height=44, label_pos="left")).pin(x=275, y=28)
+    fs.route()
+
+    for inst, tap, centre in tap_lines(fs):
+        route = tap_route(inst, tap, centre)
+        for halo in _halos(fs):
+            assert not any(segment_crosses_box(a, b, halo) for a, b in zip(route, route[1:]))
+
+
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
     from pandid.render.symbols import default_registry
 

@@ -2062,7 +2062,7 @@ class Flowsheet:
         if router is None:
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES
-        from pandid.layout.control import _clashes, _hangable, place_control
+        from pandid.layout.control import _flaws, _hangable, place_control
 
         def place() -> None:
             """Place balloons and re-route until nothing moves."""
@@ -2082,10 +2082,11 @@ class Flowsheet:
         # if the sheet stays clean. The check assumes the default router.
         if type(router) is DefaultRouter and any(_hangable(self, u) for u in self.units):
             unhung = self._geometry()
+            before = _flaws(self)
             self._may_hang, self._hung = True, set()
             try:
                 place()
-                clash = _clashes(self)
+                clash = any(n > before[k] for k, n in _flaws(self).items())
             except Exception:
                 clash = True
             finally:
