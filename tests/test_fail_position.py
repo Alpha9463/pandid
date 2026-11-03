@@ -21,25 +21,11 @@ import pytest
 from pandid import Flowsheet, spec, units
 from pandid.render.symbols import FAIL_ACTUATED, FAIL_POSITIONS, fail_marking
 from pandid.render.symbols import default_registry as registry
+from test_normally_closed import _line
 
 # Every valve variant the package draws, split by whether it has an actuator.
 ALL_VARIANTS = sorted({v for k, v in registry._symbols if k == "valve"})
 UNACTUATED = sorted(set(ALL_VARIANTS) - FAIL_ACTUATED)
-
-
-def _line(*valves):
-    """A feed -> valves -> product run, laid out and rendered."""
-    fs = Flowsheet("fail positions")
-    feed = fs.add(units.Feed("FEED"))
-    prev = feed.outlet
-    for valve in valves:
-        fs.add(valve)
-        fs.connect(prev, valve.inlet)
-        prev = valve.outlet
-    product = fs.add(units.Product("PROD"))
-    fs.connect(prev, product.inlet)
-    fs.layout()
-    return fs.to_svg()
 
 
 # --------------------------------------------------------------------- the API
