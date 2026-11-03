@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from pandid.layout.layered import COL_GAP, ROW_GAP
@@ -17,6 +18,9 @@ _Box = tuple[float, float, float, float]
 
 #: Clearance the free-spot search tests around placed unit boxes.
 CLEARANCE = 30.0
+
+#: Distance a tap may lie from its host's line or face.
+_TAP_TOL = 0.01
 
 #: Lattice spacing of the free-spot search, in drawing units.
 STEP = 25.0
@@ -231,12 +235,14 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
     -------
     Counter[str]
         Each validate() finding by code, plus units on tag halos, lines
-        through tag halos, tap lines through units or tag halos, and runs
-        two lines or tap lines share.
+        through tag halos, tap lines through units or tag halos, runs two
+        lines or tap lines share, and taps off their host's drawn line or
+        face.
     """
     from collections import Counter
 
-    from pandid.layout.attach import stream_path
+    from pandid.layout.attach import _anchor, is_attached, logical_stream_path, stream_path
+    from pandid.streams import Stream
     from pandid.layout.conflicts import _BODY_TOL, boxes_overlap, segment_crosses_box
     from pandid.portgeom import unit_box
     from pandid.render.svg import tap_lines, tap_route
@@ -275,6 +281,19 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
     flaws["line-on-line"] = sum(
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
+    for u in fs.units:
+        tap = getattr(u, "tap", None)
+        if tap is None or not is_attached(u):
+            continue
+        if isinstance(u.host, Stream):
+            points = logical_stream_path(u.host)
+            off = not any(min(a[0], b[0]) - _TAP_TOL <= tap[0] <= max(a[0], b[0]) + _TAP_TOL
+                          and min(a[1], b[1]) - _TAP_TOL <= tap[1] <= max(a[1], b[1]) + _TAP_TOL
+                          for a, b in zip(points, points[1:]))
+        else:
+            anchor = _anchor(u)
+            off = anchor is None or math.dist(anchor[0], tap) > _TAP_TOL
+        flaws["tap-off-line"] += off
     return flaws
 
 

@@ -2498,6 +2498,56 @@ def test_an_unsettled_hang_is_not_kept():
     ), (tt.tap, points)
 
 
+def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
+    """Keep an unsettled hang whose tap lies on its line where the unhung one does not.
+
+    Returns
+    -------
+    None
+        TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("hang rollback")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=400)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=35, angle=30)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=500, y=300, orientation=270)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)
+
+
+def test_routing_again_draws_the_same_sheet():
+    """Route a sheet whose keep-off attempt is kept twice, to the same drawing.
+
+    Returns
+    -------
+    None
+        The second route() gives the first route()'s drawing.
+    """
+    fs = Flowsheet("second route")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=50, angle=90)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=35, angle=135)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+    first = fs.to_svg(check=False)
+    fs.route()
+
+    assert fs.to_svg(check=False) == first
+
+
 def test_a_run_that_doubles_back_is_two_runs():
     """Split a straight run where it reverses along its track.
 
