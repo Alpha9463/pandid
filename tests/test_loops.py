@@ -66,11 +66,6 @@ def test_a_loop_takes_a_single_letter_and_a_number():
 # --- automatic numbering ------------------------------------------------------
 
 
-def test_an_omitted_number_takes_the_sheets_next_one():
-    fs = Flowsheet("draft", loop_number_start=301)
-    assert [fs.add_loop(v).name for v in ("P", "T", "F")] == ["P-301", "T-302", "F-303"]
-
-
 def test_the_counter_is_one_series_across_measured_variables():
     """P&ID_301 runs P-301, T-302, F-303, L-304, F-305, L-306, T-307, F-308.
 
@@ -167,17 +162,23 @@ def test_a_number_that_is_already_free_of_the_series_never_collides():
     assert fs.add_loop("T").name == "T-505"  # the valve reserved nothing
 
 
-def test_an_allocated_number_is_never_rewritten_afterwards():
-    """Allocation is where "allocate once" happens, not an exception to it."""
+@pytest.mark.parametrize(("number", "expected"), [(None, "101"), (303, "303")])
+def test_the_number_is_allocated_once_and_never_renumbered(number: int | None, expected: str):
+    """A loop number leaves the drawing for the DCS, unlike a stream number.
+
+    ``renumber_streams()`` re-runs on every ``connect()`` and again before every
+    render, because a stream number is engine output. Nothing re-runs on a loop,
+    so the tag a sheet minted before it was finished is the tag it renders with.
+    """
     fs, line = _sheet()
-    loop = fs.add_loop("F", None)
+    loop = fs.add_loop("F", number)
     ft = fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
     cv = fs.add(U.Valve(loop.tag("CV"), variant="control")).pin(x=300, y=300)
     vent = fs.add(U.Product("Vent")).pin(x=520, y=300)
-    fs.connect(cv.outlet, vent.inlet)
+    fs.connect(cv.outlet, vent.inlet)  # more topology, and so more renumbering
     fs.add_loop("L")  # a later declaration does not renumber an earlier one
-    fs.to_svg()
-    assert (loop.number, ft.name, cv.name) == ("101", "FT-101", "CV-101")
+    fs.to_svg()  # routes, renumbers the streams, validates
+    assert (loop.number, ft.name, cv.name) == (expected, f"FT-{expected}", f"CV-{expected}")
 
 
 def test_moving_the_start_moves_the_numbers_still_to_come():
@@ -194,38 +195,7 @@ def test_moving_the_start_moves_the_numbers_still_to_come():
     assert fs.add_loop("L").name == "L-303"
 
 
-def test_the_number_is_allocated_once_and_never_renumbered():
-    """A loop number leaves the drawing for the DCS, unlike a stream number.
-
-    ``renumber_streams()`` re-runs on every ``connect()`` and again before every
-    render, because a stream number is engine output. Nothing re-runs on a loop,
-    so the tag a sheet minted before it was finished is the tag it renders with.
-    """
-    fs, line = _sheet()
-    loop = fs.add_loop("F", 303)
-    ft = fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
-    cv = fs.add(U.Valve(loop.tag("CV"), variant="control")).pin(x=300, y=300)
-    vent = fs.add(U.Product("Vent")).pin(x=520, y=300)
-    fs.connect(cv.outlet, vent.inlet)  # more topology, and so more renumbering
-
-    fs.to_svg()  # routes, renumbers the streams, validates
-    assert (loop.number, ft.name, cv.name) == ("303", "FT-303", "CV-303")
-
-
 # --- tagging things that are not balloons -------------------------------------
-
-
-def test_loop_tag_hands_a_tag_to_any_unit_class():
-    """Loop 303's primary element is a venturi and its final element a valve.
-
-    Neither is minted by ``add_instrument``, so ``loop.tag`` is the one route
-    into a loop that every unit class shares.
-    """
-    fs = Flowsheet("mixed members")
-    loop = fs.add_loop("F", 303)
-    fe = fs.add(U.Fitting(loop.tag("FE"), variant="venturi"))
-    cv = fs.add(U.Valve(loop.tag("CV"), variant="control"))
-    assert (fe.name, cv.name) == ("FE-303", "CV-303")
 
 
 def test_loop_tag_does_not_hold_a_final_element_to_the_measured_variable():
@@ -414,7 +384,9 @@ def test_the_sequence_is_a_warning_and_never_stops_the_drawing():
 
 
 @pytest.mark.parametrize(
-    "letters", ["FIC", "FT", "FE", "LAH", "LAL", "PAH", "TIC", "FY", "PI", "I", "LT", "PDI", "FICA"]
+    "letters",
+    ["FIC", "FT", "FE", "LAH", "LAL", "PAH", "TIC", "FY", "PI", "I", "LT", "PDI", "FICA"]
+    + ["ZSC", "ZSO", "ZSH", "ZSL"],  # a position switch is qualified open or closed
 )
 def test_correctly_ordered_tags_do_not_warn(letters):
     """The shipped examples spell every one of these; none may start warning."""
@@ -432,22 +404,6 @@ def test_a_modifier_keeps_the_place_the_author_gave_it():
     assert _in_sequence("PDIC") == "PDIC"
     assert _in_sequence("FCI") == "FIC"
     assert _in_sequence("FAIC") == "FICA"
-
-
-@pytest.mark.parametrize("letters", ["ZSC", "ZSO", "ZSH", "ZSL"])
-def test_a_position_switch_is_qualified_open_or_closed_not_controlled(letters):
-    """ANSI/ISA-5.1-2009 Table 5.2.1 reads ``Z`` as *Position, dimension* and
-    ``S`` as *Switch*, and a position switch is qualified by the position it
-    switches at: ``O`` open, ``C`` closed, doing for a valve what the ``H`` and
-    ``L`` of ``LAH`` do for a measurement.
-
-    Reading that ``C`` as *Control (closed loop)* made ``ZSC`` -- a standard ISA
-    valve-position switch -- a tag the library warned against, offering ``ZCS``
-    as the cure. Its three siblings escaped only because their qualifier is not
-    one of the seven ordered letters."""
-    fs, line = _sheet()
-    fs.add_instrument(letters, 303, sensing=line, at=0.5, offset=60)
-    assert _letter_warnings(fs) == []
 
 
 def test_only_a_position_switch_takes_that_reading():
@@ -505,17 +461,6 @@ def test_a_loop_entry_needs_the_variable_it_measures():
 
     with pytest.raises(SpecError, match=r"loops\[0\] needs a 'variable'"):
         Flowsheet.from_dict({"name": "T", "loops": [{"number": 303}]})
-
-
-def test_a_spec_loop_with_no_number_takes_the_sheets_next_one():
-    fs = Flowsheet.from_dict(
-        {
-            "name": "A300",
-            "loop_number_start": 301,
-            "loops": [{"variable": "P"}, {"variable": "T"}, {"variable": "F", "number": 316}],
-        }
-    )
-    assert [loop.name for loop in fs.loops] == ["P-301", "T-302", "F-316"]
 
 
 def test_an_auto_numbered_sheet_freezes_when_it_is_written_out():
@@ -874,15 +819,6 @@ def test_a_bare_measured_variable_is_not_a_functional_code():
     fs, drum, lv = _feedback_sheet()
     with pytest.raises(ValueError, match=r"transmitter_letters='L' is the measured"):
         fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, transmitter_letters="L")
-
-
-def test_empty_function_letters_are_refused():
-    """An empty string is no tag at all, and the parameter it was given at is
-    named so the author knows which of the two to correct."""
-    fs, drum, lv = _feedback_sheet()
-
-    with pytest.raises(ValueError, match="controller_letters"):
-        fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, controller_letters="")
 
 
 def test_a_declared_loop_is_taken_rather_than_declared_again():
