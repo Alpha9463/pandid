@@ -1,34 +1,11 @@
-"""The valve's two axes: what the body is, and what strokes it.
-
-Issue #136. ``Valve(variant="control")`` drew a Saunders body with nothing on
-top of it -- a hand valve with a weir in it -- while the drawing that carried a
-diaphragm actuator answered to ``pneumatic``, the signal medium. So the variant
-an engineer types for a control valve drew the one thing a control valve cannot
-be without, and the variant that drew it correctly was the one nobody would look
-for.
-
-**ISO 15519-2:2015 Table 5** (p. 19) settles that this is a defect and not a
-style: it counts the **specific** symbols for process equipment, prime movers,
-valves, actuators and connections among the **basic** information for a P&ID.
-``professional_examples/P&ID_301.pdf`` draws the dome on all six of its control
-valves.
-
-**Table A.3** of the same standard is where the two axes come from. It registers
-the bowtie on its own (A.3.01, 2101A), registers the actuators on their own
-(A.3.40-A.3.45), and then registers the control valve as the two together
-(A.3.20, the general valve drawn with a general actuator on it, carrying 2101A,
-210A and P050B at once).
-"""
+"""Check the valve's two axes: what the body is, and what strokes it."""
 
 import pytest
 
 from pandid import Flowsheet, devices, units as U
 from pandid.render.symbols import ACTUATED, ACTUATORS, default_registry
 
-# The dome and its stem, out of the "Pneumatic Operated" stencil: two quarter
-# arcs closing on the body's crown, then the stem down into the body. Matched as
-# artwork rather than as a variant name, because the whole of #136 is that the
-# name and the drawing had come apart.
+# The dome and its stem from the "Pneumatic Operated" stencil.
 _DOME = "A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0"
 _STEM = "M 49.0 20.0 L 49.0 49.0"
 
@@ -41,33 +18,29 @@ def _art(variant):
 
 
 def test_a_control_valve_draws_an_actuator():
-    """The whole of #136, in one assertion."""
+    """Check that a control valve draws a diaphragm dome on a stem."""
     svg = _art("control")
     assert _DOME in svg, "no diaphragm dome on the variant named 'control'"
     assert _STEM in svg, "a dome with no stem is not mounted on anything"
 
 
 def test_the_actuator_stands_above_the_body_rather_than_inside_it():
-    """A Saunders weir is *in* the bowtie; an actuator sits on top of it, and the
-    difference is whether the symbol is 15 tall or 19.8."""
+    """Check that the control valve's actuator stands above the body and the run."""
     sym = default_registry.get("valve", "control")
     assert (sym.width, sym.height) == (24.5, 19.8)
-    # The run passes through the body, which is under the dome -- so the nozzles
-    # are below the middle of the box, not on it.
+    # The run passes through the body under the dome, below the middle of the box.
     assert sym.ports["inlet"][1] == sym.ports["outlet"][1] == 12.4
     assert sym.ports["inlet"][1] > sym.height / 2
 
 
 def test_the_signal_still_lands_on_the_crown():
-    """Where a controller's output terminates is the top of the actuator, which
-    is the top of the symbol whether or not an actuator is drawn there."""
+    """Check that the actuator nozzle is at the top of the symbol."""
     sym = default_registry.get("valve", "control")
     assert sym.ports["actuator"] == (12.2, 0.0)
 
 
 def test_the_old_drawing_keeps_its_place_under_its_own_name():
-    """A weir under a diaphragm is a real valve body. What it is not is a
-    control valve, so it is a body style like any other."""
+    """Check that the Saunders body draws its weir and no operator."""
     saunders = _art("saunders")
     assert _DOME not in saunders, "the Saunders body draws no operator"
     assert "A 25.0 25.0 0.0 0 1 69.0 18.0" in saunders, "the weir arc, inside the body"
@@ -87,8 +60,7 @@ def test_the_body_and_the_actuator_are_asked_for_separately():
 
 
 def test_control_is_the_shorthand_for_the_pairing_every_sheet_draws():
-    """``variant="control"`` and the pair spelled out are one drawing, so an
-    engineer who types the obvious thing gets the complete valve."""
+    """Check that ``control`` is the general body with a diaphragm."""
     assert (
         U.Valve("CV-1", variant="control").variant
         == U.Valve("CV-2", variant="default", actuator="diaphragm").variant
@@ -96,8 +68,7 @@ def test_control_is_the_shorthand_for_the_pairing_every_sheet_draws():
 
 
 def test_a_bare_body_is_still_a_bare_body():
-    """The actuator is not defaulted onto anything. A drawing that does not say
-    what strokes the valve is the honest drawing for a hand valve in a line."""
+    """Check that a body with no actuator draws none."""
     assert U.Valve("HV-1", variant="globe").variant == "globe"
     assert _DOME not in _art("globe")
 
@@ -109,10 +80,7 @@ def test_every_pairing_names_a_drawing_that_exists(body, actuator):
 
 
 def test_a_pairing_the_stencil_set_cannot_draw_is_refused():
-    """The draw.io set fuses body and operator into one shape, so a globe under
-    a diaphragm is not a drawing that exists. Refused, and the refusal lists
-    what does -- the reader is holding a body the set draws and an actuator it
-    draws, and has no way to know which of the two is the reason."""
+    """Check that a pairing with no drawing is refused, listing the pairings there are."""
     with pytest.raises(ValueError, match=r"no symbol draws a 'globe' body"):
         U.Valve("CV-1", variant="globe", actuator="diaphragm")
     with pytest.raises(ValueError, match=r"variant='butterfly', actuator='diaphragm'"):
@@ -125,21 +93,14 @@ def test_an_unknown_actuator_names_the_ones_there_are():
 
 
 def test_a_pairing_cannot_be_given_a_different_operator():
-    """Naming a *second* operator is the contradiction, and it still raises.
-
-    Two operators and one drawing: the author meant one of them and this package
-    cannot tell which. The message names the one the variant already draws, since
-    that is the half the reader did not type.
-    """
+    """Check that a pairing given another operator is refused, naming its own."""
     with pytest.raises(
         ValueError, match=r"variant 'control' already draws a valve with a 'diaphragm' operator"
     ):
         U.Valve("CV-1", variant="control", actuator="motor")
 
 
-#: ``(variant, actuator)`` for every pairing, read back out of :data:`ACTUATED`
-#: rather than typed here: the agreement rule is *the same table*, in the other
-#: direction, so a test with its own copy of it would agree with a broken rule.
+#: ``(variant, actuator)`` for every pairing, read out of :data:`ACTUATED`.
 _FITTED = sorted({(drawn, act) for (_, act), drawn in ACTUATED.items()})
 _MISMATCHED = sorted(
     (drawn, act)
@@ -161,15 +122,13 @@ def test_a_pairing_and_somebody_else_s_operator_raise(variant, actuator):
 
 
 def test_the_actuator_is_keyword_only():
-    """Positionally it would land in ``width``, which is a silent wrong drawing
-    rather than an error."""
+    """Check that ``actuator`` is keyword-only."""
     with pytest.raises(TypeError):
         U.Valve("CV-1", "gate", "diaphragm")
 
 
 def test_the_pairing_is_not_stored_beside_the_drawing():
-    """One fact, one place. The variant is what the sheet is issued with, so a
-    round trip through a spec keeps the drawing and not the spelling."""
+    """Check that a spec reads a pairing back as its drawing."""
     from pandid import spec
 
     fs = Flowsheet("round trip")
@@ -179,10 +138,7 @@ def test_the_pairing_is_not_stored_beside_the_drawing():
 
 
 def test_the_agreeing_pair_round_trips_too():
-    """A spec has one axis, ``variant``, and never carried ``actuator``: the pair
-    is a spelling and only the drawing is written out. So the valve an engineer
-    typed both halves of comes back as the pairing, and reading a sheet back is
-    not where a legal constructor call turns into a refused one."""
+    """Check that a pairing with its own operator writes only the variant and reads back."""
     from pandid import spec
 
     fs = Flowsheet("round trip")
@@ -197,9 +153,7 @@ def test_the_agreeing_pair_round_trips_too():
 
 
 def test_an_actuated_valve_may_say_where_it_fails():
-    """ANSI/ISA-5.1 note 5.3.4(10) scopes the failure symbols to control valves
-    and actuators, and now the drawing agrees with the list: everything that
-    takes a ``fail`` has a powered actuator drawn on it."""
+    """Check that an actuated valve takes ``fail=``."""
     assert U.Valve("CV-1", variant="gate", actuator="diaphragm", fail="closed").fail == "closed"
     assert U.Valve("CV-2", variant="butterfly", actuator="diaphragm", fail="open").fail == "open"
 
@@ -211,24 +165,20 @@ def test_a_handwheel_is_an_operator_and_not_an_actuator():
 
 
 def test_a_control_valve_is_still_refused_the_normally_closed_mark():
-    """PIP PIC001 4.2.2.10. It was refused on the strength of being a control
-    valve while drawing something else; it is refused now on the strength of the
-    drawing."""
+    """Check that an actuated valve refuses ``normal_position="closed"``."""
     with pytest.raises(ValueError, match=r"4\.2\.2\.10"):
         U.Valve("CV-1", variant="gate", actuator="diaphragm", normal_position="closed")
 
 
 def test_the_saunders_body_takes_the_letters_rather_than_the_fill():
-    """Its weir is inside the outline and a filled body swallows it, which is
-    clause 4.2.2.8's case."""
+    """Check that a normally closed Saunders valve is marked with the letters NC."""
     fs = Flowsheet("nc")
     fs.add(U.Valve("HV-1", variant="saunders", normal_position="closed")).pin(x=100, y=100)
     assert ">NC</text>" in fs.to_svg()
 
 
 def test_the_device_class_draws_the_actuator_too():
-    """``ControlValve()`` with no variant at all is the shortest way to type a
-    control valve, and it is the same drawing."""
+    """Check that ``ControlValve`` resolves to the actuated drawings."""
     assert devices.ControlValve("CV-1").variant == "control"
     assert (
         devices.ControlValve("CV-2", variant="butterfly", actuator="diaphragm").variant
@@ -237,10 +187,7 @@ def test_the_device_class_draws_the_actuator_too():
 
 
 def test_a_device_class_takes_the_actuator_its_own_name_implies():
-    """``VARIANT_ALIASES`` is applied *after* the pair is resolved, so a device
-    class's ``default`` reaches ``_resolve`` as the bare body and the agreement
-    rule never sees it. What it does see is an author who named the class and the
-    variant and the actuator, all three saying the same thing."""
+    """Check that a device class accepts the actuator its name implies."""
     assert devices.ControlValve("CV-1", actuator="diaphragm").variant == "control"
     assert (
         devices.ControlValve("CV-2", variant="control", actuator="diaphragm").variant == "control"
@@ -255,10 +202,7 @@ def test_a_device_class_takes_the_actuator_its_own_name_implies():
 
 
 def test_the_medium_is_no_longer_a_kind_of_valve():
-    """``pneumatic`` named a signal medium rather than a body, and by 0.1.2
-    drew what ``control`` draws. It was retired in 0.1.2 and is gone: the
-    registry has no such artwork, and says so where it says so for any other
-    variant it does not have."""
+    """Check that ``variant="pneumatic"`` is an unknown valve variant."""
     fs = Flowsheet("removed")
     fs.add(U.Valve("CV-1", variant="pneumatic")).pin(x=100, y=100)
     with pytest.raises(ValueError, match="valve has no variant 'pneumatic'"):
@@ -266,15 +210,11 @@ def test_the_medium_is_no_longer_a_kind_of_valve():
 
 
 def test_the_compound_body_name_survives_the_same_argument():
-    """``butterfly_pneumatic`` names a *body* with an actuator on it, which is a
-    valve you can point at on a rack, and it is the only spelling for its
-    drawing. A sweep over every variant carrying the word would have taken it
-    with the one that went."""
+    """Check that ``butterfly_pneumatic`` is still a variant."""
     assert U.Valve("XV-1", variant="butterfly_pneumatic").variant == "butterfly_pneumatic"
 
 
 def test_the_actuator_vocabulary_is_what_can_be_drawn():
-    """A name that always raises is a trap rather than an API, so the list is
-    exactly the operators valves.xml ships artwork for."""
+    """Check that every actuator name has a drawing."""
     assert set(ACTUATORS) == {a for _, a in ACTUATED}
     assert "piston" not in ACTUATORS

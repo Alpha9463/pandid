@@ -1,13 +1,4 @@
-"""The custom unit operation documented in ``docs/api.md``, run end to end.
-
-The docs tell a user to subclass :class:`~pandid.units.Unit`, register a
-:class:`~pandid.render.symbols.Symbol` for its ``kind``, and draw the sheet. This
-module is that page as code: if the workflow stops working, the documentation is
-wrong and this suite says so.
-
-The symbol is registered by a fixture rather than at import, so the registry the
-rest of the suite sees is the shipped one.
-"""
+"""Run the custom unit workflow documented in ``docs/api.md`` end to end."""
 
 import pytest
 
@@ -17,8 +8,7 @@ from pandid.portgeom import port_point
 from pandid.render.symbols import Symbol, default_registry
 from pandid.spec import SpecError
 
-# Straight sides on a conical bottom: the feed enters the shell wall, the mother
-# liquor leaves the opposite one, and the crystals fall out of the cone.
+# Straight sides on a cone: feed and mother liquor at the walls, crystals out the bottom.
 CRYSTALLISER_SVG = (
     '<g id="sym_crystalliser">'
     '<path d="M 5 5 L 5 45 L 35 65 L 45 65 L 75 45 L 75 5 Z" '
@@ -74,11 +64,7 @@ def crystalliser():
 
 
 def _plant(unit):
-    """A feed, the unit under test, and a product on each of its outlets.
-
-    Every boundary line tabulated, so stream-table-missing does not join
-    whatever finding a caller is actually asking about.
-    """
+    """Return a sheet with a feed, the unit and a product on each outlet, every line tabulated."""
     fs = Flowsheet("Salt Plant")
     brine = fs.add(units.Feed("Brine"))
     fs.add(unit)
@@ -122,14 +108,12 @@ def test_the_documented_example_draws_the_custom_symbol(crystalliser):
     fs.route()
     svg = fs.to_svg()
 
-    # The artwork is defined once, under an id the renderer makes from the kind,
-    # and placed by reference. The id inside the svg string is not that id.
+    # The artwork is defined once, under an id made from the kind, and placed by reference.
     assert '<symbol id="sym_crystalliser"' in svg
     assert "M 5 5 L 5 45 L 35 65" in svg
     assert 'href="#sym_crystalliser"' in svg
     assert [i for i in fs.warnings if i.code == "coincident-ports"] == []
 
-    # Every nozzle lands where the symbol put it, in the box the sheet placed.
     frame = cr.frame
     assert (frame.w, frame.h) == (80.0, 70.0)
     assert port_point(cr, frame, "feed") == (frame.x + 5.0, frame.y + 15.0)
@@ -160,15 +144,12 @@ def test_a_kind_with_no_symbol_draws_a_generic_box():
     assert 'href="#sym_neutraliser_test_unit"' in svg
     assert '<rect x="0" y="0" width="60" height="60"' in svg
     assert (unit.frame.w, unit.frame.h) == (60.0, 60.0)
-    # Every port fell back to the centre of the box, which is a warning and not
-    # a refusal: the drawing above was still made.
+    # Every port fell back to the box centre, which warns and still draws.
     assert [i.severity for i in fs.warnings if i.code == "coincident-ports"] == ["warning"]
 
 
 def test_a_port_the_symbol_never_anchored_warns_rather_than_raising():
-    """A nozzle the symbol forgets falls back to the centre of the box, so two of
-    them land on one point. That is a gap in the symbol, not a contradiction on
-    the sheet, so the drawing is still made."""
+    """Check that a nozzle the symbol does not anchor warns and still draws."""
     half_drawn = Symbol(
         svg=CRYSTALLISER_SVG.replace("sym_crystalliser", "sym_crystalliser_partial"),
         width=80.0,
@@ -188,8 +169,7 @@ def test_a_port_the_symbol_never_anchored_warns_rather_than_raising():
 
 
 def test_a_subclass_declaration_replaces_the_one_above_it():
-    """Overriding ``PORTS`` replaces the inherited list rather than adding to
-    it, exactly as an attribute lookup would."""
+    """Check that a subclass's ``PORTS`` replaces the inherited list."""
 
     class _Base(units.Unit):
         kind = "override_base_test_unit"
@@ -203,17 +183,14 @@ def test_a_subclass_declaration_replaces_the_one_above_it():
 
 
 def test_a_custom_unit_cannot_be_written_to_a_spec(crystalliser):
-    """The spec layer builds units from the shipped classes by name, so a class
-    it has never heard of has no ``kind:`` to write. It says so rather than
-    writing a spec that cannot be read back."""
+    """Check that writing a custom unit to a spec is refused."""
     fs = _plant(Crystalliser("CR-105"))
     with pytest.raises(SpecError, match="not one of the built-in equipment classes"):
         fs.to_dict()
 
 
 def test_a_custom_unit_is_scheduled_only_when_it_is_named(crystalliser):
-    """The automatic equipment list schedules a fixed set of kinds, so a custom
-    one has to be asked for by tag."""
+    """Check that a custom unit is on the equipment list only when named."""
     cr = Crystalliser("CR-106", description="Salt Crystalliser")
     fs = _plant(cr)
     assert [row for row in equipment_list(fs).rows if row[0] == "CR-106"] == []

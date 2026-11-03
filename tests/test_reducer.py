@@ -1,26 +1,4 @@
-"""The fitting that changes a line's size, and which way its cone points.
-
-The reference is the issued sheet the package reproduces
-(``professional_examples/P&ID_301.pdf``, gitignored). Measured off its vector
-geometry, it carries **eight** size-change fittings and every one of them is
-half of a pair on one centreline: a reduction into a control valve and an
-expansion back out of it. The CV-306 station's pair is
-
-* the reduction, ``(510.51, 628.70) (519.01, 630.83) (519.01, 635.08)
-  (510.51, 637.20)`` -- a west face 8.50 pt tall, an east face 4.25 pt tall,
-  8.50 pt long;
-* the expansion, the same trapezoid the other way round: ``(553.55, 630.83)``
-  to ``(553.55, 635.08)`` on the west at 4.25 pt, and ``(562.05, 628.70)`` to
-  ``(562.05, 637.20)`` on the east at 8.50 pt;
-* both centred on the run at y = 632.95, with the control valve between them
-  drawn to the same 8.50 pt height, and a drain tee outside each of them.
-
-There is no second fitting on that sheet: a reduction and an expansion are one
-casting piped round the other way, which is what ``large_end`` says and why it
-is not a variant. The tests below hold the drawn consequence of that -- the cone
-points downstream on one and upstream on the other, the box and the two faces
-are unchanged, and the run crosses both without a break.
-"""
+"""Check the reducer and which way its cone points."""
 
 from __future__ import annotations
 
@@ -83,9 +61,7 @@ def test_an_end_that_is_not_a_nozzle_is_refused():
 
 
 def test_the_ends_are_the_units_own_port_names():
-    """The argument names a port rather than describing the flow, so the two
-    have to stay the same words: a value nothing is called would be a setting
-    with no nozzle behind it."""
+    """Check that every ``large_end`` value is one of the reducer's ports."""
     assert set(units.Reducer.LARGE_ENDS) <= set(units.Reducer("RD-1").ports)
 
 
@@ -106,12 +82,7 @@ def test_an_expansion_is_the_reduction_turned_end_for_end(variant):
 
 @pytest.mark.parametrize("variant", VARIANTS)
 def test_the_run_crosses_both_fittings_without_a_break(variant):
-    """Every stream ends exactly on the nozzle it is drawn to.
-
-    The reference draws its station as one unbroken stroke through every device
-    on it; a nozzle that had moved with the mirrored artwork would leave the
-    line hanging off the far side of the fitting.
-    """
+    """Check that every stream ends on its nozzles and both fittings are drawn."""
     fs, rd, cv, ex = _station(variant)
     for stream in fs.streams:
         start, end = stream.route.waypoints[0], stream.route.waypoints[-1]
@@ -121,24 +92,15 @@ def test_the_run_crosses_both_fittings_without_a_break(variant):
         assert end == pytest.approx(
             port_point(stream.dest.owner, stream.dest.owner.frame, stream.dest.name)
         )
-    # ...and the flow crosses each fitting west to east, as it is drawn.
     for fitting in (rd, ex):
         west = port_point(fitting, fitting.frame, "inlet")
         east = port_point(fitting, fitting.frame, "outlet")
         assert west[0] < east[0]
-    # A station carrying both fittings defines both drawings.
     assert fs.to_svg().count('<symbol id="sym_reducer') == 2
 
 
 def test_the_reference_stations_proportions():
-    """The drawn pair, against P&ID-301's own.
-
-    The reference's trapezoid is 8.50 pt long between an 8.50 pt face and a
-    4.25 pt one -- square, with the small face exactly half the large -- and its
-    control valve is drawn 17.0 pt long by 8.50 pt tall. The package draws the
-    concentric body 12.5 x 12.5 beside a 24.5 x 15.0 valve, so the fitting is
-    half the valve's length on both sheets.
-    """
+    """Check that a concentric reducer is square and half the control valve's width."""
     reducer = registry.get("reducer", "concentric")
     valve = registry.get("valve", "control")
     assert reducer.width == reducer.height
@@ -149,18 +111,10 @@ def test_the_reference_stations_proportions():
 
 
 def test_an_eccentric_reducer_is_drawn_flat_on_top():
-    """Which is the pump-suction arrangement: a concentric body there leaves a
-    pocket against the roof of the line for vapour to collect in and break the
-    pump's suction.
-
-    Read off the nozzles rather than the ink, because it is the nozzles that
-    carry it onto the sheet. Flat on top means the small end's centreline is the
-    higher of the two, so its ``outlet`` sits nearer the top of the box than the
-    ``inlet`` does -- a smaller y, drawing coordinates running downward.
-    """
+    """Check that an eccentric reducer is flat on top."""
     sym = registry.get("reducer", "eccentric")
     assert sym.ports["outlet"][1] < sym.ports["inlet"][1]
-    # ...and the flat side is the artwork's own top edge, at y = 0 across.
+    # The flat side is the artwork's top edge, at y = 0.
     assert '"M 0.0 0.0 L 20.0 0.0' in sym.svg
 
 
@@ -178,9 +132,7 @@ def _placed_eccentric(mirrored):
 
 
 def test_rolling_an_eccentric_reducer_over_puts_the_flat_side_underneath():
-    """Flat on the bottom is the same fitting turned over, for the line that has
-    to drain rather than vent. It is a placement, not another symbol, and both
-    nozzles stay on the faces the run enters and leaves by."""
+    """Check that a reducer mirrored top to bottom puts the flat side underneath."""
     flat_top = _placed_eccentric(False)
     flat_bottom = _placed_eccentric("y")
     assert flat_top.frame.h == flat_bottom.frame.h
@@ -189,8 +141,7 @@ def test_rolling_an_eccentric_reducer_over_puts_the_flat_side_underneath():
         return {name: port_point(unit, unit.frame, name)[1] - unit.frame.y for name in unit.ports}
 
     up, down = offsets(flat_top), offsets(flat_bottom)
-    # Flat on top: the small end is the higher of the two. Rolled over, it is
-    # the lower one, and every nozzle is its own reflection in the box.
+    # Rolled over, the small end is the lower one and every nozzle is mirrored in the box.
     assert up["outlet"] < up["inlet"]
     assert down["outlet"] > down["inlet"]
     for name in up:
@@ -198,12 +149,9 @@ def test_rolling_an_eccentric_reducer_over_puts_the_flat_side_underneath():
 
 
 def test_an_eccentric_expansion_keeps_the_flat_side_it_was_drawn_with():
-    """Turning a fitting end for end is a mirror across the *vertical*, so it
-    cannot move the flat side: an eccentric expander out of a pump discharge is
-    still flat on top unless the placement rolls it over."""
+    """Check that an eccentric expansion stays flat on top."""
     sym = registry.for_unit(units.Reducer("RD-B", variant="eccentric", large_end="outlet"))
-    # The large end is now the outlet, and it is the *inlet* whose centreline
-    # has dropped -- the flat top is where it was.
+    # The inlet is now the small end, and the flat top stays where it was.
     assert sym.ports["inlet"][1] < sym.ports["outlet"][1]
 
 
@@ -211,9 +159,7 @@ def test_an_eccentric_expansion_keeps_the_flat_side_it_was_drawn_with():
 
 
 def test_only_a_two_ended_fitting_can_be_turned_end_for_end():
-    """Every nozzle has to be accounted for: a symbol whose connections this
-    cannot move would come back short of one, and a port the symbol does not
-    anchor falls back to the middle of its own box."""
+    """Check that ``expander`` refuses a symbol without exactly two ends."""
     with pytest.raises(ValueError, match="two ends to trade"):
         expander(registry.get("pump", "default"))
     with pytest.raises(ValueError, match="two ends to trade"):
@@ -221,9 +167,7 @@ def test_only_a_two_ended_fitting_can_be_turned_end_for_end():
 
 
 def test_the_turned_drawing_mirrors_its_bands_and_keeps_every_other_field() -> None:
-    """A band is a promise about the ink, so it turns with the ink (#508).
-    Every field the mirror does not change is carried, so a field ``Symbol``
-    grows later cannot be dropped silently."""
+    """Check that the turned drawing mirrors its bands and parts and keeps every other field."""
     banded = replace(
         registry.get("reducer", "default"),
         bands={"N": (2.5, 5.0), "W": (4.0, 8.0)},
@@ -252,8 +196,7 @@ def test_a_band_to_the_edge_of_an_uneven_width_still_fits_when_turned() -> None:
 
 
 def test_the_turned_drawing_is_built_once_and_shared():
-    """Port resolution asks for a unit's symbol on every call, so a derivation
-    rebuilt each time would redraw the artwork for every nozzle lookup."""
+    """Check that the turned drawing is built once and shared."""
     first = registry.for_unit(units.Reducer("RD-A", large_end="outlet"))
     second = registry.for_unit(units.Reducer("RD-B", large_end="outlet"))
     assert first is second
@@ -268,8 +211,6 @@ def test_an_expansion_survives_a_spec_round_trip():
     fs.add(units.Reducer("RD-306B", variant="concentric", large_end="outlet"))
     data = fs.to_dict()
     entries = {entry["name"]: entry for entry in data["units"]}
-    # A reduction is what a reducer without the word already is, so only the
-    # expansion is written down.
     assert "large_end" not in entries["RD-306A"]
     assert entries["RD-306B"]["large_end"] == "outlet"
     ends = {u.name: u.large_end for u in spec.from_dict(data).units}

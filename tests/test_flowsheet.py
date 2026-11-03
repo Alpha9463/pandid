@@ -23,16 +23,14 @@ def test_connect_creates_stream_and_marks_ports():
 
 
 def test_naming_scheme_is_keyword_only():
-    """``stream_naming_scheme`` takes no positional slot, so a stray second
-    argument fails loudly rather than being silently adopted as the scheme."""
+    """Check that ``stream_naming_scheme`` is keyword-only."""
     with pytest.raises(TypeError):
         Flowsheet("Test", "TB")
 
 
 @pytest.mark.parametrize("scheme, field", [("S-{num}", "num"), ("S-{0}", "0")])
 def test_a_naming_scheme_asking_for_an_unknown_field_is_refused_when_set(scheme, field):
-    """A field other than ``n`` is named as soon as the scheme is set, as a
-    ``ValueError`` the command line reports, not a ``KeyError`` at render."""
+    """Check that a scheme asking for a field other than ``n`` is refused when set."""
     with pytest.raises(ValueError, match=f"asks for '{field}'.*'n'"):
         Flowsheet("Test", stream_naming_scheme=scheme)
     fs = Flowsheet("Test")
@@ -43,8 +41,7 @@ def test_a_naming_scheme_asking_for_an_unknown_field_is_refused_when_set(scheme,
 
 @pytest.mark.parametrize("scheme", ["S-{n.foo}", "S-{n[0]}", "S-{n:q}", "S-{n", "S-}"])
 def test_a_naming_scheme_that_cannot_format_a_number_is_refused_when_set(scheme):
-    """Any format failure is the same ``ValueError`` naming the scheme, not a
-    raw ``AttributeError``, ``TypeError`` or unexplained ``ValueError``."""
+    """Check that a scheme that cannot format a number is refused when set, naming it."""
     with pytest.raises(ValueError, match=re.escape(f"stream_naming_scheme {scheme!r}")):
         Flowsheet("Test", stream_naming_scheme=scheme)
     fs = Flowsheet("Test")
@@ -62,13 +59,7 @@ def test_connect_rejects_wrong_directions():
 
 
 def test_connect_rejects_already_connected_port():
-    """A process nozzle takes one line, and a second one on it is a tee.
-
-    Stated on the pump rather than on the flag it used to be stated on:
-    ``feed.outlet`` is now a *pool* (#454), because a boundary flag is a mark
-    on the sheet edge rather than a nozzle. The rule this test is about did
-    not move -- see the two below it.
-    """
+    """Check that a second line on a process nozzle is refused."""
     fs, feed, pump, prod = _fs()
     fs.connect(pump.discharge, prod.inlet)
     with pytest.raises(ValueError, match=r"K-101\.discharge is already connected"):
@@ -76,9 +67,7 @@ def test_connect_rejects_already_connected_port():
 
 
 def test_a_boundary_flag_takes_as_many_lines_as_the_sheet_gives_it():
-    """One header entering a drawing and serving three users is ordinary, and
-    three flags for one header misrepresents the plant. Each line stays a line
-    of its own -- its own port, its own number -- and the flag is drawn once."""
+    """Check that a boundary flag takes a line per user on members of its connection."""
     fs = Flowsheet("Test")
     gas = fs.add(U.Feed("Gas"))
     users = [fs.add(U.Pump(f"P-{i}")) for i in (1, 2, 3)]
@@ -88,8 +77,6 @@ def test_a_boundary_flag_takes_as_many_lines_as_the_sheet_gives_it():
     assert [s.source.name for s in streams] == ["outlet", "outlet_2", "outlet_3"]
     assert len({s.name for s in streams}) == 3
     assert all(s.at_boundary for s in streams)
-    # The first line still reaches the nozzle the author named, which is what
-    # keeps ``gas.outlet.stream`` meaning what it always did.
     assert gas.outlet.stream is streams[0]
 
     flare = fs.add(U.Product("Flare"))
@@ -99,10 +86,7 @@ def test_a_boundary_flag_takes_as_many_lines_as_the_sheet_gives_it():
 
 
 def test_a_flags_members_all_leave_its_one_nozzle():
-    """The whole point of the flag: it is drawn once, and every run on it
-    crosses the sheet edge at the same place, pointing the same way. A member
-    that took the plain nearest-edge answer would leave through the top of the
-    pennant."""
+    """Check that a flag's members resolve to one point and are not reported."""
     from pandid.portgeom import resolve_port
 
     fs = Flowsheet("Test")
@@ -113,20 +97,11 @@ def test_a_flags_members_all_leave_its_one_nozzle():
     resolved = [resolve_port(gas, gas.frame, name) for name in gas.ports]
     assert len({(r.point, r.anchor, r.face) for r in resolved}) == 1
     assert resolved[0].face == "E"
-    # ...and it is a *deliberate* coincidence, so validate() does not report it
-    # while it still reports every other one.
     assert not [i for i in fs.validate() if i.code == "coincident-ports"]
 
 
 def test_connect_rejects_a_port_run_to_itself():
-    """A signal port carries no direction, so nothing about a valve's own
-    actuator stops a line being asked to run from it back to itself -- the
-    one case ``must be an outlet``/``must be an inlet`` above cannot catch,
-    since a signal port is neither. Undetected, it draws as a zero-length
-    spike ``stream_polyline()``'s own collinear-run collapse then erases
-    outright: a stream that connects, routes and renders clean while
-    meaning nothing.
-    """
+    """Check that a line from a port to itself is refused."""
     fs, feed, valve, fic, ft = _loop()
     with pytest.raises(ValueError, match=r"FV-101\.actuator is both the source"):
         fs.connect(valve.actuator, valve.actuator, kind="pneumatic")
@@ -154,10 +129,6 @@ def test_connect_rejects_invalid_stream_kind():
 
 
 # --- signal versus material ---------------------------------------------------
-#
-# A signal connection is a terminal for a measurement or a command: a valve's
-# stem, an instrument's tap and its two signal connections. Nothing flows
-# through one, so the two vocabularies do not mix in either direction.
 
 
 def _loop():
@@ -172,8 +143,7 @@ def _loop():
 
 
 def test_connect_rejects_process_fluid_into_a_signal_connection():
-    """A pipe into a valve stem is not a connection, and drawn as a process
-    line it claims one that cannot exist."""
+    """Check that a process line into a valve actuator is refused."""
     fs, feed, valve, fic, ft = _loop()
     with pytest.raises(
         ValueError,
@@ -190,8 +160,7 @@ def test_connect_rejects_process_fluid_into_an_instrument_signal_port():
 
 
 def test_connect_rejects_a_signal_leaving_a_balloon_for_a_process_nozzle():
-    """The rule reads the same from the signal end: a controller output is not
-    something a pump can be piped from."""
+    """Check that a signal line into a process nozzle is refused."""
     fs, feed, valve, fic, ft = _loop()
     pump = fs.add(U.Pump("P-101"))
     with pytest.raises(
@@ -227,23 +196,14 @@ def test_connect_rejects_a_process_kind_between_two_signal_connections(kind):
 
 @pytest.mark.parametrize("kind", ["electric", "pneumatic", "data", "capillary", "software"])
 def test_a_control_loop_closing_on_a_valve_actuator_is_accepted(kind):
-    """The legal case: every signal kind runs from a balloon to the final
-    control element."""
+    """Check that every signal kind may run from a balloon to a valve actuator."""
     fs, feed, valve, fic, ft = _loop()
     fs.connect(ft.sig_out, fic.sig_in, kind=kind)
     assert fs.connect(fic.sig_out, valve.actuator, kind=kind).kind == kind
 
 
 def test_a_refused_connect_leaves_the_sheet_as_it_found_it():
-    """The #433 audit of ``connect()``: every rule it checks is checked before
-    the first write, so a refusal takes nothing with it.
-
-    The nozzle *set* is compared and not only which lines are on which nozzle,
-    because the write nearest the refusals is a **mint**: a balloon's signal
-    connections are a pool, and taking a fresh member for a line the other end
-    then refuses would leave the balloon carrying a spare nozzle nothing
-    reaches, which the debug overlay draws.
-    """
+    """Check that a refused ``connect()`` leaves streams, nozzles and lines unchanged."""
     fs, feed, valve, fic, ft = _loop()
     fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")  # sig_out is now spoken for
     nozzles = {(u.name, name) for u in fs.units for name in u.ports}
