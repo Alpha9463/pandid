@@ -1138,27 +1138,36 @@ def test_a_refused_control_loop_leaves_the_sheet_as_it_found_it(prepare, refused
 
 
 @pytest.mark.parametrize(
-    "refused",
+    "refused, match",
     [
         pytest.param(
             lambda fs, drum, lv: fs.add_control_loop(
                 "L", 101, measuring=drum, acting_on=lv, at="N", face="N"
             ),
-            id="face",
+            "alone",
+            id="face twice",
         ),
         pytest.param(
             lambda fs, drum, lv: fs.add_control_loop(
                 "L", 101, measuring=drum, acting_on=lv, controller_at="N", controller_face="N"
             ),
-            id="controller_face",
+            "alone",
+            id="controller_face twice",
+        ),
+        pytest.param(
+            lambda fs, drum, lv: fs.add_control_loop(
+                "L", 101, measuring=drum, acting_on=lv, at="S", controller_face="Q"
+            ),
+            "face= is a side of LT-101",
+            id="an old face and a bad controller face",
         ),
     ],
 )
-def test_a_face_given_twice_warns_nothing(refused):
+def test_a_refused_face_warns_nothing(refused, match: str):
     fs, drum, lv = _feedback_sheet()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with pytest.raises(ValueError, match="alone"):
+        with pytest.raises(ValueError, match=match):
             refused(fs, drum, lv)
     assert caught == []
 
@@ -1184,7 +1193,7 @@ def test_a_face_given_twice_warns_nothing(refused):
 )
 def test_a_face_given_the_old_way_warns_at_the_authors_line(old, member: str):
     fs, drum, lv = _feedback_sheet()
-    with pytest.warns(DeprecationWarning, match="face=") as caught:
+    with pytest.warns(DeprecationWarning, match="face='S'") as caught:
         loop = old(fs, drum, lv)
     assert [_same_file(w.filename) for w in caught] == [_same_file(__file__)]
     assert getattr(loop, member).face == "S"

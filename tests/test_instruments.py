@@ -408,7 +408,7 @@ def test_a_face_given_as_at_warns_at_the_authors_line(entry: str):
     assert (inst.at, inst.face) == (None, "N")
     found = [i.message for i in fs.validate() if i.code == "deprecated"]
     assert found == [str(caught[0].message)]
-    assert found[0].startswith(f"{inst.tag}: ")
+    assert found[0].startswith(f"{inst.name}: ")
 
 
 def test_a_face_given_as_at_is_placed_where_face_puts_it():
@@ -450,6 +450,26 @@ _REFUSED = {
         lambda fs, lt, drum, fe, line: lt.attach(line, face="N"),
         "is a line; give at=",
     ),
+    "an old face on a taken tag": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("LT", 100, sensing=drum, at="S"),
+        "already exists",
+    ),
+    "at and face with no host": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("LT", 1, at="S", face="N"),
+        "no host for at= or face= to place the balloon on; give sensing=, acting_on= or near=",
+    ),
+    "face with no host": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("LT", 1, face="N"),
+        "no host for face=",
+    ),
+    "a fraction with no host": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("LT", 1, at=0.5),
+        "no host for at=",
+    ),
+    "an old face with no host": (
+        lambda fs, lt, drum, fe, line: fs.add_instrument("LT", 1, at="S"),
+        "no host for at=",
+    ),
 }
 
 
@@ -471,6 +491,44 @@ def test_a_fraction_on_a_unit_names_face():
     fs, drum, _, _ = _hosts()
     with pytest.raises(ValueError, match="V-101 is a unit; give face="):
         fs.add_instrument("LT", 1, sensing=drum, at=0.5)
+
+
+_BAD_ATTACH = {
+    "a bad angle": lambda lt, drum, line: lt.attach(drum, face="S", angle="bad"),
+    "a bad angle on a line": lambda lt, drum, line: lt.attach(line, at=0.3, angle="bad"),
+    "a bad offset": lambda lt, drum, line: lt.attach(drum, face="S", offset="bad"),
+    "a negative offset": lambda lt, drum, line: lt.attach(drum, face="S", offset=-1),
+    "an unknown relation": lambda lt, drum, line: lt.attach(drum, face="S", relation="x"),
+    "a bad face": lambda lt, drum, line: lt.attach(drum, face="Q", offset=10),
+    "an old face and a bad angle": lambda lt, drum, line: lt.attach(drum, at="S", angle="bad"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_BAD_ATTACH))
+def test_a_refused_attach_changes_no_field_and_warns_nothing(case: str):
+    fs, drum, _, line = _hosts()
+    lt = fs.add_instrument("LT", 100, near=drum, face="W", offset=60, angle=30)
+    fields = ("host", "at", "face", "offset", "angle", "relation")
+    before = [getattr(lt, name) for name in fields]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises((TypeError, ValueError)):
+            _BAD_ATTACH[case](lt, drum, line)
+    assert caught == []
+    assert [getattr(lt, name) for name in fields] == before
+
+
+@pytest.mark.parametrize("typed, side", [("S", "S"), ("bottom", "S"), ("w", "W")])
+def test_the_warning_names_the_face_that_was_typed(typed: str, side: str):
+    """Following the advice has to leave the balloon where it is."""
+    fs, drum, _, _ = _hosts()
+    with pytest.warns(DeprecationWarning) as caught:
+        lt = fs.add_instrument("LT", 101, sensing=drum, at=typed)
+    message = str(caught[0].message)
+    assert f"at={typed!r} (a unit face)" in message
+    assert message.endswith(f"use face={side!r}, or face: {side} in a spec")
+    assert [i.message for i in fs.validate() if i.code == "deprecated"] == [message]
+    assert lt.face == side
 
 
 # --- layout ------------------------------------------------------------------

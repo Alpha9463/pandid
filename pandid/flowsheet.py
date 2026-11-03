@@ -991,8 +991,8 @@ class Flowsheet:
         TypeError
             If ``number`` or a ``kwargs`` size has the wrong type.
         ValueError
-            If an argument is invalid, the tag clashes, or a host is
-            off this sheet.
+            If an argument is invalid, the tag clashes, a host is off
+            this sheet, or ``at`` or ``face`` is given with no host.
 
         Warns
         -----
@@ -1016,6 +1016,7 @@ class Flowsheet:
             type, number, sensing=sensing, acting_on=acting_on, near=near,
             at=at, face=face, offset=offset, angle=angle, variant=variant, **kwargs)
         self.add(inst)
+        inst._deprecate_at(at)
         return inst
 
     def _build_instrument(self, type: str,
@@ -1059,7 +1060,8 @@ class Flowsheet:
         TypeError
             If ``number`` or a ``kwargs`` size has the wrong type.
         ValueError
-            If the letters, variant, anchors or placement are invalid.
+            If the letters, variant, anchors or placement are invalid, or
+            ``at`` or ``face`` is given with no anchor.
         """
         from pandid.loops import ControlLoop, Loop
         from pandid.units import Instrument
@@ -1072,8 +1074,14 @@ class Flowsheet:
         inst = Instrument(type, number, variant=variant, **kwargs)
         host, relation = self._anchor(inst, sensing, acting_on, near)
         if host is not None:
-            # stacklevel 5: the caller of add_instrument() or add_control_loop().
-            inst._attach(host, at, face, offset, angle, relation, stacklevel=5)
+            inst._attach(host, at, face, offset, angle, relation)
+        elif at is not None or face is not None:
+            stray = " or ".join(f"{key}=" for key, value in (("at", at), ("face", face))
+                                if value is not None)
+            raise ValueError(
+                f"{inst.name}: there is no host for {stray} to place the balloon on; "
+                f"give sensing=, acting_on= or near="
+            )
         return inst
 
     def _refuse_foreign(self, role: str, thing: "Stream | Port | Unit") -> None:
@@ -1259,11 +1267,12 @@ class Flowsheet:
                 f"lettered from its loop, e.g. Fitting(loop.element('FE'))"
             )
         inst = Instrument(element.tag, variant=variant, **kwargs)
-        inst._attach(element, at, face, offset, angle, "sensing", stacklevel=4)
+        inst._attach(element, at, face, offset, angle, "sensing")
         # Mark the element first; add() then allows the shared tag.
         inst._marks = element
         self.add(inst)
         element.balloon = inst
+        inst._deprecate_at(at)
         return inst
 
     def add_control_loop(
@@ -1333,6 +1342,8 @@ class Flowsheet:
         DeprecationWarning
             If ``at`` names a face of a unit, or ``controller_at`` is given.
         """
+        from dataclasses import replace
+
         from pandid.loops import ControlLoop, Loop
         from pandid.ports import Port
 
@@ -1387,8 +1398,11 @@ class Flowsheet:
         self._resolve_connection(controller.sig_out, acting_on,
                                  kind=output_kind, pending=pending)
 
+        transmitter._deprecate_at(at)
         if controller_at is not None:
-            _CONTROLLER_AT.warn(controller, where=controller.name)
+            replace(_CONTROLLER_AT, what=f"add_control_loop(controller_at={controller_at!r})",
+                    instead=f"controller_face={controller.face!r}",
+                    ).warn(controller, where=controller.name)
         # Commit.
         if allocates is not None:
             self._register_loop(loop, allocated=allocates)

@@ -95,6 +95,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A refused balloon placement changes nothing (#438).** `attach()` with a
+  bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
+  face no longer leaves the balloon on the sheet, and `add_instrument()`
+  refuses `at=` or `face=` given with no `sensing=`, `acting_on=` or `near=`
+  instead of dropping them.
 - **An expander keeps every field of the reducer it is turned from (#508).**
   `large_end="outlet"` now draws at the reducer's trim weight, and its bands
   are mirrored with the artwork.

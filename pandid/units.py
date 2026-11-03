@@ -3756,23 +3756,33 @@ class Instrument(Unit):
         DeprecationWarning
             If ``at`` names a face of a unit.
         """
-        return self._attach(on, at, face, offset, angle, relation, stacklevel=4)
+        self._attach(on, at, face, offset, angle, relation)
+        self._deprecate_at(at)
+        return self
+
+    def _deprecate_at(self, at: object) -> None:
+        """Warn the caller's caller that ``at`` named a unit face, if it did.
+
+        Parameters
+        ----------
+        at : object
+            The ``at`` this balloon was attached with.
+        """
+        from dataclasses import replace
+
+        if isinstance(at, str):
+            replace(_AT_FACE, what=f"at={at!r} (a unit face)",
+                    instead=f"face={self.face!r}, or face: {self.face} in a spec",
+                    ).warn(self, where=self.name, stacklevel=4)
 
     def _attach(self, on: "Stream | Unit", at: float | str | None, face: str | None,
-                offset: float, angle: float, relation: str, stacklevel: int) -> "Instrument":
-        """Anchor this balloon as :meth:`attach` does.
+                offset: float, angle: float, relation: str) -> None:
+        """Anchor this balloon as :meth:`attach` does, without the warning.
 
         Parameters
         ----------
         on, at, face, offset, angle, relation
             As for :meth:`attach`.
-        stacklevel : int
-            Stack level of the warning for a face given as ``at``.
-
-        Returns
-        -------
-        Instrument
-            This balloon.
 
         Raises
         ------
@@ -3827,6 +3837,7 @@ class Instrument(Unit):
                     f"{self.name}: face= is a side of {on.name}: 'N', 'S', 'E' or 'W', "
                     f"or 'top', 'bottom', 'left' or 'right', got {named!r}"
                 )
+        offset, angle = float(offset), float(angle)
         if offset < 0:
             raise ValueError(f"{self.name}: offset= must not be negative, got {offset!r}")
         if relation not in RELATIONS:
@@ -3835,16 +3846,13 @@ class Instrument(Unit):
                 f"{getattr(on, 'name', on)!r}, one of "
                 f"{', '.join(repr(r) for r in RELATIONS)}, got {relation!r}"
             )
-        if old:
-            _AT_FACE.warn(self, where=self.name, stacklevel=stacklevel)
         self.host = on
         self.at = fraction
         self.face = side
-        self.offset = float(offset)
-        self.angle = float(angle)
+        self.offset = offset
+        self.angle = angle
         self.relation = relation
         self._invalidate_layout()
-        return self
 
 
 def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:

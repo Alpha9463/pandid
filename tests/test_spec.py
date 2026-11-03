@@ -1238,12 +1238,12 @@ def test_a_balloons_side_is_written_as_face():
 )
 def test_a_side_given_as_at_still_loads_and_is_reported(entry):
     spec = _spec(units=_WITH_ELEMENT, instruments=[entry])
-    with pytest.warns(DeprecationWarning, match="use face='N'"):
+    with pytest.warns(DeprecationWarning, match="use face='S'"):
         fs = Flowsheet.from_dict(spec)
     inst = fs.units[-1]
     assert (inst.at, inst.face) == (None, "S")
     found = [i.message for i in fs.validate() if i.code == "deprecated"]
-    assert len(found) == 1 and found[0].startswith(f"{inst.tag}: ")
+    assert len(found) == 1 and found[0].startswith(f"{inst.name}: ")
     assert fs.to_dict()["instruments"][0]["face"] == "S"
 
 
