@@ -1726,9 +1726,9 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 ZONE_BAND = 16.0
 
 
-def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
+def sheet_rect(ix: float, iy: float, iw: float, ih: float
                ) -> tuple[float, float, float, float]:
-    """Return the sheet rectangle around a drawing frame.
+    """Return the sheet rectangle a zone band's width around a frame.
 
     Parameters
     ----------
@@ -1736,15 +1736,13 @@ def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
         Frame top-left corner.
     iw, ih : float
         Frame width and height.
-    band : float, default=ZONE_BAND
-        Zone band width.
 
     Returns
     -------
     tuple[float, float, float, float]
         Sheet ``(x, y, w, h)``.
     """
-    return ix - band, iy - band, iw + 2 * band, ih + 2 * band
+    return ix - ZONE_BAND, iy - ZONE_BAND, iw + 2 * ZONE_BAND, ih + 2 * ZONE_BAND
 
 
 #: Zone letter size, and its baseline drop from the band's middle.
@@ -1768,8 +1766,7 @@ class Zoned(NamedTuple):
     parts: list[tuple]
 
 
-def zone_layout(ix: float, iy: float, iw: float, ih: float,
-                band: float = ZONE_BAND) -> Zoned:
+def zone_layout(ix: float, iy: float, iw: float, ih: float) -> Zoned:
     """Return the zone-ruled border around a drawing frame.
 
     Parameters
@@ -1778,15 +1775,13 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
         Frame top-left corner.
     iw, ih : float
         Frame width and height.
-    band : float, default=ZONE_BAND
-        Zone band width.
 
     Returns
     -------
     Zoned
         Border geometry.
     """
-    ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih, band)
+    ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih)
     cols = max(4, min(12, round(iw / 165)))
     rows = max(3, min(8, round(ih / 165)))
     parts: list[tuple] = []
@@ -1799,8 +1794,8 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
         if c:
             parts.append(("rule", x0, oy, x0, iy))
             parts.append(("rule", x0, iy + ih, x0, oy + oh))
-        parts.append(("label", (x0 + x1) / 2, oy + band / 2, num))
-        parts.append(("label", (x0 + x1) / 2, oy + oh - band / 2, num))
+        parts.append(("label", (x0 + x1) / 2, oy + ZONE_BAND / 2, num))
+        parts.append(("label", (x0 + x1) / 2, oy + oh - ZONE_BAND / 2, num))
     # Rows: letters top down, on the left and right bands.
     for r in range(rows):
         y0 = iy + ih * r / rows
@@ -1809,14 +1804,13 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
         if r:
             parts.append(("rule", ox, y0, ix, y0))
             parts.append(("rule", ix + iw, y0, ox + ow, y0))
-        parts.append(("label", ox + band / 2, (y0 + y1) / 2, letter))
-        parts.append(("label", ox + ow - band / 2, (y0 + y1) / 2, letter))
+        parts.append(("label", ox + ZONE_BAND / 2, (y0 + y1) / 2, letter))
+        parts.append(("label", ox + ow - ZONE_BAND / 2, (y0 + y1) / 2, letter))
     return Zoned((ox, oy, ow, oh), (ix, iy, iw, ih), parts)
 
 
-def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
-               ) -> tuple[list[str], tuple[float, float, float, float]]:
-    """Return the zone-ruled border drawn, and the sheet rectangle.
+def zone_frame(ix: float, iy: float, iw: float, ih: float) -> list[str]:
+    """Return the zone-ruled border drawn around a frame.
 
     Parameters
     ----------
@@ -1824,15 +1818,13 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
         Frame top-left corner.
     iw, ih : float
         Frame width and height.
-    band : float, default=ZONE_BAND
-        Zone band width.
 
     Returns
     -------
-    tuple[list[str], tuple[float, float, float, float]]
-        SVG elements and the sheet ``(x, y, w, h)``.
+    list[str]
+        SVG elements.
     """
-    z = zone_layout(ix, iy, iw, ih, band)
+    z = zone_layout(ix, iy, iw, ih)
     ox, oy, ow, oh = z.outer
     L = [f'<rect x="{ox:.1f}" y="{oy:.1f}" width="{ow:.1f}" height="{oh:.1f}" '
          f'fill="none" stroke="black" stroke-width="{SHEET_RULE:g}"/>',
@@ -1847,7 +1839,7 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
             _, lx, ly, text = part
             L.append(_text(lx, ly + _ZONE_BASE, text, ZONE_TYPE,
                            anchor="middle", bold=True))
-    return L, z.outer
+    return L
 
 
 # The sheet dock: which rectangle each piece of furniture is given

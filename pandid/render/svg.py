@@ -3624,11 +3624,8 @@ class SvgRenderer:
 
         # --- border around the frame, then the sheet edge -------------
         if border == "zone":
-            frame_lines, outer = F.zone_frame(*plan.frame)
-            furniture[:0] = frame_lines  # border sits behind the boxes
-        else:
-            outer = F.sheet_rect(*plan.frame)
-        ox, oy, ow, oh = outer
+            furniture[:0] = F.zone_frame(*plan.frame)  # border sits behind the boxes
+        ox, oy, ow, oh = F.sheet_rect(*plan.frame)
         OUT = F.OUTER_MARGIN
         return furniture, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT)
 
@@ -3662,11 +3659,8 @@ class SvgRenderer:
             plan.block, plan.name, plan.date, sx + sw, sy + sh,
             report=lambda *cell: fit_issues.append(fit_issue(*cell))))
         if border == "zone":
-            frame_lines, outer = F.zone_frame(*plan.frame)
-            furniture[:0] = frame_lines  # the border sits behind the rest
-        else:
-            outer = F.sheet_rect(*plan.frame)
-        ox, oy, ow, oh = outer
+            furniture[:0] = F.zone_frame(*plan.frame)  # the border sits behind the rest
+        ox, oy, ow, oh = F.sheet_rect(*plan.frame)
         OUT = F.OUTER_MARGIN
         fs.warnings = ([w for w in fs.warnings
                         if getattr(w, "code", "") not in _RENDER_CODES]
