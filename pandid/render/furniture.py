@@ -68,7 +68,18 @@ Reporter = Callable[[str, str, str, float, float], None]
 
 
 def script_counts(s: str) -> "tuple[int, int, int]":
-    """Return ``(narrow, wide, zero)`` codepoint counts of ``s``."""
+    """Return ``(narrow, wide, zero)`` codepoint counts of ``s``.
+
+    Parameters
+    ----------
+    s : str
+        Text to count.
+
+    Returns
+    -------
+    tuple[int, int, int]
+        Narrow, wide and zero-width counts.
+    """
     narrow = wide = zero = 0
     for ch in s:
         if unicodedata.category(ch) in ("Mn", "Me"):
@@ -81,7 +92,22 @@ def script_counts(s: str) -> "tuple[int, int, int]":
 
 
 def text_width(s, size: float, bold: bool = False) -> float:
-    """Return the drawn width of ``s`` at ``size``, without padding."""
+    """Return the drawn width of ``s`` at ``size``, without padding.
+
+    Parameters
+    ----------
+    s : object
+        Text, converted with ``str``.
+    size : float
+        Type size in drawing units.
+    bold : bool, default=False
+        Measure bold advances.
+
+    Returns
+    -------
+    float
+        Width in drawing units.
+    """
     s = str(s)
     table = _ADVANCE_BOLD if bold else _ADVANCE
     flat = _ADV_BOLD if bold else _ADV
@@ -102,7 +128,18 @@ def text_width(s, size: float, bold: bool = False) -> float:
 
 
 def _total(values) -> float:
-    """Return the sum of ``values``, added left to right with ``+=``."""
+    """Return the sum of ``values``, added left to right with ``+=``.
+
+    Parameters
+    ----------
+    values : iterable of float
+        Values to add.
+
+    Returns
+    -------
+    float
+        Their sum.
+    """
     total = 0.0
     for v in values:
         total += v
@@ -111,7 +148,28 @@ def _total(values) -> float:
 
 def clip(s, room: float, size: float, bold: bool = False, *,
          field: str = "", report: "Reporter | None" = None) -> str:
-    """Return ``s`` cut to ``room`` with an ellipsis, reporting it."""
+    """Return ``s`` cut to ``room`` with an ellipsis, reporting it.
+
+    Parameters
+    ----------
+    s : object
+        Text, converted with ``str``.
+    room : float
+        Width available, in drawing units.
+    size : float
+        Type size in drawing units.
+    bold : bool, default=False
+        Measure bold advances.
+    field : str, default=""
+        Field name passed to ``report``.
+    report : Reporter, optional
+        Receives a finding when ``s`` is cut.
+
+    Returns
+    -------
+    str
+        ``s``, or its longest prefix that fits with an ellipsis.
+    """
     s = str(s)
     need = text_width(s, size, bold)
     if need <= room:
@@ -129,7 +187,28 @@ def clip(s, room: float, size: float, bold: bool = False, *,
 
 def check_fit(s, room: float, size: float, bold: bool = False, *,
               field: str = "", report: "Reporter | None" = None) -> str:
-    """Return ``s`` unchanged, reporting it if it overruns ``room``."""
+    """Return ``s`` unchanged, reporting it if it overruns ``room``.
+
+    Parameters
+    ----------
+    s : object
+        Text, converted with ``str``.
+    room : float
+        Width available, in drawing units.
+    size : float
+        Type size in drawing units.
+    bold : bool, default=False
+        Measure bold advances.
+    field : str, default=""
+        Field name passed to ``report``.
+    report : Reporter, optional
+        Receives a finding when ``s`` overruns.
+
+    Returns
+    -------
+    str
+        ``s`` as a string.
+    """
     s = str(s)
     need = text_width(s, size, bold)
     if report is not None and need > room:
@@ -138,12 +217,37 @@ def check_fit(s, room: float, size: float, bold: bool = False, *,
 
 
 def report_once(report: "Reporter") -> "Reporter":
-    """Wrap ``report`` to pass on each distinct finding once."""
+    """Wrap ``report`` to pass on each distinct finding once.
+
+    Parameters
+    ----------
+    report : Reporter
+        Callback to wrap.
+
+    Returns
+    -------
+    Reporter
+        Callback that drops repeated findings.
+    """
     seen: set[tuple[str, str, str, float, float]] = set()
 
     def once(field: str, text: str, drawn: str,
              room: float, need: float) -> None:
-        """Pass on a finding not seen before."""
+        """Pass on a finding not seen before.
+
+        Parameters
+        ----------
+        field : str
+            Field name.
+        text : str
+            Requested text.
+        drawn : str
+            Drawn text.
+        room : float
+            Cell width.
+        need : float
+            Text width.
+        """
         key = (field, text, drawn, room, need)
         if key not in seen:
             seen.add(key)
@@ -154,7 +258,26 @@ def report_once(report: "Reporter") -> "Reporter":
 
 def fit_size(s, room: float, size: float, floor: float,
              bold: bool = False) -> float:
-    """Return the largest size, ``floor`` to ``size``, that fits."""
+    """Return the largest size, ``floor`` to ``size``, that fits.
+
+    Parameters
+    ----------
+    s : object
+        Text, converted with ``str``.
+    room : float
+        Width available, in drawing units.
+    size : float
+        Largest type size.
+    floor : float
+        Smallest type size.
+    bold : bool, default=False
+        Measure bold advances.
+
+    Returns
+    -------
+    float
+        Type size in drawing units.
+    """
     need = text_width(s, size, bold)
     if need <= room or need <= 0 or room <= 0:
         return size
@@ -162,7 +285,28 @@ def fit_size(s, room: float, size: float, floor: float,
 
 
 def _text(x, y, s, size, *, anchor="start", bold=False, fill="black"):
-    """Return an SVG ``<text>`` element with escaped content."""
+    """Return an SVG ``<text>`` element with escaped content.
+
+    Parameters
+    ----------
+    x, y : float
+        Anchor point.
+    s : object
+        Text.
+    size : float
+        Type size.
+    anchor : str, default="start"
+        SVG ``text-anchor``.
+    bold : bool, default=False
+        Set the text bold.
+    fill : str, default="black"
+        Text colour.
+
+    Returns
+    -------
+    str
+        SVG element.
+    """
     wt = ' font-weight="bold"' if bold else ""
     return (f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{size:.1f}"'
             f' text-anchor="{anchor}"{wt} fill="{fill}">{escaped(s)}</text>')
@@ -188,7 +332,18 @@ _ANN_PAD, _ANN_GAP = 9.0, 12.0
 
 
 def _ann_layout(ann):
-    """Return ``(size, row_h, title_h, col_w)`` for an Annotation."""
+    """Return ``(size, row_h, title_h, col_w)`` for an Annotation.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Titled box.
+
+    Returns
+    -------
+    tuple
+        Type size, row depth, title depth and column widths.
+    """
     size = ann.font_size
     row_h = size + 7
     title_h = size + 12 if ann.title else 0
@@ -205,7 +360,18 @@ def _ann_layout(ann):
 
 
 def measure_annotation(ann) -> tuple[float, float]:
-    """Return an Annotation's ``(width, height)``."""
+    """Return an Annotation's ``(width, height)``.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Titled box.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height in drawing units.
+    """
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = _ANN_PAD, _ANN_GAP
     body_w = _total(col_w) + gap * (len(col_w) - 1)
@@ -216,12 +382,38 @@ def measure_annotation(ann) -> tuple[float, float]:
 
 
 def _overflowing_text(ann, size: float, body_w: float) -> str:
-    """Return the title if it overruns, otherwise the widest row."""
+    """Return the title if it overruns, otherwise the widest row.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Titled box.
+    size : float
+        Row type size.
+    body_w : float
+        Width of the row columns.
+
+    Returns
+    -------
+    str
+        Text to name in a finding.
+    """
     if text_width(ann.title, size + 1, bold=True) > body_w:
         return ann.title
 
     def flat(r):
-        """Return a row as one string."""
+        """Return a row as one string.
+
+        Parameters
+        ----------
+        r : str or sequence
+            Row, or a row's cells.
+
+        Returns
+        -------
+        str
+            The cells joined by spaces.
+        """
         return "   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
     return max((flat(r) for r in ann.rows), key=lambda s: text_width(s, size),
                default=ann.title)
@@ -233,8 +425,17 @@ def draw_annotation(ann, x: float, y: float, *,
 
     Parameters
     ----------
+    ann : Annotation
+        Titled box.
+    x, y : float
+        Top-left corner.
     report : Reporter, optional
         Receives a finding when an explicit width is too small.
+
+    Returns
+    -------
+    list[str]
+        SVG elements.
     """
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = _ANN_PAD, _ANN_GAP
@@ -272,7 +473,18 @@ def draw_annotation(ann, x: float, y: float, *,
 # ----------------------------------------------------------------
 
 def _table_layout(tb):
-    """Return ``(size, ncol, col_w, row_h)`` for a TableBox."""
+    """Return ``(size, ncol, col_w, row_h)`` for a TableBox.
+
+    Parameters
+    ----------
+    tb : TableBox
+        Table.
+
+    Returns
+    -------
+    tuple
+        Type size, column count, column widths and row depth.
+    """
     size = tb.font_size
     ncol = max(len(tb.headers), max((len(r) for r in tb.rows), default=0))
     col_w = [0.0] * ncol
@@ -285,7 +497,18 @@ def _table_layout(tb):
 
 
 def measure_table(tb) -> tuple[float, float]:
-    """Return a TableBox's ``(width, height)``."""
+    """Return a TableBox's ``(width, height)``.
+
+    Parameters
+    ----------
+    tb : TableBox
+        Table.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height in drawing units.
+    """
     size, ncol, col_w, row_h = _table_layout(tb)
     title_h = size + 10 if tb.title else 0
     nrows = len(tb.rows) + (1 if tb.headers else 0)
@@ -293,7 +516,20 @@ def measure_table(tb) -> tuple[float, float]:
 
 
 def draw_table(tb, x: float, y: float) -> list[str]:
-    """Return a TableBox drawn with its top-left at ``(x, y)``."""
+    """Return a TableBox drawn with its top-left at ``(x, y)``.
+
+    Parameters
+    ----------
+    tb : TableBox
+        Table.
+    x, y : float
+        Top-left corner.
+
+    Returns
+    -------
+    list[str]
+        SVG elements.
+    """
     size, ncol, col_w, row_h = _table_layout(tb)
     title_h = size + 10 if tb.title else 0
     w = _total(col_w)
@@ -305,7 +541,17 @@ def draw_table(tb, x: float, y: float) -> list[str]:
     top = y + title_h
 
     def _row(ry, cells, *, header):
-        """Append one ruled row at ``ry``."""
+        """Append one ruled row at ``ry``.
+
+        Parameters
+        ----------
+        ry : float
+            Top of the row.
+        cells : list
+            Cell values.
+        header : bool
+            Draw a heading row.
+        """
         cx = x
         for ci in range(ncol):
             val = cells[ci] if ci < len(cells) else ""
@@ -370,6 +616,16 @@ def _width_floor(stated: float | str, name: str, ruled: float) -> float:
         Option name, for error messages.
     ruled : float
         Scale relative to :data:`_BASE_SIZE`.
+
+    Returns
+    -------
+    float
+        Floor in drawing units; 0 for ``"auto"``.
+
+    Raises
+    ------
+    ValueError
+        If ``stated`` is not a number or is negative.
     """
     if stated == "auto":
         return 0.0
@@ -388,7 +644,18 @@ def _width_floor(stated: float | str, name: str, ruled: float) -> float:
 
 
 def _options(fs):
-    """Return the sheet's stream-table options, or the defaults."""
+    """Return the sheet's stream-table options, or the defaults.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet.
+
+    Returns
+    -------
+    StreamTableOptions
+        Stated or default options.
+    """
     from pandid.document import StreamTableOptions
     options = getattr(fs, "stream_table", None)
     return StreamTableOptions() if options is None else options
@@ -403,6 +670,8 @@ def _report_unused_sections(fs, sec_before: dict[str, str], seen: set) -> None:
 
     Parameters
     ----------
+    fs : Flowsheet
+        Flowsheet whose warnings are updated.
     sec_before : dict[str, str]
         Property key to section label.
     seen : set
@@ -422,7 +691,18 @@ def _report_unused_sections(fs, sec_before: dict[str, str], seen: set) -> None:
 class StreamCell(NamedTuple):
     """One ruled cell of the stream table.
 
-    A section heading is one cell spanning the table.
+    Attributes
+    ----------
+    text : str
+        Cell text.
+    w : float
+        Cell width.
+    fill : str
+        Cell fill.
+    bold : bool
+        Whether the text is bold.
+    anchor : str
+        SVG ``text-anchor``.
     """
     text: str
     w: float
@@ -434,7 +714,16 @@ class StreamCell(NamedTuple):
 class StreamTable(NamedTuple):
     """Stream table geometry, shared by both backends.
 
-    ``rows`` are lists of :class:`StreamCell`, top to bottom.
+    Attributes
+    ----------
+    rows : list[list[StreamCell]]
+        Cells, row by row, top to bottom.
+    size : float
+        Type size.
+    row_h : float
+        Row depth.
+    w, h : float
+        Table width and height.
     """
     rows: list
     size: float
@@ -444,7 +733,20 @@ class StreamTable(NamedTuple):
 
 
 def _stream_cell_text(values, key) -> str:
-    """Return the cell text for ``key``, ``"-"`` if missing."""
+    """Return the cell text for ``key``, ``"-"`` if missing.
+
+    Parameters
+    ----------
+    values : dict
+        A column's property values.
+    key : str
+        Property name.
+
+    Returns
+    -------
+    str
+        Cell text.
+    """
     val = values.get(key, "-")
     return "-" if val in (None, "") else str(val)
 
@@ -452,9 +754,20 @@ def _stream_cell_text(values, key) -> str:
 def _run_values(run) -> dict:
     """Return one column's property values, merged over its run.
 
-    A segment marked :attr:`~pandid.streams.Stream.tabulate` is read
-    first, then the rest in drawing order. The first value of a key
-    wins.
+    Parameters
+    ----------
+    run : list[Stream]
+        Segments of one named run, in drawing order.
+
+    Returns
+    -------
+    dict
+        First value of each key, the tabulated segment read first.
+
+    Raises
+    ------
+    ValueError
+        If more than one segment is marked ``tabulate``.
     """
     marked = [s for s in run if s.tabulate]
     if len(marked) > 1:
@@ -477,8 +790,15 @@ def _run_values(run) -> dict:
 def _table_runs(fs) -> list:
     """Return the named runs that get a column, in sheet order.
 
-    A run gets a column when it states a property or crosses the sheet
-    edge (ISO 10628-1 4.3.2 d).
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet.
+
+    Returns
+    -------
+    list[list[Stream]]
+        Runs with a property or crossing the edge (ISO 10628-1 4.3.2 d).
     """
     return [run for run in fs._named_runs().values()
             if any(s.properties for s in run) or any(s.at_boundary for s in run)]
@@ -487,8 +807,26 @@ def _table_runs(fs) -> list:
 class _Measured(NamedTuple):
     """Stream table measurements shared by the docked and sheet layouts.
 
-    ``disp`` lists rows as ``("section", label)`` or ``("data", key)``;
-    ``span`` is the width a section heading needs.
+    Attributes
+    ----------
+    streams : list[Stream]
+        Each column's stream.
+    cells : list[dict]
+        Each column's property values.
+    disp : list[tuple[str, str]]
+        Rows as ``("section", label)`` or ``("data", key)``.
+    heading : str
+        Label of the heading row.
+    size : float
+        Type size.
+    row_h : float
+        Row depth.
+    label_w : float
+        Label column width.
+    name_w : float
+        Width of each stream column.
+    span : float
+        Width a section heading needs.
     """
     streams: list
     cells: list
@@ -502,13 +840,43 @@ class _Measured(NamedTuple):
 
 
 def _section_span(m: "_Measured", columns: int) -> float:
-    """Return the label column width that fits section headings."""
+    """Return the label column width that fits section headings.
+
+    Parameters
+    ----------
+    m : _Measured
+        Table measurements.
+    columns : int
+        Stream columns beside the label column.
+
+    Returns
+    -------
+    float
+        Label column width.
+    """
     return max(m.label_w, m.span - m.name_w * columns)
 
 
 def _stream_rows(m: "_Measured", streams: list, cells: list,
                  label_w: float) -> list[list[StreamCell]]:
-    """Return the table's cells, row by row, for the given columns."""
+    """Return the table's cells, row by row, for the given columns.
+
+    Parameters
+    ----------
+    m : _Measured
+        Table measurements.
+    streams : list[Stream]
+        Each column's stream.
+    cells : list[dict]
+        Each column's property values.
+    label_w : float
+        Label column width.
+
+    Returns
+    -------
+    list[list[StreamCell]]
+        Rows, top to bottom.
+    """
     rows: list[list[StreamCell]] = [
         [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
         + [StreamCell(s.name, m.name_w, _STREAM_HEAD_FILL, True, "middle")
@@ -528,7 +896,24 @@ def _stream_rows(m: "_Measured", streams: list, cells: list,
 
 def _stream_table(m: "_Measured", streams: list, cells: list,
                   label_w: float) -> StreamTable:
-    """Return a table over the given columns: whole, or one block."""
+    """Return a table over the given columns: whole, or one block.
+
+    Parameters
+    ----------
+    m : _Measured
+        Table measurements.
+    streams : list[Stream]
+        Each column's stream.
+    cells : list[dict]
+        Each column's property values.
+    label_w : float
+        Label column width.
+
+    Returns
+    -------
+    StreamTable
+        Table geometry.
+    """
     rows = _stream_rows(m, streams, cells, label_w)
     return StreamTable(rows, m.size, m.row_h,
                        label_w + m.name_w * len(streams),
@@ -536,7 +921,18 @@ def _stream_table(m: "_Measured", streams: list, cells: list,
 
 
 def stream_table_layout(fs) -> "StreamTable | None":
-    """Return the stream table docked on a diagram, or ``None``."""
+    """Return the stream table docked on a diagram, or ``None``.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Flowsheet.
+
+    Returns
+    -------
+    StreamTable or None
+        Table geometry, or ``None`` if it is empty.
+    """
     m = _measure(fs)
     if m is None:
         return None
@@ -549,8 +945,20 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
 
     Parameters
     ----------
+    fs : Flowsheet
+        Flowsheet.
     own_sheet : bool, default=False
         Use the table-sheet default type size.
+
+    Returns
+    -------
+    _Measured or None
+        Measurements, or ``None`` if it is empty.
+
+    Raises
+    ------
+    ValueError
+        If the stated font size is not positive.
     """
     runs = _table_runs(fs)
     if not runs:
@@ -591,8 +999,7 @@ def _measure(fs, *, own_sheet: bool = False) -> "_Measured | None":
         row_h = _ROW_H if n <= 18 else max(15.0, size + 5)
         ruled = 1.0
     else:
-        # A stated size also scales row depth and column floors, but not
-        # the gutter and pad.
+        # A stated size scales row depth and column floors.
         size = asked
         ruled = size / _BASE_SIZE
         row_h = _ROW_H * ruled
@@ -629,14 +1036,37 @@ _BLOCK_ROWS = 1.0
 
 
 class TableSheet(NamedTuple):
-    """Stream table on a sheet of its own, cut into stacked blocks."""
+    """Stream table on a sheet of its own, cut into stacked blocks.
+
+    Attributes
+    ----------
+    blocks : list[StreamTable]
+        Blocks, top to bottom.
+    gap : float
+        Gap between blocks.
+    w, h : float
+        Stack width and height.
+    """
     blocks: list
     gap: float
     w: float
     h: float
 
     def at(self, left: float, top: float):
-        """Yield ``(index, block, x, y)`` for each block, top down."""
+        """Yield ``(index, block, x, y)`` for each block, top down.
+
+        Parameters
+        ----------
+        left : float
+            Left edge of the stack.
+        top : float
+            Top of the stack.
+
+        Yields
+        ------
+        tuple[int, StreamTable, float, float]
+            Block index, block and its top-left corner.
+        """
         y = top
         for i, block in enumerate(self.blocks):
             yield i, block, left, y
@@ -644,7 +1074,20 @@ class TableSheet(NamedTuple):
 
 
 def _blocks_of(n: int, count: int) -> list:
-    """Return ``range(n)`` split into ``count`` near-equal blocks."""
+    """Return ``range(n)`` split into ``count`` near-equal blocks.
+
+    Parameters
+    ----------
+    n : int
+        Number of columns.
+    count : int
+        Number of blocks, capped at ``n``.
+
+    Returns
+    -------
+    list[list[int]]
+        Column indices per block.
+    """
     count = min(count, n)
     per, extra = divmod(n, count)
     blocks, start = [], 0
@@ -660,8 +1103,17 @@ def _partition(m: "_Measured", n: int, room: "float | None") -> list:
 
     Parameters
     ----------
+    m : _Measured
+        Table measurements.
+    n : int
+        Number of columns.
     room : float or None
         Page width for the table, or ``None`` for one block.
+
+    Returns
+    -------
+    list[list[int]]
+        Column indices per block; one column each if none fits.
     """
     if room is None:
         return [list(range(n))]
@@ -679,8 +1131,15 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
 
     Parameters
     ----------
+    fs : Flowsheet
+        Flowsheet.
     room : float or None
         Page width for the table, or ``None`` for one block.
+
+    Returns
+    -------
+    TableSheet or None
+        Stacked blocks, or ``None`` if it is empty.
     """
     m = _measure(fs, own_sheet=True)
     if m is None:
@@ -702,8 +1161,15 @@ def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
 
     Parameters
     ----------
+    table : TableSheet
+        Stacked blocks.
     free : tuple[float, float, float, float] or None
         Region a fixed page leaves, or ``None`` for a grown sheet.
+
+    Returns
+    -------
+    tuple[float, float]
+        Top-left corner.
     """
     if free is None:
         return (0.0, 0.0)
@@ -713,7 +1179,22 @@ def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
 
 def draw_stream_table(table: StreamTable, left: float, top: float, *,
                       group: str = "stream_table") -> list[str]:
-    """Return ``table`` drawn with its top-left at ``(left, top)``."""
+    """Return ``table`` drawn with its top-left at ``(left, top)``.
+
+    Parameters
+    ----------
+    table : StreamTable
+        Table geometry.
+    left, top : float
+        Top-left corner.
+    group : str, default="stream_table"
+        SVG id of the enclosing group, unique per sheet.
+
+    Returns
+    -------
+    list[str]
+        SVG lines.
+    """
     out = [f'<g id="{group}">']
     y = top
     for row in table.rows:
@@ -789,7 +1270,20 @@ _COMPANY_LEAD = 12.0
 
 
 def _field(obj, name: str) -> str:
-    """Return a title-block field as text, stripped; empty if unset."""
+    """Return a title-block field as text, stripped; empty if unset.
+
+    Parameters
+    ----------
+    obj : object
+        Title block or revision.
+    name : str
+        Field name.
+
+    Returns
+    -------
+    str
+        Field text.
+    """
     return _drawn_text(getattr(obj, name, None)).strip()
 
 
@@ -798,7 +1292,18 @@ _DEFAULTS: "dict[type, dict[str, str]]" = {}
 
 
 def _class_defaults(cls: "type[Any]") -> "dict[str, str]":
-    """Return a dataclass's string field defaults, cached per class."""
+    """Return a dataclass's string field defaults, cached per class.
+
+    Parameters
+    ----------
+    cls : type
+        Dataclass, or any other class.
+
+    Returns
+    -------
+    dict[str, str]
+        Field name to default; empty for a non-dataclass.
+    """
     known = _DEFAULTS.get(cls)
     if known is None:
         known = _DEFAULTS[cls] = (
@@ -809,12 +1314,36 @@ def _class_defaults(cls: "type[Any]") -> "dict[str, str]":
 
 
 def _stated(obj, name: str) -> str:
-    """Return a field as drawn: the stated value, else its default."""
+    """Return a field as drawn: the stated value, else its default.
+
+    Parameters
+    ----------
+    obj : object
+        Title block or revision.
+    name : str
+        Field name.
+
+    Returns
+    -------
+    str
+        Field text.
+    """
     return _field(obj, name) or _class_defaults(type(obj)).get(name, "")
 
 
 def company_lines(company: str) -> list[str]:
-    """Return ``company`` wrapped between words to fit its cell."""
+    """Return ``company`` wrapped between words for its cell.
+
+    Parameters
+    ----------
+    company : str
+        Company name.
+
+    Returns
+    -------
+    list[str]
+        Lines; a word wider than the cell stays whole on its own.
+    """
     line, lines = "", []
     for word in company.split():
         trial = (line + " " + word).strip()
@@ -831,7 +1360,15 @@ def company_lines(company: str) -> list[str]:
 def company_overflow(tb) -> "tuple[int, float, float] | None":
     """Return how far the wrapped company name overruns the strip.
 
-    The result is ``(lines, room, need)``, or ``None`` if it fits.
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    tuple[int, float, float] or None
+        ``(lines, room, need)``, or ``None`` if it fits.
     """
     lines = company_lines(_stated(tb, "company"))
     _, room = measure_title_strip(tb)
@@ -842,8 +1379,15 @@ def company_overflow(tb) -> "tuple[int, float, float] | None":
 def undrawn_signatories(tb) -> "list[tuple[str, str, str]]":
     """Return the block signatories the strip does not draw.
 
-    Each is ``(field, value, displaced_by)``; ``displaced_by`` is empty
-    when there is no revision row.
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        ``(field, value, displaced_by)``; ``displaced_by`` may be empty.
     """
     out: list[tuple[str, str, str]] = []
     newest = tb.revisions[-1] if tb.revisions else None
@@ -862,14 +1406,36 @@ def undrawn_signatories(tb) -> "list[tuple[str, str, str]]":
 
 
 def _header_lines(tb) -> list[tuple[str, str]]:
-    """Return the set client and project rows as ``(label, value)``."""
+    """Return the set client and project rows as ``(label, value)``.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Rows, client first.
+    """
     return [(label, value) for label, value
             in (("CLIENT", _stated(tb, "client")),
                 ("PROJECT", _stated(tb, "project"))) if value]
 
 
 def measure_title_strip(tb) -> tuple[float, float]:
-    """Return the title strip's ``(width, height)``."""
+    """Return the title strip's ``(width, height)``.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+
+    Returns
+    -------
+    tuple[float, float]
+        Width and height in drawing units.
+    """
     n = len(tb.revisions)
     h = max((n + 1) * _REV_ROW, _BODY_H) + _HDR_ROW * len(_header_lines(tb))
     return _REV_W + _COMPANY_W + _INFO_W, h
@@ -878,8 +1444,20 @@ def measure_title_strip(tb) -> tuple[float, float]:
 class RevGrid(NamedTuple):
     """Revision grid geometry, with text already clipped.
 
-    ``rows`` run oldest first, top to bottom; ``header_y`` rules off the
-    heading row at the foot.
+    Attributes
+    ----------
+    x, y : float
+        Top-left corner.
+    w, h : float
+        Width and height.
+    cols : tuple[tuple[str, float], ...]
+        Heading and width of each column.
+    row_h : float
+        Row depth.
+    header_y : float
+        Top of the heading row, at the foot.
+    rows : list[list[str]]
+        Revision rows, oldest first.
     """
     x: float
     y: float
@@ -894,9 +1472,16 @@ class RevGrid(NamedTuple):
 class Strip(NamedTuple):
     """Title strip geometry, shared by both backends.
 
-    ``rules`` are the two full-depth dividers. ``parts`` holds, in
-    drawing order, ``("rule", x1, y1, x2, y2, weight)`` and
-    ``("text", x, baseline, string, size, anchor, bold, fill)``.
+    Attributes
+    ----------
+    box : tuple[float, float, float, float]
+        Strip ``(x, y, w, h)``.
+    rules : list[tuple]
+        The two full-depth dividers, as rule parts.
+    rev : RevGrid
+        Revision grid.
+    parts : list[tuple]
+        Rules and text in drawing order; see :func:`_strip_part`.
     """
     box: tuple
     rules: list
@@ -910,19 +1495,28 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     """Return the title strip laid out from its bottom-right corner.
 
     An overlong title is set smaller, down to the subtitle size, then
-    trimmed. The company name and sheet count are drawn whole and
-    reported. Every other value is trimmed with an ellipsis.
+    trimmed. The company name and sheet count are drawn whole; other
+    values are trimmed with an ellipsis.
 
     Parameters
     ----------
+    tb : TitleBlock
+        Title block.
     name : str
         Title fallback.
     date : str
         Date fallback.
+    right, bottom : float
+        Bottom-right corner.
     fit_scale : str, default=""
         Scale for a block that states none.
     report : Reporter, optional
         Receives a finding per cell that cannot hold its value.
+
+    Returns
+    -------
+    Strip
+        Strip geometry.
     """
     name, date = str(name or "").strip(), str(date or "").strip()
     date = _stated(tb, "date") or date
@@ -938,8 +1532,17 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     def rev_cells(cells, bold=False):
         """Return one grid row, each cell clipped to its column.
 
-        ``cells`` holds a ``(value, field)`` pair per column; an empty
-        field is not reported.
+        Parameters
+        ----------
+        cells : list[tuple[str, str]]
+            ``(value, field)`` per column; blank fields go unreported.
+        bold : bool, default=False
+            Measure bold advances.
+
+        Returns
+        -------
+        list[str]
+            Clipped cell texts.
         """
         return [clip(v, cw - 2 * _REV_PAD, _REV_TYPE, bold,
                      field=f, report=report if f else None)
@@ -1068,13 +1671,41 @@ def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
                     ) -> "list[tuple[str, str, str, float, float]]":
     """Return the strip's overflow findings without drawing.
 
-    Each finding is a tuple of :data:`Reporter` arguments.
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+    name : str
+        Title fallback.
+    date : str
+        Date fallback.
+    fit_scale : str, default=""
+        Scale for a block that states none.
+
+    Returns
+    -------
+    list[tuple[str, str, str, float, float]]
+        Findings, each a tuple of :data:`Reporter` arguments.
     """
     found: list[tuple[str, str, str, float, float]] = []
 
     def collect(field: str, text: str, drawn: str,
                 room: float, need: float) -> None:
-        """Record a finding."""
+        """Record a finding.
+
+        Parameters
+        ----------
+        field : str
+            Field name.
+        text : str
+            Requested text.
+        drawn : str
+            Drawn text.
+        room : float
+            Cell width.
+        need : float
+            Text width.
+        """
         found.append((field, text, drawn, room, need))
 
     title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale, report=collect)
@@ -1082,7 +1713,18 @@ def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
 
 
 def _strip_part(part) -> str:
-    """Return one :class:`Strip` part as SVG."""
+    """Return one :class:`Strip` part as SVG.
+
+    Parameters
+    ----------
+    part : tuple
+        A ``"rule"`` or ``"text"`` part.
+
+    Returns
+    -------
+    str
+        SVG element.
+    """
     if part[0] == "rule":
         _, x1, y1, x2, y2, weight = part
         return (f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
@@ -1094,7 +1736,28 @@ def _strip_part(part) -> str:
 def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
                      fit_scale: str = "", *,
                      report: "Reporter | None" = None) -> list[str]:
-    """Return the title strip drawn from its bottom-right corner."""
+    """Return the title strip drawn from its bottom-right corner.
+
+    Parameters
+    ----------
+    tb : TitleBlock
+        Title block.
+    name : str
+        Title fallback.
+    date : str
+        Date fallback.
+    right, bottom : float
+        Bottom-right corner.
+    fit_scale : str, default=""
+        Scale for a block that states none.
+    report : Reporter, optional
+        Receives a finding per cell that cannot hold its value.
+
+    Returns
+    -------
+    list[str]
+        SVG elements.
+    """
     strip = title_strip_layout(tb, name, date, right, bottom, fit_scale,
                                report=report)
     x, y, w, h = strip.box
@@ -1112,7 +1775,17 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
         L.append(_strip_part(("rule", cx, g.y, cx, g.y + g.h, _STRIP_HAIRLINE)))
 
     def rev_row(ry, vals, bold=False):
-        """Append one row of revision text at ``ry``."""
+        """Append one row of revision text at ``ry``.
+
+        Parameters
+        ----------
+        ry : float
+            Top of the row.
+        vals : list[str]
+            Cell texts.
+        bold : bool, default=False
+            Set the text bold.
+        """
         cx = g.x
         for (_heading, cw), value in zip(g.cols, vals):
             L.append(_text(cx + _REV_PAD, ry + g.row_h - 4, value,
@@ -1138,7 +1811,22 @@ ZONE_BAND = 16.0
 
 def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
                ) -> tuple[float, float, float, float]:
-    """Return the sheet rectangle around a drawing frame."""
+    """Return the sheet rectangle around a drawing frame.
+
+    Parameters
+    ----------
+    ix, iy : float
+        Frame top-left corner.
+    iw, ih : float
+        Frame width and height.
+    band : float, default=ZONE_BAND
+        Zone band width.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Sheet ``(x, y, w, h)``.
+    """
     return ix - band, iy - band, iw + 2 * band, ih + 2 * band
 
 
@@ -1149,9 +1837,14 @@ ZONE_TYPE, _ZONE_BASE = 9, 3
 class Zoned(NamedTuple):
     """Zone-ruled border geometry, shared by both backends.
 
-    ``outer`` is the sheet border and ``inner`` the drawing frame.
-    ``parts`` holds ``("rule", x1, y1, x2, y2)`` ticks and
-    ``("label", x, y, text)`` letters centred on ``(x, y)``.
+    Attributes
+    ----------
+    outer : tuple[float, float, float, float]
+        Sheet border ``(x, y, w, h)``.
+    inner : tuple[float, float, float, float]
+        Drawing frame ``(x, y, w, h)``.
+    parts : list[tuple]
+        ``("rule", x1, y1, x2, y2)`` and ``("label", x, y, text)``.
     """
     outer: tuple[float, float, float, float]
     inner: tuple[float, float, float, float]
@@ -1160,7 +1853,22 @@ class Zoned(NamedTuple):
 
 def zone_layout(ix: float, iy: float, iw: float, ih: float,
                 band: float = ZONE_BAND) -> Zoned:
-    """Return the zone-ruled border around a drawing frame."""
+    """Return the zone-ruled border around a drawing frame.
+
+    Parameters
+    ----------
+    ix, iy : float
+        Frame top-left corner.
+    iw, ih : float
+        Frame width and height.
+    band : float, default=ZONE_BAND
+        Zone band width.
+
+    Returns
+    -------
+    Zoned
+        Border geometry.
+    """
     ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih, band)
     cols = max(4, min(12, round(iw / 165)))
     rows = max(3, min(8, round(ih / 165)))
@@ -1191,7 +1899,22 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
 
 def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
                ) -> tuple[list[str], tuple[float, float, float, float]]:
-    """Return the zone-ruled border drawn, and the sheet rectangle."""
+    """Return the zone-ruled border drawn, and the sheet rectangle.
+
+    Parameters
+    ----------
+    ix, iy : float
+        Frame top-left corner.
+    iw, ih : float
+        Frame width and height.
+    band : float, default=ZONE_BAND
+        Zone band width.
+
+    Returns
+    -------
+    tuple[list[str], tuple[float, float, float, float]]
+        SVG elements and the sheet ``(x, y, w, h)``.
+    """
     z = zone_layout(ix, iy, iw, ih, band)
     ox, oy, ow, oh = z.outer
     L = [f'<rect x="{ox:.1f}" y="{oy:.1f}" width="{ow:.1f}" height="{oh:.1f}" '
@@ -1223,7 +1946,17 @@ OUTER_MARGIN = 8.0
 
 
 class Docked(NamedTuple):
-    """One piece of furniture and the rectangle the sheet gives it."""
+    """One piece of furniture and the rectangle the sheet gives it.
+
+    Attributes
+    ----------
+    obj : object
+        The furniture.
+    x, y : float
+        Top-left corner.
+    w, h : float
+        Width and height.
+    """
     obj: object
     x: float
     y: float
@@ -1235,24 +1968,30 @@ def dock(items, inner, *, sheet=None, too_small=None):
     """Return ``(placed, frame, free)`` for the sheet furniture.
 
     Each box stacks flush to the frame edge its ``align`` names, inset
-    by its ``margin``; a box with a ``position`` goes there. Without a
-    ``sheet`` the frame grows to hold the drawing and the bands.
-    ``placed`` lists :class:`Docked` boxes, ``frame`` is
-    ``(x, y, w, h)`` and ``free`` is the region left on a fixed page,
-    else ``None``.
+    by its ``margin``; a box with a ``position`` goes there.
 
     Parameters
     ----------
     items : iterable of tuple
-        ``(obj, align, w, h)``; ``margin`` and ``position`` are read
-        from ``obj`` where present.
+        ``(obj, align, w, h)``; ``obj`` may set margin and position.
     inner : tuple[float, float, float, float]
         Drawing bounds ``(x0, y0, x1, y1)``.
     sheet : _Sheet, optional
-        Fixed page.
+        Fixed page; without it the frame grows to fit.
     too_small : callable, optional
-        Takes ``(need_w, need_h, culprit)`` and returns the exception
-        to raise when a fixed page cannot hold the furniture.
+        Takes ``(need_w, need_h, culprit)``; returns the error to raise.
+
+    Returns
+    -------
+    tuple
+        Placed boxes, the frame ``(x, y, w, h)`` and the free region.
+
+    Raises
+    ------
+    TypeError
+        If ``sheet`` overflows and ``too_small`` is not given.
+    Exception
+        From ``too_small``, if the furniture overflows ``sheet``.
     """
     from pandid.document import _ALIGN
 
@@ -1267,15 +2006,48 @@ def dock(items, inner, *, sheet=None, too_small=None):
             cols[align].append((obj, w, h))
 
     def stack_h(entries):
-        """Return a stack's height, with gaps."""
+        """Return a stack's height, with gaps.
+
+        Parameters
+        ----------
+        entries : list[tuple]
+            ``(obj, w, h)`` boxes in one stack.
+
+        Returns
+        -------
+        float
+            Height including gaps.
+        """
         return _total(h for _, _, h in entries) + GAP * max(0, len(entries) - 1)
 
     def stack_w(entries):
-        """Return a stack's width."""
+        """Return a stack's width.
+
+        Parameters
+        ----------
+        entries : list[tuple]
+            ``(obj, w, h)`` boxes in one stack.
+
+        Returns
+        -------
+        float
+            Width of its widest box.
+        """
         return max((w for _, w, _ in entries), default=0.0)
 
     def biggest(dim: int):
-        """Return the largest piece along ``dim``: 1 width, 2 height."""
+        """Return the largest piece along ``dim``.
+
+        Parameters
+        ----------
+        dim : int
+            1 for width, 2 for height.
+
+        Returns
+        -------
+        object or None
+            The piece, or ``None`` if there is none.
+        """
         entries = [it for col in cols.values() for it in col]
         return max(entries, key=lambda it: it[dim])[0] if entries else None
 
@@ -1287,7 +2059,18 @@ def dock(items, inner, *, sheet=None, too_small=None):
     left_w, right_w = stack_w(cols["left"]), stack_w(cols["right"])
 
     def row_w(lk, ck, rk):
-        """Return the width a band row needs."""
+        """Return the width a band row needs.
+
+        Parameters
+        ----------
+        lk, ck, rk : str
+            Left, centre and right alignments of the row.
+
+        Returns
+        -------
+        float
+            Row width.
+        """
         lw, cw, rw = stack_w(cols[lk]), stack_w(cols[ck]), stack_w(cols[rk])
         side = (lw + SEP + rw) if (lw and rw) else max(lw, rw)
         return max(side, cw)
@@ -1333,7 +2116,22 @@ def dock(items, inner, *, sheet=None, too_small=None):
     placed: list[Docked] = []
 
     def x_for(mode, w, m):
-        """Return a box's x for left, right or centred placement."""
+        """Return a box's x for left, right or centred placement.
+
+        Parameters
+        ----------
+        mode : str
+            ``"l"``, ``"r"`` or ``"c"``.
+        w : float
+            Box width.
+        m : float
+            Box margin.
+
+        Returns
+        -------
+        float
+            Left edge of the box.
+        """
         if mode == "l":
             return ix + m
         if mode == "r":
@@ -1341,7 +2139,15 @@ def dock(items, inner, *, sheet=None, too_small=None):
         return ix + (iw - w) / 2
 
     def put_top(entries, mode):
-        """Place a stack against the top edge."""
+        """Place a stack against the top edge.
+
+        Parameters
+        ----------
+        entries : list[tuple]
+            ``(obj, w, h)`` boxes in one stack.
+        mode : str
+            ``"l"``, ``"r"`` or ``"c"``.
+        """
         y = iy
         for obj, w, h in entries:
             m = getattr(obj, "margin", 0.0)
@@ -1349,7 +2155,15 @@ def dock(items, inner, *, sheet=None, too_small=None):
             y += m + h + GAP
 
     def put_bottom(entries, mode):
-        """Place a stack against the bottom edge."""
+        """Place a stack against the bottom edge.
+
+        Parameters
+        ----------
+        entries : list[tuple]
+            ``(obj, w, h)`` boxes in one stack.
+        mode : str
+            ``"l"``, ``"r"`` or ``"c"``.
+        """
         y = iyb
         for obj, w, h in reversed(entries):
             m = getattr(obj, "margin", 0.0)
@@ -1358,7 +2172,15 @@ def dock(items, inner, *, sheet=None, too_small=None):
             y = top - GAP
 
     def put_side(entries, mode):
-        """Place a stack against a side edge, centred vertically."""
+        """Place a stack against a side edge, centred vertically.
+
+        Parameters
+        ----------
+        entries : list[tuple]
+            ``(obj, w, h)`` boxes in one stack.
+        mode : str
+            ``"l"``, ``"r"`` or ``"c"``.
+        """
         y = (iy + iyb) / 2 - stack_h(entries) / 2
         for obj, w, h in entries:
             m = getattr(obj, "margin", 0.0)
