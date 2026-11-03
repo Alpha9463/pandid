@@ -955,6 +955,26 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             for said in missed:
                 warnings.append(Issue("warning", "pin-not-honored", f"{said}. {cure}"))
 
+        # A grid pin is a place in order: a lower col is drawn further west,
+        # and a lower row higher up its column. A frame records the rank it
+        # was pinned to, so compare where the units are drawn.
+        graded = [u for u in placed if u.kind != "instrument" and u.pin_ is not None]
+        for a in graded:
+            for b in graded:
+                pa, pb, fa, fb = a.pin_, b.pin_, a.frame, b.frame
+                assert pa is not None and pb is not None and fa is not None and fb is not None
+                if (pa.col is not None and pb.col is not None and pa.x is None and pb.x is None
+                        and pa.col < pb.col and fa.cx >= fb.cx):
+                    said = f"{a.name} was pinned col={pa.col}, west of {b.name}'s col={pb.col}"
+                elif (pa.row is not None and pb.row is not None and pa.y is None and pb.y is None
+                      and pa.col == pb.col and pa.row < pb.row and fa.cy >= fb.cy):
+                    said = f"{a.name} was pinned row={pa.row}, above {b.name}'s row={pb.row}"
+                else:
+                    continue
+                warnings.append(Issue("warning", "pin-not-honored",
+                                      f"{said}, and is not drawn so. Something moved one of "
+                                      "them after layout read the pins"))
+
         boxes = [(u, unit_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None

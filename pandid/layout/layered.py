@@ -291,14 +291,23 @@ def _stacks(units: list[Unit], links: list[Link]
             u = lead[u]
         return u
 
+    col = {u: None if u.pin_ is None else u.pin_.col for u in units}
     stacked = []
     for link in links:
         a, b = link.source.owner, link.dest.owner
         up = _STACK.get((_face(link.source), _face(link.dest)))
         if up is None or link.recycle or find(a) is find(b):
             continue
+        upper, lower = (b, a) if up else (a, b)
+        ca, cb = col[find(a)], col[find(b)]
+        rows = [None if u.pin_ is None else u.pin_.row for u in (upper, lower)]
+        # The author's grid pins win: a stack never joins two columns or turns rows over.
+        if (ca is not None and cb is not None and ca != cb) or (
+                rows[0] is not None and rows[1] is not None and rows[0] > rows[1]):
+            continue
+        col[find(b)] = cb if cb is not None else ca
         lead[find(a)] = find(b)
-        stacked.append((b, a, link) if up else (a, b, link))
+        stacked.append((upper, lower, link))
     groups: dict[Unit, list[Unit]] = {}
     for u in units:
         groups.setdefault(find(u), []).append(u)

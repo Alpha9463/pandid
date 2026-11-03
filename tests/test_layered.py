@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from _layout_cases import build as build_biodiesel
-from pandid import Flowsheet, GravitySeparator, Product, Reactor, units as U
+from pandid import Block, Feed, Flowsheet, GravitySeparator, Product, Reactor, units as U
 from pandid.layout.quality import measure_final
-from pandid.portgeom import port_point
+from pandid.portgeom import port_point, resolve_port
 from pandid.geometry import Frame, Route
 from pandid.routing.metrics import real_bends
 from scripts import layout_quality, route_quality
@@ -206,3 +206,123 @@ def test_a_valve_on_an_upright_leg_runs_along_it(mirror: str | bool | None) -> N
     for stream in fs.streams:
         assert stream.route is not None
         assert real_bends(stream.route.waypoints) == 0
+
+
+def _upright_line(valve: U.Valve) -> tuple[Flowsheet, U.Valve]:
+    """Put a valve on a pipe that runs straight down from one tank into another.
+
+    Parameters
+    ----------
+    valve : Valve
+        Valve to put on the pipe.
+
+    Returns
+    -------
+    tuple[Flowsheet, Valve]
+        The sheet and the valve on it.
+    """
+    fs = Flowsheet("Upright line")
+    top = fs.add(U.Tank("T-1"))
+    bottom = fs.add(U.Tank("T-2")).nozzle("in_1", "N")
+    line = fs.connect(top.ports["out_1"], bottom.ports["in_1"])
+    return fs, fs.add(valve, on=line)
+
+
+def test_a_stated_level_turn_holds_and_round_trips() -> None:
+    """Keep a valve level on an upright pipe when its author stated a 0 turn.
+
+    Returns
+    -------
+    None
+        The stated 0 is drawn and written to a spec; an unstated turn is not
+        written.
+    """
+    fs, valve = _upright_line(U.Valve("HV-1").pin(orientation=0))
+    fs.route()
+    assert valve.frame is not None and valve.frame.orientation == 0
+
+    (entry,) = [u for u in fs.to_dict()["units"] if u["name"] == "HV-1"]
+    assert entry["pin"]["orientation"] == 0
+    again = Flowsheet.from_dict(fs.to_dict())
+    again.route()
+    (copy,) = [u for u in again.units if u.name == "HV-1"]
+    assert copy.frame is not None and copy.frame.orientation == 0
+
+    loose, free = _upright_line(U.Valve("HV-2").pin(mirrored="y"))
+    (entry,) = [u for u in loose.to_dict()["units"] if u["name"] == "HV-2"]
+    assert "orientation" not in entry["pin"]
+    loose.route()
+    assert free.frame is not None and free.frame.orientation in (90, 270)
+
+
+def test_a_valve_with_a_stated_inlet_face_is_set_on_its_line() -> None:
+    """Set a valve whose inlet face its author stated, skipping poses that lose it.
+
+    Returns
+    -------
+    None
+        The line routes and the valve's inlet is on the stated face.
+    """
+    fs = Flowsheet("Stated face")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    line = fs.connect(feed.outlet, product.inlet)
+    valve = fs.add(U.Valve("HV-1").nozzle("inlet", "W"), on=line)
+    fs.route()
+
+    assert valve.frame is not None
+    assert resolve_port(valve, valve.frame, "inlet").face == "W"
+    assert not any(measure_final(fs).hard)
+
+
+@pytest.mark.parametrize("pins", [((0, None), (1, None)), ((0, 1), (0, 0))])
+def test_grid_pins_win_over_a_stack(pins: tuple[tuple[int, int | None], ...]) -> None:
+    """Keep two blocks where their grid pins put them, though their pipe would stack them.
+
+    A pipe from A's bottom to B's top stacks B under A, unless the author
+    pinned them to different columns or B to a row above A's.
+
+    Parameters
+    ----------
+    pins : tuple[tuple[int, int or None], ...]
+        ``(col, row)`` pinned on A, then on B.
+
+    Returns
+    -------
+    None
+        B is drawn east of A, or above it, as pinned, and nothing is reported.
+    """
+    fs = Flowsheet("Pinned stack")
+    a = fs.add(Block("A", outputs=["S"]))
+    b = fs.add(Block("B", inputs=["N"]))
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    for unit, (col, row) in zip((a, b), pins):
+        unit.pin(col=col, row=row)
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None
+    if pins[0][0] != pins[1][0]:
+        assert b.frame.x >= a.frame.x_max
+    else:
+        assert b.frame.y_max <= a.frame.y
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+def test_a_grid_pin_drawn_out_of_order_is_reported() -> None:
+    """Report two units drawn in the other order from their column pins.
+
+    Returns
+    -------
+    None
+        ``pin-not-honored`` names the pin the drawing does not keep.
+    """
+    fs = Flowsheet("Swapped")
+    a = fs.add(Block("A")).pin(col=0)
+    b = fs.add(Block("B")).pin(col=1)
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.layout()
+    assert a.frame is not None and b.frame is not None
+    a.frame.x, b.frame.x = b.frame.x, a.frame.x
+
+    found = [i for i in fs.validate() if i.code == "pin-not-honored"]
+    assert found and "col" in found[0].message

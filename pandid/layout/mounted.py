@@ -531,8 +531,7 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     direction = (forward, 0) if level else (0, forward)
     ordinate = ay if level else ax
     assert unit.frame is not None
-    # A pin with no turn (a mirror, or what is left of a position) states no turn.
-    turned = unit.pin_ is not None and bool(unit.pin_.orientation % 360)
+    turned = unit._turn_stated
     if turned:
         # A stated turn is kept, mirrored along the pipe when the flow runs the other way.
         turn, flip = int(unit.frame.orientation), bool(unit.frame.mirrored)
@@ -545,7 +544,10 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     fits = []
     for turn, flip in poses:
         candidate = _candidate(unit, point, turn, flip)
-        inlet = port_point(unit, candidate, "inlet")
+        try:
+            inlet = port_point(unit, candidate, "inlet")
+        except ValueError:
+            continue  # a nozzle face the author stated cannot be reached in this pose
         shift = ordinate - inlet[1 if level else 0]
         candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
                             y=candidate.y + (shift if level else 0.0))
