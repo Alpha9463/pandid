@@ -10,7 +10,8 @@ from pandid import Flowsheet, units as U
 from pandid.render import debug as D
 from pandid.render.export import flatten
 
-from test_halo_invariants import _halos, _overlaps
+from _layout_cases import overlaps
+from test_halo_invariants import _halos
 from test_label_invariants import CORPUS, _RENDER_OPTS
 
 SVG = "{http://www.w3.org/2000/svg}"
@@ -347,7 +348,7 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
     shell_in = [b for b, text in _placed(svg) if text.startswith("shell_in")]
     assert shell_in, "the exchanger's shell_in port is not labelled at all"
     for box in shell_in:
-        assert not [h for h in halos if _overlaps(box, h)], (
+        assert not [h for h in halos if overlaps(box, h)], (
             "shell_in is written under an opaque halo and loses characters to it"
         )
 
@@ -410,8 +411,8 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
     buried = [
         text
         for i, (box, text) in enumerate(labels)
-        if any(_overlaps(box, h) for h in halos)
-        or any(_overlaps(box, other) for j, (other, _) in enumerate(labels) if j != i)
+        if any(overlaps(box, h) for h in halos)
+        or any(overlaps(box, other) for j, (other, _) in enumerate(labels) if j != i)
     ]
     assert len(buried) <= _CROWDED.get(name, 0), (
         f"{name}: {len(buried)} of {len(labels)} overlay labels are written under a "

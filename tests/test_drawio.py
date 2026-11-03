@@ -15,7 +15,7 @@ import pytest
 
 from _render_cases import copy_settled_case
 from test_crossing_style import _ARC, MARKED, _paths
-from test_halo_invariants import _overlaps
+from _layout_cases import overlaps
 import pandid
 from pandid import units
 from pandid.flowsheet import Flowsheet
@@ -2918,7 +2918,7 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(
         (name, other)
         for name, box in numbers
         for other, obstacle in drawn.items()
-        if _overlaps(box, obstacle)
+        if overlaps(box, obstacle)
     ]
     assert not struck, f"{stem}: line numbers written over {struck}"
 

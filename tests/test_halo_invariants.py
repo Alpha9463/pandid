@@ -6,6 +6,7 @@ from typing import NamedTuple
 
 import pytest
 
+from _layout_cases import overlaps
 from _render_cases import copy_settled_case
 from pandid.portgeom import unit_box
 from pandid.render.svg import _PLATE_CLEARANCE, _ink, _obstacle
@@ -31,11 +32,6 @@ def _halos(svg: str) -> "list[tuple[float, float, float, float]]":
         )
         for m in _HALO.finditer(body)
     ]
-
-
-def _overlaps(a, b) -> bool:
-    """Return whether two rectangles share area; touching edges do not count."""
-    return a[2] > b[0] and a[0] < b[2] and a[3] > b[1] and a[1] < b[3]
 
 
 class Face(NamedTuple):
@@ -133,7 +129,7 @@ def test_no_halo_lands_on_a_graphical_symbol(drawn, name):
         f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
         for halo in halos
         for u, box in symbols
-        if _overlaps(halo, _inked(box))
+        if overlaps(halo, _inked(box))
     ]
     assert not broken, f"{name}: halo over the ink of " + "; ".join(sorted(set(broken)))
 
@@ -147,7 +143,7 @@ def test_no_halo_is_written_hard_against_an_outline(drawn, name):
         f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
         for halo in halos
         for u, box in symbols
-        if _overlaps(halo, _obstacle(box))
+        if overlaps(halo, _obstacle(box))
     ]
     assert not crowded, f"{name}: halo within {_PLATE_CLEARANCE}u of " + "; ".join(
         sorted(set(crowded))
@@ -163,7 +159,7 @@ def test_no_halo_lands_on_an_impulse_line(drawn, name):
         f"({box[0]:.0f}, {box[1]:.0f})-({box[2]:.0f}, {box[3]:.0f})"
         for halo in halos
         for box in taps
-        if _overlaps(halo, box)
+        if overlaps(halo, box)
     ]
     assert not cut, f"{name}: halo over the impulse line at " + "; ".join(sorted(set(cut)))
 
@@ -197,7 +193,7 @@ def test_no_flange_mark_lands_on_a_symbol_it_is_not_the_joint_for(drawn, name):
         f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
         for face in bars
         for u, box in symbols
-        if u is not face.port.owner and _overlaps(face.box, _inked(box))
+        if u is not face.port.owner and overlaps(face.box, _inked(box))
     ]
     assert not over, f"{name}: flange face over the ink of " + "; ".join(sorted(set(over)))
 
@@ -229,7 +225,7 @@ def test_no_flange_mark_lands_on_a_tag_or_a_line_number(drawn, name):
         f"({face.box[0]:.0f}, {face.box[1]:.0f})"
         for face in bars
         for halo in halos
-        if _overlaps(face.box, halo)
+        if overlaps(face.box, halo)
     ]
     assert not hit, f"{name}: a halo deletes the flange face at " + "; ".join(sorted(set(hit)))
 
@@ -263,7 +259,7 @@ def test_no_letter_code_lands_on_a_line(drawn, name):
         f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
         for box in _code_boxes(fs)
         for line in _ink(fs, "vertical")
-        if _overlaps(box, line.box)
+        if overlaps(box, line.box)
     ]
     assert not struck, f"{name}: a letter code lies on " + "; ".join(sorted(set(struck)))
 
@@ -279,10 +275,7 @@ def test_no_letter_code_lands_on_a_tag_or_a_line_number(drawn, name):
         if not any(all(abs(a - b) < 0.2 for a, b in zip(h, code)) for code in codes)
     ]
     hit = [
-        f"({box[0]:.0f}, {box[1]:.0f})"
-        for box in codes
-        for other in others
-        if _overlaps(box, other)
+        f"({box[0]:.0f}, {box[1]:.0f})" for box in codes for other in others if overlaps(box, other)
     ]
     assert not hit, f"{name}: a letter code is written over a label at " + "; ".join(
         sorted(set(hit))
