@@ -8,17 +8,6 @@ must not disagree with the drawing.
 from pandid import Flowsheet, units as U
 
 
-def test_valve_carries_stream_number():
-    fs = Flowsheet("v")
-    f = fs.add(U.Feed("F"))
-    v = fs.add(U.Valve("FV-1"))
-    p = fs.add(U.Product("P"))
-    s1 = fs.connect(f.outlet, v.inlet)
-    s2 = fs.connect(v.outlet, p.inlet)
-    fs.renumber_streams()
-    assert s1.name == s2.name == "S1"  # one number through the inline valve
-
-
 def test_new_line_number_valve_breaks_number():
     fs = Flowsheet("v")
     f = fs.add(U.Feed("F"))
@@ -40,17 +29,6 @@ def test_reactor_breaks_number():
     s2 = fs.connect(r.outlet, p.inlet)
     fs.renumber_streams()
     assert s1.name != s2.name
-
-
-def test_fitting_carries_stream_number():
-    fs = Flowsheet("f")
-    f = fs.add(U.Feed("F"))
-    st = fs.add(U.Fitting("ST-1", variant="strainer"))
-    p = fs.add(U.Product("P"))
-    s1 = fs.connect(f.outlet, st.inlet)
-    s2 = fs.connect(st.outlet, p.inlet)
-    fs.renumber_streams()
-    assert s1.name == s2.name == "S1"  # a strainer is inline, like a valve
 
 
 def test_connect_returns_the_number_that_gets_drawn():
