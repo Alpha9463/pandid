@@ -384,7 +384,6 @@ def quadrant_labels(fs, direction: str) -> list:
         return []
     ink = _ink(fs, direction)
     symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    symbols += [_obstacle(b) for b in flange_boxes(fs, None)]
 
     out: list = []
     for u in annotated:
