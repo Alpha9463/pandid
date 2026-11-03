@@ -107,6 +107,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exchanger, now meet the ISO 10628-1 5.3.1 c) floor.
 - **A multi-feed `Separator` round-trips through a spec (#579).**
   `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
+- **Tag halos and self-sized blocks and flags fit their text (#579).** They
+  are measured with the face's own letter widths, so wide capitals are
+  covered and lower-case names no longer pad their box.
+- **draw.io letters table and revision cells where the sheet does (#579).**
+  Their text had sat one or two units further in.
 - **A tap line to a balloon off its tap's axis is drawn square (#170).** It
   leaves the host at a right angle and turns once onto the balloon, or twice
   when the balloon is behind the tapped face, instead of running diagonally.
