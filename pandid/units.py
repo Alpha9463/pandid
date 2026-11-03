@@ -3374,7 +3374,7 @@ class Instrument(Unit):
     # Variants that may be drawn several times under one tag.
     _REPEATABLE_VARIANTS = frozenset({"sis", "logic", "interlock"})
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         type: str,
         number: str | int = "",
@@ -3418,7 +3418,28 @@ class Instrument(Unit):
         self.tap: tuple[float, float] | None = None
 
     def _resolved_variant(self, name: str, variant: str, display: str | None) -> str:
-        """Set :attr:`display` and return the registered variant."""
+        """Set :attr:`display` and return the registered variant.
+
+        Parameters
+        ----------
+        name : str
+            Tag, for messages.
+        variant : str
+            Symbol type.
+        display : str or None
+            Where the reading is available; ``None`` implies one.
+
+        Returns
+        -------
+        str
+            Registered variant.
+
+        Raises
+        ------
+        ValueError
+            If ``variant`` is a display spelling, ``display`` is
+            unknown, or the pair has no drawing.
+        """
         meant = _DISPLAY_VARIANTS.get(variant)
         if meant is not None:
             raise ValueError(
@@ -3485,14 +3506,36 @@ class Instrument(Unit):
         return self._add_port(name, self.ports[member.group(1)].direction, "signal")
 
     def _mint_port(self, name: str) -> Port | None:
-        """Return :meth:`signal_port`, or ``None`` if there is none."""
+        """Return :meth:`signal_port`, or ``None`` if there is none.
+
+        Parameters
+        ----------
+        name : str
+            Port name.
+
+        Returns
+        -------
+        Port or None
+            Existing or new port, or ``None``.
+        """
         try:
             return self.signal_port(name)
         except KeyError:
             return None
 
     def _pool_of(self, port_name: str) -> str | None:
-        """Return the port's pool, or ``None`` for ``pv``."""
+        """Return the port's pool, or ``None`` for ``pv``.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        str or None
+            ``"sig_in"``, ``"sig_out"`` or ``None``.
+        """
         if port_name in self._SIGNAL_POOLS:
             return port_name
         member = _POOL_MEMBER.fullmatch(port_name)
@@ -3500,7 +3543,13 @@ class Instrument(Unit):
 
     @property
     def tag(self) -> str:
-        """The ISA tag drawn in the symbol."""
+        """Return the ISA tag drawn in the symbol.
+
+        Returns
+        -------
+        str
+            Drawn tag.
+        """
         return self._tag
 
     def repeats(self, other: "Unit") -> bool:
@@ -3521,7 +3570,18 @@ class Instrument(Unit):
         """
 
         def symbol(variant: object) -> object:
-            """Return the symbol a variant draws."""
+            """Return the symbol a variant draws.
+
+            Parameters
+            ----------
+            variant : object
+                Balloon variant.
+
+            Returns
+            -------
+            object
+                ``"sis"`` for ``"logic"``, else ``variant``.
+            """
             return "sis" if variant == "logic" else variant
 
         if other is self._marks:
@@ -3604,7 +3664,8 @@ class Instrument(Unit):
         offset : float, default=45.0
             Tap to balloon centre in pixels; 0 draws it on the line.
         angle : float, default=90.0
-            Degrees counter-clockwise from the flow or face direction.
+            Degrees counter-clockwise from the flow on a stream, or
+            from the face tangent on a unit.
         relation : str, default="sensing"
             One of :data:`RELATIONS`.
 
@@ -3666,7 +3727,27 @@ class Instrument(Unit):
 
 
 def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
-    """Return one quadrant's letter codes in ISO 15519-2 5.2.5 order."""
+    """Return one quadrant's letter codes in ISO 15519-2 5.2.5 order.
+
+    Parameters
+    ----------
+    where : str
+        Tag, for messages.
+    quadrant : str
+        Quadrant letter, ``"a"`` to ``"d"``.
+    codes : str or Sequence[str]
+        Letter codes; an empty string writes none.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Stripped codes, sorted A, S then Z.
+
+    Raises
+    ------
+    ValueError
+        If a code is empty.
+    """
     if isinstance(codes, str):
         codes = (codes,) if codes else ()
     out = [str(code).strip() for code in codes]
@@ -3679,14 +3760,36 @@ def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> 
             )
 
     def rank(code: str) -> int:
-        """Return a code's sort rank from its A, S or Z letter."""
+        """Return a code's sort rank from its A, S or Z letter.
+
+        Parameters
+        ----------
+        code : str
+            Letter code.
+
+        Returns
+        -------
+        int
+            1 for A, 2 for S, 3 for Z, else 4.
+        """
         return next((" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)
 
     return tuple(sorted(out, key=rank))
 
 
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
-    """Return an inlet and an outlet port spec for each named side."""
+    """Return an inlet and an outlet port spec for each named side.
+
+    Parameters
+    ----------
+    *sides : str
+        Side names, such as ``"shell"``.
+
+    Returns
+    -------
+    list[tuple[str, str, str]]
+        ``("<side>_in", "inlet", "process")`` and the matching outlet.
+    """
     return [
         (f"{side}_{end}", direction, "process")
         for side in sides
@@ -3700,12 +3803,7 @@ class HeatExchanger(_VariantPorted):
     Most variants have ``shell`` and ``tube`` sides. ``air_cooled`` has
     ``tube`` and ``air``, ``plate`` and ``spiral`` have ``side_a`` and
     ``side_b``, and ``thin_film`` has ``jacket`` and ``product``.
-    ``kettle`` adds ``bottoms``.
-
-    Parameters
-    ----------
-    name, variant, width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    ``kettle`` adds ``bottoms``. Parameters are those of :class:`Unit`.
     """
 
     # Only the shell-and-tube ports are annotated; use
@@ -3798,6 +3896,11 @@ class Evaporator(Unit):
         construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Attributes
+    ----------
+    supports : str or None
+        Support drawn under the body.
     """
 
     feed: Port
@@ -3817,7 +3920,7 @@ class Evaporator(Unit):
     COMPOSITION = {"supports": None}
     _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -3864,6 +3967,11 @@ class Thickener(Unit):
         construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Attributes
+    ----------
+    rake : str or None
+        Stirrer drawn on the shaft.
     """
 
     feed: Port
@@ -3879,7 +3987,7 @@ class Thickener(Unit):
     COMPOSITION = {"rake": DEFAULT_RAKE}
     _FIXED_AT_CONSTRUCTION = frozenset({"rake"})
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
@@ -3906,14 +4014,50 @@ class Thickener(Unit):
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
-    """Return the feed port names ``feed_1`` to ``feed_n``."""
+    """Return the feed port names ``feed_1`` to ``feed_n``.
+
+    Parameters
+    ----------
+    n_feeds : int
+        Number of feeds.
+    owner : str
+        Class name, for messages.
+
+    Returns
+    -------
+    list[str]
+        Feed port names.
+
+    Raises
+    ------
+    ValueError
+        If ``n_feeds`` is less than 1.
+    """
     if n_feeds < 1:
         raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
     return [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
 def _draw_names(n_draws: int, owner: str) -> list[str]:
-    """Return side-draw names: ``draw``, or ``draw_1`` to ``draw_n``."""
+    """Return side-draw names: ``draw``, or ``draw_1`` to ``draw_n``.
+
+    Parameters
+    ----------
+    n_draws : int
+        Number of side draws.
+    owner : str
+        Class name, for messages.
+
+    Returns
+    -------
+    list[str]
+        Draw port names; empty for none.
+
+    Raises
+    ------
+    ValueError
+        If ``n_draws`` is negative.
+    """
     if n_draws < 0:
         raise ValueError(f"{owner} cannot take a negative number of draws, got {n_draws}")
     if n_draws == 0:
@@ -3934,10 +4078,31 @@ def _stage_fractions(
 
     Parameters
     ----------
+    name : str
+        Tag, for messages.
+    internals : str or None
+        Column internals.
+    trays : int
+        Drawn count of decks or beds.
     stages : list[int or None] or None
         One stage per port in ``names``; ``None`` keeps the even spread.
-    keyword, noun : str
-        Argument name and ``"feed"`` or ``"draw"``, for error messages.
+    names : list[str]
+        Port names, in order.
+    keyword : str
+        Argument name, for messages.
+    noun : str
+        ``"feed"`` or ``"draw"``, for messages.
+
+    Returns
+    -------
+    dict[str, float]
+        Shell fraction per port with a stated stage.
+
+    Raises
+    ------
+    ValueError
+        If ``stages`` has the wrong length, names a stage with no
+        internals, or names a stage outside the column.
     """
     if stages is None:
         return {}
@@ -3996,6 +4161,13 @@ class Reactor(Unit):
         Group-27 internals. Fixed at construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Attributes
+    ----------
+    agitator, internals : str or None
+        Stirrer and internals drawn in the body.
+    feeds : tuple[Port, ...]
+        Feed ports, top to bottom.
 
     Raises
     ------
@@ -4111,7 +4283,7 @@ class Reactor(Unit):
             else None,
         }
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         n_feeds: int = 1,
@@ -4255,6 +4427,13 @@ class Separator(Unit):
     width, height, label_pos, description, reference
         As for :class:`Unit`.
 
+    Attributes
+    ----------
+    characteristic : str or None
+        Group-29 mark drawn, if any.
+    feeds : tuple[Port, ...]
+        Feed ports, top to bottom.
+
     Raises
     ------
     ValueError
@@ -4363,11 +4542,22 @@ class Separator(Unit):
     COMPOSITION_VARIANT = "characteristic"
 
     def _symbol_anchor(self, port_name: str) -> str:
-        """Return a port's anchor, checking _VARIANT_ANCHORS first."""
+        """Return a port's anchor, checking ``_VARIANT_ANCHORS`` first.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        str
+            Anchor name in the artwork.
+        """
         renamed = self._VARIANT_ANCHORS.get(self.variant, {})
         return renamed.get(port_name) or super()._symbol_anchor(port_name)
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         n_feeds: int = 1,
@@ -4533,14 +4723,28 @@ class Column(Unit):
         when omitted. Fixed at construction.
     trays : int, default=DEFAULT_TRAYS
         Drawn count of decks or beds. Fixed at construction.
-    feed_stages, draw_stages : list[int or None], optional
-        Stage per feed or draw, in order; ``None`` keeps the even
-        spread. Fixed at construction.
+    feed_stages : list[int or None], optional
+        Stage per feed; ``None`` keeps the even spread. Fixed at
+        construction.
     n_draws : int, default=0
         Number of side draws on the east face: ``draw`` for one, else
         ``draw_1`` to ``draw_n``.
+    draw_stages : list[int or None], optional
+        Stage per draw; ``None`` keeps the even spread. Fixed at
+        construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Attributes
+    ----------
+    internals : str or None
+        Internals drawn in the shell.
+    trays : int
+        Drawn count of decks or beds.
+    feeds, draws : tuple[Port, ...]
+        Feed and side-draw ports, highest first.
+    feed_stages, draw_stages : list[int or None] or None
+        Stages as given.
 
     Raises
     ------
@@ -4671,7 +4875,7 @@ class Column(Unit):
         {"internals", "trays", "feed_stages", "draw_stages"}
     )
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         n_feeds: int = 1,
@@ -4722,7 +4926,18 @@ class Column(Unit):
         }
 
     def _series_pin(self, port_name: str) -> float | None:
-        """Return the shell fraction a stage pins a port to, or None."""
+        """Return the shell fraction a stage pins a port to.
+
+        Parameters
+        ----------
+        port_name : str
+            Port name.
+
+        Returns
+        -------
+        float or None
+            Fraction down the shell, or ``None`` with no stated stage.
+        """
         return self._stage_fractions.get(port_name)
 
 
@@ -5294,8 +5509,7 @@ if TYPE_CHECKING:
 class Mixer(Unit):
     """Mixer: combines several inlet streams into one outlet.
 
-    Drawn as a triangle. The inlets are ``in_1`` to ``in_n``, also
-    :attr:`inlets` from index zero.
+    Drawn as a triangle.
 
     Parameters
     ----------
@@ -5305,6 +5519,11 @@ class Mixer(Unit):
         Number of inlets.
     variant, width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Attributes
+    ----------
+    inlets : tuple[Port, ...]
+        Inlets ``in_1`` to ``in_n``, in order.
 
     Raises
     ------
@@ -5364,7 +5583,7 @@ class Mixer(Unit):
         def __new__(cls, name: str, n_inlets: int = 2, *args: Any, **kwargs: Any) -> "Mixer": ...
 
     kind = "mixer"
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         n_inlets: int = 2,
@@ -5467,8 +5686,7 @@ if TYPE_CHECKING:
 class Splitter(Unit):
     """Splitter: divides one inlet stream into several outlets.
 
-    Drawn as a triangle. The outlets are ``out_1`` to ``out_n``, also
-    :attr:`outlets`.
+    Drawn as a triangle.
 
     Parameters
     ----------
@@ -5478,6 +5696,11 @@ class Splitter(Unit):
         Number of outlets.
     variant, width, height, label_pos, description, reference
         As for :class:`Unit`.
+
+    Attributes
+    ----------
+    outlets : tuple[Port, ...]
+        Outlets ``out_1`` to ``out_n``, in order.
 
     Raises
     ------
@@ -5540,7 +5763,7 @@ class Splitter(Unit):
 
     kind = "splitter"
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         n_outlets: int = 2,
@@ -5641,7 +5864,30 @@ if TYPE_CHECKING:
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument: str) -> list[str]:
-    """Return one face per connection from a count or a face list."""
+    """Return one face per connection from a count or a face list.
+
+    Parameters
+    ----------
+    spec : int or Sequence[str]
+        Count on the default face, or one face per connection.
+    default : str
+        Face used for a count.
+    owner : str
+        Block name, for messages.
+    argument : str
+        ``"inputs"`` or ``"outputs"``, for messages.
+
+    Returns
+    -------
+    list[str]
+        Compass face per connection.
+
+    Raises
+    ------
+    ValueError
+        If ``spec`` is neither a count nor a face list, is negative, or
+        names an invalid face.
+    """
     if isinstance(spec, bool) or not isinstance(spec, (int, Sequence)) or isinstance(spec, str):
         raise ValueError(
             f"{owner}: {argument}= is a count ({argument}=3) or one face per "
@@ -5655,7 +5901,26 @@ def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument
 
 
 def _block_face(face: object, owner: str) -> str:
-    """Return the compass face for a compass or side name."""
+    """Return the compass face for a compass or side name.
+
+    Parameters
+    ----------
+    face : object
+        ``"N"``, ``"S"``, ``"E"``, ``"W"``, or ``"top"``, ``"bottom"``,
+        ``"left"``, ``"right"``.
+    owner : str
+        Block name, for messages.
+
+    Returns
+    -------
+    str
+        ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+
+    Raises
+    ------
+    ValueError
+        If ``face`` is not a face.
+    """
     resolved = (
         _FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
         if isinstance(face, str)
@@ -5672,11 +5937,10 @@ def _block_face(face: object, owner: str) -> str:
 class Block(_FaceFamilies):
     """Block flow diagram box: a plant section drawn as a rectangle.
 
-    Connections are ``in_1`` to ``in_n`` and ``out_1`` to ``out_m``,
-    also :attr:`inlets` and :attr:`outlets`; :attr:`input_faces` and
-    :attr:`output_faces` are their faces. A face names the box's own
-    side, and layout draws each peer on that side. The box grows to
-    fit its connections and name::
+    Connections are ``in_1`` to ``in_n`` and ``out_1`` to ``out_m``;
+    :attr:`input_faces` and :attr:`output_faces` are their faces. A
+    face names the box's own side, and layout draws each peer on that
+    side. The box grows to fit its connections and name::
 
         rx = fs.add(units.Block("Reaction",
                                 inputs=["W", "W", "N"],
@@ -5694,6 +5958,8 @@ class Block(_FaceFamilies):
 
     Attributes
     ----------
+    inlets, outlets : tuple[Port, ...]
+        Connections in order.
     DEFAULT_INPUT_FACE, DEFAULT_OUTPUT_FACE : str
         Faces used for a count: ``"W"`` and ``"E"``.
 
@@ -5723,7 +5989,7 @@ class Block(_FaceFamilies):
     _width: float | None = None
     _height: float | None = None
 
-    def __init__(
+    def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         inputs: "int | Sequence[str]" = 1,
@@ -5764,33 +6030,95 @@ class Block(_FaceFamilies):
         self._check_box()
 
     def _add_connection(self, name: str, direction: str, face: str) -> Port:
-        """Create a connection and record its face."""
+        """Create a connection and record its face.
+
+        Parameters
+        ----------
+        name : str
+            Connection name.
+        direction : str
+            ``"inlet"`` or ``"outlet"``.
+        face : str
+            Compass face.
+
+        Returns
+        -------
+        Port
+            The new port.
+        """
         port = self._add_port(name, direction, "process")
         self._faces[name] = face
         return port
 
     @property
     def width(self) -> float | None:
-        """Return the box width, or ``None`` to fit the connections."""
+        """Return the box width, or ``None`` to fit the connections.
+
+        Returns
+        -------
+        float or None
+            Width in pixels, or ``None``.
+        """
         return self._width
 
     @width.setter
     def width(self, value: float | None) -> None:
-        """Set the box width; raise ValueError if it is too small."""
+        """Set the box width.
+
+        Parameters
+        ----------
+        value : float or None
+            Width in pixels, or ``None`` to fit the connections.
+
+        Raises
+        ------
+        ValueError
+            If the box is too small for its connections.
+        """
         self._resize("_width", value)
 
     @property
     def height(self) -> float | None:
-        """Return the box height, or ``None`` to fit the connections."""
+        """Return the box height, or ``None`` to fit the connections.
+
+        Returns
+        -------
+        float or None
+            Height in pixels, or ``None``.
+        """
         return self._height
 
     @height.setter
     def height(self, value: float | None) -> None:
-        """Set the box height; raise ValueError if it is too small."""
+        """Set the box height.
+
+        Parameters
+        ----------
+        value : float or None
+            Height in pixels, or ``None`` to fit the connections.
+
+        Raises
+        ------
+        ValueError
+            If the box is too small for its connections.
+        """
         self._resize("_height", value)
 
     def _resize(self, attr: str, value: float | None) -> None:
-        """Set a box dimension, keeping the old one if refused."""
+        """Set a box dimension, keeping the old one if refused.
+
+        Parameters
+        ----------
+        attr : str
+            ``"_width"`` or ``"_height"``.
+        value : float or None
+            New size, or ``None`` to fit the connections.
+
+        Raises
+        ------
+        ValueError
+            If the box is too small for its connections.
+        """
         was = getattr(self, attr)
         setattr(self, attr, value)
         # Unit.__init__ sets the size before the connections exist.
