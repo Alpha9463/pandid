@@ -1,11 +1,7 @@
-"""Define a port: a named nozzle on a unit where one stream attaches.
+"""Ports: named nozzles on a unit, each holding at most one stream.
 
-A port belongs to one unit and holds at most one stream. A process port
-has a direction that :meth:`pandid.flowsheet.Flowsheet.connect` enforces:
-a process stream runs from an outlet to an inlet. A signal port carries
-signal lines only, and ``connect()`` will not join a signal port to a
-process port. A signal connection is not held to the port's direction;
-which end it took is read from the stream's ``source`` and ``dest``.
+A process stream runs from an outlet to an inlet. A signal port
+carries signal lines only, in either direction.
 """
 
 from __future__ import annotations

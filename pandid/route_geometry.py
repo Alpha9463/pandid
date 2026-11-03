@@ -1,4 +1,4 @@
-"""Complete stream paths shared by rendering and drawing measurements."""
+"""Complete stream paths for rendering and drawing measurements."""
 
 from __future__ import annotations
 
