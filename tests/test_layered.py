@@ -210,20 +210,6 @@ def test_a_stated_level_turn_holds_and_round_trips() -> None:
     assert free.frame is not None and free.frame.orientation in (90, 270)
 
 
-def test_a_valve_with_a_stated_inlet_face_is_set_on_its_line() -> None:
-    """Set a valve whose inlet face its author stated, skipping poses that lose it."""
-    fs = Flowsheet("Stated face")
-    feed = fs.add(Feed("Feed"))
-    product = fs.add(Product("Product"))
-    line = fs.connect(feed.outlet, product.inlet)
-    valve = fs.add(U.Valve("HV-1").nozzle("inlet", "W"), on=line)
-    fs.route()
-
-    assert valve.frame is not None
-    assert resolve_port(valve, valve.frame, "inlet").face == "W"
-    assert not any(measure_final(fs).hard)
-
-
 @pytest.mark.parametrize("pins", [((0, None), (1, None)), ((0, 1), (0, 0))])
 def test_grid_pins_win_over_a_stack(pins: tuple[tuple[int, int | None], ...]) -> None:
     """Keep two blocks where their grid pins put them, though their pipe would stack them.
@@ -302,21 +288,29 @@ def test_a_station_member_keeps_its_stated_turn() -> None:
     assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
 
 
-@pytest.mark.parametrize("port, face", [("outlet", "E"), ("inlet", "W")])
-def test_a_stated_nozzle_face_is_kept_in_every_pose(port: str, face: str) -> None:
-    """Set a control valve with a stated nozzle face on a line without raising.
+@pytest.mark.parametrize(
+    "kind, port, face",
+    [(U.Valve, "inlet", "W"), (D.ControlValve, "outlet", "E"), (D.ControlValve, "inlet", "W")],
+)
+def test_a_stated_nozzle_face_is_kept_in_every_pose(
+    kind: type[U.Valve], port: str, face: str
+) -> None:
+    """Set a valve with a stated nozzle face on a line, skipping poses that lose it.
 
     Parameters
     ----------
+    kind : type[Valve]
+        Valve class set on the line.
     port, face : str
         The nozzle and the face its author stated.
     """
     fs, line = _line()
-    valve = fs.add(D.ControlValve("CV-1").nozzle(port, face), on=line)
+    valve = fs.add(kind("V-1").nozzle(port, face), on=line)
     fs.route()
 
     assert valve.frame is not None
     assert resolve_port(valve, valve.frame, port).face == face
+    assert not any(measure_final(fs).hard)
 
 
 def test_row_pins_order_a_whole_stack() -> None:
