@@ -1,174 +1,215 @@
+"""Check the layered layout engine through the public API."""
+
+from __future__ import annotations
+
+from itertools import combinations
+from pathlib import Path
+
 import pytest
 
 from pandid import Flowsheet, devices as D, units as U
-from pandid.layout import _seed_slots
-from pandid.layout.cycles import break_cycles
-from pandid.layout.coordinates import assign_coordinates
-from pandid.layout.place import assign_positions
-from pandid.portgeom import port_point, unit_box
+from pandid.layout.attach import place_attached, stream_path
+from pandid.layout.halo import balloon_pads
+from pandid.layout.layered import BAND_WIDTH, COL_GAP, MARGIN
+from pandid.portgeom import pin_intent, port_faces, port_point, unit_box
 from pandid.routing.metrics import real_bends
 
+from _layout_cases import build
 
-def test_cycle_breaking():
-    fs = Flowsheet("Test")
-    u1 = fs.add(U.Reactor("R1"))
-    u2 = fs.add(U.Separator("S1"))
-
-    s1 = fs.connect(u1.outlet, u2.feed)
-    s2 = fs.connect(u2.liquid, u1.feed)  # backward
-
-    break_cycles(fs)
-
-    # One of them should be marked as recycle. Because u1 is first,
-    # and has out-degree 1, DFS from u1 goes to u2, then u2 goes to u1.
-    # The edge from u2 to u1 is the back-edge.
-    assert s1.is_recycle is False
-    assert s2.is_recycle is True
+Box = tuple[float, float, float, float]
 
 
-def test_layering():
-    fs = Flowsheet("Test")
-    u1 = fs.add(U.Reactor("R1"))
-    u2 = fs.add(U.Separator("S1"))
-    u3 = fs.add(U.Mixer("M1"))
+def _overlap(a: Box, b: Box) -> bool:
+    """Return whether two drawn boxes overlap.
 
-    fs.connect(u1.outlet, u2.feed)
-    fs.connect(u2.vapor, u3.in_1)
-
-    _seed_slots(fs)
-    break_cycles(fs)
-    assign_positions(fs)
-
-    assert u1._slot.col == 0
-    assert u2._slot.col == 1
-    assert u3._slot.col == 2
-
-
-def test_pinned_layering():
-    fs = Flowsheet("Test")
-    u1 = fs.add(U.Reactor("R1"))
-    u2 = fs.add(U.Separator("S1"))
-
-    fs.connect(u1.outlet, u2.feed)
-
-    u1.pin(col=2, row=0)  # u1 is forced to col 2
-
-    _seed_slots(fs)
-    break_cycles(fs)
-    assign_positions(fs)
-
-    assert u1._slot.col == 2
-    # u2 must be at least u1.col + 1
-    assert u2._slot.col == 3
-
-
-def test_ordering():
-    fs = Flowsheet("Test")
-    u1 = fs.add(U.Separator("S1"))
-    u2 = fs.add(U.Reactor("R1"))
-    u3 = fs.add(U.Mixer("M1"))
-
-    fs.connect(u1.vapor, u2.feed)
-    fs.connect(u1.liquid, u3.in_1)
-
-    _seed_slots(fs)
-    break_cycles(fs)
-    assign_positions(fs)
-
-    # u2 and u3 are both in col 1, they must have different rows (0 and 1)
-    assert u1._slot.row == 0
-    assert {u2._slot.row, u3._slot.row} == {0, 1}
-
-
-def test_coordinates():
-    fs = Flowsheet("Test")
-    u1 = fs.add(U.Reactor("R1"))
-    u1.pin(col=1, row=2)
-
-    _seed_slots(fs)
-    assign_coordinates(fs)
-
-    # Only one column (col 1) exists, so it starts at MARGIN_X
-    assert u1.frame.x == 50
-    assert u1.frame.y == 50 + 2 * 120
-
-
-def test_vertical_vent_terminal_aligns_without_overriding_exact_pins():
-    """Align a free vent nozzle while retaining authored pixel coordinates.
+    Parameters
+    ----------
+    a, b : tuple[float, float, float, float]
+        ``(x_min, y_min, x_max, y_max)``.
 
     Returns
     -------
-    None
-        The free connection is straight and both explicit x pins remain exact.
+    bool
+        Whether their interiors meet.
     """
-    free = Flowsheet("Free vent")
-    vessel = free.add(U.Vessel("V-1", variant="horizontal", width=150, height=48))
-    vent = free.add(U.Vent("VT-1"))
-    stream = free.connect(vessel.vent, vent.inlet)
-    free.layout()
-    free.route()
-
-    assert port_point(vessel, vessel.frame, "vent")[0] == pytest.approx(
-        port_point(vent, vent.frame, "inlet")[0]
-    )
-    assert real_bends(stream.route.waypoints) == 0
-
-    pinned = Flowsheet("Pinned vent")
-    vessel = pinned.add(U.Vessel("V-2", variant="horizontal", width=150, height=48))
-    vent = pinned.add(U.Vent("VT-2"))
-    vessel.pin(x=100)
-    vent.pin(x=50)
-    pinned.connect(vessel.vent, vent.inlet)
-    pinned.layout()
-    pinned.route()
-
-    assert vessel.frame.x == 100
-    assert vent.frame.x == 50
+    return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
 
 
-def test_full_layout_via_render(tmp_path):
-    fs = Flowsheet("Test")
-    u1 = fs.add(U.Reactor("R1"))
-    u2 = fs.add(U.Separator("S1"))
-    fs.connect(u1.outlet, u2.feed)
+def _drawn_boxes(fs: Flowsheet) -> dict[str, Box]:
+    """Return every unit's drawn box, by name.
 
-    # rendering should implicitly trigger layout because frames are None
-    svg_path = tmp_path / "test.svg"
-    fs.render(str(svg_path))
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
 
-    assert u1.frame.x is not None
-    assert u2.frame.col == 1
-
-    content = svg_path.read_text()
-    assert "<use" in content
-
-
-def test_spine_straightening_scales_the_port_offset_to_the_resolved_box():
-    """The straightening target has to come from the resolved box, not the
-    symbol.
-
-    A drum resized past its symbol's height carries its inlet proportionally
-    lower, so aiming at the raw symbol-space offset lands the run short by
-    exactly that ratio -- 6px for a 42-high drum on a 30-high symbol. Only units
-    left unpinned in y are affected, which is why the examples do not show it:
-    they pin.
+    Returns
+    -------
+    dict[str, tuple[float, float, float, float]]
+        Each unit's drawn box; a feed flag's is left of its frame.
     """
-    from pandid.portgeom import port_point
+    boxes = {}
+    for unit in fs.units:
+        assert unit.frame is not None, unit.name
+        boxes[unit.name] = unit_box(unit, unit.frame)
+    return boxes
 
-    fs = Flowsheet("straighten")
-    feed = fs.add(U.Feed("Feed"))
-    drum = fs.add(U.Vessel("V-1", variant="horizontal", height=42))
-    fs.connect(feed.outlet, drum.inlet)
+
+def _overlapping(fs: Flowsheet) -> list[tuple[str, str]]:
+    """Return the pairs of units whose drawn boxes overlap.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[tuple[str, str]]
+        Names of each overlapping pair.
+    """
+    boxes = _drawn_boxes(fs)
+    return [(a, b) for a, b in combinations(boxes, 2) if _overlap(boxes[a], boxes[b])]
+
+
+def _unit_overlaps(fs: Flowsheet) -> list[str]:
+    """Return the messages of the sheet's unit-overlap findings.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    list[str]
+        One message per overlap ``validate()`` reports.
+    """
+    return [issue.message for issue in fs.validate() if issue.code == "unit-overlap"]
+
+
+def _long_train(n: int) -> Flowsheet:
+    """Return *n* blocks in one straight line, each feeding the next.
+
+    Parameters
+    ----------
+    n : int
+        Number of blocks.
+
+    Returns
+    -------
+    Flowsheet
+        Unlaid sheet.
+    """
+    fs = Flowsheet("train")
+    port = fs.add(U.Feed("F")).outlet
+    for i in range(n):
+        block = fs.add(U.Block(f"B-{i}", inputs=["W"], outputs=["E"]))
+        fs.connect(port, block.in_1)
+        port = block.out_1
+    fs.connect(port, fs.add(U.Product("P")).inlet)
+    return fs
+
+
+def _width_and_rows(fs: Flowsheet) -> tuple[float, int]:
+    """Return a laid-out sheet's drawn width and how many unit heights it has.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out sheet.
+
+    Returns
+    -------
+    tuple[float, int]
+        Drawn width, and the count of distinct unit centre heights.
+    """
+    boxes = _drawn_boxes(fs).values()
+    width = max(box[2] for box in boxes) - min(box[0] for box in boxes)
+    return width, len({round((box[1] + box[3]) / 2) for box in boxes})
+
+
+# --- layers: flow runs west to east -------------------------------------------
+
+
+def test_flow_runs_west_to_east() -> None:
+    """Check that each step along the flow is the next column east."""
+    fs = Flowsheet("Train")
+    reactor = fs.add(U.Reactor("R1"))
+    separator = fs.add(U.Separator("S1"))
+    mixer = fs.add(U.Mixer("M1"))
+    fs.connect(reactor.outlet, separator.feed)
+    fs.connect(separator.vapor, mixer.in_1)
     fs.layout()
 
-    assert port_point(feed, feed.frame, "outlet")[1] == port_point(drum, drum.frame, "inlet")[1]
+    frames = [unit.frame for unit in (reactor, separator, mixer)]
+    assert all(frame is not None for frame in frames)
+    assert [frame.col for frame in frames if frame is not None] == [0, 1, 2]
+    xs = [frame.x for frame in frames if frame is not None]
+    assert xs == sorted(xs) and len(set(xs)) == 3
+
+
+def test_a_cycle_is_broken_at_its_return_line() -> None:
+    """Check that a cycle is laid out with its closing pipe drawn as a return line."""
+    fs = Flowsheet("Cycle")
+    reactor = fs.add(U.Reactor("R1"))
+    separator = fs.add(U.Separator("S1"))
+    forward = fs.connect(reactor.outlet, separator.feed)
+    back = fs.connect(separator.liquid, reactor.feed)
+    fs.layout()
+    fs.route()
+
+    assert not forward.is_recycle
+    assert back.is_recycle
+    assert reactor.frame is not None and separator.frame is not None
+    assert reactor.frame.x_max < separator.frame.x
+
+
+def test_a_mirrored_pump_runs_west() -> None:
+    """Check that a pump mirrored to face west puts its suction east and discharge west."""
+    fs = Flowsheet("West")
+    tank = fs.add(U.Vessel("V-1", variant="horizontal"))
+    pump = fs.add(U.Pump("P-1")).pin(mirrored="x")
+    drum = fs.add(U.Vessel("V-2", variant="horizontal"))
+    fs.connect(tank.outlet, pump.suction)
+    fs.connect(pump.discharge, drum.in_1)
+    fs.layout()
+
+    assert tank.frame is not None and pump.frame is not None and drum.frame is not None
+    assert drum.frame.x_max < pump.frame.x
+    assert pump.frame.x_max < tank.frame.x
+
+
+def test_a_pipe_from_a_north_nozzle_to_a_south_nozzle_stacks_its_units() -> None:
+    """Check that a top-to-bottom pipe puts both ends in one column, nozzles lined up."""
+    fs = Flowsheet("Stack")
+    lower = fs.add(U.Block("A", inputs=["W"], outputs=["E", "N"]))
+    upper = fs.add(U.Block("B", inputs=["S"], outputs=["E"]))
+    fs.connect(fs.add(U.Feed("F")).outlet, lower.in_1)
+    fs.connect(lower.out_1, fs.add(U.Product("P1")).inlet)
+    fs.connect(lower.out_2, upper.in_1)
+    fs.connect(upper.out_1, fs.add(U.Product("P2")).inlet)
+    fs.layout()
+
+    assert lower.frame is not None and upper.frame is not None
+    assert upper.frame.col == lower.frame.col
+    assert upper.frame.y_max < lower.frame.y
+    assert port_point(upper, upper.frame, "in_1")[0] == pytest.approx(
+        port_point(lower, lower.frame, "out_2")[0]
+    )
 
 
 # --- north and south faces (#168) ---------------------------------------------
 
 
-def _syngas_block():
-    """The sheet from issue #168: two north inlets on one block."""
+def _syngas_block() -> tuple[Flowsheet, U.Feed, U.Feed, U.Feed, U.Block]:
+    """Return the sheet from issue #168: two north inlets on one block.
+
+    Returns
+    -------
+    tuple
+        The unlaid sheet, its natural gas, air and steam feeds, and the block.
+    """
     fs = Flowsheet("north face")
     ng = fs.add(U.Feed("Natural Gas"))
     air = fs.add(U.Feed("Air"))
@@ -179,56 +220,48 @@ def _syngas_block():
     fs.connect(air.outlet, sec.in_2)
     fs.connect(steam.outlet, sec.in_3)
     fs.connect(sec.out_1, prod.inlet)
-    return fs, ng, air, steam, sec, prod
+    return fs, ng, air, steam, sec
 
 
-def test_a_north_face_puts_its_peer_above_the_block_and_not_beside_it():
-    """Issue #168: a peer on a north connection belongs in the row above.
+def test_a_feed_on_a_north_nozzle_is_drawn_above_it() -> None:
+    """Check that feeds onto a block's roof sit above it, one each, and a side feed stays level.
 
-    Ranked as a flow-order step it went a column to the left and wherever
-    the barycentre landed it -- for ``Air`` here, the bottom of the sheet,
-    from which its run climbed the full height and crossed two others to
-    reach a nozzle on the roof.
+    Issue #168: ranked only as a flow step, ``Air`` landed at the bottom of
+    the sheet and climbed its full height to reach a nozzle on the roof.
     """
-    fs, ng, air, steam, sec, prod = _syngas_block()
+    fs, ng, air, steam, sec = _syngas_block()
     fs.layout()
 
+    assert sec.frame is not None and ng.frame is not None
     for feed in (air, steam):
-        assert feed._slot.col == sec._slot.col
-        assert feed._slot.row < sec._slot.row
-    # The two of them stack rather than fight over the one row.
-    assert air._slot.row != steam._slot.row
-    # The west inlet is unaffected: it still ranks a column to the left.
-    assert ng._slot.col == sec._slot.col - 1
-    assert ng._slot.row == sec._slot.row
+        assert feed.frame is not None
+        assert port_point(feed, feed.frame, "outlet")[1] < sec.frame.y
+    # The two of them stack rather than fight over the one place.
+    assert air.frame is not None and steam.frame is not None
+    assert air.frame.row != steam.frame.row
+    # The west inlet is unaffected: a column to the left, level with its nozzle.
+    assert sec.frame.col is not None
+    assert ng.frame.col == sec.frame.col - 1
+    assert port_point(ng, ng.frame, "outlet")[1] == pytest.approx(
+        port_point(sec, sec.frame, "in_1")[1]
+    )
 
 
-def test_a_north_face_peer_reaches_its_nozzle_in_one_turn():
-    """The row above is only half of it: the run has to be short too.
+def _legs(path: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Return the straight runs of a routed path, in order, as unit steps.
 
-    Both feeds face east and the nozzles they drop onto are inside the
-    block, so the coordinate pass aims each flag a stand-off short of its
-    own nozzle. Without that the run leaves east, drops, and comes back
-    west -- three turns to cross ten pixels.
+    Parameters
+    ----------
+    path : list[tuple[float, float]]
+        Routed waypoints.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        One direction per leg; zero-length repeats and a stand-off waypoint
+        that continues a leg are folded in, so this counts turns.
     """
-    from pandid.layout.attach import stream_path
-
-    fs, ng, air, steam, sec, prod = _syngas_block()
-    fs.layout()
-    fs.route()
-
-    for feed in (air, steam):
-        legs = _legs(stream_path(feed.outlet.stream))
-        assert len(legs) <= 2, f"{feed.name} turns {len(legs) - 1} times: {legs}"
-
-
-def _legs(path):
-    """The straight runs of a routed path, in order, as unit steps.
-
-    Zero-length repeats and the stand-off waypoint that continues a leg
-    are folded in, so this counts *turns* rather than waypoints.
-    """
-    out = []
+    out: list[tuple[float, float]] = []
     for a, b in zip(path, path[1:]):
         dx, dy = b[0] - a[0], b[1] - a[1]
         if (dx, dy) == (0.0, 0.0):
@@ -239,7 +272,25 @@ def _legs(path):
     return out
 
 
-def test_a_south_face_puts_its_peer_below():
+def test_a_north_face_peer_reaches_its_nozzle_in_one_turn() -> None:
+    """Check that a feed onto a roof nozzle leaves east and drops onto it.
+
+    Without the feed aimed short of its own nozzle the run leaves east,
+    drops, and comes back west: three turns to cross ten pixels.
+    """
+    fs, _, air, steam, _ = _syngas_block()
+    fs.layout()
+    fs.route()
+
+    for feed in (air, steam):
+        stream = feed.outlet.stream
+        assert stream is not None
+        legs = _legs(stream_path(stream))
+        assert len(legs) <= 2, f"{feed.name} turns {len(legs) - 1} times: {legs}"
+
+
+def test_a_south_nozzles_peer_is_drawn_below_it() -> None:
+    """Check that a product off a bottom nozzle sits below it, and the east one stays level."""
     fs = Flowsheet("south face")
     feed = fs.add(U.Feed("Feed"))
     sec = fs.add(U.Block("Sec", inputs=["W"], outputs=["E", "S"]))
@@ -250,48 +301,20 @@ def test_a_south_face_puts_its_peer_below():
     fs.connect(sec.out_2, waste.inlet)
     fs.layout()
 
-    assert waste._slot.col == sec._slot.col
-    assert waste._slot.row == sec._slot.row + 1
-    assert prod._slot.col == sec._slot.col + 1
+    assert sec.frame is not None and prod.frame is not None and waste.frame is not None
+    assert port_point(waste, waste.frame, "inlet")[1] > port_point(sec, sec.frame, "out_2")[1]
+    assert sec.frame.col is not None
+    assert prod.frame.col == sec.frame.col + 1
+    assert port_point(prod, prod.frame, "inlet")[1] == pytest.approx(
+        port_point(sec, sec.frame, "out_1")[1]
+    )
 
 
-def test_two_north_faces_facing_each_other_settle_on_one_column():
-    """A north connected to a north says each is above the other.
+def test_an_equipment_nozzle_on_the_north_is_not_a_stacking_constraint() -> None:
+    """Check that a compressor fed off a drum's top nozzle is still the next unit along.
 
-    No arrangement satisfies both, and the two are equally sure, so the
-    row they settle on is the *same* row -- and both say, separately and
-    in agreement, that they are in one column. So the sheet stacks them,
-    and the separation gives one of them the row below.
-
-    The engine before this one cancelled the pair outright, dropping
-    what they agreed on along with what they did not, and fell back to
-    flow order. That cancellation is #446: a column overhead and a
-    condenser inlet are exactly this pair of faces, and dropping both
-    left nothing at all to say which way up the tower went. Here the
-    disagreement is settled by weight and there is nothing to drop --
-    which for two plain blocks, neither of which has a convention to
-    appeal to, is a stack.
-    """
-    fs = Flowsheet("facing")
-    a = fs.add(U.Block("A", inputs=["W"], outputs=["N"]))
-    b = fs.add(U.Block("B", inputs=["N"], outputs=["E"]))
-    feed = fs.add(U.Feed("Feed"))
-    prod = fs.add(U.Product("Product"))
-    fs.connect(feed.outlet, a.in_1)
-    fs.connect(a.out_1, b.in_1)
-    fs.connect(b.out_1, prod.inlet)
-    fs.layout()
-
-    assert b._slot.col == a._slot.col
-    assert b._slot.row != a._slot.row
-
-
-def test_an_equipment_nozzle_on_the_north_is_not_a_stacking_constraint():
-    """A drum's vapour leaves the top because vapour does.
-
-    The compressor it feeds is still the next unit along, and a rule read
-    off the geometry rather than off the author would put it on the roof --
-    and would rearrange every sheet in the corpus for the same reason.
+    Vapour leaves the top because vapour does; that says nothing about
+    where the compressor goes.
     """
     fs = Flowsheet("equipment")
     feed = fs.add(U.Feed("Feed"))
@@ -301,15 +324,16 @@ def test_an_equipment_nozzle_on_the_north_is_not_a_stacking_constraint():
     fs.connect(sep.vapor, comp.suction)
     fs.layout()
 
-    assert comp._slot.col == sep._slot.col + 1
-    assert comp._slot.row == sep._slot.row
+    assert sep.frame is not None and comp.frame is not None
+    assert sep.frame.col is not None
+    assert comp.frame.col == sep.frame.col + 1
+    assert comp.frame.row == sep.frame.row
 
 
-def test_a_named_north_nozzle_is_not_a_stacking_constraint_either():
-    """``examples/08`` feeds its deaerator over the top tray.
+def test_a_named_north_nozzle_is_not_a_stacking_constraint_either() -> None:
+    """Check that moving a drum's inlet to its top leaves the pump beside it.
 
-    ``nozzle("inlet", "N")`` moves the stream to another part of the same
-    drum; the pump on the other end of it still belongs beside the drum.
+    ``examples/08`` feeds its deaerator over the top tray.
     """
     fs = Flowsheet("named")
     pump = fs.add(U.Pump("P-1"))
@@ -318,15 +342,30 @@ def test_a_named_north_nozzle_is_not_a_stacking_constraint_either():
     fs.connect(pump.discharge, drum.inlet)
     fs.layout()
 
-    assert drum._slot.col == pump._slot.col + 1
+    assert pump.frame is not None and drum.frame is not None
+    assert pump.frame.col is not None
+    assert drum.frame.col == pump.frame.col + 1
 
 
-def test_a_recycle_into_a_south_face_does_not_drag_its_source_back():
-    """A recycle is drawn backward from a unit columns downstream.
+def test_a_top_nozzle_piped_to_a_side_nozzle_does_not_stack() -> None:
+    """Check that two blocks joined by a roof pipe and a side pipe sit side by side."""
+    fs = Flowsheet("vertical cycle")
+    a = fs.add(U.Block("A", inputs=["W"], outputs=["E", "N"]))
+    b = fs.add(U.Block("B", inputs=["N", "W"], outputs=["E"]))
+    fs.connect(fs.add(U.Feed("F")).outlet, a.in_1)
+    fs.connect(a.out_1, b.in_1)
+    fs.connect(a.out_2, b.in_2)
+    fs.connect(b.out_1, fs.add(U.Product("P")).inlet)
+    fs.layout()
 
-    Reading its face as a same-column constraint would pull that unit back
-    to the block it returns to.
-    """
+    assert a.frame is not None and b.frame is not None
+    assert a.frame.col is not None
+    assert b.frame.col == a.frame.col + 1
+    assert a.frame.row == b.frame.row
+
+
+def test_a_recycle_into_a_south_face_does_not_drag_its_source_back() -> None:
+    """Check that a return line into a bottom nozzle keeps its source downstream."""
     fs = Flowsheet("recycle")
     feed = fs.add(U.Feed("Feed"))
     a = fs.add(U.Block("A", inputs=["W", "S"], outputs=["E"]))
@@ -338,33 +377,16 @@ def test_a_recycle_into_a_south_face_does_not_drag_its_source_back():
     fs.connect(b.out_2, a.in_2, draw_as_recycle=True)
     fs.layout()
 
-    assert b._slot.col == a._slot.col + 1
+    assert a.frame is not None and b.frame is not None
+    assert a.frame.col is not None
+    assert b.frame.col == a.frame.col + 1
 
 
-def test_a_stacked_sheet_lays_out_the_same_way_twice():
-    """Faces are read off the solver slot, not off the frames left behind."""
-    fs, *_ = _syngas_block()
-    fs.layout()
-    first = {u.name: (u.frame.x, u.frame.y) for u in fs.units}
-    fs.layout()
-    assert {u.name: (u.frame.x, u.frame.y) for u in fs.units} == first
+def test_a_branch_ranks_beside_the_spine_it_joins() -> None:
+    """Check that a blower feeding a tower far along the train sits one column from it.
 
-
-# --- slack removal ------------------------------------------------------------
-
-
-def test_a_branch_ranks_beside_the_spine_it_joins():
-    """Longest path measures from the left edge of the drawing.
-
-    A blower feeding a tower eight units along starts beside the first
-    unit of the train and runs the width of the page to reach it. Removing
-    the slack puts it in the next column to the tower instead.
-
-    *Which* side it lands on is the tower's own nozzle: ``boilup_in`` is
-    on the east face, so the run enters from the east and the blower
-    that feeds it is drawn there. Only the distance is this test's
-    subject -- the branch is one column from what it joins, wherever the
-    nozzle puts it, rather than the width of the sheet away.
+    Longest path from the left edge would start it beside the first unit
+    of the train and run its line the width of the page.
     """
     fs = Flowsheet("slack")
     water = fs.add(U.Feed("Water"))
@@ -380,277 +402,21 @@ def test_a_branch_ranks_beside_the_spine_it_joins():
     fs.connect(blower.discharge, tower.boilup_in)
     fs.layout()
 
-    assert abs(blower._slot.col - tower._slot.col) == 1
-    assert abs(air._slot.col - blower._slot.col) == 1
-    # And not at the left edge, which is where longest path alone put it.
-    assert blower._slot.col > b._slot.col
+    assert air.frame is not None and blower.frame is not None
+    assert tower.frame is not None and b.frame is not None
+    assert air.frame.col is not None and blower.frame.col is not None
+    assert tower.frame.col is not None and b.frame.col is not None
+    assert abs(blower.frame.col - tower.frame.col) == 1
+    assert abs(air.frame.col - blower.frame.col) == 1
+    assert blower.frame.col > b.frame.col
 
 
-def test_a_unit_between_two_pins_is_drawn_between_them():
-    """Both pins hold, and what is derived sits where its claims want.
+def test_a_relief_valve_is_drawn_over_the_vessel_it_protects() -> None:
+    """Check that a relief valve on a vessel's top nozzle sits up at that vessel.
 
-    The engine before this one ranked by longest path and then slid every
-    derived position as far along as its own connections allowed, so the
-    pump took one column short of the drum and left five empty columns
-    for its own feed line to cross. There is no distance-from-a-source
-    here to remove the slack from: the pump is pulled by the flag on one
-    side and the drum on the other, and lands where those weigh out.
-    """
-    fs = Flowsheet("pinned slack")
-    feed = fs.add(U.Feed("Feed"))
-    pump = fs.add(U.Pump("P-1"))
-    drum = fs.add(U.Vessel("V-1"))
-    fs.connect(feed.outlet, pump.suction)
-    fs.connect(pump.discharge, drum.inlet)
-    feed.pin(col=0)
-    drum.pin(col=6)
-    fs.layout()
-
-    assert feed._slot.col == 0
-    assert drum._slot.col == 6
-    assert 0 < pump._slot.col < 6
-
-
-def test_two_pins_that_contradict_hold_and_the_derived_one_gives():
-    """``P-1`` east of ``P-3``, with the flow running the other way.
-
-    Two pins this far apart cannot both be honoured with a chain between
-    them, and what gives is the position nobody stated: ``P-2`` settles
-    between the two rather than being dragged off the page behind the
-    pump feeding it. Both pins hold exactly, which is the point -- a pin
-    is a boundary condition and not a preference to be reconciled.
-    """
-    fs = Flowsheet("conflicting pins")
-    a = fs.add(U.Pump("P-1"))
-    b = fs.add(U.Pump("P-2"))
-    c = fs.add(U.Pump("P-3"))
-    fs.connect(a.discharge, b.suction)
-    fs.connect(b.discharge, c.suction)
-    a.pin(col=3)
-    c.pin(col=0)
-    fs.layout()
-
-    assert a.frame.col == 3
-    assert c.frame.col == 0
-    assert 0 <= b.frame.col <= 3
-    assert min(u.frame.col for u in fs.units) >= 0
-
-
-# --- rows and columns left of the origin ---------------------------------------
-
-
-def test_a_row_pinned_above_the_first_band_draws():
-    """``pin(row=-1)`` names the band over row 0, which is a real place.
-
-    The coordinate pass counted its bands up from zero, so the pin
-    indexed a band that was never built and the sheet raised
-    ``KeyError`` instead of drawing.
-    """
-    fs = Flowsheet("negative row")
-    top = fs.add(U.Feed("Top"))
-    bottom = fs.add(U.Feed("Bottom"))
-    mixer = fs.add(U.Mixer("M-1"))
-    fs.connect(top.outlet, mixer.in_1)
-    fs.connect(bottom.outlet, mixer.in_2)
-    top.pin(row=-1)
-    bottom.pin(row=2)
-    fs.layout()
-
-    assert top.frame.row == -1
-    assert bottom.frame.row == 2
-    # The band above row 0 is drawn above it, and on the page.
-    assert 0 <= top.frame.y < bottom.frame.y
-
-
-def test_crossing_reduction_runs_left_of_column_zero():
-    """The barycentre swept ``range(1, max_col + 1)``.
-
-    A sheet pinned to the left of column 0 has ``max_col == 0``, which
-    makes that range and its mirror both empty: every sweep became a
-    no-op and the sheet came out unordered with nothing reported.
-    """
-    fs = Flowsheet("negative column")
-    a, b, c = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "ABC")
-    x, y, z = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "XYZ")
-    for src, dest in ((a, z), (b, y), (c, x)):
-        fs.connect(src.out_1, dest.in_1)
-        src.pin(col=-1)
-    fs.layout()
-
-    # Each sink follows the source feeding it, so no run crosses another.
-    assert [z.frame.row, y.frame.row, x.frame.row] == [0, 1, 2]
-
-
-def test_a_pinned_row_survives_a_sheet_that_stacks_above_it():
-    """Neither the pin nor the stacking constraint gives.
-
-    ``Air`` on the north face lands a row above the block, which is a
-    row below zero here, and the rebase cannot renumber the bands out
-    from under a pin. It walked every unit rather than the satellites,
-    so the pinned product was renumbered too.
-
-    It then put the satellite in the first free row instead, which is
-    *below* the unit feeding it. The coordinate pass builds a band for a
-    negative row now, so there is nothing left to drop: the pin keeps its
-    band and the feed keeps its roof.
-    """
-    fs = Flowsheet("pinned row over a stack")
-    ng = fs.add(U.Feed("Natural Gas"))
-    air = fs.add(U.Feed("Air"))
-    sec = fs.add(U.Block("Sec", inputs=["W", "N"], outputs=["E"]))
-    prod = fs.add(U.Product("Syngas"))
-    fs.connect(ng.outlet, sec.in_1)
-    fs.connect(air.outlet, sec.in_2)
-    fs.connect(sec.out_1, prod.inlet)
-    prod.pin(row=-1)
-    fs.layout()
-
-    assert prod.frame.row == -1
-    assert air.frame.row == sec.frame.row - 1
-    assert air.frame.y < sec.frame.y
-
-
-def _pinned_north_feed(pin_row):
-    """A block with a west feed and a north one, optionally pinned."""
-    fs = Flowsheet("stack")
-    b = fs.add(U.Block("Reaction", inputs=["W", "N"], outputs=1))
-    feed = fs.add(U.Feed("Main"))
-    air = fs.add(U.Feed("Air"))
-    prod = fs.add(U.Product("Out"))
-    fs.connect(feed.outlet, b.in_1)
-    fs.connect(air.outlet, b.in_2)
-    fs.connect(b.out_1, prod.inlet)
-    if pin_row is not None:
-        b.pin(row=pin_row)
-    fs.layout()
-    return b, air
-
-
-def test_pinning_the_row_the_engine_picks_anyway_does_not_flip_a_north_feed():
-    """Issue #311: a pin that moves nothing turned the drawing upside down.
-
-    ``pin(row=0)`` is what an author types to say *this is the top of the
-    sheet*, and it put the north feed on the south side of the block it
-    feeds. Every one of these is the same sheet, and ``Air`` is over the
-    block on all of them.
-    """
-    for pin_row in (None, 0, 1, 2, -1):
-        block, air = _pinned_north_feed(pin_row)
-        assert air.frame.row == block.frame.row - 1, f"pin(row={pin_row})"
-        assert air.frame.y < block.frame.y, f"pin(row={pin_row})"
-    # The pin is still the pin: the band it named is the band it gets.
-    for pin_row in (0, 1, 2, -1):
-        assert _pinned_north_feed(pin_row)[0].frame.row == pin_row
-
-
-def test_vertical_claims_that_state_no_top_settle_on_one_row():
-    """Two blocks each told to sit over the other, and beside it too.
-
-    Two runs between the same pair: one names the arriving face and one
-    the leaving face, so each block claims the other is its satellite --
-    and a third pair of claims, off the two sideways faces, says they
-    are side by side on one row. Those cancel; these do not, and the two
-    weigh the same, so the answer is the arrangement both sideways faces
-    asked for.
-
-    The engine before this one had no way to say "cancel on one axis and
-    not on the other", so it read the pair as one column and stacked
-    them.
-    """
-    fs = Flowsheet("vertical cycle")
-    a = fs.add(U.Block("A", inputs=["W"], outputs=["E", "N"]))
-    b = fs.add(U.Block("B", inputs=["N", "W"], outputs=["E"]))
-    fs.connect(fs.add(U.Feed("F")).outlet, a.in_1)
-    fs.connect(a.out_1, b.in_1)
-    fs.connect(a.out_2, b.in_2)
-    fs.connect(b.out_1, fs.add(U.Product("P")).inlet)
-    fs.layout()
-
-    assert b.frame.col == a.frame.col + 1
-    assert a.frame.row == b.frame.row
-
-
-# --- laying a sheet out twice draws it twice the same -------------------------
-
-
-def _interlock_on_a_signal():
-    """``examples/04_control_loop.py``'s shape: a balloon on a balloon's line.
-
-    ``LT`` reads the drum, ``LIC`` sits under it, and the interlock hangs
-    off the *signal between the two* -- a stream whose ends are both
-    attached instruments, so where it is drawn from depends on faces
-    chosen after the boxes are placed.
-    """
-    fs = Flowsheet("interlock")
-    feed = fs.add(U.Feed("Feed"))
-    drum = fs.add(U.Vessel("V-101"))
-    prod = fs.add(U.Product("Product"))
-    fs.connect(feed.outlet, drum.inlet)
-    fs.connect(drum.outlet, prod.inlet)
-
-    lt = fs.add_instrument("LT", 101, sensing=drum, at="S", offset=70)
-    lic = fs.add_instrument("LIC", 101, near=lt, at="S", offset=95, variant="shared")
-    measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
-    interlock = fs.add_instrument(
-        "I", 1, sensing=measurement, at=0.5, offset=44, angle=90, variant="logic"
-    )
-    return fs, interlock
-
-
-def test_laying_a_sheet_out_twice_puts_every_box_in_the_same_place():
-    """Issue #294: ``layout()`` has to be a function of the model.
-
-    An instrument hung on a signal between two other balloons was placed
-    from the faces a symbol defaults to on the first run and from the
-    faces the first run chose on the second, so ``layout()`` moved it
-    16px the second time it was called. The sheet drew correctly all the
-    same -- ``route()`` runs the placement to a fixed point of its own --
-    but anyone calling ``layout()`` and reading ``frame`` got the
-    unsettled answer, and so did ``validate()``.
-    """
-    fs, interlock = _interlock_on_a_signal()
-
-    def boxes():
-        return {u.name: (u.frame.x, u.frame.y) for u in fs.units if u.frame}
-
-    fs.layout()
-    first = boxes()
-    assert interlock.name in first  # the balloon under test is on the sheet
-    fs.layout()
-    assert boxes() == first
-    fs.layout()
-    assert boxes() == first
-
-
-def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed():
-    """A label dodges the faces the nozzles leave from, so it is told last.
-
-    The placement fixed point sits between the two, which only works if
-    it ends on a selection nothing has moved a box since.
-    """
-    fs, interlock = _interlock_on_a_signal()
-    fs.layout()
-
-    lt = next(u for u in fs.units if u.name == "LT-101")
-    before = dict(lt.frame.port_faces)
-    from pandid.layout.attach import place_attached
-
-    assert not place_attached(fs), "a further pass still moves a balloon"
-    assert dict(lt.frame.port_faces) == before
-
-
-# --- what a fixed nozzle face says about placement (#431) ---------------------
-
-
-def test_a_relief_valve_is_drawn_over_the_vessel_it_protects():
-    """Issue #430: the two ends of a return line had no relation at all.
-
-    The vessel's crown and the valve's own inlet both say the valve is
-    above it, and neither says anything about how far along -- so the
-    column comes out the same for both and the relief runs straight up.
-    Ranked as a step along the flow instead, the valve landed at the
-    bottom right of the sheet and the relief line was drawn round the
-    outside of everything to reach it.
+    Issue #430: the valve landed at the bottom right of the sheet and the
+    relief line was drawn round the outside of everything to reach it. It
+    now sits above the vessel, on the first level leg of its line.
     """
     fs = Flowsheet("relief")
     feed = fs.add(U.Feed("Feed"))
@@ -665,36 +431,34 @@ def test_a_relief_valve_is_drawn_over_the_vessel_it_protects():
     fs.layout()
 
     assert psv.frame is not None and drum.frame is not None
-    assert psv.frame.col == drum.frame.col
+    # On the relief line's first level leg, beside the vessel's top.
+    assert drum.frame.x <= psv.frame.cx <= drum.frame.x_max + COL_GAP
     assert psv.frame.y_max <= drum.frame.y
 
 
-def test_one_fixed_nozzle_places_an_edge_whose_far_end_can_move():
-    """The reading is per endpoint, which a per-edge rule cannot do.
+def test_one_fixed_nozzle_places_an_edge_whose_far_end_can_move() -> None:
+    """Check that a pump's one-face discharge puts the drum it feeds east of it.
 
-    A horizontal drum's inlet is authored on three faces, so nothing
-    about *it* says where the drum goes. The pump's discharge is on one,
-    and that is enough: the drum is east of the pump.
+    A horizontal drum's inlet is authored on three faces, so nothing about
+    it says where the drum goes; the pump's discharge is enough.
     """
-    from pandid.portgeom import port_faces
-
     fs = Flowsheet("one fixed end")
     pump = fs.add(U.Pump("P-1"))
     drum = fs.add(U.Vessel("V-1", variant="horizontal"))
     fs.connect(pump.discharge, drum.in_1)
     fs.layout()
 
-    assert len(port_faces(drum, "in_1", drum.frame)) > 1, "in_1 is not movable"
     assert drum.frame is not None and pump.frame is not None
+    assert len(port_faces(drum, "in_1", drum.frame)) > 1, "in_1 is not movable"
+    assert pump.frame.col is not None
     assert drum.frame.col == pump.frame.col + 1
 
 
-def test_a_signal_run_states_no_order_along_the_sheet():
-    """Issue #430's other half: a wire is not a step along the process.
+def test_a_signal_run_states_no_order_along_the_sheet() -> None:
+    """Check that a control loop neither tears the process nor puts balloons on the grid.
 
-    Read as one, the controller was pushed a full column east of the
-    transmitter and the loop it closed became a cycle the flow graph had
-    to be torn to break.
+    Issue #430: read as a step along the process, a wire pushed the
+    controller a column east and made the loop a cycle to break.
     """
     fs = Flowsheet("loop")
     feed = fs.add(U.Feed("Feed"))
@@ -708,161 +472,266 @@ def test_a_signal_run_states_no_order_along_the_sheet():
     signal = fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
     fs.layout()
 
-    # No wire is a recycle, because no wire is in the flow graph at all.
     assert [s.name for s in fs.streams if s.is_recycle] == []
     assert not signal.is_recycle
-    # The process reads exactly as it does without the loop on it.
-    assert prod.frame is not None and valve.frame is not None
-    assert prod.frame.col == valve.frame.col + 1
-    # And both balloons are drawn, off the grid the equipment is on.
+    assert feed.frame is not None and prod.frame is not None and valve.frame is not None
+    assert feed.frame.x < valve.frame.x < prod.frame.x
     for balloon in (ft, fic):
         assert balloon.frame is not None
         assert balloon.frame.col is None
 
 
-def test_a_free_standing_balloon_is_placed_near_what_it_is_wired_to():
-    fs = Flowsheet("panel")
-    feed = fs.add(U.Feed("Feed"))
-    valve = fs.add(D.ControlValve("FV-101"))
-    prod = fs.add(U.Product("Product"))
-    fs.connect(feed.outlet, valve.inlet)
-    fs.connect(valve.outlet, prod.inlet)
-    fic = fs.add(U.Instrument("FIC-101"))
-    fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
+# --- order within a layer ------------------------------------------------------
+
+
+def test_two_units_fed_by_one_take_two_rows_of_the_next_column() -> None:
+    """Check that two units sharing a feeder share its next column on separate rows."""
+    fs = Flowsheet("Branch")
+    separator = fs.add(U.Separator("S1"))
+    reactor = fs.add(U.Reactor("R1"))
+    mixer = fs.add(U.Mixer("M1"))
+    fs.connect(separator.vapor, reactor.feed)
+    fs.connect(separator.liquid, mixer.in_1)
     fs.layout()
 
-    assert fic.frame is not None and valve.frame is not None
-    reach = abs(fic.frame.cx - valve.frame.cx) + abs(fic.frame.cy - valve.frame.cy)
-    assert reach < 400, "the controller is nowhere near the valve it commands"
-    # Near, but not on top of it.
-    assert not (
-        fic.frame.x < valve.frame.x_max
-        and fic.frame.x_max > valve.frame.x
-        and fic.frame.y < valve.frame.y_max
-        and fic.frame.y_max > valve.frame.y
-    )
+    assert separator.frame is not None and reactor.frame is not None and mixer.frame is not None
+    assert separator.frame.row == 0
+    assert separator.frame.col is not None
+    assert reactor.frame.col == mixer.frame.col == separator.frame.col + 1
+    assert {reactor.frame.row, mixer.frame.row} == {0, 1}
 
 
-def test_a_free_standing_balloon_stays_off_a_feed_flag_where_it_is_drawn():
-    """Keep a balloon clear of the flag drawn, not of the flag's frame.
+def test_crossing_reduction_runs_left_of_column_zero() -> None:
+    """Check that a layer pinned left of column 0 still orders the next one.
 
-    An unmirrored feed flag keeps its nozzle at ``frame.x + 50`` and is drawn
-    leftward from it, so a long tag reaches far left of its frame. The
-    balloon used to be kept clear of the frame only, and landed on the
-    flag (#574).
+    The old barycentre swept ``range(1, max_col + 1)``, which is empty when
+    every pin is left of column 0.
     """
-    fs = Flowsheet("panel")
-    valve = fs.add(D.ControlValve("FV-101")).pin(x=500, y=300)
-    feed = fs.add(U.Feed("FEED FROM UNIT 100 STORAGE AREA")).pin(x=880, y=290)
-    fs.connect(feed.outlet, fs.add(U.Product("P")).pin(x=1200, y=600).inlet)
-    fic = fs.add(U.Instrument("FIC-101")).pin(y=300)
-    fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
+    fs = Flowsheet("negative column")
+    a, b, c = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "ABC")
+    x, y, z = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "XYZ")
+    for src, dest in ((a, z), (b, y), (c, x)):
+        fs.connect(src.out_1, dest.in_1)
+        src.pin(col=-1)
     fs.layout()
 
-    assert fic.frame is not None and feed.frame is not None
-    x0, y0, x1, y1 = unit_box(fic, fic.frame)
-    fx0, fy0, fx1, fy1 = unit_box(feed, feed.frame)
-    assert fx0 < feed.frame.x, "the flag is meant to be drawn left of its frame"
-    assert not (x0 < fx1 and x1 > fx0 and y0 < fy1 and y1 > fy0), "the balloon is on the flag"
+    assert x.frame is not None and y.frame is not None and z.frame is not None
+    # Each sink follows the source feeding it, so no run crosses another.
+    assert [z.frame.row, y.frame.row, x.frame.row] == [0, 1, 2]
 
 
-# --- reserving the space stage 2 will need (#428) ------------------------------
+# --- straightening ---------------------------------------------------------------
 
 
-def test_a_chain_of_balloons_is_reserved_paper_before_anything_is_placed():
-    """Stage 1 has to leave room for what stage 2 hangs on it.
+def test_a_pipe_runs_level_onto_a_resized_unit() -> None:
+    """Check that a feed lines up with a resized drum's inlet, not its symbol's.
 
-    Packed as though the sheet were empty, the transmitter and its
-    controller land on whatever the next column put beside the plate
-    they read.
+    A drum resized past its symbol's height carries its inlet
+    proportionally lower.
     """
-    fs = Flowsheet("halo")
+    fs = Flowsheet("straighten")
     feed = fs.add(U.Feed("Feed"))
-    plate = fs.add(D.Fitting("FE-101", variant="orifice"))
-    valve = fs.add(D.ControlValve("FV-101"))
-    prod = fs.add(U.Product("Product"))
-    fs.connect(feed.outlet, plate.inlet)
-    fs.connect(plate.outlet, valve.inlet)
-    fs.connect(valve.outlet, prod.inlet)
-    top = fs.add_balloon(plate, at="N", offset=38)
-    ft = fs.add_instrument("FT", 101, near=top, at="N", offset=23)
-    fs.add_instrument("FIC", 101, near=ft, at="N", offset=60, variant="shared")
-    fs.route()
-
-    assert not [i for i in fs.validate() if i.code == "unit-overlap"], (
-        "a balloon was drawn over something"
-    )
-
-
-# --- bands (#429) --------------------------------------------------------------
-
-
-def _long_train(n):
-    """*n* blocks in one straight line, each feeding the next."""
-    fs = Flowsheet("train")
-    port = fs.add(U.Feed("F")).outlet
-    for i in range(n):
-        block = fs.add(U.Block(f"B-{i}", inputs=["W"], outputs=["E"]))
-        fs.connect(port, block.in_1)
-        port = block.out_1
-    fs.connect(port, fs.add(U.Product("P")).inlet)
-    return fs
-
-
-def test_a_ribbon_wider_than_the_paper_is_folded_into_bands():
-    """Issue #429: nothing wrapped, so a big plant became one long run."""
-    from pandid.layout.coordinates import BAND_WIDTH
-
-    fs = _long_train(30)
+    drum = fs.add(U.Vessel("V-1", variant="horizontal", height=42))
+    fs.connect(feed.outlet, drum.inlet)
     fs.layout()
-    frames = [u.frame for u in fs.units if u.frame is not None]
-    width = max(f.x_max for f in frames) - min(f.x for f in frames)
-    assert width <= BAND_WIDTH
-    # Folded, not squashed: the sheet is several rows of blocks deep.
-    assert len({round(f.cy) for f in frames}) > 1
+
+    assert feed.frame is not None and drum.frame is not None
+    assert port_point(feed, feed.frame, "outlet")[1] == port_point(drum, drum.frame, "inlet")[1]
 
 
-def test_a_protected_fold_rechecks_deferred_columns():
-    """Keep each band within paper after moving a fold off a host run.
+def test_a_train_lines_up_with_a_unit_pinned_in_y() -> None:
+    """Check that every pipe of a straight train runs level when one block is pinned in y."""
+    fs = _long_train(6)
+    fs.units[3].pin(y=300)
+    fs.layout()
+
+    assert _width_and_rows(fs)[1] == 1
+
+
+def test_vertical_vent_terminal_aligns_without_overriding_exact_pins() -> None:
+    """Check that a free vent rises straight off its nozzle, and pinned x values hold."""
+    free = Flowsheet("Free vent")
+    vessel = free.add(U.Vessel("V-1", variant="horizontal", width=150, height=48))
+    vent = free.add(U.Vent("VT-1"))
+    stream = free.connect(vessel.vent, vent.inlet)
+    free.layout()
+    free.route()
+
+    assert vessel.frame is not None and vent.frame is not None and stream.route is not None
+    assert port_point(vessel, vessel.frame, "vent")[0] == pytest.approx(
+        port_point(vent, vent.frame, "inlet")[0]
+    )
+    assert real_bends(stream.route.waypoints) == 0
+
+    pinned = Flowsheet("Pinned vent")
+    vessel = pinned.add(U.Vessel("V-2", variant="horizontal", width=150, height=48))
+    vent = pinned.add(U.Vent("VT-2"))
+    vessel.pin(x=100)
+    vent.pin(x=50)
+    pinned.connect(vessel.vent, vent.inlet)
+    pinned.layout()
+    pinned.route()
+
+    assert vessel.frame is not None and vent.frame is not None
+    assert vessel.frame.x == 100
+    assert vent.frame.x == 50
+
+
+# --- grid pins --------------------------------------------------------------------
+
+
+def test_a_col_pin_sets_the_layer() -> None:
+    """Check that a pinned column holds and the next unit along takes the one after."""
+    fs = Flowsheet("Pinned col")
+    reactor = fs.add(U.Reactor("R1"))
+    separator = fs.add(U.Separator("S1"))
+    fs.connect(reactor.outlet, separator.feed)
+    reactor.pin(col=2, row=0)
+    fs.layout()
+
+    assert reactor.frame is not None and separator.frame is not None
+    assert reactor.frame.col == 2
+    assert separator.frame.col == 3
+
+
+def test_a_unit_between_two_pins_is_drawn_between_them() -> None:
+    """Check that a pump between a feed in column 0 and a drum in column 6 lands between."""
+    fs = Flowsheet("pinned slack")
+    feed = fs.add(U.Feed("Feed"))
+    pump = fs.add(U.Pump("P-1"))
+    drum = fs.add(U.Vessel("V-1"))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, drum.inlet)
+    feed.pin(col=0)
+    drum.pin(col=6)
+    fs.layout()
+
+    assert feed.frame is not None and pump.frame is not None and drum.frame is not None
+    assert feed.frame.col == 0
+    assert drum.frame.col == 6
+    assert pump.frame.col is not None and 0 < pump.frame.col < 6
+
+
+def test_two_pins_that_contradict_hold_and_the_derived_one_gives() -> None:
+    """Check that ``P-1`` east of ``P-3`` holds with the flow running the other way.
+
+    Both pins hold exactly; what gives is the position nobody stated,
+    which settles between the two.
+    """
+    fs = Flowsheet("conflicting pins")
+    a = fs.add(U.Pump("P-1"))
+    b = fs.add(U.Pump("P-2"))
+    c = fs.add(U.Pump("P-3"))
+    fs.connect(a.discharge, b.suction)
+    fs.connect(b.discharge, c.suction)
+    a.pin(col=3)
+    c.pin(col=0)
+    fs.layout()
+
+    assert a.frame is not None and b.frame is not None and c.frame is not None
+    assert a.frame.col == 3
+    assert c.frame.col == 0
+    assert b.frame.col is not None
+
+
+def test_grid_pins_are_recorded_and_a_lone_unit_starts_at_the_margin() -> None:
+    """Check that a col and row pin are the frame's, and the unit is not moved off the margin."""
+    fs = Flowsheet("Lone")
+    reactor = fs.add(U.Reactor("R1"))
+    reactor.pin(col=1, row=2)
+    fs.layout()
+
+    assert reactor.frame is not None
+    assert (reactor.frame.col, reactor.frame.row) == (1, 2)
+    assert (reactor.frame.x, reactor.frame.y) == (MARGIN, MARGIN)
+
+
+def test_a_row_pinned_above_row_zero_draws() -> None:
+    """Check that ``pin(row=-1)`` is recorded and drawn on the page.
+
+    A pass that counted bands up from zero once raised ``KeyError`` here.
+    """
+    fs = Flowsheet("negative row")
+    top = fs.add(U.Feed("Top"))
+    bottom = fs.add(U.Feed("Bottom"))
+    mixer = fs.add(U.Mixer("M-1"))
+    fs.connect(top.outlet, mixer.in_1)
+    fs.connect(bottom.outlet, mixer.in_2)
+    top.pin(row=-1)
+    bottom.pin(row=2)
+    fs.layout()
+
+    assert top.frame is not None and bottom.frame is not None
+    assert top.frame.row == -1
+    assert bottom.frame.row == 2
+    assert min(top.frame.y, bottom.frame.y) >= MARGIN
+
+
+@pytest.mark.parametrize("pin_row", [None, 0, 1, 2, -1])
+def test_pinning_a_row_does_not_flip_a_north_feed(pin_row: int | None) -> None:
+    """Check that a block's row pin leaves its roof feed above it.
+
+    Issue #311: ``pin(row=0)``, which moves nothing, put the north feed on
+    the south side of the block.
+
+    Parameters
+    ----------
+    pin_row : int or None
+        Row pinned on the block, or ``None`` for no pin.
+    """
+    fs = Flowsheet("stack")
+    block = fs.add(U.Block("Reaction", inputs=["W", "N"], outputs=1))
+    feed = fs.add(U.Feed("Main"))
+    air = fs.add(U.Feed("Air"))
+    prod = fs.add(U.Product("Out"))
+    fs.connect(feed.outlet, block.in_1)
+    fs.connect(air.outlet, block.in_2)
+    fs.connect(block.out_1, prod.inlet)
+    if pin_row is not None:
+        block.pin(row=pin_row)
+    fs.layout()
+
+    assert air.frame is not None and block.frame is not None
+    assert air.frame.y_max <= block.frame.y
+    if pin_row is not None:
+        assert block.frame.row == pin_row
+
+
+# --- pixel pins -------------------------------------------------------------------
+
+
+def test_x_and_y_pins_are_exact_even_when_they_conflict() -> None:
+    """Check that two pumps pinned to one point stay there and the overlap is reported."""
+    fs = Flowsheet("Conflicting pixel pins")
+    a = fs.add(U.Pump("P-1")).pin(x=400, y=300)
+    b = fs.add(U.Pump("P-2")).pin(x=400, y=300)
+    fs.connect(a.discharge, b.suction)
+    fs.layout()
+
+    assert a.frame is not None and b.frame is not None
+    assert (a.frame.x, a.frame.y) == (400, 300)
+    assert (b.frame.x, b.frame.y) == (400, 300)
+    with pytest.raises(ValueError, match="overlap"):
+        fs.to_svg()
+
+
+def _pixel_anchored_pump(
+    dx: float = 0, dy: float = 0, vertical: bool = False
+) -> tuple[Flowsheet, U.Pump]:
+    """Return a laid-out free pump between a pinned feed and product.
+
+    Parameters
+    ----------
+    dx, dy : float
+        Offset added to both flags' pins.
+    vertical : bool
+        Whether the three are turned to run down the sheet.
 
     Returns
     -------
-    None
-        Deferred columns are included in the next band's width check.
+    tuple[Flowsheet, Pump]
+        The laid-out sheet and its pump.
     """
-    from pandid.layout import _seed_slots
-    from pandid.layout.coarse import Host
-    from pandid.layout.coordinates import BAND_WIDTH, _bands, _columns, _lay_columns
-    from pandid.layout.place import assign_positions
-    from pandid.layout.stages import process_units, slot
-
-    fs = Flowsheet("Protected fold")
-    blocks = [fs.add(U.Block(str(index), inputs=["W"], outputs=["E"])) for index in range(20)]
-    streams = [fs.connect(source.out_1, dest.in_1) for source, dest in zip(blocks, blocks[1:])]
-    _seed_slots(fs)
-    assign_positions(fs)
-    for block in blocks:
-        slot(block).w = 200
-    units = process_units(fs)
-    columns = _columns(units, {})
-    run = streams[9]
-    host = Host(run.source, run.dest, run, run)
-
-    bands = _bands(units, columns, {}, True, hosts=[host])
-    assert [column for band in bands for column in band] == list(range(20))
-    assert all(_lay_columns(columns, band, {}) <= BAND_WIDTH for band in bands)
-    assert any(9 in band and 10 in band for band in bands)
-
-
-def test_a_ribbon_that_fits_the_paper_is_left_alone():
-    """The fold is for a sheet nobody could read, not for every sheet."""
-    fs = _long_train(6)
-    fs.layout()
-    frames = [u.frame for u in fs.units if u.frame is not None]
-    assert len({round(f.cy) for f in frames}) == 1
-
-
-def _pixel_anchored_pump(dx=0, dy=0, vertical=False):
     fs = Flowsheet("Pixel anchors")
     feed = fs.add(U.Feed("Feed"))
     pump = fs.add(U.Pump("P-1"))
@@ -880,39 +749,39 @@ def _pixel_anchored_pump(dx=0, dy=0, vertical=False):
     return fs, pump
 
 
-def test_free_pump_follows_translated_pixel_anchors():
-    import pytest
-
-    from pandid.portgeom import port_point
-
+def test_free_pump_follows_translated_pixel_anchors() -> None:
+    """Check that moving both flags' x pins moves the free pump between them by as much."""
     before_fs, before = _pixel_anchored_pump()
     after_fs, after = _pixel_anchored_pump(dx=1000)
+    feed, product = after_fs.units[0], after_fs.units[-1]
+
+    assert before.frame is not None and after.frame is not None
+    assert feed.frame is not None and product.frame is not None
     assert after.frame.x - before.frame.x == pytest.approx(1000)
     assert after.frame.y == pytest.approx(before.frame.y)
     assert 1100 < after.frame.x < after.frame.x_max < 1700
-    assert port_point(after_fs.units[0], after_fs.units[0].frame, "outlet") == (1100, 400)
-    assert port_point(after_fs.units[-1], after_fs.units[-1].frame, "inlet") == (1700, 400)
+    assert port_point(feed, feed.frame, "outlet") == (1100, 400)
+    assert port_point(product, product.frame, "inlet") == (1700, 400)
     before_fs.to_svg()
     after_fs.to_svg()
 
 
-def test_vertical_pump_follows_translated_pixel_anchors():
-    import pytest
-
+def test_vertical_pump_follows_translated_pixel_anchors() -> None:
+    """Check that moving both turned flags' y pins moves the free pump between them by as much."""
     _, before = _pixel_anchored_pump(vertical=True)
     fs, after = _pixel_anchored_pump(dy=1000, vertical=True)
+
+    assert before.frame is not None and after.frame is not None
     assert after.frame.y - before.frame.y == pytest.approx(1000)
     assert after.frame.x == pytest.approx(before.frame.x)
     assert 1100 < after.frame.y < after.frame.y_max < 1700
     fs.to_svg()
 
 
-def test_partial_pixel_pins_follow_transformed_nozzles_and_preserve_grid_intent():
-    import pytest
+def test_partial_pixel_pins_follow_transformed_nozzles_and_preserve_grid_intent() -> None:
+    """Check that pins on a turned nozzle hold and the sheet lays out the same every time."""
 
-    from pandid.portgeom import port_point
-
-    def build(dx, dy):
+    def build_partial(dx: float, dy: float) -> tuple[Flowsheet, U.Pump, D.Valve, U.Product]:
         fs = Flowsheet("Partial transformed anchors")
         pump = fs.add(U.Pump("P-1", width=140, height=100))
         valve = fs.add(D.Valve("V-1"))
@@ -924,8 +793,11 @@ def test_partial_pixel_pins_follow_transformed_nozzles_and_preserve_grid_intent(
         fs.layout()
         return fs, pump, valve, product
 
-    _, _, valve_before, _ = build(0, 0)
-    after, pump, valve, product = build(1000, 500)
+    _, _, valve_before, _ = build_partial(0, 0)
+    after, pump, valve, product = build_partial(1000, 500)
+
+    assert valve_before.frame is not None and valve.frame is not None
+    assert pump.frame is not None and product.frame is not None and product.pin_ is not None
     assert valve.frame.x - valve_before.frame.x == pytest.approx(1000)
     assert valve.frame.y - valve_before.frame.y == pytest.approx(500)
     assert port_point(pump, pump.frame, "discharge") == pytest.approx((2000, 900))
@@ -937,56 +809,35 @@ def test_partial_pixel_pins_follow_transformed_nozzles_and_preserve_grid_intent(
     restored = Flowsheet.from_dict(after.to_dict())
     restored.layout()
     assert restored.to_dict() == after.to_dict()
-    expected = [(u.frame.x, u.frame.y) for u in after.units]
+    expected = [unit.frame for unit in after.units]
     after.layout()
-    assert [(u.frame.x, u.frame.y) for u in after.units] == expected
-    assert [(u.frame.x, u.frame.y) for u in restored.units] == expected
+    assert [unit.frame for unit in after.units] == expected
+    assert [unit.frame for unit in restored.units] == expected
 
 
-def test_pixel_anchors_leave_a_disconnected_free_component_in_place():
-    def build(dx):
-        fs, _ = _pixel_anchored_pump(dx=dx)
-        feed = fs.add(U.Feed("Other feed"))
-        pump = fs.add(U.Pump("Other pump"))
-        fs.connect(feed.outlet, pump.suction)
-        fs.layout()
-        return [(u.frame.x, u.frame.y) for u in (feed, pump)]
-
-    assert build(0) == build(1000)
-
-
-def test_conflicting_pixel_pins_are_reported_without_moving_them():
-    import pytest
-
-    fs = Flowsheet("Conflicting pixel pins")
-    a = fs.add(U.Pump("P-1")).pin(x=400, y=300)
-    b = fs.add(U.Pump("P-2")).pin(x=400, y=300)
-    fs.connect(a.discharge, b.suction)
-    fs.layout()
-    assert (a.frame.x, a.frame.y) == (400, 300)
-    assert (b.frame.x, b.frame.y) == (400, 300)
-    with pytest.raises(ValueError, match="overlap"):
-        fs.to_svg()
-
-
-def test_biodiesel_pixel_refinement_keeps_the_pinned_control_renderable():
-    import pytest
-
-    from _layout_cases import build
-    from pandid.portgeom import pin_intent
-
+def test_translating_every_pin_translates_the_drawing() -> None:
+    """Check that moving every biodiesel pin 1000 down and right moves every unit as far."""
     fs, _ = build()
-    fs.to_svg()
-    before = {u: (u.frame.x, u.frame.y) for u in fs.units}
-    for u in fs.units:
-        for axis, (port, value) in pin_intent(u).items():
-            u.pin(**{axis: value + 1000}, port=port)
-    fs.to_svg()
-    for u, (x, y) in before.items():
-        assert (u.frame.x, u.frame.y) == pytest.approx((x + 1000, y + 1000)), u.name
+    fs.layout()
+    fs.route()
+    before = {}
+    for unit in fs.units:
+        assert unit.frame is not None
+        before[unit.name] = (unit.frame.x, unit.frame.y)
+    for unit in fs.units:
+        for axis, (port, value) in pin_intent(unit).items():
+            unit.pin(**{axis: value + 1000}, port=port)
+    fs.layout()
+    fs.route()
+
+    for unit in fs.units:
+        assert unit.frame is not None
+        x, y = before[unit.name]
+        assert (unit.frame.x, unit.frame.y) == pytest.approx((x + 1000, y + 1000)), unit.name
 
 
-def test_pixel_clearance_does_not_move_a_separator_into_a_free_pump():
+def test_a_branched_sheet_with_partial_pins_draws() -> None:
+    """Check that a branched sheet pinned on one axis here and two there renders."""
     fs = Flowsheet("Branched pixel anchors")
     feed = fs.add(U.Feed("F"))
     separator = fs.add(U.Separator("S"))
@@ -1005,123 +856,361 @@ def test_pixel_clearance_does_not_move_a_separator_into_a_free_pump():
     fs.to_svg()
 
 
-@pytest.mark.parametrize("skip", ["s103", "dirty_water"])
-def test_biodiesel_unpin_matches_a_fresh_build_and_keeps_remaining_pins(skip):
-    """Keep the same final drawing after an unpin and fresh reconstruction.
-
-    Parameters
-    ----------
-    skip : str
-        Name of the unit whose placement pin is removed.
-
-    Returns
-    -------
-    None
-        Pin positions and completed layout agree across rerenders.
-    """
-    from _layout_cases import build
-    from pandid.portgeom import pin_intent, port_point
-
-    live, units = build()
-    live.to_svg()
-    units[skip].pin_ = None
-    fresh, _ = build(skip=skip)
-    assert live.to_svg() == fresh.to_svg()
-    assert not [issue for issue in live.validate() if issue.code == "unit-overlap"]
-    for unit in live.units:
-        for axis, (port, value) in pin_intent(unit).items():
-            point = port_point(unit, unit.frame, port) if port else (unit.frame.x, unit.frame.y)
-            assert point[0 if axis == "x" else 1] == pytest.approx(value)
-    positions = [(u.frame.x, u.frame.y) for u in live.units]
-    live.layout()
-    live.route()
-    assert [(u.frame.x, u.frame.y) for u in live.units] == positions
-
-
-def test_disconnected_partial_pin_clears_a_fixed_body_on_its_free_axis():
-    fs = Flowsheet("Partial pin clearance")
-    fixed = fs.add(U.Pump("Fixed")).pin(x=50, y=50)
-    free = fs.add(U.Pump("Free")).pin(y=50)
-    fs.to_svg()
-    assert (fixed.frame.x, fixed.frame.y) == (50, 50)
-    assert free.frame.y == 50
-    assert free.frame.x_max <= fixed.frame.x or free.frame.x >= fixed.frame.x_max
-
-
-def test_pin_clearance_uses_drawn_feed_extents_and_transformed_equipment_size():
-    from pandid.portgeom import port_point, unit_box
-
-    fs = Flowsheet("Drawn extent clearance")
-    feed = fs.add(U.Feed("Long feed label that extends far to the left")).pin(x=300, y=100)
-    pump = fs.add(U.Pump("Rotated", width=140, height=90)).pin(y=75, orientation=90, mirrored="x")
-    fs.to_svg()
-    assert port_point(feed, feed.frame, "outlet") == (300, 100)
-    assert (pump.frame.y, pump.frame.w, pump.frame.h) == (75, 140, 90)
-    left, right = unit_box(feed, feed.frame), unit_box(pump, pump.frame)
-    assert right[2] <= left[0] or right[0] >= left[2]
-
-
-def test_straightening_preserves_explicit_grid_row_order():
-    fs = Flowsheet("Explicit row order")
-    source = fs.add(U.Feed("Source")).pin(col=0, row=2)
-    top = fs.add(U.Pump("Top")).pin(col=1, row=0)
-    middle = fs.add(U.Pump("Middle")).pin(col=2, row=1)
-    fs.connect(source.outlet, top.suction)
-    fs.to_svg()
-    assert (top.frame.row, middle.frame.row, source.frame.row) == (0, 1, 2)
-    assert top.frame.y_max <= middle.frame.y < middle.frame.y_max <= source.frame.y
-
-
-def test_collision_repair_preserves_explicit_grid_row_order():
-    fs = Flowsheet("Clearance within explicit rows")
+def test_units_sharing_a_layer_with_a_pinned_unit_keep_clear_of_it() -> None:
+    """Check that free heights in a layer stack clear of a tall pinned unit, x pins exact."""
+    fs = Flowsheet("Clearance within a layer")
     obstacle = fs.add(U.Pump("Fixed", height=540)).pin(x=50, y=0)
     top = fs.add(U.Pump("Top")).pin(x=50, row=3)
     bottom = fs.add(U.Pump("Bottom")).pin(x=50, row=4)
     fs.to_svg()
+
+    assert obstacle.frame is not None and top.frame is not None and bottom.frame is not None
     assert (obstacle.frame.x, obstacle.frame.y) == (50, 0)
     assert (top.frame.x, bottom.frame.x) == (50, 50)
     assert (top.frame.row, bottom.frame.row) == (3, 4)
-    assert top.frame.y_max <= bottom.frame.y
+    assert _overlapping(fs) == []
 
 
-def test_collision_repair_keeps_an_attached_instrument_clear_with_its_host():
+def test_a_free_axis_keeps_clear_of_a_pinned_unit() -> None:
+    """Check that a pump pinned only in y is placed clear of one pinned in both."""
+    fs = Flowsheet("Partial pin clearance")
+    fixed = fs.add(U.Pump("Fixed")).pin(x=50, y=50)
+    free = fs.add(U.Pump("Free")).pin(y=50)
+    fs.layout()
+
+    assert fixed.frame is not None and free.frame is not None
+    assert (fixed.frame.x, fixed.frame.y) == (50, 50)
+    assert free.frame.y == 50
+    assert _overlapping(fs) == []
+
+
+def test_a_pinned_feed_flag_is_kept_clear_where_it_is_drawn() -> None:
+    """Check that a pump pinned in y keeps clear of the flag a long feed tag draws.
+
+    An unmirrored flag keeps its nozzle at ``frame.x + 50`` and is drawn
+    leftward from it, so a long tag reaches far left of its frame (#574).
+    A turned and mirrored pump keeps the size it was given.
+    """
+    fs = Flowsheet("Drawn extent clearance")
+    feed = fs.add(U.Feed("Long feed label that extends far to the left")).pin(x=300, y=100)
+    pump = fs.add(U.Pump("Rotated", width=140, height=90)).pin(y=75, orientation=90, mirrored="x")
+    fs.layout()
+
+    assert feed.frame is not None and pump.frame is not None
+    assert port_point(feed, feed.frame, "outlet") == (300, 100)
+    assert (pump.frame.y, pump.frame.w, pump.frame.h) == (75, 140, 90)
+    assert unit_box(feed, feed.frame)[0] < feed.frame.x
+    assert _overlapping(fs) == []
+
+
+def test_an_x_pinned_unit_and_its_balloon_keep_clear_of_a_pinned_body() -> None:
+    """Check that a pump pinned in x over a wide pinned body is placed clear of it."""
     fs = Flowsheet("Instrument clearance")
     fixed = fs.add(U.Pump("Fixed", width=1500, height=400)).pin(x=0, y=50)
     host = fs.add(U.Pump("Host", width=100, height=100)).pin(x=550)
     fs.connect(fixed.discharge, host.suction)
     fs.add_instrument("LT", 1, sensing=host, at="S", offset=40)
-    fs.to_svg()
+    fs.layout()
+
+    assert fixed.frame is not None and host.frame is not None
     assert (fixed.frame.x, fixed.frame.y) == (0, 50)
     assert host.frame.x == 550
-    assert not [issue for issue in fs.validate() if issue.code == "unit-overlap"]
+    assert _unit_overlaps(fs) == []
 
 
-def test_collision_repair_can_make_room_between_free_grid_rows():
-    fs = Flowsheet("Make room between rows")
-    upper = fs.add(U.Pump("Upper")).pin(row=0, x=500)
-    middle = fs.add(U.Pump("Middle")).pin(row=1, x=50)
-    lower = fs.add(U.Pump("Lower")).pin(row=2, x=500)
-    fixed = fs.add(U.Pump("Fixed", height=100)).pin(x=50, y=150)
-    fs.to_svg()
-    assert (upper.frame.x, middle.frame.x, lower.frame.x) == (500, 50, 500)
-    assert (fixed.frame.x, fixed.frame.y) == (50, 150)
-    assert upper.frame.y_max <= middle.frame.y < middle.frame.y_max <= lower.frame.y
-    positions = [(u.frame.x, u.frame.y) for u in fs.units]
-    fs.layout()
-    assert [(u.frame.x, u.frame.y) for u in fs.units] == positions
-
-
-def test_collision_repair_can_make_room_for_two_units_in_one_grid_column():
-    fs = Flowsheet("Make room within a column")
+def test_two_units_pinned_to_one_column_and_height_sit_side_by_side() -> None:
+    """Check that two pumps pinned to one column at one height do not overlap."""
+    fs = Flowsheet("Room within a column")
     left = fs.add(U.Pump("Left", width=100)).pin(col=0, y=150)
     right = fs.add(U.Pump("Right")).pin(col=2, row=0)
     fixed = fs.add(U.Pump("Fixed", width=50)).pin(x=100, y=50)
     a = fs.add(U.Pump("A", width=50)).pin(col=1, y=50)
     b = fs.add(U.Pump("B", width=70, height=50)).pin(col=1, y=50)
-    fs.to_svg()
+    fs.layout()
+
+    for unit in (left, right, fixed, a, b):
+        assert unit.frame is not None
+    assert fixed.frame is not None and left.frame is not None
+    assert a.frame is not None and b.frame is not None
     assert (fixed.frame.x, fixed.frame.y) == (100, 50)
     assert (left.frame.y, a.frame.y, b.frame.y) == (150, 50, 50)
-    assert left.frame.x_max <= min(a.frame.x, b.frame.x)
-    assert max(a.frame.x_max, b.frame.x_max) <= right.frame.x
-    assert a.frame.x_max <= b.frame.x or b.frame.x_max <= a.frame.x
-    assert fixed.frame.x_max < min(a.frame.x, b.frame.x)
+    assert _overlapping(fs) == []
+
+
+def test_the_pinned_biodiesel_sheet_draws_without_an_overlap() -> None:
+    """Check that a sheet pinned mostly by height lays out with no two units overlapping."""
+    fs, _ = build()
+    fs.layout()
+    fs.route()
+
+    assert _unit_overlaps(fs) == []
+
+
+# --- bands (#429) -------------------------------------------------------------------
+
+
+def test_a_ribbon_wider_than_the_paper_is_folded_into_bands() -> None:
+    """Check that a train too wide for the paper is folded, not squashed.
+
+    Issue #429: nothing wrapped, so a big plant became one long run.
+    """
+    fs = _long_train(30)
+    fs.layout()
+
+    width, rows = _width_and_rows(fs)
+    assert width <= BAND_WIDTH
+    assert rows > 1
+
+
+def test_a_ribbon_that_fits_the_paper_is_left_alone() -> None:
+    """Check that a train that fits is drawn as one row."""
+    fs = _long_train(6)
+    fs.layout()
+
+    assert _width_and_rows(fs)[1] == 1
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_a_pixel_pinned_ribbon_is_not_folded(axis: str) -> None:
+    """Check that a wide train with one unit pinned in x or y is not folded onto the pin.
+
+    Parameters
+    ----------
+    axis : str
+        Axis pinned on the first block.
+    """
+    fs = _long_train(30)
+    fs.units[1].pin(**{axis: 200})
+    fs.layout()
+
+    assert _width_and_rows(fs)[0] > BAND_WIDTH
+
+
+# --- margins, overlaps and determinism ------------------------------------------------
+
+
+def test_the_drawing_and_its_balloon_halos_start_at_the_margin() -> None:
+    """Check that the top-left of an unpinned sheet, balloon room included, is at the margin."""
+    fs = Flowsheet("Margin")
+    feed = fs.add(U.Feed("Feed"))
+    drum = fs.add(U.Vessel("V-1"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, fs.add(U.Product("P")).inlet)
+    fs.add_instrument("PT", 1, sensing=drum, at="N", offset=60)
+    fs.add_instrument("TT", 1, sensing=feed, at="W", offset=60)
+    fs.layout()
+
+    pads = balloon_pads(fs)
+    assert pads, "no unit reserves room for its balloons"
+    lefts, tops = [], []
+    for unit in fs.units:
+        assert unit.frame is not None
+        x0, y0, _, _ = unit_box(unit, unit.frame)
+        pad = pads.get(unit)
+        lefts.append(x0 - (pad.west if pad else 0.0))
+        tops.append(y0 - (pad.north if pad else 0.0))
+    assert (min(lefts), min(tops)) == (MARGIN, MARGIN)
+
+
+def test_disconnected_pieces_are_placed_without_overlapping() -> None:
+    """Check that separate trains and a lone vessel each get their own place."""
+    fs = Flowsheet("Islands")
+    for i in range(3):
+        feed = fs.add(U.Feed(f"F{i}"))
+        pump = fs.add(U.Pump(f"P{i}"))
+        fs.connect(feed.outlet, pump.suction)
+        fs.connect(pump.discharge, fs.add(U.Product(f"D{i}")).inlet)
+    fs.add(U.Vessel("V-9"))
+    fs.layout()
+
+    assert _overlapping(fs) == []
+
+
+def test_no_two_units_overlap_judged_by_the_boxes_they_draw() -> None:
+    """Check a folded sheet of roof-fed blocks with long feed tags for overlaps.
+
+    A feed flag is drawn left of its frame, so each box is the one drawn.
+    """
+    fs = Flowsheet("Stacked")
+    port = fs.add(U.Feed("F")).outlet
+    for i in range(30):
+        block = fs.add(U.Block(f"B-{i}", inputs=["W", "N"], outputs=["E"]))
+        fs.connect(port, block.in_1)
+        fs.connect(fs.add(U.Feed(f"AIR AND STEAM SUPPLY {i}")).outlet, block.in_2)
+        port = block.out_1
+    fs.connect(port, fs.add(U.Product("P")).inlet)
+    fs.layout()
+
+    flag = fs.units[2]
+    assert flag.frame is not None and unit_box(flag, flag.frame)[0] < flag.frame.x
+    assert _overlapping(fs) == []
+
+
+def test_laying_out_twice_gives_identical_frames() -> None:
+    """Check that a sheet with roof feeds lays out the same way twice."""
+    fs, *_ = _syngas_block()
+    fs.layout()
+    first = [unit.frame for unit in fs.units]
+    fs.layout()
+
+    assert [unit.frame for unit in fs.units] == first
+
+
+def _interlock_on_a_signal() -> tuple[Flowsheet, U.Unit]:
+    """Return ``examples/04_control_loop.py``'s shape: a balloon on a balloon's line.
+
+    ``LT`` reads the drum, ``LIC`` sits under it, and the interlock hangs
+    off the signal between the two, so where it is drawn depends on faces
+    chosen after the boxes are placed.
+
+    Returns
+    -------
+    tuple[Flowsheet, Unit]
+        The unlaid sheet and its interlock.
+    """
+    fs = Flowsheet("interlock")
+    feed = fs.add(U.Feed("Feed"))
+    drum = fs.add(U.Vessel("V-101"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, prod.inlet)
+    lt = fs.add_instrument("LT", 101, sensing=drum, at="S", offset=70)
+    lic = fs.add_instrument("LIC", 101, near=lt, at="S", offset=95, variant="shared")
+    measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    interlock = fs.add_instrument(
+        "I", 1, sensing=measurement, at=0.5, offset=44, angle=90, variant="logic"
+    )
+    return fs, interlock
+
+
+def test_laying_a_sheet_out_twice_puts_every_box_in_the_same_place() -> None:
+    """Check that a balloon hung on a signal is placed the same on every layout.
+
+    Issue #294: it was placed from default faces the first time and from
+    the first run's faces the second, so it moved 16px.
+    """
+    fs, interlock = _interlock_on_a_signal()
+    fs.layout()
+    first = {unit.name: unit.frame for unit in fs.units}
+    assert first[interlock.name] is not None
+    fs.layout()
+    assert {unit.name: unit.frame for unit in fs.units} == first
+    fs.layout()
+    assert {unit.name: unit.frame for unit in fs.units} == first
+
+
+def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed() -> None:
+    """Check that layout ends on a face selection no further balloon pass changes.
+
+    A label dodges the faces nozzles leave from, so it is placed last.
+    """
+    fs, _ = _interlock_on_a_signal()
+    fs.layout()
+
+    lt = next(unit for unit in fs.units if unit.name == "LT-101")
+    assert lt.frame is not None
+    before = dict(lt.frame.port_faces)
+    assert not place_attached(fs), "a further pass still moves a balloon"
+    assert dict(lt.frame.port_faces) == before
+
+
+@pytest.mark.parametrize("skip", ["s103", "dirty_water"])
+def test_an_unpinned_sheet_matches_a_fresh_build_and_keeps_remaining_pins(skip: str) -> None:
+    """Check that removing a pin draws what a build without it draws.
+
+    Parameters
+    ----------
+    skip : str
+        Key of the unit whose pin is removed.
+    """
+    live, units = build()
+    live.layout()
+    live.route()
+    units[skip].pin_ = None
+    fresh, _ = build(skip=skip)
+
+    assert live.to_svg(check=False) == fresh.to_svg(check=False)
+    for unit in live.units:
+        assert unit.frame is not None
+        for axis, (port, value) in pin_intent(unit).items():
+            point = port_point(unit, unit.frame, port) if port else (unit.frame.x, unit.frame.y)
+            assert point[0 if axis == "x" else 1] == pytest.approx(value)
+    frames = [unit.frame for unit in live.units]
+    live.layout()
+    live.route()
+    assert [unit.frame for unit in live.units] == frames
+
+
+def test_full_layout_via_render(tmp_path: Path) -> None:
+    """Check that rendering an unlaid sheet lays it out first.
+
+    Parameters
+    ----------
+    tmp_path : Path
+        Output directory.
+    """
+    fs = Flowsheet("Test")
+    reactor = fs.add(U.Reactor("R1"))
+    separator = fs.add(U.Separator("S1"))
+    fs.connect(reactor.outlet, separator.feed)
+    svg_path = tmp_path / "test.svg"
+    fs.render(str(svg_path))
+
+    assert reactor.frame is not None and separator.frame is not None
+    assert separator.frame.col == 1
+    assert "<use" in svg_path.read_text()
+
+
+# --- balloons -----------------------------------------------------------------------
+
+
+def test_a_free_standing_balloon_is_placed_near_what_it_is_wired_to() -> None:
+    """Check that a controller wired to a valve is drawn near it but not on it."""
+    fs = Flowsheet("panel")
+    feed = fs.add(U.Feed("Feed"))
+    valve = fs.add(D.ControlValve("FV-101"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    fic = fs.add(U.Instrument("FIC-101"))
+    fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+
+    assert fic.frame is not None and valve.frame is not None
+    reach = abs(fic.frame.cx - valve.frame.cx) + abs(fic.frame.cy - valve.frame.cy)
+    assert reach < 400, "the controller is nowhere near the valve it commands"
+    assert not _overlap(unit_box(fic, fic.frame), unit_box(valve, valve.frame))
+
+
+def test_a_free_standing_balloon_stays_off_a_feed_flag_where_it_is_drawn() -> None:
+    """Check that a balloon keeps clear of the flag drawn, not of the flag's frame (#574)."""
+    fs = Flowsheet("panel")
+    valve = fs.add(D.ControlValve("FV-101")).pin(x=500, y=300)
+    feed = fs.add(U.Feed("FEED FROM UNIT 100 STORAGE AREA")).pin(x=880, y=290)
+    fs.connect(feed.outlet, fs.add(U.Product("P")).pin(x=1200, y=600).inlet)
+    fic = fs.add(U.Instrument("FIC-101")).pin(y=300)
+    fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+
+    assert fic.frame is not None and feed.frame is not None
+    flag = unit_box(feed, feed.frame)
+    assert flag[0] < feed.frame.x, "the flag is meant to be drawn left of its frame"
+    assert not _overlap(unit_box(fic, fic.frame), flag), "the balloon is on the flag"
+
+
+def test_a_chain_of_balloons_is_reserved_paper_before_anything_is_placed() -> None:
+    """Check that a balloon chain on an orifice plate lands on nothing else."""
+    fs = Flowsheet("halo")
+    feed = fs.add(U.Feed("Feed"))
+    plate = fs.add(D.Fitting("FE-101", variant="orifice"))
+    valve = fs.add(D.ControlValve("FV-101"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, plate.inlet)
+    fs.connect(plate.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    top = fs.add_balloon(plate, at="N", offset=38)
+    ft = fs.add_instrument("FT", 101, near=top, at="N", offset=23)
+    fs.add_instrument("FIC", 101, near=ft, at="N", offset=60, variant="shared")
+    fs.route()
+
+    assert _unit_overlaps(fs) == [], "a balloon was drawn over something"

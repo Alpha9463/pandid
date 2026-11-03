@@ -354,10 +354,11 @@ def test_declarations_finds_a_module_constant():
     assert found == {"RETIRED": RETIRED}
 
 
-def test_the_package_declares_no_deprecation_today():
-    """The twelve spellings 0.1.3 and 0.1.4 deprecated are deleted (#579), and
-    nothing new is retiring. Written out because an empty answer is also what a
-    broken walker returns: :func:`test_declarations_finds_a_module_constant`
-    says it can find one at all.
+def test_the_package_declares_only_the_placement_hints():
+    """The twelve spellings 0.1.3 and 0.1.4 deprecated are deleted (#579); the
+    one retiring now is a unit class's ``PLACES``/``LAYOUT_CONFIDENCE`` (#564),
+    which layout no longer reads.
     """
-    assert declarations() == {}
+    from pandid.units import _PLACEMENT_HINTS
+
+    assert declarations() == {"pandid.units._PLACEMENT_HINTS": _PLACEMENT_HINTS}

@@ -20,6 +20,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 from pandid._checks import check_real, check_whole, is_whole, suggest
+from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
 
@@ -167,6 +168,15 @@ class _NoSuchAttribute(AttributeError):
                 f"available ports: {sorted(ports)}")
 
 
+#: Layout reads nozzle faces, so the old placement hints place nothing.
+_PLACEMENT_HINTS = Deprecation(
+    what="PLACES or LAYOUT_CONFIDENCE on a Unit subclass",
+    instead="unit.nozzle(port, face) or unit.pin(orientation=..., mirrored=...)",
+    removed_in="0.1.7",
+    note="layout now places a unit's peers by the faces its nozzles are drawn on",
+)
+
+
 class Unit:
     """A piece of equipment, flag, fitting or instrument on a flowsheet.
 
@@ -203,20 +213,9 @@ class Unit:
     PORT_ANCHORS : dict[str, str]
         Port name to the name the symbol anchors it under, for a renamed
         nozzle. Read through :meth:`_symbol_anchor`.
-    LAYOUT_CONFIDENCE : float
-        Weight of this class's placement claims (stiffness in the
-        least-squares fit, at both ends): 8 for columns and reactors, 4 for
-        vessels, tanks and separators, 2 for exchangers, pumps, compressors
-        and filters, 1 by default, and 0 for inline valves, fittings,
-        reducers and tees, whose claims are dropped. See
-        :mod:`pandid.layout.claims`.
-    PLACES : dict[str, str | tuple[str, float] | None]
-        Port or port-family name to where the connected unit is drawn: a
-        compass point, or ``(point, weight)``. Written in the symbol's
-        frame and turned with the unit. ``None`` declines a direction for a
-        service connection (steam, fuel, regenerant), so its header is
-        placed by the rest of the sheet. A missing entry falls back to the
-        port's fixed face. A subclass's dict replaces its base's.
+    LAYOUT_CONFIDENCE, PLACES
+        Deprecated, and read by nothing: layout places a unit's peers by
+        its nozzle faces. A subclass that sets either is reported.
     ONE_NOZZLE_MANY_RUNS : bool
         Whether several streams may meet at one point on purpose. Only
         boundary flags set it; elsewhere coincident ports are an error.
@@ -431,12 +430,18 @@ class Unit:
         self.ports: dict[str, Port] = {}
         self._new_line_number = False
         self._pin: Pin | None = None  # intent; set only via pin()
+        # Whether pin() was given an orientation or a mirror, so a stated 0 or
+        # False is not "unstated".
+        self._turn_stated = False
+        self._mirror_stated = False
         # Axes pinned to a port rather than the corner: {"y": "inlet"}.
         self._pin_ports: dict[str, str] = {}
         self.frame: Frame | None = None  # resolved; set only by layout
         self._port_faces: dict[str, str] = {}  # port name -> face
         for spec in self._declared_ports():
             self._add_port(*spec)
+        if type(self).PLACES is not Unit.PLACES or type(self).LAYOUT_CONFIDENCE != 1:
+            _PLACEMENT_HINTS.warn(self, where=name)
 
     def _invalidate_layout(self) -> None:
         """Mark the sheet's cached geometry stale, if the unit is on one.
@@ -601,6 +606,8 @@ class Unit:
         """
         self._pin_ports = {}
         self._pin = value
+        self._turn_stated = value is not None and value.orientation != 0
+        self._mirror_stated = value is not None and (value.mirrored or value.mirror_y)
 
     def pin(
         self: _UnitT,
@@ -632,7 +639,8 @@ class Unit:
         Parameters
         ----------
         col, row : int or None, optional
-            Grid column and row.
+            Flow column, counted west to east, and place down that column:
+            a lower ``row`` is drawn above a higher one in the same column.
         x, y : float or None, optional
             Pixel coordinate of the corner, or of ``port``.
         orientation : float, optional
@@ -721,6 +729,8 @@ class Unit:
         # inconsistent.
         self._pin_ports = ports
         self._pin = candidate
+        self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
+        self._mirror_stated = self._mirror_stated or mirrored is not _UNCHANGED
         return self
 
     def _pin_port(self, port_name: str) -> str:
@@ -1154,8 +1164,6 @@ class _Boundary(Unit):
         Whether the flag is a repeatable utility header.
     """
 
-    # A flag's face is artwork, not a direction, so it states no claims.
-    LAYOUT_CONFIDENCE = 0
 
     ONE_NOZZLE_MANY_RUNS = True
 
@@ -1287,8 +1295,6 @@ class _FluidMover(Unit):
     discharge: Port
 
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
-    LAYOUT_CONFIDENCE = 2
-    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class Pump(_FluidMover):
@@ -1320,8 +1326,6 @@ class _NormallyPositioned(Unit):
         operation.
     """
 
-    # Inline devices state no placement claims.
-    LAYOUT_CONFIDENCE = 0
 
     #: Normal positions a device may declare.
     NORMAL_POSITIONS = ("open", "closed")
@@ -1938,10 +1942,6 @@ class _MultiPortVessel(_FaceFamilies):
         Port families in declaration order.
     """
 
-    LAYOUT_CONFIDENCE = 4
-    # Inlets come from upstream and outlets go downstream, whatever face
-    # they use. Vent, relief and drain restate their faces at vessel weight.
-    PLACES = {"in": "W", "out": "E", "vent": "N", "relief": "N", "drain": "S"}
 
     def _symbol_anchor(self, port_name: str) -> str:
         """Return the anchor name, resolving the ``inlet``/``outlet`` aliases.
@@ -2778,7 +2778,6 @@ class Reducer(Unit):
     outlet: Port
 
     kind = "reducer"
-    LAYOUT_CONFIDENCE = 0
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     LARGE_ENDS = ("inlet", "outlet")
@@ -2896,7 +2895,6 @@ class Tee(Unit):
     branch: Port
 
     kind = "tee"
-    LAYOUT_CONFIDENCE = 0
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     DEFAULT_NAME = "TEE"
@@ -3093,10 +3091,6 @@ class Furnace(Unit):
     fuel: Port
 
     kind = "furnace"
-    # Vessel rank: the train is drawn through it, not around it.
-    LAYOUT_CONFIDENCE = 4
-    # The fuel header is a utility; do not hang it below the furnace.
-    PLACES = {"fuel": None}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -3116,10 +3110,6 @@ class Boiler(Unit):
     steam: Port
 
     kind = "boiler"
-    # Vessel rank, as for Furnace.
-    LAYOUT_CONFIDENCE = 4
-    # Steam leaves the apex but its consumers are downstream, so claim east.
-    PLACES = {"steam": "E"}
     PORTS = [("feedwater", "inlet", "process"), ("steam", "outlet", "process")]
 
 
@@ -3156,11 +3146,6 @@ class Turbine(Unit):
     outlet: Port
 
     kind = "turbine"
-    # Machine rank, as for Compressor and Pump.
-    LAYOUT_CONFIDENCE = 2
-    # No PLACES: the symbol fixes inlet west and outlet east, and a stated
-    # face would ignore mirroring.
-
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
@@ -3234,12 +3219,6 @@ class Filter(_VariantPorted):
     outlet: Port
 
     kind = "filter"
-    LAYOUT_CONFIDENCE = 2
-    # Regenerant lines run to day tanks and effluent headers; do not let
-    # them place those above the filter. wash_in keeps its artwork claim:
-    # silencing it costs crossings on the alumina example until the
-    # fallback for silent ports improves.
-    PLACES = {"regenerant_in": None, "spent_regenerant": None}
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # One in, one out; the default.
@@ -3329,8 +3308,6 @@ class Dryer(Unit):
     vent: Port
 
     kind = "dryer"
-    # heating_in is a utility from a header; do not place the header below.
-    PLACES = {"heating_in": None}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("product", "outlet", "process"),
@@ -3370,12 +3347,6 @@ class Kiln(Unit):
     air: Port
 
     kind = "kiln"
-    # Vessel rank, as for Furnace.
-    LAYOUT_CONFIDENCE = 4
-    # Off-gas leaves the train up and away, like Separator.overflow. Fuel
-    # and air are utilities; do not let them place their headers. Feed and
-    # product keep the artwork's faces, which follow mirroring.
-    PLACES = {"offgas": "NE", "fuel": None, "air": None}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("product", "outlet", "process"),
@@ -3453,10 +3424,6 @@ class ScreeningDevice(Unit):
     # Not "screen": pandid.spec aliases class names and kinds in one table,
     # and "screen" would collide with the Screen device class.
     kind = "screening_device"
-    # The artwork feeds through the roof, but upstream is drawn west, not
-    # above. Undersize goes south-east, like Separator.underflow, so the
-    # two products get a lane each; oversize keeps the artwork's east face.
-    PLACES = {"feed": "W", "undersize": "SE"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("oversize", "outlet", "process"),
@@ -3891,8 +3858,6 @@ class Instrument(Unit):
     sig_out: Port
 
     kind = "instrument"
-    # Balloons are placed after the process units and make no claims.
-    LAYOUT_CONFIDENCE = 0
     # Declared up front, not created on first use, so face selection sees
     # them in a fixed order whatever order the author connects them in.
     PORTS = [
@@ -4372,9 +4337,6 @@ class HeatExchanger(_VariantPorted):
     tube_out: Port
 
     kind = "hex"
-    # No PLACES: which side is the process depends on the service, so a
-    # class-wide claim would misplace either condensers or interchangers.
-    LAYOUT_CONFIDENCE = 2
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default port set.
@@ -4400,11 +4362,6 @@ class Heater(Unit):
     utility_in: Port
 
     kind = "heater"
-    LAYOUT_CONFIDENCE = 2
-    # The utility header is placed by the sheet, not hung below each heater.
-    # inlet and outlet are not restated: their artwork faces follow
-    # mirroring, and a PLACES entry would not.
-    PLACES = {"utility_in": None}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -4423,9 +4380,6 @@ class Cooler(Unit):
     utility_out: Port
 
     kind = "cooler"
-    LAYOUT_CONFIDENCE = 2
-    # As for Heater: do not lift the return header above every cooler.
-    PLACES = {"utility_out": None}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -4456,12 +4410,6 @@ class CoolingTower(Unit):
     blowdown: Port
 
     kind = "cooling_tower"
-    # Vessel rank: coolers on the sheet are piped back to it.
-    LAYOUT_CONFIDENCE = 4
-    # Cold water leaves the basin but the loop runs on east. Makeup,
-    # blowdown and air intake run to headers or ambient, so they place
-    # nothing. air_out keeps its north face: exhaust is drawn leaving up.
-    PLACES = {"water_out": "E", "air_in": None, "makeup": None, "blowdown": None}
     PORTS = [
         *_side_ports("water", "air"),
         ("makeup", "inlet", "utility"),
@@ -4523,14 +4471,6 @@ class Evaporator(Unit):
     condensate: Port
 
     kind = "evaporator"
-    # Vessel rank, as for Separator.
-    LAYOUT_CONFIDENCE = 4
-    # Vapour goes to the next unit along, not above, or a train climbs into
-    # a staircase. Concentrate goes down and on, clear of the vapour. The
-    # steam chest runs to utility headers and places nothing. feed keeps
-    # its artwork face, which follows mirroring.
-    PLACES = {"vapor": "E", "concentrate": "SE",
-              "heating_in": None, "condensate": None}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("vapor", "outlet", "vapor"),
@@ -4618,11 +4558,6 @@ class Thickener(Unit):
     underflow: Port
 
     kind = "thickener"
-    # Vessel rank, as for Separator.
-    LAYOUT_CONFIDENCE = 4
-    # As Separator: overflow up and away, underflow down and on, so the two
-    # draws never share a cell. feed keeps its artwork face.
-    PLACES = {"overflow": "NE", "underflow": "SE"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("overflow", "outlet", "process"),
@@ -4908,13 +4843,6 @@ class Reactor(Unit):
         def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Reactor": ...
 
     kind = "reactor"
-    # Column rank: the sheet is drawn around the reactor.
-    LAYOUT_CONFIDENCE = 8
-    # The outlet is on the floor, but what it feeds is the next unit along,
-    # so claim east and let the pipe turn. Claiming SE at this weight steps
-    # a reactor train into a staircase and measured worse on the corpus.
-    # Feed restates its west face at reactor weight.
-    PLACES = {"feed": "W", "outlet": "E", "vent": "N"}
     # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default port set: product, off-gas and jacket or coil duty.
@@ -5212,16 +5140,6 @@ class Separator(Unit):
         def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Separator": ...
 
     kind = "separator"
-    LAYOUT_CONFIDENCE = 4
-    # Bottom draws go south-east so the two draws never share a cell.
-    # Vapour goes east, not north-east: it feeds the next unit along, and
-    # lifting it turns a train into a staircase. Overflow goes north-east:
-    # a collector's clean gas leaves the train.
-    PLACES = {
-        "feed": "W",
-        "vapor": "E", "liquid": "SE",
-        "overflow": "NE", "underflow": "SE",
-    }
     # Ports depend on the variant; __init__ adds feeds, then _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
     # Default draws. Feeds are a family added in __init__.
@@ -5624,23 +5542,6 @@ class Column(Unit):
         ) -> "Column": ...
 
     kind = "column"
-    # Highest rank: readers expect the tower arrangement below.
-    LAYOUT_CONFIDENCE = 8
-    # The artwork faces (overhead N, bottoms S, returns E) do not say where
-    # the condenser or reboiler is drawn. NE and SE give the overhead
-    # system and the reboiler loop a column each and keep the west side
-    # for feeds. Returns match their draws, since each returns from the
-    # same cluster. Return lines usually reach claims only as reversed
-    # flow (pandid.layout.claims), so the return entries have little
-    # effect. A side draw goes east at a lower weight.
-    PLACES = {
-        "feed": "W",
-        "overhead": "NE",
-        "reflux_in": "NE",
-        "bottoms": "SE",
-        "boilup_in": "SE",
-        "draw": ("E", 4),
-    }
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
@@ -6389,12 +6290,6 @@ class Mixer(Unit):
         def __new__(cls, name: str, n_inlets: int = 2, *args: Any, **kwargs: Any) -> "Mixer": ...
 
     kind = "mixer"
-    # Machine rank, so the units it collects from do not pull it off its
-    # header line.
-    LAYOUT_CONFIDENCE = 2
-    # No PLACES: the artwork fixes inlets west and the outlet east, and a
-    # stated face would ignore mirroring.
-
     def __init__(
         self,
         name: str,
@@ -6573,8 +6468,6 @@ class Splitter(Unit):
         ) -> "Splitter": ...
 
     kind = "splitter"
-    # As Mixer: machine rank and no PLACES.
-    LAYOUT_CONFIDENCE = 2
 
     def __init__(
         self,
@@ -6772,8 +6665,8 @@ class Block(_FaceFamilies):
     family; :attr:`inlets` and :attr:`outlets` are the ports and
     :attr:`input_faces` and :attr:`output_faces` their faces.
 
-    Layout reads each face as a placement claim (north puts the peer in the
-    row above), so a BFD lays itself out (:mod:`pandid.layout.claims`). A
+    Layout reads each face as the side the peer is drawn on (north puts it
+    above), so a BFD lays itself out (:mod:`pandid.layout.layered`). A
     face names the box's own side: a turned or mirrored :meth:`pin` moves
     every connection with the box. :func:`pandid.portgeom.port_faces`
     reports faces on the finished sheet.
@@ -7000,6 +6893,7 @@ class Block(_FaceFamilies):
         # Restore the stated pin, not the resolved corner, so a refused
         # call keeps the anchor port the previous pin named.
         was, was_ports = self._pin, dict(self._pin_ports)
+        was_stated = self._turn_stated, self._mirror_stated
         super().pin(
             col=col, row=row, x=x, y=y, orientation=orientation, mirrored=mirrored, port=port
         )
@@ -7010,6 +6904,7 @@ class Block(_FaceFamilies):
             # same frames.
             self._pin_ports = was_ports
             self._pin = was
+            self._turn_stated, self._mirror_stated = was_stated
             raise
         return self
 

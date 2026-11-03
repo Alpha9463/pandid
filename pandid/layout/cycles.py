@@ -2,7 +2,7 @@
 
 Placement needs an acyclic process graph. A depth-first walk marks each
 back edge with ``Stream._is_recycle``; those streams are drawn right to
-left and state a reversed claim (:mod:`pandid.layout.claims`).
+left (:mod:`pandid.layout.layered`).
 """
 
 from typing import TYPE_CHECKING

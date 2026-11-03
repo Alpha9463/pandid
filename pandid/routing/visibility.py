@@ -8,6 +8,10 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
 
+#: Clearance a line keeps beside a tag's halo, a pen and a gap, so it does
+#: not graze the halo.
+TAG_CLEAR = 3.0
+
 
 @dataclass
 class Rect:
@@ -220,7 +224,9 @@ class VisibilityGraph:
             # The halo the renderer draws behind the tag; an untagged unit,
             # such as an element whose balloon carries its tag, draws none.
             if u.kind not in ("feed", "product") and lpos != "center" and u.tag:
-                label_w = tag_width(u.tag)
+                label_w = tag_width(u.tag) + 2 * TAG_CLEAR
+                # A valve's fail letters sit past its tag, below it or beside it.
+                fail = 25.0 if getattr(u, "fail", "") else 0.0
                 if lpos == "top":
                     cx = f.x + u_width / 2
                     self.obstacles.append(Rect(cx - label_w / 2, cx + label_w / 2, f.y - 20, f.y))
@@ -230,10 +236,11 @@ class VisibilityGraph:
                     cx = f.x + u_width / 2
                     self.obstacles.append(
                         Rect(
-                            cx - label_w / 2, cx + label_w / 2, f.y + u_height, f.y + u_height + 25
+                            cx - label_w / 2, cx + label_w / 2,
+                            f.y + u_height, f.y + u_height + 25 + fail,
                         )
                     )
-                    y_set.add(f.y + u_height + 25.0 + margin)
+                    y_set.add(f.y + u_height + 25.0 + fail + margin)
                     y_set.add(f.y + u_height + 10.0)
                 elif lpos == "left":
                     cy = f.y + u_height / 2
@@ -243,9 +250,9 @@ class VisibilityGraph:
                 elif lpos == "right":
                     cy = f.y + u_height / 2
                     self.obstacles.append(
-                        Rect(f.x + u_width, f.x + u_width + label_w + 15, cy - 10, cy + 10)
+                        Rect(f.x + u_width, f.x + u_width + label_w + 15 + fail, cy - 10, cy + 10)
                     )
-                    x_set.add(f.x + u_width + label_w + 15.0 + margin)
+                    x_set.add(f.x + u_width + label_w + 15.0 + fail + margin)
                     x_set.add(f.x + u_width + 5.0)
 
             x_set.add(f.x - margin)

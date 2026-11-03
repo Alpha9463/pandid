@@ -891,20 +891,6 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             "routing passes; a balloon may sit slightly off the line it taps. "
             "Pin the balloon-carrying lines with via() to settle it"))
 
-    search_result = getattr(fs, "_layout_search_result", None)
-    if search_result is not None and search_result.status != "converged":
-        code = (
-            "layout-search-budget-exhausted"
-            if search_result.status == "budget_exhausted"
-            else "layout-search-unresolved"
-        )
-        warnings.append(Issue(
-            "warning", code,
-            f"layout search {search_result.status} with "
-            f"{len(search_result.conflicts)} named conflicts after "
-            f"{search_result.exact_trials} exact trials"
-        ))
-
     # --- a balloon nothing could place (recorded by layout) ---
     # An attached instrument is placed from its host, so a chain of them
     # must end on a placed unit. Read from place_attached's record,
@@ -945,6 +931,16 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     nozzle = f".{port_name}" if port_name is not None else ""
                     missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
                                   f"drawn at {drawn:g}, {abs(drawn - want):g} away")
+            # A stated turn or mirror is drawn as stated.
+            pin = u.pin_
+            if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
+                missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
+                              f"drawn at {u.frame.orientation:g}")
+            if pin is not None and u._mirror_stated and (
+                    (u.frame.mirrored, u.frame.mirror_y) != (pin.mirrored, pin.mirror_y)):
+                missed.append(f"{u.name} was pinned with mirrored="
+                              f"{(pin.mirrored, pin.mirror_y)} and is drawn with "
+                              f"{(u.frame.mirrored, u.frame.mirror_y)}")
             # Grid ranks: compare the pinned col/row with the frame's. Skip a
             # rank superseded by an absolute pin on the same axis
             # (:func:`pandid.layout.control._place_free`); the coordinate
@@ -968,6 +964,26 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     "this unit after the solver read the pin")
             for said in missed:
                 warnings.append(Issue("warning", "pin-not-honored", f"{said}. {cure}"))
+
+        # A grid pin is a place in order: a lower col is drawn further west,
+        # and a lower row higher up its column. A frame records the rank it
+        # was pinned to, so compare where the units are drawn.
+        graded = [u for u in placed if u.kind != "instrument" and u.pin_ is not None]
+        for a in graded:
+            for b in graded:
+                pa, pb, fa, fb = a.pin_, b.pin_, a.frame, b.frame
+                assert pa is not None and pb is not None and fa is not None and fb is not None
+                if (pa.col is not None and pb.col is not None and pa.x is None and pb.x is None
+                        and pa.col < pb.col and fa.cx >= fb.cx):
+                    said = f"{a.name} was pinned col={pa.col}, west of {b.name}'s col={pb.col}"
+                elif (pa.row is not None and pb.row is not None and pa.y is None and pb.y is None
+                      and pa.col == pb.col and pa.row < pb.row and fa.cy >= fb.cy):
+                    said = f"{a.name} was pinned row={pa.row}, above {b.name}'s row={pb.row}"
+                else:
+                    continue
+                warnings.append(Issue("warning", "pin-not-honored",
+                                      f"{said}, and is not drawn so. Something moved one of "
+                                      "them after layout read the pins"))
 
         boxes = [(u, unit_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.

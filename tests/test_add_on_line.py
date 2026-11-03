@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from pandid import Feed, Flowsheet, Product, Reactor, Tee, Valve
-from pandid.layout.backbone import infer_backbone
+from pandid.layout.mounted import mounted_runs
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
 from pandid.state import State
@@ -71,7 +71,7 @@ def test_add_on_orders_insertions_by_fraction() -> None:
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-2", "Product"]
     assert [s._inline_at for s in fs.streams] == [0.25, 0.75, None]
-    assert infer_backbone(fs).runs[0].inline_at == (0.25, 0.75)
+    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == (0.25, 0.75)
     fs.to_svg()
     assert earlier.frame is not None and later.frame is not None
     assert earlier.frame.x < later.frame.x
@@ -97,7 +97,7 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
     second = fs.add(Valve("HV-2"), on=run, at=0.75)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is True
+    assert fs._mounted_layout is True
     fs.route()
     quality = measure_final(fs)
     assert quality.hard == (0,) * len(quality.hard)
@@ -114,7 +114,10 @@ def test_unpinned_inline_chain_uses_equipment_first_placement() -> None:
 
 @pytest.mark.parametrize("pinned_origin", [False, True])
 def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> None:
-    """Place inline valves on the clear leg after a south discharge.
+    """Place inline valves on the leg that reaches the receiver.
+
+    The reactor's outlet may leave south or east; either way the valves sit
+    level with the receiver's inlet, with at most one bend in the line.
 
     Parameters
     ----------
@@ -124,7 +127,7 @@ def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> 
     Returns
     -------
     None
-        The reactor train uses contracted placement with a clear elbow.
+        The valves are on the receiver's leg and the line is clear.
     """
     fs = Flowsheet("South outlet inline train")
     feed = fs.add(Feed("Feed"))
@@ -138,7 +141,7 @@ def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> 
     second = fs.add(Valve("HV-2"), on=run, at=0.75)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is True
+    assert fs._mounted_layout is True
     fs.route()
     quality = measure_final(fs)
     assert quality.hard == (0,) * len(quality.hard)
@@ -148,7 +151,6 @@ def test_south_discharge_inline_chain_uses_receiver_leg(pinned_origin: bool) -> 
     if pinned_origin:
         assert (reactor.frame.x, reactor.frame.y) == (350, 250)
     receiver_y = port_point(product, product.frame, "inlet")[1]
-    assert receiver_y > port_point(reactor, reactor.frame, "outlet")[1]
     assert port_point(first, first.frame, "inlet")[1] == pytest.approx(receiver_y)
     assert port_point(second, second.frame, "inlet")[1] == pytest.approx(receiver_y)
 
@@ -168,7 +170,7 @@ def test_south_discharge_does_not_put_inline_valves_above_its_outlet() -> None:
     fs.add(Valve("HV-1"), on=run, at=0.5)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is False
+    assert fs._mounted_layout is True
     fs.route()
     assert product.frame is not None
     assert port_point(product, product.frame, "inlet")[1] == 50
@@ -193,7 +195,7 @@ def test_inline_chain_preserves_a_pinned_branch_origin() -> None:
     fs.connect(tee.branch, branch.inlet)
 
     fs.route()
-    assert fs._coarse_layout_candidate is False
+    assert fs._mounted_layout is True
     assert feed.frame is not None and tee.frame is not None and valve.frame is not None
     assert port_point(feed, feed.frame, "outlet") == (450, 300)
     assert feed.frame.x < valve.frame.x < tee.frame.x
@@ -224,7 +226,7 @@ def test_unrelated_inline_preference_cannot_mask_a_failed_attachment() -> None:
     fs._set_inline_at(preferred, 0.5)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is False
+    assert fs._mounted_layout is True
 
 
 def test_rotation_only_pin_places_inline_valve_on_its_host_run() -> None:
@@ -242,7 +244,7 @@ def test_rotation_only_pin_places_inline_valve_on_its_host_run() -> None:
     valve = fs.add(Valve("V").pin(orientation=90), on=run, at=0.5)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is True
+    assert fs._mounted_layout is True
     fs.route()
 
     assert valve.frame is not None
@@ -271,7 +273,7 @@ def test_adjacent_logical_runs_use_their_own_fractions() -> None:
     second = fs.add(Valve("HV-B"), on=downstream, at=0.75)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is True
+    assert fs._mounted_layout is True
     fs.route()
     assert feed.frame is not None and middle.frame is not None and product.frame is not None
     assert first.frame is not None and second.frame is not None
@@ -310,7 +312,7 @@ def test_adjacent_roots_with_handwired_preference_keep_full_placement() -> None:
     fs._set_inline_at(middle, 0.25)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is False
+    assert fs._mounted_layout is True
     fs.route()
     assert first_boundary.frame is not None and handwired.frame is not None
     assert first_boundary.frame.x < handwired.frame.x
@@ -393,7 +395,7 @@ def test_add_on_respects_branch_and_exact_device_pin() -> None:
 
     fs.to_svg()
     assert valve.frame is not None and (valve.frame.x, valve.frame.y) == (400, 180)
-    assert junction in [fs.units[index] for index in infer_backbone(fs).nodes]
+    assert all(junction not in run.elements for run in mounted_runs(fs))
     assert not any(issue.code == "pin-not-honored" for issue in fs.validate())
 
 
@@ -433,7 +435,7 @@ def test_devices_without_at_go_in_the_order_added() -> None:
     valves = [fs.add(Valve(f"HV-{n}"), on=line) for n in (1, 2, 3)]
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-2", "HV-3", "Product"]
-    assert infer_backbone(fs).runs[0].inline_at == (0.25, 0.5, 0.75)
+    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == (0.25, 0.5, 0.75)
     fs.layout()
     centres = [valve.frame.cx for valve in valves if valve.frame is not None]
     assert centres == pytest.approx([400, 700, 1000], abs=1)
@@ -460,7 +462,9 @@ def test_a_device_with_at_goes_before_any_with_a_larger_at() -> None:
     fs.add(Valve("HV-4"), on=line, at=0.3)
 
     assert [s.dest.owner.name for s in fs.streams] == ["HV-1", "HV-4", "HV-2", "HV-3", "Product"]
-    assert infer_backbone(fs).runs[0].inline_at == pytest.approx((0.15, 0.3, 0.6, 0.8))
+    assert tuple(place[2] for place in mounted_runs(fs)[0].places if place) == pytest.approx(
+        (0.15, 0.3, 0.6, 0.8)
+    )
 
 
 def test_at_without_on_is_refused() -> None:

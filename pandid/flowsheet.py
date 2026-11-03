@@ -29,9 +29,7 @@ if TYPE_CHECKING:
 
     from pandid.components import Component
     from pandid.document import TitleBlock
-    from pandid.geometry import Frame
     from pandid.loops import ControlLoop, Loop
-    from pandid.layout.search import SearchResult
     from pandid.ports import Port
     from pandid.stations import ValveStation
     from pandid.units import Instrument, Unit
@@ -591,9 +589,8 @@ class Flowsheet:
         # Diagram type of the last render; validate() defaults to it.
         self._drawn_as: str | None = None
         self.route_converged: bool = True
-        self._layout_search_result: SearchResult | None = None
-        self._search_seed_frames: tuple[Frame, ...] | None = None
-        self._coarse_layout_candidate = False
+        # Whether the last layout set pipe furniture on routed pipe.
+        self._mounted_layout = False
         self.unplaced_instruments: list = []
         # Frames and routes are cached between renders. Every mutation that
         # can move a box or a route calls _invalidate_layout(), which marks
@@ -623,8 +620,6 @@ class Flowsheet:
         """
         self._layout_stale = True
         self._route_stale = True
-        self._layout_search_result = None
-        self._search_seed_frames = None
 
     @property
     def auto_faces(self) -> bool:
@@ -1767,6 +1762,11 @@ class Flowsheet:
                     byp.pin(mirrored="x" if mirrored else False)
                     byp.pin(x=centre - resolve_size(byp)[0] / 2)
                     byp.pin(port="inlet", y=y - bypass_rise)
+                # These turns and mirrors are the station's own drawing, not
+                # ones its author stated on a member.
+                for drawn in (*run, byp, dr_a, dr_b):
+                    if drawn is not None:
+                        drawn._turn_stated = drawn._mirror_stated = False
 
             def branch_line(src: "Port", dst: "Port") -> Stream:
                 """Connect a bypass or drain leg with the station's line number.
@@ -2091,16 +2091,11 @@ class Flowsheet:
         ----------
         engine : object or None, optional
             Layout engine with a ``layout(fs)`` method. ``None`` selects the
-            default engine, which also enables the refinement and search in
-            :meth:`route`.
+            default engine.
         """
         from pandid.layout import default_layout_engine
 
-        self._default_layout = engine is None or engine is default_layout_engine
-        self._coarse_layout_candidate = False
-        self._refinement_attempted = False
-        self._layout_search_result = None
-        self._search_seed_frames = None
+        self._mounted_layout = False
         if engine is None:
             engine = default_layout_engine
         engine.layout(self)
@@ -2114,34 +2109,16 @@ class Flowsheet:
         neither moves, up to
         :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES`; a sheet that
         does not settle sets ``route_converged`` to ``False``, reported by
-        :meth:`validate`. With the default router and engine, bounded
-        refinement and layout search then run, keeping a change only when
-        the routed drawing improves without new defects.
+        :meth:`validate`.
 
         Parameters
         ----------
         router : object or None, optional
             Router with a ``route(fs)`` method. ``None`` selects the default
-            router and enables refinement.
+            router.
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
-        if router is not None and self._coarse_layout_candidate:
-            from pandid.layout import default_layout_engine
-
-            default_layout_engine.layout(self, use_coarse=False)
-            self._layout_stale = False
-            self._route_stale = True
-        self._layout_search_result = None
-        self._search_seed_frames = None
-        default_router = router is None
-        from pandid.layout.stages import process_units
-
-        canonical_frames = all(
-            unit.frame is not None and unit._slot is not None
-            and unit.frame.x == unit._slot.x and unit.frame.y == unit._slot.y
-            for unit in process_units(self)
-        )
         if router is None:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
@@ -2158,39 +2135,6 @@ class Flowsheet:
             router.route(self)
         # Cleared last, so a router that raises leaves routes stale.
         self._route_stale = False
-        if (default_router and getattr(self, "_default_layout", False)
-                and not self._refinement_attempted):
-            from pandid.layout.trials import refine_default
-            self._refinement_attempted = True
-            refine_default(self)
-        if default_router and self._coarse_layout_candidate:
-            from pandid.layout.coarse import keep_if_better
-            keep_if_better(self)
-        if default_router and getattr(self, "_default_layout", False):
-            row_baseline = None
-            if canonical_frames:
-                import copy
-
-                from pandid.layout.coarse import has_free_station
-                from pandid.layout.trials import refine_rows
-
-                if (not has_free_station(self)
-                        and not any(stream._logical_to is not None for stream in self.streams)):
-                    row_baseline = copy.deepcopy(self)
-                    if not refine_rows(self):
-                        row_baseline = None
-            from pandid.layout.search import SearchBudget, search_layout
-
-            budget = SearchBudget(4, 4, 16)
-            search_layout(self, budget)
-            if row_baseline is not None:
-                from pandid.layout.trials import _publish_candidate, row_final_better
-
-                search_layout(row_baseline, budget)
-                if not row_final_better(row_baseline, self):
-                    _publish_candidate(self, row_baseline)
-            # Only explicit searches report budget status during validation.
-            self._layout_search_result = None
 
     def _resolve_geometry(self) -> None:
         """Lay out and route only if the cached geometry is missing or stale.

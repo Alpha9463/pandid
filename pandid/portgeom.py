@@ -95,47 +95,11 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
     return px, py, sw, sh
 
 
-#: Compass point to ``(eastward, southward)`` on the y-down canvas. Shared by
-#: :mod:`pandid.layout.claims` and :func:`drawn_direction` so a claim's step
-#: and its transform use one table.
+#: Compass point to ``(eastward, southward)`` on the y-down canvas.
 COMPASS: dict[str, tuple[int, int]] = {
     "N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0),
     "NE": (1, -1), "NW": (-1, -1), "SE": (1, 1), "SW": (-1, 1),
 }
-
-_POINT = {step: point for point, step in COMPASS.items()}
-
-
-def drawn_direction(direction: str, placed) -> str:
-    """Turn a compass direction from the symbol's frame into the drawing's.
-
-    Applies the placement's mirror, then its clockwise quarter turn, as
-    :func:`symbol_to_box` does for points. A ``"W"`` on a unit drawn
-    ``mirrored=True`` becomes ``"E"``. :attr:`pandid.units.Unit.PLACES`
-    entries are read through this.
-
-    Parameters
-    ----------
-    direction : str
-        Compass point in the symbol's frame, including diagonals.
-    placed : Pin, Frame, _Slot or None
-        Placement to apply; ``None`` applies no transform.
-
-    Returns
-    -------
-    str
-        Compass point as drawn.
-    """
-    rot, mirror_x, mirror_y = _xform(placed) if placed is not None else (0, False, False)
-    dx, dy = COMPASS[direction]
-    if mirror_x:
-        dx = -dx
-    if mirror_y:
-        dy = -dy
-    # Clockwise on the y-down canvas: east turns to south.
-    for _ in range(rot // 90 % 4):
-        dx, dy = -dy, dx
-    return _POINT[(dx, dy)]
 
 
 def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True

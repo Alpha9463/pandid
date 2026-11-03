@@ -2,58 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock
-
 import pytest
 
 from pandid import Feed, Flowsheet, GravitySeparator, Product, Reactor, Valve
 from pandid.layout.attach import logical_stream_path
-from pandid.layout import default_layout_engine
-from pandid.layout.coarse import _station_width
+from pandid.layout.layered import END_ROOM
+from pandid.layout.mounted import _station_width
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point
-from pandid.routing import DefaultRouter
 from pandid.spec import SpecError
-
-
-class _ShiftLayout:
-    """Test layout engine that moves an existing drawing horizontally."""
-
-    def layout(self, fs: Flowsheet) -> None:
-        """Move resolved frames to distinguish custom and built-in results.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Drawing with existing resolved frames.
-
-        Returns
-        -------
-        None
-            Frames are shifted in place.
-        """
-        for unit in fs.units:
-            assert unit.frame is not None
-            unit.frame.x += 1000
-
-
-class _DelegateLayout:
-    """Test layout engine that delegates to the built-in engine."""
-
-    def layout(self, fs: Flowsheet) -> None:
-        """Resolve geometry through the built-in layout engine.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Drawing to lay out.
-
-        Returns
-        -------
-        None
-            The built-in engine assigns frames.
-        """
-        default_layout_engine.layout(fs)
 
 
 def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
@@ -72,7 +29,7 @@ def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
     fs.connect(station.outlet, product.inlet)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is True
+    assert fs._mounted_layout is True
     main = [
         unit
         for unit in station.members
@@ -98,7 +55,7 @@ def test_unpinned_station_keeps_its_run_and_branches_together() -> None:
     ]
 
 
-def test_hand_wired_station_contracts_before_equipment_placement() -> None:
+def test_hand_wired_station_is_set_on_its_pipe() -> None:
     """Keep an unpinned hand-wired station out of the equipment grid.
 
     Returns
@@ -114,7 +71,7 @@ def test_hand_wired_station_contracts_before_equipment_placement() -> None:
     fs.connect(station.outlet, product.inlet)
 
     fs.layout()
-    assert fs._coarse_layout_candidate is True
+    assert fs._mounted_layout is True
     fs.route()
     quality = measure_final(fs)
     assert quality.hard == (0,) * len(quality.hard)
@@ -153,7 +110,7 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
         port_point(product, product.frame, "inlet")[0]
         - port_point(reactor, reactor.frame, "outlet")[0]
     )
-    assert nozzle_span == pytest.approx(_station_width(fs._station_assemblies) + 41)
+    assert nozzle_span == pytest.approx(_station_width(fs._station_assemblies) + END_ROOM)
     receiver_y = port_point(product, product.frame, "inlet")[1]
     main = [
         unit
@@ -170,12 +127,12 @@ def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) ->
 
 
 def test_station_does_not_force_an_outward_facing_elbow() -> None:
-    """Keep a station off a leg that reverses its source nozzle.
+    """Set a station on the routed pipe after it leaves an east nozzle westward.
 
     Returns
     -------
     None
-        A westbound host does not form a westbound leg from an east nozzle.
+        The pipe turns clear of the nozzle and the station sits on one leg.
     """
     fs = Flowsheet("Reverse outlet station")
     feed = fs.add(Feed("Feed")).pin(x=1300, y=300)
@@ -183,7 +140,7 @@ def test_station_does_not_force_an_outward_facing_elbow() -> None:
     run = fs.connect(feed.outlet, reactor.feed)
     station = fs.add_valve_station("CV-101", on=run)
 
-    fs.layout()
+    fs.route()
     assert feed.frame is not None and reactor.frame is not None
     assert port_point(feed, feed.frame, "outlet") == (1300, 300)
     assert (reactor.frame.x, reactor.frame.y, reactor.frame.orientation) == (100, 100, 90)
@@ -192,7 +149,9 @@ def test_station_does_not_force_an_outward_facing_elbow() -> None:
         for unit in station.members
         if unit not in (station.bypass, station.upstream_drain, station.downstream_drain)
     ]
-    assert len({round(port_point(unit, unit.frame, "inlet")[1]) for unit in main}) > 1
+    assert len({round(port_point(unit, unit.frame, "inlet")[1]) for unit in main}) == 1
+    quality = measure_final(fs)
+    assert quality.hard == (0,) * len(quality.hard)
 
 
 def test_station_compacts_an_equipment_train_from_a_pinned_origin() -> None:
@@ -248,138 +207,6 @@ def test_branch_station_keeps_a_clear_compact_default_route() -> None:
     assert quality.hard[:4] == (0, 0, 0, 0)
     assert quality.crossings == 0
     assert quality.length < 1900
-
-
-@pytest.mark.parametrize("explicit_engine", [False, True])
-def test_builtin_layout_route_checks_coarse_quality(explicit_engine: bool) -> None:
-    """Apply the routed quality check for either built-in layout entry path.
-
-    Parameters
-    ----------
-    explicit_engine : bool
-        Pass the built-in engine explicitly when true.
-
-    Returns
-    -------
-    None
-        The route is compact and no unchecked candidate remains.
-    """
-    fs = Flowsheet("Built-in station layout")
-    feed = fs.add(Feed("Feed"))
-    reactor = fs.add(Reactor("R-101")).pin(x=500, y=350)
-    product = fs.add(Product("Product"))
-    fs.connect(feed.outlet, reactor.feed)
-    run = fs.connect(reactor.outlet, product.inlet)
-    fs.add_valve_station("CV-101", on=run)
-
-    if explicit_engine:
-        fs.layout(engine=default_layout_engine)
-    fs.route()
-    assert fs._coarse_layout_candidate is False
-    assert measure_final(fs).length < 1500
-
-
-def test_coarse_quality_trials_leave_final_search_to_the_live_drawing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Run one final search after choosing a coarse station placement.
-
-    Parameters
-    ----------
-    monkeypatch : pytest.MonkeyPatch
-        Records calls to the bounded final layout search.
-
-    Returns
-    -------
-    None
-        Detached baseline and reservation trials settle without recursive
-        searches; the published drawing receives the one final search.
-    """
-    from pandid.layout import search as search_mod
-
-    fs = Flowsheet("Coarse trial search")
-    feed = fs.add(Feed("Feed"))
-    reactor = fs.add(Reactor("R-101"))
-    product = fs.add(Product("Product"))
-    fs.connect(feed.outlet, reactor.feed)
-    run = fs.connect(reactor.outlet, product.inlet)
-    fs.add_valve_station("CV-101", on=run)
-
-    search = Mock(wraps=search_mod.search_layout)
-    monkeypatch.setattr(search_mod, "search_layout", search)
-    fs.route()
-
-    assert search.call_count == 1
-    assert fs._coarse_layout_candidate is False
-    quality = measure_final(fs)
-    assert quality.hard == (0,) * len(quality.hard)
-
-
-def test_custom_router_uses_full_station_layout() -> None:
-    """Use the full graph when a custom routing choice lacks a quality gate.
-
-    Returns
-    -------
-    None
-        A custom router receives a finished full-graph placement.
-    """
-    fs = Flowsheet("Custom station route")
-    feed = fs.add(Feed("Feed"))
-    reactor = fs.add(Reactor("R-101"))
-    product = fs.add(Product("Product"))
-    fs.connect(feed.outlet, reactor.feed)
-    run = fs.connect(reactor.outlet, product.inlet)
-    fs.add_valve_station("CV-101", on=run)
-
-    fs.layout()
-    assert fs._coarse_layout_candidate is True
-    fs.route(router=DefaultRouter())
-    assert fs._coarse_layout_candidate is False
-    assert all(stream.route is not None for stream in fs.streams)
-
-
-def test_custom_layout_survives_custom_routing_after_a_coarse_layout() -> None:
-    """Clear the coarse marker before running a replacement layout engine.
-
-    Returns
-    -------
-    None
-        Routing preserves coordinates supplied by the custom engine.
-    """
-    fs = Flowsheet("Custom station layout")
-    reactor = fs.add(Reactor("R-101"))
-    product = fs.add(Product("Product"))
-    run = fs.connect(reactor.outlet, product.inlet)
-    fs.add_valve_station("CV-101", on=run)
-    fs.layout()
-    assert fs._coarse_layout_candidate is True
-    assert reactor.frame is not None
-    original_x = reactor.frame.x
-
-    fs.layout(engine=_ShiftLayout())
-    assert fs._coarse_layout_candidate is False
-    fs.route(router=DefaultRouter())
-    assert reactor.frame.x == original_x + 1000
-
-
-def test_delegated_builtin_layout_route_checks_coarse_quality() -> None:
-    """Check coarse quality when a wrapper delegates to the built-in engine.
-
-    Returns
-    -------
-    None
-        A default-routed candidate does not escape the quality gate.
-    """
-    fs = Flowsheet("Delegated station layout")
-    reactor = fs.add(Reactor("R-101"))
-    product = fs.add(Product("Product"))
-    run = fs.connect(reactor.outlet, product.inlet)
-    fs.add_valve_station("CV-101", on=run)
-
-    fs.layout(engine=_DelegateLayout())
-    assert fs._coarse_layout_candidate is True
-    fs.route()
-    assert fs._coarse_layout_candidate is False
 
 
 def test_station_on_a_line_retains_the_line_and_fraction() -> None:

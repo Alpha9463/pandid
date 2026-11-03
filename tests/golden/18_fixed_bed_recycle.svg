@@ -1,180 +1,180 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2520" height="1589" viewBox="-84.0 -171.0 2520.0 1589.4">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2597" height="1491" viewBox="0.0 -39.0 2597.0 1491.4">
   <title>Methanol Synthesis Loop</title>
   <!-- pandid:provenance -->
   <!-- /pandid:provenance -->
   <!-- Background -->
-  <rect x="-84.0" y="-171.0" width="2520.0" height="1589.4" fill="white" />
-    <rect x="-76.0" y="-163.0" width="2504.0" height="1573.4" fill="none" stroke="black" stroke-width="1"/>
-    <rect x="-60.0" y="-147.0" width="2472.0" height="1541.4" fill="none" stroke="black" stroke-width="2"/>
-    <text x="43.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">1</text>
-    <text x="43.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">1</text>
-    <line x1="146.0" y1="-163.0" x2="146.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="146.0" y1="1394.4" x2="146.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="249.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">2</text>
-    <text x="249.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">2</text>
-    <line x1="352.0" y1="-163.0" x2="352.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="352.0" y1="1394.4" x2="352.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="455.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">3</text>
-    <text x="455.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">3</text>
-    <line x1="558.0" y1="-163.0" x2="558.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="558.0" y1="1394.4" x2="558.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="661.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">4</text>
-    <text x="661.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">4</text>
-    <line x1="764.0" y1="-163.0" x2="764.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="764.0" y1="1394.4" x2="764.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="867.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">5</text>
-    <text x="867.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">5</text>
-    <line x1="970.0" y1="-163.0" x2="970.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="970.0" y1="1394.4" x2="970.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="1073.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">6</text>
-    <text x="1073.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">6</text>
-    <line x1="1176.0" y1="-163.0" x2="1176.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="1176.0" y1="1394.4" x2="1176.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="1279.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">7</text>
-    <text x="1279.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">7</text>
-    <line x1="1382.0" y1="-163.0" x2="1382.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="1382.0" y1="1394.4" x2="1382.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="1485.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">8</text>
-    <text x="1485.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">8</text>
-    <line x1="1588.0" y1="-163.0" x2="1588.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="1588.0" y1="1394.4" x2="1588.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="1691.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">9</text>
-    <text x="1691.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">9</text>
-    <line x1="1794.0" y1="-163.0" x2="1794.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="1794.0" y1="1394.4" x2="1794.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="1897.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">10</text>
-    <text x="1897.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">10</text>
-    <line x1="2000.0" y1="-163.0" x2="2000.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="2000.0" y1="1394.4" x2="2000.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="2103.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">11</text>
-    <text x="2103.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">11</text>
-    <line x1="2206.0" y1="-163.0" x2="2206.0" y2="-147.0" stroke="black" stroke-width="0.75"/>
-    <line x1="2206.0" y1="1394.4" x2="2206.0" y2="1410.4" stroke="black" stroke-width="0.75"/>
-    <text x="2309.0" y="-152.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">12</text>
-    <text x="2309.0" y="1405.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">12</text>
-    <text x="-68.0" y="-47.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
-    <text x="2420.0" y="-47.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
-    <line x1="-76.0" y1="45.7" x2="-60.0" y2="45.7" stroke="black" stroke-width="0.75"/>
-    <line x1="2412.0" y1="45.7" x2="2428.0" y2="45.7" stroke="black" stroke-width="0.75"/>
-    <text x="-68.0" y="145.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
-    <text x="2420.0" y="145.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
-    <line x1="-76.0" y1="238.4" x2="-60.0" y2="238.4" stroke="black" stroke-width="0.75"/>
-    <line x1="2412.0" y1="238.4" x2="2428.0" y2="238.4" stroke="black" stroke-width="0.75"/>
-    <text x="-68.0" y="337.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
-    <text x="2420.0" y="337.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
-    <line x1="-76.0" y1="431.0" x2="-60.0" y2="431.0" stroke="black" stroke-width="0.75"/>
-    <line x1="2412.0" y1="431.0" x2="2428.0" y2="431.0" stroke="black" stroke-width="0.75"/>
-    <text x="-68.0" y="530.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
-    <text x="2420.0" y="530.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
-    <line x1="-76.0" y1="623.7" x2="-60.0" y2="623.7" stroke="black" stroke-width="0.75"/>
-    <line x1="2412.0" y1="623.7" x2="2428.0" y2="623.7" stroke="black" stroke-width="0.75"/>
-    <text x="-68.0" y="723.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
-    <text x="2420.0" y="723.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
-    <line x1="-76.0" y1="816.4" x2="-60.0" y2="816.4" stroke="black" stroke-width="0.75"/>
-    <line x1="2412.0" y1="816.4" x2="2428.0" y2="816.4" stroke="black" stroke-width="0.75"/>
-    <text x="-68.0" y="915.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">F</text>
-    <text x="2420.0" y="915.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">F</text>
-    <line x1="-76.0" y1="1009.1" x2="-60.0" y2="1009.1" stroke="black" stroke-width="0.75"/>
-    <line x1="2412.0" y1="1009.1" x2="2428.0" y2="1009.1" stroke="black" stroke-width="0.75"/>
-    <text x="-68.0" y="1108.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
-    <text x="2420.0" y="1108.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
-    <line x1="-76.0" y1="1201.7" x2="-60.0" y2="1201.7" stroke="black" stroke-width="0.75"/>
-    <line x1="2412.0" y1="1201.7" x2="2428.0" y2="1201.7" stroke="black" stroke-width="0.75"/>
-    <text x="-68.0" y="1301.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
-    <text x="2420.0" y="1301.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
-    <rect x="-60.0" y="-147.0" width="256.2" height="211.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="68.1" y="-130.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
-    <line x1="-60.0" y1="-124.0" x2="196.2" y2="-124.0" stroke="black" stroke-width="1"/>
-    <text x="-51.0" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CS</text>
-    <text x="-4.8" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Carbon Steel A106-B</text>
-    <text x="-51.0" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">LT</text>
-    <text x="-4.8" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Low Temperature Carbon Steel A333-6</text>
-    <text x="-51.0" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SS</text>
-    <text x="-4.8" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Stainless Steel 316L</text>
-    <text x="-51.0" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SG</text>
-    <text x="-4.8" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Synthesis Gas</text>
-    <text x="-51.0" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">LG</text>
-    <text x="-4.8" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Loop Gas</text>
-    <text x="-51.0" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">PG</text>
-    <text x="-4.8" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Purge Gas</text>
-    <text x="-51.0" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CM</text>
-    <text x="-4.8" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol</text>
-    <text x="-51.0" y="16.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FGSH</text>
-    <text x="-4.8" y="16.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Fuel Gas Supply Header</text>
-    <text x="-51.0" y="34.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CWSH</text>
-    <text x="-4.8" y="34.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Supply Header</text>
-    <text x="-51.0" y="52.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CWRH</text>
-    <text x="-4.8" y="52.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Return Header</text>
-    <rect x="2222.4" y="-147.0" width="189.6" height="157.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="2317.2" y="-130.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="2222.4" y1="-124.0" x2="2412.0" y2="-124.0" stroke="black" stroke-width="1"/>
-    <text x="2231.4" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-301</text>
-    <text x="2273.4" y="-110.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Gas Compressor</text>
-    <text x="2231.4" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-301</text>
-    <text x="2273.4" y="-92.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Feed / Effluent Exchanger</text>
-    <text x="2231.4" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">H-301</text>
-    <text x="2273.4" y="-74.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Converter Fired Heater</text>
-    <text x="2231.4" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">R-301</text>
-    <text x="2273.4" y="-56.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Methanol Converter</text>
-    <text x="2231.4" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-302</text>
-    <text x="2273.4" y="-38.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Condenser</text>
-    <text x="2231.4" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-301</text>
-    <text x="2273.4" y="-20.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol Separator</text>
-    <text x="2231.4" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-302</text>
-    <text x="2273.4" y="-2.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Recycle Gas Compressor</text>
-    <rect x="-60.0" y="1309.4" width="479.0" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="179.5" y="1326.4" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
-    <line x1="-60.0" y1="1332.4" x2="419.0" y2="1332.4" stroke="black" stroke-width="1"/>
-    <text x="-51.0" y="1346.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: converter high bed temperature. TT-307 is its own measurement, independent of TIC-302.</text>
-    <text x="-51.0" y="1364.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">H-301 flue gas and combustion air are on P&amp;ID-302.</text>
-    <text x="-51.0" y="1382.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Per-pass conversion is 5 to 7 %; the recycle ratio is 5:1 on molar flow.</text>
-    <rect x="1760.0" y="1314.4" width="652.0" height="80.0" fill="white" stroke="black" stroke-width="2"/>
-    <line x1="2060.0" y1="1314.4" x2="2060.0" y2="1394.4" stroke="black" stroke-width="1.5"/>
-    <line x1="2160.0" y1="1314.4" x2="2160.0" y2="1394.4" stroke="black" stroke-width="1.5"/>
-    <line x1="1760.0" y1="1380.4" x2="2060.0" y2="1380.4" stroke="black" stroke-width="1"/>
-    <line x1="1782.0" y1="1314.4" x2="1782.0" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <line x1="1832.0" y1="1314.4" x2="1832.0" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <line x1="1964.0" y1="1314.4" x2="1964.0" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <line x1="1996.0" y1="1314.4" x2="1996.0" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <line x1="2028.0" y1="1314.4" x2="2028.0" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <text x="1763.0" y="1390.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">REV</text>
-    <text x="1785.0" y="1390.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">DATE</text>
-    <text x="1835.0" y="1390.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">DESCRIPTION</text>
-    <text x="1967.0" y="1390.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">BY</text>
-    <text x="1999.0" y="1390.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">CHK&#x27;D</text>
-    <text x="2031.0" y="1390.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">APP&#x27;D</text>
-    <text x="1763.0" y="1376.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">B</text>
-    <text x="1785.0" y="1376.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">18/02/26</text>
-    <text x="1835.0" y="1376.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">Issued For Review</text>
-    <text x="1967.0" y="1376.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">AA</text>
-    <text x="1999.0" y="1376.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">JS</text>
-    <text x="2031.0" y="1376.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">RL</text>
-    <text x="1763.0" y="1362.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">A</text>
-    <text x="1785.0" y="1362.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">29/01/26</text>
-    <text x="1835.0" y="1362.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">Issued for internal review</text>
-    <text x="1967.0" y="1362.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">AA</text>
-    <text x="1999.0" y="1362.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black"></text>
-    <text x="2031.0" y="1362.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black"></text>
-    <text x="2110.0" y="1354.4" font-family="sans-serif" font-size="8.0" text-anchor="middle" font-weight="bold" fill="black">PANDID</text>
-    <line x1="2160.0" y1="1346.4" x2="2412.0" y2="1346.4" stroke="black" stroke-width="0.75"/>
-    <line x1="2160.0" y1="1368.8" x2="2412.0" y2="1368.8" stroke="black" stroke-width="0.75"/>
-    <text x="2166.0" y="1329.4" font-family="sans-serif" font-size="12.5" text-anchor="start" font-weight="bold" fill="black">Methanol Synthesis Loop</text>
-    <text x="2166.0" y="1340.4" font-family="sans-serif" font-size="10.5" text-anchor="start" fill="black">A300 Process &amp; Instrumentation Diagram 1</text>
-    <text x="2407.0" y="1325.4" font-family="sans-serif" font-size="7.5" text-anchor="end" fill="#666">SHEET 1 of 1</text>
-    <text x="2166.0" y="1354.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">STATUS</text>
-    <text x="2166.0" y="1363.8" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">ISSUED FOR REVIEW</text>
-    <text x="2165.0" y="1376.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DRAWING No</text>
-    <text x="2165.0" y="1389.4" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P&amp;ID-301</text>
-    <line x1="2255.8" y1="1368.8" x2="2255.8" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <text x="2260.8" y="1376.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">SCALE</text>
-    <text x="2260.8" y="1389.4" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">NTS</text>
-    <line x1="2308.7" y1="1368.8" x2="2308.7" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <text x="2313.7" y="1376.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DATE</text>
-    <text x="2313.7" y="1389.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">18/02/26</text>
-    <line x1="2381.8" y1="1368.8" x2="2381.8" y2="1394.4" stroke="black" stroke-width="0.5"/>
-    <text x="2386.8" y="1376.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">REV</text>
-    <text x="2386.8" y="1389.4" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">B</text>
+  <rect x="0.0" y="-39.0" width="2597.0" height="1491.4" fill="white" />
+    <rect x="8.0" y="-31.0" width="2581.0" height="1475.4" fill="none" stroke="black" stroke-width="1"/>
+    <rect x="24.0" y="-15.0" width="2549.0" height="1443.4" fill="none" stroke="black" stroke-width="2"/>
+    <text x="130.2" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">1</text>
+    <text x="130.2" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">1</text>
+    <line x1="236.4" y1="-31.0" x2="236.4" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="236.4" y1="1428.4" x2="236.4" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="342.6" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">2</text>
+    <text x="342.6" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">2</text>
+    <line x1="448.8" y1="-31.0" x2="448.8" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="448.8" y1="1428.4" x2="448.8" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="555.0" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">3</text>
+    <text x="555.0" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">3</text>
+    <line x1="661.2" y1="-31.0" x2="661.2" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="661.2" y1="1428.4" x2="661.2" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="767.5" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">4</text>
+    <text x="767.5" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">4</text>
+    <line x1="873.7" y1="-31.0" x2="873.7" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="873.7" y1="1428.4" x2="873.7" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="979.9" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">5</text>
+    <text x="979.9" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">5</text>
+    <line x1="1086.1" y1="-31.0" x2="1086.1" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="1086.1" y1="1428.4" x2="1086.1" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="1192.3" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">6</text>
+    <text x="1192.3" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">6</text>
+    <line x1="1298.5" y1="-31.0" x2="1298.5" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="1298.5" y1="1428.4" x2="1298.5" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="1404.7" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">7</text>
+    <text x="1404.7" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">7</text>
+    <line x1="1510.9" y1="-31.0" x2="1510.9" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="1510.9" y1="1428.4" x2="1510.9" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="1617.1" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">8</text>
+    <text x="1617.1" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">8</text>
+    <line x1="1723.3" y1="-31.0" x2="1723.3" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="1723.3" y1="1428.4" x2="1723.3" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="1829.5" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">9</text>
+    <text x="1829.5" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">9</text>
+    <line x1="1935.8" y1="-31.0" x2="1935.8" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="1935.8" y1="1428.4" x2="1935.8" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="2042.0" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">10</text>
+    <text x="2042.0" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">10</text>
+    <line x1="2148.2" y1="-31.0" x2="2148.2" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="2148.2" y1="1428.4" x2="2148.2" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="2254.4" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">11</text>
+    <text x="2254.4" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">11</text>
+    <line x1="2360.6" y1="-31.0" x2="2360.6" y2="-15.0" stroke="black" stroke-width="0.75"/>
+    <line x1="2360.6" y1="1428.4" x2="2360.6" y2="1444.4" stroke="black" stroke-width="0.75"/>
+    <text x="2466.8" y="-20.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">12</text>
+    <text x="2466.8" y="1439.4" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">12</text>
+    <text x="16.0" y="78.2" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
+    <text x="2581.0" y="78.2" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
+    <line x1="8.0" y1="165.4" x2="24.0" y2="165.4" stroke="black" stroke-width="0.75"/>
+    <line x1="2573.0" y1="165.4" x2="2589.0" y2="165.4" stroke="black" stroke-width="0.75"/>
+    <text x="16.0" y="258.6" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
+    <text x="2581.0" y="258.6" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
+    <line x1="8.0" y1="345.9" x2="24.0" y2="345.9" stroke="black" stroke-width="0.75"/>
+    <line x1="2573.0" y1="345.9" x2="2589.0" y2="345.9" stroke="black" stroke-width="0.75"/>
+    <text x="16.0" y="439.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
+    <text x="2581.0" y="439.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
+    <line x1="8.0" y1="526.3" x2="24.0" y2="526.3" stroke="black" stroke-width="0.75"/>
+    <line x1="2573.0" y1="526.3" x2="2589.0" y2="526.3" stroke="black" stroke-width="0.75"/>
+    <text x="16.0" y="619.5" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
+    <text x="2581.0" y="619.5" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
+    <line x1="8.0" y1="706.7" x2="24.0" y2="706.7" stroke="black" stroke-width="0.75"/>
+    <line x1="2573.0" y1="706.7" x2="2589.0" y2="706.7" stroke="black" stroke-width="0.75"/>
+    <text x="16.0" y="799.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
+    <text x="2581.0" y="799.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
+    <line x1="8.0" y1="887.1" x2="24.0" y2="887.1" stroke="black" stroke-width="0.75"/>
+    <line x1="2573.0" y1="887.1" x2="2589.0" y2="887.1" stroke="black" stroke-width="0.75"/>
+    <text x="16.0" y="980.3" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">F</text>
+    <text x="2581.0" y="980.3" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">F</text>
+    <line x1="8.0" y1="1067.6" x2="24.0" y2="1067.6" stroke="black" stroke-width="0.75"/>
+    <line x1="2573.0" y1="1067.6" x2="2589.0" y2="1067.6" stroke="black" stroke-width="0.75"/>
+    <text x="16.0" y="1160.8" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
+    <text x="2581.0" y="1160.8" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">G</text>
+    <line x1="8.0" y1="1248.0" x2="24.0" y2="1248.0" stroke="black" stroke-width="0.75"/>
+    <line x1="2573.0" y1="1248.0" x2="2589.0" y2="1248.0" stroke="black" stroke-width="0.75"/>
+    <text x="16.0" y="1341.2" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
+    <text x="2581.0" y="1341.2" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">H</text>
+    <rect x="24.0" y="-15.0" width="256.2" height="211.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="152.1" y="2.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
+    <line x1="24.0" y1="8.0" x2="280.2" y2="8.0" stroke="black" stroke-width="1"/>
+    <text x="33.0" y="22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CS</text>
+    <text x="79.2" y="22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Carbon Steel A106-B</text>
+    <text x="33.0" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">LT</text>
+    <text x="79.2" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Low Temperature Carbon Steel A333-6</text>
+    <text x="33.0" y="58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SS</text>
+    <text x="79.2" y="58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Stainless Steel 316L</text>
+    <text x="33.0" y="76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SG</text>
+    <text x="79.2" y="76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Synthesis Gas</text>
+    <text x="33.0" y="94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">LG</text>
+    <text x="79.2" y="94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Loop Gas</text>
+    <text x="33.0" y="112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">PG</text>
+    <text x="79.2" y="112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Purge Gas</text>
+    <text x="33.0" y="130.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CM</text>
+    <text x="79.2" y="130.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol</text>
+    <text x="33.0" y="148.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FGSH</text>
+    <text x="79.2" y="148.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Fuel Gas Supply Header</text>
+    <text x="33.0" y="166.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CWSH</text>
+    <text x="79.2" y="166.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Supply Header</text>
+    <text x="33.0" y="184.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CWRH</text>
+    <text x="79.2" y="184.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Cooling Water Return Header</text>
+    <rect x="2383.4" y="-15.0" width="189.6" height="157.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="2478.2" y="2.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
+    <line x1="2383.4" y1="8.0" x2="2573.0" y2="8.0" stroke="black" stroke-width="1"/>
+    <text x="2392.4" y="22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-301</text>
+    <text x="2434.4" y="22.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Make-up Gas Compressor</text>
+    <text x="2392.4" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-301</text>
+    <text x="2434.4" y="40.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Feed / Effluent Exchanger</text>
+    <text x="2392.4" y="58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">H-301</text>
+    <text x="2434.4" y="58.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Converter Fired Heater</text>
+    <text x="2392.4" y="76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">R-301</text>
+    <text x="2434.4" y="76.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Methanol Converter</text>
+    <text x="2392.4" y="94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">E-302</text>
+    <text x="2434.4" y="94.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Product Condenser</text>
+    <text x="2392.4" y="112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-301</text>
+    <text x="2434.4" y="112.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Crude Methanol Separator</text>
+    <text x="2392.4" y="130.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">K-302</text>
+    <text x="2434.4" y="130.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Recycle Gas Compressor</text>
+    <rect x="24.0" y="1343.4" width="479.0" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="263.5" y="1360.4" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
+    <line x1="24.0" y1="1366.4" x2="503.0" y2="1366.4" stroke="black" stroke-width="1"/>
+    <text x="33.0" y="1380.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: converter high bed temperature. TT-307 is its own measurement, independent of TIC-302.</text>
+    <text x="33.0" y="1398.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">H-301 flue gas and combustion air are on P&amp;ID-302.</text>
+    <text x="33.0" y="1416.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Per-pass conversion is 5 to 7 %; the recycle ratio is 5:1 on molar flow.</text>
+    <rect x="1921.0" y="1348.4" width="652.0" height="80.0" fill="white" stroke="black" stroke-width="2"/>
+    <line x1="2221.0" y1="1348.4" x2="2221.0" y2="1428.4" stroke="black" stroke-width="1.5"/>
+    <line x1="2321.0" y1="1348.4" x2="2321.0" y2="1428.4" stroke="black" stroke-width="1.5"/>
+    <line x1="1921.0" y1="1414.4" x2="2221.0" y2="1414.4" stroke="black" stroke-width="1"/>
+    <line x1="1943.0" y1="1348.4" x2="1943.0" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <line x1="1993.0" y1="1348.4" x2="1993.0" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <line x1="2125.0" y1="1348.4" x2="2125.0" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <line x1="2157.0" y1="1348.4" x2="2157.0" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <line x1="2189.0" y1="1348.4" x2="2189.0" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <text x="1924.0" y="1424.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">REV</text>
+    <text x="1946.0" y="1424.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">DATE</text>
+    <text x="1996.0" y="1424.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">DESCRIPTION</text>
+    <text x="2128.0" y="1424.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">BY</text>
+    <text x="2160.0" y="1424.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">CHK&#x27;D</text>
+    <text x="2192.0" y="1424.4" font-family="sans-serif" font-size="7.5" text-anchor="start" font-weight="bold" fill="black">APP&#x27;D</text>
+    <text x="1924.0" y="1410.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">B</text>
+    <text x="1946.0" y="1410.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">18/02/26</text>
+    <text x="1996.0" y="1410.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">Issued For Review</text>
+    <text x="2128.0" y="1410.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">AA</text>
+    <text x="2160.0" y="1410.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">JS</text>
+    <text x="2192.0" y="1410.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">RL</text>
+    <text x="1924.0" y="1396.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">A</text>
+    <text x="1946.0" y="1396.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">29/01/26</text>
+    <text x="1996.0" y="1396.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">Issued for internal review</text>
+    <text x="2128.0" y="1396.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">AA</text>
+    <text x="2160.0" y="1396.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black"></text>
+    <text x="2192.0" y="1396.4" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black"></text>
+    <text x="2271.0" y="1388.4" font-family="sans-serif" font-size="8.0" text-anchor="middle" font-weight="bold" fill="black">PANDID</text>
+    <line x1="2321.0" y1="1380.4" x2="2573.0" y2="1380.4" stroke="black" stroke-width="0.75"/>
+    <line x1="2321.0" y1="1402.8" x2="2573.0" y2="1402.8" stroke="black" stroke-width="0.75"/>
+    <text x="2327.0" y="1363.4" font-family="sans-serif" font-size="12.5" text-anchor="start" font-weight="bold" fill="black">Methanol Synthesis Loop</text>
+    <text x="2327.0" y="1374.4" font-family="sans-serif" font-size="10.5" text-anchor="start" fill="black">A300 Process &amp; Instrumentation Diagram 1</text>
+    <text x="2568.0" y="1359.4" font-family="sans-serif" font-size="7.5" text-anchor="end" fill="#666">SHEET 1 of 1</text>
+    <text x="2327.0" y="1388.4" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">STATUS</text>
+    <text x="2327.0" y="1397.8" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">ISSUED FOR REVIEW</text>
+    <text x="2326.0" y="1410.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DRAWING No</text>
+    <text x="2326.0" y="1423.4" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P&amp;ID-301</text>
+    <line x1="2416.8" y1="1402.8" x2="2416.8" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <text x="2421.8" y="1410.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">SCALE</text>
+    <text x="2421.8" y="1423.4" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">NTS</text>
+    <line x1="2469.7" y1="1402.8" x2="2469.7" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <text x="2474.7" y="1410.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DATE</text>
+    <text x="2474.7" y="1423.4" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">18/02/26</text>
+    <line x1="2542.8" y1="1402.8" x2="2542.8" y2="1428.4" stroke="black" stroke-width="0.5"/>
+    <text x="2547.8" y="1410.8" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">REV</text>
+    <text x="2547.8" y="1423.4" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">B</text>
   <defs>
     <symbol id="sym_compressor" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_fitting_orifice" viewBox="0 0 12.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 30.0 L 15.0 30.0 M 15.0 0.0 L 15.0 60.0 M 25.0 10.0 L 25.0 50.0 M 35.0 0.0 L 35.0 60.0 M 35.0 30.0 L 50.0 30.0" fill="none" stroke="#111" stroke-width="4"/></g></symbol>
@@ -190,278 +190,258 @@
     <symbol id="sym_valve_solenoid" viewBox="0 0 24.5 22.2" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="white" stroke="#111" stroke-width="4"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="white" stroke="#111" stroke-width="4"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="4"/><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="2.25" stroke-linejoin="round">S</text><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">S</text></g></symbol>
   </defs>
   <g id="units">
-    <use href="#sym_reactor_cdedf707a_s124x200" x="1608" y="524" width="124" height="200" />
-    <use href="#sym_hex_straight_tubes_s120x36" x="1053" y="586" width="120" height="36" />
-    <use href="#sym_furnace" x="1293" y="574.5" width="80.0" height="99.0" />
-    <use href="#sym_hex_straight_tubes_s120x36" x="1108" y="1048" width="120" height="36" />
-    <use href="#sym_separator_knockout" x="1293" y="1011" width="51.0" height="95.4" />
-    <use href="#sym_compressor" x="718.5" y="594" width="70.0" height="67.0" />
-    <use href="#sym_compressor" x="1958" y="590.5" width="70.0" height="67.0" />
-    <polygon points="-34.0,611.0 85.0,611.0 100.0,624.0 85.0,637.0 -34.0,637.0" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="25.5" y="620.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Synthesis Gas</text>
-    <text x="25.5" y="632.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-201</text>
-    <polygon points="274.0,314.5 339.0,314.5 354.0,324.5 339.0,334.5 274.0,334.5" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="306.5" y="324.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FGSH</text>
-    <polygon points="1038.0,294.5 1103.0,294.5 1118.0,304.5 1103.0,314.5 1038.0,314.5" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1070.5" y="304.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CWSH</text>
-    <polygon points="1108.0,1225.9 1173.0,1225.9 1188.0,1235.9 1173.0,1245.9 1108.0,1245.9" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1140.5" y="1235.9" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CWRH</text>
-    <polygon points="2220.0,1073.0 2371.0,1073.0 2386.0,1086.0 2371.0,1099.0 2220.0,1099.0" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="2295.5" y="1082.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge to Fuel Gas</text>
-    <text x="2295.5" y="1094.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-901</text>
-    <polygon points="1958.0,1245.4 2085.0,1245.4 2100.0,1258.4 2085.0,1271.4 1958.0,1271.4" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="2021.5" y="1254.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Crude Methanol</text>
-    <text x="2021.5" y="1266.4" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-401</text>
-    <use href="#sym_tee" x="908.5" y="598" width="12.0" height="12.0" />
-    <use href="#sym_tee" x="1608" y="1080" width="12.0" height="12.0" />
-    <use href="#sym_fitting_orifice" x="304" y="616.5" width="12.5" height="15.0" />
-    <use href="#sym_valve_control" x="504" y="611.6" width="24.5" height="19.8" />
-    <use href="#sym_fitting_orifice" x="504" y="317" width="12.5" height="15.0" />
-    <use href="#sym_valve_solenoid" x="718.5" y="309.6" width="24.5" height="22.2" />
-    <use href="#sym_valve_control" x="908.5" y="312.1" width="24.5" height="19.8" />
-    <use href="#sym_valve_control" x="1958" y="1073.6" width="24.5" height="19.8" />
-    <use href="#sym_valve_control" x="1608" y="1246" width="24.5" height="19.8" />
+    <use href="#sym_reactor_cdedf707a_s124x200" x="1445" y="304" width="124" height="200" />
+    <use href="#sym_hex_straight_tubes_s120x36" x="659" y="570" width="120" height="36" />
+    <use href="#sym_furnace" x="1021" y="324.5" width="80.0" height="99.0" />
+    <use href="#sym_hex_straight_tubes_s120x36" x="1001" y="1037" width="120" height="36" />
+    <use href="#sym_separator_knockout" x="1481.5" y="1000" width="51.0" height="95.4" />
+    <use href="#sym_compressor" x="337" y="620" width="70.0" height="67.0" />
+    <use href="#sym_compressor" x="2381" y="844" width="70.0" height="67.0" />
+    <polygon points="50.0,637.0 169.0,637.0 184.0,650.0 169.0,663.0 50.0,663.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="109.5" y="646.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Synthesis Gas</text>
+    <text x="109.5" y="658.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-201</text>
+    <polygon points="699.0,444.1 764.0,444.1 779.0,454.1 764.0,464.1 699.0,464.1" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="731.5" y="454.1" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FGSH</text>
+    <polygon points="699.0,987.0 764.0,987.0 779.0,997.0 764.0,1007.0 699.0,1007.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="731.5" y="997.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CWSH</text>
+    <polygon points="1445.0,1282.4 1510.0,1282.4 1525.0,1292.4 1510.0,1302.4 1445.0,1302.4" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1477.5" y="1292.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CWRH</text>
+    <polygon points="2381.0,993.0 2532.0,993.0 2547.0,1006.0 2532.0,1019.0 2381.0,1019.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="2456.5" y="1002.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge to Fuel Gas</text>
+    <text x="2456.5" y="1014.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-901</text>
+    <polygon points="2017.0,1122.4 2144.0,1122.4 2159.0,1135.4 2144.0,1148.4 2017.0,1148.4" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="2080.5" y="1131.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Crude Methanol</text>
+    <text x="2080.5" y="1143.4" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-401</text>
+    <use href="#sym_tee" x="527" y="624" width="12.0" height="12.0" />
+    <use href="#sym_tee" x="2082" y="1000" width="12.0" height="12.0" />
+    <use href="#sym_fitting_orifice" x="228.75" y="642.5" width="12.5" height="15.0" />
+    <use href="#sym_valve_control" x="273.75" y="637.6" width="24.5" height="19.8" />
+    <use href="#sym_fitting_orifice" x="853.25" y="446.6" width="12.5" height="15.0" />
+    <use href="#sym_valve_solenoid" x="927.75" y="439.2" width="24.5" height="22.2" />
+    <use href="#sym_valve_control" x="1008.25" y="441.7" width="24.5" height="19.8" />
+    <use href="#sym_valve_control" x="2225.25" y="993.6" width="24.5" height="19.8" />
+    <use href="#sym_valve_control" x="1729.5" y="1123" width="24.5" height="19.8" />
   </g>
   <g id="streams">
-    <path d="M 100.0,624.0 L 304.0,624.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 316.5,624.0 L 504.0,624.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 528.5,624.0 L 718.5,624.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 788.5,604.0 L 908.5,604.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 920.5,604.0 L 1053.0,604.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1173.0,604.0 L 1268.0,604.0 L 1268.0,629.0 L 1293.0,629.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1373.0,654.0 L 1583.0,654.0 L 1583.0,624.0 L 1608.0,624.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1608.0,689.0 L 1188.0,689.0 L 1188.0,609 M 1188.0,599 L 1188.0,541.0 L 1143.0,541.0 L 1143.0,586.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1083.0,622.0 L 1083.0,693.5 M 1083.0,703.5 L 1083.0,1066.0 L 1108.0,1066.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1228.0,1066.0 L 1293.0,1066.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1318.0,1106.4 L 1318.0,1258.4 L 1608.0,1258.4" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1632.5,1258.4 L 1958.0,1258.4" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1318.0,1011.0 L 1318.0,986.0 L 1583.0,986.0 L 1583.0,1086.0 L 1608.0,1086.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1620.0,1086.0 L 1958.0,1086.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1982.5,1086.0 L 2220.0,1086.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1614.0,1092.0 L 1614.0,1117.0 L 1933.0,1117.0 L 1933.0,1091 M 1933.0,1081 L 1933.0,839 M 1933.0,829 L 1933.0,620.5 L 1958.0,620.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 2028.0,600.5 L 2053.0,600.5 L 2053.0,90.0 L 945.5,90.0 L 945.5,319.5 M 945.5,329.5 L 945.5,497 M 945.5,507 L 945.5,599 M 945.5,609 L 945.5,635.0 L 914.5,635.0 L 914.5,610.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 354.0,324.5 L 504.0,324.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 516.5,324.5 L 718.5,324.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 743.0,324.5 L 908.5,324.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 933.0,324.5 L 1028.0,324.5 L 1028.0,497 M 1028.0,507 L 1028.0,599 M 1028.0,609 L 1028.0,698.5 L 1333.0,698.5 L 1333.0,694 M 1333.0,684 L 1333.0,664.1" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1118.0,304.5 L 1198.0,304.5 L 1198.0,497 M 1198.0,507 L 1198.0,599 M 1198.0,609 L 1198.0,684 M 1198.0,694 L 1198.0,693.5 M 1198.0,703.5 L 1198.0,1048.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1138.0,1084.0 L 1138.0,1195.9 L 1083.0,1195.9 L 1083.0,1235.9 L 1108.0,1235.9" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 310.25,511.5 L 310.25,473.5" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 332.25,451.5 L 516.2,451.5 L 516.2,611.6" fill="none" stroke="black" stroke-width="1" />
-    <line x1="363.5" y1="456.5" x2="369.5" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="367.5" y1="456.5" x2="373.5" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="400.3" y1="456.5" x2="406.3" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="404.3" y1="456.5" x2="410.3" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="437.1" y1="456.5" x2="443.1" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="441.1" y1="456.5" x2="447.1" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="473.9" y1="456.5" x2="479.9" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="477.9" y1="456.5" x2="483.9" y2="446.5" stroke="black" stroke-width="1" />
-    <line x1="511.2" y1="486.0" x2="521.2" y2="492.0" stroke="black" stroke-width="1" />
-    <line x1="511.2" y1="490.0" x2="521.2" y2="496.0" stroke="black" stroke-width="1" />
-    <line x1="511.2" y1="526.0" x2="521.2" y2="532.0" stroke="black" stroke-width="1" />
-    <line x1="511.2" y1="530.0" x2="521.2" y2="536.0" stroke="black" stroke-width="1" />
-    <line x1="511.2" y1="566.1" x2="521.2" y2="572.1" stroke="black" stroke-width="1" />
-    <line x1="511.2" y1="570.1" x2="521.2" y2="576.1" stroke="black" stroke-width="1" />
-    <path d="M 1505.5,572.0 L 1505.5,524.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 510.25,212.0 L 510.25,174.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 1483.5,502.0 L 557.25,502.0 L 557.25,329.5 M 557.25,319.5 L 557.25,152.0 L 532.25,152.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 510.25,130.0 L 510.25,105.0 L 920.7,105.0 L 920.7,312.1" fill="none" stroke="black" stroke-width="1" />
-    <line x1="505.2" y1="112.0" x2="515.2" y2="118.0" stroke="black" stroke-width="1" />
-    <line x1="505.2" y1="116.0" x2="515.2" y2="122.0" stroke="black" stroke-width="1" />
-    <line x1="545.8" y1="110.0" x2="551.8" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="549.8" y1="110.0" x2="555.8" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="586.8" y1="110.0" x2="592.8" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="590.8" y1="110.0" x2="596.8" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="627.9" y1="110.0" x2="633.9" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="631.9" y1="110.0" x2="637.9" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="668.9" y1="110.0" x2="674.9" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="672.9" y1="110.0" x2="678.9" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="710.0" y1="110.0" x2="716.0" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="714.0" y1="110.0" x2="720.0" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="751.0" y1="110.0" x2="757.0" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="755.0" y1="110.0" x2="761.0" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="792.1" y1="110.0" x2="798.1" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="796.1" y1="110.0" x2="802.1" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="833.1" y1="110.0" x2="839.1" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="837.1" y1="110.0" x2="843.1" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="874.2" y1="110.0" x2="880.2" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="878.2" y1="110.0" x2="884.2" y2="100.0" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="140.9" x2="925.7" y2="146.9" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="144.9" x2="925.7" y2="150.9" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="182.3" x2="925.7" y2="188.3" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="186.3" x2="925.7" y2="192.3" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="223.8" x2="925.7" y2="229.8" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="227.8" x2="925.7" y2="233.8" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="265.2" x2="925.7" y2="271.2" stroke="black" stroke-width="1" />
-    <line x1="915.7" y1="269.2" x2="925.7" y2="275.2" stroke="black" stroke-width="1" />
-    <path d="M 1459.0,904.0 L 1459.0,856.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 1481.0,834.0 L 1970.2,834.0 L 1970.2,1073.6" fill="none" stroke="black" stroke-width="1" />
-    <line x1="1520.0" y1="839.0" x2="1526.0" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1524.0" y1="839.0" x2="1530.0" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1564.4" y1="839.0" x2="1570.4" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1568.4" y1="839.0" x2="1574.4" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1608.9" y1="839.0" x2="1614.9" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1612.9" y1="839.0" x2="1618.9" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1653.4" y1="839.0" x2="1659.4" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1657.4" y1="839.0" x2="1663.4" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1697.9" y1="839.0" x2="1703.9" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1701.9" y1="839.0" x2="1707.9" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1742.3" y1="839.0" x2="1748.3" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1746.3" y1="839.0" x2="1752.3" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1786.8" y1="839.0" x2="1792.8" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1790.8" y1="839.0" x2="1796.8" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1831.3" y1="839.0" x2="1837.3" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1835.3" y1="839.0" x2="1841.3" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1875.8" y1="839.0" x2="1881.8" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1879.8" y1="839.0" x2="1885.8" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1920.2" y1="839.0" x2="1926.2" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1924.2" y1="839.0" x2="1930.2" y2="829.0" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="868.4" x2="1975.2" y2="874.4" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="872.4" x2="1975.2" y2="878.4" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="908.4" x2="1975.2" y2="914.4" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="912.4" x2="1975.2" y2="918.4" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="948.3" x2="1975.2" y2="954.3" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="952.3" x2="1975.2" y2="958.3" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="988.2" x2="1975.2" y2="994.2" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="992.2" x2="1975.2" y2="998.2" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="1028.2" x2="1975.2" y2="1034.2" stroke="black" stroke-width="1" />
-    <line x1="1965.2" y1="1032.2" x2="1975.2" y2="1038.2" stroke="black" stroke-width="1" />
-    <path d="M 1426.0,1058.7 L 1573.25,1058.7 L 1573.25,1194.0 L 1598.25,1194.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 1620.25,1216.0 L 1620.25,1221.0 L 1620.2,1221.0 L 1620.2,1246.0" fill="none" stroke="black" stroke-width="1" />
-    <line x1="1615.2" y1="1228.0" x2="1625.2" y2="1234.0" stroke="black" stroke-width="1" />
-    <line x1="1615.2" y1="1232.0" x2="1625.2" y2="1238.0" stroke="black" stroke-width="1" />
-    <rect x="158.7" y="617.5" width="86.6" height="13.0" fill="white" />
-    <text x="202.0" y="624.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">300-SG-301-CS</text>
-    <rect x="805.2" y="587.0" width="86.6" height="13.0" fill="white" />
-    <text x="848.5" y="593.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">200-SG-302-CS</text>
-    <rect x="1201.2" y="574.0" width="86.6" height="13.0" fill="white" />
-    <text x="1244.5" y="580.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-314-CS</text>
-    <rect x="1416.7" y="647.5" width="86.6" height="13.0" fill="white" />
-    <text x="1460.0" y="654.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-LT</text>
-    <rect x="1354.7" y="682.5" width="86.6" height="13.0" fill="white" />
-    <text x="1398.0" y="689.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-LT</text>
-    <rect x="1076.5" y="800.7" width="13.0" height="86.6" fill="white" />
-    <text x="1083.0" y="844.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1083.0, 844.0)">350-LG-306-CS</text>
-    <rect x="1199.2" y="1096.0" width="86.6" height="13.0" fill="white" />
-    <text x="1242.5" y="1102.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-315-CS</text>
-    <rect x="1419.7" y="1251.9" width="86.6" height="13.0" fill="white" />
-    <text x="1463.0" y="1258.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-CM-307-SS</text>
-    <rect x="1365.2" y="979.5" width="86.6" height="13.0" fill="white" />
-    <text x="1408.5" y="986.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-308-CS</text>
-    <rect x="1926.5" y="837.5" width="13.0" height="86.6" fill="white" />
-    <text x="1933.0" y="880.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1933.0, 880.8)">350-LG-316-CS</text>
-    <rect x="1456.0" y="83.5" width="86.6" height="13.0" fill="white" />
-    <text x="1499.2" y="90.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-310-CS</text>
-    <rect x="388.8" y="318.0" width="80.4" height="13.0" fill="white" />
-    <text x="429.0" y="324.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-FG-311-CS</text>
-    <rect x="1191.5" y="701.9" width="13.0" height="92.8" fill="white" />
-    <text x="1198.0" y="748.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1198.0, 748.2)">250-CWS-312-CS</text>
-    <rect x="1121.0" y="1093.5" width="13.0" height="92.8" fill="white" />
-    <text x="1127.5" y="1140.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1127.5, 1140.0)">250-CWR-313-CS</text>
+    <path d="M 184.0,650.0 L 228.75,650.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 241.25,650.0 L 273.75,650.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 298.25,650.0 L 337.0,650.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 407.0,630.0 L 527.0,630.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 539.0,630.0 L 634.0,630.0 L 634.0,588.0 L 659.0,588.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 779.0,588.0 L 993.25,588.0 L 993.25,530 M 993.25,520 L 993.25,459.1 M 993.25,449.1 L 993.25,379.00000000000006 L 1021.0,379.00000000000006" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1101.0,404.00000000000006 L 1445.0,404.00000000000006" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1445.0,469.00000000000006 L 1047.75,469.00000000000006 L 1047.75,525.0 L 749.0,525.0 L 749.0,570.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 689.0,606.0 L 689.0,656 M 689.0,666 L 689.0,1055.0 L 1001.0,1055.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1121.0,1055.0 L 1481.5,1055.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1506.5,1095.4 L 1506.5,1135.4 L 1729.5,1135.4" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1754.0,1135.4 L 2017.0,1135.4" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1506.5,1000.0 L 1506.5,975.0 L 2057.0,975.0 L 2057.0,1006.0 L 2082.0,1006.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 2094.0,1006.0 L 2225.25,1006.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 2249.75,1006.0 L 2381.0,1006.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 2088.0,1012.0 L 2088.0,1071.0 L 2356.0,1071.0 L 2356.0,1011 M 2356.0,1001 L 2356.0,874.0 L 2381.0,874.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 2451.0,854.0 L 2476.0,854.0 L 2476.0,661.0 L 533.0,661.0 L 533.0,636.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 779.0,454.1 L 853.25,454.1" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 865.75,454.1 L 927.75,454.1" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 952.25,454.1 L 1008.25,454.1" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1032.75,454.1 L 1061.0,454.1 L 1061.0,414.1" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 779.0,997.0 L 1091.0,997.0 L 1091.0,1037.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1031.0,1073.0 L 1031.0,1292.4 L 1445.0,1292.4" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 235.0,537.5 L 235.0,499.5" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 257.0,477.5 L 285.95,477.5 L 285.95,637.6" fill="none" stroke="black" stroke-width="1" />
+    <line x1="266.0" y1="482.5" x2="272.0" y2="472.5" stroke="black" stroke-width="1" />
+    <line x1="270.0" y1="482.5" x2="276.0" y2="472.5" stroke="black" stroke-width="1" />
+    <line x1="280.9" y1="512.0" x2="290.9" y2="518.0" stroke="black" stroke-width="1" />
+    <line x1="280.9" y1="516.0" x2="290.9" y2="522.0" stroke="black" stroke-width="1" />
+    <line x1="280.9" y1="552.0" x2="290.9" y2="558.0" stroke="black" stroke-width="1" />
+    <line x1="280.9" y1="556.0" x2="290.9" y2="562.0" stroke="black" stroke-width="1" />
+    <line x1="280.9" y1="592.1" x2="290.9" y2="598.1" stroke="black" stroke-width="1" />
+    <line x1="280.9" y1="596.1" x2="290.9" y2="602.1" stroke="black" stroke-width="1" />
+    <path d="M 1273.0,322.00000000000006 L 1273.0,274.00000000000006" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 859.5,341.6 L 859.5,303.6" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 1251.0,252.00000000000006 L 906.5,252.00000000000006 L 906.5,281.6 L 881.5,281.6" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
+    <path d="M 859.5,259.6 L 859.5,234.60000000000002 L 1020.45,234.60000000000002 L 1020.45,247 M 1020.45,257 L 1020.45,374 M 1020.45,384 L 1020.45,441.70000000000005" fill="none" stroke="black" stroke-width="1" />
+    <line x1="854.5" y1="241.6" x2="864.5" y2="247.6" stroke="black" stroke-width="1" />
+    <line x1="854.5" y1="245.6" x2="864.5" y2="251.6" stroke="black" stroke-width="1" />
+    <line x1="894.2" y1="239.6" x2="900.2" y2="229.6" stroke="black" stroke-width="1" />
+    <line x1="898.2" y1="239.6" x2="904.2" y2="229.6" stroke="black" stroke-width="1" />
+    <line x1="934.5" y1="239.6" x2="940.5" y2="229.6" stroke="black" stroke-width="1" />
+    <line x1="938.5" y1="239.6" x2="944.5" y2="229.6" stroke="black" stroke-width="1" />
+    <line x1="974.7" y1="239.6" x2="980.7" y2="229.6" stroke="black" stroke-width="1" />
+    <line x1="978.7" y1="239.6" x2="984.7" y2="229.6" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="270.5" x2="1025.5" y2="276.5" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="274.5" x2="1025.5" y2="280.5" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="311.9" x2="1025.5" y2="317.9" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="315.9" x2="1025.5" y2="321.9" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="353.4" x2="1025.5" y2="359.4" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="357.4" x2="1025.5" y2="363.4" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="394.8" x2="1025.5" y2="400.8" stroke="black" stroke-width="1" />
+    <line x1="1015.5" y1="398.8" x2="1025.5" y2="404.8" stroke="black" stroke-width="1" />
+    <path d="M 1734.1,893.0 L 1734.1,845.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 1756.1,823.0 L 2237.45,823.0 L 2237.45,993.6" fill="none" stroke="black" stroke-width="1" />
+    <line x1="1794.4" y1="828.0" x2="1800.4" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1798.4" y1="828.0" x2="1804.4" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1838.1" y1="828.0" x2="1844.1" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1842.1" y1="828.0" x2="1848.1" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1881.9" y1="828.0" x2="1887.9" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1885.9" y1="828.0" x2="1891.9" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1925.6" y1="828.0" x2="1931.6" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1929.6" y1="828.0" x2="1935.6" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1969.4" y1="828.0" x2="1975.4" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="1973.4" y1="828.0" x2="1979.4" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2013.2" y1="828.0" x2="2019.2" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2017.2" y1="828.0" x2="2023.2" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2056.9" y1="828.0" x2="2062.9" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2060.9" y1="828.0" x2="2066.9" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2100.7" y1="828.0" x2="2106.7" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2104.7" y1="828.0" x2="2110.7" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2144.4" y1="828.0" x2="2150.4" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2148.4" y1="828.0" x2="2154.4" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2188.2" y1="828.0" x2="2194.2" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2192.2" y1="828.0" x2="2198.2" y2="818.0" stroke="black" stroke-width="1" />
+    <line x1="2232.4" y1="860.1" x2="2242.4" y2="866.1" stroke="black" stroke-width="1" />
+    <line x1="2232.4" y1="864.1" x2="2242.4" y2="870.1" stroke="black" stroke-width="1" />
+    <line x1="2232.4" y1="902.8" x2="2242.4" y2="908.8" stroke="black" stroke-width="1" />
+    <line x1="2232.4" y1="906.8" x2="2242.4" y2="912.8" stroke="black" stroke-width="1" />
+    <line x1="2232.4" y1="945.5" x2="2242.4" y2="951.5" stroke="black" stroke-width="1" />
+    <line x1="2232.4" y1="949.5" x2="2242.4" y2="955.5" stroke="black" stroke-width="1" />
+    <path d="M 1614.5,1047.7 L 1694.75,1047.7 L 1694.75,1071.0 L 1719.75,1071.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 1741.75,1093.0 L 1741.75,1098.0 L 1741.7,1098.0 L 1741.7,1123.0" fill="none" stroke="black" stroke-width="1" />
+    <line x1="1736.7" y1="1105.0" x2="1746.7" y2="1111.0" stroke="black" stroke-width="1" />
+    <line x1="1736.7" y1="1109.0" x2="1746.7" y2="1115.0" stroke="black" stroke-width="1" />
+    <rect x="121.1" y="607.0" width="86.6" height="13.0" fill="white" />
+    <text x="164.4" y="613.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">300-SG-301-CS</text>
+    <line x1="187.6" y1="620.0" x2="213.8" y2="650.0" stroke="black" stroke-width="1" />
+    <path d="M 213.8,650.0 L 207.6,647.5 L 212.1,643.5 Z" fill="black" />
+    <rect x="423.7" y="613.0" width="86.6" height="13.0" fill="white" />
+    <text x="467.0" y="619.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">200-SG-302-CS</text>
+    <rect x="842.8" y="581.5" width="86.6" height="13.0" fill="white" />
+    <text x="886.1" y="588.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-314-CS</text>
+    <rect x="1181.7" y="397.5" width="86.6" height="13.0" fill="white" />
+    <text x="1225.0" y="404.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-304-LT</text>
+    <rect x="1203.1" y="462.5" width="86.6" height="13.0" fill="white" />
+    <text x="1246.4" y="469.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-305-LT</text>
+    <rect x="682.5" y="787.2" width="13.0" height="86.6" fill="white" />
+    <text x="689.0" y="830.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 689.0, 830.5)">350-LG-306-CS</text>
+    <rect x="1258.0" y="1048.5" width="86.6" height="13.0" fill="white" />
+    <text x="1301.2" y="1055.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-315-CS</text>
+    <rect x="1574.7" y="1128.9" width="86.6" height="13.0" fill="white" />
+    <text x="1618.0" y="1135.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">100-CM-307-SS</text>
+    <rect x="1738.5" y="968.5" width="86.6" height="13.0" fill="white" />
+    <text x="1781.8" y="975.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-308-CS</text>
+    <rect x="2178.7" y="1064.5" width="86.6" height="13.0" fill="white" />
+    <text x="2222.0" y="1071.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-316-CS</text>
+    <rect x="1461.2" y="654.5" width="86.6" height="13.0" fill="white" />
+    <text x="1504.5" y="661.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">350-LG-310-CS</text>
+    <rect x="787.9" y="471.1" width="80.4" height="13.0" fill="white" />
+    <text x="828.1" y="477.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">80-FG-311-CS</text>
+    <rect x="888.6" y="990.5" width="92.8" height="13.0" fill="white" />
+    <text x="935.0" y="997.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">250-CWS-312-CS</text>
+    <rect x="1191.6" y="1285.9" width="92.8" height="13.0" fill="white" />
+    <text x="1238.0" y="1292.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">250-CWR-313-CS</text>
   </g>
   <g id="instrument_taps">
-    <line x1="310.25" y1="616.5" x2="310.25" y2="578.5" stroke="black" stroke-width="1" />
-    <line x1="1505.5" y1="654" x2="1505.5" y2="594" stroke="black" stroke-width="1" />
-    <line x1="510.25" y1="317" x2="510.25" y2="279" stroke="black" stroke-width="1" />
-    <line x1="1459" y1="986" x2="1459" y2="926" stroke="black" stroke-width="1" />
-    <line x1="1344" y1="1058.7" x2="1404" y2="1058.7" stroke="black" stroke-width="1" />
-    <line x1="1670" y1="524" x2="1670" y2="464" stroke="black" stroke-width="1" />
-    <line x1="1732" y1="624" x2="1792" y2="624" stroke="black" stroke-width="1" />
-    <line x1="1814" y1="624" x2="1858" y2="624" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
-    <line x1="730.75" y1="309.6" x2="730.75" y2="275.6" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="235" y1="642.5" x2="235" y2="604.5" stroke="black" stroke-width="1" />
+    <line x1="1273" y1="404" x2="1273" y2="344" stroke="black" stroke-width="1" />
+    <line x1="859.5" y1="446.6" x2="859.5" y2="408.6" stroke="black" stroke-width="1" />
+    <line x1="1734.1" y1="975" x2="1734.1" y2="915" stroke="black" stroke-width="1" />
+    <line x1="1532.5" y1="1047.7" x2="1592.5" y2="1047.7" stroke="black" stroke-width="1" />
+    <line x1="1507" y1="304" x2="1507" y2="244" stroke="black" stroke-width="1" />
+    <line x1="1569" y1="404" x2="1629" y2="404" stroke="black" stroke-width="1" />
+    <line x1="1651" y1="404" x2="1695" y2="404" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="940" y1="439.2" x2="940" y2="405.2" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
   </g>
   <g id="instruments">
-    <use href="#sym_instrument" x="288.25" y="556.5" width="44.0" height="44.0" />
-    <text x="310.25" y="574.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FE</text>
-    <text x="310.25" y="588.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
-    <use href="#sym_instrument" x="288.25" y="511.5" width="44.0" height="44.0" />
-    <text x="310.25" y="529.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
-    <text x="310.25" y="543.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
-    <use href="#sym_instrument_shared" x="288.25" y="429.5" width="44.0" height="44.0" />
-    <text x="310.25" y="441.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
-    <text x="310.25" y="462.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
-    <use href="#sym_instrument" x="1483.5" y="572" width="44.0" height="44.0" />
-    <text x="1505.5" y="590.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TT</text>
-    <text x="1505.5" y="604.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">302</text>
-    <use href="#sym_instrument_shared" x="1483.5" y="480" width="44.0" height="44.0" />
-    <text x="1505.5" y="492.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TIC</text>
-    <text x="1505.5" y="513.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">302</text>
-    <use href="#sym_instrument" x="488.25" y="257" width="44.0" height="44.0" />
-    <text x="510.25" y="275.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FE</text>
-    <text x="510.25" y="289.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
-    <use href="#sym_instrument" x="488.25" y="212" width="44.0" height="44.0" />
-    <text x="510.25" y="230.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
-    <text x="510.25" y="244.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
-    <use href="#sym_instrument_shared" x="488.25" y="130" width="44.0" height="44.0" />
-    <text x="510.25" y="142.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
-    <text x="510.25" y="163.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
-    <use href="#sym_instrument" x="1437" y="904" width="44.0" height="44.0" />
-    <text x="1459.0" y="922.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PT</text>
-    <text x="1459.0" y="936.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
-    <use href="#sym_instrument_shared" x="1437" y="812" width="44.0" height="44.0" />
-    <text x="1459.0" y="824.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PIC</text>
-    <text x="1459.0" y="845.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
-    <use href="#sym_instrument" x="1382" y="1036.7" width="44.0" height="44.0" />
-    <text x="1404.0" y="1054.7" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LT</text>
-    <text x="1404.0" y="1068.7" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">305</text>
-    <use href="#sym_instrument_shared" x="1598.25" y="1172" width="44.0" height="44.0" />
-    <text x="1620.25" y="1184.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LIC</text>
-    <text x="1620.25" y="1205.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">305</text>
-    <use href="#sym_instrument" x="1648" y="442" width="44.0" height="44.0" />
-    <text x="1670.0" y="460.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TI</text>
-    <text x="1670.0" y="474.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">306</text>
-    <use href="#sym_instrument" x="1770" y="602" width="44.0" height="44.0" />
-    <text x="1792.0" y="620.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TT</text>
-    <text x="1792.0" y="634.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">307</text>
-    <use href="#sym_instrument_sis" x="1838" y="604" width="40.0" height="40.0" />
-    <text x="1858.0" y="631.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
-    <use href="#sym_instrument_sis" x="710.75" y="255.6" width="40.0" height="40.0" />
-    <text x="730.75" y="282.6" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
+    <use href="#sym_instrument" x="213" y="582.5" width="44.0" height="44.0" />
+    <text x="235.0" y="600.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FE</text>
+    <text x="235.0" y="614.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
+    <use href="#sym_instrument" x="213" y="537.5" width="44.0" height="44.0" />
+    <text x="235.0" y="555.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
+    <text x="235.0" y="569.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
+    <use href="#sym_instrument_shared" x="213" y="455.5" width="44.0" height="44.0" />
+    <text x="235.0" y="467.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
+    <text x="235.0" y="488.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
+    <use href="#sym_instrument" x="1251" y="322" width="44.0" height="44.0" />
+    <text x="1273.0" y="340.00000000000006" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TT</text>
+    <text x="1273.0" y="354.00000000000006" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">302</text>
+    <use href="#sym_instrument_shared" x="1251" y="230" width="44.0" height="44.0" />
+    <text x="1273.0" y="242.00000000000006" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TIC</text>
+    <text x="1273.0" y="263.00000000000006" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">302</text>
+    <use href="#sym_instrument" x="837.5" y="386.6" width="44.0" height="44.0" />
+    <text x="859.5" y="404.6" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FE</text>
+    <text x="859.5" y="418.6" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
+    <use href="#sym_instrument" x="837.5" y="341.6" width="44.0" height="44.0" />
+    <text x="859.5" y="359.6" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
+    <text x="859.5" y="373.6" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
+    <use href="#sym_instrument_shared" x="837.5" y="259.6" width="44.0" height="44.0" />
+    <text x="859.5" y="271.6" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
+    <text x="859.5" y="292.6" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
+    <use href="#sym_instrument" x="1712.1" y="893" width="44.0" height="44.0" />
+    <text x="1734.1" y="911.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PT</text>
+    <text x="1734.1" y="925.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
+    <use href="#sym_instrument_shared" x="1712.1" y="801" width="44.0" height="44.0" />
+    <text x="1734.1" y="813.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PIC</text>
+    <text x="1734.1" y="834.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
+    <use href="#sym_instrument" x="1570.5" y="1025.7" width="44.0" height="44.0" />
+    <text x="1592.5" y="1043.7" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LT</text>
+    <text x="1592.5" y="1057.7" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">305</text>
+    <use href="#sym_instrument_shared" x="1719.75" y="1049" width="44.0" height="44.0" />
+    <text x="1741.75" y="1061.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LIC</text>
+    <text x="1741.75" y="1082.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">305</text>
+    <use href="#sym_instrument" x="1485" y="222" width="44.0" height="44.0" />
+    <text x="1507.0" y="240.00000000000006" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TI</text>
+    <text x="1507.0" y="254.00000000000006" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">306</text>
+    <use href="#sym_instrument" x="1607" y="382" width="44.0" height="44.0" />
+    <text x="1629.0" y="400.00000000000006" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TT</text>
+    <text x="1629.0" y="414.00000000000006" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">307</text>
+    <use href="#sym_instrument_sis" x="1675" y="384" width="40.0" height="40.0" />
+    <text x="1695.0" y="411.00000000000006" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
+    <use href="#sym_instrument_sis" x="920" y="385.2" width="40.0" height="40.0" />
+    <text x="940.0" y="412.20000000000005" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
   </g>
   <g id="unit_labels">
-    <rect x="1625.5" y="502.0" width="41.0" height="15.0" fill="white" />
-    <text x="1646.0" y="514.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">R-301</text>
-    <rect x="1092.5" y="564.0" width="41.0" height="15.0" fill="white" />
-    <text x="1113.0" y="576.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-301</text>
-    <rect x="1312.5" y="552.5" width="41.0" height="15.0" fill="white" />
-    <text x="1333.0" y="564.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">H-301</text>
-    <rect x="1147.5" y="1026.0" width="41.0" height="15.0" fill="white" />
-    <text x="1168.0" y="1038.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-302</text>
-    <rect x="1354.0" y="1015.2" width="41.0" height="15.0" fill="white" />
-    <text x="1354.0" y="1022.7" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-301</text>
-    <rect x="733.0" y="572.0" width="41.0" height="15.0" fill="white" />
-    <text x="753.5" y="584.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">K-301</text>
-    <rect x="1972.5" y="568.5" width="41.0" height="15.0" fill="white" />
-    <text x="1993.0" y="580.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">K-302</text>
-    <rect x="492.4" y="638.9" width="47.6" height="15.0" fill="white" />
-    <text x="516.25" y="646.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-301</text>
-    <rect x="505.6" y="657.9" width="21.2" height="15.0" fill="white" />
-    <text x="516.25" y="665.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
-    <rect x="707.0" y="339.3" width="47.6" height="15.0" fill="white" />
-    <text x="730.75" y="346.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">XV-307</text>
-    <rect x="720.1" y="358.3" width="21.2" height="15.0" fill="white" />
-    <text x="730.75" y="365.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
-    <rect x="891.0" y="339.4" width="47.6" height="15.0" fill="white" />
-    <text x="914.75" y="346.90000000000003" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-303</text>
-    <rect x="910.1" y="358.4" width="21.2" height="15.0" fill="white" />
-    <text x="920.75" y="365.90000000000003" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
-    <rect x="1946.5" y="1100.9" width="47.6" height="15.0" fill="white" />
-    <text x="1970.25" y="1108.3999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-304</text>
-    <rect x="1959.7" y="1119.9" width="21.2" height="15.0" fill="white" />
-    <text x="1970.25" y="1127.3999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FO</text>
-    <rect x="1596.5" y="1273.3" width="47.6" height="15.0" fill="white" />
-    <text x="1620.25" y="1280.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-305</text>
-    <rect x="1609.7" y="1292.3" width="21.2" height="15.0" fill="white" />
-    <text x="1620.25" y="1299.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
-    <rect x="1532.5" y="484.0" width="27.8" height="15.0" fill="white" />
-    <text x="1532.5" y="491.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">TAH</text>
-    <rect x="1486.0" y="816.0" width="27.8" height="15.0" fill="white" />
-    <text x="1486.0" y="823.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAH</text>
-    <rect x="1486.0" y="837.0" width="27.8" height="15.0" fill="white" />
-    <text x="1486.0" y="844.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAL</text>
-    <rect x="1647.2" y="1176.0" width="27.8" height="15.0" fill="white" />
-    <text x="1647.25" y="1183.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAH</text>
-    <rect x="1647.2" y="1197.0" width="27.8" height="15.0" fill="white" />
-    <text x="1647.25" y="1204.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAL</text>
+    <rect x="1462.5" y="282.0" width="41.0" height="15.0" fill="white" />
+    <text x="1483.0" y="294.00000000000006" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">R-301</text>
+    <rect x="698.5" y="548.0" width="41.0" height="15.0" fill="white" />
+    <text x="719.0" y="560.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-301</text>
+    <rect x="1040.5" y="302.5" width="41.0" height="15.0" fill="white" />
+    <text x="1061.0" y="314.50000000000006" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">H-301</text>
+    <rect x="1040.5" y="1015.0" width="41.0" height="15.0" fill="white" />
+    <text x="1061.0" y="1027.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-302</text>
+    <rect x="1542.5" y="1004.2" width="41.0" height="15.0" fill="white" />
+    <text x="1542.5" y="1011.7" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-301</text>
+    <rect x="351.5" y="598.0" width="41.0" height="15.0" fill="white" />
+    <text x="372.0" y="610.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">K-301</text>
+    <rect x="2395.5" y="822.0" width="41.0" height="15.0" fill="white" />
+    <text x="2416.0" y="834.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">K-302</text>
+    <rect x="262.2" y="664.9" width="47.6" height="15.0" fill="white" />
+    <text x="286.0" y="672.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-301</text>
+    <rect x="275.4" y="683.9" width="21.2" height="15.0" fill="white" />
+    <text x="286.0" y="691.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
+    <rect x="916.2" y="468.9" width="47.6" height="15.0" fill="white" />
+    <text x="940.0" y="476.40000000000003" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">XV-307</text>
+    <rect x="929.4" y="487.9" width="21.2" height="15.0" fill="white" />
+    <text x="940.0" y="495.40000000000003" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
+    <rect x="996.7" y="469.0" width="47.6" height="15.0" fill="white" />
+    <text x="1020.5" y="476.50000000000006" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-303</text>
+    <rect x="1009.9" y="488.0" width="21.2" height="15.0" fill="white" />
+    <text x="1020.5" y="495.50000000000006" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
+    <rect x="2213.7" y="1020.9" width="47.6" height="15.0" fill="white" />
+    <text x="2237.5" y="1028.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-304</text>
+    <rect x="2226.9" y="1039.9" width="21.2" height="15.0" fill="white" />
+    <text x="2237.5" y="1047.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FO</text>
+    <rect x="1718.0" y="1150.3" width="47.6" height="15.0" fill="white" />
+    <text x="1741.75" y="1157.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-305</text>
+    <rect x="1731.2" y="1169.3" width="21.2" height="15.0" fill="white" />
+    <text x="1741.75" y="1176.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
+    <rect x="1300.0" y="234.0" width="27.8" height="15.0" fill="white" />
+    <text x="1300.0" y="241.50000000000006" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">TAH</text>
+    <rect x="1761.1" y="805.0" width="27.8" height="15.0" fill="white" />
+    <text x="1761.1" y="812.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAH</text>
+    <rect x="1761.1" y="826.0" width="27.8" height="15.0" fill="white" />
+    <text x="1761.1" y="833.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAL</text>
+    <rect x="1768.8" y="1053.0" width="27.8" height="15.0" fill="white" />
+    <text x="1768.75" y="1060.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAH</text>
+    <rect x="1768.8" y="1074.0" width="27.8" height="15.0" fill="white" />
+    <text x="1768.75" y="1081.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAL</text>
   </g>
 </svg>

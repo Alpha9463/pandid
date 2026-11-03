@@ -15,15 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Layout draws equipment as a layered graph (#564).** Equipment and
+  boundary flags are set in columns by flow and nozzle faces, ordered to cut
+  crossings, and lined up nozzle to nozzle. Valves, fittings and valve
+  stations are then set on their routed pipes. Sheets without pins draw
+  differently.
+- **An in-line device turns to run along its pipe (#564).** A valve on an
+  upright pipe is drawn upright, unless its author stated a turn with
+  `pin(orientation=...)`; a stated 0 keeps it level, and a stated
+  `mirrored=` is kept too.
+- **`pin(row=...)` orders units down their column (#564).** A lower row is
+  drawn above a higher one in the same `col=` column; it no longer names an
+  absolute grid row.
 - **Number starts must be integers (#533).** `stream_number_start`,
   `line_number_start` and `loop_number_start` raise `TypeError` for anything
   but an integer, and store any integer type as an `int`.
 - **The pneumatic hatch is drawn from `HATCH_ARM` (#304).** The SVG and
   draw.io pneumatic hatches both take their stroke from
   `pandid.render.svg.HATCH_ARM`.
-- **Layout trials are settled and judged one way (#574).** Every layout
-  trial settles with `settle()` and is accepted or refused by
-  `pandid.layout.quality.accepts`.
 - **A missed attribute lookup on a unit no longer lists its ports (#574).**
   The port list in the `AttributeError` for an unknown attribute is written
   only when the error is shown.
@@ -35,8 +44,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attached balloon, `pin()` for any other unit. A suggested `attach()`
   repeats the balloon's `relation=` and `angle=`.
 
+### Deprecated
+
+- **`PLACES` and `LAYOUT_CONFIDENCE` on a unit class (#564).** Layout no
+  longer reads them, and a subclass that sets them is reported. Point a
+  nozzle with `nozzle(port, face)` or `pin(orientation=..., mirrored=...)`.
+
 ### Removed
 
+- **Layout refinement and search after routing (#564).** `Flowsheet.route()`
+  no longer moves units once it has routed them. `pandid.layout.search`,
+  `trials`, `candidates` and `settle` are deleted, with the
+  `layout-search-*` warnings.
+- **The grid placement modules (#564).** `pandid.layout.place`, `claims`,
+  `coordinates`, `coarse`, `pixel`, `solver` and `structure` are deleted, as
+  is `pandid.portgeom.drawn_direction`. Label placement is in
+  `pandid.layout.labels`.
 - **`Port.side` (#304).** It was always `None`.
 - **Unused code (#574).** `pandid.layout.stages.control_units` and
   `signal_streams`, `Edge.source_role`, `Edge.dest_role`,

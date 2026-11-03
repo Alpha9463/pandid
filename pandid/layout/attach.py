@@ -434,8 +434,8 @@ def place_attached(fs: "Flowsheet") -> bool:
     # make this pass depend on the last. Each balloon joins once placed.
     obstacles = [unit_box(u, u.frame) for u in fs.units
                  if u.frame is not None and not is_attached(u)]
-    coarse = fs._coarse_layout_candidate
-    keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if coarse else 0.0)
+    mounted = fs._mounted_layout
+    keepouts = _nozzle_keepouts(fs, margin=RESOLVED_CLEARANCE if mounted else 0.0)
     # Balloons chain, so place a host before whatever hangs on it.
     pending = [u for u in fs.units if is_attached(u)]
     while pending:
@@ -450,8 +450,8 @@ def place_attached(fs: "Flowsheet") -> bool:
             w, h = resolve_size(inst)
             distance, angle = _clear_standoff(
                 inst, (tx, ty), ref, w, h,
-                obstacles + keepouts if coarse else obstacles,
-                [] if coarse else keepouts)
+                obstacles + keepouts if mounted else obstacles,
+                [] if mounted else keepouts)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis. ``pin_``

@@ -1,21 +1,21 @@
-"""Observable conflicts used by route-constrained placement."""
+"""Observable conflicts that a measured drawing names."""
 
 from __future__ import annotations
 
 from pandid import Block, Feed, Flowsheet, Product
 from pandid.layout.conflicts import Conflict, analyze_conflicts
-from pandid.layout.quality import admissible, measure_final
+from pandid.layout.quality import measure_final
 from pandid.portgeom import resolve_port
 from pandid.routing.metrics import crossing_pairs
 
 
-def test_exchanging_the_blocking_unit_is_not_an_improvement() -> None:
-    """Reject a same-count defect transferred to another unit.
+def test_a_conflict_names_the_unit_a_line_crosses() -> None:
+    """Tell apart two drawings whose counts match but whose blocking unit differs.
 
     Returns
     -------
     None
-        Conflict identity blocks the candidate despite equal counts.
+        The measured conflicts name the unit the line runs through.
     """
     fs = Flowsheet("Swapped blocker")
     source = fs.add(Feed("Feed"))
@@ -25,8 +25,9 @@ def test_exchanging_the_blocking_unit_is_not_an_improvement() -> None:
     source.pin(x=0, y=50)
     dest.pin(x=300, y=50)
     stream = fs.connect(source.outlet, dest.inlet)
-    fs.layout()
     fs.route()
+    assert source.frame is not None and dest.frame is not None
+    assert first.frame is not None and second.frame is not None and stream.route is not None
     first.frame.x = second.frame.x = 140
     first.frame.y, second.frame.y = 20, 200
     stream.route.waypoints = [
@@ -39,8 +40,8 @@ def test_exchanging_the_blocking_unit_is_not_an_improvement() -> None:
 
     assert before.hard == after.hard
     assert before.crossings == after.crossings
-    assert before.hard_conflicts != after.hard_conflicts
-    assert not admissible(before, after, preserve_crossing_pairs=True)
+    assert Conflict("route-crosses-unit", (0,), (2,)) in before.hard_conflicts
+    assert Conflict("route-crosses-unit", (0,), (3,)) in after.hard_conflicts
 
 
 def test_fixed_blocker_names_the_sealed_source_exit() -> None:

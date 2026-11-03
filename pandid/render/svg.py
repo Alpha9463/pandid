@@ -48,7 +48,7 @@ _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 _FIELD_BALLOONS = {"default"}
 
 #: Values ``label_pos`` accepts: the four faces, in the order layout tries
-#: them (:data:`pandid.layout.coordinates.LABEL_SIDES`), and ``"center"``,
+#: them (:data:`pandid.layout.labels.LABEL_SIDES`), and ``"center"``,
 #: which layout never picks but a balloon or an author may ask for.
 #:
 #: :meth:`SvgRenderer._label_place`, ``pandid.render.drawio._LABEL_SIDE``
@@ -4607,7 +4607,7 @@ class SvgRenderer:
         """Return the equipment tag item, moved clear of drawn ink.
 
         Layout chose a side from faces without nozzles
-        (:func:`~pandid.layout.coordinates.assign_labels`), but passing
+        (:func:`~pandid.layout.labels.assign_labels`), but passing
         lines, impulse lines and balloons can still lie there, and the tag's
         opaque halo would erase them. The tag first slides along its side,
         then tries other free sides; the first placement that erases
@@ -4635,7 +4635,7 @@ class SvgRenderer:
         tuple
             Label item.
         """
-        from pandid.layout.coordinates import free_label_sides
+        from pandid.layout.labels import free_label_sides
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, tag)
         box = _unit_label_box(item)
