@@ -38,6 +38,8 @@ MIN_NOZZLE_PITCH = ARROWHEAD + MIN_HEAD_CLEARANCE
 def wears_arrowhead(stream, registry) -> bool:
     """Return whether a stream ends in an arrowhead.
 
+    The result applies only on a sheet that draws arrowheads.
+
     Parameters
     ----------
     stream : Stream
@@ -345,7 +347,13 @@ class IsoPart:
     name: str
 
     def __post_init__(self) -> None:
-        """Validate the part's identity against ISO 10628-2's rules."""
+        """Validate the part's identity.
+
+        Raises
+        ------
+        ValueError
+            If the group, item, registration number or name is invalid.
+        """
         if self.group not in PART_GROUPS and self.item not in COMPOSED_APPARATUS:
             raise ValueError(
                 f"{self.reg}: ISO 10628-2 group {self.group} is not one of the part "
@@ -410,7 +418,13 @@ class Overlay:
     mirror: bool = False
 
     def __post_init__(self) -> None:
-        """Refuse a part with no extent."""
+        """Refuse a part with no extent.
+
+        Raises
+        ------
+        ValueError
+            If ``w`` or ``h`` is not positive.
+        """
         if self.w <= 0 or self.h <= 0:
             raise ValueError(
                 f"overlay {self.group}/{self.name} is placed {self.w:g} x {self.h:g} of "
@@ -495,7 +509,13 @@ class Symbol:
     trim: bool = False
 
     def __post_init__(self) -> None:
-        """Validate the ports and build the full face menus."""
+        """Validate the ports and build the full face menus.
+
+        Raises
+        ------
+        ValueError
+            If ports, menus, series or bands are inconsistent.
+        """
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}
         stray = sorted(set(declared) - set(self.ports))
         if stray:
@@ -1185,11 +1205,11 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     Raises
     ------
     ValueError
-        If the variant or a part is not registered.
+        If the variant or a part is unregistered, or composing fails.
     ValueError
         If a role has no placement on a requested face.
     ValueError
-        If two or more nozzles share a face with no wall.
+        If two or more nozzles share a face whose band is one point.
     """
     base = default_registry.composed(kind, variant, overlays)
     ports = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
@@ -1378,7 +1398,7 @@ def fail_marking(unit) -> str:
     Raises
     ------
     ValueError
-        If a variant without an actuator declares a fail position.
+        If the variant has no powered actuator but declares ``fail``.
     """
     declared = getattr(unit, "fail", "") or ""
     if not declared:
@@ -1460,7 +1480,7 @@ def darkened(sym: Symbol) -> Symbol:
     Raises
     ------
     ValueError
-        If the first ``<path>`` is not a white-filled body.
+        If the first ``<path>`` is missing or not filled white.
     """
     head = _FIRST_PATH.search(sym.svg)
     if head is None or _BODY_PAPER not in head.group(0):
@@ -1516,7 +1536,9 @@ def expander(sym: Symbol) -> Symbol:
     Raises
     ------
     ValueError
-        If the symbol is not a two-port fitting drawn as one ``<g>``.
+        If the ports are not exactly ``inlet`` and ``outlet``.
+    ValueError
+        If the artwork is not a single ``<g>`` group.
     """
     swap = {"inlet": "outlet", "outlet": "inlet"}
     if set(sym.ports) != set(swap) or sym.port_series:
@@ -1621,7 +1643,13 @@ class OverlayPart:
     drawio_shape: str = ""
 
     def __post_init__(self) -> None:
-        """Check the name, box, artwork and port positions."""
+        """Check the name, box, artwork and port positions.
+
+        Raises
+        ------
+        ValueError
+            If the name, box, artwork or a port position is invalid.
+        """
         if not self.name.strip():
             raise ValueError(
                 f"{self.iso.reg}: a part needs a name to be registered and asked for "
@@ -3127,7 +3155,9 @@ class SymbolRegistry:
         Raises
         ------
         ValueError
-            If a variant or part is unregistered or cannot be composed.
+            If ``kind`` is registered without ``variant``.
+        ValueError
+            If a part is unregistered or cannot be composed.
         """
         if not overlays:
             return self.get(kind, variant)
@@ -3216,7 +3246,9 @@ class SymbolRegistry:
         Raises
         ------
         ValueError
-            If the variant is unknown or a derived drawing is refused.
+            If the unit's kind is registered without its variant.
+        ValueError
+            If a derived drawing is refused.
         """
         variant = getattr(unit, "variant", "default")
         sym = self.get(unit.kind, variant)
