@@ -142,3 +142,19 @@ def nozzle_of(unit: Unit | None, port: str) -> tuple[float, float]:
     frame = frame_of(unit)
     assert unit is not None
     return port_point(unit, frame, port)
+
+
+def overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:
+    """Return whether two drawn boxes overlap.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float, float, float]
+        ``(x_min, y_min, x_max, y_max)``.
+
+    Returns
+    -------
+    bool
+        Whether their interiors meet.
+    """
+    return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]

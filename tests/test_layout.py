@@ -14,25 +14,9 @@ from pandid.layout.layered import BAND_WIDTH, COL_GAP, MARGIN
 from pandid.portgeom import pin_intent, port_faces, port_point, unit_box
 from pandid.routing.metrics import real_bends
 
-from _layout_cases import build
+from _layout_cases import build, overlaps
 
 Box = tuple[float, float, float, float]
-
-
-def _overlap(a: Box, b: Box) -> bool:
-    """Return whether two drawn boxes overlap.
-
-    Parameters
-    ----------
-    a, b : tuple[float, float, float, float]
-        ``(x_min, y_min, x_max, y_max)``.
-
-    Returns
-    -------
-    bool
-        Whether their interiors meet.
-    """
-    return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
 
 
 def _drawn_boxes(fs: Flowsheet) -> dict[str, Box]:
@@ -69,7 +53,7 @@ def _overlapping(fs: Flowsheet) -> list[tuple[str, str]]:
         Names of each overlapping pair.
     """
     boxes = _drawn_boxes(fs)
-    return [(a, b) for a, b in combinations(boxes, 2) if _overlap(boxes[a], boxes[b])]
+    return [(a, b) for a, b in combinations(boxes, 2) if overlaps(boxes[a], boxes[b])]
 
 
 def _unit_overlaps(fs: Flowsheet) -> list[str]:
@@ -1179,7 +1163,7 @@ def test_a_free_standing_balloon_is_placed_near_what_it_is_wired_to() -> None:
     assert fic.frame is not None and valve.frame is not None
     reach = abs(fic.frame.cx - valve.frame.cx) + abs(fic.frame.cy - valve.frame.cy)
     assert reach < 400, "the controller is nowhere near the valve it commands"
-    assert not _overlap(unit_box(fic, fic.frame), unit_box(valve, valve.frame))
+    assert not overlaps(unit_box(fic, fic.frame), unit_box(valve, valve.frame))
 
 
 def test_a_free_standing_balloon_stays_off_a_feed_flag_where_it_is_drawn() -> None:
@@ -1195,7 +1179,7 @@ def test_a_free_standing_balloon_stays_off_a_feed_flag_where_it_is_drawn() -> No
     assert fic.frame is not None and feed.frame is not None
     flag = unit_box(feed, feed.frame)
     assert flag[0] < feed.frame.x, "the flag is meant to be drawn left of its frame"
-    assert not _overlap(unit_box(fic, fic.frame), flag), "the balloon is on the flag"
+    assert not overlaps(unit_box(fic, fic.frame), flag), "the balloon is on the flag"
 
 
 def test_a_chain_of_balloons_is_reserved_paper_before_anything_is_placed() -> None:
