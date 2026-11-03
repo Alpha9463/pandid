@@ -1224,9 +1224,26 @@ def _drawn_by_hand() -> Flowsheet:
     return fs
 
 
+def _balloon_on_a_signal_line() -> Flowsheet:
+    """PI-1 sits on a signal line between two pinned indicators near the
+    valve LIC-1 drives."""
+    fs = Flowsheet("signal balloon")
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=300, y=300)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    lt = fs.add_instrument("LT", 1).pin(x=300, y=350)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    x1 = fs.add_instrument("XI", 1).pin(x=200, y=300)
+    x2 = fs.add_instrument("XI", 2).pin(x=550, y=500)
+    line = fs.connect(x1.sig_out, x2.sig_in, kind="electric")
+    fs.add_instrument("PI", 1, sensing=line, at=0.5, offset=60)
+    return fs
+
+
 @pytest.mark.parametrize(
     "build",
     [
+        _balloon_on_a_signal_line,
         _close_transmitter,
         _two_transmitters,
         _cascade,
@@ -1257,6 +1274,24 @@ def test_a_hung_controller_that_leaves_a_clash_is_placed_from_its_wiring(
                 continue
             box = unit_box(u, u.frame)
             assert not any(segment_crosses_box(a, b, box) for a, b in zip(route, route[1:]))
+
+
+def test_a_router_that_freezes_its_routes_still_gets_the_fallback() -> None:
+    """A router that marks every route drawn by hand still has the sheet
+    laid out again when the hung controller leaves a slanted line."""
+    from pandid.routing import DefaultRouter
+
+    class FreezeRouter(DefaultRouter):
+        def route(self, fs: Flowsheet) -> None:
+            super().route(fs)
+            for stream in fs.streams:
+                assert stream.route is not None
+                stream.route.manual = True
+
+    fs, _, _ = _hung_controller()
+    fs.route(FreezeRouter())
+
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():

@@ -67,7 +67,6 @@ def _place_free(fs: "Flowsheet") -> bool:
     pending = [u for u in fs.units if is_control(u) and getattr(u, "host", None) is None]
     if not pending:
         return False
-    fs._hung = set()
 
     # Use each unit's drawn box, which may reach outside its frame.
     taken = [unit_box(u, u.frame) for u in fs.units

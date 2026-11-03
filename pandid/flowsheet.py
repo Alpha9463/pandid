@@ -547,8 +547,8 @@ class Flowsheet:
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
-        # Controllers hung off an actuator by the last placement, and
-        # whether hanging is refused while route() places again.
+        # Controllers hung off an actuator since the last layout(), and
+        # whether hanging is refused while route() lays out again.
         self._hung: set[int] = set()
         self._hang_refused = False
         # Engine of the last layout(), for laying out again.
@@ -2033,6 +2033,7 @@ class Flowsheet:
         if engine is None:
             engine = default_layout_engine
         self._layout_engine = engine
+        self._hung = set()
         engine.layout(self)
         self._layout_stale = False
         self._route_stale = True
@@ -2055,6 +2056,8 @@ class Flowsheet:
         ValueError
             If the default router meets a frame that is not finite.
         """
+        # Routes drawn by hand before this call.
+        authored = {id(s) for s in self.streams if s.route is not None and s.route.manual}
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         if router is None:
@@ -2081,12 +2084,16 @@ class Flowsheet:
 
             self._hang_refused = True
             try:
-                # Start the balloons afresh, as on a sheet never laid out.
+                # Start the balloons and routes afresh, as on a sheet never
+                # laid out.
                 for u in self.units:
                     if is_control(u):
                         u.frame = None
                         if hasattr(u, "tap"):
                             u.tap = None
+                for s in self.streams:
+                    if id(s) not in authored:
+                        s.route = None
                 self.layout(self._layout_engine)
                 settle()
             finally:
