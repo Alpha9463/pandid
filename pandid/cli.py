@@ -128,9 +128,7 @@ def _suggest(value: str, candidates: Sequence[str]) -> str:
     return f" (did you mean {match!r}?)"
 
 
-# --------------------------------------------------------------
 # Subcommands
-# --------------------------------------------------------------
 
 
 def _load(path: Path) -> Flowsheet:
@@ -363,9 +361,7 @@ def _symbols(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-# --------------------------------------------------------------
 # The command line itself
-# --------------------------------------------------------------
 
 
 def _diagram_option(command: argparse.ArgumentParser, help: str) -> None:

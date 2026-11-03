@@ -2052,9 +2052,7 @@ _LABEL_SIDE = {
 }
 
 
-# ----------------------------------------------------------------
 # The pneumatic cross-hatch
-# ----------------------------------------------------------------
 
 # Hatch stroke angle on a horizontal run, in clockwise degrees, and
 # stroke length.
@@ -2176,9 +2174,7 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
     return out
 
 
-# ----------------------------------------------------------------
 # Furniture, as draw.io tables
-# ----------------------------------------------------------------
 
 # Table styles. The table rules its own row and column lines; rows and
 # cells draw no edges.

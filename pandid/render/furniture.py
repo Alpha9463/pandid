@@ -288,9 +288,7 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black"):
             f' text-anchor="{anchor}"{wt} fill="{fill}">{escaped(s)}</text>')
 
 
-# ----------------------------------------------------------------
 # Generic titled box (Annotation): title bar over rows
-# ----------------------------------------------------------------
 
 # Rule weights of a titled box and the line under its title.
 _BOX_RULE = 1.5
@@ -450,9 +448,7 @@ def draw_annotation(ann, x: float, y: float, *,
     return L
 
 
-# ----------------------------------------------------------------
 # Generic bordered table (TableBox)
-# ----------------------------------------------------------------
 
 def _table_layout(tb):
     """Return ``(size, ncol, col_w, row_h)`` for a TableBox.
@@ -562,10 +558,8 @@ def draw_table(tb, x: float, y: float) -> list[str]:
     return L
 
 
-# ----------------------------------------------------------------
 # Stream property table (a heading row of line numbers, a row per
 # property, section headings where the flowsheet asks for them)
-# ----------------------------------------------------------------
 
 # Clearance added to the widest text in a stream-table column.
 _STREAM_GUTTER = 14.0
@@ -1220,10 +1214,8 @@ def draw_stream_table(table: StreamTable, left: float, top: float, *,
     return out
 
 
-# ----------------------------------------------------------------
 # Engineering title strip (revision table | company | client/project,
 # title, status, drawing number / scale / date / rev)
-# ----------------------------------------------------------------
 
 # Strip rectangle weight, equal to the frame's.
 _STRIP_RULE = 2.0
@@ -1804,10 +1796,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     return L
 
 
-# ----------------------------------------------------------------
 # Zone-ruled drawing border: letters A.. top down, numerals 1.. left
 # to right (ISO 5457 4.4).
-# ----------------------------------------------------------------
 
 #: Width of the lettered band between drawing frame and sheet border.
 ZONE_BAND = 16.0
@@ -1937,9 +1927,7 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
     return L, z.outer
 
 
-# ----------------------------------------------------------------
 # The sheet dock: which rectangle each piece of furniture is given
-# ----------------------------------------------------------------
 
 #: Clearances: drawing to frame, between boxes in one stack, and
 #: between left and right stacks sharing a band.

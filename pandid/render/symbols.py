@@ -303,10 +303,8 @@ class PortSeries:
         return fixed, min(ends), max(ends)
 
 
-# ----------------------------------------------------------------
 # Supplementary symbols: ISO 10628-2 group 26-29 parts composed onto a
 # body (clause 5).
-# ----------------------------------------------------------------
 
 #: ISO 10628-2 Table 1 subject groups whose items may be overlaid.
 PART_GROUPS = {
@@ -663,11 +661,9 @@ class Symbol:
         return hits
 
 
-# ----------------------------------------------------------------
 # Belt conveyor, adapted from the draw.io P&ID stencil "Drier (Roller
 # Conveyor Belt)" (Apache-2.0; see NOTICE): the housing is dropped and
 # the run and roller size are parameters.
-# ----------------------------------------------------------------
 
 #: Default roller radius.
 CONVEYOR_ROLLER = 10.0
@@ -796,9 +792,7 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
     )
 
 
-# ----------------------------------------------------------------
 # Screw conveyor, ISO 10628-2 item 18.5 X8063, built to its length.
-# ----------------------------------------------------------------
 
 #: Grid module of item 18.5, in drawing units.
 SCREW_MODULE = 5.0
@@ -928,9 +922,7 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
     )
 
 
-# ----------------------------------------------------------------
 # Bucket elevator, ISO 10628-2 items 18.7 X8065 and 18.8 X8066.
-# ----------------------------------------------------------------
 
 # Grid module of both elevator rows, in drawing units.
 _LIFT_M = 10.0
@@ -979,9 +971,7 @@ def _lift_chute(x: float, y: float, dx: float, dy: float) -> str:
             f'fill="none" stroke="#111" stroke-width="2"/>')
 
 
-# ----------------------------------------------------------------
 # Block flow diagram box, sized to its connections.
-# ----------------------------------------------------------------
 
 #: Spacing of a block's connections on one face.
 BLOCK_PITCH = 2.5 * ARROWHEAD
@@ -1288,9 +1278,7 @@ def _built_to_size(kind: str, variant: str) -> "Callable[..., Symbol] | None":
     return _BUILT_TO_SIZE.get((kind, variant)) or _BUILT_TO_SIZE.get((kind, None))
 
 
-# ----------------------------------------------------------------
 # Normally closed devices.
-# ----------------------------------------------------------------
 
 #: Valve variants whose body is darkened when normally closed.
 NC_DARKENS = frozenset({
@@ -1302,9 +1290,7 @@ NC_DARKENS = frozenset({
 #: (PIP PIC001 4.2.2.10).
 NC_FORBIDDEN = frozenset({"control", "regulator", "relief", "psv"})
 
-# ----------------------------------------------------------------
 # Valve body and actuator pairings.
-# ----------------------------------------------------------------
 
 #: ``(body, actuator)`` to the variant whose artwork draws the pair.
 ACTUATED: dict[tuple[str, str], str] = {
@@ -1363,9 +1349,7 @@ def actuated_variant(body: str, actuator: str) -> str:
     )
 
 
-# ----------------------------------------------------------------
 # Fail position: where an actuated valve goes on loss of power.
-# ----------------------------------------------------------------
 
 #: Fail positions and the letters drawn for them (ANSI/ISA-5.1-2009
 #: Table 5.4.4 Method B).
@@ -1508,9 +1492,7 @@ def darkened(sym: Symbol) -> Symbol:
     )
 
 
-# ----------------------------------------------------------------
 # Expander: a reducer piped the other way round.
-# ----------------------------------------------------------------
 
 # Face after a left-to-right mirror.
 _FLIPPED_FACE = {"W": "E", "E": "W", "N": "N", "S": "S"}
@@ -1596,9 +1578,7 @@ def expander(sym: Symbol) -> Symbol:
     )
 
 
-# ----------------------------------------------------------------
 # Composition: a body carrying its parts.
-# ----------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -2323,9 +2303,7 @@ _Z_ELEVATOR = Symbol(
 )
 
 
-# ----------------------------------------------------------------
 # ISO 10628-2 group 19: feeders, and item 19.5, the spray nozzle.
-# ----------------------------------------------------------------
 
 # The 4 M circle of items 19.1 C2056 and 19.2 X8067.
 _FEEDER_CIRCLE = 40.0
@@ -2452,10 +2430,8 @@ _SPRAY_NOZZLE = Symbol(
 )
 
 
-# ----------------------------------------------------------------
 # ISO 10628-2 group 12: mixers and kneaders. Item 12.2 is the vendored
 # fitting/static_mixer.
-# ----------------------------------------------------------------
 
 def _mix_element(x0: float) -> str:
     """Return one "N" mixing element of items 12.1-12.3.
@@ -2528,9 +2504,7 @@ _KNEADER = Symbol(
 )
 
 
-# ----------------------------------------------------------------
 # ISO 10628-2 item 24.15, registered 2181: the steam trap.
-# ----------------------------------------------------------------
 
 #: Steam trap body diameter.
 TRAP_BODY_D = 40.0
@@ -2585,9 +2559,7 @@ _STEAM_TRAP = Symbol(
 )
 
 
-# ----------------------------------------------------------------
 # ISO 10628-2 group 7: screening devices, sieves and rakes.
-# ----------------------------------------------------------------
 
 # Group-7 outline, from item 7.1 (all items but 7.7).
 _SCREEN_W, _SCREEN_H = 60.0, 90.0
@@ -2750,9 +2722,7 @@ _REEL_BODY = Symbol(
 )
 
 
-# ----------------------------------------------------------------
 # Evaporators and kilns: original drawings with no registration number.
-# ----------------------------------------------------------------
 
 # Detail weight (ISO 10628-1 5.3.1 c) and outline weight (5.3.1 b).
 _DETAIL = 'fill="none" stroke="#111" stroke-width="1"'

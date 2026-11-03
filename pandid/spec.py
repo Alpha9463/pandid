@@ -113,9 +113,7 @@ class SpecError(ValueError):
     """Error for a flowsheet spec that cannot be read or written."""
 
 
-# ----------------------------------------------------------------
 # Primitive validation
-# ----------------------------------------------------------------
 
 
 def _mapping(value: Any, where: str) -> Mapping[str, Any]:
@@ -554,9 +552,7 @@ def _read_fields(data: Mapping[str, Any], where: str,
             for keys, read in readers for key in keys if key in data}
 
 
-# --------------------------------------------------------------
 # The equipment registry
-# --------------------------------------------------------------
 
 
 def _snake(name: str) -> str:
@@ -630,9 +626,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     return _CLASSES[name]
 
 
-# --------------------------------------------------------------
 # Reading: spec -> Flowsheet
-# --------------------------------------------------------------
 
 _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
@@ -2101,9 +2095,7 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
         raise _fail_from(e, where) from None  # e.g. a bad align=
 
 
-# --------------------------------------------------------------
 # Writing: Flowsheet -> spec
-# --------------------------------------------------------------
 
 _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
 
@@ -2620,9 +2612,7 @@ def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
     return entry
 
 
-# --------------------------------------------------------------
 # File loaders
-# --------------------------------------------------------------
 
 
 def from_json(path: str | Path) -> Flowsheet:
