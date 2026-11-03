@@ -21,37 +21,115 @@ EXIT_MISSING_DEPENDENCY = 3
 
 
 class _Failure(Exception):
-    """A user-facing failure and the exit code to report it under."""
+    """Hold a user-facing failure and the exit code to report it under.
+
+    Parameters
+    ----------
+    message : str
+        Error message.
+    code : int, default=EXIT_FAILED
+        Exit code.
+
+    Attributes
+    ----------
+    code : int
+        Exit code.
+    """
 
     def __init__(self, message: str, code: int = EXIT_FAILED) -> None:
+        """Store the message and the exit code.
+
+        Parameters
+        ----------
+        message : str
+            Error message.
+        code : int, default=EXIT_FAILED
+            Exit code.
+        """
         super().__init__(message)
         self.code = code
 
 
 def _note(message: str) -> None:
-    """Flush stdout, then write a line to stderr."""
+    """Flush stdout, then write a line to stderr.
+
+    Parameters
+    ----------
+    message : str
+        Line to write.
+    """
     sys.stdout.flush()
     print(message, file=sys.stderr)
 
 
 def _fail(message: str, code: int) -> int:
-    """Report an error on stderr and return its exit code."""
+    """Report an error on stderr and return its exit code.
+
+    Parameters
+    ----------
+    message : str
+        Error message.
+    code : int
+        Exit code.
+
+    Returns
+    -------
+    int
+        ``code``.
+    """
     _note(f"error: {message}")
     return code
 
 
 def _plural(count: int, noun: str) -> str:
-    """Return a count with its noun, adding ``s`` when not 1."""
+    """Return a count with its noun, adding ``s`` when not 1.
+
+    Parameters
+    ----------
+    count : int
+        Count.
+    noun : str
+        Singular noun.
+
+    Returns
+    -------
+    str
+        Count and noun.
+    """
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
 def _fold(name: str) -> str:
-    """Fold a name to lower case without underscores or hyphens."""
+    """Fold a name to lower case without underscores or hyphens.
+
+    Parameters
+    ----------
+    name : str
+        Name to fold.
+
+    Returns
+    -------
+    str
+        Folded name.
+    """
     return name.lower().replace("_", "").replace("-", "")
 
 
 def _suggest(value: str, candidates: Sequence[str]) -> str:
-    """Return a "did you mean" hint, or an empty string."""
+    """Return a "did you mean" hint, or an empty string.
+
+    Parameters
+    ----------
+    value : str
+        Name the user typed.
+    candidates : Sequence[str]
+        Valid names.
+
+    Returns
+    -------
+    str
+        Hint naming the closest candidate, or ``""``.
+    """
     close = difflib.get_close_matches(_fold(value), [_fold(c) for c in candidates], n=1, cutoff=0.6)
     if not close:
         return ""
@@ -65,7 +143,29 @@ def _suggest(value: str, candidates: Sequence[str]) -> str:
 
 
 def _load(path: Path) -> Flowsheet:
-    """Read a spec file, choosing the reader from its extension."""
+    """Read a spec file, choosing the reader from its extension.
+
+    Parameters
+    ----------
+    path : Path
+        Spec file (``.yaml``, ``.yml`` or ``.json``).
+
+    Returns
+    -------
+    Flowsheet
+        Flowsheet the spec declares.
+
+    Raises
+    ------
+    _Failure
+        If the extension is not supported.
+    OSError
+        If the file cannot be opened.
+    ImportError
+        If PyYAML is needed and not installed.
+    SpecError
+        If the spec is invalid.
+    """
     suffix = path.suffix.lower()
     if suffix not in (".yaml", ".yml", ".json"):
         named = repr(suffix) if suffix else "a file with no extension"
@@ -80,7 +180,18 @@ def _load(path: Path) -> Flowsheet:
 
 
 def _draw(args: argparse.Namespace) -> int:
-    """Render a spec and report any warnings."""
+    """Render a spec and report any warnings.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed ``draw`` arguments.
+
+    Returns
+    -------
+    int
+        Exit code.
+    """
     fs = _load(args.spec)
     out = args.output if args.output is not None else args.spec.with_suffix(".svg")
     fs.render(
@@ -108,7 +219,18 @@ def _draw(args: argparse.Namespace) -> int:
 
 
 def _validate(args: argparse.Namespace) -> int:
-    """Lay out and route a spec, then print its validation findings."""
+    """Lay out and route a spec, then print its validation findings.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed ``validate`` arguments.
+
+    Returns
+    -------
+    int
+        Exit code: 1 if any finding is an error, else 0.
+    """
     fs = _load(args.spec)
     # The geometric checks measure the routed frames.
     fs.route()
@@ -133,6 +255,11 @@ def _catalogue() -> list[tuple[str, str, list[str]]]:
 
     A kind shared by several classes is listed once, under the class
     ``spec._ALIASES`` resolves it to.
+
+    Returns
+    -------
+    list[tuple[str, str, list[str]]]
+        Rows sorted by class name.
     """
     from pandid.render.symbols import default_registry
 
@@ -148,7 +275,24 @@ def _catalogue() -> list[tuple[str, str, list[str]]]:
 
 
 def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
-    """Format a label and its items, wrapped under a hanging indent."""
+    """Format a label and its items, wrapped under a hanging indent.
+
+    Parameters
+    ----------
+    label : str
+        Row label.
+    items : Sequence[str]
+        Items to list after the label.
+    pad : int
+        Width of the label column.
+    width : int
+        Maximum line width.
+
+    Returns
+    -------
+    list[str]
+        Output lines.
+    """
     lines = [label.ljust(pad)]
     for item in items:
         if len(lines[-1]) > pad and len(lines[-1]) + len(item) > width:
@@ -158,7 +302,23 @@ def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
 
 
 def _symbols(args: argparse.Namespace) -> int:
-    """Print the symbol catalogue, optionally for one kind."""
+    """Print the symbol catalogue, optionally for one kind.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed ``symbols`` arguments.
+
+    Returns
+    -------
+    int
+        Exit code.
+
+    Raises
+    ------
+    _Failure
+        If ``--kind`` names no kind (exit 2).
+    """
     catalogue = _catalogue()
     rows = catalogue
     if args.kind is not None:
@@ -194,13 +354,27 @@ def _symbols(args: argparse.Namespace) -> int:
 
 
 def _diagram_option(command: argparse.ArgumentParser, help: str) -> None:
-    """Add the shared ``--diagram`` option to a command."""
+    """Add the shared ``--diagram`` option to a command.
+
+    Parameters
+    ----------
+    command : argparse.ArgumentParser
+        Subcommand parser.
+    help : str
+        Help text for the option.
+    """
     command.add_argument("--diagram", choices=("pfd", "p&id", "bfd"), default="pfd",
                          help=help)
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for every subcommand."""
+    """Build the argument parser for every subcommand.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Parser for the ``pandid`` command.
+    """
     parser = argparse.ArgumentParser(
         prog="pandid",
         description="Draw a P&ID or process flow diagram from a flowsheet spec file.",

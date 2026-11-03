@@ -71,12 +71,34 @@ class TitleBlock:
 
 
 def _drawn_text(value: Any) -> str:
-    """Return a field value as drawn text; ``None`` is blank."""
+    """Return a field value as drawn text; ``None`` is blank.
+
+    Parameters
+    ----------
+    value : Any
+        Field value.
+
+    Returns
+    -------
+    str
+        ``""`` for ``None``, else ``str(value)``.
+    """
     return "" if value is None else str(value)
 
 
 def _drawn_rows(rows: Any) -> list:
-    """Return box rows with every line and cell as drawn text."""
+    """Return box rows with every line and cell as drawn text.
+
+    Parameters
+    ----------
+    rows : Iterable
+        Lines, or tuples or lists of cells.
+
+    Returns
+    -------
+    list
+        Rows of the same shapes, as text.
+    """
     # shortcut: a row appended to .rows in place is not converted;
     # convert at draw time if needed.
     return [tuple(map(_drawn_text, r)) if isinstance(r, tuple)
@@ -85,7 +107,18 @@ def _drawn_rows(rows: Any) -> list:
 
 
 def _drawn_text_fields(cls: type) -> frozenset[str]:
-    """Return the names of a dataclass's string-default fields."""
+    """Return the names of a dataclass's string-default fields.
+
+    Parameters
+    ----------
+    cls : type
+        Dataclass.
+
+    Returns
+    -------
+    frozenset[str]
+        Field names.
+    """
     return frozenset(f.name for f in fields(cls) if isinstance(f.default, str))
 
 
@@ -98,7 +131,25 @@ _ALIGN = {
 
 
 def _resolve_align(align, default):
-    """Return the alignment, checked against the docking positions."""
+    """Return the alignment, checked against the docking positions.
+
+    Parameters
+    ----------
+    align : str or None
+        Stated alignment, or ``None`` for the default.
+    default : str
+        Alignment used when ``align`` is ``None``.
+
+    Returns
+    -------
+    str
+        Docking position.
+
+    Raises
+    ------
+    ValueError
+        If the alignment is not a docking position.
+    """
     value = default if align is None else align
     if value not in _ALIGN:
         raise ValueError(f"align must be one of {sorted(_ALIGN)}, got {value!r}")
@@ -110,7 +161,23 @@ _COL_ALIGN = {"l", "c", "r"}
 
 
 def _resolve_col_align(col_align):
-    """Return ``col_align`` after checking each entry."""
+    """Return ``col_align`` after checking each entry.
+
+    Parameters
+    ----------
+    col_align : list[str] or None
+        Column alignments.
+
+    Returns
+    -------
+    list[str] or None
+        The same alignments.
+
+    Raises
+    ------
+    ValueError
+        If an entry is not ``"l"``, ``"c"`` or ``"r"``.
+    """
     if col_align is None:
         return None
     for i, a in enumerate(col_align):
@@ -126,7 +193,20 @@ class _Box:
     """Field checks shared by the annotation and table boxes."""
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Set a field, storing text as drawn and checking numbers."""
+        """Set a field, storing text as drawn and checking numbers.
+
+        Parameters
+        ----------
+        name : str
+            Field name.
+        value : Any
+            New value.
+
+        Raises
+        ------
+        TypeError
+            If a numeric field or ``position`` entry is not a number.
+        """
         where = f"{type(self).__name__}.{name}"
         if name == "rows":
             value = _drawn_rows(value)
@@ -167,8 +247,7 @@ class Annotation(_Box):
     Raises
     ------
     TypeError
-        If ``margin``, ``width``, ``font_size`` or a ``position``
-        coordinate is not a number.
+        If a numeric field or ``position`` coordinate is not a number.
     ValueError
         If ``align`` is not a docking position.
     """
@@ -181,7 +260,13 @@ class Annotation(_Box):
     font_size: float = 11.0
 
     def __post_init__(self):
-        """Check the alignment."""
+        """Check the alignment.
+
+        Raises
+        ------
+        ValueError
+            If ``align`` is not a docking position.
+        """
         self.align = _resolve_align(self.align, "top-right")
 
 
@@ -211,8 +296,7 @@ class TableBox(_Box):
     Raises
     ------
     TypeError
-        If ``margin``, ``font_size`` or a ``position`` coordinate is
-        not a number.
+        If a numeric field or ``position`` coordinate is not a number.
     ValueError
         If ``align`` or a ``col_align`` entry is invalid.
     """
@@ -226,7 +310,13 @@ class TableBox(_Box):
     col_align: list[str] | None = None
 
     def __post_init__(self):
-        """Check the alignment and column alignments."""
+        """Check the alignment and column alignments.
+
+        Raises
+        ------
+        ValueError
+            If ``align`` or a ``col_align`` entry is invalid.
+        """
         self.align = _resolve_align(self.align, "bottom-right")
         self.col_align = _resolve_col_align(self.col_align)
 
@@ -246,9 +336,8 @@ class StreamTableOptions:
     sheet_subtitle : str
         Subtitle of the table's own sheet.
     sheet_drawing_number : str
-        Drawing number of the table's own sheet. A blank one adds
-        :data:`TABLE_SHEET_SUFFIX` to the diagram's number, and stays
-        blank if the diagram has none.
+        Table sheet's number; blank uses the diagram's number plus
+        :data:`TABLE_SHEET_SUFFIX`, or blank if the diagram has none.
     """
 
     font_size: float | None = None
@@ -303,7 +392,18 @@ def table_sheet_block(block: "TitleBlock | None",
 
 
 def _same_number(a: str, b: str) -> bool:
-    """Compare two drawing numbers, stripped and case-folded."""
+    """Compare two drawing numbers, stripped and case-folded.
+
+    Parameters
+    ----------
+    a, b : str
+        Drawing numbers.
+
+    Returns
+    -------
+    bool
+        Whether they name the same drawing.
+    """
     return a.strip().casefold() == b.strip().casefold()
 
 
@@ -323,7 +423,23 @@ _ENCLOSURE_MEANT = {
 
 
 def _resolve_enclosure(shape):
-    """Return an enclosure name after checking it."""
+    """Return an enclosure name after checking it.
+
+    Parameters
+    ----------
+    shape : str
+        Stated enclosure.
+
+    Returns
+    -------
+    str
+        The same enclosure.
+
+    Raises
+    ------
+    ValueError
+        If ``shape`` is not an enclosure.
+    """
     if shape not in _ENCLOSURES:
         meant = (_ENCLOSURE_MEANT.get(shape.strip().lower())
                  if isinstance(shape, str) else None)
@@ -353,7 +469,13 @@ class StreamLabelOptions:
     enclosure: Literal["none", "diamond", "circle", "box"] = "none"
 
     def __post_init__(self):
-        """Check the enclosure."""
+        """Check the enclosure.
+
+        Raises
+        ------
+        ValueError
+            If ``enclosure`` is not one of the four shapes.
+        """
         self.enclosure = _resolve_enclosure(self.enclosure)
 
 
@@ -421,7 +543,18 @@ _KIND_LABELS = {
 
 
 def _describe(unit):
-    """Return a unit's ``description``, else its kind's name."""
+    """Return a unit's ``description``, else its kind's name.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to describe.
+
+    Returns
+    -------
+    str
+        Equipment-list description.
+    """
     return (getattr(unit, "description", "")
             or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
 
