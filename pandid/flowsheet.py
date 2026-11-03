@@ -134,7 +134,7 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
     Raises
     ------
     ValueError
-        If the scheme names an unknown component or yields nothing.
+        If the scheme is invalid or yields no line number.
     """
     if callable(scheme):
         return scheme(stream)
@@ -384,7 +384,7 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
     Raises
     ------
     ValueError
-        If the ports mix signal and process roles, or the kind differs.
+        If the ports mix roles, or the kind is wrong for their role.
     """
     signal_ends = [p for p in (src, dst) if p.role == "signal"]
     if len(signal_ends) == 1:
@@ -429,7 +429,7 @@ def _whole_number(value: Any, name: str) -> int:
     Raises
     ------
     TypeError
-        If ``value`` is not an integer.
+        If ``value`` is a bool or not an integer.
     """
     if isinstance(value, bool) or not isinstance(value, Integral):
         raise TypeError(
@@ -501,7 +501,7 @@ class Flowsheet:
     Raises
     ------
     TypeError
-        If a number start is not an integer.
+        If a number start is a bool or not an integer.
     ValueError
         If ``stream_naming_scheme`` cannot format a stream number.
     """
@@ -636,7 +636,7 @@ class Flowsheet:
         Raises
         ------
         TypeError
-            If ``value`` is not an integer.
+            If ``value`` is a bool or not an integer.
         """
         self._stream_number_start = _whole_number(value, "stream_number_start")
 
@@ -663,7 +663,7 @@ class Flowsheet:
         Raises
         ------
         TypeError
-            If ``value`` is not an integer.
+            If ``value`` is a bool or not an integer.
         """
         self._line_number_start = _whole_number(value, "line_number_start")
 
@@ -690,7 +690,7 @@ class Flowsheet:
         Raises
         ------
         TypeError
-            If ``value`` is not an integer.
+            If ``value`` is a bool or not an integer.
         """
         self._loop_number_start = _whole_number(value, "loop_number_start")
 
@@ -850,8 +850,10 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If ``number`` is neither text nor a whole number.
         ValueError
-            If the variable is invalid, or the loop is already declared.
+            If the variable or number is invalid or the loop exists.
         """
         loop, allocated = self._new_loop(variable, number)
         self._register_loop(loop, allocated=allocated)
@@ -875,8 +877,10 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If ``number`` is neither text nor a whole number.
         ValueError
-            If the variable is invalid, or the loop is already declared.
+            If the variable or number is invalid or the loop exists.
         """
         from pandid.loops import Loop
 
@@ -946,7 +950,7 @@ class Flowsheet:
         type : str
             Functional letters, such as ``"FT"``.
         number : str, int, Loop or ControlLoop, default=""
-            Loop number, or a loop whose variable ``type`` must match.
+            Loop number, or a loop; ``type`` opens with its variable.
         sensing : Stream or Unit or None, optional
             Host the balloon reads from.
         acting_on : Stream or Unit or None, optional
@@ -971,8 +975,11 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If ``number`` or a ``kwargs`` size has the wrong type.
         ValueError
-            If an argument is invalid or a host is on another sheet.
+            If an argument is invalid, the tag clashes, or a host is
+            off this sheet.
 
         Examples
         --------
@@ -1029,6 +1036,8 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If ``number`` or a ``kwargs`` size has the wrong type.
         ValueError
             If the letters, variant, anchors or placement are invalid.
         """
@@ -1090,14 +1099,14 @@ class Flowsheet:
         Parameters
         ----------
         stream : Stream
-            Material segment entering the device.
+            Material segment entering the device or station.
         at : float
             Fraction of the whole run, strictly between 0 and 1.
 
         Raises
         ------
         ValueError
-            If ``at`` is out of range, or the segment is ineligible.
+            If ``at`` is out of range or ``stream`` is unfit or foreign.
         """
         self._refuse_foreign("stream", stream)
         if (isinstance(at, bool) or not isinstance(at, (int, float))
@@ -1194,8 +1203,11 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If a ``kwargs`` size is not a number.
         ValueError
-            If the element is off this sheet, has a balloon, or no tag.
+            If the element is off this sheet, has a balloon or no tag,
+            or ``at`` or ``offset`` is invalid.
         """
         from pandid.units import Instrument
 
@@ -1240,9 +1252,10 @@ class Flowsheet:
         """Add a control loop around a final control element.
 
         Adds a transmitter and a controller, and connects the
-        measurement and output signals to the final element, which must
-        be on this sheet. Letters follow from the variable (``"F"``
-        gives ``FT`` and ``FIC``) unless whole codes are given.
+        transmitter to the controller and the controller to the final
+        element, which must be on this sheet. Letters follow from the
+        variable (``"F"`` gives ``FT`` and ``FIC``) unless whole codes
+        are given.
 
         Parameters
         ----------
@@ -1278,6 +1291,8 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If ``number`` is neither text nor a whole number.
         ValueError
             If an argument is invalid or belongs to another sheet.
         """
@@ -1404,10 +1419,12 @@ class Flowsheet:
 
         Raises
         ------
+        TypeError
+            If ``x``, ``y`` or a spacing is not a number.
         ValueError
-            If ``drains`` or ``bypass_over`` is invalid, ``bypass`` has
-            no ``isolation``, ``x`` and ``y`` or the run options lack
-            each other, ``at`` lacks ``on``, or ``on`` cannot take it.
+            If ``drains``, ``bypass_over`` or a member tag is invalid,
+            ``bypass`` lacks ``isolation``, ``x`` and ``y`` or the run
+            options come apart, or ``on`` and ``at`` cannot be used.
         """
         # Undo every member if any step raises.
         with self._unchanged_if_it_raises():
@@ -1701,7 +1718,7 @@ class Flowsheet:
             One of :data:`~pandid.streams.STREAM_KINDS`; ``None`` infers
             it from the ports.
         name : str or None, optional
-            Fixed stream name; ``None`` numbers it automatically.
+            Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False
             Prefer this stream as a cycle's return line.
         size, schedule, service : str or float, optional
@@ -1721,7 +1738,8 @@ class Flowsheet:
         TypeError
             If an end is neither a port nor a unit.
         ValueError
-            If an argument is invalid or a port is already connected.
+            If the kind, ports, ``ends`` or numbering is invalid, or a
+            port is taken and its unit has no other like it.
         """
         # Restore the sheet and both end units if anything raises.
         with self._unchanged_if_it_raises((self, *_port_bearers(src, dst))):
@@ -1850,6 +1868,8 @@ class Flowsheet:
         ------
         SpecError
             If an entry is invalid.
+        ValueError
+            If ``stream_naming_scheme`` cannot format a stream number.
         """
         from pandid.spec import from_dict as _from_dict
         return _from_dict(spec)
@@ -1870,8 +1890,12 @@ class Flowsheet:
 
         Raises
         ------
+        OSError
+            If the file cannot be read.
         SpecError
             If the file is not valid JSON or the spec is invalid.
+        ValueError
+            If it is not UTF-8 or the stream naming scheme is invalid.
         """
         from pandid.spec import from_json as _from_json
         return _from_json(path)
@@ -1894,8 +1918,12 @@ class Flowsheet:
         ------
         ImportError
             If PyYAML is not installed.
+        OSError
+            If the file cannot be read.
         SpecError
             If the file is not valid YAML or the spec is invalid.
+        ValueError
+            If it is not UTF-8 or the stream naming scheme is invalid.
         """
         from pandid.spec import from_yaml as _from_yaml
         return _from_yaml(path)
@@ -1910,6 +1938,13 @@ class Flowsheet:
         -------
         dict
             Spec in the format :mod:`pandid.spec` describes.
+
+        Raises
+        ------
+        SpecError
+            If a scheme is callable or a unit class is not built in.
+        ValueError
+            If the stream-label enclosure is unknown.
         """
         from pandid.spec import to_dict as _to_dict
         return _to_dict(self)
@@ -1943,6 +1978,11 @@ class Flowsheet:
         ----------
         router : object or None, optional
             Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
         """
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
@@ -2031,7 +2071,7 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If an argument is invalid or validation finds an error.
+            If an argument or setting is invalid, or validation fails.
         """
         from pandid.document import _resolve_enclosure
         from pandid.render.svg import (check_render_arguments, draws_arrowheads,
@@ -2121,7 +2161,7 @@ class Flowsheet:
         return runs
 
     def renumber_streams(self) -> None:
-        """Assign stream and line numbers to every stream.
+        """Assign stream names and line sequences, keeping stated ones.
 
         A number carries through inline devices and a tee's run unless
         the unit sets ``new_line_number``. Material runs come first,
@@ -2218,7 +2258,7 @@ class Flowsheet:
             elif port is outlet:
                 peer = inlet
             else:
-                continue  # a tee branch is not part of the run
+                continue  # skip a tee branch
             if peer is None or peer.stream is None or peer.stream is stream:
                 continue
             if peer.stream.kind != "material":
@@ -2231,7 +2271,7 @@ class Flowsheet:
         return found
 
     def _name_group(self, group: "list[Stream]", place: int) -> str:
-        """Name one group's segments for its place in the sequence.
+        """Number and name one group's segments for its place.
 
         Parameters
         ----------
@@ -2300,13 +2340,18 @@ class Flowsheet:
         Parameters
         ----------
         diagram : str or None, optional
-            ``"pfd"``, ``"p&id"`` or ``"bfd"``; ``None`` uses the last
-            render's type, or ``"pfd"``.
+            ``"pfd"``, ``"p&id"`` (or ``"pid"``) or ``"bfd"``; ``None``
+            uses the last render's type, or ``"pfd"``.
 
         Returns
         -------
         list[Issue]
             Findings.
+
+        Raises
+        ------
+        ValueError
+            If ``diagram`` is unknown.
         """
         from pandid.render.svg import draws_arrowheads, tabulates_boundary_flows
         from pandid.validate import validate as _validate
@@ -2359,7 +2404,8 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If an argument is invalid or validation finds an error.
+            If an argument is invalid, ``debug`` comes with a table
+            sheet, the page is too small, or validation finds an error.
         """
         with self._unchanged_if_it_raises():
             self._prepare_to_draw(
@@ -2393,7 +2439,7 @@ class Flowsheet:
         page_size : str or None, optional
             As for :meth:`to_svg`; ``None`` leaves the canvas unbounded.
         border : str or None, optional
-            ``"zone"`` draws the frame and zone band.
+            ``"none"``, or ``"zone"`` for the frame and zone band.
         connections : str or None, optional
             As for :meth:`to_svg`.
         jump_direction : str, default="vertical"
@@ -2413,7 +2459,8 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If an argument is invalid or validation finds an error.
+            If an argument is invalid, the page is too small, or
+            validation finds an error.
         """
         with self._unchanged_if_it_raises():
             self._prepare_to_draw(
@@ -2467,9 +2514,12 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If an argument is invalid or validation finds an error.
+            If the extension or an argument is invalid, ``debug`` is set
+            for ``.drawio``, the page is too small, or validation fails.
         ImportError
             If PDF or PNG output is requested without ``pandid[pdf]``.
+        RuntimeError
+            If the SVG cannot be drawn faithfully as PDF or PNG.
         OSError
             If the file cannot be written.
         """
@@ -2520,6 +2570,11 @@ class Flowsheet:
         -------
         str
             SVG document.
+
+        Raises
+        ------
+        ValueError
+            If numbering or validation fails.
         """
         return self.to_svg()
 
@@ -2560,7 +2615,8 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If an argument is invalid or validation finds an error.
+            If an argument is invalid, the page is too small, or
+            validation finds an error.
         """
         # Guard the whole call, including the preview.
         with self._unchanged_if_it_raises():
