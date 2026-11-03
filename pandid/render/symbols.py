@@ -28,8 +28,7 @@ _COINCIDENT = 0.5
 #: Side of a process-line arrowhead, in drawing units.
 ARROWHEAD = 12.0
 
-#: Gap between two arrowheads side by side: twice the main flow line
-#: weight (ISO 128-20 4.4).
+#: Gap between two arrowheads side by side (ISO 128-20 4.4).
 MIN_HEAD_CLEARANCE = 2 * LineWeight.MAIN_FLOW.width
 
 #: Smallest pitch between two nozzles that both carry an arrowhead.
@@ -50,6 +49,11 @@ def wears_arrowhead(stream, registry) -> bool:
     -------
     bool
         False for a signal or a stream ending at a bare run.
+
+    Raises
+    ------
+    ValueError
+        If the destination unit's symbol cannot be resolved.
     """
     if stream.kind in SIGNAL_KINDS:
         return False
@@ -195,6 +199,10 @@ class PortSeries:
     ----------
     prefix : str
         Member names are ``prefix`` plus a 1-based index.
+    face : str
+        Face the family is on: ``"N"``, ``"S"``, ``"E"`` or ``"W"``.
+    pitch : float
+        Preferred spacing between members.
     extent : float
         Largest fraction of the face the run may span.
     at : float or None
@@ -317,7 +325,7 @@ class IsoPart:
     Attributes
     ----------
     group : int
-        Table 1 subject group.
+        Table 1 subject group, 26 to 29; 20 only for item 20.6.
     item : str
         Item number, such as ``"27.3"``.
     reg : str
@@ -1177,7 +1185,11 @@ def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
     Raises
     ------
     ValueError
-        If a role has no placement on a face, or a face has no wall.
+        If the variant or a part is not registered.
+    ValueError
+        If a role has no placement on a requested face.
+    ValueError
+        If two or more nozzles share a face with no wall.
     """
     base = default_registry.composed(kind, variant, overlays)
     ports = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
