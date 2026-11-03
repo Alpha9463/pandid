@@ -990,12 +990,11 @@ BLOCK_PITCH = 2.5 * ARROWHEAD
 BLOCK_MIN_WIDTH = 120.0
 BLOCK_MIN_HEIGHT = 80.0
 
-# Width of one narrow tag character, and the padding.
-_LABEL_EM = 8.0
-_LABEL_PAD = 30.0
+# Font size of tags, instrument letters and flag names.
+_TAG_TYPE = 12.0
 
-# Width of a wide (CJK or fullwidth) character: a full em.
-_LABEL_EM_WIDE = 12.0
+# Padding a tag needs inside a box.
+_LABEL_PAD = 30.0
 
 
 def label_span(text: str) -> float:
@@ -1011,11 +1010,9 @@ def label_span(text: str) -> float:
     float
         Width in drawing units, padding included.
     """
-    from pandid.render.furniture import script_counts
-    narrow, wide, zero = script_counts(text)
-    if not wide and not zero:
-        return _LABEL_EM * len(text) + _LABEL_PAD
-    return _LABEL_EM * narrow + _LABEL_EM_WIDE * wide + _LABEL_PAD
+    from pandid.render.furniture import text_width
+
+    return text_width(text, _TAG_TYPE) + _LABEL_PAD
 
 
 def block_span(count: int) -> float:

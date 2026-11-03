@@ -67,30 +67,6 @@ _ADV_BOLD = 620
 Reporter = Callable[[str, str, str, float, float], None]
 
 
-def script_counts(s: str) -> "tuple[int, int, int]":
-    """Return ``(narrow, wide, zero)`` codepoint counts of ``s``.
-
-    Parameters
-    ----------
-    s : str
-        Text to count.
-
-    Returns
-    -------
-    tuple[int, int, int]
-        Narrow, wide and zero-width counts.
-    """
-    narrow = wide = zero = 0
-    for ch in s:
-        if unicodedata.category(ch) in ("Mn", "Me"):
-            zero += 1
-        elif unicodedata.east_asian_width(ch) in ("W", "F"):
-            wide += 1
-        else:
-            narrow += 1
-    return narrow, wide, zero
-
-
 def text_width(s, size: float, bold: bool = False) -> float:
     """Return the drawn width of ``s`` at ``size``.
 
@@ -329,6 +305,12 @@ ZONE_TICK = 0.75
 
 # Inset from a titled box's border to its text, and its column gap.
 _ANN_PAD, _ANN_GAP = 9.0, 12.0
+# Inset of a left- or right-aligned TableBox cell's text.
+_TABLE_PAD = 5.0
+# Depth a TableBox title adds beyond its type size.
+_TABLE_TITLE = 10
+# Rise of a box title's baseline above the rule under it.
+_TITLE_RISE = 6
 
 
 def _ann_layout(ann):
@@ -450,7 +432,7 @@ def draw_annotation(ann, x: float, y: float, *,
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
          f'fill="white" stroke="black" stroke-width="{_BOX_RULE:g}"/>']
     if ann.title:
-        L.append(_text(x + w / 2, y + title_h - 6, ann.title, size + 1,
+        L.append(_text(x + w / 2, y + title_h - _TITLE_RISE, ann.title, size + 1,
                        anchor="middle", bold=True))
         L.append(f'<line x1="{x:.1f}" y1="{y + title_h:.1f}" x2="{x + w:.1f}" '
                  f'y2="{y + title_h:.1f}" stroke="black" '
@@ -510,7 +492,7 @@ def measure_table(tb) -> tuple[float, float]:
         Width and height in drawing units.
     """
     size, ncol, col_w, row_h = _table_layout(tb)
-    title_h = size + 10 if tb.title else 0
+    title_h = size + _TABLE_TITLE if tb.title else 0
     nrows = len(tb.rows) + (1 if tb.headers else 0)
     return _total(col_w), title_h + nrows * row_h
 
@@ -531,12 +513,12 @@ def draw_table(tb, x: float, y: float) -> list[str]:
         SVG elements.
     """
     size, ncol, col_w, row_h = _table_layout(tb)
-    title_h = size + 10 if tb.title else 0
+    title_h = size + _TABLE_TITLE if tb.title else 0
     w = _total(col_w)
     align = tb.col_align or ["c"] * ncol
     L = []
     if tb.title:
-        L.append(_text(x + w / 2, y + title_h - 6, tb.title, size,
+        L.append(_text(x + w / 2, y + title_h - _TITLE_RISE, tb.title, size,
                        anchor="middle", bold=True))
     top = y + title_h
 
@@ -561,9 +543,9 @@ def draw_table(tb, x: float, y: float) -> list[str]:
                      f'stroke-width="{_CELL_RULE:g}"/>')
             a = align[ci] if ci < len(align) else "c"
             if a == "l":
-                tx, anc = cx + 5, "start"
+                tx, anc = cx + _TABLE_PAD, "start"
             elif a == "r":
-                tx, anc = cx + col_w[ci] - 5, "end"
+                tx, anc = cx + col_w[ci] - _TABLE_PAD, "end"
             else:
                 tx, anc = cx + col_w[ci] / 2, "middle"
             L.append(_text(tx, ry + row_h / 2 + size / 3, val, size,

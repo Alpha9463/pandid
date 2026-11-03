@@ -15,13 +15,13 @@ drawing, character by character, rather than against a second copy of
 pandid's own arithmetic.
 
 The equipment-tag halo (``_unit_label_box`` in :mod:`pandid.render.svg`),
-a labelled block's own box (``label_span`` in
-:mod:`pandid.render.symbols`, shared by ``block_symbol`` and a boundary
-flag's ``resolve_size``) and the ``label-overruns-symbol`` check
-(:mod:`pandid.validate`) still read a string off
-:func:`pandid.render.furniture.script_counts` at per-character rates of
-their own, so a CJK tag is neither undersized on the sheet nor waved
-through by the check meant to catch it.
+a debug label, a labelled block's own box
+(``label_span`` in :mod:`pandid.render.symbols`, shared by
+``block_symbol`` and a boundary flag's ``resolve_size``) and the
+``label-overruns-symbol`` check (:mod:`pandid.validate`) measure with
+the same function plus padding of their own, so none is narrower than
+the text it is drawn for and a CJK tag is not waved through by the
+check meant to catch it.
 
 Every case here is real text -- a real CJK string, a real combining
 mark reached by NFD-normalising a real accented word, a real mixed-script
@@ -76,15 +76,7 @@ def _old_label_span(text: str) -> float:
     return 8.0 * len(text) + 30.0
 
 
-# --- pandid.render.furniture.script_counts / text_width -----------------
-
-
-def test_script_counts_sorts_a_cjk_string_wide_a_combining_mark_zero():
-    from pandid.render.furniture import script_counts
-
-    assert script_counts(CJK) == (0, 7, 0)
-    assert script_counts(CAFE_COMBINING) == (4, 0, 1)  # C, a, f, e narrow; the accent zero
-    assert script_counts(MIXED) == (5, 1, 0)  # "T-100" narrow, "塔" wide
+# --- pandid.render.furniture.text_width ----------------------------------
 
 
 def test_an_ambiguous_width_character_is_treated_as_narrow():
@@ -95,10 +87,10 @@ def test_an_ambiguous_width_character_is_treated_as_narrow():
     is also the reading that leaves a Latin-tagged sheet exactly where
     it was.
     """
-    from pandid.render.furniture import script_counts
+    from pandid.render.furniture import text_width
 
-    assert script_counts("αβγ") == (3, 0, 0)  # Greek alpha, beta, gamma
-    assert script_counts("Дет") == (3, 0, 0)  # Cyrillic "Дет"
+    assert text_width("αβγ", 12) < 3 * 12  # Greek alpha, beta, gamma
+    assert text_width("Дет", 12) < 3 * 12  # Cyrillic "Дет"
 
 
 #: Drawing text the flat rate got wrong, with how wrong it was: the
@@ -215,13 +207,26 @@ def test_a_mixed_latin_and_cjk_tag_charges_each_script_its_own_rate():
 # --- pandid.render.svg._unit_label_box (the erasing halo) ---------------
 
 
-def test_the_halo_is_unmoved_for_a_latin_tag():
-    from pandid.render.svg import _unit_label_box
+@pytest.mark.parametrize("tag", ["Pump", "MW-101", "WWW"])
+def test_the_halo_covers_the_tag_as_the_face_sets_it(tag):
+    """A halo narrower than its tag leaves the lines it should blank
+    showing through the letters."""
+    from pandid.render.furniture import text_width
+    from pandid.render.svg import _TAG_TYPE, _unit_label_box
 
-    item = (100.0, 200.0, "middle", "middle", "top", "Pump")
-    box = _unit_label_box(item)
+    box = _unit_label_box((100.0, 200.0, "middle", "middle", "top", tag))
     assert box is not None
-    assert box[2] - box[0] == pytest.approx(len("Pump") * 6.6 + 8)
+    assert box[2] - box[0] >= text_width(tag, _TAG_TYPE)
+
+
+def test_a_debug_label_box_covers_the_label_as_the_face_sets_it():
+    """A debug label measured short of its text is placed over ink it
+    believes it clears."""
+    from pandid.render.debug import _box
+    from pandid.render.furniture import text_width
+
+    x0, _y0, x1, _y1 = _box(0.0, 0.0, "MMMM", 9.0, 1.0)
+    assert x1 - x0 >= text_width("MMMM", 9.0)
 
 
 def test_the_halo_undercounted_a_cjk_tag_by_over_a_third_and_now_does_not():
@@ -255,11 +260,22 @@ def test_the_halo_still_covers_only_what_a_combining_mark_actually_draws():
 # --- pandid.render.symbols.label_span (a block's own box) ---------------
 
 
-def test_label_span_is_unmoved_for_latin_text():
-    from pandid.render.symbols import label_span
+def test_a_block_sized_to_its_name_holds_the_name_as_the_face_sets_it():
+    """A self-sized block lettered in wide capitals is wide enough for
+    them, not for an average letter."""
+    from pandid.portgeom import unit_box
+    from pandid.render.furniture import text_width
+    from pandid.render.svg import _TAG_TYPE
 
-    for s in ("Pump", "Fermentation and Beer Stripping Section", ""):
-        assert label_span(s) == _old_label_span(s)
+    name = "W" * 15
+    fs = Flowsheet("wide block")
+    a = fs.add(U.Block(name))
+    b = fs.add(U.Block("Recovery"))
+    fs.connect(a.out_1, b.in_1)
+    fs.layout()
+    assert a.frame is not None
+    x0, _y0, x1, _y1 = unit_box(a, a.frame)
+    assert x1 - x0 >= text_width(name, _TAG_TYPE)
 
 
 def test_label_span_charges_a_cjk_tag_a_full_em_not_the_latin_rate():
