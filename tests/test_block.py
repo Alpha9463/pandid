@@ -270,7 +270,7 @@ def test_one_connection_on_a_face_has_no_spacing_to_crush():
     are all smaller than a block on one axis, and a lone nozzle in a short box is
     not a defect -- there is nothing for it to be too close to."""
     for box in ((300.0, 60.0), (60.0, 300.0), (140.0, 140.0)):
-        units.Block("B", width=box[0], height=box[1])
+        assert resolve_size(units.Block("B", width=box[0], height=box[1])) == box
 
 
 def test_a_box_shrunk_after_construction_is_refused_where_it_is_set():

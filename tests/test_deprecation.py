@@ -340,18 +340,12 @@ def test_no_deprecation_has_outlived_its_release():
     )
 
 
-def test_declarations_finds_a_module_constant():
-    """The walker itself, against a module declaring one the way a real one is.
+def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
+    """A constant put in a module of a pandid subpackage is found under its key."""
+    import pandid.layout.faces as faces
 
-    ``declarations()`` walks :mod:`pandid` and this module is not in it, so the
-    same recognition is done here on this module's own namespace: a constant of
-    this type, found by walking what a module holds.
-    """
-    import sys
-
-    module = sys.modules[__name__]
-    found = {name: value for name, value in vars(module).items() if isinstance(value, Deprecation)}
-    assert found == {"RETIRED": RETIRED}
+    monkeypatch.setattr(faces, "RETIRED", RETIRED, raising=False)
+    assert declarations()["pandid.layout.faces.RETIRED"] is RETIRED
 
 
 def test_the_package_declares_only_the_placement_hints():
