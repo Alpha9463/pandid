@@ -439,37 +439,6 @@ def _candidate(unit: Unit, point: tuple[float, float], orientation: int,
     )
 
 
-def _on_corridor(
-    unit: Unit, candidate: Frame, direction: tuple[int, int], ordinate: float,
-) -> bool:
-    """Return whether both nozzles lie on the leg's line, in flow order.
-
-    Parameters
-    ----------
-    unit : Unit
-        Device to check.
-    candidate : Frame
-        Proposed frame.
-    direction : tuple[int, int]
-        Unit step of the flow on the drawing.
-    ordinate : float
-        Coordinate of the leg across the flow.
-
-    Returns
-    -------
-    bool
-        True if the device pipes along the leg in flow order.
-    """
-    inlet = port_point(unit, candidate, "inlet")
-    outlet = port_point(unit, candidate, "outlet")
-    axis = 0 if direction[0] else 1
-    other = 1 - axis
-    forward = direction[axis]
-    return (abs(inlet[other] - ordinate) < 1.0
-            and abs(outlet[other] - ordinate) < 1.0
-            and (outlet[axis] - inlet[axis]) * forward > 0)
-
-
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame on a leg point, piped in flow order.
 
@@ -497,7 +466,7 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     (ax, ay), (bx, by) = leg
     level = _level(leg)
     forward = 1 if (bx - ax if level else by - ay) > 0 else -1
-    direction = (forward, 0) if level else (0, forward)
+    along, across = (0, 1) if level else (1, 0)
     ordinate = ay if level else ax
     assert unit.frame is not None
     turned = unit._turn_stated
@@ -516,7 +485,11 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         shift = ordinate - inlet[1 if level else 0]
         candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
                             y=candidate.y + (shift if level else 0.0))
-        if _on_corridor(unit, candidate, direction, ordinate):
+        # Keep a pose with both nozzles on the leg's line, in flow order.
+        inlet = port_point(unit, candidate, "inlet")
+        outlet = port_point(unit, candidate, "outlet")
+        if (abs(inlet[across] - ordinate) < 1.0 and abs(outlet[across] - ordinate) < 1.0
+                and (outlet[along] - inlet[along]) * forward > 0):
             fits.append(candidate)
     if not fits:
         return _candidate(unit, point, *poses[0])
