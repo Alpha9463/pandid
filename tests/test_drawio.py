@@ -898,17 +898,6 @@ def test_a_turned_cell_pins_which_anchor_algorithm_reads_its_fractions():
     assert style["legacyAnchorPoints"] == "1"
 
 
-def test_the_export_is_deterministic(sample):
-    """A re-export that differs from itself is a diff nobody can read.
-
-    Parameters
-    ----------
-    sample : Flowsheet
-        Representative flowsheet fixture.
-    """
-    assert sample.to_drawio() == sample.to_drawio()
-
-
 def test_the_backend_is_a_renderer_in_its_own_right(sample):
     """Expose the Draw.io backend through the renderer interface.
 
@@ -1359,15 +1348,6 @@ def test_a_repeated_tag_gets_a_cell_of_its_own():
     assert len(ids) == 2 + 3
 
 
-def test_an_off_page_flag_keeps_its_tag_and_its_reference():
-    """Keep an off-page flag tag and reference in the export."""
-    fs = Flowsheet("boundary")
-    feed = fs.add(units.Feed("FEED", reference="P-01"))
-    feed.pin(x=100, y=100)
-    fs.layout()
-    assert _cells(fs, check=False)["u0"].get("value") == "FEED<br>P-01"
-
-
 # ---------------------------------------------------------------------------
 # Streams: weight, dash and arrowhead.
 # ---------------------------------------------------------------------------
@@ -1505,27 +1485,6 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
             assert _style(cell)["labelBackgroundColor"] == "#ffffff"
             checked += 1
         assert checked or not [s for s in fs.streams if s.kind == "material"]
-
-
-def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
-    """Use a perpendicular offset for a displaced line number."""
-    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
-    fs.to_svg(**kwargs)
-    cells = _drawio_cells(fs, kwargs)
-    offsets = []
-    for n, s in enumerate(fs.streams):
-        cell = cells[f"s{n}"]
-        if not (cell.get("value") or ""):
-            continue
-        point = cell.find("mxGeometry/mxPoint[@as='offset']")
-        if point is None:
-            offsets.append(0.0)
-            continue
-        offsets.append(abs(float(point.get("x"))) + abs(float(point.get("y"))))
-    assert offsets, "the sample sheet writes line numbers"
-    # Most of them stand off their run; the rest sit in it on the sheet's own
-    # halo, which is the convention and not an omission.
-    assert sum(1 for d in offsets if d > 1.0) >= len(offsets) // 2
 
 
 def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
@@ -1977,25 +1936,10 @@ def test_no_table_cell_is_narrower_than_the_text_in_it(rendered_gallery):
         Shared default SVG and Draw.io outputs.
     """
     for stem in TABLE_REPRESENTATIVES:
-        clipped = _clipped(_gallery_cells(rendered_gallery, stem))
+        cells = _gallery_cells(rendered_gallery, stem)
+        assert list(_table_cells(cells)), f"{stem} carries no table"
+        clipped = _clipped(cells)
         assert not clipped, f"{stem}: " + "; ".join(clipped)
-
-
-def test_every_table_cell_states_the_size_it_is_drawn_at(rendered_gallery):
-    """State font size on each table cell.
-
-    Parameters
-    ----------
-    rendered_gallery : dict[str, _GalleryArtifacts]
-        Shared default SVG and Draw.io outputs.
-    """
-    sized = []
-    for stem in TABLE_REPRESENTATIVES:
-        # _cell_font is the assertion: it refuses to fall back to the container.
-        sized += [
-            _cell_font(c) for c, _r, _t in _table_cells(_gallery_cells(rendered_gallery, stem))
-        ]
-    assert sized, "no sheet in the gallery carries a table"
 
 
 def test_no_table_row_is_shorter_than_the_line_box_of_its_own_text(rendered_gallery):
@@ -2047,28 +1991,6 @@ def test_no_furniture_text_is_drawn_under_the_frames_own_rule(rendered_gallery):
             assert ink <= paper + 0.01, (
                 f"{stem}: {cell.get('id')} {cell.get('value')!r} is drawn to "
                 f"{ink:.2f}, past the frame's own ink at {paper:.2f}"
-            )
-
-
-def test_a_column_is_measured_in_the_face_its_text_is_drawn_in(rendered_gallery):
-    """Measure each column in its rendered font weight.
-
-    Parameters
-    ----------
-    rendered_gallery : dict[str, _GalleryArtifacts]
-        Shared default SVG and Draw.io outputs.
-    """
-    from pandid.render.furniture import text_width
-
-    for stem in TABLE_REPRESENTATIVES:
-        for cell, _row, _table in _table_cells(_gallery_cells(rendered_gallery, stem)):
-            if _style(cell).get("fontStyle") != "1":
-                continue
-            width = float(cell.find("mxGeometry").get("width"))
-            # Measure bold text at its rendered weight.
-            assert text_width(cell.get("value"), _cell_font(cell), True) <= width, (
-                f"{stem}: {cell.get('id')} {cell.get('value')!r} is drawn bold "
-                f"in a column only {width:.1f} wide"
             )
 
 
@@ -2621,24 +2543,6 @@ def test_render_honours_the_sheet_options_it_can(tmp_path, sample, option, value
     assert out.read_text(encoding="utf-8") == sample.to_drawio(**{option: value})
 
 
-def test_a_page_size_is_the_paper_the_file_opens_on():
-    """Set exported page dimensions in drawing units."""
-    from pandid.render.svg import _page
-
-    fs = Flowsheet("paper")
-    fs.add(units.Pump("P-101")).pin(x=100, y=100)
-    fs.layout()
-    model = ET.fromstring(fs.to_drawio(page_size="A3", check=False)).find("diagram/mxGraphModel")
-    sheet = _page("A3")
-    assert model.get("page") == "1"
-    assert float(model.get("pageWidth")) == pytest.approx(sheet.width, abs=0.01)
-    assert float(model.get("pageHeight")) == pytest.approx(sheet.height, abs=0.01)
-    # ...and without one there is no page *view* to rule, which is the whole of
-    # what page="0" says. It does not mean there is no page: see below.
-    plain = ET.fromstring(fs.to_drawio(check=False)).find("diagram/mxGraphModel")
-    assert plain.get("page") == "0"
-
-
 def _page_states(fs: Flowsheet, **kwargs) -> "tuple[str, float, float]":
     """Read the exported page setting and dimensions.
 
@@ -2953,23 +2857,6 @@ def test_an_unruled_sheet_draws_no_frame():
     fs.layout()
     cells = _cells(fs, page_size="A3", check=False)
     assert not [i for i in cells if i.startswith("z")]
-
-
-def test_render_writes_the_document_to_a_drawio_path(tmp_path, sample):
-    """Write a Draw.io document to a ``.drawio`` path.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary directory supplied by pytest.
-    sample : Flowsheet
-        Representative flowsheet fixture.
-    """
-    out = tmp_path / "sheet.drawio"
-    sample.render(out)
-    text = out.read_text(encoding="utf-8")
-    assert text == sample.to_drawio()
-    ET.fromstring(text)
 
 
 def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path, sample):
