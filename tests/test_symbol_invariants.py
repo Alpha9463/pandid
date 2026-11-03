@@ -7,7 +7,7 @@ import math
 import pathlib
 import re
 import xml.etree.ElementTree as ET
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -1943,10 +1943,11 @@ def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
     assert default_registry.get("no_such_kind", "anything").symbol_id() == "sym_generic"
 
 
-@functools.lru_cache(maxsize=None)
 # Stencil-generation invariants
 
-def _script(name: str):
+
+@functools.lru_cache(maxsize=None)
+def _script(name: str) -> Any:
     """Import a generator script by name.
 
     Parameters
@@ -1963,6 +1964,7 @@ def _script(name: str):
 
     path = pathlib.Path(__file__).resolve().parent.parent / "scripts" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(f"_pandid_script_{name}", path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

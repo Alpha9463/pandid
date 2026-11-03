@@ -21,32 +21,16 @@ twelve.
 
 from __future__ import annotations
 
-import functools
-import importlib.util
 import pathlib
 import xml.etree.ElementTree as ET
 
 import pytest
 
 from pandid.render.symbols import default_registry
+from test_symbol_invariants import _script
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
-
-
-@functools.lru_cache(maxsize=None)
-def _converter():
-    """Import ``scripts/mxgraph_to_svg.py`` by path.
-
-    A dev-only script rather than part of the package, exactly as
-    ``scripts/vendor_symbols.py`` and ``scripts/gen_devices.py`` are, and this
-    is the loader ``tests/test_devices.py`` uses for that one.
-    """
-    path = ROOT / "scripts" / "mxgraph_to_svg.py"
-    module_spec = importlib.util.spec_from_file_location("_pandid_script_mxgraph", path)
-    module = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(module)
-    return module
 
 
 #: A stroked line, so every specimen below has some ink for the pen to land on.
@@ -62,7 +46,7 @@ def _shape(body: str, name: str = "Specimen") -> ET.Element:
 
 def _drawn(body: str, stroke_width: float = 2.0) -> list[ET.Element]:
     """The elements *body* converts to, in document order."""
-    inner, *_ = _converter().convert_shape(_shape(body), stroke_width=stroke_width)
+    inner, *_ = _script("mxgraph_to_svg").convert_shape(_shape(body), stroke_width=stroke_width)
     return list(ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{inner}</svg>'))
 
 
@@ -85,10 +69,12 @@ def test_a_directive_the_converter_does_not_know_stops_the_conversion():
 def test_the_shape_that_could_not_be_converted_is_named():
     """A stencil set is fourteen files and eight hundred shapes."""
     with pytest.raises(ValueError, match="Liquid Filter"):
-        _converter().convert_shape(_shape(f'<glow radius="4"/>{GEOM}', "Liquid Filter"))
+        _script("mxgraph_to_svg").convert_shape(
+            _shape(f'<glow radius="4"/>{GEOM}', "Liquid Filter")
+        )
 
 
-@pytest.mark.parametrize("directive", sorted(_converter().DECLINED))
+@pytest.mark.parametrize("directive", sorted(_script("mxgraph_to_svg").DECLINED))
 def test_a_declined_directive_is_written_down_and_changes_no_ink(directive):
     """The other half of the guard: a decision, not a gap.
 
@@ -97,7 +83,9 @@ def test_a_declined_directive_is_written_down_and_changes_no_ink(directive):
     a sentence somebody can read and argue with rather than an omission nobody
     can see.
     """
-    assert _converter().DECLINED[directive].strip(), f"<{directive}> is declined with no reason"
+    assert _script("mxgraph_to_svg").DECLINED[directive].strip(), (
+        f"<{directive}> is declined with no reason"
+    )
     plain = _drawn(f"{GEOM}<stroke/>")
     with_it = _drawn(f"<{directive}/>{GEOM}<stroke/>")
     assert [el.attrib for el in with_it] == [el.attrib for el in plain]
@@ -111,8 +99,8 @@ def test_every_vendored_stencil_converts_without_a_directive_falling_off_the_end
     the point of the guard is that the addition fails loudly rather than
     quietly drawing something else.
     """
-    for _name, shape in _converter().shapes_in(path):
-        _converter().convert_shape(shape)
+    for _name, shape in _script("mxgraph_to_svg").shapes_in(path):
+        _script("mxgraph_to_svg").convert_shape(shape)
 
 
 # ---------------------------------------------------------------------------

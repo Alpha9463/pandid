@@ -21,8 +21,6 @@ still has ``"default"``, and a kind two classes own is swept once for each.
 """
 
 import ast
-import functools
-import importlib.util
 import pathlib
 import re
 import typing
@@ -32,24 +30,10 @@ import pytest
 from pandid import Flowsheet, devices, portgeom, spec, units
 from pandid.ports import Port
 from pandid.render.symbols import default_registry
+from test_symbol_invariants import _script
 
 DEVICE_CLASSES = [getattr(devices, name) for name in devices.__all__]
 IDS = [cls.__name__ for cls in DEVICE_CLASSES]
-
-
-@functools.lru_cache(maxsize=None)
-def _generator():
-    """Import ``scripts/gen_devices.py`` by path.
-
-    It is a dev-only script rather than part of the package, exactly as
-    ``scripts/vendor_symbols.py`` is, and this is the same loader
-    ``tests/test_symbol_invariants.py`` uses for that one.
-    """
-    path = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "gen_devices.py"
-    module_spec = importlib.util.spec_from_file_location("_pandid_script_gen_devices", path)
-    module = importlib.util.module_from_spec(module_spec)
-    module_spec.loader.exec_module(module)
-    return module
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +49,7 @@ def test_the_committed_module_matches_the_generator():
     The difference is what the drift would be *about* -- there, artwork; here,
     which piece of equipment a drawing is.
     """
-    generator = _generator()
+    generator = _script("gen_devices")
     committed = generator.OUT.read_text(encoding="utf-8")
     if generator.render() != committed:
         pytest.fail(
@@ -87,7 +71,7 @@ def test_every_registered_symbol_is_claimed_exactly_once():
     the library as it stands: nothing registered is unclassified, nothing
     classified has lost its drawing, and no drawing is claimed twice.
     """
-    claimed = _generator().claims()
+    claimed = _script("gen_devices").claims()
     assert claimed.keys() == set(default_registry._symbols)
 
 
@@ -98,7 +82,7 @@ def test_the_generator_refuses_a_drawing_nobody_has_classified():
     rather than by registering a symbol, because the registry is a module-level
     singleton and the two ways round are the same assertion.
     """
-    generator = _generator()
+    generator = _script("gen_devices")
     key, why = next(iter(generator.STAYS_ON_BASE.items()))
     del generator.STAYS_ON_BASE[key]
     try:
@@ -110,7 +94,7 @@ def test_the_generator_refuses_a_drawing_nobody_has_classified():
 
 def test_the_generator_refuses_two_claims_on_one_drawing():
     """A drawing is one device, so two classes claiming it is a question, not a fact."""
-    generator = _generator()
+    generator = _script("gen_devices")
     key = ("separator", "cyclone")
     generator.STAYS_ON_BASE[key] = "a second claim, for the test"
     try:
@@ -129,7 +113,7 @@ def test_the_generator_refuses_the_three_kinds_that_may_not_have_classes(kind):
     subclass defeats without a word: a utility header tapped twice would be
     reported as two services the reader cannot tell apart.
     """
-    generator = _generator()
+    generator = _script("gen_devices")
     assert kind in generator.REFUSED_KINDS
     generator.DEVICES[(kind, "default")] = ("Bogus", "...")
     try:
@@ -213,7 +197,7 @@ def _family_device_classes():
     ``tests/test_port_annotations.py``'s ``_EXACT_ARITY`` gives for ``Reactor``: a
     device that subclasses a family base tomorrow gets this test for free.
     """
-    generator = _generator()
+    generator = _script("gen_devices")
     return [cls for cls in DEVICE_CLASSES if generator.arity_family(cls.__mro__[1])]
 
 
@@ -235,7 +219,7 @@ def test_a_generated_family_subclass_gets_its_own_exact_arity_classes(cls):
     the same generator, so a wrong ``emit()`` agrees with itself. This instead
     builds the real unit and checks its ports.
     """
-    generator = _generator()
+    generator = _script("gen_devices")
     keyword, member, _default, max_n = generator.arity_family(cls.__mro__[1])
     module = ast.parse(pathlib.Path(devices.__file__).read_text(encoding="utf-8"))
     declared = {

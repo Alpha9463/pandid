@@ -32,41 +32,16 @@ Both tests assert that, rather than tolerating an exception to it.
 
 import collections
 import hashlib
-import importlib.util
 import pathlib
 import re
 import xml.etree.ElementTree as ET
-from typing import Any, Iterator
+from typing import Iterator
 
 import pytest
 
 from pandid.render.svg import _affine
 from pandid.render.symbols import Symbol, default_registry
-
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-
-
-def _script(name: str) -> Any:
-    """One of the dev-only generator scripts, imported by path.
-
-    They are not part of the package and not importable as one. Same
-    approach as ``tests/test_symbol_invariants._script``; kept local
-    rather than imported across test modules, which would make one
-    file's collection depend on another's.
-
-    By path rather than by putting ``scripts/`` on ``sys.path`` and
-    importing: a plain ``import`` of a directory added at run time is a
-    name a type checker cannot resolve, and these tests are held to
-    checking clean.
-    """
-    spec = importlib.util.spec_from_file_location(
-        f"_pandid_script_{name}", ROOT / "scripts" / f"{name}.py"
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
+from test_symbol_invariants import _script
 
 #: Every group of byte-identical shapes in the vendored draw.io stencil
 #: files, as vendored, keyed by the file they are in.
