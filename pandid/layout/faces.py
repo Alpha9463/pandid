@@ -5,7 +5,7 @@ The choice is stored on the unit's resolved frame.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Mapping
+from typing import TYPE_CHECKING
 
 from pandid.routing.visibility import MIN_ESCAPE
 
@@ -15,52 +15,21 @@ if TYPE_CHECKING:
     from pandid.units import Unit
 
 
-def eligible_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> tuple[str, ...]:
-    """Return the faces a connected port may move between, or ``()``.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet being laid out.
-    unit : Unit
-        Unit owning the port.
-    port_name : str
-        Canonical port name.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Two or more faces, or ``()`` if the port's face cannot move.
-    """
-    from pandid.portgeom import pin_intent, port_faces
-
-    frame = unit.frame
-    if not fs.auto_faces or frame is None or unit.ports[port_name].stream is None:
-        return ()
-    if port_name in unit._port_faces:
-        return ()
-    if any(port_name == port for port, _ in pin_intent(unit).values()):
-        return ()
-    menu = tuple(port_faces(unit, port_name, frame))
-    return menu if len(menu) > 1 else ()
-
-
-def select_faces(
-    fs: "Flowsheet",
-    preferred: Mapping[tuple[int, str], str] | None = None,
-) -> None:
+def select_faces(fs: "Flowsheet") -> None:
     """Choose a face for every movable port.
+
+    A connected port can move when it has two or more faces and neither
+    ``nozzle()`` nor a pin names it.
 
     Parameters
     ----------
     fs : Flowsheet
         Sheet with placed units.
-    preferred : Mapping[tuple[int, str], str] or None, optional
-        Face to try first, keyed by unit index and port name.
     """
     from pandid.layout.stages import is_control
+    from pandid.portgeom import pin_intent, port_faces
 
-    for index, unit in enumerate(fs.units):
+    for unit in fs.units:
         frame = unit.frame
         if frame is None:
             continue
@@ -68,22 +37,21 @@ def select_faces(
         if not fs.auto_faces:
             continue
         live = [name for name, port in unit.ports.items() if port.stream is not None]
-        menus = {name: menu for name in live
-                 if (menu := eligible_faces(fs, unit, name))}
+        fixed = {*unit._port_faces, *(port for port, _ in pin_intent(unit).values())}
+        menus = {name: menu for name in live if name not in fixed
+                 and len(menu := port_faces(unit, name, frame)) > 1}
         # Points of fixed ports; no choice may land on a taken point.
         taken = {_point(unit, frame, name) for name in live if name not in menus}
         for name, menu in menus.items():
             target = _reference(unit.ports[name])
             if target is None:
                 continue
-            preferred_face = None if preferred is None else preferred.get((index, name))
-            face = (_best(unit, frame, name, [preferred_face], target, taken)
-                    if preferred_face in menu else None)
-            if face is None and not is_control(unit):
-                usable = _usable_faces(fs, unit, frame, name, list(menu))
+            face = None
+            if not is_control(unit):
+                usable = _usable_faces(fs, unit, frame, name, menu)
                 face = _best(unit, frame, name, usable, target, taken)
             if face is None:
-                face = _best(unit, frame, name, list(menu), target, taken)
+                face = _best(unit, frame, name, menu, target, taken)
             if face is None:
                 # Every face is taken; keep the symbol's placement.
                 continue
@@ -256,8 +224,8 @@ def _best(unit: "Unit", frame, port_name: str, menu: list[str],
             continue
         normal = face_point(unit, frame, landed)[1]
         # Order by cost, then aim, then symbol preference.
-        scored.append((_cost(anchor, normal, target), -_aim(centre, normal, target),
-                       rank, face))
+        aim = (target[0] - centre[0]) * normal[0] + (target[1] - centre[1]) * normal[1]
+        scored.append((_cost(anchor, normal, target), -aim, rank, face))
     frame.port_faces.pop(port_name, None)
     return min(scored)[-1] if scored else None
 
@@ -283,24 +251,3 @@ def _cost(anchor: tuple[float, float], normal: tuple[float, float],
     (ax, ay), (nx, ny), (tx, ty) = anchor, normal, target
     reach = (tx - ax) * nx + (ty - ay) * ny
     return abs(tx - ax) + abs(ty - ay) + (0.0 if reach >= 0.0 else 2.0 * MIN_ESCAPE)
-
-
-def _aim(centre: tuple[float, float], normal: tuple[float, float],
-         target: tuple[float, float]) -> float:
-    """Return the centre-to-target vector projected on a face normal.
-
-    Parameters
-    ----------
-    centre : tuple[float, float]
-        Centre of the unit box.
-    normal : tuple[float, float]
-        Outward face normal.
-    target : tuple[float, float]
-        Point the port should face.
-
-    Returns
-    -------
-    float
-        Projection length.
-    """
-    return (target[0] - centre[0]) * normal[0] + (target[1] - centre[1]) * normal[1]

@@ -8,13 +8,16 @@ members state no position, turn, mirror or nozzle face.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from itertools import accumulate
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Callable, Iterator, Union
 
 from pandid.geometry import Frame
+from pandid.inline import _INLINE_KINDS
 from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.portgeom import port_point, resolve_size, unit_box
+from pandid.routing.metrics import path_length
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -42,8 +45,6 @@ TAP = 45.0
 
 #: Step, in pixels, of the search along a leg for a clear spot.
 NUDGE_STEP = 5.0
-
-_INLINE_KINDS = frozenset({"valve", "reducer", "fitting"})
 
 Point = tuple[float, float]
 Leg = tuple[Point, Point]
@@ -378,51 +379,6 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
                 [stream_polyline(other) for other in others if other.route is not None])
 
 
-def _legs(points: list[Point]) -> list[Leg]:
-    """Merge an orthogonal polyline into maximal straight legs.
-
-    Parameters
-    ----------
-    points : list[Point]
-        Polyline.
-
-    Returns
-    -------
-    list[Leg]
-        Legs as ``(start, end)`` pairs.
-    """
-    legs: list[Leg] = []
-    for a, b in zip(points, points[1:]):
-        if a == b:
-            continue
-        if legs:
-            p, q = legs[-1]
-            level = abs(p[1] - q[1]) < 1e-6
-            if level == (abs(a[1] - b[1]) < 1e-6) and (
-                (q[0] - p[0]) * (b[0] - a[0]) > 0 or (q[1] - p[1]) * (b[1] - a[1]) > 0
-            ):
-                legs[-1] = (p, b)
-                continue
-        legs.append((a, b))
-    return legs
-
-
-def _size(leg: Leg) -> float:
-    """Return a leg's length.
-
-    Parameters
-    ----------
-    leg : Leg
-        Straight leg.
-
-    Returns
-    -------
-    float
-        Length.
-    """
-    return abs(leg[1][0] - leg[0][0]) + abs(leg[1][1] - leg[0][1])
-
-
 def _level(leg: Leg) -> bool:
     """Return whether a leg is horizontal.
 
@@ -469,37 +425,6 @@ def _candidate(unit: Unit, point: tuple[float, float], orientation: int,
     )
 
 
-def _on_corridor(
-    unit: Unit, candidate: Frame, direction: tuple[int, int], ordinate: float,
-) -> bool:
-    """Return whether both nozzles lie on the leg's line, in flow order.
-
-    Parameters
-    ----------
-    unit : Unit
-        Device to check.
-    candidate : Frame
-        Proposed frame.
-    direction : tuple[int, int]
-        Unit step of the flow on the drawing.
-    ordinate : float
-        Coordinate of the leg across the flow.
-
-    Returns
-    -------
-    bool
-        True if the device pipes along the leg in flow order.
-    """
-    inlet = port_point(unit, candidate, "inlet")
-    outlet = port_point(unit, candidate, "outlet")
-    axis = 0 if direction[0] else 1
-    other = 1 - axis
-    forward = direction[axis]
-    return (abs(inlet[other] - ordinate) < 1.0
-            and abs(outlet[other] - ordinate) < 1.0
-            and (outlet[axis] - inlet[axis]) * forward > 0)
-
-
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame on a leg point, piped in flow order.
 
@@ -527,7 +452,7 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     (ax, ay), (bx, by) = leg
     level = _level(leg)
     forward = 1 if (bx - ax if level else by - ay) > 0 else -1
-    direction = (forward, 0) if level else (0, forward)
+    along, across = (0, 1) if level else (1, 0)
     ordinate = ay if level else ax
     assert unit.frame is not None
     turned = unit._turn_stated
@@ -546,7 +471,11 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         shift = ordinate - inlet[1 if level else 0]
         candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
                             y=candidate.y + (shift if level else 0.0))
-        if _on_corridor(unit, candidate, direction, ordinate):
+        # Keep a pose with both nozzles on the leg's line, in flow order.
+        inlet = port_point(unit, candidate, "inlet")
+        outlet = port_point(unit, candidate, "outlet")
+        if (abs(inlet[across] - ordinate) < 1.0 and abs(outlet[across] - ordinate) < 1.0
+                and (outlet[along] - inlet[along]) * forward > 0):
             fits.append(candidate)
     if not fits:
         return _candidate(unit, point, *poses[0])
@@ -670,7 +599,7 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
     from pandid.stations import StationAssembly
 
     (ax, ay), (bx, by) = leg
-    total = _size(leg)
+    total = path_length(leg)
     t = centre / total if total else 0.5
     point = (ax + t * (bx - ax), ay + t * (by - ay))
     if isinstance(element, StationAssembly):
@@ -810,7 +739,7 @@ def _along(legs: list[Leg], point: Point) -> float:
     travelled = 0.0
     for index, leg in enumerate(legs):
         (ax, ay), (bx, by) = leg
-        size = _size(leg)
+        size = path_length(leg)
         level = _level(leg)
         ahead = (point[0] - ax) * (1 if bx >= ax else -1) if level else             (point[1] - ay) * (1 if by >= ay else -1)
         across = abs(point[1] - ay) if level else abs(point[0] - ax)
@@ -842,7 +771,7 @@ def _point_at(legs: list[Leg], distance: float) -> tuple[Point, bool]:
     """
     for leg in legs:
         (ax, ay), (bx, by) = leg
-        size = _size(leg)
+        size = path_length(leg)
         if distance <= size:
             t = max(distance, 0.0) / size if size else 0.0
             return (ax + t * (bx - ax), ay + t * (by - ay)), _level(leg)
@@ -960,13 +889,10 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     list[list[int]]
         Plans, each giving every element's leg index.
     """
-    room = [_size(leg) - sum(_margins(index, len(legs))) + ALONG
+    room = [path_length(leg) - sum(_margins(index, len(legs))) + ALONG
             for index, leg in enumerate(legs)]
     need = [[_length(element, leg) + ALONG for leg in legs] for element in run.elements]
-    starts, travelled = [], 0.0
-    for leg in legs:
-        starts.append(travelled)
-        travelled += _size(leg)
+    starts = [0.0, *accumulate(map(path_length, legs))]
     middle = sum(wanted) / len(wanted)
 
     def distance(index: int) -> float:
@@ -982,7 +908,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
         float
             Distance along the pipe.
         """
-        return abs(starts[index] + _size(legs[index]) / 2 - middle)
+        return abs(starts[index] + path_length(legs[index]) / 2 - middle)
 
     whole = sorted((index for index in range(len(legs))
                     if sum(row[index] for row in need) <= room[index]),
@@ -994,7 +920,7 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
                        if used[index] + row[index] <= room[index]), None)
         if choice is None:
             usable = [index for index in range(cursor, len(legs)) if row[index] != float("inf")]
-            choice = max(usable or [max(range(len(legs)), key=lambda index: _size(legs[index]))],
+            choice = max(usable or [max(range(len(legs)), key=lambda i: path_length(legs[i]))],
                          key=lambda index: room[index] - used[index])
         if row[choice] != float("inf"):
             used[choice] += row[choice]
@@ -1073,13 +999,13 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     source, dest = run.source.owner, run.dest.owner
     assert source is not None and dest is not None
     assert source.frame is not None and dest.frame is not None
-    legs = _legs(points)
+    legs: list[Leg] = list(zip(points, points[1:]))
     if not legs:
         a = port_point(source, source.frame, run.source.name)
         b = port_point(dest, dest.frame, run.dest.name)
         legs = [(a, (b[0], a[1])) if abs(b[0] - a[0]) >= abs(b[1] - a[1]) else (a, (a[0], b[1]))]
     count = len(run.elements)
-    want = _wanted(run, sum(_size(leg) for leg in legs),
+    want = _wanted(run, sum(path_length(leg) for leg in legs),
                    lambda port: _along(legs, port_point(port.owner, port.owner.frame, port.name)),
                    run.taps)
     # Keep a balloon's reach clear around its tap on an upright leg.
@@ -1089,10 +1015,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         if not level:
             tap_zones.append((x - 1.0, y - TAP, x + 1.0, y + TAP))
     want = want[:count]
-    starts, travelled = [], 0.0
-    for leg in legs:
-        starts.append(travelled)
-        travelled += _size(leg)
+    starts = [0.0, *accumulate(map(path_length, legs))]
     # The pipe's own end units keep only the leg margin.
     others = [unit for unit in obstacles if unit is not source and unit is not dest]
 
@@ -1114,7 +1037,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         placed: list[dict[Unit, Frame]] = []
         mine = [*zones, *tap_zones]
         for index in sorted(set(assigned)):
-            leg, size, level = legs[index], _size(legs[index]), _level(legs[index])
+            leg, size, level = legs[index], path_length(legs[index]), _level(legs[index])
             head, tail = _margins(index, len(legs))
             group = [i for i, a in enumerate(assigned) if a == index]
             lengths = [min(_length(run.elements[i], leg), size) for i in group]
@@ -1199,6 +1122,5 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     routes, lines = _routed_pipes(fs, runs, retained)
     obstacles = list(retained)
     zones: list[Box] = []
-    # Set the longest chains first.
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
         _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes])

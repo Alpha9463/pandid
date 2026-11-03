@@ -380,23 +380,10 @@ def _overflowing_text(ann, size: float, body_w: float) -> str:
     """
     if text_width(ann.title, size + 1, bold=True) > body_w:
         return ann.title
-
-    def flat(r):
-        """Return a row as one string.
-
-        Parameters
-        ----------
-        r : str or sequence
-            Row, or a row's cells.
-
-        Returns
-        -------
-        str
-            The cells joined by spaces.
-        """
-        return "   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
-    return max((flat(r) for r in ann.rows), key=lambda s: text_width(s, size),
-               default=ann.title)
+    # A row of cells reads as one string, the cells spaced apart.
+    rows = ("   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
+            for r in ann.rows)
+    return max(rows, key=lambda s: text_width(s, size), default=ann.title)
 
 
 def draw_annotation(ann, x: float, y: float, *,
@@ -833,43 +820,6 @@ def _section_span(m: "_Measured", columns: int) -> float:
     return max(m.label_w, m.span - m.name_w * columns)
 
 
-def _stream_rows(m: "_Measured", streams: list, cells: list,
-                 label_w: float) -> list[list[StreamCell]]:
-    """Return the table's cells, row by row, for the given columns.
-
-    Parameters
-    ----------
-    m : _Measured
-        Table measurements.
-    streams : list[Stream]
-        Each column's stream.
-    cells : list[dict]
-        Each column's property values.
-    label_w : float
-        Label column width.
-
-    Returns
-    -------
-    list[list[StreamCell]]
-        Rows, top to bottom.
-    """
-    rows: list[list[StreamCell]] = [
-        [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
-        + [StreamCell(s.name, m.name_w, _STREAM_HEAD_FILL, True, "middle")
-           for s in streams]]
-    for kind, key in m.disp:
-        if kind == "section":
-            rows.append([StreamCell(key, label_w + m.name_w * len(streams),
-                                    _STREAM_SECTION_FILL, True, "start")])
-            continue
-        rows.append(
-            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
-            + [StreamCell(_stream_cell_text(c, key), m.name_w,
-                          _STREAM_VALUE_FILL, False, "middle")
-               for c in cells])
-    return rows
-
-
 def _stream_table(m: "_Measured", streams: list, cells: list,
                   label_w: float) -> StreamTable:
     """Return a table over the given columns: whole, or one block.
@@ -890,7 +840,20 @@ def _stream_table(m: "_Measured", streams: list, cells: list,
     StreamTable
         Table geometry.
     """
-    rows = _stream_rows(m, streams, cells, label_w)
+    rows: list[list[StreamCell]] = [
+        [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
+        + [StreamCell(s.name, m.name_w, _STREAM_HEAD_FILL, True, "middle")
+           for s in streams]]
+    for kind, key in m.disp:
+        if kind == "section":
+            rows.append([StreamCell(key, label_w + m.name_w * len(streams),
+                                    _STREAM_SECTION_FILL, True, "start")])
+            continue
+        rows.append(
+            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
+            + [StreamCell(_stream_cell_text(c, key), m.name_w,
+                          _STREAM_VALUE_FILL, False, "middle")
+               for c in cells])
     return StreamTable(rows, m.size, m.row_h,
                        label_w + m.name_w * len(streams),
                        m.row_h * len(rows))
@@ -1152,27 +1115,6 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     gap = m.row_h * _BLOCK_ROWS
     return TableSheet(blocks, gap, max(b.w for b in blocks),
                       _total(b.h for b in blocks) + gap * (len(blocks) - 1))
-
-
-def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
-    """Return the top-left of the block stack, centred across ``free``.
-
-    Parameters
-    ----------
-    table : TableSheet
-        Stacked blocks.
-    free : tuple[float, float, float, float] or None
-        Region a fixed page leaves, or ``None`` for a grown sheet.
-
-    Returns
-    -------
-    tuple[float, float]
-        Top-left corner.
-    """
-    if free is None:
-        return (0.0, 0.0)
-    fx, fy, fw, _fh = free
-    return (fx + (fw - table.w) / 2, fy)
 
 
 def draw_stream_table(table: StreamTable, left: float, top: float, *,
@@ -1684,27 +1626,8 @@ def title_strip_fit(tb, name: str, date: str, fit_scale: str = ""
         Findings, each a tuple of :data:`Reporter` arguments.
     """
     found: list[tuple[str, str, str, float, float]] = []
-
-    def collect(field: str, text: str, drawn: str,
-                room: float, need: float) -> None:
-        """Record a finding.
-
-        Parameters
-        ----------
-        field : str
-            Field name.
-        text : str
-            Requested text.
-        drawn : str
-            Drawn text.
-        room : float
-            Cell width.
-        need : float
-            Text width.
-        """
-        found.append((field, text, drawn, room, need))
-
-    title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale, report=collect)
+    title_strip_layout(tb, name, date, 0.0, 0.0, fit_scale,
+                       report=lambda *cell: found.append(cell))
     return found
 
 
@@ -1803,9 +1726,9 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 ZONE_BAND = 16.0
 
 
-def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
+def sheet_rect(ix: float, iy: float, iw: float, ih: float
                ) -> tuple[float, float, float, float]:
-    """Return the sheet rectangle around a drawing frame.
+    """Return the sheet rectangle a zone band's width around a frame.
 
     Parameters
     ----------
@@ -1813,15 +1736,13 @@ def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
         Frame top-left corner.
     iw, ih : float
         Frame width and height.
-    band : float, default=ZONE_BAND
-        Zone band width.
 
     Returns
     -------
     tuple[float, float, float, float]
         Sheet ``(x, y, w, h)``.
     """
-    return ix - band, iy - band, iw + 2 * band, ih + 2 * band
+    return ix - ZONE_BAND, iy - ZONE_BAND, iw + 2 * ZONE_BAND, ih + 2 * ZONE_BAND
 
 
 #: Zone letter size, and its baseline drop from the band's middle.
@@ -1845,8 +1766,7 @@ class Zoned(NamedTuple):
     parts: list[tuple]
 
 
-def zone_layout(ix: float, iy: float, iw: float, ih: float,
-                band: float = ZONE_BAND) -> Zoned:
+def zone_layout(ix: float, iy: float, iw: float, ih: float) -> Zoned:
     """Return the zone-ruled border around a drawing frame.
 
     Parameters
@@ -1855,15 +1775,13 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
         Frame top-left corner.
     iw, ih : float
         Frame width and height.
-    band : float, default=ZONE_BAND
-        Zone band width.
 
     Returns
     -------
     Zoned
         Border geometry.
     """
-    ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih, band)
+    ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih)
     cols = max(4, min(12, round(iw / 165)))
     rows = max(3, min(8, round(ih / 165)))
     parts: list[tuple] = []
@@ -1876,8 +1794,8 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
         if c:
             parts.append(("rule", x0, oy, x0, iy))
             parts.append(("rule", x0, iy + ih, x0, oy + oh))
-        parts.append(("label", (x0 + x1) / 2, oy + band / 2, num))
-        parts.append(("label", (x0 + x1) / 2, oy + oh - band / 2, num))
+        parts.append(("label", (x0 + x1) / 2, oy + ZONE_BAND / 2, num))
+        parts.append(("label", (x0 + x1) / 2, oy + oh - ZONE_BAND / 2, num))
     # Rows: letters top down, on the left and right bands.
     for r in range(rows):
         y0 = iy + ih * r / rows
@@ -1886,14 +1804,13 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
         if r:
             parts.append(("rule", ox, y0, ix, y0))
             parts.append(("rule", ix + iw, y0, ox + ow, y0))
-        parts.append(("label", ox + band / 2, (y0 + y1) / 2, letter))
-        parts.append(("label", ox + ow - band / 2, (y0 + y1) / 2, letter))
+        parts.append(("label", ox + ZONE_BAND / 2, (y0 + y1) / 2, letter))
+        parts.append(("label", ox + ow - ZONE_BAND / 2, (y0 + y1) / 2, letter))
     return Zoned((ox, oy, ow, oh), (ix, iy, iw, ih), parts)
 
 
-def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
-               ) -> tuple[list[str], tuple[float, float, float, float]]:
-    """Return the zone-ruled border drawn, and the sheet rectangle.
+def zone_frame(ix: float, iy: float, iw: float, ih: float) -> list[str]:
+    """Return the zone-ruled border drawn around a frame.
 
     Parameters
     ----------
@@ -1901,15 +1818,13 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
         Frame top-left corner.
     iw, ih : float
         Frame width and height.
-    band : float, default=ZONE_BAND
-        Zone band width.
 
     Returns
     -------
-    tuple[list[str], tuple[float, float, float, float]]
-        SVG elements and the sheet ``(x, y, w, h)``.
+    list[str]
+        SVG elements.
     """
-    z = zone_layout(ix, iy, iw, ih, band)
+    z = zone_layout(ix, iy, iw, ih)
     ox, oy, ow, oh = z.outer
     L = [f'<rect x="{ox:.1f}" y="{oy:.1f}" width="{ow:.1f}" height="{oh:.1f}" '
          f'fill="none" stroke="black" stroke-width="{SHEET_RULE:g}"/>',
@@ -1924,7 +1839,7 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
             _, lx, ly, text = part
             L.append(_text(lx, ly + _ZONE_BASE, text, ZONE_TYPE,
                            anchor="middle", bold=True))
-    return L, z.outer
+    return L
 
 
 # The sheet dock: which rectangle each piece of furniture is given
@@ -2031,22 +1946,6 @@ def dock(items, inner, *, sheet=None, too_small=None):
         """
         return max((w for _, w, _ in entries), default=0.0)
 
-    def biggest(dim: int):
-        """Return the largest piece along ``dim``.
-
-        Parameters
-        ----------
-        dim : int
-            1 for width, 2 for height.
-
-        Returns
-        -------
-        object or None
-            The piece, or ``None`` if there is none.
-        """
-        entries = [it for col in cols.values() for it in col]
-        return max(entries, key=lambda it: it[dim])[0] if entries else None
-
     # band thicknesses -------------------------------------------
     top_h = max(stack_h(cols["top-left"]), stack_h(cols["top"]),
                 stack_h(cols["top-right"]))
@@ -2085,8 +1984,11 @@ def dock(items, inner, *, sheet=None, too_small=None):
         if too_wide or need_h >= sheet.height - 2 * edge:
             if too_small is None:
                 raise TypeError("dock() needs a too_small callback when sheet is given")
+            # Blame the widest piece, or the tallest.
+            dim = 1 if too_wide else 2
+            entries = [it for col in cols.values() for it in col]
             raise too_small(need_w + 2 * edge, need_h + 2 * edge,
-                            biggest(1 if too_wide else 2))
+                            max(entries, key=lambda it: it[dim])[0] if entries else None)
         ix, iy = edge, edge
         ixr, iyb = sheet.width - edge, sheet.height - edge
     else:
