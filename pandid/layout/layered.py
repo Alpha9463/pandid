@@ -19,19 +19,19 @@ if TYPE_CHECKING:
     from pandid.ports import Port
     from pandid.units import Unit
 
-#: Clear width between layers.
+#: Least gap between layers, added to their balloon room.
 COL_GAP = 120.0
-#: Clear height between units in one layer.
+#: Least clear height between units in a layer or stack.
 ROW_GAP = 70.0
-#: Clear height beside a pipe passing through a layer.
+#: Gap between neighbours of only flags or pipes; pin clearance.
 LANE = 25.0
-#: Left and top sheet margins.
+#: Left and top margins, used when no x or y pin sets that axis.
 MARGIN = 50.0
-#: Pipe kept at each nozzle of a furnished link.
+#: Pipe added to a furnished link's room for its two nozzle ends.
 END_ROOM = 41.0
 #: How far a top or bottom nozzle wants its peer above or below it.
 LEAD = 40.0
-#: Ordering and straightening passes.
+#: Passes for ordering, swapping and straightening.
 SWEEPS = 12
 #: Widest band before the drawing folds.
 BAND_WIDTH = 3200.0
@@ -44,7 +44,7 @@ _STACK: dict[tuple[str | None, str | None], bool] = {("N", "S"): True, ("S", "N"
 
 @dataclass(frozen=True)
 class Link:
-    """One pipe between two placed units.
+    """One pipe between two units to place.
 
     Attributes
     ----------
@@ -74,7 +74,7 @@ class _Node:
     Attributes
     ----------
     members : list[Unit]
-        Units top to bottom; empty for a dummy.
+        Units, top to bottom once shaped; empty for a dummy.
     dx : dict[Unit, float]
         Each member's x offset from the stack's left edge.
     dy : dict[Unit, float]
@@ -121,7 +121,7 @@ class _Seg:
     link : Link
         Pipe the step belongs to.
     back : bool
-        Whether the pipe runs against the layer order.
+        Whether layering dropped the pipe for closing a cycle.
     """
 
     left: _Node
@@ -133,17 +133,17 @@ class _Seg:
 
 
 def _face(port: Port | None) -> str | None:
-    """Return a nozzle's fixed face, or None if it has a menu.
+    """Return a nozzle's stated or only face, else None.
 
     Parameters
     ----------
     port : Port or None
-        Nozzle to read.
+        Nozzle to read, or None.
 
     Returns
     -------
     str or None
-        Fixed face, or None.
+        Face, or None for no port or a choice of faces.
     """
     if port is None:
         return None
@@ -206,7 +206,7 @@ def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
     node : _Node
         Stack holding the nozzle.
     port : Port or None
-        Nozzle, or None for a dummy's centre.
+        Nozzle, or None for the stack's top centre.
 
     Returns
     -------
@@ -221,7 +221,7 @@ def _offset(node: _Node, port: Port | None) -> tuple[float, float]:
 
 
 def _around(node: _Node, port: Port | None, east: bool) -> float:
-    """Return a nozzle's height down its stack, from 0 to 1.
+    """Return a nozzle's rank down its stack, about 0 to 1.
 
     A top or bottom nozzle ranks further inside the nearer it is to the
     side given by ``east``.
@@ -238,7 +238,7 @@ def _around(node: _Node, port: Port | None, east: bool) -> float:
     Returns
     -------
     float
-        Rank down the stack.
+        Rank down the stack; 0.5 for a dummy or a flat stack.
     """
     if port is None or not node.h:
         return 0.5
@@ -345,11 +345,12 @@ def _rank(layers: dict[int, list[_Node]]) -> None:
 
 
 def _clear_pins(units: list[Unit]) -> None:
-    """Move units clear of the pinned units and of each other.
+    """Step units off the fully pinned units and the units before them.
 
-    If any unit is pinned, each other unit in x-then-y order moves
-    down, or right if its y is pinned, until it is ``LANE`` clear of
-    the units pinned on both axes and those moved before it.
+    If any unit has an x or y pin, each unit not pinned on both axes,
+    in x-then-y order, steps below (right of, if its y is pinned) a
+    box it comes within ``LANE`` of, up to one step more than there
+    are boxes. The boxes are the fully pinned units and those before.
 
     Parameters
     ----------
@@ -533,7 +534,7 @@ def _shape(node: _Node, stacked: list[tuple[Unit, Unit, Link]], pads: dict[Unit,
 
 
 def _east(link: Link) -> tuple[int, int]:
-    """Return a pipe's certainty rank and +1 if it runs east.
+    """Return a pipe's certainty rank and direction.
 
     A lower rank is surer. A return line runs west; otherwise level
     nozzle faces vote, and a tie runs east.
@@ -560,7 +561,9 @@ def _layers(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]]
             ) -> list[tuple[_Node, _Node, Link]]:
     """Assign each stack a layer and return the pipes kept west to east.
 
-    Pipes are kept surest first unless they close a cycle.
+    Pipes are kept surest first unless they close a cycle. A column
+    pin fixes a stack's layer; an unpinned source sits just before its
+    nearest consumer.
 
     Parameters
     ----------
@@ -644,7 +647,7 @@ def _chains(nodes: list[_Node], edges: list[tuple[_Node, _Node, Link]], units: l
     Returns
     -------
     tuple[dict[int, list[_Node]], list[_Seg]]
-        Stacks and dummies in each layer, and the pipe steps.
+        Stacks then dummies in each layer, and the pipe steps.
     """
     first = {n: min(units.index(u) for u in n.members) for n in nodes}
     layers: dict[int, list[_Node]] = {}
@@ -773,7 +776,7 @@ def _row_pins(layers: dict[int, list[_Node]]) -> None:
 
 
 def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, float]:
-    """Return each stack's left edge.
+    """Return each node's left edge.
 
     Parameters
     ----------
@@ -896,7 +899,8 @@ def _straighten(layers: dict[int, list[_Node]], segs: list[_Seg]) -> None:
 def _fold(layers: dict[int, list[_Node]], segs: list[_Seg], xs: dict[_Node, float]) -> None:
     """Fold a drawing wider than :data:`BAND_WIDTH` into bands.
 
-    A band breaks in its second half, where the fewest pipes leave.
+    A band ends at the layer in its second half that the fewest pipe
+    steps leave, the latest on a tie.
 
     Parameters
     ----------
@@ -947,7 +951,7 @@ def _gap(upper: _Node, lower: _Node) -> float:
     Returns
     -------
     float
-        Clear height.
+        ``LANE`` or ``ROW_GAP``, plus the balloon room between them.
     """
     flags = all(u.kind in ("feed", "product") for u in (*upper.members, *lower.members))
     gap = LANE if flags else ROW_GAP  # dummies and flags only
@@ -992,7 +996,7 @@ def _isotonic(targets: list[list[tuple[float, float]]], steps: list[float]) -> l
 
 
 def _median(pairs: list[tuple[float, float]]) -> float:
-    """Return the weighted median of ``(value, weight)`` pairs.
+    """Return the lower weighted median of ``(value, weight)`` pairs.
 
     Parameters
     ----------
@@ -1002,7 +1006,12 @@ def _median(pairs: list[tuple[float, float]]) -> float:
     Returns
     -------
     float
-        Weighted median.
+        Least value whose cumulative weight reaches half the total.
+
+    Raises
+    ------
+    IndexError
+        If ``pairs`` is empty.
     """
     pairs = sorted(pairs)
     half, total = sum(w for _, w in pairs) / 2, 0.0

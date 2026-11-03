@@ -168,9 +168,10 @@ def _members(element: Element) -> list[Unit]:
 def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
     """Collect the pipes that carry furniture, in stream order.
 
-    A pipe runs from a unit that is not furniture, through furniture, to
-    the next unit that is not. A pipe that starts and ends on one unit,
-    ends at furniture, or has a manual route, is skipped.
+    A pipe runs from a unit that is neither furniture nor a station
+    member, through furniture, to the next unit that is not furniture.
+    A pipe that starts and ends on one unit, ends at furniture, or has
+    a manual route, is skipped.
 
     Parameters
     ----------
@@ -352,8 +353,8 @@ def _routed_pipes(fs: Flowsheet, runs: list[MountedRun],
     Returns
     -------
     tuple[list[list[Point]], list[list[Point]]]
-        Each pipe's polyline, empty where routing failed, and the other
-        process streams' polylines between retained units.
+        Each pipe's polyline, empty where routing failed, and the routed
+        polylines of the other process streams between retained units.
     """
     from pandid.layout.cycles import break_cycles
     from pandid.layout.faces import select_faces
@@ -501,9 +502,12 @@ def _on_corridor(
 def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     """Return a device frame on a leg point, piped in flow order.
 
-    Keep a stated turn or mirror, skip poses a stated nozzle face rules
-    out, and use the first that puts both nozzles on the leg, inlet
-    upstream. With none, centre the device on the point.
+    Poses run 0, 180, 90, 270 on a level leg or 90, 270, 180, 0
+    upright, each unmirrored then mirrored, kept to a stated turn or
+    mirror and to poses every stated nozzle face allows, else the
+    current pose. The first pose with both nozzles on the leg, inlet
+    upstream, wins; upright, with an actuator and no stated turn, the
+    first with the actuator on the flow's left wins, else the first.
 
     Parameters
     ----------
@@ -517,7 +521,7 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     Returns
     -------
     Frame
-        Device frame.
+        Winning frame, else the first pose centred on the point.
     """
     (ax, ay), (bx, by) = leg
     level = _level(leg)
@@ -678,7 +682,7 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
            zones: list[Box], pipes: list[list[Point]], ends: tuple[Unit, ...] = ()) -> bool:
     """Return whether proposed frames keep clear of other units.
 
-    Each frame keeps :data:`ALONG` along the pipe and :data:`GAP` across
+    Each frame keeps :data:`ALONG` along the pipe or :data:`GAP` across
     it from every obstacle and zone. Each signal exit stays off
     obstacles, zones, end units and pipes.
 
@@ -850,9 +854,9 @@ def _wanted(run: MountedRun, total: float, along: Callable[[Port], float] | None
             extra: tuple[tuple[Port, Port, float], ...] = ()) -> list[float]:
     """Return the wanted centre distance along the pipe of each element.
 
-    An element with a place sits at its fraction of the author's line,
-    between that line's end nozzles; any other is spread evenly. Extra
-    places follow; one that cannot be located sits mid-pipe.
+    An element whose place has both line ends located sits at its
+    fraction between them; any other is spread evenly. Extra places
+    follow, mid-pipe where one cannot be located.
 
     Parameters
     ----------
@@ -920,7 +924,7 @@ def _room(run: MountedRun) -> float:
     Returns
     -------
     float
-        Pipe length.
+        Pipe length, ignoring gaps that no length opens.
     """
     start, unit = _wanted(run, 0.0), _wanted(run, 1.0)
     slope = [b - a for a, b in zip(start, unit)]
@@ -938,8 +942,9 @@ def _assign(run: MountedRun, legs: list[Leg], wanted: list[float]) -> list[list[
     """Return ways to put elements on legs in flow order, best first.
 
     Single legs that hold the whole chain come first, level before
-    upright, then nearest the wanted middle. The last way deals elements
-    onto legs in order: the first leg with room, else the roomiest.
+    upright, then nearest the wanted middle. The last way deals each
+    element onto the first leg with room from the previous element's
+    on, else the roomiest it pipes along, else the longest leg.
 
     Parameters
     ----------
@@ -1044,6 +1049,9 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
              zones: list[Box], pipes: list[list[Point]]) -> bool:
     """Set a pipe's elements on its routed polyline.
 
+    With no route, one straight leg from the source nozzle along the
+    larger offset to the destination stands in.
+
     Parameters
     ----------
     run : MountedRun
@@ -1055,7 +1063,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
     zones : list[Box]
         Ground covered by stations set so far; extended in place.
     pipes : list[list[Point]]
-        Every routed line on the sheet, this pipe included.
+        Routed lines between placed equipment, every pipe included.
 
     Returns
     -------

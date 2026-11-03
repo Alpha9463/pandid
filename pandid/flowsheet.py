@@ -1727,7 +1727,8 @@ class Flowsheet:
         sequence, spec, insulation : str or float, optional
             Sequence (automatic if unset), piping class and insulation.
         ends : str, tuple[str, str] or None, optional
-            ``connections`` style for both ends or ``(source, dest)``.
+            One of :data:`~pandid.render.svg.CONNECTIONS` for both ends,
+            or a ``(source, dest)`` pair; overrides ``connections``.
 
         Returns
         -------
@@ -2386,8 +2387,9 @@ class Flowsheet:
             Sheet ``"A4"`` to ``"A0"``, or ``None`` to fit the drawing.
         connections : str or None, optional
             Joint marks on a P&ID: ``"none"`` (default), ``"flanged"``
-            (nozzles, valves and inline fittings) or
-            ``"flanged-at-nozzles"``. Reducers and tees stay unmarked.
+            (equipment nozzles, and valve and fitting ends that draw no
+            flange of their own) or ``"flanged-at-nozzles"`` (equipment
+            nozzles only).
         jump_direction : str, default="vertical"
             ``"vertical"`` or ``"horizontal"`` line carries the mark.
         crossing_style : str, default="gap"
