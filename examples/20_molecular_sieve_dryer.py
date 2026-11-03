@@ -294,7 +294,7 @@ def main():
     # acts, which is what Instrument(variant="logic") is for. Signal
     # lines from one balloon to eight valves would say the same thing and
     # cross most of the sheet doing it.
-    kc501 = fs.add_instrument("KC", 501, near=bed_a, at="W", offset=170,
+    kc501 = fs.add_instrument("KC", 501, near=bed_a, face="W", offset=170,
                               variant="shared",
                               description="Drier Switching Sequence")
     kc501.annotate(high="KAH")
@@ -306,7 +306,7 @@ def main():
                         (xv502a, "W"), (xv502b, "W"),
                         (xv503a, "N"), (xv503b, "N"),
                         (xv504a, "W"), (xv504b, "W")):
-        fs.add_instrument("KY", 501, acting_on=valve, at=face, offset=34,
+        fs.add_instrument("KY", 501, acting_on=valve, face=face, offset=34,
                           variant="logic")
 
     # --- Loop 503: the regeneration gas temperature -------------------
@@ -318,16 +318,16 @@ def main():
     # bed legs are taken off.
     tt503 = fs.add_instrument("TT", temp503, sensing=hot_regen, at=0.5,
                               offset=70)
-    tic503 = fs.add_instrument("TIC", temp503, near=tt503, at="S", offset=70,
+    tic503 = fs.add_instrument("TIC", temp503, near=tt503, face="S", offset=70,
                                variant="shared")
     tic503.annotate(high="TAH")
     fs.connect(tt503.sig_out, tic503.sig_in, kind="electric")
     fs.connect(tic503.sig_out, cv503.actuator, kind="pneumatic")
 
     # --- Loop 504: the separator level --------------------------------
-    lt504 = fs.add_instrument("LT", level504, sensing=regen_sep, at="E",
+    lt504 = fs.add_instrument("LT", level504, sensing=regen_sep, face="E",
                               offset=60)
-    lic504 = fs.add_instrument("LIC", level504, near=lt504, at="S", offset=70,
+    lic504 = fs.add_instrument("LIC", level504, near=lt504, face="S", offset=70,
                                variant="shared")
     lic504.annotate(high="LAH", low="LAL")
     fs.connect(lt504.sig_out, lic504.sig_in, kind="electric")
@@ -342,7 +342,7 @@ def main():
     # bed B, and a balloon in it would be crossed by that line.
     at502 = fs.add_instrument("AT", 502, sensing=dry_header, at=0.4, offset=60,
                               angle=-90)
-    ai502 = fs.add_instrument("AI", 502, near=at502, at="S", offset=60,
+    ai502 = fs.add_instrument("AI", 502, near=at502, face="S", offset=60,
                               variant="shared",
                               description="Dry Gas Moisture Analyser")
     ai502.annotate(high="AAH")

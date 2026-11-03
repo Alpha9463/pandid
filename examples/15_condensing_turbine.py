@@ -93,10 +93,10 @@ def main():
     # The controller hangs over the valve it strokes, so its output
     # drops straight onto the actuator, and the interlock hangs off the
     # controller so its own output leaves east and turns down.
-    lt701 = fs.add_instrument("LT", level, sensing=v701, at="S", offset=55)
-    lic701 = fs.add_instrument("LIC", level, near=lv701, at="N", offset=110,
+    lt701 = fs.add_instrument("LT", level, sensing=v701, face="S", offset=55)
+    lic701 = fs.add_instrument("LIC", level, near=lv701, face="N", offset=110,
                                variant="shared")
-    trip = fs.add_instrument("ZSL", 701, near=lic701, at="N", offset=70,
+    trip = fs.add_instrument("ZSL", 701, near=lic701, face="N", offset=70,
                              variant="interlock",
                              description="Low-Level Trip")
     fs.connect(lt701.sig_out, lic701.pv, kind="electric")
@@ -106,7 +106,7 @@ def main():
 
     vacuum = fs.add_loop("P", 702)
     pt702 = fs.add_instrument("PT", vacuum, sensing=exhaust, at=0.5, offset=60)
-    pi702 = fs.add_instrument("PI", vacuum, near=pt702, at="N", offset=65,
+    pi702 = fs.add_instrument("PI", vacuum, near=pt702, face="N", offset=65,
                               display="subsidiary",
                               description="Local Gauge Board")
     fs.connect(pt702.sig_out, pi702.sig_in, kind="electric")

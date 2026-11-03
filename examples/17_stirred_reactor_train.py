@@ -262,9 +262,9 @@ def main():
     # the venturi is left unlettered; FT-201 then stacks over that
     # balloon, edge to edge, reading the same element. near=, because
     # nothing is drawn between two touching balloons.
-    fe201_b = fs.add_balloon(fe201, at="N", offset=38)
-    ft201 = fs.add_instrument("FT", flow201, near=fe201_b, at="N", offset=23)
-    fic201 = fs.add_instrument("FIC", flow201, near=ft201, at="N", offset=60,
+    fe201_b = fs.add_balloon(fe201, face="N", offset=38)
+    ft201 = fs.add_instrument("FT", flow201, near=fe201_b, face="N", offset=23)
+    fic201 = fs.add_instrument("FIC", flow201, near=ft201, face="N", offset=60,
                                variant="shared")
     fic201.nozzle("sig_out", "E")
     fs.connect(ft201.sig_out, fic201.pv, kind="electric")
@@ -276,11 +276,11 @@ def main():
     # the slave holds the water flow the master asks for, so a swing in
     # cooling-water pressure is corrected before the reactor temperature
     # has moved at all.
-    tt202 = fs.add_instrument("TT", temp202, sensing=rx, at="E", offset=80)
+    tt202 = fs.add_instrument("TT", temp202, sensing=rx, face="E", offset=80)
     # South of its transmitter and not north: the vent leaves the head's
     # east shoulder, so the paper above this balloon belongs to the
     # off-gas riser.
-    tic202 = fs.add_instrument("TIC", temp202, near=tt202, at="S", offset=130,
+    tic202 = fs.add_instrument("TIC", temp202, near=tt202, face="S", offset=130,
                                variant="shared")
     tic202.nozzle("sig_out", "E")
     # The alarms are lettering in this balloon's own quadrants, high above
@@ -289,9 +289,9 @@ def main():
     tic202.annotate(high="TAH", low="TAL")
     fs.connect(tt202.sig_out, tic202.sig_in, kind="electric")
 
-    fe205_b = fs.add_balloon(fe205, at="N", offset=38)
-    ft205 = fs.add_instrument("FT", flow205, near=fe205_b, at="N", offset=23)
-    fic205 = fs.add_instrument("FIC", flow205, near=ft205, at="W", offset=90,
+    fe205_b = fs.add_balloon(fe205, face="N", offset=38)
+    ft205 = fs.add_instrument("FT", flow205, near=fe205_b, face="N", offset=23)
+    fic205 = fs.add_instrument("FIC", flow205, near=ft205, face="W", offset=90,
                                variant="shared")
     fic205.nozzle("sig_out", "S")
     # The measurement lands on pv and the master sets sig_in: a cascade
@@ -301,8 +301,8 @@ def main():
     fs.connect(fic205.sig_out, cv205.actuator, kind="pneumatic")
 
     # --- Loop 203: reactor level on the product draw ------------------
-    lt203 = fs.add_instrument("LT", level203, sensing=rx, at="W", offset=90)
-    lic203 = fs.add_instrument("LIC", level203, near=lt203, at="N", offset=90,
+    lt203 = fs.add_instrument("LT", level203, sensing=rx, face="W", offset=90)
+    lic203 = fs.add_instrument("LIC", level203, near=lt203, face="N", offset=90,
                                variant="shared")
     lic203.nozzle("sig_out", "E")
     lic203.annotate(high="LAH", low="LAL")
@@ -312,7 +312,7 @@ def main():
     # --- Loop 204: reactor pressure on the vent -----------------------
     pt204 = fs.add_instrument("PT", press204, sensing=off_gas, at=0.6,
                               offset=70, angle=-90)
-    pic204 = fs.add_instrument("PIC", press204, near=pt204, at="E", offset=90,
+    pic204 = fs.add_instrument("PIC", press204, near=pt204, face="E", offset=90,
                                variant="shared")
     pic204.nozzle("sig_out", "E")   # the valve it strokes stands above and right
     pic204.annotate(high="PAH")
@@ -332,17 +332,17 @@ def main():
     # agitation is the second input, because an unstirred jacket cools
     # the wall and not the batch.
     tt207 = fs.add_instrument("TT", 207, sensing=draw, at=0.12, offset=90)
-    si208 = fs.add_instrument("ST", 208, sensing=rx, at="N", offset=70)
-    fs.add_instrument("Z", 1, sensing=tt207, at="E", offset=44, variant="sis")
-    fs.add_instrument("Z", 1, sensing=si208, at="N", offset=40, variant="sis")
+    si208 = fs.add_instrument("ST", 208, sensing=rx, face="N", offset=70)
+    fs.add_instrument("Z", 1, sensing=tt207, face="E", offset=44, variant="sis")
+    fs.add_instrument("Z", 1, sensing=si208, face="N", offset=40, variant="sis")
     # The same square a third and a fourth time, on the two valves it
     # strokes: Instrument(variant="sis") is the one symbol allowed to
     # carry its tag more than once.
     # Over each valve rather than under it: a valve that states a fail
     # position writes FC or FO beneath its tag, and a square standing
     # there is a square with lettering across it.
-    fs.add_instrument("Z", 1, acting_on=xv201, at="N", offset=34, variant="sis")
-    fs.add_instrument("Z", 1, acting_on=xv206, at="N", offset=34, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv201, face="N", offset=34, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv206, face="N", offset=34, variant="sis")
 
     # --- Sheet furniture ----------------------------------------------
     # date= and scale= are stated rather than left blank: left blank, the
