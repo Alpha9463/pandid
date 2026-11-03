@@ -143,7 +143,6 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
         If a member's stated nozzle face cannot be drawn in the station.
     """
     base = _station_frames(assembly, 0.0, 0.0, mirrored)
-    left, y = preferred_left, centerline
     pinned_x: float | None = None
     pinned_y: float | None = None
     for unit, frame in base.items():
@@ -165,11 +164,8 @@ def _anchored_origin(assembly: StationAssembly, preferred_left: float,
             if pinned_y is not None and abs(candidate_y - pinned_y) > 1e-6:
                 return None
             pinned_y = candidate_y
-    if pinned_x is not None:
-        left = pinned_x
-    if pinned_y is not None:
-        y = pinned_y
-    return left, y
+    return (preferred_left if pinned_x is None else pinned_x,
+            centerline if pinned_y is None else pinned_y)
 
 
 def _separated(first: dict[Unit, Frame], second: dict[Unit, Frame]) -> bool:
