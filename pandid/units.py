@@ -2952,8 +2952,7 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     Raises
     ------
     TypeError
-        If ``number`` is neither text nor a whole number, so a float such
-        as ``101.0`` does not draw as ``LIC-101.0``.
+        If ``number`` is neither text nor a whole number.
     """
     if number is not None and not (isinstance(number, str) or is_whole(number)):
         raise TypeError(
@@ -2971,21 +2970,17 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     return tag[:i], tag[i:]
 
 
-# Extra signal port name; the first member of each pool is bare (sig_out),
-# the rest are numbered from 2 (sig_out_2).
+# A numbered signal pool member, such as sig_out_2.
 _POOL_MEMBER = re.compile(r"(sig_in|sig_out)_\d+")
 
-#: Where a balloon's reading is available (ISO 15519-2:2015 Table 1): no
-#: bar for field, one bar for the central control system, two for a
-#: subsidiary one.
+#: Where a balloon's reading is available (ISO 15519-2 Table 1).
 DISPLAYS = ("field", "central", "subsidiary")
 
-#: How a balloon relates to its host. ``"sensing"`` and ``"acting_on"``
-#: draw a line; ``"near"`` only places the balloon.
+#: How a balloon relates to its host; ``"near"`` draws no line.
 RELATIONS = ("sensing", "acting_on", "near")
 
-# (symbol type, display) -> registered variant. Pairs not listed use the
-# symbol type unchanged, so a new balloon shape needs no entry.
+# (symbol type, display) -> registered variant. Unlisted pairs use the
+# symbol type unchanged.
 _BALLOON_SYMBOLS = {
     ("default", "field"): "default",
     ("default", "central"): "panel",
@@ -2993,46 +2988,23 @@ _BALLOON_SYMBOLS = {
     ("shared", "central"): "shared",
 }
 
-# Registered variant -> symbol type, for writing the two axes back out.
+# Registered variant -> symbol type.
 _BALLOON_SHAPES = {drawn: shape for (shape, _display), drawn in _BALLOON_SYMBOLS.items()}
 
-# Display implied by a symbol type: a shared (circle-in-square) balloon
-# is in the central system (CHEE4001 p.13).
+# Display implied by a symbol type.
 _IMPLIED_DISPLAY = {"shared": "central"}
 
-# Removed variant spellings and the display each meant. Refused by name,
-# since the registry would otherwise draw the bar while display stayed
-# "field".
+# Variant spellings refused by name, and the display each means.
 _DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
 
 
 class Instrument(Unit):
-    """ISA-5.1 instrument balloon.
+    """ISA-5.1 instrument balloon: function letters over a loop number.
 
-    The balloon draws the function letters over the bare loop number;
-    ``name`` is the full tag (``"FT-101"``). ``Instrument("FT-101")``,
-    ``Instrument("FT101")`` and ``Instrument("FT", 101)`` are the same.
-
-    ``pv`` taps the process; ``sig_in`` and ``sig_out`` carry signals. All
-    three are signal ports. ``sig_in`` and ``sig_out`` are pools: a
-    connection to a used member gets a new one, so a balloon takes as many
-    signal lines as the loop needs::
-
-        fs.connect(pic301.sig_out, cv1.actuator, kind="pneumatic")
-        fs.connect(pic301.sig_out, cv2.actuator, kind="pneumatic")
-
-    Connecting units instead lets the engine pick both ends:
-    ``fs.connect(ft305, fic305, kind="electric")``.
-
-    ``variant`` is the symbol type: ``"default"`` (circle), ``"shared"``
-    (circle in a square), ``"computer"`` (hexagon), ``"sis"`` or
-    ``"logic"`` (diamond in a square, ANSI/ISA-5.1-2009 Table 5.1.1 column
-    B) and ``"interlock"`` (diamond, Table 5.1.2 items 3-5). ``display`` is
-    where the reading is available (:data:`DISPLAYS`). Only registered
-    pairs are drawn; ``"shared"`` implies ``"central"``.
-
-    Place a balloon on what it measures with :meth:`attach` or
-    :meth:`pandid.flowsheet.Flowsheet.add_instrument`.
+    ``Instrument("FT-101")``, ``Instrument("FT101")`` and
+    ``Instrument("FT", 101)`` give the same tag. ``pv`` taps the
+    process; ``sig_in`` and ``sig_out`` are signal pools, so connecting
+    to a used member gets a new one.
 
     Parameters
     ----------
@@ -3041,12 +3013,12 @@ class Instrument(Unit):
     number : str or int, default=""
         Loop number.
     variant : str, default="default"
-        Symbol type.
+        Symbol type: ``"default"``, ``"shared"``, ``"computer"``,
+        ``"sis"``, ``"logic"`` or ``"interlock"``.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
     display : str, optional
-        One of :data:`DISPLAYS`; implied by ``variant`` when omitted, else
-        ``"field"``.
+        One of :data:`DISPLAYS`; implied by ``variant`` when omitted.
 
     Attributes
     ----------
@@ -3055,7 +3027,7 @@ class Instrument(Unit):
     display : str
         Where the reading is available.
     symbol_type : str
-        Symbol type as the author gave it, without the display folded in.
+        Symbol type as given, without the display.
     host : Stream, Unit or None
         What :meth:`attach` placed the balloon on.
     at, offset, angle, relation
@@ -3068,8 +3040,8 @@ class Instrument(Unit):
     Raises
     ------
     ValueError
-        If ``display`` is unknown, ``variant`` is a removed display
-        spelling, or the pair has no drawing.
+        If ``display`` is unknown, ``variant`` is a display spelling, or
+        the pair has no drawing.
     """
 
     pv: Port
@@ -3077,18 +3049,16 @@ class Instrument(Unit):
     sig_out: Port
 
     kind = "instrument"
-    # Declared up front, not created on first use, so face selection sees
-    # them in a fixed order whatever order the author connects them in.
     PORTS = [
         ("pv", "inlet", "signal"),
         ("sig_in", "inlet", "signal"),
         ("sig_out", "outlet", "signal"),
     ]
 
-    # Pool names, which are also the first member of each pool.
+    # Pool names, which are also each pool's first member.
     _SIGNAL_POOLS = ("sig_in", "sig_out")
 
-    # Logic-function symbols, which may be drawn several times under one tag.
+    # Variants that may be drawn several times under one tag.
     _REPEATABLE_VARIANTS = frozenset({"sis", "logic", "interlock"})
 
     def __init__(
@@ -3104,7 +3074,6 @@ class Instrument(Unit):
         display: str | None = None,
     ):
         letters, num = split_tag(type, number)
-        # Build the name from the split, so every spelling gives one tag.
         name = f"{letters}-{num}" if letters and num else letters + num
         # _resolved_variant sets the final display.
         self.display = "field"
@@ -3120,51 +3089,23 @@ class Instrument(Unit):
         )
         self.type = letters
         self.number = num
-        # Written by to_dict, so a sheet read back names an accepted variant.
         self.symbol_type = _BALLOON_SHAPES.get(variant, variant)
-        # Kept apart from name: a repeated square needs a distinct name.
+        # The drawn tag; a repeated square has a distinct name.
         self._tag = name
-        # Attachment intent (set only via attach()); the layout engine
-        # resolves it into a frame, as Pin -> Frame for equipment.
+        # Attachment intent, set only by attach().
         self.host: "Stream | Unit | None" = None
         self.at: float | str | None = None
         self.offset: float = 45.0
         self.angle: float = 90.0
-        # One of RELATIONS; decides whether a tap line is drawn.
         self.relation: str = "sensing"
         # Primary element whose tag this balloon shares (add_balloon).
         self._marks: "Unit | None" = None
-        # Letter codes written outside the symbol, keyed by quadrant;
-        # see :meth:`annotate`.
         self.quadrants: dict[str, tuple[str, ...]] = {}
-        # Resolved tap point; set only by layout.
+        # Resolved tap point, set only by layout.
         self.tap: tuple[float, float] | None = None
 
     def _resolved_variant(self, name: str, variant: str, display: str | None) -> str:
-        """Return the registered variant for a symbol type and display.
-
-        Sets :attr:`display` as a side effect.
-
-        Parameters
-        ----------
-        name : str
-            Tag, for error messages.
-        variant : str
-            Symbol type (ANSI/ISA-5.1 5.1.1).
-        display : str or None
-            Display (ISO 15519-2 Table 1); implied when ``None``.
-
-        Returns
-        -------
-        str
-            Registered variant.
-
-        Raises
-        ------
-        ValueError
-            If ``variant`` is a removed display spelling, ``display`` is
-            unknown, or the pair has no drawing.
-        """
+        """Set :attr:`display` and return the registered variant."""
         meant = _DISPLAY_VARIANTS.get(variant)
         if meant is not None:
             raise ValueError(
@@ -3187,7 +3128,7 @@ class Instrument(Unit):
         if pair is not None:
             return pair
         if display == "field":
-            return variant  # an unregistered shape is the registry's to refuse
+            return variant
         drawn = ", ".join(
             f"variant={v!r} display={d!r}" for (v, d) in _BALLOON_SYMBOLS if d != "field"
         )
@@ -3198,26 +3139,16 @@ class Instrument(Unit):
             f"Ask for display='field', or for one of those"
         )
 
-    # ------------------------------------------------------------------
-    # Signal pools.
-    #
-    # sig_in and sig_out stay plain attributes naming the first member:
-    # ``inst.sig_out.stream`` must read back the first line rather than
-    # create a new port. Flowsheet.connect asks for another member when the
-    # one given is wired. pv is not a pool; a differential instrument needs
-    # named high and low taps instead.
-    # ------------------------------------------------------------------
+    # Signal pools. sig_in and sig_out are the first members; others are
+    # created on demand.
 
     def signal_port(self, name: str) -> Port:
         """Return a port by name, creating a missing pool member.
 
-        Used by :func:`pandid.spec.from_dict` to rebuild pool members, as in
-        ``pic.signal_port("sig_out_2")``.
-
         Parameters
         ----------
         name : str
-            Port name.
+            Port name, such as ``"sig_out_2"``.
 
         Returns
         -------
@@ -3241,38 +3172,14 @@ class Instrument(Unit):
         return self._add_port(name, self.ports[member.group(1)].direction, "signal")
 
     def _mint_port(self, name: str) -> Port | None:
-        """Return :meth:`signal_port`, or ``None`` instead of raising.
-
-        Lets :func:`pandid.spec._find_port` report the error itself.
-
-        Parameters
-        ----------
-        name : str
-            Port name.
-
-        Returns
-        -------
-        Port or None
-            The port, or ``None`` if the name cannot be created.
-        """
+        """Return :meth:`signal_port`, or ``None`` instead of raising."""
         try:
             return self.signal_port(name)
         except KeyError:
             return None
 
     def _pool_of(self, port_name: str) -> str | None:
-        """Return the pool a port belongs to.
-
-        Parameters
-        ----------
-        port_name : str
-            Port name.
-
-        Returns
-        -------
-        str or None
-            ``"sig_in"`` or ``"sig_out"``, or ``None`` for ``pv``.
-        """
+        """Return the port's pool, or ``None`` for ``pv``."""
         if port_name in self._SIGNAL_POOLS:
             return port_name
         member = _POOL_MEMBER.fullmatch(port_name)
@@ -3280,20 +3187,14 @@ class Instrument(Unit):
 
     @property
     def tag(self) -> str:
-        """Return the ISA tag drawn in the symbol.
-
-        Equal to :attr:`~Unit.name` except for a repeated logic square,
-        whose names differ (``I-1``, ``I-1 (2)``) while the tag is shared.
-        """
+        """The ISA tag drawn in the symbol."""
         return self._tag
 
     def repeats(self, other: "Unit") -> bool:
         """Return whether this balloon may share ``other``'s tag.
 
-        True for the same logic symbol drawn again (``"sis"`` and
-        ``"logic"`` count as one; an interlock diamond and a diamond in a
-        square do not), or for the primary element this balloon was built
-        for by :meth:`pandid.flowsheet.Flowsheet.add_balloon`.
+        True for the same logic symbol drawn again, or for the primary
+        element this balloon marks.
 
         Parameters
         ----------
@@ -3307,7 +3208,7 @@ class Instrument(Unit):
         """
 
         def symbol(variant: object) -> object:
-            """Return the symbol a variant draws, folding ``logic`` into ``sis``."""
+            """Return the symbol a variant draws; ``logic`` is ``sis``."""
             return "sis" if variant == "logic" else variant
 
         if other is self._marks:
@@ -3329,29 +3230,22 @@ class Instrument(Unit):
     ) -> "Instrument":
         """Write letter codes in the quadrants around this symbol.
 
-        ISO 15519-2 5.2.5 puts letter codes with modifiers H or L outside
-        the symbol, ordered A, S then Z outward; no line is drawn. The
-        quadrants are the corners (5.1.3, Figure 8), so no face is used.
-        Codes in one quadrant are sorted into that order::
+        Codes in a quadrant are sorted A, S then Z outward (ISO 15519-2
+        5.2.5). An omitted argument leaves its quadrant unchanged; an
+        empty sequence clears it::
 
             lic304.annotate(high="LAH", low="LAL")
-            lsh611.annotate(high=("LAHH", "LSHH"))
-            ai301.annotate(variable="pH", safety="SIL 2")
-
-        An omitted argument leaves its quadrant unchanged; an empty
-        sequence clears it.
 
         Parameters
         ----------
         high : str or Sequence[str], optional
-            Quadrant (c): high functions such as alarms or switches.
+            Quadrant (c): high functions.
         low : str or Sequence[str], optional
             Quadrant (d): low functions.
         safety : str or Sequence[str], optional
-            Quadrant (a): typical-diagram reference or safety information
-            such as a SIL or SIF identifier.
+            Quadrant (a): safety information, such as a SIL.
         variable : str or Sequence[str], optional
-            Quadrant (b): the variable meant by letter code U, such as pH.
+            Quadrant (b): the variable for letter code U, such as pH.
 
         Returns
         -------
@@ -3384,26 +3278,22 @@ class Instrument(Unit):
     ) -> "Instrument":
         """Anchor this balloon to a process line or to equipment.
 
-        An attached balloon is placed from its host, not by flow order. An
-        absolute :meth:`~Unit.pin` overrides the standoff on the axis it
-        names; the tap point is kept.
+        An absolute :meth:`~Unit.pin` overrides the standoff on the axis
+        it names.
 
         Parameters
         ----------
         on : Stream or Unit
             Host line or equipment.
         at : float or str, optional
-            Fraction 0 to 1 along a stream's routed path (default 0.5), or
-            a face ``"N"``, ``"S"``, ``"E"`` or ``"W"`` of a unit (default
-            ``"E"``).
+            Fraction along a stream (default 0.5), or a unit face
+            ``"N"``, ``"S"``, ``"E"`` or ``"W"`` (default ``"E"``).
         offset : float, default=45.0
-            Distance from tap to balloon centre in pixels; 0 draws an
-            in-line element on the line.
+            Tap to balloon centre in pixels; 0 draws it on the line.
         angle : float, default=90.0
-            Branch direction in degrees, counter-clockwise from the flow
-            direction at the tap (or the face tangent on a unit).
+            Degrees counter-clockwise from the flow or face direction.
         relation : str, default="sensing"
-            One of :data:`RELATIONS`; ``"near"`` draws no tap line.
+            One of :data:`RELATIONS`.
 
         Returns
         -------
@@ -3458,36 +3348,12 @@ class Instrument(Unit):
         self.offset = float(offset)
         self.angle = float(angle)
         self.relation = relation
-        # Placement is resolved in route(), so re-anchoring needs a re-route.
         self._invalidate_layout()
         return self
 
 
 def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
-    """Return one quadrant's letter codes in ISO 15519-2 5.2.5 order.
-
-    Codes are sorted A, S then Z outward by their function letter; codes
-    with none of these follow in the given order.
-
-    Parameters
-    ----------
-    where : str
-        Tag, for error messages.
-    quadrant : str
-        Quadrant letter, for error messages.
-    codes : str or Sequence[str]
-        Codes; an empty string or sequence clears the quadrant.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Sorted codes.
-
-    Raises
-    ------
-    ValueError
-        If a code is empty.
-    """
+    """Return one quadrant's letter codes in ISO 15519-2 5.2.5 order."""
     if isinstance(codes, str):
         codes = (codes,) if codes else ()
     out = [str(code).strip() for code in codes]
@@ -3500,29 +3366,14 @@ def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> 
             )
 
     def rank(code: str) -> int:
-        """Return a code's sort rank from its function letter.
-
-        The function letter follows the measured variable: ``LAH``
-        alarms, ``LSHH`` switches, ``LZHH`` trips.
-        """
+        """Return a code's sort rank from its A, S or Z letter."""
         return next((" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)
 
     return tuple(sorted(out, key=rank))
 
 
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
-    """Return an inlet and an outlet spec for each named side.
-
-    Parameters
-    ----------
-    *sides : str
-        Side names, such as ``"shell"`` and ``"tube"``.
-
-    Returns
-    -------
-    list[tuple[str, str, str]]
-        ``(name, direction, role)`` port specs.
-    """
+    """Return an inlet and an outlet port spec for each named side."""
     return [
         (f"{side}_{end}", direction, "process")
         for side in sides
@@ -3531,16 +3382,12 @@ def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
 
 
 class HeatExchanger(_VariantPorted):
-    """Heat exchanger with an inlet and outlet on each of its two sides.
+    """Heat exchanger with an inlet and an outlet on each of two sides.
 
-    Ports are named for the side of the equipment, not the duty: which
-    fluid goes shell side is a design decision the drawing records, and
-    which side is hot can change between operating cases.
-
-    Most variants are shell and tube. ``air_cooled`` has ``tube`` and
-    ``air`` sides, ``plate`` and ``spiral`` have ``side_a`` and ``side_b``,
-    and ``thin_film`` has ``jacket`` and ``product`` sides. ``kettle`` adds
-    ``bottoms``, the liquid draw at the weir end of the shell.
+    Most variants have ``shell`` and ``tube`` sides. ``air_cooled`` has
+    ``tube`` and ``air``, ``plate`` and ``spiral`` have ``side_a`` and
+    ``side_b``, and ``thin_film`` has ``jacket`` and ``product``.
+    ``kettle`` adds ``bottoms``.
 
     Parameters
     ----------
@@ -3548,19 +3395,16 @@ class HeatExchanger(_VariantPorted):
         As for :class:`Unit`.
     """
 
-    # Only the shell-and-tube ports, so ``hx.bottoms`` does not type-check
-    # on every exchanger; use ``hx.port("bottoms")`` for the others.
+    # Only the shell-and-tube ports are annotated; use
+    # ``hx.port(name)`` for the others.
     shell_in: Port
     shell_out: Port
     tube_in: Port
     tube_out: Port
 
     kind = "hex"
-    # Ports depend on the variant; __init__ adds _VARIANT_PORTS.
     PORTS: list[tuple[str, str, str]] = []
-    # Default port set.
     _DEFAULT_PORTS = _side_ports("shell", "tube")
-    # Variant -> port set; absent variants are shell and tube.
     _VARIANT_PORTS = {
         "kettle": [*_DEFAULT_PORTS, ("bottoms", "outlet", "liquid")],
         "air_cooled": _side_ports("tube", "air"),
@@ -3571,10 +3415,7 @@ class HeatExchanger(_VariantPorted):
 
 
 class Heater(Unit):
-    """Single-stream heater with a utility heating medium.
-
-    ``utility_in`` is the heating medium's connection.
-    """
+    """Single-stream heater; ``utility_in`` takes the heating medium."""
 
     inlet: Port
     outlet: Port
@@ -3589,10 +3430,7 @@ class Heater(Unit):
 
 
 class Cooler(Unit):
-    """Single-stream cooler with a utility cooling medium.
-
-    ``utility_out`` is the cooling medium's connection.
-    """
+    """Single-stream cooler; ``utility_out`` takes the cooling medium."""
 
     inlet: Port
     outlet: Port
@@ -3609,22 +3447,15 @@ class Cooler(Unit):
 class CoolingTower(Unit):
     """Evaporative cooling tower.
 
-    ``"default"`` and ``"induced_draft"`` draw the fan on a stack over the
-    fill; ``"forced_draft"`` draws fans at the foot of each side. Both have
-    the same six ports.
-
-    Ports are named for the side, as on :class:`HeatExchanger`: ``water``
-    for the circulating loop and ``air`` for the draught. ``makeup``
-    replaces evaporation and drift losses, and ``blowdown`` bleeds off
-    dissolved solids; both are on the basin. The air ports are usually left
-    unpiped.
+    ``water`` and ``air`` ports are the two sides; ``makeup`` and
+    ``blowdown`` are on the basin. ``"default"`` and ``"induced_draft"``
+    draw a fan over the fill; ``"forced_draft"`` draws fans at the foot.
     """
 
     water_in: Port
     water_out: Port
     air_in: Port
     air_out: Port
-    # Makeup is a utility supplied to the tower; blowdown is water leaving.
     makeup: Port
     blowdown: Port
 
@@ -3639,45 +3470,18 @@ class CoolingTower(Unit):
 class Evaporator(Unit):
     """Evaporator: liquor concentrated by boiling off water.
 
-    Unlike :class:`HeatExchanger`, the vapour is a plant stream piped to the
-    next effect or a condenser. ``feed``, ``vapor`` (crown) and
-    ``concentrate`` (bottom) are the process; ``heating_in`` and
-    ``condensate`` are the steam chest. The chest is fed from the west and
-    drained to the east, so one effect's vapour reaches the next effect's
-    ``heating_in`` in a left-to-right train.
-
-    Variants::
-
-        Evaporator("EV-101")                            # element unspecified
-        Evaporator("EV-102", variant="calandria")       # short-tube
-        Evaporator("EV-103", variant="falling_film")
-        Evaporator("EV-104", variant="climbing_film")
-        Evaporator("EV-105", variant="plate")
-
-    ``default`` draws an unspecified element for an early PFD. The falling-
-    and climbing-film bodies differ in where the liquor enters, and only
-    the falling-film body has a distributor. Draw forced circulation as
-    this body, a circulating heater and a pump.
-
-    ``supports`` draws an ISO group-26 support under the shell, as on
-    :class:`Vessel`::
-
-        Evaporator("EV-101", variant="falling_film", supports="skirt")
-
-    The heating element is the variant, not an overlay, because ISO
-    groups 26 to 29 draw no tube bundle or plate pack. Drawn one way up
-    and reported as ``gravity-turned`` by
-    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned (ISO 15519-1
-    11.4.2).
+    ``feed``, ``vapor`` and ``concentrate`` are the process;
+    ``heating_in`` (west) and ``condensate`` (east) are the steam chest.
 
     Parameters
     ----------
     name : str
         Tag.
     variant : str, default="default"
-        Heating element.
+        Heating element: ``"default"``, ``"calandria"``,
+        ``"falling_film"``, ``"climbing_film"`` or ``"plate"``.
     supports : str, optional
-        ``"leg"``, ``"bracket"``, ``"skirt"`` or ``"ring"``. Fixed at
+        ``"leg"``, ``"bracket"``, ``"skirt"`` or ``"ring"``; fixed at
         construction.
     width, height, label_pos, description, reference
         As for :class:`Unit`.
@@ -3697,9 +3501,7 @@ class Evaporator(Unit):
         ("heating_in", "inlet", "utility"),
         ("condensate", "outlet", "utility"),
     ]
-    # No support unless ``supports`` names one.
     COMPOSITION = {"supports": None}
-    # The supports overlay is composed in __init__.
     _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
 
     def __init__(
