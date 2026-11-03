@@ -224,16 +224,14 @@ It is still stencil-derived and still Apache-2.0. Adapting one means:
 
 1. write the builder in `pandid/render/symbols.py`, with a comment naming the
    stencil file, the shape, and what was changed;
-2. record it in `ADAPTED_ELSEWHERE` in `scripts/vendor_symbols.py`, so the
-   mapping table stays the place provenance is looked up;
-3. name it and its file in `NOTICE` section 2. It is not an original primitive
+2. name it and its file in `NOTICE` section 2. It is not an original primitive
    and does not belong in the section 1 paragraph that lists those.
 
 The second member is not stencil-derived and is built to *fit* rather than to a
 size the author gives: the block flow diagram's box, whose connections are a
 per-face count only the unit knows, and whose box grows so a run of them keeps a
-legible pitch instead of being squeezed. It is an original primitive, so steps 2
-and 3 do not apply to it; `pandid.units.Block.symbol` is where its drawing comes
+legible pitch instead of being squeezed. It is an original primitive, so step 2
+does not apply to it; `pandid.units.Block.symbol` is where its drawing comes
 from, and `pandid.render.symbols.block_symbol` builds it.
 
 Do not reach for this to avoid vendoring. A symbol with a fixed size goes
