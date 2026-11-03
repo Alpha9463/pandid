@@ -118,9 +118,10 @@ SCENARIOS: dict[str, tuple[Callable[[], tuple[Flowsheet, dict]], Budget]] = {
     "biodiesel as authored": (_biodiesel(), Budget(7, 1981, 1254)),
     "biodiesel with one pin removed": (_biodiesel(skip="s103"), Budget(7, 1981, 1254)),
     "biodiesel automatic": (_biodiesel(pinned=False), Budget(20, 1998, 942)),
-    # 12 on the layered engine (#564), against 8 before: accepted, with the drawing
-    # half the size. Four are a station bypass under its own controller's signal.
-    "ethanol P&ID automatic": (_stripped("11_ethanol_pid"), Budget(12, 2588, 1992)),
+    # 13 on the layered engine (#564), against 8 before: accepted, with the drawing
+    # half the size. Four are a station bypass under its own controller's signal,
+    # and one follows from keeping the mirrors stated on XV-301, FE-303 and CV-306.
+    "ethanol P&ID automatic": (_stripped("11_ethanol_pid"), Budget(13, 2588, 1992)),
     # Width measured on the layered engine (#564), which keeps one band up to 3200 px.
     "molecular sieve automatic": (_stripped("20_molecular_sieve_dryer"), Budget(32, 2903, 1822)),
     "alumina refinery automatic": (_stripped("21_alumina_refinery"), Budget(69, 3044, 2147)),

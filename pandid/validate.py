@@ -931,6 +931,16 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     nozzle = f".{port_name}" if port_name is not None else ""
                     missed.append(f"{u.name}{nozzle} was pinned {axis}={want:g} and is "
                                   f"drawn at {drawn:g}, {abs(drawn - want):g} away")
+            # A stated turn or mirror is drawn as stated.
+            pin = u.pin_
+            if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
+                missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
+                              f"drawn at {u.frame.orientation:g}")
+            if pin is not None and u._mirror_stated and (
+                    (u.frame.mirrored, u.frame.mirror_y) != (pin.mirrored, pin.mirror_y)):
+                missed.append(f"{u.name} was pinned with mirrored="
+                              f"{(pin.mirrored, pin.mirror_y)} and is drawn with "
+                              f"{(u.frame.mirrored, u.frame.mirror_y)}")
             # Grid ranks: compare the pinned col/row with the frame's. Skip a
             # rank superseded by an absolute pin on the same axis
             # (:func:`pandid.layout.control._place_free`); the coordinate

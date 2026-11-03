@@ -1762,6 +1762,11 @@ class Flowsheet:
                     byp.pin(mirrored="x" if mirrored else False)
                     byp.pin(x=centre - resolve_size(byp)[0] / 2)
                     byp.pin(port="inlet", y=y - bypass_rise)
+                # These turns and mirrors are the station's own drawing, not
+                # ones its author stated on a member.
+                for drawn in (*run, byp, dr_a, dr_b):
+                    if drawn is not None:
+                        drawn._turn_stated = drawn._mirror_stated = False
 
             def branch_line(src: "Port", dst: "Port") -> Stream:
                 """Connect a bypass or drain leg with the station's line number.

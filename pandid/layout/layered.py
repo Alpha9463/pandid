@@ -292,6 +292,9 @@ def _stacks(units: list[Unit], links: list[Link]
         return u
 
     col = {u: None if u.pin_ is None else u.pin_.col for u in units}
+    row = {u: None if u.pin_ is None else u.pin_.row for u in units}
+    depth = dict.fromkeys(units, 0)  # place down the stack, from its root's
+    group = {u: [u] for u in units}
     stacked = []
     for link in links:
         a, b = link.source.owner, link.dest.owner
@@ -299,14 +302,19 @@ def _stacks(units: list[Unit], links: list[Link]
         if up is None or link.recycle or find(a) is find(b):
             continue
         upper, lower = (b, a) if up else (a, b)
-        ca, cb = col[find(a)], col[find(b)]
-        rows = [None if u.pin_ is None else u.pin_.row for u in (upper, lower)]
+        top, bottom = find(upper), find(lower)
+        drop = depth[upper] + 1 - depth[lower]
+        merged = [(u, depth[u]) for u in group[top]] + [(u, depth[u] + drop) for u in group[bottom]]
+        ranked = [(r, d) for u, d in merged if (r := row[u]) is not None]
         # The author's grid pins win: a stack never joins two columns or turns rows over.
-        if (ca is not None and cb is not None and ca != cb) or (
-                rows[0] is not None and rows[1] is not None and rows[0] > rows[1]):
+        if (col[top] is not None and col[bottom] is not None and col[top] != col[bottom]) or any(
+                r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked):
             continue
-        col[find(b)] = cb if cb is not None else ca
-        lead[find(a)] = find(b)
+        for u in group[bottom]:
+            depth[u] += drop
+        col[top] = col[top] if col[top] is not None else col[bottom]
+        group[top] += group.pop(bottom)
+        lead[bottom] = top
         stacked.append((upper, lower, link))
     groups: dict[Unit, list[Unit]] = {}
     for u in units:

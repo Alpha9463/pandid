@@ -2378,8 +2378,8 @@ def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
         if unit._turn_stated or unit.pin_.orientation:
             pin["orientation"] = int(unit.pin_.orientation)
         mirror = _MIRROR_NAMES.get((unit.pin_.mirrored, unit.pin_.mirror_y))
-        if mirror:
-            pin["mirrored"] = mirror
+        if mirror or unit._mirror_stated:
+            pin["mirrored"] = mirror or False
         entry["pin"] = pin
     if unit._port_faces:
         entry["port_faces"] = dict(unit._port_faces)

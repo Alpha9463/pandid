@@ -5,10 +5,12 @@ from __future__ import annotations
 import pytest
 
 from _layout_cases import build as build_biodiesel
-from pandid import Block, Feed, Flowsheet, GravitySeparator, Product, Reactor, units as U
+from pandid import Block, Feed, Flowsheet, GravitySeparator, Product, Reactor
+from pandid import devices as D, units as U
 from pandid.layout.quality import measure_final
 from pandid.portgeom import port_point, resolve_port
 from pandid.geometry import Frame, Route
+from pandid.streams import Stream
 from pandid.routing.metrics import real_bends
 from scripts import layout_quality, route_quality
 from scripts.layout_compare import _fingerprint
@@ -326,3 +328,113 @@ def test_a_grid_pin_drawn_out_of_order_is_reported() -> None:
 
     found = [i for i in fs.validate() if i.code == "pin-not-honored"]
     assert found and "col" in found[0].message
+
+
+def _line() -> tuple[Flowsheet, Stream]:
+    """Return a sheet with one level line from a feed to a product.
+
+    Returns
+    -------
+    tuple[Flowsheet, Stream]
+        The sheet and its line.
+    """
+    fs = Flowsheet("Line")
+    feed = fs.add(Feed("Feed"))
+    product = fs.add(Product("Product"))
+    return fs, fs.connect(feed.outlet, product.inlet)
+
+
+def test_a_stated_mirror_holds_on_a_line() -> None:
+    """Keep the mirror its author stated on a control valve set on a line.
+
+    Returns
+    -------
+    None
+        The frame keeps the mirror and nothing is reported.
+    """
+    fs, line = _line()
+    valve = fs.add(D.ControlValve("CV-1").pin(orientation=0, mirrored=True), on=line)
+    fs.route()
+
+    assert valve.frame is not None and valve.frame.mirrored is True
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+def test_a_station_member_keeps_its_stated_turn() -> None:
+    """Keep the turn its author stated on a station's control valve.
+
+    Returns
+    -------
+    None
+        The control valve is drawn at its stated turn and nothing is reported.
+    """
+    fs, line = _line()
+    station = fs.add_valve_station("CV-101", on=line)
+    assert station.control is not None
+    station.control.pin(orientation=90)
+    fs.route()
+
+    assert station.control.frame is not None and station.control.frame.orientation == 90
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+@pytest.mark.parametrize("port, face", [("outlet", "E"), ("inlet", "W")])
+def test_a_stated_nozzle_face_is_kept_in_every_pose(port: str, face: str) -> None:
+    """Set a control valve with a stated nozzle face on a line without raising.
+
+    Parameters
+    ----------
+    port, face : str
+        The nozzle and the face its author stated.
+
+    Returns
+    -------
+    None
+        The line routes and the nozzle is on its stated face.
+    """
+    fs, line = _line()
+    valve = fs.add(D.ControlValve("CV-1").nozzle(port, face), on=line)
+    fs.route()
+
+    assert valve.frame is not None
+    assert resolve_port(valve, valve.frame, port).face == face
+
+
+def test_row_pins_order_a_whole_stack() -> None:
+    """Keep row pins in order down a stack of three, not only between neighbours.
+
+    Returns
+    -------
+    None
+        C, pinned to row 0, is drawn above A, pinned to row 2, and nothing is
+        reported.
+    """
+    fs = Flowsheet("Three")
+    a = fs.add(Block("A", outputs=["S"])).pin(col=0, row=2)
+    b = fs.add(Block("B", inputs=["N"], outputs=["S"]))
+    c = fs.add(Block("C", inputs=["N"])).pin(col=0, row=0)
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.connect(b.ports["out_1"], c.ports["in_1"])
+    fs.route()
+
+    assert a.frame is not None and c.frame is not None
+    assert c.frame.y_max <= a.frame.y
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
+    """Report a unit drawn in another turn or mirror than its author stated.
+
+    Returns
+    -------
+    None
+        ``pin-not-honored`` names the turn and the mirror.
+    """
+    fs, line = _line()
+    valve = fs.add(D.ControlValve("CV-1").pin(orientation=0, mirrored=True), on=line)
+    fs.layout()
+    assert valve.frame is not None
+    valve.frame.orientation, valve.frame.mirrored = 90, False
+
+    said = " ".join(i.message for i in fs.validate() if i.code == "pin-not-honored")
+    assert "orientation" in said and "mirror" in said

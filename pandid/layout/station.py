@@ -357,10 +357,13 @@ def place_stations(fs: Flowsheet, assemblies: list[StationAssembly] | None = Non
             fraction = _fraction(assembly)
             target = start[0] + fraction * (end[0] - start[0])
             left = min(max(target - width / 2, low + 8), high - width - 8)
-            origin = _anchored_origin(assembly, left, centerline, mirrored)
-            if origin is None or not low + 8 <= origin[0] <= high - width - 8:
-                break
-            frames = _station_frames(assembly, *origin, mirrored)
+            try:
+                origin = _anchored_origin(assembly, left, centerline, mirrored)
+                if origin is None or not low + 8 <= origin[0] <= high - width - 8:
+                    break
+                frames = _station_frames(assembly, *origin, mirrored)
+            except ValueError:
+                break  # a member's stated nozzle face cannot be drawn in the station
             if not _fits(frames, obstacles) or any(
                 not _separated(frames, earlier) for earlier in proposed
             ):

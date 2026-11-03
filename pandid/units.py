@@ -430,8 +430,10 @@ class Unit:
         self.ports: dict[str, Port] = {}
         self._new_line_number = False
         self._pin: Pin | None = None  # intent; set only via pin()
-        # Whether pin() was given an orientation, so a stated 0 is not "unstated".
+        # Whether pin() was given an orientation or a mirror, so a stated 0 or
+        # False is not "unstated".
         self._turn_stated = False
+        self._mirror_stated = False
         # Axes pinned to a port rather than the corner: {"y": "inlet"}.
         self._pin_ports: dict[str, str] = {}
         self.frame: Frame | None = None  # resolved; set only by layout
@@ -605,6 +607,7 @@ class Unit:
         self._pin_ports = {}
         self._pin = value
         self._turn_stated = value is not None and value.orientation != 0
+        self._mirror_stated = value is not None and (value.mirrored or value.mirror_y)
 
     def pin(
         self: _UnitT,
@@ -727,6 +730,7 @@ class Unit:
         self._pin_ports = ports
         self._pin = candidate
         self._turn_stated = self._turn_stated or orientation is not _UNCHANGED
+        self._mirror_stated = self._mirror_stated or mirrored is not _UNCHANGED
         return self
 
     def _pin_port(self, port_name: str) -> str:
@@ -6888,7 +6892,8 @@ class Block(_FaceFamilies):
         """
         # Restore the stated pin, not the resolved corner, so a refused
         # call keeps the anchor port the previous pin named.
-        was, was_ports, was_turned = self._pin, dict(self._pin_ports), self._turn_stated
+        was, was_ports = self._pin, dict(self._pin_ports)
+        was_stated = self._turn_stated, self._mirror_stated
         super().pin(
             col=col, row=row, x=x, y=y, orientation=orientation, mirrored=mirrored, port=port
         )
@@ -6899,7 +6904,7 @@ class Block(_FaceFamilies):
             # same frames.
             self._pin_ports = was_ports
             self._pin = was
-            self._turn_stated = was_turned
+            self._turn_stated, self._mirror_stated = was_stated
             raise
         return self
 

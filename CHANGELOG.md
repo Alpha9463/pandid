@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   differently.
 - **An in-line device turns to run along its pipe (#564).** A valve on an
   upright pipe is drawn upright, unless its author stated a turn with
-  `pin(orientation=...)`; a stated 0 keeps it level.
+  `pin(orientation=...)`; a stated 0 keeps it level, and a stated
+  `mirrored=` is kept too.
 - **`pin(row=...)` orders units down their column (#564).** A lower row is
   drawn above a higher one in the same `col=` column; it no longer names an
   absolute grid row.

@@ -197,8 +197,11 @@ def mounted_runs(fs: Flowsheet) -> list[MountedRun]:
         tap = (line.source, line._logical_to or line.dest, 0.5 if at is None else float(at))
         for segment in line._logical_segments or [line]:
             tapped.setdefault(id(segment), []).append(tap)
+    # A station whose members state a position, a transform or a nozzle face
+    # is drawn as equipment, so the station's own layout never overrides them.
     stations = {id(a.station.inlet): a for a in fs._station_assemblies
-                if not any(_position_pinned(u) for u in a.station.members)}
+                if not any(_position_pinned(u) or u._turn_stated or u._mirror_stated
+                           or u._port_faces for u in a.station.members)}
     runs = []
     for first in process_streams(fs):
         start = first.source.owner
@@ -532,22 +535,21 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     ordinate = ay if level else ax
     assert unit.frame is not None
     turned = unit._turn_stated
-    if turned:
-        # A stated turn is kept, mirrored along the pipe when the flow runs the other way.
-        turn, flip = int(unit.frame.orientation), bool(unit.frame.mirrored)
-        poses = [(turn, flip), (turn, not flip)]
-    else:
-        # A mirror before a half turn keeps an actuator on top of a pipe running west.
-        first = 0 if level else 90
-        poses = [(turn % 360, flip) for turn in (first, first + 180, first + 90, first + 270)
-                 for flip in (False, True)]
+    # A stated turn or mirror is kept. A mirror before a half turn keeps an
+    # actuator on top of a pipe running west.
+    first = 0 if level else 90
+    turns = ([int(unit.frame.orientation)] if turned
+             else [turn % 360 for turn in (first, first + 180, first + 90, first + 270)])
+    flips = [bool(unit.frame.mirrored)] if unit._mirror_stated else [False, True]
+    # A pose in which a nozzle face its author stated cannot be reached is no pose.
+    poses = [(turn, flip) for turn in turns for flip in flips
+             if _reaches(unit, _candidate(unit, point, turn, flip))]
+    if not poses:
+        poses = [(int(unit.frame.orientation), bool(unit.frame.mirrored))]
     fits = []
     for turn, flip in poses:
         candidate = _candidate(unit, point, turn, flip)
-        try:
-            inlet = port_point(unit, candidate, "inlet")
-        except ValueError:
-            continue  # a nozzle face the author stated cannot be reached in this pose
+        inlet = port_point(unit, candidate, "inlet")
         shift = ordinate - inlet[1 if level else 0]
         candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
                             y=candidate.y + (shift if level else 0.0))
@@ -561,6 +563,29 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     # balloons hang by default, so its signals need not cross the pipe.
     left = -forward
     return min(fits, key=lambda c: (port_point(unit, c, "actuator")[0] - ordinate) * left > 0)
+
+
+def _reaches(unit: Unit, frame: Frame) -> bool:
+    """Return whether every nozzle face a unit's author stated can be drawn in a pose.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to check.
+    frame : Frame
+        Proposed pose.
+
+    Returns
+    -------
+    bool
+        Whether each port given a face with ``nozzle()`` resolves.
+    """
+    try:
+        for name in unit._port_faces:
+            port_point(unit, frame, name)
+    except ValueError:
+        return False
+    return True
 
 
 def _main_width(assembly: StationAssembly) -> float:
