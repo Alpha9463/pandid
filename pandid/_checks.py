@@ -15,25 +15,71 @@ from typing import Any
 
 
 def is_real(value: Any) -> bool:
-    """Return whether a value is a non-bool real, not a ``Fraction``."""
+    """Return whether a value is a non-bool real, not a ``Fraction``.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+
+    Returns
+    -------
+    bool
+        Whether layout can compute with it.
+    """
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
         return False
     return isinstance(value, numbers.Integral) or not isinstance(value, numbers.Rational)
 
 
 def is_whole(value: Any) -> bool:
-    """Return whether a value is a non-bool integer of any type."""
+    """Return whether a value is a non-bool integer of any type.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+
+    Returns
+    -------
+    bool
+        Whether it is a ``numbers.Integral`` other than ``bool``.
+    """
     return isinstance(value, numbers.Integral) and not isinstance(value, bool)
 
 
 def suggest(value: str, candidates: Iterable[str]) -> str:
-    """Return a ``" (did you mean 'variant'?)"`` hint, or ``""``."""
+    """Return a ``" (did you mean 'variant'?)"`` hint, or ``""``.
+
+    Parameters
+    ----------
+    value : str
+        Value given.
+    candidates : Iterable[str]
+        Accepted values.
+
+    Returns
+    -------
+    str
+        Hint naming the closest candidate, or ``""``.
+    """
     close = get_close_matches(value, candidates, n=1, cutoff=0.6)
     return f" (did you mean {close[0]!r}?)" if close else ""
 
 
 def _hint(value: Any) -> str:
-    """Return advice for a ``Decimal`` or ``Fraction``, or ``""``."""
+    """Return advice for a ``Decimal`` or ``Fraction``, or ``""``.
+
+    Parameters
+    ----------
+    value : Any
+        Refused value.
+
+    Returns
+    -------
+    str
+        Text to append to the error message.
+    """
     if isinstance(value, (Decimal, numbers.Rational)) and not isinstance(value, numbers.Integral):
         return "; layout computes with floats, so pass float(value)"
     return ""

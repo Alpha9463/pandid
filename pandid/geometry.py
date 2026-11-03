@@ -8,6 +8,16 @@ _QUARTER_TURNS = (0, 90, 180, 270)
 def normalize_orientation(value) -> int:
     """Return an orientation as a clockwise quarter turn in degrees.
 
+    Parameters
+    ----------
+    value : object
+        Angle in degrees.
+
+    Returns
+    -------
+    int
+        ``0``, ``90``, ``180`` or ``270``.
+
     Raises
     ------
     ValueError
@@ -27,13 +37,19 @@ def normalize_orientation(value) -> int:
 def normalize_mirror(value) -> tuple[bool, bool]:
     """Resolve a mirror setting to ``(mirror_x, mirror_y)``.
 
+    ``"h"`` and ``"horizontal"`` mean ``"x"``, ``"v"`` and
+    ``"vertical"`` mean ``"y"``, ``"both"`` means ``"xy"``, and
+    ``"none"`` flips nothing.
+
     Parameters
     ----------
     value : bool, str or None
-        ``True``, ``"x"``, ``"h"`` or ``"horizontal"`` flips left to
-        right; ``"y"``, ``"v"`` or ``"vertical"`` top to bottom;
-        ``"xy"`` or ``"both"`` both. ``None``, ``False``, ``""`` and
-        ``"none"`` flip nothing.
+        ``True`` or ``"x"`` (left-right), ``"y"`` or ``"xy"``.
+
+    Returns
+    -------
+    tuple[bool, bool]
+        Left-right and top-bottom flips.
 
     Raises
     ------
@@ -123,22 +139,46 @@ class Frame:
 
     @property
     def x_max(self) -> float:
-        """Return the right edge in pixels."""
+        """Return the right edge in pixels.
+
+        Returns
+        -------
+        float
+            ``x + w``.
+        """
         return self.x + self.w
 
     @property
     def y_max(self) -> float:
-        """Return the bottom edge in pixels."""
+        """Return the bottom edge in pixels.
+
+        Returns
+        -------
+        float
+            ``y + h``.
+        """
         return self.y + self.h
 
     @property
     def cx(self) -> float:
-        """Return the horizontal centre in pixels."""
+        """Return the horizontal centre in pixels.
+
+        Returns
+        -------
+        float
+            ``x + w / 2``.
+        """
         return self.x + self.w / 2
 
     @property
     def cy(self) -> float:
-        """Return the vertical centre in pixels."""
+        """Return the vertical centre in pixels.
+
+        Returns
+        -------
+        float
+            ``y + h / 2``.
+        """
         return self.y + self.h / 2
 
 

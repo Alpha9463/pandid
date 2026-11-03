@@ -31,7 +31,7 @@ _HELD = ("units", "streams", "loops", "components", "annotations")
 class Deprecation:
     """One deprecated spelling, its replacement and its removal release.
 
-    Parameters
+    Attributes
     ----------
     what : str
         The deprecated call, such as ``"Valve(variant='control')"``.
@@ -39,8 +39,8 @@ class Deprecation:
         The replacement call.
     removed_in : str
         Release in which the old spelling stops working.
-    note : str, default=""
-        What else changes, printed before the replacement.
+    note : str
+        What else changes, printed before the replacement; may be empty.
 
     Raises
     ------
@@ -117,12 +117,34 @@ class Deprecation:
 
 
 def _recorded(obj: object) -> list[Issue]:
-    """Return the findings stored in one carrier's ``__dict__``."""
+    """Return the findings stored in one carrier's ``__dict__``.
+
+    Parameters
+    ----------
+    obj : object
+        Possible carrier.
+
+    Returns
+    -------
+    list[Issue]
+        Stored findings, possibly empty.
+    """
     return list(getattr(obj, "__dict__", {}).get(_ATTR, ()))
 
 
 def findings(fs: "Flowsheet") -> list[Issue]:
-    """Return the deprecation findings on a sheet and its objects."""
+    """Return the deprecation findings on a sheet and its objects.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet being validated.
+
+    Returns
+    -------
+    list[Issue]
+        Findings on the sheet and on the objects it holds.
+    """
     out = _recorded(fs)
     for held in _HELD:
         for obj in getattr(fs, held, ()):
@@ -133,8 +155,10 @@ def findings(fs: "Flowsheet") -> list[Issue]:
 def declarations() -> dict[str, Deprecation]:
     """Return every module-level :class:`Deprecation` in pandid.
 
-    Keys are ``"module.NAME"``; a constant imported into a second module
-    appears under both names.
+    Returns
+    -------
+    dict[str, Deprecation]
+        Declarations keyed by ``"module.NAME"``, one key per module.
     """
     import importlib
     import pkgutil

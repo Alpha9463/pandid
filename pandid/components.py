@@ -1,4 +1,4 @@
-"""Components: entries in a flowsheet's chemical species list."""
+"""Chemical species registered on a flowsheet."""
 
 from __future__ import annotations
 
