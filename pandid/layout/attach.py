@@ -325,10 +325,13 @@ def _standoff_box(tap: Point, ref: Point, distance: float, angle: float,
 def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                     w: float, h: float,
                     obstacles: list[Box],
-                    keepouts: list[Box]) -> tuple[float, float]:
+                    keepouts: list[Box],
+                    runs: tuple[Box, ...] = ()) -> tuple[float, float]:
     """Return the distance and angle to hang a balloon at.
 
-    A balloon whose requested box straddles its stream tap keeps it.
+    A balloon whose requested box straddles its stream tap keeps it. No
+    candidate's box, moved to the balloon's pin, may come within
+    :data:`TOUCHING` of ``runs``.
 
     Parameters
     ----------
@@ -346,6 +349,8 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
         Boxes each candidate is tested against.
     keepouts : list[Box]
         Boxes a moved candidate is also tested against.
+    runs : tuple[Box, ...], optional
+        Runs to keep off, each as a flat box.
 
     Returns
     -------
@@ -355,6 +360,7 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     from pandid.streams import Stream
 
     on_a_line = isinstance(inst.host, Stream)
+    pin = inst.pin_
     angles = _branch_angles(inst.angle)
     asked = (inst.offset, inst.angle)
     fallback, least = asked, None
@@ -369,13 +375,85 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                 gap, against = -TOUCHING, obstacles
             else:
                 gap, against = RESOLVED_CLEARANCE, obstacles + keepouts
-            if not any(_intrusion(box, o, gap) > 0.0 for o in against):
+            x0 = box[0] if pin is None or pin.x is None else float(pin.x)
+            y0 = box[1] if pin is None or pin.y is None else float(pin.y)
+            drawn = (x0, y0, x0 + w, y0 + h)
+            if not (any(_intrusion(box, o, gap) > 0.0 for o in against)
+                    or any(_intrusion(drawn, r, TOUCHING) > 0.0 for r in runs)):
                 return distance, angle
             # Rank fallbacks by the overlap validation reports.
             crowding = sum(_intrusion(box, o, -TOUCHING) for o in obstacles)
             if least is None or crowding < least:
                 fallback, least = (distance, angle), crowding
     return fallback
+
+
+def _tapped_stream(unit: "Unit") -> "Stream | None":
+    """Return the stream at the end of a balloon's chain of hosts.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to follow.
+
+    Returns
+    -------
+    Stream or None
+        Stream the chain taps, or None if it ends on a unit or loops.
+    """
+    from pandid.streams import Stream
+
+    host, seen = getattr(unit, "host", None), set()
+    while host is not None and not isinstance(host, Stream) and id(host) not in seen:
+        seen.add(id(host))
+        host = getattr(host, "host", None)
+    return host if isinstance(host, Stream) else None
+
+
+def _chained(unit: "Unit") -> bool:
+    """Return whether a unit hangs from a balloon whose chain taps a line.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to test.
+
+    Returns
+    -------
+    bool
+        True for a balloon hung from another balloon on a line.
+    """
+    from pandid.streams import Stream
+
+    host = getattr(unit, "host", None)
+    return host is not None and not isinstance(host, Stream) and _tapped_stream(unit) is not None
+
+
+def _tapped_runs(inst: "Instrument") -> tuple[Box, ...]:
+    """Return the runs of the line a balloon hung from a unit taps.
+
+    Parameters
+    ----------
+    inst : Instrument
+        Attached balloon.
+
+    Returns
+    -------
+    tuple[Box, ...]
+        Each straight run as a flat box; ``()`` for a balloon hung from
+        the line itself, a chain that taps no line, or a slanted line.
+    """
+    from pandid.routing.astar import committed_segments
+
+    stream = _tapped_stream(inst)
+    if stream is None or inst.host is stream:
+        return ()
+    try:
+        segments = committed_segments(logical_stream_path(stream))
+    except ValueError:  # an undrawn or slanted line has no runs to keep off
+        return ()
+    return tuple((lo, fixed, hi, fixed) if axis == "h" else (fixed, lo, fixed, hi)
+                 for axis, fixed, lo, hi in segments)
 
 
 def place_attached(fs: "Flowsheet") -> bool:
@@ -414,10 +492,12 @@ def place_attached(fs: "Flowsheet") -> bool:
                 continue
             (tx, ty), ref = anchor
             w, h = resolve_size(inst)
+            runs = _tapped_runs(inst) if fs._keep_clear else ()
+            fs._kept_clear = fs._kept_clear or bool(runs)
             distance, angle = _clear_standoff(
                 inst, (tx, ty), ref, w, h,
                 obstacles + keepouts if mounted else obstacles,
-                [] if mounted else keepouts)
+                [] if mounted else keepouts, runs)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             # An absolute pin replaces the standoff on its axis.

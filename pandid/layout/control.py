@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from pandid.layout.layered import COL_GAP, ROW_GAP
@@ -17,6 +18,9 @@ _Box = tuple[float, float, float, float]
 
 #: Clearance the free-spot search tests around placed unit boxes.
 CLEARANCE = 30.0
+
+#: Distance a tap may lie from its host's line or face.
+_TAP_TOL = 0.01
 
 #: Lattice spacing of the free-spot search, in drawing units.
 STEP = 25.0
@@ -219,13 +223,15 @@ def _halos(fs: "Flowsheet") -> list[_Box]:
             if id(r) not in bodies]
 
 
-def _flaws(fs: "Flowsheet") -> "Counter[str]":
+def _flaws(fs: "Flowsheet", full: bool = False) -> "Counter[str]":
     """Count the routed sheet's findings and drawn clashes.
 
     Parameters
     ----------
     fs : Flowsheet
         Routed sheet.
+    full : bool, default=False
+        Count shared runs per straight run rather than per segment.
 
     Returns
     -------
@@ -271,11 +277,71 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
                                          if u is not inst and u is not inst.host)
         flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
     runs = [(k, a, b) for k, points in enumerate(lines + [route for _, route in taps])
-            for a, b in zip(points, points[1:])]
+            for a, b in (_straight_runs(points) if full else zip(points, points[1:]))]
     flaws["line-on-line"] = sum(
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
     return flaws
+
+
+def _taps_off(fs: "Flowsheet") -> set[int]:
+    """Return the balloons whose tap is off their host's drawn line or face.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    set[int]
+        ``id()`` of each such balloon.
+    """
+    from pandid.layout.attach import _anchor, is_attached, logical_stream_path
+    from pandid.streams import Stream
+
+    off = set()
+    for u in fs.units:
+        tap = getattr(u, "tap", None)
+        if tap is None or not is_attached(u):
+            continue
+        if isinstance(u.host, Stream):
+            points = logical_stream_path(u.host)
+            on = any(min(a[0], b[0]) - _TAP_TOL <= tap[0] <= max(a[0], b[0]) + _TAP_TOL
+                     and min(a[1], b[1]) - _TAP_TOL <= tap[1] <= max(a[1], b[1]) + _TAP_TOL
+                     for a, b in zip(points, points[1:]))
+        else:
+            anchor = _anchor(u)
+            on = anchor is not None and math.dist(anchor[0], tap) <= _TAP_TOL
+        if not on:
+            off.add(id(u))
+    return off
+
+
+def _straight_runs(points: list) -> list:
+    """Return the ends of each straight run of a polyline.
+
+    Parameters
+    ----------
+    points : list
+        Polyline points.
+
+    Returns
+    -------
+    list[tuple[tuple[float, float], tuple[float, float]]]
+        Each run of segments on one track, to within 1, that keeps one
+        direction, as its two ends.
+    """
+    out: list = []
+    for a, b in zip(points, points[1:]):
+        if out:
+            p, q = out[-1]
+            if any(abs(p[i] - q[i]) < 1 and abs(q[i] - b[i]) < 1
+                   and (q[1 - i] - p[1 - i]) * (b[1 - i] - q[1 - i]) >= 0 for i in (0, 1)):
+                out[-1] = (p, b)
+                continue
+        out.append((a, b))
+    return out
 
 
 def _shared(a: tuple[float, float], b: tuple[float, float],

@@ -556,6 +556,10 @@ class Flowsheet:
         self._unhung: tuple | None = None
         # Whether a layout engine is running, which routes without hanging.
         self._laying_out = False
+        # Whether a balloon hung from a balloon keeps off the tapped line,
+        # and whether any did since route() turned that on.
+        self._keep_clear = False
+        self._kept_clear = False
         self.unplaced_instruments: list = []
         # Whether cached frames and routes are stale.
         self._layout_stale = False
@@ -2034,7 +2038,10 @@ class Flowsheet:
         Attached instruments are placed and the sheet re-routed until
         neither moves, up to
         :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES` passes;
-        ``route_converged`` records whether it settled.
+        ``route_converged`` records whether it settled. The sheet is then
+        placed again with balloons hung from balloons kept off the line
+        their chain taps, and that is kept only if no tap leaves its line
+        and no finding or clash grows.
 
         Parameters
         ----------
@@ -2052,8 +2059,8 @@ class Flowsheet:
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES
-        from pandid.layout.control import _flaws, _hangable, place_control
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
+        from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
 
         def place() -> None:
             """Place balloons and re-route until nothing moves."""
@@ -2071,8 +2078,8 @@ class Flowsheet:
         place()
         # Hang each controller it can off its actuator, and keep that only
         # if the sheet stays clean. The check assumes the default router.
-        if (type(router) is DefaultRouter and not self._laying_out
-                and any(_hangable(self, u) for u in self.units)):
+        attempt = type(router) is DefaultRouter and not self._laying_out
+        if attempt and any(_hangable(self, u) for u in self.units):
             unhung = self._geometry()
             before = _flaws(self)
             self._may_hang, self._hung = True, set()
@@ -2087,6 +2094,26 @@ class Flowsheet:
                 self._put_geometry(unhung, keep_manual=False)
             else:
                 self._unhung = unhung
+        # Then keep each chained balloon off its tapped line, hanging as
+        # above, and keep that only if no tap leaves its line and the sheet
+        # stays as clean.
+        if attempt and any(_chained(u) for u in self.units):
+            prior = self._geometry()
+            before, off = _flaws(self, full=True), _taps_off(self)
+            self._may_hang = self._unhung is not None
+            self._keep_clear, self._kept_clear = True, False
+            try:
+                place()
+                clash = (not _taps_off(self) <= off
+                         or any(n > before[k] for k, n in _flaws(self, full=True).items()))
+            except Exception:
+                clash = True
+            finally:
+                self._may_hang = self._keep_clear = False
+            if clash or not self._kept_clear:
+                self._put_geometry(prior, keep_manual=False)
+            elif self._unhung is None:
+                self._unhung = prior
         self._route_stale = False
 
     def _geometry(self) -> tuple:

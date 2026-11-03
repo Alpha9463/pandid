@@ -114,6 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A balloon hung from another balloon no longer sits on the line it taps
+  (#619).** After the controller-hanging attempt, `route()` tries keeping it
+  clear of that line, and keeps the result only if no balloon's tap leaves its
+  line and no finding or clash grows.
 - **A refused balloon placement changes nothing (#438).** `attach()` with a
   bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
   face no longer leaves the balloon on the sheet, and `add_instrument()`

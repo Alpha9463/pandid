@@ -2363,3 +2363,207 @@ def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
     """Check that the removed ``panel`` and ``aux`` variants are refused, naming ``display=``."""
     with pytest.raises(ValueError, match=f"display={display!r}"):
         U.Instrument("LIC", 101, variant=variant)
+
+
+def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
+    """Settle a balloon chain whose asked spot lies on the tapped line.
+
+    Returns
+    -------
+    None
+        Routing settles, the line runs straight, and TIC keeps off it.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("settle")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, offset=70)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=70)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    points = stream_path(line)
+    assert {y for _, y in points} == {300.0}, points
+    assert tic.frame is not None
+    x0, y0 = tic.frame.x, tic.frame.y
+    x1, y1 = x0 + tic.frame.w, y0 + tic.frame.h
+    for (ax, ay), (bx, by) in zip(points, points[1:]):
+        on = min(ax, bx) <= x1 and max(ax, bx) >= x0 and min(ay, by) <= y1 and max(ay, by) >= y0
+        assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
+
+
+def test_a_balloon_pinned_on_one_axis_keeps_its_asked_branch_on_the_other():
+    """Keep the asked branch of a partly pinned balloon whose pinned box clears the line.
+
+    Returns
+    -------
+    None
+        TIC's free x is the one its asked offset and angle give.
+    """
+    from pandid.layout.attach import _anchor, _standoff_box
+    from pandid.portgeom import resolve_size
+
+    fs = Flowsheet("partial pin")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
+    fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=feed.outlet.stream, offset=70)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=50, angle=45).pin(y=500)
+    fs.route()
+
+    anchor = _anchor(tic)
+    assert anchor is not None and tic.frame is not None
+    tap, ref = anchor
+    w, h = resolve_size(tic)
+    asked = _standoff_box(tap, ref, tic.offset, tic.angle, w, h)
+    assert tic.frame.x == pytest.approx(asked[0])
+    assert tic.frame.y == pytest.approx(500)
+
+
+def test_keeping_a_chained_balloon_clear_is_dropped_when_it_adds_a_clash():
+    """Keep the first drawing when keeping TIC off its line adds a clash.
+
+    Returns
+    -------
+    None
+        No tap line crosses a unit.
+    """
+    from pandid.layout.control import _flaws
+
+    fs = Flowsheet("clash")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=70, angle=135)
+    fs.add_instrument("TIC", 1, near=tt, face="E", offset=50, angle=0)
+    fs.route()
+
+    assert _flaws(fs)["tap-through-unit"] == 0
+
+
+def test_an_unsettled_attempt_is_not_kept_over_an_unsettled_sheet():
+    """Keep the first drawing when the keep-off attempt does not settle either.
+
+    Returns
+    -------
+    None
+        TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("disconnected tap")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=400)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=400)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.4, offset=70, angle=0)
+    fs.add_instrument("TIC", 1, near=tt, face="E", offset=35, angle=135)
+    fs.route()
+
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)
+
+
+def test_routing_again_draws_the_same_sheet():
+    """Route a sheet whose keep-off attempt is kept twice, to the same drawing.
+
+    Returns
+    -------
+    None
+        The second route() gives the first route()'s drawing.
+    """
+    fs = Flowsheet("second route")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=50, angle=90)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=35, angle=135)
+    fs.connect(tt.sig_out, tic.sig_in, kind="electric")
+    fs.route()
+    first = fs.to_svg(check=False)
+    fs.route()
+
+    assert fs.to_svg(check=False) == first
+
+
+def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
+    """Keep main's hung drawing when keeping chained balloons clear adds a crossing.
+
+    Returns
+    -------
+    None
+        No line crosses a unit.
+    """
+    fs = Flowsheet("crossing")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=100)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=300)
+    line = fs.connect(feed.outlet, prod.inlet)
+    chains = [(0.6, 35, 45, "N", 100, 45), (0.6, 35, 0, "N", 35, 0), (0.5, 50, 270, "E", 70, 90)]
+    for i, (at, offset, angle, face, near_offset, near_angle) in enumerate(chains, 1):
+        tt = fs.add_instrument("TT", i, sensing=line, at=at, offset=offset, angle=angle)
+        fs.add_instrument("TIC", i, near=tt, face=face, offset=near_offset, angle=near_angle)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=100, orientation=180)
+    lic = fs.add_instrument("LIC", 99)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert "route-crosses-unit" not in [issue.code for issue in fs.validate()]
+
+
+def test_keeping_chained_balloons_clear_disconnects_no_tap():
+    """Keep the first drawing when keeping chained balloons clear moves a tap off its line.
+
+    Returns
+    -------
+    None
+        TT-1's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("two chains")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=400)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=300, y=300)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt1 = fs.add_instrument("TT", 1, sensing=line, at=0.3, offset=70, angle=135)
+    fs.add_instrument("TIC", 1, near=tt1, face="E", offset=50, angle=135)
+    tt2 = fs.add_instrument("TT", 2, sensing=line, at=0.7, offset=100, angle=90)
+    fs.add_instrument("TIC", 2, near=tt2, face="W", offset=100, angle=270)
+    fs.route()
+
+    assert tt1.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt1.tap[0] <= max(ax, bx) and min(ay, by) <= tt1.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt1.tap, points)
+
+
+def test_a_run_that_doubles_back_is_two_runs():
+    """Split a straight run where it reverses along its track.
+
+    Returns
+    -------
+    None
+        The excursion and its return are separate runs.
+    """
+    from pandid.layout.control import _straight_runs
+
+    runs = _straight_runs(
+        [(300.0, 265.0), (312.2, 265.0), (312.2, 275.0), (312.2, 265.0), (400.0, 265.0)]
+    )
+    assert runs == [
+        ((300.0, 265.0), (312.2, 265.0)),
+        ((312.2, 265.0), (312.2, 275.0)),
+        ((312.2, 275.0), (312.2, 265.0)),
+        ((312.2, 265.0), (400.0, 265.0)),
+    ]
+    assert _straight_runs([(0.0, 0.0), (0.0, 10.0), (0.0, 30.0), (5.0, 30.0)]) == [
+        ((0.0, 0.0), (0.0, 30.0)),
+        ((0.0, 30.0), (5.0, 30.0)),
+    ]
