@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 #: Clearance a line keeps beside a tag's halo.
 TAG_CLEAR = 3.0
 
+#: Least distance a route runs straight out of a nozzle.
+MIN_ESCAPE = 25.0
+
 
 @dataclass
 class Rect:
@@ -109,12 +112,12 @@ def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
         Escape distance.
     """
     if kind in ("feed", "product"):
-        return 25.0
+        return MIN_ESCAPE
     if (face, label_pos) in (("N", "top"), ("S", "bottom")):
         return 45.0
     if (face, label_pos) in (("W", "left"), ("E", "right")):
         return 50.0
-    return 25.0
+    return MIN_ESCAPE
 
 
 def share_escape_room(

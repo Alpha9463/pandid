@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from pandid.portgeom import resolve_port
+from pandid.routing.visibility import MIN_ESCAPE
 
 if TYPE_CHECKING:
     from pandid.units import Unit
@@ -37,8 +38,9 @@ def horizontal_centerline(
     end : tuple[float, float]
         Destination nozzle point.
     require_clear_exit : bool, optional
-        Require a vertical nozzle facing the leg from 25 or more away,
-        or two level ends facing each other.
+        Require a vertical nozzle facing the leg from
+        :data:`~pandid.routing.visibility.MIN_ESCAPE` or more away, or
+        two level ends facing each other.
 
     Returns
     -------
@@ -58,8 +60,8 @@ def horizontal_centerline(
         and dest_face not in ("E", "W")
         and (
             not require_clear_exit
-            or (dest_face == "N" and start[1] <= end[1] - 25)
-            or (dest_face == "S" and start[1] >= end[1] + 25)
+            or (dest_face == "N" and start[1] <= end[1] - MIN_ESCAPE)
+            or (dest_face == "S" and start[1] >= end[1] + MIN_ESCAPE)
         )
     ):
         return start[1]
@@ -68,8 +70,8 @@ def horizontal_centerline(
         and source_face not in ("E", "W")
         and (
             not require_clear_exit
-            or (source_face == "N" and end[1] <= start[1] - 25)
-            or (source_face == "S" and end[1] >= start[1] + 25)
+            or (source_face == "N" and end[1] <= start[1] - MIN_ESCAPE)
+            or (source_face == "S" and end[1] >= start[1] + MIN_ESCAPE)
         )
     ):
         return end[1]

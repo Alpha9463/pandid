@@ -10,6 +10,7 @@ from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.corridor import horizontal_centerline
 from pandid.layout.stages import process_units, slot
 from pandid.portgeom import port_point, resolve_port, resolve_size, unit_box
+from pandid.routing.visibility import MIN_ESCAPE
 from pandid.stations import StationAssembly, member_mirror
 
 if TYPE_CHECKING:
@@ -251,9 +252,9 @@ def _station_centerline(source: Unit, source_port: str, dest: Unit,
     lower, upper = float("-inf"), float("inf")
     for face, point in ((source_face, start), (dest_face, end)):
         if face == "N":
-            upper = min(upper, point[1] - 25.0)
+            upper = min(upper, point[1] - MIN_ESCAPE)
         elif face == "S":
-            lower = max(lower, point[1] + 25.0)
+            lower = max(lower, point[1] + MIN_ESCAPE)
     if lower > upper:
         return None
     if source_face in ("E", "W"):

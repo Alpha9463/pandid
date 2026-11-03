@@ -9,6 +9,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from pandid.routing.visibility import MIN_ESCAPE
+
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
@@ -34,9 +36,6 @@ MIN_BRANCH = 20.0
 
 #: Clearance tested around a standoff other than the asked one.
 RESOLVED_CLEARANCE = 6.0
-
-#: Length of the escape strip in front of a connected nozzle.
-ESCAPE_ROOM = 25.0
 
 #: Overlap two boxes may share before they count as colliding.
 TOUCHING = 1.0
@@ -260,7 +259,7 @@ def _nozzle_keepouts(fs: "Flowsheet", *, margin: float = 0.0) -> list[Box]:
                 continue
             ax, ay, facing = port_anchor(u, u.frame, name)
             dx, dy = COMPASS[facing]
-            bx, by = ax + ESCAPE_ROOM * dx, ay + ESCAPE_ROOM * dy
+            bx, by = ax + MIN_ESCAPE * dx, ay + MIN_ESCAPE * dy
             out.append((min(ax, bx) - margin, min(ay, by) - margin,
                         max(ax, bx) + margin, max(ay, by) + margin))
     return out
