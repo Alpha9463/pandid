@@ -57,12 +57,6 @@ def _stream_runs(svg):
     return runs
 
 
-def _covers(box, run):
-    """Whether *box* swallows *run* end to end, leaving no line drawn."""
-    x0, y0, x1, y1 = box
-    return all(x0 <= x <= x1 and y0 <= y <= y1 for x, y in run)
-
-
 def _overlaps(box, run):
     """Whether *box* touches any part of an axis-aligned *run*."""
     x0, y0, x1, y1 = box
@@ -177,26 +171,15 @@ def _transfer_sheet():
     return fs
 
 
-def test_stream_label_halo_never_erases_its_own_run():
-    # The halo is opaque and sized from the character count, so a line number is
-    # wider than many of the runs it can land on. A halo that covers a run end to
-    # end leaves a floating label with an arrowhead attached to nothing.
-    svg = _transfer_sheet().to_svg()
-
-    labels = _stream_labels(svg)
-    assert len(labels) == 2
-    for box, _, name in labels:
-        for run in _stream_runs(svg):
-            assert not _covers(box, run), f"{name} erases the run {run}"
-
-
 def test_a_label_too_wide_for_its_run_is_written_beside_it():
     # No amount of sliding rescues a label wider than its run, so it steps off
     # the line entirely and leaves the pipe untouched.
     svg = _transfer_sheet().to_svg()
 
     runs = _stream_runs(svg)
-    for box, _, name in _stream_labels(svg):
+    labels = _stream_labels(svg)
+    assert len(labels) == 2
+    for box, _, name in labels:
         assert not any(_overlaps(box, run) for run in runs), f"{name} still sits on a line"
 
 
