@@ -24,12 +24,14 @@ are unchanged, and the run crosses both without a break.
 
 from __future__ import annotations
 
+from dataclasses import fields, replace
+
 import pytest
 
 from pandid import Flowsheet, spec, units
 from pandid.portgeom import port_point, resolve_size
+from pandid.render.symbols import Symbol, expander
 from pandid.render.symbols import default_registry as registry
-from pandid.render.symbols import expander
 
 #: Every body a reducer is drawn with.
 VARIANTS = ("default", "concentric", "eccentric")
@@ -224,6 +226,19 @@ def test_only_a_two_ended_fitting_can_be_turned_end_for_end():
         expander(registry.get("pump", "default"))
     with pytest.raises(ValueError, match="two ends to trade"):
         expander(registry.get("valve", "control"))  # inlet, outlet and actuator
+
+
+def test_the_turned_drawing_mirrors_its_bands_and_keeps_every_other_field() -> None:
+    """A band is a promise about the ink, so it turns with the ink (#508).
+    Every field the mirror does not change is carried, so a field ``Symbol``
+    grows later cannot be dropped silently."""
+    banded = replace(registry.get("reducer", "default"), bands={"N": (2.5, 5.0), "W": (4.0, 8.0)})
+    turned = expander(banded)
+    assert turned.bands == {"N": (7.5, 10.0), "E": (4.0, 8.0)}
+    mirrored = {"svg", "ports", "port_faces", "bands", "id_suffix", "drawio_flip_h"}
+    for f in fields(Symbol):
+        if f.name not in mirrored:
+            assert getattr(turned, f.name) == getattr(banded, f.name), f.name
 
 
 def test_the_turned_drawing_is_built_once_and_shared():

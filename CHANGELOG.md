@@ -90,6 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An expander keeps every field of the reducer it is turned from (#508).**
+  `large_end="outlet"` now draws at the reducer's trim weight, and its bands
+  are mirrored with the artwork.
 - **`Feeder` and `ScreeningDevice` draw without a `variant=` (#604).** Both
   default to their `"general"` drawing instead of raising `ValueError` at
   render.
