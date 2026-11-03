@@ -10,9 +10,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pandid.geometry import Frame
+from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.halo import Pad, balloon_pads
 from pandid.layout.stages import slot
-from pandid.portgeom import port_faces, resolve_port, unit_box
+from pandid.portgeom import COMPASS, port_faces, resolve_port, unit_box
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -245,7 +246,7 @@ def _around(node: _Node, port: Port | None, east: bool) -> float:
     assert port.owner is not None
     _, _, face = _nozzle(port, node.faces.get(id(port)))
     x, y = _offset(node, port)
-    lean = {"N": -1, "S": 1}.get(face, 0) * (-1 if east else 1) * x / (100 * max(node.w, 1))
+    lean = COMPASS[face][1] * (-1 if east else 1) * x / (100 * max(node.w, 1))
     return y / node.h + lean
 
 
@@ -398,8 +399,7 @@ def _clear_pins(units: list[Unit]) -> None:
         axis = "y" if free(u, "y") else "x"
         for _ in range(len(placed) + 1):
             a = box(u)
-            hit = next((b for b in map(box, placed) if a[0] < b[2] + LANE and b[0] < a[2] + LANE
-                        and a[1] < b[3] + LANE and b[1] < a[3] + LANE), None)
+            hit = next((b for b in map(box, placed) if boxes_overlap(a, b, LANE)), None)
             if hit is None:
                 break
             s = slot(u)
