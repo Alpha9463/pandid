@@ -13,6 +13,18 @@ if TYPE_CHECKING:
 
 __all__ = ["Router", "DefaultRouter"]
 
+#: Cost of one used graph edge for the streams routed after it.
+LANE_PENALTY = 2000.0
+
+#: Crossing charge for a stream rerouted against every other route.
+RIPUP_CROSSING_PENALTY = 1000.0
+
+#: Search expansions a reroute may spend.
+RIPUP_BUDGET = 20_000
+
+#: Bends a reroute may add per crossing it removes.
+RIPUP_BENDS_PER_CROSSING = 1
+
 
 class Router(Protocol):
     """Define the interface ``Flowsheet.route`` requires of a router."""
@@ -182,6 +194,110 @@ def _record_route(crossing_index: "CrossingIndex", waypoints: list[tuple[float, 
         crossing_index.record(waypoints[run_start:])
 
 
+def _simplify(
+    path: list[tuple[float, float]],
+    start_proj: tuple[float, float],
+    goal_proj: tuple[float, float],
+) -> list[tuple[float, float]]:
+    """Drop collinear waypoints but keep both escape nodes.
+
+    Parameters
+    ----------
+    path : list[tuple[float, float]]
+        Route waypoints.
+    start_proj, goal_proj : tuple[float, float]
+        Escape nodes to keep.
+
+    Returns
+    -------
+    list[tuple[float, float]]
+        Simplified waypoints.
+    """
+    simplified = [path[0]]
+    for i in range(1, len(path)-1):
+        prev = simplified[-1]
+        curr = path[i]
+        nxt = path[i+1]
+        if curr == start_proj or curr == goal_proj:
+            simplified.append(curr)
+            continue
+        if (prev[0] == curr[0] == nxt[0]) or (prev[1] == curr[1] == nxt[1]):
+            continue
+        simplified.append(curr)
+    if len(path) > 1:
+        simplified.append(path[-1])
+    return simplified
+
+
+def _meets(paths: dict[int, list[tuple[float, float]]], keys: set[int]) -> tuple[int, int]:
+    """Count crossings and contacts between paths, each pair touching ``keys``.
+
+    A contact is two runs that do not cross but come within
+    :data:`~pandid.routing.separation.SPACING` of each other.
+
+    Parameters
+    ----------
+    paths : dict[int, list[tuple[float, float]]]
+        Waypoints by stream id.
+    keys : set[int]
+        Stream ids whose pairs are counted.
+
+    Returns
+    -------
+    tuple[int, int]
+        Crossings, then contacts.
+    """
+    from pandid.routing.metrics import crossing_point
+    from pandid.routing.separation import SPACING
+
+    segs = [(k, a, b) for k, pts in paths.items() for a, b in zip(pts, pts[1:])
+            if a != b and (a[0] == b[0] or a[1] == b[1])]
+    crossings = contacts = 0
+    for k1, a1, b1 in segs:
+        if k1 not in keys:
+            continue
+        for k2, a2, b2 in segs:
+            if k2 == k1 or (k2 in keys and k2 < k1):
+                continue
+            if (a1[1] == b1[1]) != (a2[1] == b2[1]):
+                h, v = ((a1, b1), (a2, b2)) if a1[1] == b1[1] else ((a2, b2), (a1, b1))
+                if crossing_point(h, v) is not None:
+                    crossings += 1
+                    continue
+            gx = max(0.0, min(a2[0], b2[0]) - max(a1[0], b1[0]), min(a1[0], b1[0]) - max(a2[0], b2[0]))
+            gy = max(0.0, min(a2[1], b2[1]) - max(a1[1], b1[1]), min(a1[1], b1[1]) - max(a2[1], b2[1]))
+            contacts += math.hypot(gx, gy) <= SPACING + 1e-6
+    return crossings, contacts
+
+
+def _improves(
+    before: dict[int, list[tuple[float, float]]],
+    after: dict[int, list[tuple[float, float]]],
+) -> bool:
+    """Return whether ``after`` crosses less and is no worse otherwise.
+
+    Fewer crossings, no more contacts, and at most
+    :data:`RIPUP_BENDS_PER_CROSSING` added bends per crossing removed.
+
+    Parameters
+    ----------
+    before, after : dict[int, list[tuple[float, float]]]
+        Separated waypoints by stream id.
+
+    Returns
+    -------
+    bool
+        Whether to keep ``after``.
+    """
+    from pandid.routing.metrics import real_bends
+
+    changed = {k for k in after if after[k] != before.get(k)}
+    x0, c0 = _meets(before, changed)
+    x1, c1 = _meets(after, changed)
+    added = sum(real_bends(after[k]) - real_bends(before[k]) for k in changed)
+    return x1 < x0 and c1 <= c0 and added <= RIPUP_BENDS_PER_CROSSING * (x0 - x1)
+
+
 def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
     """Check that every placed frame is finite.
 
@@ -257,12 +373,34 @@ class DefaultRouter:
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
         crossing_index = CrossingIndex()
         routed: list["Stream"] = []
+        # Search ends and found path of each automatic stream, by id.
+        searches: dict[int, tuple] = {}
+        found: dict[int, list[tuple[float, float]]] = {}
+
+        def index_of(streams: list["Stream"]) -> CrossingIndex:
+            """Return a crossing index of the streams' separated waypoints.
+
+            Parameters
+            ----------
+            streams : list[Stream]
+                Streams with a route.
+
+            Returns
+            -------
+            CrossingIndex
+                Index of every stream's previewed separated waypoints.
+            """
+            preview = preview_separated_waypoints(streams)
+            index = CrossingIndex()
+            for s in streams:
+                # Every routed stream has a route.
+                assert s.route is not None
+                wp = preview.get(id(s), s.route.waypoints)
+                _record_route(index, wp, s.route.manual)
+            return index
 
         def settle(stream: "Stream") -> None:
             """Add a routed stream and rebuild the crossing index.
-
-            The index holds a preview of every routed stream's separated
-            waypoints.
 
             Parameters
             ----------
@@ -271,13 +409,21 @@ class DefaultRouter:
             """
             nonlocal crossing_index
             routed.append(stream)
-            preview = preview_separated_waypoints(routed)
-            crossing_index = CrossingIndex()
-            for s in routed:
-                # Every routed stream has a route.
-                assert s.route is not None
-                wp = preview.get(id(s), s.route.waypoints)
-                _record_route(crossing_index, wp, s.route.manual)
+            crossing_index = index_of(routed)
+
+        def charge(path: list[tuple[float, float]], amount: float) -> None:
+            """Add ``amount`` to the penalty of each edge on ``path``, both ways.
+
+            Parameters
+            ----------
+            path : list[tuple[float, float]]
+                Path through graph nodes.
+            amount : float
+                Penalty to add.
+            """
+            for u_node, v_node in zip(path, path[1:]):
+                edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + amount
+                edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + amount
 
         for stream in fs.streams:
             if stream.route and stream.route.manual:
@@ -341,6 +487,7 @@ class DefaultRouter:
             is_recycle = getattr(stream, "is_recycle", False)
             path = []
             if clear_stubs:
+                searches[id(stream)] = (start, goal, start_proj, goal_proj, start_dir, goal_dir, is_recycle)
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
                     edge_penalties, is_recycle, crossing_index,
@@ -349,34 +496,49 @@ class DefaultRouter:
 
             if path:
                 path = [start] + path + [goal]
-                # Penalise used segments for later streams.
-                for i in range(len(path) - 1):
-                    u_node, v_node = path[i], path[i+1]
-                    edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + 2000.0
-                    edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + 2000.0
+                found[id(stream)] = path
+                charge(path, LANE_PENALTY)
             else:
                 path = _fallback_path(
                     start, start_proj, goal_proj, goal, graph.obstacles, crossing_index
                 )
 
-            # Remove collinear points but keep both escape nodes.
-            simplified = [path[0]]
-            for i in range(1, len(path)-1):
-                prev = simplified[-1]
-                curr = path[i]
-                nxt = path[i+1]
-                if curr == start_proj or curr == goal_proj:
-                    simplified.append(curr)
-                    continue
-                if (prev[0] == curr[0] == nxt[0]) or (prev[1] == curr[1] == nxt[1]):
-                    continue
-                simplified.append(curr)
-            if len(path) > 1:
-                simplified.append(path[-1])
-
-            stream.route = Route(waypoints=simplified, used_fallback=not path_found)
+            stream.route = Route(
+                waypoints=_simplify(path, start_proj, goal_proj), used_fallback=not path_found
+            )
 
             settle(stream)
+
+        # Reroute each crossing stream against every other route, and
+        # keep the new route where the sheet improves.
+        preview = preview_separated_waypoints(routed)
+        for stream in routed:
+            if id(stream) not in searches:
+                continue
+            index = index_of([s for s in routed if s is not stream])
+            own = preview[id(stream)]
+            if not any(index.crossings_along(a, b) for a, b in zip(own, own[1:])):
+                continue
+            old_route, old_path = stream.route, found.get(id(stream), [])
+            charge(old_path, -LANE_PENALTY)
+            start, goal, start_proj, goal_proj, start_dir, goal_dir, is_recycle = searches[id(stream)]
+            try:
+                path = find_path(
+                    graph, start_proj, goal_proj, start_dir, goal_dir,
+                    edge_penalties, is_recycle, index, RIPUP_CROSSING_PENALTY, RIPUP_BUDGET,
+                )
+            except RuntimeError:  # Keep the old route past the budget.
+                path = []
+            if path:
+                path = [start, *path, goal]
+                stream.route = Route(waypoints=_simplify(path, start_proj, goal_proj))
+                after = preview_separated_waypoints(routed)
+                if _improves(preview, after):
+                    preview, found[id(stream)] = after, path
+                    charge(path, LANE_PENALTY)
+                    continue
+            stream.route = old_route
+            charge(old_path, LANE_PENALTY)
 
         # Separate parallel segments that share a lane.
         from pandid.routing.separation import separate_streams

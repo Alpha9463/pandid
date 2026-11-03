@@ -270,6 +270,8 @@ def find_path(
     edge_penalties: Optional[Dict[Tuple[Tuple[float, float], Tuple[float, float]], float]] = None,
     is_recycle: bool = False,
     crossing_index: Optional[CrossingIndex] = None,
+    crossing_penalty: float = CROSSING_PENALTY,
+    budget: Optional[int] = None,
 ) -> List[Tuple[float, float]]:
     """Return the cheapest orthogonal path on the graph.
 
@@ -287,6 +289,11 @@ def find_path(
         Favour recycle lanes and halve the bend cost.
     crossing_index : CrossingIndex or None, optional
         Routes drawn before this one.
+    crossing_penalty : float, default=CROSSING_PENALTY
+        Cost of crossing one route in ``crossing_index``.
+    budget : int or None, optional
+        Expansions allowed; None allows :data:`MAX_EXPANSIONS_PER_NODE`
+        per graph node, and at least :data:`MIN_EXPANSION_BUDGET`.
 
     Returns
     -------
@@ -311,7 +318,8 @@ def find_path(
     if edge_penalties is None:
         edge_penalties = {}
 
-    budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
+    if budget is None:
+        budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
     expansions = 0
     crossing_queries = 0
     horizontal_tracks: Optional[List[float]] = None
@@ -362,7 +370,7 @@ def find_path(
             if crossing_index is not None:
                 crossing_queries += 1
                 if crossing_queries <= _INLINE_CROSSING_QUERY_THRESHOLD:
-                    cost += CROSSING_PENALTY * crossing_index.crossings_along(current, neighbor)
+                    cost += crossing_penalty * crossing_index.crossings_along(current, neighbor)
                 else:
                     if horizontal_tracks is None or vertical_tracks is None:
                         horizontal_tracks = crossing_index._sorted_keys("h")
@@ -373,7 +381,7 @@ def find_path(
                         i0 = bisect.bisect_right(vertical_tracks, xlo)
                         i1 = bisect.bisect_left(vertical_tracks, xhi)
                         if i0 != i1:
-                            cost += CROSSING_PENALTY * sum(
+                            cost += crossing_penalty * sum(
                                 1
                                 for x in vertical_tracks[i0:i1]
                                 for lo, hi in crossing_index.v[x]
@@ -385,7 +393,7 @@ def find_path(
                         i0 = bisect.bisect_right(horizontal_tracks, ylo)
                         i1 = bisect.bisect_left(horizontal_tracks, yhi)
                         if i0 != i1:
-                            cost += CROSSING_PENALTY * sum(
+                            cost += crossing_penalty * sum(
                                 1
                                 for y in horizontal_tracks[i0:i1]
                                 for lo, hi in crossing_index.h[y]
@@ -408,11 +416,11 @@ def find_path(
             if cur_dir and ndir != cur_dir:
                 cost += bend_cost
             elif cur_dir and crossing_index is not None:
-                cost += CROSSING_PENALTY * crossing_index.crosses(current, _AXIS[cur_dir])
+                cost += crossing_penalty * crossing_index.crosses(current, _AXIS[cur_dir])
 
             if neighbor == goal and goal_dir and crossing_index is not None:
                 if ndir is not None and ndir == OPPOSITE[goal_dir]:
-                    cost += CROSSING_PENALTY * crossing_index.crosses(goal, _AXIS[ndir])
+                    cost += crossing_penalty * crossing_index.crosses(goal, _AXIS[ndir])
                 elif crossing_index.crosses(goal, _AXIS[OPPOSITE[goal_dir]]):
                     cost += bend_cost
 
