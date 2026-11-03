@@ -238,38 +238,25 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
     for stream_index, stream in enumerate(fs.streams):
         source, dest = stream.source.owner, stream.dest.owner
         route = stream.route
-        if route is None or (not route.manual and len(route.waypoints) < 2):
-            conflicts.add(Conflict("missing-route", streams=(stream_index,)))
-            continue
-        if source.frame is None or dest.frame is None:
+        if (route is None or (not route.manual and len(route.waypoints) < 2)
+                or source.frame is None or dest.frame is None):
             conflicts.add(Conflict("missing-route", streams=(stream_index,)))
             continue
         source_index, dest_index = index_by_id[id(source)], index_by_id[id(dest)]
         if not route.manual:
             if route.used_fallback:
                 conflicts.add(Conflict("fallback", streams=(stream_index,)))
-            conflicts.update(
-                _exit_conflicts(
-                    fs, stream_index, boxes, index_by_id, True, route.waypoints, hosts
-                )
-            )
-            conflicts.update(
-                _exit_conflicts(
-                    fs, stream_index, boxes, index_by_id, False, route.waypoints, hosts
-                )
-            )
+            for at_source in (True, False):
+                conflicts.update(_exit_conflicts(
+                    fs, stream_index, boxes, index_by_id, at_source, route.waypoints, hosts))
         start = resolve_port(source, source.frame, stream.source.name).point
         end = resolve_port(dest, dest.frame, stream.dest.name).point
+        if route.manual:
+            continue
         points = [start, *route.waypoints, end]
         for a, b in zip(points, points[1:]):
-            if (
-                not route.manual
-                and abs(a[0] - b[0]) >= _SQUARE_TOL
-                and abs(a[1] - b[1]) >= _SQUARE_TOL
-            ):
+            if abs(a[0] - b[0]) >= _SQUARE_TOL and abs(a[1] - b[1]) >= _SQUARE_TOL:
                 conflicts.add(Conflict("route-diagonal", streams=(stream_index,)))
-            if route.manual:
-                continue
             for unit_index, box in boxes:
                 if unit_index in (source_index, dest_index):
                     continue
@@ -277,12 +264,9 @@ def analyze_conflicts(fs: Flowsheet) -> tuple[Conflict, ...]:
                     continue
                 if segment_crosses_box(a, b, box):
                     conflicts.add(Conflict("route-crosses-unit", (stream_index,), (unit_index,)))
-    paths: list[list[tuple[float, float]] | None] = []
-    for stream in fs.streams:
-        route = stream.route
-        if route is None or stream.source.owner.frame is None or stream.dest.owner.frame is None:
-            paths.append(None)
-        else:
-            paths.append(stream_polyline(stream))
+    paths = [stream_polyline(stream) if stream.route is not None
+             and stream.source.owner.frame is not None
+             and stream.dest.owner.frame is not None else None
+             for stream in fs.streams]
     conflicts.update(Conflict("crossing", streams=pair) for pair in crossing_pairs(paths))
     return tuple(sorted(conflicts))

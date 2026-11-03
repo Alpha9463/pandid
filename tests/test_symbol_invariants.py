@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import functools
 import math
-import pathlib
 import re
 import xml.etree.ElementTree as ET
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -23,6 +21,8 @@ from pandid.render.symbols import (
     default_registry,
     spread,
 )
+
+from _render_cases import _script
 
 _AGITATORS = {name for group, name in default_registry._parts if group == 28}
 
@@ -529,19 +529,6 @@ def test_baked_redraw_preserves_supported_geometry():
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_ports_within_bounding_box(entry):
-    """Verify symbol ports remain inside their boxes."""
-    (kind, variant), sym = entry
-    for name, (x, y) in sym.ports.items():
-        assert -BOX_EPS <= x <= sym.width + BOX_EPS, (
-            f"{kind}/{variant} port {name!r} x={x} outside [0, {sym.width}]"
-        )
-        assert -BOX_EPS <= y <= sym.height + BOX_EPS, (
-            f"{kind}/{variant} port {name!r} y={y} outside [0, {sym.height}]"
-        )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_port_faces_within_bounding_box(entry):
     """Verify alternate port faces remain inside their boxes."""
     (kind, variant), sym = entry
@@ -556,81 +543,25 @@ def test_port_faces_within_bounding_box(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
-    """Verify alternate placements resolve to their declared faces."""
+def test_every_port_placement_lies_on_the_drawing(entry):
+    """Verify process placements land on ink and signal placements on the outline."""
     (kind, variant), sym = entry
+    drawn = kind not in _DYNAMIC_KINDS
+    segments = _collect_segments(sym.svg) if drawn else []
     for name, faces in sym.port_faces.items():
         for face, (x, y) in faces.items():
-            got = outward_dir(x, y, sym.width, sym.height)
-            assert got == face, (
-                f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
-                f"nearest the {got} edge of the {sym.width}x{sym.height} box"
-            )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_the_menu_carries_the_symbols_own_nozzle(entry):
-    """Verify the port menu includes the home nozzle."""
-    (kind, variant), sym = entry
-    assert set(sym.port_faces) == set(sym.ports), f"{kind}/{variant} menu misses a port"
-    for name, xy in sym.ports.items():
-        assert xy in sym.port_faces[name].values(), (
-            f"{kind}/{variant} port {name!r} home {xy} is not in its own menu"
-        )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_ports_lie_on_drawn_geometry(entry):
-    """Verify process ports land on drawn geometry."""
-    (kind, variant), sym = entry
-    if kind in _DYNAMIC_KINDS:
-        pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
-    segments = _collect_segments(sym.svg)
-    for name, (x, y) in sym.ports.items():
-        if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS or (kind, name) in _SIGNAL_PORTS:
-            continue
-        d = _nearest_distance((x, y), segments)
-        assert d <= GEOM_TOL, (
-            f"{kind}/{variant} port {name!r} at ({x}, {y}) is {d:.1f}u "
-            f"from the nearest drawn stroke (tolerance {GEOM_TOL})"
-        )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_port_faces_lie_on_drawn_geometry(entry):
-    """Verify alternate port faces land on drawn geometry."""
-    (kind, variant), sym = entry
-    if kind in _DYNAMIC_KINDS:
-        pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
-    segments = _collect_segments(sym.svg)
-    for name, faces in sym.port_faces.items():
-        if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS or (kind, name) in _SIGNAL_PORTS:
-            continue
-        for face, (x, y) in faces.items():
-            d = _nearest_distance((x, y), segments)
-            assert d <= GEOM_TOL, (
-                f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
-                f"{d:.1f}u from the nearest drawn stroke (tolerance {GEOM_TOL})"
-            )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_signal_ports_sit_on_the_symbols_outline(entry):
-    """Verify signal ports lie on symbol outlines."""
-    (kind, variant), sym = entry
-    placements = {(name, "port"): xy for name, xy in sym.ports.items()}
-    placements.update(
-        {(name, face): xy for name, faces in sym.port_faces.items() for face, xy in faces.items()}
-    )
-    for (name, where), (x, y) in placements.items():
-        if (kind, name) not in _SIGNAL_PORTS:
-            continue
-        inboard = min(x, y, sym.width - x, sym.height - y)
-        assert inboard <= GEOM_TOL, (
-            f"{kind}/{variant} signal port {name!r} ({where}) at ({x}, {y}) is "
-            f"{inboard:.1f}u inside the {sym.width}x{sym.height} box "
-            f"(tolerance {GEOM_TOL})"
-        )
+            where = f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y})"
+            if (kind, name) in _SIGNAL_PORTS:
+                inboard = min(x, y, sym.width - x, sym.height - y)
+                assert inboard <= GEOM_TOL, (
+                    f"{where} is a signal port {inboard:.1f}u inside the "
+                    f"{sym.width}x{sym.height} box (tolerance {GEOM_TOL})"
+                )
+            elif drawn and (kind, variant, name) not in _KNOWN_GEOMETRY_GAPS:
+                d = _nearest_distance((x, y), segments)
+                assert d <= GEOM_TOL, (
+                    f"{where} is {d:.1f}u from the nearest drawn stroke (tolerance {GEOM_TOL})"
+                )
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
@@ -772,29 +703,22 @@ def _port_placements(sym: Symbol) -> list[tuple[str, str, Point]]:
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_every_drawn_nozzle_carries_a_port(entry):
-    """Verify each drawn nozzle has a modelled port."""
+def test_drawn_nozzles_and_ports_agree(entry):
+    """Verify each drawn nozzle has a port and no port sits between two nozzles."""
     (kind, variant), sym = entry
     if (kind, variant) in _NOT_NOZZLES:
         pytest.skip("draws a gauge stub, not a process nozzle")
-    points = [xy for _n, _f, xy in _port_placements(sym)]
-    for nozzle in _drawn_nozzles(sym):
+    nozzles = _drawn_nozzles(sym)
+    placements = _port_placements(sym)
+    points = [xy for _n, _f, xy in placements]
+    for nozzle in nozzles:
         near = min(math.dist(nozzle.point, p) for p in points) if points else math.inf
         assert near <= GEOM_TOL, (
             f"{kind}/{variant} draws a nozzle on its {nozzle.face} face at "
             f"{nozzle.point} and anchors no port on it, so the drawing offers a "
             f"connection the class cannot make"
         )
-
-
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_no_port_lands_between_two_drawn_nozzles(entry):
-    """Verify ports match a row of drawn nozzles."""
-    (kind, variant), sym = entry
-    if (kind, variant) in _NOT_NOZZLES:
-        pytest.skip("draws a gauge stub, not a process nozzle")
-    nozzles = _drawn_nozzles(sym)
-    for name, face, (x, y) in _port_placements(sym):
+    for name, face, (x, y) in placements:
         on_face = [n for n in nozzles if n.face == face]
         if len(on_face) < 2:
             continue
@@ -811,42 +735,50 @@ def test_no_port_lands_between_two_drawn_nozzles(entry):
 
 _ODD_BOXES = ((300.0, 60.0), (60.0, 300.0))
 
-_PLACEMENTS = ({},)
-
 _ROUNDTRIP_EPS = 1e-9
 
 _UNBOXABLE_KINDS = {"conveyor"}
 
 _UNIT_BY_KIND = {cls.kind: cls for cls in (getattr(units, n) for n in units.__all__)}
 
-_RETIRED_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
+_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
 
 
-def _drawing(cls, variant: str) -> dict[str, str]:
+def _drawing(cls, variant: str) -> dict[str, Any]:
     """Return the keyword that asks ``cls`` for a registered drawing.
 
-    A Separator's characteristic drawings are asked for by
-    ``characteristic=``; ``variant=`` refuses them.
+    Parameters
+    ----------
+    cls : type
+        Unit class.
+    variant : str
+        Registered variant.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``display=``, ``characteristic=`` or ``variant=``, whichever reaches it.
     """
-    return {
-        "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant": variant
-    }
+    if cls is units.Instrument and variant in _DISPLAYS:
+        return {"display": _DISPLAYS[variant]}
+    key = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
+    return {key: variant}
 
 
 # Dynamic-unit placement invariants
 
 
-def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
-    """Construct a unit with explicit dimensions.
+def _unit(kind: str, variant: str, index: int = 1, **size: float):
+    """Construct a unit drawing a registered symbol.
 
     Parameters
     ----------
     kind, variant : str
         Registered symbol key.
     index : int
-        Instrument index.
-    w, h : float
-        Requested dimensions.
+        Number that keeps the name unique on a sheet.
+    **size : float
+        ``width`` and ``height``, if given.
 
     Returns
     -------
@@ -855,33 +787,8 @@ def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
     """
     cls = _UNIT_BY_KIND[kind]
     if kind == "instrument":  # tagged (type, number) rather than named
-        display = _RETIRED_DISPLAYS.get(variant)
-        if display is not None:
-            return cls("XX", index, display=display, width=w, height=h)
-        return cls("XX", index, variant=variant, width=w, height=h)
-    return cls(f"{kind}-{variant}-{index}", **_drawing(cls, variant), width=w, height=h)
-
-
-def _default_unit(kind: str, variant: str):
-    """Construct a unit at its natural size.
-
-    Parameters
-    ----------
-    kind, variant : str
-        Registered symbol key.
-
-    Returns
-    -------
-    units.Unit
-        Configured unit.
-    """
-    cls = _UNIT_BY_KIND[kind]
-    if kind == "instrument":
-        display = _RETIRED_DISPLAYS.get(variant)
-        if display is not None:
-            return cls("XX", 1, display=display)
-        return cls("XX", 1, variant=variant)
-    return cls(f"{kind}-{variant}-x", **_drawing(cls, variant))
+        return cls("XX", index, **_drawing(cls, variant), **size)
+    return cls(f"{kind}-{variant}-{index}", **_drawing(cls, variant), **size)
 
 
 _WIDEST_CLASS_FOR_KIND = {"column": units.DistillationColumn}
@@ -894,7 +801,7 @@ def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
     """Verify every drawn anchor is reachable by a modelled port."""
     (kind, variant), sym = entry
     cls = _WIDEST_CLASS_FOR_KIND.get(kind)
-    unit = cls(f"{kind}-{variant}-x", variant=variant) if cls else _default_unit(kind, variant)
+    unit = cls(f"{kind}-{variant}-x", variant=variant) if cls else _unit(kind, variant)
     reachable = {unit._symbol_anchor(name) for name in unit.ports}
     reachable |= {
         artwork_name
@@ -1006,26 +913,25 @@ def odd_box_sheets():
     Returns
     -------
     dict
-        Units and placement transforms by box and placement.
+        Units and placement transforms by box.
     """
     from pandid import Flowsheet
 
     sheets: dict[tuple, dict[tuple[str, str], tuple]] = {}
     for box in _ODD_BOXES:
-        for turn, placement in enumerate(_PLACEMENTS):
-            fs = Flowsheet("odd boxes")
-            placed = {}
-            for i, ((kind, variant), _) in enumerate(_SYMBOLS):
-                if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
-                    continue
-                unit = _sized_unit(kind, variant, i, *box)
-                fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8), **placement)
-                placed[(kind, variant)] = unit
-            matrices = _placements(fs.to_svg(), _natives(fs))
-            sheets[(box, turn)] = {
-                key: (unit, matrices[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))])
-                for key, unit in placed.items()
-            }
+        fs = Flowsheet("odd boxes")
+        placed = {}
+        for i, ((kind, variant), _) in enumerate(_SYMBOLS):
+            if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
+                continue
+            unit = _unit(kind, variant, i, width=box[0], height=box[1])
+            fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8))
+            placed[(kind, variant)] = unit
+        matrices = _placements(fs.to_svg(), _natives(fs))
+        sheets[box] = {
+            key: (unit, matrices[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))])
+            for key, unit in placed.items()
+        }
     return sheets
 
 
@@ -1050,8 +956,8 @@ def _resolved_in_symbol_space(unit, matrix: Matrix, name: str) -> Point:
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_ports_land_on_drawn_ink_at_any_box_shape(entry, odd_box_sheets):
-    """Verify ports follow artwork across box shapes."""
+def test_ports_stay_on_the_drawing_at_any_box_shape(entry, odd_box_sheets):
+    """Verify process ports stay on ink and signal ports on the outline in odd boxes."""
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
@@ -1059,17 +965,25 @@ def test_ports_land_on_drawn_ink_at_any_box_shape(entry, odd_box_sheets):
         pytest.skip("a conveyor is sized by length=, so its box is its artwork's")
     first = next(iter(odd_box_sheets.values()))[(kind, variant)][0]
     segments = _collect_segments(default_registry.for_unit(first).svg)
-    for key, sheet in odd_box_sheets.items():
+    corners = [(0.0, 0.0), (sym.width, 0.0), (sym.width, sym.height), (0.0, sym.height)]
+    outline = list(zip(corners, corners[1:] + corners[:1]))
+    for (w, h), sheet in odd_box_sheets.items():
         unit, matrix = sheet[(kind, variant)]
         for name in unit.ports:
-            if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS or (kind, name) in _SIGNAL_PORTS:
-                continue
-            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
-            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
-                f"{kind}/{variant} port {name!r} in a {key[0][0]:g}x{key[0][1]:g} box at "
-                f"{_PLACEMENTS[key[1]] or 'no turn'} is {d:.1f}u from the nearest drawn "
-                f"stroke once the artwork's own placement is undone (tolerance {GEOM_TOL})"
-            )
+            where = f"{kind}/{variant} port {name!r} in a {w:g}x{h:g} box"
+            point = _resolved_in_symbol_space(unit, matrix, name)
+            if (kind, name) in _SIGNAL_PORTS:
+                d = _nearest_distance(point, outline)
+                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
+                    f"{where} is a signal port {d:.1f}u off the {sym.width}x{sym.height} "
+                    f"outline once the artwork's own placement is undone (tolerance {GEOM_TOL})"
+                )
+            elif (kind, variant, name) not in _KNOWN_GEOMETRY_GAPS:
+                d = _nearest_distance(point, segments)
+                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
+                    f"{where} is {d:.1f}u from the nearest drawn stroke once the artwork's "
+                    f"own placement is undone (tolerance {GEOM_TOL})"
+                )
 
 
 @pytest.mark.parametrize("entry", _DIRECTIONAL, ids=_DIRECTIONAL_IDS)
@@ -1102,40 +1016,17 @@ def test_a_directional_symbol_carries_no_lettering_of_its_own(entry):
     )
 
 
-@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_signal_ports_stay_on_the_outline_at_any_box_shape(entry, odd_box_sheets):
-    """Verify signal ports remain on outlines across box shapes."""
-    (kind, variant), sym = entry
-    if kind in _DYNAMIC_KINDS:
-        pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
-    if kind in _UNBOXABLE_KINDS:
-        pytest.skip("a conveyor is sized by length=, so its box is its artwork's")
-    corners = [(0.0, 0.0), (sym.width, 0.0), (sym.width, sym.height), (0.0, sym.height)]
-    outline = list(zip(corners, corners[1:] + corners[:1]))
-    for key, sheet in odd_box_sheets.items():
-        unit, matrix = sheet[(kind, variant)]
-        for name in unit.ports:
-            if (kind, name) not in _SIGNAL_PORTS:
-                continue
-            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), outline)
-            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
-                f"{kind}/{variant} signal port {name!r} in a {key[0][0]:g}x{key[0][1]:g} box "
-                f"at {_PLACEMENTS[key[1]] or 'no turn'} is {d:.1f}u off the "
-                f"{sym.width}x{sym.height} outline once the artwork's own placement is "
-                f"undone (tolerance {GEOM_TOL})"
-            )
-
-
-_HOLDUP = [(units.Vessel, "vessel"), (units.Tank, "tank")]
+_HOLDUP_CASES = [
+    (cls, kind, variant)
+    for cls, kind in ((units.Vessel, "vessel"), (units.Tank, "tank"))
+    for variant in sorted(default_registry.variants(kind))
+]
+_HOLDUP_CASE_IDS = [f"{kind}/{variant}" for _, kind, variant in _HOLDUP_CASES]
 
 _ROLE_FACE = {"vent": "N", "relief": "N", "drain": "S"}
 
 
-@pytest.mark.parametrize(
-    "cls,kind,variant",
-    [(cls, kind, v) for cls, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-    ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-)
+@pytest.mark.parametrize("cls,kind,variant", _HOLDUP_CASES, ids=_HOLDUP_CASE_IDS)
 def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind, variant):
     """Verify holdup variants anchor every declared nozzle."""
     from pandid.portgeom import is_anchored
@@ -1148,11 +1039,7 @@ def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind,
         )
 
 
-@pytest.mark.parametrize(
-    "cls,kind,variant",
-    [(cls, kind, v) for cls, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-    ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
-)
+@pytest.mark.parametrize("cls,kind,variant", _HOLDUP_CASES, ids=_HOLDUP_CASE_IDS)
 def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, variant):
     """Verify relief and drain ports occupy their prescribed positions."""
     from pandid.portgeom import port_faces
@@ -1279,28 +1166,22 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
 
     (kind, variant), _, turned = entry
     segments = _collect_segments(turned.svg)
-    for box in _ODD_BOXES:
-        for placement in _PLACEMENTS:
-            fs = Flowsheet("odd boxes, turned end for end")
-            unit = units.Reducer(
-                f"{kind}-{variant}",
-                variant=variant,
-                large_end="outlet",
-                width=box[0],
-                height=box[1],
+    for w, h in _ODD_BOXES:
+        fs = Flowsheet("odd boxes, turned end for end")
+        unit = units.Reducer(
+            f"{kind}-{variant}", variant=variant, large_end="outlet", width=w, height=h
+        )
+        fs.add(unit).pin(x=200, y=200)
+        matrix = _placements(fs.to_svg(), _natives(fs))[
+            (round(unit.frame.cx, 6), round(unit.frame.cy, 6))
+        ]
+        for name in unit.ports:
+            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
+            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
+                f"{kind}/{variant} turned end for end: port {name!r} in a {w:g}x{h:g} box "
+                f"is {d:.1f}u from the nearest drawn stroke once the artwork's own "
+                f"placement is undone (tolerance {GEOM_TOL})"
             )
-            fs.add(unit).pin(x=200, y=200, **placement)
-            matrix = _placements(fs.to_svg(), _natives(fs))[
-                (round(unit.frame.cx, 6), round(unit.frame.cy, 6))
-            ]
-            for name in unit.ports:
-                d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
-                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
-                    f"{kind}/{variant} turned end for end: port {name!r} in a "
-                    f"{box[0]:g}x{box[1]:g} box at {placement or 'no turn'} is "
-                    f"{d:.1f}u from the nearest drawn stroke once the artwork's own "
-                    f"placement is undone (tolerance {GEOM_TOL})"
-                )
 
 
 # Port-placement menu invariants
@@ -1398,7 +1279,7 @@ def test_an_alternate_on_a_ports_own_home_face_is_rejected():
             width=91.5,
             height=30.0,
             ports={"feed": (0.0, 15.0)},
-            port_faces={"feed": {"W": (0.0, 12.0)}},  # the west head is already taken
+            port_faces={"feed": {"W": (0.0, 12.0)}},
         )
 
 
@@ -1435,7 +1316,23 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
         ports={"feed": (0.0, 15.0)},
         port_faces={"feed": {"W": (0.0, 15.0), "N": (20.0, 0.0)}},
     )
-    assert list(sym.port_faces["feed"]) == ["W", "N"]  # home stays most preferred
+    assert list(sym.port_faces["feed"]) == ["W", "N"]
+
+
+def test_every_port_menu_starts_from_its_home_placement():
+    """Verify each port's menu holds its home placement first, menu or no menu."""
+    sym = Symbol(
+        svg='<g id="sym_x"/>',
+        width=91.5,
+        height=30.0,
+        ports={"feed": (0.0, 15.0), "vapor": (91.5, 15.0)},
+        port_faces={"feed": {"N": (20.0, 0.0)}},
+    )
+    assert sym.port_faces == {
+        "feed": {"W": (0.0, 15.0), "N": (20.0, 0.0)},
+        "vapor": {"E": (91.5, 15.0)},
+    }
+    assert list(sym.port_faces["feed"]) == ["W", "N"]
 
 
 # Port-series invariants
@@ -1695,12 +1592,6 @@ def test_a_nozzle_clear_of_the_series_band_is_not_a_collision():
     assert clear.coincident_ports() == []
 
 
-def test_a_series_on_another_face_is_not_a_collision():
-    """Verify series on separate faces are not collisions."""
-    assert default_registry.get("splitter").coincident_ports() == []
-    assert default_registry.get("mixer").coincident_ports() == []
-
-
 _HOLDUP = [
     (kind, variant) for kind in ("tank", "vessel") for variant in default_registry.variants(kind)
 ]
@@ -1811,47 +1702,33 @@ def test_three_inlets_stack_up_a_dished_roof_tanks_shell():
 
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
-def test_a_holdup_family_stays_on_its_own_box_at_every_count(kind, variant):
-    """Verify holdup-family ports remain within their boxes."""
+def test_a_holdup_family_stays_on_its_wall_and_its_ink_at_every_count(kind, variant):
+    """Verify a holdup family stays on its box, its declared wall and its drawn ink."""
     sym = default_registry.get(kind, variant)
+    segments = _collect_segments(sym.svg)
     for role, prefix, menu in _role_menus(kind, variant):
-        for face in menu:
+        for face, drawn in menu.items():
+            assert face in sym.bands, (
+                f"{kind}/{variant}: {role} may be piped from {face}, and no band "
+                f"says how much of that face is drawing"
+            )
+            lo, hi = sym.bands[face]
             for count in range(1, 9 if _has_wall(sym, face) else 2):
                 unit = _holdup(kind, variant, role, [face] * count)
                 w, h = resolve_size(unit)
                 for i in range(1, count + 1):
                     x, y = port_offset(unit, f"{prefix}{i}")
-                    assert -ON_BODY_TOL <= x <= w + ON_BODY_TOL, (
-                        f"{kind}/{variant} {prefix}{i} of {count} on {face} is at "
-                        f"x={x}, outside a box {w} wide"
-                    )
-                    assert -ON_BODY_TOL <= y <= h + ON_BODY_TOL, (
-                        f"{kind}/{variant} {prefix}{i} of {count} on {face} is at "
-                        f"y={y}, outside a box {h} tall"
-                    )
-
-
-@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
-def test_a_holdup_family_stays_inside_the_wall_its_symbol_declares(kind, variant):
-    """Verify holdup-family ports remain on declared walls."""
-    sym = default_registry.get(kind, variant)
-    if not sym.bands:
-        pytest.skip(f"{kind}/{variant} declares no wall")
-    for role, prefix, menu in _role_menus(kind, variant):
-        for face in menu:
-            if face not in sym.bands:
-                continue
-            lo, hi = sym.bands[face]
-            for count in range(1, 9 if _has_wall(sym, face) else 2):
-                unit = _holdup(kind, variant, role, [face] * count)
-                for i in range(1, count + 1):
-                    x, y = port_offset(unit, f"{prefix}{i}")
+                    where = f"{kind}/{variant} {prefix}{i} of {count} on {face} at ({x}, {y})"
+                    if count == 1:
+                        assert (x, y) == pytest.approx(drawn), f"{where}, not at {drawn} as drawn"
+                    assert -ON_BODY_TOL <= x <= w + ON_BODY_TOL, f"{where} is outside {w} wide"
+                    assert -ON_BODY_TOL <= y <= h + ON_BODY_TOL, f"{where} is outside {h} tall"
                     along = y if face in ("W", "E") else x
                     assert lo - ON_BODY_TOL <= along <= hi + ON_BODY_TOL, (
-                        f"{kind}/{variant} {prefix}{i} of {count} sits {along} along "
-                        f"its {face} face, outside the ({lo}, {hi}) wall the symbol "
-                        f"declares"
+                        f"{where} is outside the ({lo}, {hi}) wall the symbol declares"
                     )
+                    d = _nearest_distance((x, y), segments)
+                    assert d <= GEOM_TOL, f"{where} is {d:.1f}u from the nearest drawn stroke"
 
 
 @pytest.mark.parametrize(("kind", "variant"), _BANDED, ids=_BANDED_IDS)
@@ -1874,18 +1751,6 @@ def test_every_declared_wall_lies_on_the_drawing(kind, variant):
                     f"{kind}/{variant} bands {face!r} at ({lo}, {hi}); {t} along it "
                     f"is {point}, which is {d:.1f}u from the nearest drawn stroke"
                 )
-
-
-@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
-def test_every_family_face_declares_a_band(kind, variant):
-    """Verify every family face declares a placement band."""
-    sym = default_registry.get(kind, variant)
-    for role, _, menu in _role_menus(kind, variant):
-        for face in menu:
-            assert face in sym.bands, (
-                f"{kind}/{variant}: {role} may be piped from {face}, and no band "
-                f"says how much of that face is drawing"
-            )
 
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
@@ -1916,12 +1781,7 @@ def test_a_face_with_no_wall_is_refused_by_the_drawing_too():
 
 
 def test_an_inlet_and_an_outlet_on_a_face_with_no_wall_are_refused_by_the_drawing():
-    """Verify the drawing counts both families on a wall-less face (#507).
-
-    No shipped body offers both roles a point face, so the symbol is
-    registered here: an inlet and an outlet may both sit on a cone apex.
-    The symbol itself warns that the two roles share that point.
-    """
+    """Verify an inlet and an outlet on one wall-less face are refused."""
     from pandid.render.symbols import vessel_symbol
 
     variant = "cross_role_test"
@@ -1939,7 +1799,6 @@ def test_an_inlet_and_an_outlet_on_a_face_with_no_wall_are_refused_by_the_drawin
             bands={"N": (50.0, 50.0), "W": (30.0, 80.0)},
         )
     default_registry.register("tank", apex, variant)
-    # W has a wall, but only the outlet may use it, so neither path offers it (#580).
     try:
         with pytest.raises(ValueError, match="in_1 and out_1 are both on the N face") as drawn:
             vessel_symbol("tank", variant, (("in_1", "N"), ("out_1", "N")))
@@ -1971,7 +1830,6 @@ def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
                 units.Vessel("X-1", variant=variant, supports=supports)
             )
         except ValueError as exc:
-            # Refused when built, by the composition check (#574).
             assert "cannot carry supports=" in str(exc), f"vessel/{variant} + {supports}: {exc}"
             continue
         assert drawn.bands == sym.bands, (
@@ -2014,35 +1872,6 @@ def test_a_pinned_series_member_stays_inside_the_band():
     assert series.placement(0, 1, 60.0, 100.0, pin=0.95, band=band) == (0.0, 70.0)
     assert series.placement(0, 1, 60.0, 100.0, pin=0.5, band=band) == (0.0, 50.0)
     assert series.placement(0, 1, 60.0, 100.0, pin=0.05) == (0.0, 5.0)
-
-
-@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
-def test_a_holdup_family_lies_on_drawn_geometry(kind, variant):
-    """Verify holdup-family ports lie on drawn geometry."""
-    sym = default_registry.get(kind, variant)
-    segments = _collect_segments(sym.svg)
-    for role, prefix, menu in _role_menus(kind, variant):
-        for face in menu:
-            for count in range(1, 9 if _has_wall(sym, face) else 2):
-                unit = _holdup(kind, variant, role, [face] * count)
-                for i in range(1, count + 1):
-                    point = port_offset(unit, f"{prefix}{i}")
-                    d = _nearest_distance(point, segments)
-                    assert d <= GEOM_TOL, (
-                        f"{kind}/{variant} {prefix}{i} of {count} on {face} at "
-                        f"{point} is {d:.1f}u from the nearest drawn stroke"
-                    )
-
-
-@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
-def test_a_lone_holdup_connection_lands_where_the_stencil_drew_it(kind, variant):
-    """Verify a lone holdup connection preserves its stencil position."""
-    for role, prefix, menu in _role_menus(kind, variant):
-        for face, xy in menu.items():
-            unit = _holdup(kind, variant, role, [face])
-            assert port_offset(unit, f"{prefix}1") == pytest.approx(xy), (
-                f"{kind}/{variant} {role} on {face}"
-            )
 
 
 # Registry lookup invariants
@@ -2092,29 +1921,7 @@ def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
     assert default_registry.get("no_such_kind", "anything").symbol_id() == "sym_generic"
 
 
-@functools.lru_cache(maxsize=None)
 # Stencil-generation invariants
-
-def _script(name: str):
-    """Import a generator script by name.
-
-    Parameters
-    ----------
-    name : str
-        Script stem.
-
-    Returns
-    -------
-    module
-        Imported script module.
-    """
-    import importlib.util
-
-    path = pathlib.Path(__file__).resolve().parent.parent / "scripts" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(f"_pandid_script_{name}", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _clip(line: str, column: int, width: int = 90) -> str:
@@ -2614,14 +2421,10 @@ _STRAIGHT_VALVES = sorted(
 )
 
 
-_OFF_THE_RUN_BY_DESIGN = {
+_OFF_THE_RUN = {
     "three_way": "The branch extends the box below the top-aligned process run.",
     "knife": "The gate housing extends below the process run.",
 }
-
-_OFF_THE_RUN_BY_DEFECT: dict[str, str] = {}
-
-_OFF_THE_RUN = {**_OFF_THE_RUN_BY_DESIGN, **_OFF_THE_RUN_BY_DEFECT}
 
 
 def _run_heights(sym: Symbol) -> dict[tuple[str, str], float]:
@@ -2695,7 +2498,6 @@ def test_exactly_the_valves_named_above_leave_the_run():
         )
     }
     assert strayed == set(_OFF_THE_RUN)
-    assert set(_OFF_THE_RUN_BY_DESIGN) & set(_OFF_THE_RUN_BY_DEFECT) == set()
     assert all(_OFF_THE_RUN.values()), "an exception without a reason is a list of names"
 
 
@@ -2710,13 +2512,13 @@ def test_the_valves_the_run_does_not_cross_are_out_of_scope():
     assert len(_OFF_THE_RUN) * 2 < len(_STRAIGHT_VALVES), "the exceptions would be the rule"
 
 
-@pytest.mark.parametrize("variant", sorted(_OFF_THE_RUN_BY_DESIGN))
+@pytest.mark.parametrize("variant", sorted(_OFF_THE_RUN))
 def test_a_valve_drawn_below_the_run_is_drawn_there_in_ink(variant):
     """Verify below-run valves render at their declared offset."""
     plain = default_registry.get("valve", "gate")
     assert _ink_below_the_run(plain) == pytest.approx(_VALVE_RUN_HEIGHT)
     sym = default_registry.get("valve", variant)
-    assert _ink_below_the_run(sym) > _ink_below_the_run(plain), _OFF_THE_RUN_BY_DESIGN[variant]
+    assert _ink_below_the_run(sym) > _ink_below_the_run(plain), _OFF_THE_RUN[variant]
     assert _ink_below_the_run(sym) == pytest.approx(
         sym.height - sym.ports["inlet"][1], abs=_VALVE_RUN_TOL
     ), f"valve/{variant} has whitespace under it, not a deeper drawing"

@@ -1,13 +1,5 @@
-"""The deprecation mechanism: one declaration, a warning and a finding.
+"""Test the deprecation mechanism: one declaration, a warning and a finding."""
 
-Exercised through a deprecated API declared *here*, not by deprecating something
-real. The mechanism ships before its customers (#136, #138, #154, the
-``sig_in``/``sig_out`` rename), and a test that leaned on one of those would
-start failing on the day that spelling was deleted -- one release after it was
-added -- which is the wrong thing for a test of the machinery to be tied to.
-"""
-
-import os
 import warnings
 
 import pytest
@@ -15,17 +7,10 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.deprecation import CODE, Deprecation, declarations
 
-# Every DeprecationWarning raised in this file is one this file deliberately
-# caused. Unfiltered they are the entire warnings summary of `pytest -q`, which
-# is a summary worth keeping empty so that a real one stands out. The tests that
-# are *about* the warning assert on it through `pytest.warns`, which installs a
-# filter of its own and is unaffected by this.
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
-#: The stand-in. Written the way a real one is: a module constant beside the
-#: code that honours it, naming a call an author types and the call that
-#: replaces it.
+#: A stand-in deprecation for the tests to raise.
 RETIRED = Deprecation(
     what="Pump(cooled=True)",
     instead="Pump(jacket='cooling')",
@@ -34,7 +19,7 @@ RETIRED = Deprecation(
 
 
 class _OldPump(U.Pump):
-    """A pump built the retired way, so a whole sheet can be drawn with one."""
+    """A pump that warns ``RETIRED`` on construction."""
 
     def __init__(self, name, **kwargs):
         super().__init__(name, **kwargs)
@@ -68,12 +53,7 @@ def test_a_deprecated_call_reports():
 
 
 def test_the_warning_and_the_finding_are_the_same_sentence():
-    """The one thing the whole mechanism exists to guarantee.
-
-    Not two constructors compared: the string a filter would show, captured off
-    a real call, against the string ``validate()`` reports for that same call.
-    An edit that changed one and not the other fails here.
-    """
+    """Check that the warning and the ``validate()`` finding carry the same message."""
     fs = Flowsheet("same")
     with pytest.warns(DeprecationWarning) as caught:
         fs.add(_OldPump("P-101"))
@@ -91,31 +71,18 @@ def test_the_message_names_the_replacement_and_the_release():
     assert "99.0.0" in message  # when it goes
 
 
-def test_the_warning_points_at_the_callers_line():
-    """stacklevel: the author's file, not pandid's.
-
-    Compared as paths, not strings: Windows may spell one path in two cases
-    (#574).
-    """
+def test_the_warning_points_at_the_callers_line(same_file):
+    """Check that the warning points at the caller's file."""
     with pytest.warns(DeprecationWarning) as caught:
         _OldPump("P-101")
-
-    def same(path: str) -> str:
-        """Return a path as the file system resolves and compares it."""
-        return os.path.normcase(os.path.realpath(path))
-
-    assert same(caught[0].filename) == same(__file__)
+    assert same_file(caught[0].filename) == same_file(__file__)
 
 
 # --- carried from construction to validate() ---------------------------------
 
 
 def test_a_unit_deprecated_before_add_is_still_reported():
-    """The case the mechanism is shaped around.
-
-    The call happens while the unit is being built, when there is no flowsheet
-    in scope to record against, and the finding still reaches ``validate()``.
-    """
+    """Check that a unit deprecated before ``add`` is still reported by ``validate()``."""
     pump = _OldPump("P-101")
     assert pump.flowsheet is None
     fs = Flowsheet("late")
@@ -124,20 +91,13 @@ def test_a_unit_deprecated_before_add_is_still_reported():
 
 
 def test_a_unit_never_added_is_not_reported():
-    _OldPump("P-101")  # built, warned, and left off the sheet
+    _OldPump("P-101")
     fs = Flowsheet("empty")
     assert [i for i in fs.validate() if i.code == CODE] == []
 
 
-def test_it_survives_a_render():
-    """``fs.warnings`` is what ``render()`` leaves behind, so it has to be in it."""
-    fs, _ = _sheet()
-    fs.to_svg()
-    assert [i.code for i in fs.warnings if i.code == CODE] == [CODE]
-
-
 def test_reporting_does_not_consume_the_finding():
-    """``validate()`` reports; it never clears. Twice must answer twice."""
+    """Check that calling ``validate()`` twice reports the finding both times."""
     fs, _ = _sheet()
     first = [i.message for i in fs.validate() if i.code == CODE]
     second = [i.message for i in fs.validate() if i.code == CODE]
@@ -148,7 +108,7 @@ def test_reporting_does_not_consume_the_finding():
 
 
 def test_each_unit_reports_for_itself():
-    """Two units, two findings: two places in the author's file to edit."""
+    """Check that two deprecated units give two findings, each naming its unit."""
     fs = Flowsheet("two")
     fs.add(_OldPump("P-101"))
     fs.add(_OldPump("P-102"))
@@ -158,7 +118,7 @@ def test_each_unit_reports_for_itself():
 
 
 def test_one_carrier_says_it_once():
-    """A repeat is one thing to fix, so it is one finding -- and still warns."""
+    """Check that a repeated warning on one carrier warns twice and reports once."""
     fs = Flowsheet("repeat")
     pump = fs.add(_OldPump("P-101"))
     with pytest.warns(DeprecationWarning) as caught:
@@ -179,7 +139,7 @@ def test_a_stream_carries_one():
 
 
 def test_the_flowsheet_carries_one():
-    """For a deprecated ``Flowsheet`` method, which has the sheet and no unit."""
+    """Check that a flowsheet carries a deprecation of its own."""
     fs = Flowsheet("sheet")
     with pytest.warns(DeprecationWarning):
         RETIRED.warn(fs)
@@ -198,22 +158,14 @@ def test_a_loop_carries_one():
 
 
 def test_a_deprecation_needs_a_carrier():
-    """#207: there is no home for a finding with nothing to ride on.
-
-    There was one -- a process-wide list, appended to every ``validate()`` for
-    the life of the interpreter -- and a sheet built in one Jupyter cell
-    reported a call made in another. Refusing the call is what closes it: each
-    of these three used to record, and the second is the one a customer writes
-    by accident, passing a ``flowsheet`` that is still ``None``.
-    """
+    """Check that a deprecation with no carrier raises ``TypeError``."""
     for nothing in ((), (None,), (object(),)):
         with pytest.raises(TypeError, match="carrier"):
             RETIRED.warn(*nothing)
 
 
 def test_a_refused_call_does_not_warn_either():
-    """Both signals or neither. A finding nothing will report is a bug in the
-    caller, not something to half-announce."""
+    """Check that a refused call raises without warning."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         with pytest.raises(TypeError):
@@ -222,12 +174,7 @@ def test_a_refused_call_does_not_warn_either():
 
 
 def test_a_deprecation_stays_on_the_sheet_that_made_it():
-    """#207, end to end: a second sheet in the same process sees none of it.
-
-    Through the stand-in, because 0.1.3 ships no deprecation of its own -- the
-    six 0.1.2 declared were deleted in it, which is the one-release rule
-    working rather than a gap in this file.
-    """
+    """Check that a deprecation reports on its own sheet and not on another."""
     used = Flowsheet("used")
     feed = used.add(U.Feed("F"))
     pump = used.add(_OldPump("P-101"))
@@ -251,12 +198,7 @@ def test_a_deprecation_stays_on_the_sheet_that_made_it():
 
 
 def test_two_carriers_with_the_same_sentence_both_report():
-    """The dedupe is per carrier, not per sentence.
-
-    Two units are two places in the author's file to edit even when the finding
-    reads identically, which it does when the call names no ``where``. A
-    mechanism that deduplicated on the sentence would report one and drop one.
-    """
+    """Check that two carriers with the same message both report."""
     fs = Flowsheet("twins")
     first = fs.add(U.Pump("P-101"))
     second = fs.add(U.Pump("P-102"))
@@ -267,8 +209,7 @@ def test_two_carriers_with_the_same_sentence_both_report():
 
 
 def test_a_second_render_says_it_once_too():
-    """``render()`` assigns ``fs.warnings`` rather than appending to it, so a
-    sheet drawn twice reports what it found once, not twice."""
+    """Check that rendering a sheet twice reports its deprecation once."""
     fs, _ = _sheet()
     fs.to_svg()
     fs.to_svg()
@@ -286,7 +227,7 @@ def test_a_declaration_needs_all_three_parts():
 
 
 def test_where_is_optional():
-    """A deprecation with nothing on the sheet to name still reads."""
+    """Check that a deprecation's message reads without a ``where``."""
     assert RETIRED.message() == (
         "Pump(cooled=True) is deprecated and is removed in pandid 99.0.0; "
         "use Pump(jacket='cooling')"
@@ -294,13 +235,7 @@ def test_where_is_optional():
 
 
 def test_a_replacement_that_is_not_a_drop_in_says_so_before_it_is_named():
-    """ "Use X instead" is a promise, and a promise about a *different* drawing
-    has to be kept out loud.
-
-    The caveat goes in the middle rather than at the end, so the sentence still
-    finishes on the line the author types next -- which is the whole reason the
-    replacement comes last.
-    """
+    """Check that a ``note`` comes before the replacement in the message."""
     moved = Deprecation(
         what="Pump(cooled=True)",
         instead="Pump(jacket='cooling')",
@@ -315,14 +250,7 @@ def test_a_replacement_that_is_not_a_drop_in_says_so_before_it_is_named():
 
 
 def test_no_deprecation_has_outlived_its_release():
-    """The one-release rule, enforced instead of remembered.
-
-    Every deprecation the package declares names a release that has not shipped.
-    One that names the current version or an older one should have been deleted
-    in that release, and this is what says so before a user finds it still
-    there. The six 0.1.2 declared are what it walked through the gate; 0.1.3
-    deleted them and declares none of its own.
-    """
+    """Check that no declared deprecation names the current or an older release."""
     from pandid import __version__
 
     def release(text):
@@ -341,7 +269,7 @@ def test_no_deprecation_has_outlived_its_release():
 
 
 def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
-    """A constant put in a module of a pandid subpackage is found under its key."""
+    """Check that ``declarations()`` finds a constant in a pandid subpackage module."""
     import pandid.layout.faces as faces
 
     monkeypatch.setattr(faces, "RETIRED", RETIRED, raising=False)
@@ -349,12 +277,7 @@ def test_declarations_finds_a_module_constant(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_the_package_declares_only_the_placement_hints_and_the_faces():
-    """The twelve spellings 0.1.3 and 0.1.4 deprecated are deleted (#579). Those
-    retiring now are a unit class's ``PLACES``/``LAYOUT_CONFIDENCE`` (#564),
-    which layout no longer reads, a unit face given as ``at=`` or
-    ``controller_at=`` (#438), and a vessel's ``default_input_face()`` and
-    ``default_output_face()`` (#624).
-    """
+    """Check that the package declares only the placement-hint and face deprecations."""
     from pandid.flowsheet import _CONTROLLER_AT
     from pandid.units import _AT_FACE, _DEFAULT_FACES, _PLACEMENT_HINTS
 

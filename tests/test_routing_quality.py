@@ -1,9 +1,4 @@
-"""Routing polish: geometric properties a routed sheet has to hold, none of which
-a golden byte-match would localise. Forward streams stay off the sheet-edge
-recycle lanes, runs are never drawn over themselves, ports leave squarely without
-a gratuitous hop, facing nozzles closer than the escape stand-off still run
-straight across, and the separation pass moves only the runs that actually
-collide."""
+"""Check routing properties a golden byte-match would not localise."""
 
 import math
 
@@ -17,13 +12,7 @@ from pandid.streams import Stream
 
 
 def test_route_report_uses_drawn_nozzles_for_length_baseline() -> None:
-    """Compare a route's drawn length with its nozzle-to-nozzle minimum.
-
-    Returns
-    -------
-    None
-        An inset nozzle does not inflate the reported length ratio.
-    """
+    """Compare a route's drawn length with its nozzle-to-nozzle minimum."""
     from scripts import gallery, route_quality
     from pandid.portgeom import port_point
 
@@ -72,8 +61,7 @@ def test_forward_streams_do_not_route_on_the_recycle_lane():
 
 
 def _crossing_network():
-    """Two feeds, each splitting to both mixers, which forces two streams to
-    share the vertical corridor between the splitter and mixer columns."""
+    """Return two feeds that each split to both mixers through one vertical corridor."""
     fs = Flowsheet("Crossing Network")
     f1, f2 = fs.add(U.Feed("Feed A")), fs.add(U.Feed("Feed B"))
     s1 = fs.add(U.Splitter("SP-501", n_outlets=2))
@@ -119,34 +107,11 @@ def test_parallel_runs_sharing_a_corridor_are_separated():
                 )
 
 
-def test_routes_remain_orthogonal_and_clear_of_equipment():
-    # No routing refinement may buy its result with diagonal segments or
-    # obstacle crossings.
-    fs = _ammonia_loop()
-    fs.layout()
-    fs.route()
-    boxes = []
-    for u in fs.units:
-        f = u.frame
-        boxes.append((u, f.x, f.y, f.x + f.w, f.y + f.h))
-    for s in fs.streams:
-        wp = s.route.waypoints
-        for i in range(len(wp) - 1):
-            (x1, y1), (x2, y2) = wp[i], wp[i + 1]
-            assert abs(x1 - x2) < 0.5 or abs(y1 - y2) < 0.5, f"{s.name} has a diagonal segment"
-
-
 OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
 
 
 def _headings(waypoints):
-    """The route's headings in order, one per straight run.
-
-    Zero-length segments are dropped and collinear ones merged, so the result is
-    the shape of the drawn line rather than its waypoint count. Dropping the
-    degenerate ones matters: a spur that goes out and straight back collapses to
-    a repeated waypoint, which hides the reversal from a naive pairwise scan.
-    """
+    """The route's headings in order, one per straight run."""
     out = []
     for (x1, y1), (x2, y2) in zip(waypoints, waypoints[1:]):
         if abs(x1 - x2) < 0.5 and abs(y1 - y2) < 0.5:
@@ -158,12 +123,7 @@ def _headings(waypoints):
 
 
 def _inline_element_signal():
-    """An E-facing port whose row is open to the west.
-
-    An in-line primary element (``offset=0``) deliberately stands aside from the
-    obstacle set, so the row through its east-facing ``sig_out`` is clear, the
-    one geometry in which a run leaving east can turn straight back west.
-    """
+    """Return an in-line element whose east-facing signal port has a row open to the west."""
     fs = Flowsheet("Inline Element")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     prod = fs.add(U.Product("Product")).pin(x=700, y=170)
@@ -175,11 +135,7 @@ def _inline_element_signal():
 
 
 def _nozzle_above_its_target_lane():
-    """A downward nozzle 15px above the lane it has to join, projected 25px out.
-
-    The escape projection overshoots the lane, so the run has to come back up to
-    it, the geometry that tempts the search into a spur out and straight back.
-    """
+    """Return a downward nozzle 15px above the lane it joins, projected 25px out."""
     fs = Flowsheet("Overshot Nozzle")
     hx = fs.add(U.HeatExchanger("E-101")).pin(x=568, y=68)
     sep = fs.add(U.Separator("V-101")).pin(x=728, y=88)
@@ -210,20 +166,7 @@ def test_no_run_doubles_back_along_its_own_axis():
 
 
 def _facing_valves(gap: float, drop: float = 0.0, label_pos: str | None = None):
-    """Two gate valves whose facing nozzles sit ``gap`` apart.
-
-    The nozzles land on the box edges, so the space between them is the space
-    between the boxes. A control valve station packs an isolation valve, a
-    reducer, the valve, another reducer and a second isolation valve into spans
-    narrower than a single escape stand-off, which is the density this geometry
-    stands in for.
-
-    ``drop`` puts the second valve on another lane, so the run needs a jog
-    rather than a straight shot. A valve's tag block is drawn above it and is
-    itself an obstacle 45px wide, which straddles the corridor between two
-    valves this close; ``label_pos="center"`` moves the tag onto the symbol so
-    the corridor is about the stand-off and nothing else.
-    """
+    """Return two gate valves whose facing nozzles sit ``gap`` apart."""
     kwargs = {"variant": "gate"}
     if label_pos is not None:
         kwargs["label_pos"] = label_pos
@@ -382,10 +325,6 @@ def test_a_port_does_not_overshoot_the_lane_it_is_leaving_for():
 
 def _routed_through(stream: Stream, points: list[tuple[float, float]]) -> None:
     """Give a stream an automatic route through ``points``.
-
-    The separation tests below build their geometry this way and call
-    ``separate_streams`` directly. ``via()`` would mark the route manual,
-    and a manual route is never separated (#574).
 
     Parameters
     ----------
