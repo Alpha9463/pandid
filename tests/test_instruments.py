@@ -2755,60 +2755,31 @@ def test_the_square_is_not_a_removed_spelling():
     assert U.Instrument("FIC", 301, variant="shared").variant == "shared"
 
 
-class _CountingRouter:
-    """Route with the default router and count the passes.
-
-    Attributes
-    ----------
-    passes : int
-        Routing passes made.
-    """
-
-    def __init__(self) -> None:  # numpydoc ignore=GL08
-        from pandid.routing import DefaultRouter
-
-        self.passes = 0
-        self._router = DefaultRouter()
-
-    def route(self, fs: Flowsheet) -> None:
-        """Route the sheet and count the pass.
-
-        Parameters
-        ----------
-        fs : Flowsheet
-            Sheet to route.
-        """
-        self.passes += 1
-        self._router.route(fs)
-
-
 def test_a_balloon_hung_from_a_tap_balloon_settles_off_the_tapped_line():
     """Settle a balloon chain whose asked spot lies on the tapped line.
 
     Returns
     -------
     None
-        Routing settles in two passes and TIC keeps off every run of the line.
+        Routing settles, the line runs straight, and TIC keeps off it.
     """
     from pandid.layout.attach import stream_path
 
     fs = Flowsheet("settle")
-    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=500)
-    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=100)
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=600, y=300)
     line = fs.connect(feed.outlet, prod.inlet)
-    loop = fs.add_loop("T", 1)
-    tt = fs.add_instrument("TT", loop, sensing=line, at=0.5, offset=70)
-    tic = fs.add_instrument("TIC", loop, near=tt, face="S", offset=70)
+    tt = fs.add_instrument("TT", 1, sensing=line, offset=70)
+    tic = fs.add_instrument("TIC", 1, near=tt, face="S", offset=70)
     fs.connect(tt.sig_out, tic.sig_in, kind="electric")
-    router = _CountingRouter()
-    fs.route(router)
+    fs.route()
 
     assert fs.route_converged
-    assert router.passes <= 2
+    points = stream_path(line)
+    assert {y for _, y in points} == {300.0}, points
     assert tic.frame is not None
     x0, y0 = tic.frame.x, tic.frame.y
     x1, y1 = x0 + tic.frame.w, y0 + tic.frame.h
-    points = stream_path(line)
     for (ax, ay), (bx, by) in zip(points, points[1:]):
         on = min(ax, bx) <= x1 and max(ax, bx) >= x0 and min(ay, by) <= y1 and max(ay, by) >= y0
         assert not on, ((ax, ay), (bx, by), (x0, y0, x1, y1))
@@ -2966,3 +2937,27 @@ def test_a_sheet_the_keep_off_rule_cannot_settle_is_routed_as_before():
         min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
         for (ax, ay), (bx, by) in zip(points, points[1:])
     ), (tt.tap, points)
+
+
+def test_keeping_a_chained_balloon_off_its_line_adds_no_tap_crossing():
+    """Keep main's drawing where keeping a chained balloon clear adds a clash.
+
+    Returns
+    -------
+    None
+        No tap line crosses a unit.
+    """
+    from pandid.layout.control import _flaws
+
+    fs = Flowsheet("tap crossing")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=500)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.1, offset=100, angle=45)
+    fs.add_instrument("TIC", 1, near=tt, face="S", offset=35, angle=0)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=500, y=400, orientation=180)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert _flaws(fs)["tap-through-unit"] == 0

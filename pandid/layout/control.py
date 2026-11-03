@@ -271,11 +271,35 @@ def _flaws(fs: "Flowsheet") -> "Counter[str]":
                                          if u is not inst and u is not inst.host)
         flaws["tap-through-tag"] += sum(crosses(route, h) for h in halos)
     runs = [(k, a, b) for k, points in enumerate(lines + [route for _, route in taps])
-            for a, b in zip(points, points[1:])]
+            for a, b in _straight_runs(points)]
     flaws["line-on-line"] = sum(
         _shared(a, b, c, d) for i, (k, a, b) in enumerate(runs)
         for m, c, d in runs[i + 1:] if m != k)
     return flaws
+
+
+def _straight_runs(points: list) -> list:
+    """Return the ends of each straight run of a polyline.
+
+    Parameters
+    ----------
+    points : list
+        Polyline points.
+
+    Returns
+    -------
+    list[tuple[tuple[float, float], tuple[float, float]]]
+        Each run of segments on one track, to within 1, as its two ends.
+    """
+    out: list = []
+    for a, b in zip(points, points[1:]):
+        if out:
+            p, q = out[-1]
+            if any(abs(p[i] - q[i]) < 1 and abs(q[i] - b[i]) < 1 for i in (0, 1)):
+                out[-1] = (p, b)
+                continue
+        out.append((a, b))
+    return out
 
 
 def _shared(a: tuple[float, float], b: tuple[float, float],

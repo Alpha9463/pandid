@@ -410,6 +410,25 @@ def _tapped_stream(unit: "Unit") -> "Stream | None":
     return host if isinstance(host, Stream) else None
 
 
+def _chained(unit: "Unit") -> bool:
+    """Return whether a unit hangs from a balloon whose chain taps a line.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit to test.
+
+    Returns
+    -------
+    bool
+        True for a balloon hung from another balloon on a line.
+    """
+    from pandid.streams import Stream
+
+    host = getattr(unit, "host", None)
+    return host is not None and not isinstance(host, Stream) and _tapped_stream(unit) is not None
+
+
 def _tapped_runs(inst: "Instrument") -> tuple[Box, ...]:
     """Return the runs of the line a balloon hung from a unit taps.
 
