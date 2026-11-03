@@ -1,24 +1,4 @@
-"""Provide the ``pandid`` command line.
-
-A thin shell over the public API: it reads a spec with :mod:`pandid.spec`,
-calls the same methods a script would, and reports any failure as one
-line on stderr with an exit code::
-
-    pandid draw plant.yaml -o plant.pdf --page-size A3 --border zone
-    pandid validate plant.yaml
-    pandid symbols --kind valve
-
-===== ============================================================
-``0`` success
-``1`` the flowsheet was rejected: the spec could not be read,
-      validation found errors, or the engine refused the request
-      (such as an unknown page size)
-``2`` the command line was wrong: an unknown flag, a missing
-      argument, or an option value checked here
-``3`` an optional extra is missing (PyYAML for a YAML spec, the
-      ``pdf`` extra for PDF or PNG output)
-===== ============================================================
-"""
+"""Provide the ``pandid`` command line."""
 
 from __future__ import annotations
 
@@ -41,15 +21,7 @@ EXIT_MISSING_DEPENDENCY = 3
 
 
 class _Failure(Exception):
-    """A user-facing failure and the exit code to report it under.
-
-    Parameters
-    ----------
-    message : str
-        One-line explanation.
-    code : int, default=EXIT_FAILED
-        Exit code.
-    """
+    """A user-facing failure and the exit code to report it under."""
 
     def __init__(self, message: str, code: int = EXIT_FAILED) -> None:
         super().__init__(message)
@@ -57,88 +29,29 @@ class _Failure(Exception):
 
 
 def _note(message: str) -> None:
-    """Write a line to stderr after flushing stdout.
-
-    Flushing keeps the note after the output it refers to when either
-    stream is a pipe.
-
-    Parameters
-    ----------
-    message : str
-        Line to write.
-    """
+    """Flush stdout, then write a line to stderr."""
     sys.stdout.flush()
     print(message, file=sys.stderr)
 
 
 def _fail(message: str, code: int) -> int:
-    """Report an error on stderr and return its exit code.
-
-    Parameters
-    ----------
-    message : str
-        Error text.
-    code : int
-        Exit code.
-
-    Returns
-    -------
-    int
-        ``code``.
-    """
+    """Report an error on stderr and return its exit code."""
     _note(f"error: {message}")
     return code
 
 
 def _plural(count: int, noun: str) -> str:
-    """Return a count with its noun, pluralised with ``s`` when not 1.
-
-    Parameters
-    ----------
-    count : int
-        Number of items.
-    noun : str
-        Singular noun.
-
-    Returns
-    -------
-    str
-        Such as ``"1 unit"`` or ``"3 units"``.
-    """
+    """Return a count with its noun, adding ``s`` when not 1."""
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
 def _fold(name: str) -> str:
-    """Fold a kind or class name for comparison.
-
-    Parameters
-    ----------
-    name : str
-        Name such as ``HeatExchanger`` or ``heat_exchanger``.
-
-    Returns
-    -------
-    str
-        Lower case without underscores or hyphens.
-    """
+    """Fold a name to lower case without underscores or hyphens."""
     return name.lower().replace("_", "").replace("-", "")
 
 
 def _suggest(value: str, candidates: Sequence[str]) -> str:
-    """Return a "did you mean" hint for a misspelt name.
-
-    Parameters
-    ----------
-    value : str
-        Name the user typed.
-    candidates : Sequence[str]
-        Valid names.
-
-    Returns
-    -------
-    str
-        `` (did you mean 'X'?)``, or an empty string when nothing is close.
-    """
+    """Return a "did you mean" hint, or an empty string."""
     close = difflib.get_close_matches(_fold(value), [_fold(c) for c in candidates], n=1, cutoff=0.6)
     if not close:
         return ""
@@ -152,36 +65,13 @@ def _suggest(value: str, candidates: Sequence[str]) -> str:
 
 
 def _load(path: Path) -> Flowsheet:
-    """Read a spec file, choosing the reader from its extension.
-
-    Parameters
-    ----------
-    path : Path
-        ``.yaml``, ``.yml`` or ``.json`` file.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet built from the spec.
-
-    Raises
-    ------
-    _Failure
-        If the extension is not supported.
-    OSError
-        If the file cannot be opened.
-    ImportError
-        If PyYAML is needed and not installed.
-    SpecError
-        If the spec is invalid.
-    """
+    """Read a spec file, choosing the reader from its extension."""
     suffix = path.suffix.lower()
     if suffix not in (".yaml", ".yml", ".json"):
         named = repr(suffix) if suffix else "a file with no extension"
         raise _Failure(
             f"{path}: cannot read a spec from {named}; write it as .yaml, .yml or .json")
-    # Open the file first, so a missing file reports exit 1 rather than a
-    # missing PyYAML (exit 3).
+    # Raise OSError for a missing file before any reader is imported.
     with path.open("rb"):
         pass
     if suffix == ".json":
@@ -190,18 +80,7 @@ def _load(path: Path) -> Flowsheet:
 
 
 def _draw(args: argparse.Namespace) -> int:
-    """Render a spec and report any warnings.
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        Parsed ``draw`` arguments.
-
-    Returns
-    -------
-    int
-        :data:`EXIT_OK`; failures raise.
-    """
+    """Render a spec and report any warnings."""
     fs = _load(args.spec)
     out = args.output if args.output is not None else args.spec.with_suffix(".svg")
     fs.render(
@@ -229,21 +108,9 @@ def _draw(args: argparse.Namespace) -> int:
 
 
 def _validate(args: argparse.Namespace) -> int:
-    """Lay out and route a spec, then print its validation findings.
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        Parsed ``validate`` arguments.
-
-    Returns
-    -------
-    int
-        :data:`EXIT_FAILED` if any finding is an error, else
-        :data:`EXIT_OK`.
-    """
+    """Lay out and route a spec, then print its validation findings."""
     fs = _load(args.spec)
-    # Route first so the geometric checks have frames to measure.
+    # The geometric checks measure the routed frames.
     fs.route()
     issues = fs.validate(diagram=args.diagram)
     for issue in issues:
@@ -262,17 +129,10 @@ def _validate(args: argparse.Namespace) -> int:
 
 
 def _catalogue() -> list[tuple[str, str, list[str]]]:
-    """List the drawable kinds and their variants.
+    """Return ``(class name, kind, variants)`` for each drawable kind.
 
-    Kinds come from the unit classes, so only kinds a spec can name are
-    listed. One row per kind: classes that share a kind (``Absorber`` and
-    ``Stripper`` are ``"column"``) appear only under the class
-    ``spec._ALIASES`` resolves the kind to.
-
-    Returns
-    -------
-    list[tuple[str, str, list[str]]]
-        ``(class name, kind, variants)``, sorted by class name.
+    A kind shared by several classes is listed once, under the class
+    ``spec._ALIASES`` resolves it to.
     """
     from pandid.render.symbols import default_registry
 
@@ -288,24 +148,7 @@ def _catalogue() -> list[tuple[str, str, list[str]]]:
 
 
 def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
-    """Format a label and its items, wrapped under a hanging indent.
-
-    Parameters
-    ----------
-    label : str
-        Row label.
-    items : Sequence[str]
-        Items to list.
-    pad : int
-        Indent for the items.
-    width : int
-        Line width.
-
-    Returns
-    -------
-    list[str]
-        Output lines.
-    """
+    """Format a label and its items, wrapped under a hanging indent."""
     lines = [label.ljust(pad)]
     for item in items:
         if len(lines[-1]) > pad and len(lines[-1]) + len(item) > width:
@@ -315,23 +158,7 @@ def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
 
 
 def _symbols(args: argparse.Namespace) -> int:
-    """Print the symbol catalogue, optionally for one kind.
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        Parsed ``symbols`` arguments.
-
-    Returns
-    -------
-    int
-        :data:`EXIT_OK`.
-
-    Raises
-    ------
-    _Failure
-        If ``--kind`` names no kind (exit 2).
-    """
+    """Print the symbol catalogue, optionally for one kind."""
     catalogue = _catalogue()
     rows = catalogue
     if args.kind is not None:
@@ -367,31 +194,13 @@ def _symbols(args: argparse.Namespace) -> int:
 
 
 def _diagram_option(command: argparse.ArgumentParser, help: str) -> None:
-    """Add the shared ``--diagram`` option to a command.
-
-    ``draw`` and ``validate`` must agree on the diagram type: a P&ID draws
-    no arrowheads, so ``nozzles-crowded`` does not apply, and a block flow
-    diagram needs no stream table.
-
-    Parameters
-    ----------
-    command : argparse.ArgumentParser
-        Subcommand parser.
-    help : str
-        Help text for this command.
-    """
+    """Add the shared ``--diagram`` option to a command."""
     command.add_argument("--diagram", choices=("pfd", "p&id", "bfd"), default="pfd",
                          help=help)
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for every subcommand.
-
-    Returns
-    -------
-    argparse.ArgumentParser
-        Parser whose subcommands set ``run`` to their handler.
-    """
+    """Build the argument parser for every subcommand."""
     parser = argparse.ArgumentParser(
         prog="pandid",
         description="Draw a P&ID or process flow diagram from a flowsheet spec file.",
@@ -430,7 +239,7 @@ def _build_parser() -> argparse.ArgumentParser:
              "(default: none)",
     )
     # ``--stream-table`` alone draws the table under the drawing;
-    # ``--stream-table sheet`` writes the table as its own sheet instead.
+    # ``--stream-table sheet`` draws the table as its own sheet.
     draw.add_argument(
         "--stream-table", nargs="?", const=True, default=False,
         choices=(TABLE_SHEET,), metavar=TABLE_SHEET,
@@ -442,7 +251,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="which of two crossing lines carries the crossing mark "
              "(default: vertical)",
     )
-    # Use the renderer's own choices and default, so the CLI and API agree.
     draw.add_argument(
         "--crossing-style", choices=CROSSING_STYLES, default=CROSSING_STYLE_DEFAULT,
         help="what that mark is: 'arc' bridges the crossed line, 'gap' "
@@ -484,9 +292,6 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line and return the exit code.
 
-    Every failure a user can cause is reported as one line on stderr; a
-    traceback indicates a bug.
-
     Parameters
     ----------
     argv : Sequence[str] or None, optional
@@ -495,7 +300,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns
     -------
     int
-        Exit code from the table in the module docstring.
+        0 on success, 1 for a rejected sheet, 2 for a bad command line,
+        3 for a missing optional extra.
     """
     parser = _build_parser()
     try:
@@ -508,10 +314,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     except _Failure as e:
         return _fail(str(e), e.code)
     except ImportError as e:
-        # A missing optional extra; the message names what to install.
+        # A missing optional extra.
         return _fail(str(e), EXIT_MISSING_DEPENDENCY)
     except ValueError as e:
-        # SpecError and engine refusals; their messages are user-facing.
+        # SpecError and engine refusals.
         return _fail(str(e), EXIT_FAILED)
     except OSError as e:
         # A missing or unreadable file or directory.
