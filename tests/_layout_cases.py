@@ -10,6 +10,7 @@ from pandid import (
 )
 from pandid.geometry import Frame
 from pandid.portgeom import port_point
+from pandid.stations import ValveStation
 from pandid.units import Unit
 
 
@@ -158,3 +159,20 @@ def overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float,
         Whether their interiors meet.
     """
     return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
+
+
+def on_the_run(station: ValveStation) -> list[Unit]:
+    """Return a valve station's members that sit on the run, in flow order.
+
+    Parameters
+    ----------
+    station : ValveStation
+        Station to read.
+
+    Returns
+    -------
+    list[Unit]
+        Every member but the bypass valve and the drain valves.
+    """
+    legs = (station.bypass, station.upstream_drain, station.downstream_drain)
+    return [unit for unit in station.members if unit not in legs]
