@@ -106,29 +106,16 @@ def test_an_inferred_duty_still_round_trips_without_saying_kind():
 # nozzles taken and a corrected retry answering `already connected`.
 
 
-def _state(fs: Flowsheet) -> bytes:
-    """The whole flowsheet, deeply, as bytes that can be compared.
-
-    ``pickle`` rather than a field-by-field walk for the same reason the
-    rollback it checks is wholesale: a comparison that names what to look at is
-    a comparison that goes stale. The first three rounds of this family of bugs
-    were each caught by the *next* thing nobody had thought to look at -- the
-    streams list, then the nozzles, then the numbering cache -- and this looks
-    at all of it at once.
-    """
-    return pickle.dumps(fs)
-
-
 def test_the_state_check_can_see_a_change():
     """The guard's own guard. A comparison that compares nothing passes
-    everything, so this asserts that ``_state`` notices the smallest of the
+    everything, so this asserts that the pickled sheet notices the smallest of the
     mutations a refused ``connect()`` used to leave behind."""
     fs = Flowsheet("meta")
     feed = fs.add(U.Feed("F"))
     product = fs.add(U.Product("P"))
-    before = _state(fs)
+    before = pickle.dumps(fs)
     fs.connect(feed.outlet, product.inlet)
-    assert _state(fs) != before
+    assert pickle.dumps(fs) != before
 
 
 def test_the_state_check_can_see_a_renumbering():
@@ -138,10 +125,10 @@ def test_the_state_check_can_see_a_renumbering():
     feed = fs.add(U.Feed("F"))
     product = fs.add(U.Product("P"))
     fs.connect(feed.outlet, product.inlet)
-    before = _state(fs)
+    before = pickle.dumps(fs)
     fs.stream_number_start = 90
     fs.renumber_streams()
-    assert _state(fs) != before
+    assert pickle.dumps(fs) != before
 
 
 def test_a_rejected_line_number_leaves_the_sheet_alone():
@@ -151,12 +138,12 @@ def test_a_rejected_line_number_leaves_the_sheet_alone():
     fs = Flowsheet("a", line_numbering_scheme="{size}")
     feed = fs.add(U.Feed("Feed"))
     product = fs.add(U.Product("Product"))
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     with pytest.raises(ValueError, match="never uses"):
         fs.connect(feed.outlet, product.inlet, service="P")
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert fs.streams == []
     assert feed.outlet.stream is None and product.inlet.stream is None
 
@@ -172,12 +159,12 @@ def test_a_scheme_naming_something_that_is_not_a_component_lands_the_same_way():
     fs = Flowsheet("b", line_numbering_scheme="{flavour}")
     feed = fs.add(U.Feed("Feed"))
     product = fs.add(U.Product("Product"))
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     with pytest.raises(ValueError, match="not a line-number component"):
         fs.connect(feed.outlet, product.inlet, size='6"')
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert fs.connect(feed.outlet, product.inlet).name == "S1"
 
 
@@ -190,7 +177,7 @@ def test_a_rejected_line_number_leaves_the_run_it_would_have_joined_alone():
     valve = fs.add(U.Valve("HV-1"))
     product = fs.add(U.Product("Product"))
     first = fs.connect(feed.outlet, valve.inlet)
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     # The new segment is the run's only carrier of line-number components, so
     # it is the one the number is formatted from -- and it carries nothing the
@@ -198,7 +185,7 @@ def test_a_rejected_line_number_leaves_the_run_it_would_have_joined_alone():
     with pytest.raises(ValueError, match="never uses"):
         fs.connect(valve.outlet, product.inlet, service="P")
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert first.name == "S1"
     assert fs.streams == [first]
 
@@ -216,13 +203,13 @@ def test_a_rejected_line_number_mints_no_pool_member():
     one = fs.add(U.Product("P-1"))
     two = fs.add(U.Product("P-2"))
     fs.connect(header.outlet, one.inlet, size='6"')
-    before = _state(fs)
+    before = pickle.dumps(fs)
     ports_before = sorted(header.ports)
 
     with pytest.raises(ValueError, match="never uses"):
         fs.connect(header.outlet, two.inlet, service="P")
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert sorted(header.ports) == ports_before
 
 
@@ -241,12 +228,12 @@ def test_a_rejected_duty_leaves_the_lines_numbered_behind_the_runs_alone():
     assert (duty.kind, duty.name) == ("energy", "S3")
     second = fs.add(U.Cooler("C-2"))
     third = fs.add(U.Heater("H-2"))
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     with pytest.raises(ValueError, match="never uses"):
         fs.connect(second.utility_out, third.utility_in, service="P")
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert duty.name == "S3"
 
 
@@ -262,12 +249,12 @@ def test_a_rejected_join_between_two_runs_leaves_the_whole_sheet_alone():
     upstream = fs.connect(feed.outlet, first_valve.inlet)
     downstream = fs.connect(second_valve.outlet, product.inlet)
     assert (upstream.name, downstream.name) == ("S1", "S2")
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     with pytest.raises(ValueError, match="never uses"):
         fs.connect(first_valve.outlet, second_valve.inlet, service="P")
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert (upstream.name, downstream.name) == ("S1", "S2")
 
     middle = fs.connect(first_valve.outlet, second_valve.inlet)
@@ -285,14 +272,14 @@ def test_a_refused_rule_check_still_leaves_the_sheet_alone():
     product = fs.add(U.Product("P"))
     fs.connect(feed.outlet, pump.suction)
     fs.connect(pump.discharge, product.inlet)
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     # A pump has one suction, and a second line on it is a tee the drawing has
     # to show -- unlike a header flag, whose connection is a pool.
     with pytest.raises(ValueError, match="already connected"):
         fs.connect(feed.outlet, pump.suction)
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
 
 
 def test_a_scheme_changed_under_a_duty_leaves_the_lines_ahead_of_it_alone():
@@ -320,12 +307,12 @@ def test_a_scheme_changed_under_a_duty_leaves_the_lines_ahead_of_it_alone():
     # A reconfiguration the sheet as it stands cannot answer: the duty that
     # carries a size carries no spec.
     fs.line_numbering_scheme = "{spec}"
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     with pytest.raises(ValueError, match="never uses"):
         fs.connect(heater.outlet, product.inlet)
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert plain.name == "S2"  # renamed to S3 by the pass that never finished
 
 
@@ -348,12 +335,12 @@ def test_a_renumbering_that_cannot_finish_renumbers_nothing():
 
     fs.line_numbering_scheme = "{spec}"
     fs.stream_number_start = 90
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     with pytest.raises(ValueError, match="never uses"):
         fs.renumber_streams()
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert plain.name == "S1"  # renamed to S90 by the pass that never finished
 
 
@@ -376,10 +363,10 @@ def test_a_rejected_segment_leaves_its_run_s_sequences_alone():
     assert first.sequence == "1001"
 
     fs.line_number_start = 2000
-    before = _state(fs)
+    before = pickle.dumps(fs)
 
     with pytest.raises(ValueError, match="never uses"):
         fs.connect(valve.outlet, product.inlet, service="P")
 
-    assert _state(fs) == before
+    assert pickle.dumps(fs) == before
     assert first.sequence == "1001"  # rewritten to 2000 by the naming that failed
