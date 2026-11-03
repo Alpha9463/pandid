@@ -215,9 +215,14 @@ def _dashed_stencil_keys() -> set[str]:
 
 DASHED_STENCILS = _dashed_stencil_keys()
 
-_DRAWINGS = sorted(default_registry._symbols.items()) + [
-    ((kind, f"{variant} [closed]"), sym)
-    for (kind, variant), sym in sorted(default_registry._closed.items())
+_DRAWINGS = [
+    (key, sym)
+    for key, sym in sorted(default_registry._symbols.items())
+    + [
+        ((kind, f"{variant} [closed]"), sym)
+        for (kind, variant), sym in sorted(default_registry._closed.items())
+    ]
+    if sym.drawio_shape
 ]
 _IDS = [f"{kind}/{variant}" for (kind, variant), _ in _DRAWINGS]
 
@@ -246,8 +251,6 @@ def test_the_two_backends_draw_the_same_equipment(entry):
     plate, and a filter drawn solid is a drum.
     """
     (kind, variant), sym = entry
-    if not sym.drawio_shape:
-        pytest.skip("drawn by hand rather than vendored, so there is no stencil to differ from")
     upstream = sym.drawio_shape in DASHED_STENCILS
     inlined = "stroke-dasharray" in sym.svg
     assert inlined == upstream, (
