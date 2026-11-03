@@ -134,7 +134,7 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
     Raises
     ------
     ValueError
-        If the scheme is invalid or yields no line number.
+        If a format-string scheme is invalid or yields no line number.
     """
     if callable(scheme):
         return scheme(stream)
@@ -328,7 +328,7 @@ def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
 
 
 def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) -> str:
-    """Return and check one control-loop member's functional code.
+    """Return one control-loop member's functional code.
 
     Parameters
     ----------
@@ -349,7 +349,7 @@ def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) 
     Raises
     ------
     ValueError
-        If the code is blank or invalid for the loop.
+        If ``stated`` is blank or invalid for the loop.
     """
     if stated is None:
         return default
@@ -384,7 +384,7 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
     Raises
     ------
     ValueError
-        If the ports mix roles, or the kind is wrong for their role.
+        If only one port is a signal port, or the kind is wrong.
     """
     signal_ends = [p for p in (src, dst) if p.role == "signal"]
     if len(signal_ends) == 1:
@@ -736,8 +736,9 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the unit is already on a sheet, its name is taken, ``at``
-            is given without ``on``, or the unit cannot go in that line.
+            If the unit is already on a sheet, its name is taken by a
+            unit it may not repeat, ``at`` is given without ``on``, or
+            the unit cannot go in that line.
         """
         if on is not None:
             from pandid.inline import insert_device
@@ -773,7 +774,8 @@ class Flowsheet:
         Raises
         ------
         ValueError
-            If the unit is already on a sheet, or its name clashes.
+            If the unit is already on a sheet, or its name is taken by a
+            unit it may not repeat.
         """
         if unit in self.units:
             raise ValueError(
@@ -926,7 +928,7 @@ class Flowsheet:
         self.loops.append(loop)
 
     def _resume_loop_numbering(self) -> None:
-        """Move the loop counter past every numeric loop number."""
+        """Move the loop counter past every digit-only loop number."""
         for loop in self.loops:
             if not loop.number.isdigit():
                 continue
@@ -956,7 +958,7 @@ class Flowsheet:
         acting_on : Stream or Unit or None, optional
             Host the balloon commands.
         near : Stream or Unit or None, optional
-            Host the balloon is placed by, with no line drawn.
+            Host the balloon is placed by.
         at : float, str or None, optional
             Fraction along a stream host, or face of a unit host.
         offset : float, default=45.0
@@ -1008,7 +1010,7 @@ class Flowsheet:
                           at: float | str | None = None,
                           offset: float = 45.0, angle: float = 90.0,
                           variant: str = "default", **kwargs) -> "Instrument":
-        """Build and anchor a balloon.
+        """Build a balloon, anchored to its host if one is given.
 
         Parameters
         ----------
@@ -1032,7 +1034,7 @@ class Flowsheet:
         Returns
         -------
         Instrument
-            The anchored balloon.
+            The balloon.
 
         Raises
         ------
@@ -1178,8 +1180,7 @@ class Flowsheet:
                     variant: str = "default", **kwargs) -> "Instrument":
         """Move a primary element's tag into a balloon drawn beside it.
 
-        The balloon hangs on a solid impulse line and is named like a
-        repeat, such as ``FE-303 (2)``.
+        The balloon is named like a repeat, such as ``FE-303 (2)``.
 
         Parameters
         ----------
@@ -1299,7 +1300,7 @@ class Flowsheet:
         from pandid.loops import ControlLoop, Loop
         from pandid.ports import Port
 
-        # Check everything; nothing is written until the commit.
+        # Check everything, then commit below.
         if isinstance(variable, Loop):
             if number is not None:
                 raise ValueError(
@@ -1706,8 +1707,7 @@ class Flowsheet:
         """Connect two ports with a new stream.
 
         A process stream runs from an outlet to an inlet; a signal
-        stream joins two signal ports, and either end may be a unit. Any
-        line-number component but ``sequence`` shows a line number.
+        stream joins two signal ports, and either end may be a unit.
 
         Parameters
         ----------
@@ -1716,8 +1716,9 @@ class Flowsheet:
         dst : Port or Unit
             Destination port, or a unit for a signal line.
         kind : str or None, optional
-            One of :data:`~pandid.streams.STREAM_KINDS`; ``None`` infers
-            it from the ports.
+            One of :data:`~pandid.streams.STREAM_KINDS`, required for a
+            signal line; ``None`` infers ``"energy"`` between two energy
+            or utility ports, else ``"material"``.
         name : str or None, optional
             Fixed name; ``None`` or ``""`` numbers it automatically.
         draw_as_recycle : bool, default=False
@@ -1725,7 +1726,7 @@ class Flowsheet:
         size, schedule, service : str or float, optional
             Nominal bore, wall schedule and service.
         sequence, spec, insulation : str or float, optional
-            Sequence (automatic if unset), piping class and insulation.
+            Sequence, piping class and insulation.
         ends : str, tuple[str, str] or None, optional
             One of :data:`~pandid.render.svg.CONNECTIONS` for both ends,
             or a ``(source, dest)`` pair; overrides ``connections``.
@@ -1771,7 +1772,7 @@ class Flowsheet:
             dst.stream = stream
             self.streams.append(stream)
             self._invalidate_layout()
-            # Number this stream alone when possible, else every stream.
+            # Number incrementally when possible, else renumber all.
             if not self._number_appended(stream):
                 self.renumber_streams()
             return stream
@@ -1827,7 +1828,7 @@ class Flowsheet:
                 f"destination; a stream needs two different nozzles to mean "
                 f"anything"
             )
-        # Only process ports have a direction.
+        # A process stream runs from an outlet to an inlet.
         if src.role != "signal" and src.direction != "outlet":
             raise ValueError(
                 f"source port {src.owner.name}.{src.name} must be an outlet, "
@@ -2002,7 +2003,7 @@ class Flowsheet:
                 self.route_converged = True
                 break
             router.route(self)
-        # Cleared last; a router that raises leaves routes stale.
+        # Mark the routes current.
         self._route_stale = False
 
     def _resolve_geometry(self) -> None:
@@ -2040,7 +2041,7 @@ class Flowsheet:
         Parameters
         ----------
         objects : Sequence or None, optional
-            Objects to guard; ``None`` means the sheet and its contents.
+            Objects, or ``None`` for the sheet, its units and streams.
 
         Yields
         ------
@@ -2448,7 +2449,7 @@ class Flowsheet:
         jump_direction : str, default="vertical"
             As for :meth:`to_svg`.
         crossing_style : str, default="gap"
-            As for :meth:`to_svg`; ``"plain"`` writes no line jumps.
+            As for :meth:`to_svg`.
         show_stream_table : bool or {"sheet"}, default=False
             As for :meth:`to_svg`.
         check : bool, default=True
@@ -2510,7 +2511,7 @@ class Flowsheet:
         crossing_style : str, default="gap"
             As for :meth:`to_svg`.
         debug : bool or float, default=False
-            As for :meth:`to_svg`; not for ``.drawio``.
+            As for :meth:`to_svg`; ``.drawio`` refuses it.
         check : bool, default=True
             As for :meth:`to_svg`.
 
@@ -2590,8 +2591,7 @@ class Flowsheet:
              check: bool = True) -> None:
         """Render the flowsheet and show it.
 
-        Opens a window that blocks until closed when a display and
-        ``pandid[pdf]`` are available; otherwise opens the SVG in a
+        Shows the drawing in a window that blocks until closed, or in a
         browser. A preview that fails leaves the sheet unchanged.
 
         Parameters
