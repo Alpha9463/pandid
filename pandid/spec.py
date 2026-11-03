@@ -555,25 +555,6 @@ def _read_fields(data: Mapping[str, Any], where: str,
 # The equipment registry
 
 
-def _snake(name: str) -> str:
-    """Return a CamelCase name in snake_case.
-
-    Parameters
-    ----------
-    name : str
-        CamelCase name.
-
-    Returns
-    -------
-    str
-        The snake_case name.
-    """
-    out = [name[0].lower()]
-    for char in name[1:]:
-        out.append(f"_{char.lower()}" if char.isupper() else char)
-    return "".join(out)
-
-
 # Every class a spec may name, from units and devices.
 _CLASSES: dict[str, type[Unit]] = {
     name: getattr(unit_types, name) for name in unit_types.__all__ if name != "Unit"
@@ -583,7 +564,7 @@ _CLASSES.update({name: getattr(device_types, name) for name in device_types.__al
 # Accept the class name (HeatExchanger) and its snake_case spelling.
 _ALIASES: dict[str, str] = {}
 for _name, _cls in _CLASSES.items():
-    for _alias in (_name, _snake(_name)):
+    for _alias in (_name, re.sub(r"(?<=.)([A-Z])", r"_\1", _name)):
         _ALIASES[_alias.lower()] = _name
 # Also accept Unit.kind (hex), resolved to its base class in units.
 for _name in unit_types.__all__:
@@ -2176,7 +2157,9 @@ def to_dict(fs: Flowsheet) -> dict:
         _resolve_enclosure(fs.stream_labels.enclosure)
         spec["stream_labels"] = labels
     if fs.title_block is not None:
-        spec["title_block"] = _write_title_block(fs.title_block)
+        block = spec["title_block"] = _stated_text(fs.title_block)
+        if fs.title_block.revisions:
+            block["revisions"] = [_stated_text(rev) for rev in fs.title_block.revisions]
     if fs.annotations:
         spec["annotations"] = [_write_annotation(a) for a in fs.annotations]
     return spec
@@ -2550,25 +2533,6 @@ def _stated_text(obj: TitleBlock | Revision) -> dict[str, Any]:
     text = _drawn_text_fields(type(obj))
     return {f.name: getattr(obj, f.name) for f in dataclass_fields(type(obj))
             if f.name in text and getattr(obj, f.name) != f.default}
-
-
-def _write_title_block(block: TitleBlock) -> dict[str, Any]:
-    """Write ``title_block:``.
-
-    Parameters
-    ----------
-    block : TitleBlock
-        Title block to write.
-
-    Returns
-    -------
-    dict[str, Any]
-        The entry.
-    """
-    entry: dict[str, Any] = _stated_text(block)
-    if block.revisions:
-        entry["revisions"] = [_stated_text(rev) for rev in block.revisions]
-    return entry
 
 
 def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:

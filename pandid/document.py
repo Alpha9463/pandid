@@ -90,25 +90,6 @@ def _drawn_text(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def _drawn_rows(rows: Any) -> list:
-    """Return box rows with every line and cell as drawn text.
-
-    Parameters
-    ----------
-    rows : Iterable
-        Lines, or tuples or lists of cells.
-
-    Returns
-    -------
-    list
-        Rows of the same shapes, as text.
-    """
-    # shortcut: rows.append skips this, convert at draw time if needed.
-    return [tuple(map(_drawn_text, r)) if isinstance(r, tuple)
-            else list(map(_drawn_text, r)) if isinstance(r, list)
-            else _drawn_text(r) for r in rows]
-
-
 def _drawn_text_fields(cls: type) -> frozenset[str]:
     """Return the names of a dataclass's string-default fields.
 
@@ -163,35 +144,6 @@ def _resolve_align(align, default):
 _COL_ALIGN = {"l", "c", "r"}
 
 
-def _resolve_col_align(col_align):
-    """Return ``col_align`` after checking each entry.
-
-    Parameters
-    ----------
-    col_align : list[str] or None
-        Column alignments.
-
-    Returns
-    -------
-    list[str] or None
-        The same alignments.
-
-    Raises
-    ------
-    ValueError
-        If an entry is not ``"l"``, ``"c"`` or ``"r"``.
-    """
-    if col_align is None:
-        return None
-    for i, a in enumerate(col_align):
-        if a not in _COL_ALIGN:
-            raise ValueError(
-                f"col_align[{i}] must be one of {sorted(_COL_ALIGN)} ('l'/'c'/'r' for "
-                f"left/centre/right), got {a!r}"
-            )
-    return col_align
-
-
 class _Box:
     """Field checks shared by the annotation and table boxes."""
 
@@ -215,7 +167,10 @@ class _Box:
         """
         where = f"{type(self).__name__}.{name}"
         if name == "rows":
-            value = _drawn_rows(value)
+            # shortcut: rows.append skips this, convert at draw time if needed.
+            value = [tuple(map(_drawn_text, r)) if isinstance(r, tuple)
+                     else list(map(_drawn_text, r)) if isinstance(r, list)
+                     else _drawn_text(r) for r in value]
         elif name == "headers":
             value = [_drawn_text(c) for c in value]
         elif name in ("margin", "width", "font_size") and value is not None:
@@ -326,7 +281,13 @@ class TableBox(_Box):
             If ``align`` or a ``col_align`` entry is invalid.
         """
         self.align = _resolve_align(self.align, "bottom-right")
-        self.col_align = _resolve_col_align(self.col_align)
+        if self.col_align is not None:
+            for i, a in enumerate(self.col_align):
+                if a not in _COL_ALIGN:
+                    raise ValueError(
+                        f"col_align[{i}] must be one of {sorted(_COL_ALIGN)} ('l'/'c'/'r' "
+                        f"for left/centre/right), got {a!r}"
+                    )
 
 
 @dataclass
@@ -384,7 +345,7 @@ def table_sheet_block(block: "TitleBlock | None",
     diagram = TitleBlock() if block is None else block
     number = diagram.drawing_number
     stated = _drawn_text(options.sheet_drawing_number)
-    if stated and _same_number(stated, number):
+    if stated and stated.strip().casefold() == number.strip().casefold():
         raise ValueError(
             f"fs.stream_table.sheet_drawing_number={stated!r} is the diagram's "
             f"own drawing number. The table sheet is a second document and "
@@ -398,22 +359,6 @@ def table_sheet_block(block: "TitleBlock | None",
         drawing_number=(stated
                         or (f"{number}{TABLE_SHEET_SUFFIX}" if number else "")),
     )
-
-
-def _same_number(a: str, b: str) -> bool:
-    """Compare two drawing numbers, stripped and case-folded.
-
-    Parameters
-    ----------
-    a, b : str
-        Drawing numbers.
-
-    Returns
-    -------
-    bool
-        Whether they name the same drawing.
-    """
-    return a.strip().casefold() == b.strip().casefold()
 
 
 # Stream label enclosures; "none" is the bare number on its halo.
@@ -549,23 +494,6 @@ _KIND_LABELS = {
 }
 
 
-def _describe(unit):
-    """Return a unit's ``description``, else its kind's name.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit to describe.
-
-    Returns
-    -------
-    Any
-        Stated description as given, else the kind's name.
-    """
-    return (getattr(unit, "description", "")
-            or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
-
-
 def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
                    position=None, margin=0.0, include=None, width=None):
     """Build an :class:`Annotation` scheduling the major equipment.
@@ -617,7 +545,9 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
                 f"drop the tag from include=."
             )
         chosen = [by_name[tag] for tag in include]
-    rows = [(u.name, _describe(u)) for u in chosen]
+    # A stated description, else the kind's name.
+    rows = [(u.name, getattr(u, "description", "")
+             or _KIND_LABELS.get(u.kind, u.kind.replace("_", " ").title())) for u in chosen]
     return Annotation(title=title, rows=rows, align=align,
                       position=position, margin=margin, width=width)
 

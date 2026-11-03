@@ -1558,21 +1558,6 @@ class Flowsheet:
             scheme = tag_scheme if tag_scheme is not None else self.valve_station_tag_scheme
             num = str(number) if number is not None else station_number(tag)
 
-            def described(role: str) -> str:
-                """Return a member's description.
-
-                Parameters
-                ----------
-                role : str
-                    Member role.
-
-                Returns
-                -------
-                str
-                    Description.
-                """
-                return f"{description} {ROLE_WORDS[role]}".strip()
-
             def valve(role: str, closed: bool = False) -> "Valve":
                 """Add a member valve.
 
@@ -1589,7 +1574,7 @@ class Flowsheet:
                     The added valve.
                 """
                 unit = Valve(member_tag(scheme, role, tag, num),
-                             description=described(role),
+                             description=f"{description} {ROLE_WORDS[role]}".strip(),
                              normal_position="closed" if closed else "open")
                 self.add(unit)
                 return unit
@@ -1608,7 +1593,7 @@ class Flowsheet:
                     The added reducer.
                 """
                 unit = Reducer(member_tag(scheme, role, tag, num),
-                               description=described(role),
+                               description=f"{description} {ROLE_WORDS[role]}".strip(),
                                large_end="inlet" if role == "reduction" else "outlet")
                 self.add(unit)
                 return unit
