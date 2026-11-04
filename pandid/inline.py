@@ -57,6 +57,9 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
     if not line._logical_segments and line._inline_at is not None:
         raise ValueError("on= cannot replace an existing inline position")
     segments = line._logical_segments or [line]
+    stated = [segment._inline_at for segment in segments[:-1]]
+    index = len(stated) if at is None else next(
+        (i for i, value in enumerate(stated) if value is not None and value > at), len(stated))
     if any(s.draw_as_recycle or s.is_recycle for s in segments):
         flagged = any(s.draw_as_recycle for s in segments)
         source, dest = _ends(segments)
@@ -70,18 +73,15 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
             f"fs.connect({source}, <device>.inlet"
             + (", draw_as_recycle=True" if flagged else "")
             + f") and fs.connect(<device>.outlet, {dest})"
+            + _regroup(fs, line, segments, index, at, "<device>")
         )
     if any(s.route is not None and s.route.manual for s in segments):
         raise ValueError("on= cannot split a manual route")
     if any(s.ends is not None for s in segments):
         raise ValueError("on= cannot split a line with explicit end-joint styles")
-    stated = [segment._inline_at for segment in segments[:-1]]
-    if at is None:
-        return segments, len(stated)
-    if at in stated:
+    if at is not None and at in stated:
         raise ValueError("inline positions must be distinct")
-    return segments, next((i for i, value in enumerate(stated)
-                           if value is not None and value > at), len(stated))
+    return segments, index
 
 
 def _ends(segments: list[Stream]) -> tuple[str, str]:
@@ -101,6 +101,62 @@ def _ends(segments: list[Stream]) -> tuple[str, str]:
     source, dest = (f"{p.owner.name}.{p.owner._pool_of(p.name) or p.name}"
                     for p in (segments[0].source, segments[-1].dest))
     return source, dest
+
+
+def _regroup(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
+             at: float | None, item: str) -> str:
+    """Return advice putting what a line carries either side of a new item.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet that owns the line.
+    line : Stream
+        Line handle.
+    segments : list[Stream]
+        The line's physical segments in flow order.
+    index : int
+        Index of the device or station the new item goes before.
+    at : float or None
+        The new item's fraction of the line, or ``None`` to go last.
+    item : str
+        Name of the new item.
+
+    Returns
+    -------
+    str
+        A sentence naming the line, into or out of ``item``, for each
+        device, valve station and balloon on the line; ``""`` when the
+        line carries none.
+    """
+    from pandid.units import Instrument
+
+    if at is None:
+        # Spread after the last stated position, as position() draws it.
+        stated = [(i, s._inline_at) for i, s in enumerate(segments[:-1])
+                  if s._inline_at is not None]
+        low, start = stated[-1] if stated else (-1, 0.0)
+        count = len(segments) - 1
+        at = start + (1 - start) * (count - low) / (count + 1 - low)
+    sides: dict[bool, list[str]] = {True: [], False: []}
+    for k, segment in enumerate(segments[:-1]):
+        station = next((a.station for a in fs._station_assemblies
+                        if a.station.inlet is segment.dest), None)
+        sides[k < index].append(f"valve station {station.control.name}" if station
+                                else segment.dest.owner.name)
+    for u in fs.units:
+        if (isinstance(u, Instrument) and u.at is not None
+                and any(u.host is s for s in (line, *segments))):
+            sides[u.at < at].append(u.name)
+    groups = [f"{' and '.join(filter(None, (', '.join(names[:-1]), names[-1])))} "
+              f"on the line {where} {item}"
+              for names, where in ((sides[True], "into"), (sides[False], "out of"))
+              if names]
+    if not groups:
+        return ""
+    each = "each " if len(sides[True]) + len(sides[False]) > 1 else ""
+    return (f". Then put {', and '.join(groups)}, {each}by the call that put it on "
+            f"{line.name}, given that line instead")
 
 
 def position(segment: Stream) -> float | None:
@@ -202,22 +258,13 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
         branch = (f"fs.connect({tee}.branch, ...)"
                   if device.ports["branch"].direction == "outlet"
                   else f"fs.connect(..., {tee}.branch)")
-        # Name what on= already put on the line, either side of the tee.
-        items = [next((f"valve station {a.station.control.name}"
-                       for a in fs._station_assemblies if a.station.inlet is s.dest),
-                      s.dest.owner.name) for s in segments[:-1]]
-        moves = [f"{', '.join(group)} to on= the line {where} {tee}"
-                 for group, where in ((items[:index], "into"), (items[index:], "out of"))
-                 if group]
         raise ValueError(
             f"on= puts a device with one inlet and one outlet in a line, and a tee "
             f"has a third connection, its branch, that on= cannot pipe. Connect the "
             f"tee in place of the connect() that drew {line.name}, keeping its other "
             f"arguments: "
             f"fs.connect({source}, {tee}.inlet), fs.connect({tee}.outlet, {dest}) "
-            f"and {branch}"
-            + (f". Then move {' and '.join(moves)}, keeping each one's at="
-               if moves else "")
+            f"and {branch}" + _regroup(fs, line, segments, index, at, tee)
         )
     if not isinstance(device, Unit) or device.kind not in _INLINE_KINDS:
         raise ValueError("on= puts a valve, reducer or fitting in a line")

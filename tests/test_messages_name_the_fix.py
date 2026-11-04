@@ -7,7 +7,21 @@ from collections.abc import Callable
 
 import pytest
 
-from pandid import ControlValve, Feed, Flowsheet, Product, Pump, Splitter, Tee, Valve, Vessel
+from pandid import (
+    ControlValve,
+    Feed,
+    Flowsheet,
+    Instrument,
+    Port,
+    Product,
+    Pump,
+    Splitter,
+    Stream,
+    Tee,
+    Unit,
+    Valve,
+    Vessel,
+)
 from pandid import units
 
 
@@ -137,26 +151,86 @@ def test_stream_table_missing_on_an_instrumented_sheet_suggests_a_pid() -> None:
     assert 'render with diagram="p&id"' in found
 
 
-@pytest.mark.parametrize("tee_at", [0.25, 0.9])
-def test_following_the_tee_advice_keeps_the_order_the_fractions_ask_for(tee_at: float) -> None:
-    """Check that the hand-piped tee and the moved valve keep their order along the line."""
+def _carry(fs: Flowsheet, on: Callable[[str], Stream]) -> None:
+    """Put HV-1, valve station FV-101, PT-102 and FT-101 on the lines *on* names."""
+    fs.add(Valve("HV-1"), on=on("HV-1"), at=0.1)
+    fs.add_valve_station("FV-101", on=on("FV-101"), at=0.6)
+    fs.add_instrument("FT", 101, sensing=on("FT-101"), at=0.8)
+    fs.add_instrument("PT", 102, sensing=on("PT-102"), at=0.2)
+
+
+def _sides(message: str, item: str) -> dict[str, str]:
+    """Return the line, into or out of *item*, the advice puts each named thing on."""
+    found = {}
+    pattern = rf"(?:put |, and )(.+?) on the line (into|out of) {re.escape(item)}"
+    for names, where in re.findall(pattern, message[message.index("Then put ") :]):
+        for name in re.split(r", | and ", names):
+            found[name.removeprefix("valve station ")] = where
+    return found
+
+
+def _drawn(start: Port, stop: Unit) -> list[str]:
+    """Return the HV-1, FV-101, T and V met walking the run from *start* to *stop*."""
+    order, port = [], start
+    while port.stream is not None and port.stream.dest.owner is not stop:
+        order.append(port.stream.dest.owner.name)
+        port = port.stream.dest.owner.port("outlet")
+    return [name for name in order if name in ("HV-1", "FV-101", "T", "V")]
+
+
+def _hosts(fs: Flowsheet) -> dict[str, object]:
+    """Return the line each balloon taps."""
+    return {u.name: u.host for u in fs.units if isinstance(u, Instrument)}
+
+
+def test_following_the_tee_advice_keeps_every_item_on_its_side() -> None:
+    """Check that the hand-piped tee keeps each device and balloon on its side of the branch."""
     fs, feed, product = _line()
     line = fs.connect(feed.outlet, product.inlet)
-    fs.add(Valve("HV-1"), on=line, at=0.75)
+    _carry(fs, lambda name: line)
     with pytest.raises(ValueError) as refused:
-        fs.add(Tee("T"), on=line, at=tee_at)
-    side = re.search(r"move HV-1 to on= the line (into|out of) T\b", str(refused.value))
-    assert side is not None, str(refused.value)
+        fs.add(Tee("T"), on=line, at=0.3)
+    sides = _sides(str(refused.value), "T")
 
     fs, feed, product = _line()
     tee = fs.add(Tee("T"))
-    into = fs.connect(feed.outlet, tee.inlet)
-    out_of = fs.connect(tee.outlet, product.inlet)
+    lines = {
+        "into": fs.connect(feed.outlet, tee.inlet),
+        "out of": fs.connect(tee.outlet, product.inlet),
+    }
     fs.connect(tee.branch, fs.add(Product("B")).inlet)
-    fs.add(Valve("HV-1"), on=into if side[1] == "into" else out_of, at=0.75)
+    _carry(fs, lambda name: lines[sides[name]])
 
-    order, port = [], feed.outlet
-    while port.stream is not None and port.stream.dest.owner is not product:
-        order.append(port.stream.dest.owner.name)
-        port = port.stream.dest.owner.port("outlet")
-    assert order == (["T", "HV-1"] if tee_at < 0.75 else ["HV-1", "T"])
+    assert _drawn(feed.outlet, product) == ["HV-1", "T", "FV-101"]
+    assert _hosts(fs) == {"FT-101": lines["out of"], "PT-102": lines["into"]}
+
+
+def test_following_the_recycle_advice_keeps_every_item_on_its_side() -> None:
+    """Check that the hand-piped device keeps each device and balloon on its side of it."""
+
+    def loop() -> tuple[Flowsheet, Splitter, Vessel]:
+        fs, feed, product = _line()
+        drum, split = fs.add(Vessel("R", inputs=2)), fs.add(Splitter("SP"))
+        fs.connect(feed.outlet, drum.port("in_1"))
+        fs.connect(drum.port("out_1"), split.inlet)
+        fs.connect(split.out_1, product.inlet)
+        return fs, split, drum
+
+    fs, split, drum = loop()
+    back = fs.connect(split.out_2, drum.port("in_2"))
+    _carry(fs, lambda name: back)
+    fs.route()
+    with pytest.raises(ValueError, match="recycle") as refused:
+        fs.add(Valve("V"), on=back, at=0.3)
+    sides = _sides(str(refused.value), "<device>")
+
+    fs, split, drum = loop()
+    valve = fs.add(Valve("V"))
+    lines = {
+        "into": fs.connect(split.out_2, valve.inlet),
+        "out of": fs.connect(valve.outlet, drum.port("in_2")),
+    }
+    _carry(fs, lambda name: lines[sides[name]])
+
+    assert _drawn(split.out_2, drum) == ["HV-1", "V", "FV-101"]
+    assert _hosts(fs) == {"FT-101": lines["out of"], "PT-102": lines["into"]}
