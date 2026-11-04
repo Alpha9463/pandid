@@ -114,6 +114,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Mixer("M", n_inlets=3).in_1` and `GasHolder("G", inputs=("N", "S"))` pass
   both checkers, and a nozzle past the count, such as `.in_4`, fails at run
   time instead of in the checker.
+- **An alignment set on an `Annotation` or `TableBox` after construction is
+  checked (#646).** A bad `align` or `col_align` raises `ValueError` where it
+  is assigned, not a `KeyError` inside `to_svg()`.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an
