@@ -2,15 +2,15 @@
 
 Before you start:
 1. Pass diagram="p&id" to render() for a P&ID ("bfd" for a block flow
-   diagram). Without it the sheet is a PFD, which reports
-   stream-table-missing until each line crossing the sheet edge has
-   properties and render(show_stream_table=True) draws the table.
+   diagram). Without it the sheet is a PFD, which warns until every line
+   crossing the sheet edge states its flow: stream.properties =
+   {"Flow (kg/h)": ...}; render(show_stream_table=True) tabulates them.
 2. Check in this order: render, then fs.validate(), then look. render()
    raises ValueError listing every error finding; before a render,
-   fs.validate() reports only model findings, under PFD rules. Act on
-   every finding, warnings too, then open the drawing and look for lines
-   through units, crowded labels and balloons on the wrong line. Repeat
-   until fs.validate() returns [] and the drawing reads right.
+   fs.validate() misses findings that need the drawing and uses PFD
+   rules. Act on every finding, warnings too, then open the drawing and
+   look for lines through units, crowded labels and balloons on the wrong
+   line. Repeat until fs.validate() returns [] and the drawing reads right.
 
 Model: a Flowsheet holds units (equipment, valves, instruments, and the
 Feed and Product flags where lines enter and leave the sheet); import
@@ -77,8 +77,9 @@ Traps:
 - A signal line needs kind= (electric, pneumatic, data, capillary or
   software): fs.connect(ft.sig_out, fic.sig_in, kind="electric"). A process
   line infers material, or energy between two energy or utility ports.
-- face= is a side of a unit, "N", "S", "E" or "W"; at= is a fraction 0..1
-  along a line: fs.add_instrument("TI", 103, sensing=cooler, face="E"),
+- face= is a side of a unit, "N", "S", "E" or "W"; at= is a fraction
+  along a line, 0..1 for an instrument and strictly between for a valve
+  put in the line: fs.add_instrument("TI", 103, sensing=cooler, face="E"),
   fs.add_instrument("PI", 104, sensing=line, at=0.3),
   fs.add(Valve("HV-102"), on=line, at=0.5).
 - Attach an instrument with one of sensing= (what it measures), acting_on=
