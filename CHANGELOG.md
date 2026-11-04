@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is a crossing within an arrowhead length of a nozzle and `route-along-unit`
   a line drawn on a unit's box edge; the router also counts instrument tap
   lines as crossings.
+- **`help(pandid)` is a guide to using the package (#174).** It gives the
+  model, a runnable example, port names, common mistakes and how to check a
+  sheet; `AGENTS.md` points coding agents to it.
 
 ### Changed
 
