@@ -114,7 +114,6 @@ class CentrifugalPump(Pump):
     """
 
     VARIANTS = ("default",)
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -128,7 +127,6 @@ class GearPump(Pump):
 
     VARIANTS = ("default", "gear")
     VARIANT_ALIASES = {"default": "gear"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -142,7 +140,6 @@ class ScrewPump(Pump):
 
     VARIANTS = ("default", "screw")
     VARIANT_ALIASES = {"default": "screw"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -158,7 +155,6 @@ class PeristalticPump(Pump):
 
     VARIANTS = ("default", "peristaltic")
     VARIANT_ALIASES = {"default": "peristaltic"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -175,7 +171,6 @@ class SubmersiblePump(Pump):
 
     VARIANTS = ("default", "submersible")
     VARIANT_ALIASES = {"default": "submersible"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -191,7 +186,6 @@ class VacuumPump(Pump):
 
     VARIANTS = ("default", "vacuum")
     VARIANT_ALIASES = {"default": "vacuum"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -204,7 +198,6 @@ class CentrifugalCompressor(Compressor):
     """
 
     VARIANTS = ("default",)
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -218,7 +211,6 @@ class ReciprocatingCompressor(Compressor):
 
     VARIANTS = ("default", "reciprocating")
     VARIANT_ALIASES = {"default": "reciprocating"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -232,7 +224,6 @@ class RotaryCompressor(Compressor):
 
     VARIANTS = ("default", "rotary")
     VARIANT_ALIASES = {"default": "rotary"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -246,7 +237,6 @@ class LiquidRingCompressor(Compressor):
 
     VARIANTS = ("default", "liquid_ring")
     VARIANT_ALIASES = {"default": "liquid_ring"}
-    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
     suction: Port
     discharge: Port
@@ -442,13 +432,6 @@ class CalandriaEvaporator(Evaporator):
 
     VARIANTS = ("default", "calandria")
     VARIANT_ALIASES = {"default": "calandria"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -465,13 +448,6 @@ class FallingFilmEvaporator(Evaporator):
 
     VARIANTS = ("default", "falling_film")
     VARIANT_ALIASES = {"default": "falling_film"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -488,13 +464,6 @@ class ClimbingFilmEvaporator(Evaporator):
 
     VARIANTS = ("default", "climbing_film")
     VARIANT_ALIASES = {"default": "climbing_film"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -511,13 +480,6 @@ class PlateEvaporator(Evaporator):
 
     VARIANTS = ("default", "plate")
     VARIANT_ALIASES = {"default": "plate"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("concentrate", "outlet", "liquid"),
-        ("heating_in", "inlet", "utility"),
-        ("condensate", "outlet", "utility"),
-    ]
 
     feed: Port
     vapor: Port
@@ -533,13 +495,6 @@ class RotaryKiln(Kiln):
     """
 
     VARIANTS = ("default",)
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("offgas", "outlet", "vapor"),
-        ("fuel", "inlet", "feed"),
-        ("air", "inlet", "utility"),
-    ]
 
     feed: Port
     product: Port
@@ -558,13 +513,6 @@ class FluidizedBedCalciner(Kiln):
 
     VARIANTS = ("default", "fluidized_bed")
     VARIANT_ALIASES = {"default": "fluidized_bed"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("offgas", "outlet", "vapor"),
-        ("fuel", "inlet", "feed"),
-        ("air", "inlet", "utility"),
-    ]
 
     feed: Port
     product: Port
@@ -581,13 +529,6 @@ class ShaftKiln(Kiln):
 
     VARIANTS = ("default", "shaft")
     VARIANT_ALIASES = {"default": "shaft"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("offgas", "outlet", "vapor"),
-        ("fuel", "inlet", "feed"),
-        ("air", "inlet", "utility"),
-    ]
 
     feed: Port
     product: Port
@@ -824,12 +765,6 @@ class RotaryDryer(Dryer):
     """
 
     VARIANTS = ("default",)
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -845,12 +780,6 @@ class FluidizedBedDryer(Dryer):
 
     VARIANTS = ("default", "fluidized_bed")
     VARIANT_ALIASES = {"default": "fluidized_bed"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -866,12 +795,6 @@ class SprayDryer(Dryer):
 
     VARIANTS = ("default", "spray")
     VARIANT_ALIASES = {"default": "spray"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -889,12 +812,6 @@ class ShelfDryer(Dryer):
 
     VARIANTS = ("default", "shelf")
     VARIANT_ALIASES = {"default": "shelf"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -912,12 +829,6 @@ class TurboDryer(Dryer):
 
     VARIANTS = ("default", "turbo")
     VARIANT_ALIASES = {"default": "turbo"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -935,12 +846,6 @@ class BeltDryer(Dryer):
 
     VARIANTS = ("default", "belt")
     VARIANT_ALIASES = {"default": "belt"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("product", "outlet", "process"),
-        ("heating_in", "inlet", "utility"),
-        ("vent", "outlet", "vapor"),
-    ]
 
     feed: Port
     product: Port
@@ -958,7 +863,6 @@ class JawCrusher(Crusher):
 
     VARIANTS = ("default", "jaw")
     VARIANT_ALIASES = {"default": "jaw"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -974,7 +878,6 @@ class ConeCrusher(Crusher):
 
     VARIANTS = ("default", "cone")
     VARIANT_ALIASES = {"default": "cone"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -990,7 +893,6 @@ class HammerCrusher(Crusher):
 
     VARIANTS = ("default", "hammer")
     VARIANT_ALIASES = {"default": "hammer"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1006,7 +908,6 @@ class ImpactCrusher(Crusher):
 
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1022,7 +923,6 @@ class RollerCrusher(Crusher):
 
     VARIANTS = ("default", "roller")
     VARIANT_ALIASES = {"default": "roller"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1038,7 +938,6 @@ class HammerMill(Mill):
 
     VARIANTS = ("default", "hammer")
     VARIANT_ALIASES = {"default": "hammer"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1054,7 +953,6 @@ class ImpactMill(Mill):
 
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1070,7 +968,6 @@ class RollerMill(Mill):
 
     VARIANTS = ("default", "roller")
     VARIANT_ALIASES = {"default": "roller"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1086,7 +983,6 @@ class VibratingMill(Mill):
 
     VARIANTS = ("default", "vibration")
     VARIANT_ALIASES = {"default": "vibration"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1104,7 +1000,6 @@ class ScrewConveyor(Conveyor):
 
     VARIANTS = ("default", "screw")
     VARIANT_ALIASES = {"default": "screw"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1120,7 +1015,6 @@ class RotaryValveFeeder(Feeder):
 
     VARIANTS = ("default", "rotary_valve")
     VARIANT_ALIASES = {"default": "rotary_valve"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1136,7 +1030,6 @@ class RotaryTableFeeder(Feeder):
 
     VARIANTS = ("default", "rotary_table")
     VARIANT_ALIASES = {"default": "rotary_table"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1152,7 +1045,6 @@ class MeteringFeeder(Feeder):
 
     VARIANTS = ("default", "metering")
     VARIANT_ALIASES = {"default": "metering"}
-    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
     discharge: Port
@@ -1168,11 +1060,6 @@ class CoarseRakeScreen(ScreeningDevice):
 
     VARIANTS = ("default", "coarse_rake")
     VARIANT_ALIASES = {"default": "coarse_rake"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -1189,11 +1076,6 @@ class FineRakeScreen(ScreeningDevice):
 
     VARIANTS = ("default", "fine_rake")
     VARIANT_ALIASES = {"default": "fine_rake"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -1210,11 +1092,6 @@ class CoarseAndFineScreen(ScreeningDevice):
 
     VARIANTS = ("default", "coarse_and_fine")
     VARIANT_ALIASES = {"default": "coarse_and_fine"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -1231,11 +1108,6 @@ class VibratingScreen(ScreeningDevice):
 
     VARIANTS = ("default", "vibrating")
     VARIANT_ALIASES = {"default": "vibrating"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -1252,11 +1124,6 @@ class RotaryDrumScreen(ScreeningDevice):
 
     VARIANTS = ("default", "rotating_drum")
     VARIANT_ALIASES = {"default": "rotating_drum"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -1273,11 +1140,6 @@ class ReelScreen(ScreeningDevice):
 
     VARIANTS = ("default", "basket_reel")
     VARIANT_ALIASES = {"default": "basket_reel"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("oversize", "outlet", "process"),
-        ("undersize", "outlet", "process"),
-    ]
 
     feed: Port
     oversize: Port
@@ -1444,7 +1306,6 @@ class SpectacleBlind(Fitting):
 
     VARIANTS = ("default", "blind")
     VARIANT_ALIASES = {"default": "blind"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port
     outlet: Port
@@ -1460,7 +1321,6 @@ class SteamTrap(Fitting):
 
     VARIANTS = ("default", "steam_trap")
     VARIANT_ALIASES = {"default": "steam_trap"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port
     outlet: Port
@@ -1491,7 +1351,6 @@ class FlowElement(Fitting):
         "averaging_pitot",
     )
     VARIANT_ALIASES = {"default": "venturi"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     inlet: Port
     outlet: Port
@@ -1529,11 +1388,6 @@ class GasHolder(Tank):
 
     VARIANTS = ("default", "gas_holder")
     VARIANT_ALIASES = {"default": "gas_holder"}
-    PORTS = [
-        ("vent", "outlet", "vapor"),
-        ("relief", "outlet", "process"),
-        ("drain", "outlet", "liquid"),
-    ]
 
     vent: Port
     relief: Port
