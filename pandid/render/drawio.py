@@ -173,23 +173,6 @@ def _placed_rect(frame, x: float, y: float, w: float, h: float
     return xs[0], ys[0], xs[1] - xs[0], ys[1] - ys[0]
 
 
-def _turn_keys(frame) -> list[str]:
-    """Return the ``direction`` key turning a child with its parent.
-
-    Parameters
-    ----------
-    frame : Frame
-        Parent unit's frame.
-
-    Returns
-    -------
-    list[str]
-        The key, or an empty list when the parent is not turned.
-    """
-    rot, _mirror_x, _mirror_y = _xform(frame)
-    return [] if rot not in _DIRECTION else [f"direction={_DIRECTION[rot]}"]
-
-
 class _Fit(NamedTuple):
     """Map drawing coordinates onto the page.
 
@@ -370,7 +353,7 @@ _APPROXIMATIONS = {
     ("splitter", "default"): _Approximation("triangle", "", flip_h=True),
     # An invisible cell that every edge meets at its centre.
     ("tee", "default"): _Approximation(None, "", stroke=_NO_STROKE),
-    # Drawn by DrawioRenderer._flag_shape.
+    # Drawn by DrawioRenderer._shape.
     ("feed", "default"): _Approximation(None, ""),
     ("product", "default"): _Approximation(None, ""),
     ("conveyor", "default"): _Approximation(
@@ -1051,7 +1034,16 @@ class DrawioRenderer:
         weight = (f"strokeWidth="
                   f"{fit.length(_svg._class_weight(sym).width):g}")
         if u.kind in ("feed", "product"):
-            return self._flag_shape(u, fit)
+            # draw.io's offPageConnector, turned north to point east and
+            # south to point west.
+            (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
+            size = (depth / (x1 - x0)) if x1 - x0 else 0.375
+            return ["shape=offPageConnector", f"size={fmt(min(1.0, size), 6)}",
+                    f"direction={'north' if east else 'south'}",
+                    "anchorPointDirection=0", "legacyAnchorPoints=1",
+                    "rounded=0", "whiteSpace=wrap",
+                    f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
+                    f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
         stencil = sym.drawio_shape or sym.drawio_body_shape
         if stencil:
             # outlineConnect=0 keeps a stream on its nozzle.
@@ -1071,35 +1063,6 @@ class DrawioRenderer:
         return keys + [*approx.keys, f"strokeColor={approx.stroke}",
                        f"fillColor={approx.fill}",
                        f"strokeWidth={fit.length(approx.weight):g}"]
-
-    @staticmethod
-    def _flag_shape(u, fit: "_Fit") -> list[str]:
-        """Return the style keys for an off-page flag.
-
-        The flag is draw.io's ``offPageConnector``, turned north to
-        point east and south to point west.
-
-        Parameters
-        ----------
-        u : Unit
-            Feed or Product.
-        fit : _Fit
-            Drawing fit.
-
-        Returns
-        -------
-        list[str]
-            Style keys.
-        """
-        (x0, _, x1, _), depth, east = boundary_flag(u, u.frame)
-        width = x1 - x0
-        size = (depth / width) if width else 0.375
-        return ["shape=offPageConnector", f"size={fmt(min(1.0, size), 6)}",
-                f"direction={'north' if east else 'south'}",
-                "anchorPointDirection=0", "legacyAnchorPoints=1",
-                "rounded=0", "whiteSpace=wrap",
-                f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
-                f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
 
     def _label(self, u, fit: "_Fit", tags: "_Tags",
                wraps: bool) -> "tuple[str, list[str], tuple]":
@@ -1231,12 +1194,19 @@ class DrawioRenderer:
                  '          </mxGeometry>']
                 if (round(dx, 2) or round(dy, 2)) else [geometry + " />"])
         cid = self._id(index)
+        # A stand-in's second outline, as a child cell.
+        inscribed = [] if approx is None or approx.inscribed is None else _rect(
+            f"{cid}-in", 0, 0, x1 - x0, y1 - y0,
+            ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
+                      f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
+                      f"strokeWidth={fit.length(approx.weight):g}",
+                      "connectable=0", "movable=0"]) + ";", parent=cid)
         return [
             f'        <mxCell id="{cid}" value={_attr(text)} '
             f'style={_attr(style)} vertex="1" parent="1">',
             *body,
             '        </mxCell>',
-            *self._inscribed(cid, approx, x1 - x0, y1 - y0, fit),
+            *inscribed,
             *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
             *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.frame, u.name),
         ]
@@ -1299,7 +1269,8 @@ class DrawioRenderer:
         """
         if approx is None or not approx.pieces:
             return []
-        turn = _turn_keys(u.frame)
+        rot = _xform(u.frame)[0]
+        turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
         for i, piece in enumerate(approx.pieces):
             px, py, pw, ph = _placed_rect(u.frame, piece.x, piece.y, piece.w, piece.h)
@@ -1340,6 +1311,8 @@ class DrawioRenderer:
         """
         if not sym.overlays:
             return []
+        rot = _xform(frame)[0]
+        turn = [f"direction={_DIRECTION[rot]}"] if rot in _DIRECTION else []
         out: list[str] = []
         for i, overlay in enumerate(sym.overlays):
             part = self.registry.part(overlay.group, overlay.name)
@@ -1360,43 +1333,12 @@ class DrawioRenderer:
                 keys.append("flipH=1")
             ox, oy, ow, oh = _placed_rect(frame, overlay.x, overlay.y, overlay.w, overlay.h)
             style = ";".join([
-                "html=1", "rounded=0", *keys, *_turn_keys(frame),
+                "html=1", "rounded=0", *keys, *turn,
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(_PART_STROKE):g}",
                 "connectable=0", "movable=0"]) + ";"
             out += _rect(f"{cid}-p{i}", ox * w, oy * h, ow * w, oh * h, style, parent=cid)
         return out
-
-    @staticmethod
-    def _inscribed(cid: str, approx: "_Approximation | None",
-                   w: float, h: float, fit: "_Fit") -> list[str]:
-        """Return a stand-in's second outline as a child cell.
-
-        Parameters
-        ----------
-        cid : str
-            Parent cell id.
-        approx : _Approximation or None
-            Stand-in.
-        w : float
-            Parent cell width.
-        h : float
-            Parent cell height.
-        fit : _Fit
-            Drawing fit.
-
-        Returns
-        -------
-        list[str]
-            Cell XML lines; empty without an inscribed shape.
-        """
-        if approx is None or approx.inscribed is None:
-            return []
-        style = ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
-                          f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
-                          f"strokeWidth={fit.length(approx.weight):g}",
-                          "connectable=0", "movable=0"]) + ";"
-        return _rect(f"{cid}-in", 0, 0, w, h, style, parent=cid)
 
     # ---------------------------------------------------- streams
 
@@ -1837,9 +1779,7 @@ class DrawioRenderer:
                                       + ("fontStyle=1;" if c == 0 and len(r) > 1 else "")
                                       for c in range(len(col_w))] for r in grid])
         # Free-form lines.
-        size = getattr(obj, "font_size", 11.0)
-        _s, _row_h, title_h, _col_w = F._ann_layout(obj) if rows or title else (
-            size, 0.0, 0.0, [])
+        size, _row_h, title_h, _col_w = F._ann_layout(obj)
         return _text_box(cid, title, [str(r) for r in rows], x, y, w, h, size,
                          title_h)
 
@@ -1874,12 +1814,15 @@ class DrawioRenderer:
                     "rounded=0;html=1;movable=1;"
                     f"strokeColor={_LINE_INK};fillColor={_NO_FILL};"
                     f"strokeWidth={F._STRIP_RULE:g};")
-        for n, part in enumerate(strip.rules):
-            out += _strip_rule(f"{cid}-v{n}", part)
+        for n, (_kind, x1, y1, x2, y2, weight) in enumerate(strip.rules):
+            out += _segment(f"{cid}-v{n}", x1, y1, x2, y2, _LINE_INK, weight)
         out += _rev_table(f"{cid}-rev", strip.rev)
         for n, part in enumerate(strip.parts):
-            out += (_strip_rule(f"{cid}-p{n}", part) if part[0] == "rule"
-                    else _strip_label(f"{cid}-p{n}", part))
+            if part[0] == "rule":
+                _kind, x1, y1, x2, y2, weight = part
+                out += _segment(f"{cid}-p{n}", x1, y1, x2, y2, _LINE_INK, weight)
+            else:
+                out += _strip_label(f"{cid}-p{n}", part)
         return out
 
 
@@ -2344,27 +2287,6 @@ def _fill(colour: str) -> str:
     return colour
 
 
-def _stream_cell(cell) -> str:
-    """Return the style for one stream-table cell.
-
-    Parameters
-    ----------
-    cell : StreamCell
-        Laid-out cell.
-
-    Returns
-    -------
-    str
-        Style fragment.
-    """
-    if cell.anchor == "start":
-        align = f"align=left;spacingLeft={fmt(F._STREAM_PAD - _TEXT_INSET, 2)};"
-    else:
-        align = "align=center;"
-    return (f"fillColor={_fill(cell.fill)};" + align
-            + ("fontStyle=1;" if cell.bold else ""))
-
-
 def _stream_table(cid: str, table, x, y) -> list[str]:
     """Return the stream property table as a draw.io table.
 
@@ -2391,8 +2313,11 @@ def _stream_table(cid: str, table, x, y) -> list[str]:
                   font=table.size, row_h=table.row_h,
                   keys=f"strokeWidth={F._CELL_RULE:g};",
                   row_widths=widths,
-                  cell_keys=[[_stream_cell(c) for c in row]
-                             for row in table.rows])
+                  cell_keys=[[f"fillColor={_fill(c.fill)};"
+                              + (f"align=left;spacingLeft={fmt(F._STREAM_PAD - _TEXT_INSET, 2)};"
+                                 if c.anchor == "start" else "align=center;")
+                              + ("fontStyle=1;" if c.bold else "")
+                              for c in row] for row in table.rows])
 
 
 def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
@@ -2543,25 +2468,6 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
              f"fontColor={_LINE_INK};")
     return _rect(cid, cx - _LABEL_HALF, cy - _LABEL_HALF, 2 * _LABEL_HALF, 2 * _LABEL_HALF,
                  style, _html_text(text))
-
-
-def _strip_rule(cid: str, part) -> list[str]:
-    """Return a title-strip rule as an edge.
-
-    Parameters
-    ----------
-    cid : str
-        Cell id.
-    part : tuple
-        ``(kind, x1, y1, x2, y2, weight)``.
-
-    Returns
-    -------
-    list[str]
-        XML lines.
-    """
-    _kind, x1, y1, x2, y2, weight = part
-    return _segment(cid, x1, y1, x2, y2, _LINE_INK, weight)
 
 
 def _strip_label(cid: str, part) -> list[str]:

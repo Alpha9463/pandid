@@ -192,74 +192,6 @@ def check_fit(s, room: float, size: float, bold: bool = False, *,
     return s
 
 
-def report_once(report: "Reporter") -> "Reporter":
-    """Wrap ``report`` to pass on each distinct finding once.
-
-    Parameters
-    ----------
-    report : Reporter
-        Callback to wrap.
-
-    Returns
-    -------
-    Reporter
-        Callback that drops repeated findings.
-    """
-    seen: set[tuple[str, str, str, float, float]] = set()
-
-    def once(field: str, text: str, drawn: str,
-             room: float, need: float) -> None:
-        """Pass on a finding not seen before.
-
-        Parameters
-        ----------
-        field : str
-            Field name.
-        text : str
-            Requested text.
-        drawn : str
-            Drawn text.
-        room : float
-            Cell width.
-        need : float
-            Text width.
-        """
-        key = (field, text, drawn, room, need)
-        if key not in seen:
-            seen.add(key)
-            report(field, text, drawn, room, need)
-
-    return once
-
-
-def fit_size(s, room: float, size: float, floor: float,
-             bold: bool = False) -> float:
-    """Return the largest size, ``floor`` to ``size``, that fits.
-
-    Parameters
-    ----------
-    s : object
-        Text, converted with ``str``.
-    room : float
-        Width available, in drawing units.
-    size : float
-        Largest type size.
-    floor : float
-        Smallest type size.
-    bold : bool, default=False
-        Measure bold advances.
-
-    Returns
-    -------
-    float
-        Type size in drawing units.
-    """
-    need = text_width(s, size, bold)
-    if need <= room or need <= 0 or room <= 0:
-        return size
-    return max(floor, math.floor(size * room / need * 10) / 10)
-
-
 def _text(x, y, s, size, *, anchor="start", bold=False, fill="black"):
     """Return an SVG ``<text>`` element with escaped content.
 
@@ -361,31 +293,6 @@ def measure_annotation(ann) -> tuple[float, float]:
     return w, h
 
 
-def _overflowing_text(ann, size: float, body_w: float) -> str:
-    """Return the title if it overruns, otherwise the widest row.
-
-    Parameters
-    ----------
-    ann : Annotation
-        Titled box.
-    size : float
-        Row type size.
-    body_w : float
-        Width of the row columns.
-
-    Returns
-    -------
-    str
-        Text to name in a finding.
-    """
-    if text_width(ann.title, size + 1, bold=True) > body_w:
-        return ann.title
-    # A row of cells reads as one string, the cells spaced apart.
-    rows = ("   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
-            for r in ann.rows)
-    return max(rows, key=lambda s: text_width(s, size), default=ann.title)
-
-
 def draw_annotation(ann, x: float, y: float, *,
                     report: "Reporter | None" = None) -> list[str]:
     """Return an Annotation drawn with its top-left at ``(x, y)``.
@@ -411,7 +318,12 @@ def draw_annotation(ann, x: float, y: float, *,
         body_w = _total(col_w) + gap * (len(col_w) - 1)
         inner = max(body_w, text_width(ann.title, size + 1, bold=True))
         if ann.width < inner + 2 * pad:
-            over = _overflowing_text(ann, size, body_w)
+            # Name the title if it overruns, else the widest row, its
+            # cells spaced apart.
+            rows = ("   ".join(str(c) for c in r) if isinstance(r, (tuple, list))
+                    else str(r) for r in ann.rows)
+            over = (ann.title if text_width(ann.title, size + 1, bold=True) > body_w
+                    else max(rows, key=lambda s: text_width(s, size), default=ann.title))
             report(f"annotation {ann.title!r} (width={ann.width:g})", over, over,
                    ann.width, inner + 2 * pad)
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
@@ -1463,8 +1375,6 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     rx = x + _REV_W
     cx2 = rx + _COMPANY_W
     rules = [("rule", vx, y, vx, bottom, 1.5) for vx in (rx, cx2)]
-    if report is not None:
-        report = report_once(report)
 
     # --- Revision grid (left): heading at the foot, revisions above
     def rev_cells(cells, bold=False):
@@ -1515,11 +1425,12 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     if _stated(tb, "company"):
         lines = company_lines(_stated(tb, "company"))
         cy = y + h / 2 - (len(lines) - 1) * _COMPANY_LEAD / 2
-        for ln in lines:
-            # A word wider than the cell is drawn whole and reported.
+        for k, ln in enumerate(lines):
+            # A word wider than the cell is drawn whole and reported once.
             parts.append(("text", rx + _COMPANY_W / 2, cy,
                           check_fit(ln, _COMPANY_W - 10, _COMPANY_TYPE, True,
-                                    field="company", report=report),
+                                    field="company",
+                                    report=None if ln in lines[:k] else report),
                           _COMPANY_TYPE, "middle", True, "black"))
             cy += _COMPANY_LEAD
 
@@ -1547,7 +1458,9 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     # band.
     sheets = f"SHEET {_stated(tb, 'sheet')} of {_stated(tb, 'of_sheets')}"
     title = _stated(tb, "title") or name
-    title_type = fit_size(title, _TITLE_W, _TITLE_TYPE, _SUBTITLE_TYPE, True)
+    need = text_width(title, _TITLE_TYPE, True)
+    title_type = (_TITLE_TYPE if need <= _TITLE_W else max(
+        _SUBTITLE_TYPE, math.floor(_TITLE_TYPE * _TITLE_W / need * 10) / 10))
     parts.append(("text", ix + 6, top + 15,
                   clip(title, _TITLE_W, title_type, True,
                        field=("title" if _field(tb, "title")
@@ -2093,10 +2006,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
     put_bottom(cols["bottom-right"], "r")
     put_side(cols["left"], "l")
     put_side(cols["right"], "r")
-    cy = (iy + iyb) / 2 - stack_h(cols["center"]) / 2
-    for obj, w, h in cols["center"]:
-        placed.append(Docked(obj, ix + (iw - w) / 2, cy, w, h))
-        cy += h + GAP
+    put_side(cols["center"], "c")
 
     # hand-placed boxes; expand the frame to keep them inside ----
     for obj, px, py, w, h in positioned:
