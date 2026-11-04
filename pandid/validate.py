@@ -305,6 +305,29 @@ def _pierced_end(path, ends):
     return None
 
 
+def _drawn_box(unit) -> tuple[float, float, float, float]:
+    """Return the box a placed unit's symbol is drawn in.
+
+    A Feed or Product is its pennant, inset from its unit box.
+
+    Parameters
+    ----------
+    unit : Unit
+        Placed unit.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        Box as left, top, right, bottom.
+    """
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import boundary_flag
+
+    if unit.kind in ("feed", "product"):
+        return boundary_flag(unit, unit.frame).box
+    return unit_box(unit, unit.frame)
+
+
 def _along_edge(a, b, box) -> bool:
     """Return whether an orthogonal segment runs along an edge of a box.
 
@@ -840,7 +863,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"{said}, and is not drawn so. Something moved one of "
                                       "them after layout read the pins"))
 
-        boxes = [(u, unit_box(u, u.frame)) for u in placed]
+        boxes = [(u, _drawn_box(u)) for u in placed]
         # Only streams with both ends placed have a drawn path.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
@@ -988,7 +1011,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
-            ends = [(u, name, unit_box(u, u.frame), resolve_port(u, u.frame, name).face)
+            ends = [(u, name, _drawn_box(u), resolve_port(u, u.frame, name).face)
                     if is_anchored(u, name) else None
                     for u, name in ((src_u, s.source.name), (dst_u, s.dest.name))]
             pierced = _pierced_end(path, ends) if len(path) > 1 else None
