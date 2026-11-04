@@ -9,6 +9,7 @@ from typing import cast
 
 import pytest
 
+from pandid import ControlValve, ShellAndTubeExchanger
 from pandid.flowsheet import Flowsheet
 from pandid.geometry import Route
 from pandid.streams import Stream
@@ -94,6 +95,40 @@ def test_rect_intersection():
     assert r.intersects_segment(10, 5, 10, 25)
     # Miss a segment that lies outside.
     assert not r.intersects_segment(5, 5, 25, 5)
+
+
+@pytest.mark.parametrize("valve_at", [(440, 170), (446, 150)])
+def test_a_lane_beside_a_tag_or_its_own_unit_stays_a_way_through(valve_at):
+    """Route a cooler's outlet up the narrow lane between it and its valve."""
+    fs = Flowsheet("product cooler")
+    cooler = fs.add(ShellAndTubeExchanger("E-101")).pin(x=360, y=180)
+    valve = fs.add(ControlValve("TV-101")).pin(x=valve_at[0], y=valve_at[1])
+    feed, product = fs.add(Feed("Feed")), fs.add(Product("Product"))
+    cws, cwr = fs.add(Feed("CWS")), fs.add(Product("CWR"))
+    fs.connect(feed.outlet, cooler.tube_in)
+    fs.connect(cooler.tube_out, valve.inlet)
+    fs.connect(valve.outlet, product.inlet)
+    fs.connect(cws.outlet, cooler.shell_in)
+    fs.connect(cooler.shell_out, cwr.inlet)
+    fs.add_control_loop("T", 101, measuring=cooler, acting_on=valve)
+    fs.to_svg(diagram="p&id")
+    assert fs.validate(diagram="p&id") == []
+
+
+def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():
+    """Route round a vessel rather than along a lane a pixel under it."""
+    fs = Flowsheet("lane beside an edge")
+    feed = fs.add(Feed("F")).pin(port="outlet", x=100, y=100)
+    product = fs.add(Product("P")).pin(port="inlet", x=700, y=100)
+    fs.add(Vessel("V-1", width=60, height=100)).pin(x=380, y=50)
+    # V-2's lower lane runs one pixel under V-1.
+    fs.add(Vessel("V-2", width=60, height=86)).pin(x=1000, y=50)
+    line = fs.connect(feed.outlet, product.inlet)
+    fs.route()
+    assert line.route is not None
+    # V-1's bottom edge is at y=150.
+    assert all(abs(y - 150.0) >= 2.0 for _, y in line.route.waypoints), line.route.waypoints
+    assert "route-along-unit" not in {issue.code for issue in fs.validate()}
 
 
 def test_clear_gaps_closes_the_run_a_span_reaches_into():
@@ -481,6 +516,20 @@ def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
     index.v[20] = [(0.0, 20.0)]  # Cross the north route at (20, 10).
     routed = find_path(graph, (0, 0), (40, 0), "E", None, crossing_index=index)
     assert (20, 10) in routed, f"detoured two extra bends to dodge a crossing: {routed}"
+
+
+def test_a_route_goes_round_rather_than_cross_an_arrowhead():
+    """Pay a longer route of the same bends to cross clear of a nozzle."""
+    graph = _graph(
+        [(0, 0), (0, 10), (20, 10), (40, 10), (40, 0)],
+        [(0, 0), (0, -30), (20, -30), (40, -30), (40, 0)],
+    )
+    assert (20, 10) in find_path(graph, (0, 0), (40, 0), "E", None)
+
+    heads = CrossingIndex()
+    heads.record([(20, 4), (20, 16)])  # an arrowhead the north route crosses
+    routed = find_path(graph, (0, 0), (40, 0), "E", None, nozzle_index=heads)
+    assert (20, -30) in routed, f"crossed the arrowhead: {routed}"
 
 
 def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):

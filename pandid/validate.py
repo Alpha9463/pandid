@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from pandid._checks import suggest
 from pandid.layout.conflicts import _BODY_TOL, _SQUARE_TOL, boxes_overlap, segment_crosses_box
 from pandid.portgeom import COMPASS
+from pandid.routing.visibility import EDGE_TOL as _EDGE_TOL
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -25,10 +26,6 @@ _PIN_TOL = 0.05
 #: ``mirrored=`` spelling of each ``(mirrored, mirror_y)`` pair.
 _MIRRORED = {(False, False): "False", (True, False): "True",
              (False, True): '"y"', (True, True): '"xy"'}
-
-#: Distance in px within which a line lies on a box edge: one main-flow
-#: line width.
-_EDGE_TOL = 2.0
 
 #: ``(kind, variant)`` pairs whose nozzles step in height by design.
 OFFSET_BY_DESIGN = frozenset({
@@ -827,8 +824,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     """
     from pandid.inline import _INLINE_KINDS
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import (is_anchored, pin_intent, port_faces,
-                                 port_point, resolve_port, unit_box)
+    from pandid.portgeom import (drawn_box, is_anchored, pin_intent, port_faces,
+                                 port_point, resolve_port)
     from pandid.render.svg import crossings, stream_polyline
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
@@ -944,7 +941,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                       f"{said}, and is not drawn so. Something moved one of "
                                       "them after layout read the pins"))
 
-        boxes = [(u, unit_box(u, u.frame)) for u in placed]
+        boxes = [(u, drawn_box(u, u.frame)) for u in placed]
         # Only streams with both ends placed have a drawn path.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
@@ -1093,7 +1090,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
-            ends = [(u, name, unit_box(u, u.frame), resolve_port(u, u.frame, name).face)
+            ends = [(u, name, drawn_box(u, u.frame), resolve_port(u, u.frame, name).face)
                     if is_anchored(u, name) else None
                     for u, name in ((src_u, s.source.name), (dst_u, s.dest.name))]
             pierced = _pierced_end(path, ends) if len(path) > 1 else None

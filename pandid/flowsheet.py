@@ -24,6 +24,7 @@ from pandid.inline import _INLINE_KINDS
 from pandid.streams import LINE_NUMBER_FIELDS, PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 
 if TYPE_CHECKING:
+    from collections import Counter
     from collections.abc import Sequence
 
     from pandid.components import Component
@@ -528,6 +529,16 @@ class Flowsheet:
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
+        # Whether layout keeps each valve's signal exit a lane clear of
+        # other units, and whether the last layout drew one closer.
+        self._exit_clear = False
+        self._exit_tight = False
+        # Engine the last layout ran.
+        self._engine = None
+        # Whether the router prices arrowheads and lanes beside units, and
+        # whether an unfaced balloon on equipment may leave its E face.
+        self._priced = False
+        self._free_faces = False
         # Whether route() may hang a controller off its actuator, the
         # controllers it hung, and the sheet as routed without them.
         self._may_hang = False
@@ -1193,7 +1204,8 @@ class Flowsheet:
         at : float, str or None, optional
             Deprecated; use ``face``.
         face : str or None, optional
-            Face of the element to hang the balloon from; default ``"E"``.
+            Face of the element to hang the balloon from, as for
+            :meth:`~pandid.units.Instrument.attach`.
         offset : float, default=46.0
             Distance from the tap to the balloon centre.
         angle : float, default=90.0
@@ -2008,9 +2020,10 @@ class Flowsheet:
         from pandid.layout import default_layout_engine
 
         self._unhang()
-        self._mounted_layout = False
+        self._mounted_layout = self._exit_tight = False
         if engine is None:
             engine = default_layout_engine
+        self._engine = engine
         outer, self._laying_out = self._laying_out, True
         try:
             engine.layout(self)
@@ -2031,7 +2044,12 @@ class Flowsheet:
         from balloons kept off the line their chain taps, kept only if no
         tap leaves its line and no finding or clash grows. Where the result
         has a tap off its line that was on it before hanging, the sheet is
-        placed as if no controller could hang.
+        placed as if no controller could hang. Where the result draws a
+        line along a unit or across an arrowhead, the sheet is routed again
+        pricing both, with each unfaced balloon on equipment on a free face,
+        kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
+        within a lane of another unit, the sheet is laid out and routed
+        again, once, with every exit a lane clear, kept on the same terms.
 
         Parameters
         ----------
@@ -2045,14 +2063,18 @@ class Flowsheet:
         RuntimeError
             If the default router's path search exceeds its budget.
         """
+        # Start from main's faces for unfaced balloons.
+        self._free_faces = False
         if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         from pandid.routing import DefaultRouter
 
         if router is None:
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained, free_face
+        from pandid.units import Instrument
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
+        from pandid.validate import geometry_issues
 
         def place() -> None:
             """Place balloons and re-route until nothing moves."""
@@ -2095,27 +2117,86 @@ class Flowsheet:
             elif self._unhung is None:
                 self._unhung = prior
 
-        # Start from the sheet as routed without hanging, not from a hung
-        # controller left by the last route().
-        self._unhang()
-        router.route(self)
-        place()
-        # Hang each controller it can off its actuator, then keep each
-        # chained balloon off its tapped line, hanging as kept. The check
-        # assumes the default router.
-        tries = type(router) is DefaultRouter and not self._laying_out
-        hang = tries and any(_hangable(self, u) for u in self.units)
-        chained = tries and any(_chained(u) for u in self.units)
-        off = _taps_off(self) if hang else set()
-        if hang:
-            attempt(may_hang=True, keep_clear=False)
-        if chained:
-            attempt(may_hang=self._unhung is not None, keep_clear=True)
-        # Where hanging left a tap off its line, place as if nothing could hang.
-        if hang and not _taps_off(self) <= off:
+        def settle() -> None:
+            """Route the laid-out sheet and place its balloons."""
+            # Start from the sheet as routed without hanging, not from a
+            # hung controller left by the last route().
             self._unhang()
+            router.route(self)
+            place()
+            # Hang each controller it can off its actuator, then keep each
+            # chained balloon off its tapped line, hanging as kept.
+            hang = tries and any(_hangable(self, u) for u in self.units)
+            chained = tries and any(_chained(u) for u in self.units)
+            off = _taps_off(self) if hang else set()
+            if hang:
+                attempt(may_hang=True, keep_clear=False)
             if chained:
-                attempt(may_hang=False, keep_clear=True)
+                attempt(may_hang=self._unhung is not None, keep_clear=True)
+            # Where hanging left a tap off its line, place as if nothing
+            # could hang.
+            if hang and not _taps_off(self) <= off:
+                self._unhang()
+                if chained:
+                    attempt(may_hang=False, keep_clear=True)
+
+        def keep_if_better(redo: Callable[[], None], before: Counter[str]) -> None:
+            """Redo the sheet, and undo that if a finding or clash grew or a
+            tap left its line.
+
+            Parameters
+            ----------
+            redo : Callable[[], None]
+                Lays out or routes the sheet again.
+            before : Counter[str]
+                Findings and clashes of the sheet as it stands.
+            """
+            prior, unhung, off = self._geometry(), self._unhung, _taps_off(self)
+            free = self._free_faces
+            try:
+                redo()
+                kept = _taps_off(self) <= off and not any(
+                    n > before[k] for k, n in _flaws(self).items())
+            except Exception:
+                kept = False
+            if not kept:
+                self._free_faces = free
+                self._put_geometry(prior, keep_manual=False)
+                self._unhung = unhung
+
+        def priced() -> None:
+            """Settle the sheet with arrowheads and lanes beside units priced
+            and unfaced balloons on free faces, laid out again if one moves."""
+            self._priced = self._free_faces = True
+            try:
+                if any(isinstance(u, Instrument) and free_face(u) for u in self.units):
+                    self.layout(self._engine)
+                settle()
+            finally:
+                self._priced = False
+
+        def settle_best() -> None:
+            """Settle the sheet, then priced where it draws a touch."""
+            settle()
+            touch = {"route-along-unit", "route-crosses-near-nozzle"}
+            if tries and any(i.code in touch for i in geometry_issues(self)):
+                keep_if_better(priced, _flaws(self))
+
+        def relaid() -> None:
+            """Lay out with every signal exit a lane clear, and settle."""
+            self._exit_clear = True
+            try:
+                self.layout(self._engine)
+            finally:
+                self._exit_clear = False
+            settle_best()
+
+        # The checks assume the default router.
+        tries = type(router) is DefaultRouter and not self._laying_out
+        settle_best()
+        if tries and self._exit_tight:
+            keep_if_better(relaid, _flaws(self))
+            self._exit_tight = False
         self._route_stale = False
 
     def _geometry(self) -> tuple:
