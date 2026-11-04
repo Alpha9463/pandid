@@ -1893,27 +1893,7 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     return (rx, ry, rx + hw, ry + hh)
 
 
-def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
-    """Return the id suffix naming a placement transform.
-
-    Parameters
-    ----------
-    rot : int
-        Rotation in degrees.
-    mirror_x, mirror_y : bool
-        Mirrors applied by the placement.
-
-    Returns
-    -------
-    str
-        Suffix, or ``""`` for the identity.
-    """
-    if not (rot or mirror_x or mirror_y):
-        return ""
-    return "_t" + (f"r{rot}" if rot else "") + ("x" if mirror_x else "") + ("y" if mirror_y else "")
-
-
-def _placed_box(u) -> "tuple[float, float] | None":
+def _placed_box(u) -> "tuple[float, float]":
     """Return the size a unit's artwork is drawn into, before rotation.
 
     Parameters
@@ -1923,12 +1903,10 @@ def _placed_box(u) -> "tuple[float, float] | None":
 
     Returns
     -------
-    tuple[float, float] or None
-        ``(width, height)``, or ``None`` if unplaced.
+    tuple[float, float]
+        ``(width, height)``.
     """
-    f = getattr(u, "frame", None)
-    if f is None:
-        return None
+    f = u.frame
     rot = int(getattr(f, "orientation", 0) or 0)
     return (f.h, f.w) if rot in (90, 270) else (f.w, f.h)
 
@@ -1948,10 +1926,7 @@ def _reshapes(sym, u) -> bool:
     bool
         Whether the aspects differ.
     """
-    box = _placed_box(u)
-    if box is None:
-        return False
-    bw, bh = box
+    bw, bh = _placed_box(u)
     return not math.isclose(sym.width * bh, sym.height * bw, rel_tol=1e-9)
 
 
@@ -1973,33 +1948,12 @@ def _placement_scale(sym, u) -> "tuple[float, float]":
     Returns
     -------
     tuple[float, float]
-        ``(sx, sy)``; ``(1, 1)`` if unplaced or the symbol has no size.
+        ``(sx, sy)``; ``(1, 1)`` if the symbol has no size.
     """
-    box = _placed_box(u)
-    if box is None or not (sym.width and sym.height):
+    if not (sym.width and sym.height):
         return (1.0, 1.0)
+    box = _placed_box(u)
     return (box[0] / sym.width, box[1] / sym.height)
-
-
-def _stretch_scale(sym, u) -> "tuple[float, float]":
-    """Return the scale stretching a reshaped stretchable symbol.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Unit's symbol.
-    u : Unit
-        Placed unit.
-
-    Returns
-    -------
-    tuple[float, float]
-        ``(sx, sy)``; ``(1, 1)`` unless a stretchable symbol
-        is reshaped.
-    """
-    if sym.stretchable and _reshapes(sym, u):
-        return _placement_scale(sym, u)
-    return (1.0, 1.0)
 
 
 @lru_cache(maxsize=2048)
@@ -2021,26 +1975,6 @@ def _uneven(svg: str, fx: float, fy: float) -> bool:
     bool
         Whether some stroke's x and y scales differ.
     """
-    return any(not math.isclose(ax, ay, rel_tol=1e-9)
-               for ax, ay in _stroke_scales(svg, fx, fy))
-
-
-def _stroke_scales(svg: str, fx: float, fy: float) -> "list[tuple[float, float]]":
-    """Return ``(|sx|, |sy|)`` for each stroked element in ``svg``.
-
-    Parameters
-    ----------
-    svg : str
-        Symbol artwork.
-    fx, fy : float
-        Outer scale.
-
-    Returns
-    -------
-    list[tuple[float, float]]
-        Scale magnitudes per element carrying a stroke width.
-    """
-    out: list[tuple[float, float]] = []
     scales = [(fx, fy)]
     for m in _TAG.finditer(svg):
         closing, name, raw, self_closing = m.groups()
@@ -2054,10 +1988,11 @@ def _stroke_scales(svg: str, fx: float, fy: float) -> "list[tuple[float, float]]
                 sx, sy, _, _ = _affine(found.group(1))
                 ax, ay = ax * sx, ay * sy
         elif 'stroke-width="' in raw:
-            out.append((abs(ax), abs(ay)))
+            if not math.isclose(abs(ax), abs(ay), rel_tol=1e-9):
+                return True
         if not self_closing:
             scales.append((ax, ay))
-    return out
+    return False
 
 
 def _fold(sym, u) -> "tuple[float, float]":
@@ -2075,7 +2010,9 @@ def _fold(sym, u) -> "tuple[float, float]":
     tuple[float, float]
         ``(1, 1)`` unless the placement would scale a stroke unevenly.
     """
-    fx, fy = _stretch_scale(sym, u)
+    if not (sym.stretchable and _reshapes(sym, u)):
+        return (1.0, 1.0)
+    fx, fy = _placement_scale(sym, u)
     return (fx, fy) if _uneven(sym.svg, fx, fy) else (1.0, 1.0)
 
 
@@ -2101,29 +2038,6 @@ def _pen_scale(sym, u) -> float:
         # An uneven box that cancels the artwork's own uneven wrapper.
         return math.sqrt(kx * ky)
     return min(kx, ky)
-
-
-def _size_tag(sym, u) -> str:
-    """Return the id suffix naming the box a symbol is drawn for.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Unit's symbol.
-    u : Unit
-        Placed unit.
-
-    Returns
-    -------
-    str
-        ``""`` at the symbol's own size, else ``"_s<w>x<h>"``.
-    """
-    if (math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9)
-            and _fold(sym, u) == (1.0, 1.0)):
-        return ""
-    box = _placed_box(u)
-    assert box is not None
-    return f"_s{fmt(box[0], 2)}x{fmt(box[1], 2)}"
 
 
 def _at_pen_scale(svg: str, scale: float) -> str:
@@ -2279,28 +2193,6 @@ def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
     return " ".join(out)
 
 
-def _scaled_points(points: str, m: "tuple[float, float, float, float]") -> str:
-    """Return ``points`` with the map ``(sx, sy, tx, ty)`` applied.
-
-    Parameters
-    ----------
-    points : str
-        Polyline or polygon points.
-    m : tuple[float, float, float, float]
-        ``(sx, sy, tx, ty)``.
-
-    Returns
-    -------
-    str
-        Mapped points.
-    """
-    ax, ay, ex, ey = m
-    v = [float(t) for t in points.replace(",", " ").split()]
-    return " ".join(
-        f"{fmt(v[i] * ax + ex, 6)},{fmt(v[i + 1] * ay + ey, 6)}" for i in range(0, len(v), 2)
-    )
-
-
 def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
                     m: "tuple[float, float, float, float]",
                     gx: float, gy: float, self_closing: str) -> str:
@@ -2343,7 +2235,9 @@ def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
         elif key == "d":
             out.append((key, _scaled_path(value, m)))
         elif key == "points":
-            out.append((key, _scaled_points(value, m)))
+            v = [float(t) for t in value.replace(",", " ").split()]
+            out.append((key, " ".join(f"{fmt(v[i] * ax + ex, 6)},{fmt(v[i + 1] * ay + ey, 6)}"
+                                      for i in range(0, len(v), 2))))
         elif key == "font-size":
             # Scale text by the geometric mean.
             out.append((key, fmt(math.sqrt(abs(ax * ay)) * float(value), 6)))
@@ -3011,7 +2905,6 @@ def _too_small(sheet: _Sheet, need_w: float, need_h: float,
 
 # Sentinel for the title strip among docked furniture.
 TITLE = "\x00title"
-_FURNITURE_NAMES = {TITLE: "the title strip"}
 
 
 def _furniture_name(obj) -> str:
@@ -3027,8 +2920,8 @@ def _furniture_name(obj) -> str:
     str
         Name such as ``"the stream table"``.
     """
-    if isinstance(obj, str):
-        return _FURNITURE_NAMES.get(obj, obj)
+    if obj is TITLE:
+        return "the title strip"
     if isinstance(obj, F.StreamTable):
         return "the stream table"
     title = getattr(obj, "title", "")
@@ -3689,9 +3582,7 @@ class SvgRenderer:
             ``(rotation, mirror_x, mirror_y)``.
         """
         sym = self.registry.for_unit(u)
-        f = getattr(u, "frame", None)
-        if f is None:
-            return (0, False, False)
+        f = u.frame
         rot = int(getattr(f, "orientation", 0) or 0)
         mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
         if "<text" in sym.svg:
@@ -3718,8 +3609,15 @@ class SvgRenderer:
         """
         variant = getattr(u, 'variant', 'default')
         sym = self.registry.for_unit(u)
-        body = u.kind if variant == "default" else f"{u.kind}_{variant}"
-        body += sym.id_suffix + _size_tag(sym, u) + _xform_tag(*self._baked_xform(u))
+        body = (u.kind if variant == "default" else f"{u.kind}_{variant}") + sym.id_suffix
+        if not (math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9)
+                and _fold(sym, u) == (1.0, 1.0)):
+            bw, bh = _placed_box(u)
+            body += f"_s{fmt(bw, 2)}x{fmt(bh, 2)}"
+        rot, mirror_x, mirror_y = self._baked_xform(u)
+        if rot or mirror_x or mirror_y:
+            body += ("_t" + (f"r{rot}" if rot else "") + ("x" if mirror_x else "")
+                     + ("y" if mirror_y else ""))
         return ident("sym", body)
 
     def _defs(self, fs, arrows=True):
@@ -4268,11 +4166,8 @@ class SvgRenderer:
             marker_id = arrow_marker_id(paint)
             color = escaped(paint)
             is_signal = s.kind in _SIGNAL_KINDS
-            dash = ""
-            if s.dasharray:
-                dash = f' stroke-dasharray="{escaped(s.dasharray)}"'
-            elif s.kind in _SIGNAL_DASH:
-                dash = f' stroke-dasharray="{_SIGNAL_DASH[s.kind]}"'
+            pattern = s.dasharray or _SIGNAL_DASH.get(s.kind, "")
+            dash = f' stroke-dasharray="{escaped(pattern)}"' if pattern else ""
 
             d_parts = [f"M {points[0][0]},{points[0][1]}"]
             for i in range(len(points) - 1):
