@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`validate()` reports lines that touch (#621).** `route-crosses-near-nozzle`
   flags a crossing within an arrowhead length of a nozzle and `route-along-unit`
   a line on a unit's box edge; the router counts tap lines as crossings.
+- **`help(pandid)` is a guide to using the package (#174).** It gives the
+  model, a runnable example, port names, common mistakes and how to check a
+  sheet; `pandid --help`, `help(pandid.Flowsheet)` and `AGENTS.md` point to it.
 
 ### Changed
 
@@ -103,6 +106,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Numbered nozzles type-check in mypy and pyright (#646).**
+  `Mixer("M", n_inlets=3).in_1` and `GasHolder("G", inputs=("N", "S"))` pass
+  both checkers, and a nozzle past the count, such as `.in_4`, fails at run
+  time instead of in the checker.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an
