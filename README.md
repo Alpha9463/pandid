@@ -1,13 +1,10 @@
 # pandid
 
-Create process flow diagrams (PFDs), piping and instrumentation diagrams (P&IDs),
-and block flow diagrams (BFDs) from a Python flowsheet. Describe equipment and
-connections; pandid places the units and routes the streams. The core package
-has no runtime dependencies.
+Draw process flow diagrams (PFDs), piping and instrumentation diagrams (P&IDs)
+and block flow diagrams (BFDs) from Python. Describe the equipment and how it
+connects; pandid places the units and routes the lines.
 
 [![Ethanol purification P&ID](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/10_ethanol_pid.svg)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
-
-[See the example and the full gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md).
 
 ## Install
 
@@ -39,44 +36,30 @@ fs.connect(drum.liquid, liquid.inlet)
 fs.render("flash.svg")
 ```
 
-No coordinates are needed for this drawing. Render to SVG, editable draw.io,
-or PDF/PNG with the optional export backend. You can also pin equipment or add
-stream waypoints when a drawing needs manual control.
+Render to SVG, draw.io, PDF or PNG. Pin equipment or route a line by hand when
+a drawing needs it.
 
-A line returned by `connect()` can carry a valve,
-`fs.add(Valve("HV-101"), on=line)`, or a control-valve station,
-`fs.add_valve_station("CV-101", on=line)`; `at=` gives a rough position. See
-[devices on a line](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#devices-on-a-line).
+## Features
 
-## Capabilities
+- Automatic layout and routing, with manual overrides.
+- Equipment symbols, instruments, control loops and line numbers.
+- Title blocks, borders, equipment lists and stream tables.
+- Python, JSON or YAML input, and a `pandid` command to draw and check a sheet.
+- No runtime dependencies in the core package.
 
-- Automatic equipment placement and orthogonal stream routing, with manual
-  placement and route overrides.
-- Equipment symbols, line numbers, instrumentation and control loops for BFDs,
-  PFDs and P&IDs.
-- Title blocks, drawing borders, equipment lists and stream tables.
-- Python, JSON or YAML flowsheet input; SVG, draw.io, PDF or PNG output; a
-  command line for drawing and validation.
-
-Pandid draws diagrams; it does not calculate mass or energy balances. It follows
-selected process-drawing conventions but does not claim standards
-certification. The [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#standards)
-explains the standards used and their limits.
+pandid draws diagrams; it does not calculate mass or energy balances. It
+follows process-drawing standards but is not certified against them.
 
 ## Learn more
 
-- [Example gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md): rendered diagrams and their scripts.
-- [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md): equipment, ports, placement, data formats and commands.
-- [Contributing](https://github.com/Alpha9463/pandid/blob/main/CONTRIBUTING.md): setup, checks and GitHub workflow.
-- [Changelog](https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md): release history.
-
-For a spec file, run `pandid draw plant.yaml -o plant.svg` or
-`pandid validate plant.yaml`. See the
-[command line reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#command-line).
+- [Example gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
+- [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md)
+- [Changelog](https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md)
+- [Contributing](https://github.com/Alpha9463/pandid/blob/main/CONTRIBUTING.md)
 
 ## Licence
 
-Pandid is source-available for noncommercial use under the
+pandid is source-available for noncommercial use under the
 [PolyForm Strict License 1.0.0](https://polyformproject.org/licenses/strict/1.0.0).
 The licence does not grant permission to distribute or modify the software.
 For a separate licence, contact `alexandersonxii+pandid@gmail.com`.
