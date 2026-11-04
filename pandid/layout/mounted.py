@@ -468,25 +468,15 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     for turn, flip in poses:
         candidate = _candidate(unit, point, turn, flip)
         inlet = port_point(unit, candidate, "inlet")
-        shift = ordinate - inlet[across]
-        shifted = replace(candidate, x=candidate.x + (0.0 if level else shift),
-                          y=candidate.y + (shift if level else 0.0))
-        offset = port_point(unit, replace(candidate, x=0.0, y=0.0), "inlet")
-        direct = (replace(candidate, y=ordinate - offset[1]) if level
-                  else replace(candidate, x=ordinate - offset[0]))
-        # Keep a pose with both nozzles on the leg's line, in flow order. Each
-        # frame rounds differently; keep the inlet nearer the leg, the shifted
-        # frame on a tie.
-        # shortcut: some leg coordinates admit no frame that lands it exactly;
-        # snap near-equal ends in the router if those jogs show.
-        on_leg = []
-        for c in (shifted, direct):
-            inlet, outlet = port_point(unit, c, "inlet"), port_point(unit, c, "outlet")
-            if (abs(inlet[across] - ordinate) < 1.0 and abs(outlet[across] - ordinate) < 1.0
-                    and (outlet[along] - inlet[along]) * forward > 0):
-                on_leg.append((abs(inlet[across] - ordinate), c))
-        if on_leg:
-            fits.append(min(on_leg, key=lambda e: e[0])[1])
+        shift = ordinate - inlet[1 if level else 0]
+        candidate = replace(candidate, x=candidate.x + (0.0 if level else shift),
+                            y=candidate.y + (shift if level else 0.0))
+        # Keep a pose with both nozzles on the leg's line, in flow order.
+        inlet = port_point(unit, candidate, "inlet")
+        outlet = port_point(unit, candidate, "outlet")
+        if (abs(inlet[across] - ordinate) < 1.0 and abs(outlet[across] - ordinate) < 1.0
+                and (outlet[along] - inlet[along]) * forward > 0):
+            fits.append(candidate)
     if not fits:
         return _candidate(unit, point, *poses[0])
     if turned or level or "actuator" not in unit.ports:
