@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A conveyor's `variant` is checked when it is reassigned.** Setting it to
   a variant the conveyor's length is too short for raises `ValueError` at
   once and keeps the old variant, instead of failing when the sheet is drawn.
+- **`to_svg()` writes its `<defs>` entries in id order (#646).** The drawing
+  is unchanged, but a saved SVG may list its markers and symbols in a new order.
 
 ### Deprecated
 

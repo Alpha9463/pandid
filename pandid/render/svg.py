@@ -3683,7 +3683,7 @@ class SvgRenderer:
         return ident("sym", body)
 
     def _defs(self, fs, arrows=True):
-        """Return the ``<defs>`` block: arrow markers and symbols.
+        """Return the ``<defs>`` block: arrow markers and symbols, each in id order.
 
         Parameters
         ----------
@@ -3698,7 +3698,7 @@ class SvgRenderer:
             SVG lines.
         """
         lines = []
-        used_colors = sorted({s.color or "black" for s in fs.streams})
+        used_colors = sorted({s.color or "black" for s in fs.streams}, key=arrow_marker_id)
         lines.append('  <defs>')
         for c in used_colors if arrows else ():
             lines.append(
@@ -3725,7 +3725,7 @@ class SvgRenderer:
             used[key] = (self._sym_id(u), sym, fold, pen, *xform)
             if sym.stretchable and _reshapes(sym, u) and fold == (1.0, 1.0):
                 stretched.add(key)
-        for key in sorted(used):
+        for key in sorted(used, key=lambda k: used[k][0]):
             sym_id, sym, fold, pen, rot, mirror_x, mirror_y = used[key]
             art = _baked(sym.svg, *fold)
             width, height = sym.width * fold[0], sym.height * fold[1]

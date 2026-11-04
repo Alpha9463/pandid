@@ -212,36 +212,6 @@ def flowsheet(name: str) -> "tuple[Flowsheet, dict]":
     return caught[name]
 
 
-def normalize(svg: str) -> str:
-    """Canonicalize unordered SVG definitions for reproducible assets.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    str
-        SVG document with sorted marker and definition entries.
-    """
-    lines = svg.split("\n")
-    try:
-        start = next(i for i, ln in enumerate(lines) if ln.strip() == "<defs>")
-        end = next(i for i, ln in enumerate(lines) if ln.strip() == "</defs>")
-    except StopIteration:
-        return svg
-    body = lines[start + 1 : end]
-    markers = []
-    j = 0
-    while j < len(body) and body[j].strip().startswith("<marker "):
-        markers.append(tuple(body[j : j + 3]))
-        j += 3
-    markers.sort()
-    new_body = [line for group in markers for line in group] + sorted(body[j:])
-    return "\n".join(lines[: start + 1] + new_body + lines[end:])
-
-
 def rasterize(svg: str, width: int = WIDTH) -> bytes:
     """Rasterize an SVG document to a PNG of the requested width.
 
@@ -284,7 +254,7 @@ def main() -> None:
     _pandid_is_this_checkout()
     GALLERY.mkdir(parents=True, exist_ok=True)
     for stem, (fs, kwargs) in captures().items():
-        svg = normalize(fs.to_svg(**kwargs))
+        svg = fs.to_svg(**kwargs)
         (GALLERY / f"{stem}.svg").write_text(svg, encoding="utf-8")
         if args.svg_only:
             print(f"wrote {stem}.svg")
