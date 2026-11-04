@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, TypedDict, TypeVar, Unpack
+from typing import TYPE_CHECKING, Any, NoReturn, TypedDict, TypeVar, Unpack
 
 from pandid._checks import check_real, check_whole, is_whole, suggest
 from pandid.deprecation import Deprecation
@@ -4790,3 +4790,37 @@ class Block(_FaceFamilies):
             drawn, axis = (w, "width") if upright == turned else (h, "height")
             if drawn < along - 1e-9:
                 raise block_box_too_small(self.name, face, count, axis, drawn, along, turned=turned)
+
+
+# Defined at run time only; type checkers still report a missing name.
+if not TYPE_CHECKING:
+    def __getattr__(name: str) -> NoReturn:
+        """Refuse a missing name, saying where its class lives.
+
+        Parameters
+        ----------
+        name : str
+            Attribute asked for.
+
+        Raises
+        ------
+        AttributeError
+            Always; names ``pandid.devices`` for a device class and the
+            instrument calls for a transmitter, controller or indicator.
+        """
+        said = f"module 'pandid.units' has no attribute {name!r}"
+        if name.startswith("_"):
+            raise AttributeError(said)
+        from pandid import devices
+
+        if name in getattr(devices, "__all__", ()):
+            raise AttributeError(f"{said}: {name} is in pandid.devices. Import it as "
+                                 f"from pandid import {name}")
+        if name.endswith(("Transmitter", "Controller", "Indicator")):
+            raise AttributeError(
+                f"{said}: a transmitter, controller or indicator is an Instrument "
+                f"tagged by its letters, with no class of its own. Add one with "
+                f"fs.add_instrument(\"LT\", 101, sensing=...), or a transmitter, a "
+                f"controller and their signal lines with "
+                f"fs.add_control_loop(\"L\", 101, measuring=..., acting_on=...)")
+        raise AttributeError(said)

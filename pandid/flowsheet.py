@@ -271,7 +271,8 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
             f"the {which} is {end.name}, a unit rather than one of its nozzles, and "
             f"kind={kind!r} is process piping. Which nozzle a pipe runs to is the "
             f"whole question, so name it ({end.name}.<nozzle>); only a signal line "
-            f"(kind one of {sorted(SIGNAL_KINDS)}) may be drawn to the unit"
+            f"(kind one of {sorted(SIGNAL_KINDS)}) may be drawn to the unit. Its "
+            f"nozzles are {sorted(end.ports)}"
         )
     if isinstance(end, Instrument):
         # Use the signal pool.
@@ -1370,6 +1371,17 @@ class Flowsheet:
         self._refuse_unaddable(transmitter)
         # Check the controller's tag against the pending transmitter.
         self._refuse_unaddable(controller, alongside=(transmitter,))
+        if isinstance(acting_on, Port) and acting_on.role != "signal":
+            owner = acting_on.owner
+            signals = [_spell(p) for p in owner.ports.values() if p.role == "signal"]
+            choices = ([owner.name] if len(signals) == 1 else []) + signals
+            raise ValueError(
+                f"acting_on={_spell(acting_on)} is a process connection, and "
+                f"acting_on= takes the final control element or its signal "
+                f"connection: "
+                + (" or ".join(f"acting_on={c}" for c in choices) if choices
+                   else f"{owner.name} has none to drive")
+            )
         pending = (transmitter, controller)
         self._resolve_connection(transmitter.sig_out, controller.sig_in,
                                  kind=measurement_kind, pending=pending)
@@ -1846,8 +1858,46 @@ class Flowsheet:
             if port.stream is not None and not port.owner.has_another_port(port):
                 raise ValueError(
                     f"port {port.owner.name}.{port.name} is already connected"
+                    f"{self._taken(port)}"
                 )
         return src, dst, _inferred_kind(src, dst) if not stated else kind
+
+    def _taken(self, port: "Port") -> str:
+        """Return what already uses a connected port, and what to do.
+
+        Parameters
+        ----------
+        port : Port
+            Connected port.
+
+        Returns
+        -------
+        str
+            Text to append to the refusal, or ``""``.
+        """
+        from pandid.units import Instrument
+
+        stream = port.stream
+        other = stream.dest if stream is not None and stream.source is port else (
+            stream.source if stream is not None else None)
+        # A station pipes its members to each other.
+        station = next((a.station for a in self._station_assemblies
+                        if port.owner in a.station.members and other is not None
+                        and other.owner in a.station.members), None)
+        if station is not None and port.role != "signal":
+            end = "inlet" if port.direction == "inlet" else "outlet"
+            return (f": it is inside valve station {station.control.name}, which "
+                    f"pipes it. Connect to the station's own {end}, station.{end}, "
+                    f"where station is what add_valve_station("
+                    f"{station.control.name!r}) returned")
+        if port.role != "signal" or stream is None or stream.dest is not port:
+            return ""
+        driver = stream.source.owner
+        if not isinstance(driver, Instrument):
+            return f": {driver.name} drives it"
+        return (f": {driver.name} drives it, and it takes one controller output. "
+                f"For cascade control, have the new controller set {driver.name}'s "
+                f"set point instead: add_control_loop(..., acting_on={driver.name})")
 
     @classmethod
     def from_dict(cls, spec: dict) -> "Flowsheet":

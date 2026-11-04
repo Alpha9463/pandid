@@ -58,7 +58,20 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
         raise ValueError("on= cannot replace an existing inline position")
     segments = line._logical_segments or [line]
     if any(s.draw_as_recycle or s.is_recycle for s in segments):
-        raise ValueError("on= cannot split a recycle line")
+        flagged = any(s.draw_as_recycle for s in segments)
+        source, dest = _ends(segments)
+        raise ValueError(
+            f"on= cannot split {line.name}: it "
+            + ("is marked draw_as_recycle=True, and a split line would leave one "
+               "part without that mark" if flagged else
+               "is the recycle line the last render drew to close a cycle")
+            + f". Pipe the device in with two connect() calls in place of the one "
+            f"that drew {line.name}, keeping its other arguments: "
+            f"fs.connect({source}, <device>.inlet"
+            + (", draw_as_recycle=True" if flagged else "")
+            + f") and fs.connect(<device>.outlet, {dest})"
+            + _carried(fs, line, segments)
+        )
     if any(s.route is not None and s.route.manual for s in segments):
         raise ValueError("on= cannot split a manual route")
     if any(s.ends is not None for s in segments):
@@ -70,6 +83,58 @@ def split_point(fs: Flowsheet, line: Stream, at: float | None) -> tuple[list[Str
         raise ValueError("inline positions must be distinct")
     return segments, next((i for i, value in enumerate(stated)
                            if value is not None and value > at), len(stated))
+
+
+def _ends(segments: list[Stream]) -> tuple[str, str]:
+    """Return a line's source and destination as ``connect()`` took them.
+
+    Parameters
+    ----------
+    segments : list[Stream]
+        The line's physical segments in flow order.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``unit.port`` where the line starts and ends, naming a pool
+        member by its pool.
+    """
+    source, dest = (f"{p.owner.name}.{p.owner._pool_of(p.name) or p.name}"
+                    for p in (segments[0].source, segments[-1].dest))
+    return source, dest
+
+
+def _carried(fs: Flowsheet, line: Stream, segments: list[Stream]) -> str:
+    """Return a sentence listing what a line carries, to put back.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet that owns the line.
+    line : Stream
+        Line handle.
+    segments : list[Stream]
+        The line's physical segments in flow order.
+
+    Returns
+    -------
+    str
+        The devices and valve stations on the line in flow order, then
+        the balloons on it or its parts; ``""`` when it carries none.
+    """
+    from pandid.units import Instrument
+
+    devices = [next((f"valve station {a.station.control.name}" for a in fs._station_assemblies
+                     if a.station.inlet is s.dest), s.dest.owner.name)
+               for s in segments[:-1]]
+    balloons = [u.name for u in fs.units
+                if isinstance(u, Instrument) and any(u.host is s for s in segments)]
+    items = ([", ".join(devices) + (" (in flow order)" if len(devices) > 1 else "")]
+             if devices else []) + balloons
+    if not items:
+        return ""
+    listed = " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
+    return f". Then put back what {line.name} carries, each where it sits now: {listed}"
 
 
 def position(segment: Stream) -> float | None:
@@ -165,6 +230,19 @@ def insert_device(fs: Flowsheet, line: Stream, device: _UnitT, *,
         If the line, device or fraction cannot be used.
     """
     segments, index = split_point(fs, line, at)
+    if isinstance(device, Unit) and device.kind == "tee":
+        source, dest = _ends(segments)
+        tee = device.name
+        branch = (f"fs.connect({tee}.branch, ...)"
+                  if device.ports["branch"].direction == "outlet"
+                  else f"fs.connect(..., {tee}.branch)")
+        raise ValueError(
+            f"on= cannot put a tee in a line: its branch needs a line of its own. "
+            f"Draw {line.name} through {tee} with connect() calls in place of the one "
+            f"that drew {line.name}, keeping its other arguments: "
+            f"fs.connect({source}, {tee}.inlet), fs.connect({tee}.outlet, {dest}) "
+            f"and {branch}" + _carried(fs, line, segments)
+        )
     if not isinstance(device, Unit) or device.kind not in _INLINE_KINDS:
         raise ValueError("on= puts a valve, reducer or fitting in a line")
     ports = device.ports
