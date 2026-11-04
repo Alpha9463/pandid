@@ -2044,10 +2044,10 @@ class Flowsheet:
         from balloons kept off the line their chain taps, kept only if no
         tap leaves its line and no finding or clash grows. Where the result
         has a tap off its line that was on it before hanging, the sheet is
-        placed as if no controller could hang. Each balloon nozzle a unit
-        blocks is then turned to the cheapest clear face with which the
-        routed sheet takes no tap off its line and grows no finding or
-        clash. Where the result draws a
+        placed as if no controller could hang. Each balloon nozzle where a
+        unit blocks a line the router could not route is then turned to the
+        cheapest clear face with which the routed sheet takes no tap off
+        its line and grows no finding or clash. Where the result draws a
         line along a unit or across an arrowhead, the sheet is routed again
         pricing both, with each unfaced balloon on equipment on a free face,
         kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
@@ -2147,9 +2147,9 @@ class Flowsheet:
                 turn()
 
         def turn() -> None:
-            """Turn each balloon nozzle a unit blocks to the cheapest clear
-            face with which the sheet, routed again, takes no tap off its
-            line and grows no finding or clash."""
+            """Turn each blocked balloon nozzle to the cheapest clear face
+            with which the sheet, routed again, takes no tap off its line
+            and grows no finding or clash."""
             for unit, name in blocked_nozzles(self):
                 for face in clear_faces(self, unit, name):
                     prior = self._geometry()

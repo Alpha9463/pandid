@@ -60,12 +60,10 @@ def select_faces(fs: "Flowsheet") -> None:
 
 
 def blocked_nozzles(fs: "Flowsheet") -> list[tuple["Unit", str]]:
-    """Return the balloon nozzles a unit blocks that may turn.
+    """Return the blocked balloon nozzles that may turn.
 
-    A nozzle is blocked when its outward stub crosses the body of a
-    unit other than its own and its line's other end, or another
-    unit's tag halo. It may turn when its line is drawn automatically
-    and neither ``nozzle()`` nor a pin names its face.
+    A nozzle may turn when neither ``nozzle()`` nor a pin names its
+    face.
 
     Parameters
     ----------
@@ -75,7 +73,7 @@ def blocked_nozzles(fs: "Flowsheet") -> list[tuple["Unit", str]]:
     Returns
     -------
     list[tuple[Unit, str]]
-        Each balloon and the name of its blocked nozzle.
+        Each balloon and the name of a nozzle :func:`_blocked` holds for.
     """
     from pandid.layout.stages import is_control
     from pandid.portgeom import pin_intent
@@ -84,17 +82,11 @@ def blocked_nozzles(fs: "Flowsheet") -> list[tuple["Unit", str]]:
         return []
     out = []
     for unit in fs.units:
-        frame = unit.frame
-        if frame is None or not is_control(unit):
+        if not is_control(unit):
             continue
         fixed = {*unit._port_faces, *(port for port, _ in pin_intent(unit).values())}
-        for name, port in unit.ports.items():
-            stream = port.stream
-            if (name in fixed or stream is None or stream.route is None
-                    or stream.route.manual or _reference(port) is None):
-                continue
-            if not _clear(unit, frame, name, _blocking(fs, port)):
-                out.append((unit, name))
+        out += [(unit, name) for name in unit.ports
+                if name not in fixed and _blocked(fs, unit, name)]
     return out
 
 
@@ -113,8 +105,9 @@ def clear_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> list[str]:
     Returns
     -------
     list[str]
-        Faces clear of what :func:`blocked_nozzles` tests, on no point
-        another line on the balloon takes, in :func:`_best` order.
+        Faces clear of what :func:`_blocking` returns, on no point
+        another line on the balloon takes, in :func:`_best` order;
+        none if the nozzle is not blocked.
     """
     from dataclasses import replace
 
@@ -123,7 +116,7 @@ def clear_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> list[str]:
     frame = unit.frame
     port = unit.ports[port_name]
     target = _reference(port)
-    if frame is None or target is None:
+    if frame is None or target is None or not _blocked(fs, unit, port_name):
         return []
     blocking = _blocking(fs, port)
     menu = [face for face in port_faces(unit, port_name, frame) if _clear(
@@ -137,6 +130,31 @@ def clear_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> list[str]:
         order.append(face)
         menu.remove(face)
     return order
+
+
+def _blocked(fs: "Flowsheet", unit: "Unit", port_name: str) -> bool:
+    """Return whether the router gave up on a line at a blocked nozzle.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    unit : Unit
+        Unit owning the nozzle.
+    port_name : str
+        Nozzle to test.
+
+    Returns
+    -------
+    bool
+        True if the nozzle's automatic line takes the fallback path and
+        its outward stub enters a box :func:`_blocking` returns.
+    """
+    port = unit.ports[port_name]
+    route = port.stream.route if port.stream is not None else None
+    if unit.frame is None or route is None or route.manual or not route.used_fallback:
+        return False
+    return not _clear(unit, unit.frame, port_name, _blocking(fs, port))
 
 
 def _blocking(fs: "Flowsheet", port: "Port") -> list[tuple[float, float, float, float]]:
