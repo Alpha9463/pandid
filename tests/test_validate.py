@@ -882,6 +882,50 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
     assert len(members) == size
 
 
+# --- material crossing an exchanger's sides -----------------------------------
+
+
+def _exchanger(variant: str, *piped: str) -> Flowsheet:
+    """Build E-101 with a feed on each piped inlet and a product on each piped outlet."""
+    fs = Flowsheet("exchanger")
+    hx = fs.add(U.HeatExchanger("E-101", variant=variant))
+    for name in piped:
+        port = hx.port(name)
+        if port.direction == "inlet":
+            fs.connect(fs.add(U.Feed(f"F-{name}")).outlet, port)
+        else:
+            fs.connect(port, fs.add(U.Product(f"P-{name}")).inlet)
+    return fs
+
+
+@pytest.mark.parametrize(
+    ("variant", "fed", "drained", "a_out", "b_in"),
+    [
+        ("default", "shell_in", "tube_out", "shell_out", "tube_in"),
+        ("plate", "side_a_in", "side_b_out", "side_a_out", "side_b_in"),
+    ],
+)
+def test_material_crossing_an_exchangers_sides_is_reported(
+    variant: str, fed: str, drained: str, a_out: str, b_in: str
+):
+    """Check that a feed on one side and an outlet on the other is reported once."""
+    (issue,) = _found(_exchanger(variant, fed, drained), "exchanger-sides-crossed")
+    assert issue.severity == "warning"
+    assert issue.message.startswith(f"E-101 is fed at {fed} and drained at {drained}")
+    assert f"fs.connect(E-101.{a_out}, P-{drained}.inlet)" in issue.message
+    assert f"fs.connect(F-{fed}.outlet, E-101.{b_in})" in issue.message
+
+
+@pytest.mark.parametrize(
+    "piped",
+    [("shell_in", "shell_out", "tube_in", "tube_out"), ("tube_in", "tube_out")],
+    ids=["both sides", "tube side only"],
+)
+def test_an_exchanger_piped_side_by_side_is_not_reported(piped: tuple[str, ...]):
+    """Check that each side carrying its own material is not reported."""
+    assert _found(_exchanger("default", *piped), "exchanger-sides-crossed") == []
+
+
 # --- nozzles crowded under their own arrowheads -------------------------------
 
 
