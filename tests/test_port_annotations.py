@@ -145,6 +145,29 @@ _EXACT_ARITY = {
 _MAX_ARITY = 8
 
 
+def _parsed(module):
+    """Return the syntax tree of ``module``'s source."""
+    return ast.parse(pathlib.Path(module.__file__).read_text(encoding="utf-8"))
+
+
+def view_nozzles(module):
+    """Return each typed view in ``module`` and the nozzles its mixin declares."""
+    mixins = {}
+    for node in ast.walk(_parsed(units)):
+        if isinstance(node, ast.ClassDef) and node.name.startswith("_"):
+            own = {
+                stmt.target.id
+                for stmt in node.body
+                if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+            }
+            mixins[node.name] = own.union(*(mixins.get(ast.unparse(b), ()) for b in node.bases))
+    return {
+        node.name: mixins[ast.unparse(node.bases[1])]
+        for node in ast.walk(_parsed(module))
+        if isinstance(node, ast.ClassDef) and len(node.bases) == 2
+    }
+
+
 def _arity_families():
     """Return ``_EXACT_ARITY`` flattened to one row per (class, family)."""
     return [
@@ -156,7 +179,7 @@ def _arity_families():
 
 def _classes_with_a_visible_getattr():
     """Return every class in ``units.py`` defining ``__getattr__`` under ``TYPE_CHECKING``."""
-    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    tree = _parsed(units)
     out = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
@@ -187,16 +210,7 @@ def test_only_these_classes_answer_for_a_numbered_nozzle():
 )
 def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls, keyword, member, suffix):
     """Check that a literal count gets a class declaring exactly those nozzles."""
-    module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
-    declared = {
-        node.name: {
-            stmt.target.id
-            for stmt in node.body
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-        }
-        for node in ast.walk(module)
-        if isinstance(node, ast.ClassDef)
-    }
+    declared = view_nozzles(units)
     for n in range(1, _MAX_ARITY + 1):
         name = f"{cls.__name__}{suffix}{n}"
         assert name in declared, f"{name} is not defined; the overload names it"
@@ -216,7 +230,7 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls, keywo
 
 def test_no_arity_class_is_left_over(cls=None):
     """Check that no arity class is left over."""
-    module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    module = _parsed(units)
     expected = {
         f"{cls.__name__}{suffix}{n}"
         for cls, keyword, member, suffix in _arity_families()
@@ -241,7 +255,7 @@ def test_the_run_time_getattr_stays_hidden_from_checkers():
     assert "__getattr__" in vars(units.Unit)
 
     # And it must be the ``if not TYPE_CHECKING`` one.
-    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    tree = _parsed(units)
     guarded = [
         node.name
         for node in ast.walk(tree)
