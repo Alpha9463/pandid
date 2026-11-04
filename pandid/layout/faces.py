@@ -59,6 +59,149 @@ def select_faces(fs: "Flowsheet") -> None:
             taken.add(_point(unit, frame, name))
 
 
+def blocked_nozzles(fs: "Flowsheet") -> list[tuple["Unit", str]]:
+    """Return the balloon nozzles a unit blocks that may turn.
+
+    A nozzle is blocked when its outward stub crosses the body of a
+    unit other than its own and its line's other end, or another
+    unit's tag halo. It may turn when its line is drawn automatically
+    and neither ``nozzle()`` nor a pin names its face.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+
+    Returns
+    -------
+    list[tuple[Unit, str]]
+        Each balloon and the name of its blocked nozzle.
+    """
+    from pandid.layout.stages import is_control
+    from pandid.portgeom import pin_intent
+
+    if not fs.auto_faces:
+        return []
+    out = []
+    for unit in fs.units:
+        frame = unit.frame
+        if frame is None or not is_control(unit):
+            continue
+        fixed = {*unit._port_faces, *(port for port, _ in pin_intent(unit).values())}
+        for name, port in unit.ports.items():
+            stream = port.stream
+            if (name in fixed or stream is None or stream.route is None
+                    or stream.route.manual or _reference(port) is None):
+                continue
+            if not _clear(unit, frame, name, _blocking(fs, port)):
+                out.append((unit, name))
+    return out
+
+
+def clear_faces(fs: "Flowsheet", unit: "Unit", port_name: str) -> list[str]:
+    """Return the faces a blocked nozzle may turn to, cheapest first.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Routed sheet.
+    unit : Unit
+        Balloon owning the nozzle.
+    port_name : str
+        Nozzle to turn.
+
+    Returns
+    -------
+    list[str]
+        Faces clear of what :func:`blocked_nozzles` tests, on no point
+        another line on the balloon takes, in :func:`_best` order.
+    """
+    from dataclasses import replace
+
+    from pandid.portgeom import port_faces
+
+    frame = unit.frame
+    port = unit.ports[port_name]
+    target = _reference(port)
+    if frame is None or target is None:
+        return []
+    blocking = _blocking(fs, port)
+    menu = [face for face in port_faces(unit, port_name, frame) if _clear(
+        unit, replace(frame, port_faces={**frame.port_faces, port_name: face}),
+        port_name, blocking)]
+    taken = {_point(unit, frame, name) for name, other in unit.ports.items()
+             if other.stream is not None and name != port_name}
+    order: list[str] = []
+    while (face := _best(unit, replace(frame, port_faces=dict(frame.port_faces)),
+                         port_name, menu, target, taken)) is not None:
+        order.append(face)
+        menu.remove(face)
+    return order
+
+
+def _blocking(fs: "Flowsheet", port: "Port") -> list[tuple[float, float, float, float]]:
+    """Return the boxes a balloon nozzle's outward stub must miss.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Sheet with placed units.
+    port : Port
+        Connected nozzle.
+
+    Returns
+    -------
+    list[tuple[float, float, float, float]]
+        Bodies of units other than its own and its line's other end,
+        and tag halos of units other than its own.
+    """
+    from pandid.portgeom import unit_box
+    from pandid.routing.visibility import _tag_halo
+
+    stream = port.stream
+    assert stream is not None
+    far = (stream.dest if stream.source is port else stream.source).owner
+    out = []
+    for u in fs.units:
+        if u.frame is None or u is port.owner:
+            continue
+        if u is not far:
+            out.append(unit_box(u, u.frame))
+        halo = _tag_halo(u, u.frame)
+        if halo is not None:
+            out.append((halo.x_min, halo.y_min, halo.x_max, halo.y_max))
+    return out
+
+
+def _clear(unit: "Unit", frame, port_name: str,
+           boxes: list[tuple[float, float, float, float]]) -> bool:
+    """Return whether a port's outward stub misses every box.
+
+    Parameters
+    ----------
+    unit : Unit
+        Unit owning the port.
+    frame : Frame
+        The unit's frame, with the face to test.
+    port_name : str
+        Port to test.
+    boxes : list[tuple[float, float, float, float]]
+        Boxes as left, top, right, bottom.
+
+    Returns
+    -------
+    bool
+        True if the stub, :data:`MIN_ESCAPE` long, enters no box.
+    """
+    from pandid.layout.conflicts import segment_crosses_box
+    from pandid.portgeom import face_point, resolve_port
+
+    _, anchor, landed = resolve_port(unit, frame, port_name)
+    normal = face_point(unit, frame, landed)[1]
+    tip = (anchor[0] + MIN_ESCAPE * normal[0], anchor[1] + MIN_ESCAPE * normal[1])
+    return not any(segment_crosses_box(anchor, tip, box) for box in boxes)
+
+
 def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
                   menu: list[str]) -> list[str]:
     """Return the clear faces, dropping any that add bends.
@@ -87,8 +230,7 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
         Usable faces, in menu order.
     """
     from pandid.layout.attach import is_attached
-    from pandid.layout.conflicts import segment_crosses_box
-    from pandid.portgeom import face_point, port_faces, resolve_port, unit_box
+    from pandid.portgeom import port_faces, resolve_port, unit_box
     from pandid.routing.metrics import min_bends
 
     port = unit.ports[port_name]
@@ -112,11 +254,9 @@ def _usable_faces(fs: "Flowsheet", unit: "Unit", frame, port_name: str,
     bends: dict[str, int | None] = {}
     for face in menu:
         frame.port_faces[port_name] = face
-        _, anchor, landed = resolve_port(unit, frame, port_name)
-        normal = face_point(unit, frame, landed)[1]
-        tip = (anchor[0] + MIN_ESCAPE * normal[0], anchor[1] + MIN_ESCAPE * normal[1])
-        if not any(segment_crosses_box(anchor, tip, box) for box in boxes):
+        if _clear(unit, frame, port_name, boxes):
             clear.append(face)
+        _, anchor, landed = resolve_port(unit, frame, port_name)
         bends[face] = (
             None if fixed_peer is None
             else min_bends(anchor, landed, fixed_peer.anchor, fixed_peer.face)

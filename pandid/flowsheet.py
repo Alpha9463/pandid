@@ -2031,7 +2031,10 @@ class Flowsheet:
         from balloons kept off the line their chain taps, kept only if no
         tap leaves its line and no finding or clash grows. Where the result
         has a tap off its line that was on it before hanging, the sheet is
-        placed as if no controller could hang.
+        placed as if no controller could hang. Last, each balloon nozzle
+        a unit blocks is turned to the cheapest clear face with which the
+        routed sheet takes no tap off its line and grows no finding or
+        clash.
 
         Parameters
         ----------
@@ -2053,6 +2056,7 @@ class Flowsheet:
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
+        from pandid.layout.faces import blocked_nozzles, clear_faces
 
         def place() -> None:
             """Place balloons and re-route until nothing moves."""
@@ -2116,6 +2120,24 @@ class Flowsheet:
             self._unhang()
             if chained:
                 attempt(may_hang=False, keep_clear=True)
+        # Turn each balloon nozzle a unit blocks to the cheapest clear face
+        # that takes no tap off its line and grows no finding or clash.
+        for unit, name in blocked_nozzles(self) if tries else []:
+            for face in clear_faces(self, unit, name):
+                prior = self._geometry()
+                before, off = _flaws(self), _taps_off(self)
+                assert unit.frame is not None
+                unit.frame.port_faces[name] = face
+                try:
+                    router.route(self)
+                    kept = _taps_off(self) <= off and not any(
+                        n > before[k] for k, n in _flaws(self).items())
+                except Exception:
+                    kept = False
+                if kept:
+                    self._unhung = self._unhung or prior
+                    break
+                self._put_geometry(prior, keep_manual=False)
         self._route_stale = False
 
     def _geometry(self) -> tuple:
