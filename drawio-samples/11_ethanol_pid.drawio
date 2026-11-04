@@ -797,19 +797,23 @@
           <mxGeometry x="0" y="139.59" width="85.87" height="19.08" as="geometry" />
         </mxCell>
         <mxCell id="u1" value="C-301" style="html=1;shape=mxgraph.pid.heat_exchangers.heat_exchanger_(straight_tubes);outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="922.2" y="455.11" width="111.64" height="34.35" as="geometry" />
+          <mxGeometry x="922.2" y="455.11" width="111.64" height="34.35" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u2" value="D-301" style="html=1;shape=mxgraph.pid.vessels.drum_or_condenser;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=1.71746;labelPosition=left;align=right;verticalLabelPosition=middle;verticalAlign=middle;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="925.71" y="515.22" width="111.64" height="36.07" as="geometry" />
+          <mxGeometry x="925.71" y="515.22" width="111.64" height="36.07" as="geometry">
+            <mxPoint x="-6.59" y="0" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u3" value="RB-301" style="html=1;shape=mxgraph.pid.heat_exchangers.reboiler;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="656" y="772.84" width="120.22" height="42.94" as="geometry">
-            <mxPoint x="-5.15" y="0" as="offset" />
+            <mxPoint x="-5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u4" value="HX-301" style="html=1;shape=mxgraph.pid.heat_exchangers.heat_exchanger_(straight_tubes);outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="999.49" y="893.06" width="111.64" height="34.35" as="geometry">
-            <mxPoint x="-5.15" y="0" as="offset" />
+            <mxPoint x="-5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u5" value="Fermentation Broth&lt;br&gt;P&amp;amp;ID-201" style="html=1;shape=offPageConnector;size=0.11303;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=9.30292;" vertex="1" parent="1">
@@ -840,22 +844,34 @@
           <mxGeometry x="1377.33" y="954.89" width="99.07" height="22.33" as="geometry" />
         </mxCell>
         <mxCell id="u14" value="XV-301" style="html=1;shape=mxgraph.pid.valves.solenoid_valve_closed;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipV=1;" vertex="1" parent="1">
-          <mxGeometry x="269.57" y="616.29" width="21.04" height="19.06" as="geometry" />
+          <mxGeometry x="269.57" y="616.29" width="21.04" height="19.06" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u15" value="FE-313" style="html=1;shape=mxgraph.pid.valves.rotameter;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="355.44" y="616.12" width="16.14" height="12.88" as="geometry" />
+          <mxGeometry x="355.44" y="616.12" width="16.14" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u16" value="CV-306" style="html=1;shape=mxgraph.pid.valves.pneumatic_operated;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipV=1;" vertex="1" parent="1">
-          <mxGeometry x="827.74" y="835.18" width="21.04" height="17" as="geometry" />
+          <mxGeometry x="827.74" y="835.18" width="21.04" height="17" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u17" value="NRV-306" style="html=1;shape=mxgraph.pid.valves.check_valve_1;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="913.01" y="834.84" width="21.12" height="13.31" as="geometry" />
+          <mxGeometry x="913.01" y="834.84" width="21.12" height="13.31" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u18" value="HV-311" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="329.68" y="465.84" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="329.68" y="465.84" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u19" value="HV-315" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="329.68" y="903.79" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="329.68" y="903.79" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u20" value="" style="html=1;shape=mxgraph.pid.flow_sensors.venturi;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
           <mxGeometry x="585.15" y="644.03" width="21.47" height="17.17" as="geometry" />
@@ -870,30 +886,44 @@
           <mxGeometry x="1003.52" y="647.46" width="10.3" height="10.3" as="geometry" />
         </mxCell>
         <mxCell id="u24" value="CV-301-1" style="html=1;shape=mxgraph.pid.valves.pneumatic_operated;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="792.11" y="375.76" width="21.04" height="17" as="geometry" />
+          <mxGeometry x="792.11" y="375.76" width="21.04" height="17" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u25" value="HV-301A" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="672.74" y="379.97" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="672.74" y="379.97" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u26" value="HV-301B" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="911.47" y="379.97" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="911.47" y="379.97" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u27" value="HV-301C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="750.46" y="341.32" width="21.04" height="12.88" as="geometry">
-            <mxPoint x="-5.15" y="0" as="offset" />
+            <mxPoint x="-5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u28" value="HV-301D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="718.25" y="417.32" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="718.25" y="417.32" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u29" value="HV-301E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="874.11" y="417.32" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="874.11" y="417.32" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u30" value="RD-301A" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="755.61" y="381.08" width="10.73" height="10.73" as="geometry" />
+          <mxGeometry x="755.61" y="381.08" width="10.73" height="10.73" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u31" value="RD-301B" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
-          <mxGeometry x="838.91" y="381.08" width="10.73" height="10.73" as="geometry" />
+          <mxGeometry x="838.91" y="381.08" width="10.73" height="10.73" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u32" value="" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=none;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=10.3048;flipV=1;" vertex="1" parent="1">
           <mxGeometry x="636.67" y="381.26" width="10.3" height="10.3" as="geometry" />
@@ -908,28 +938,44 @@
           <mxGeometry x="875.4" y="381.26" width="10.3" height="10.3" as="geometry" />
         </mxCell>
         <mxCell id="u36" value="CV-303" style="html=1;shape=mxgraph.pid.valves.pneumatic_operated;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
-          <mxGeometry x="787.81" y="641.97" width="21.04" height="17" as="geometry" />
+          <mxGeometry x="787.81" y="641.97" width="21.04" height="17" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u37" value="HV-303A" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
-          <mxGeometry x="907.18" y="646.17" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="907.18" y="646.17" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u38" value="HV-303B" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
-          <mxGeometry x="668.45" y="646.17" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="668.45" y="646.17" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u39" value="HV-303C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
-          <mxGeometry x="829.46" y="607.53" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="829.46" y="607.53" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u40" value="HV-303D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="869.82" y="683.53" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="869.82" y="683.53" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u41" value="HV-303E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="713.96" y="683.53" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="713.96" y="683.53" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u42" value="RD-303A" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
-          <mxGeometry x="834.61" y="647.29" width="10.73" height="10.73" as="geometry" />
+          <mxGeometry x="834.61" y="647.29" width="10.73" height="10.73" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u43" value="RD-303B" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="751.32" y="647.29" width="10.73" height="10.73" as="geometry" />
+          <mxGeometry x="751.32" y="647.29" width="10.73" height="10.73" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u44" value="" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=none;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=10.3048;flipH=1;flipV=1;" vertex="1" parent="1">
           <mxGeometry x="953.98" y="647.46" width="10.3" height="10.3" as="geometry" />
@@ -944,33 +990,43 @@
           <mxGeometry x="715.25" y="647.46" width="10.3" height="10.3" as="geometry" />
         </mxCell>
         <mxCell id="u48" value="CV-305" style="html=1;shape=mxgraph.pid.valves.pneumatic_operated;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="1167.8" y="702.08" width="21.04" height="17" as="geometry" />
+          <mxGeometry x="1167.8" y="702.08" width="21.04" height="17" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u49" value="HV-305A" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="1069.05" y="706.29" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="1069.05" y="706.29" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u50" value="HV-305B" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="1266.55" y="706.29" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="1266.55" y="706.29" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u51" value="HV-305C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="1133.02" y="667.64" width="21.04" height="12.88" as="geometry">
-            <mxPoint x="-5.15" y="0" as="offset" />
+            <mxPoint x="-5.15" y="-0.56" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u52" value="HV-305D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="1107.69" y="743.64" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="1107.69" y="743.64" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u53" value="HV-305E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="1236.07" y="743.64" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="1236.07" y="743.64" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u54" value="RD-305A" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="1138.17" y="707.4" width="10.73" height="10.73" as="geometry">
-            <mxPoint x="-5.15" y="0" as="offset" />
+            <mxPoint x="-5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u55" value="RD-305B" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
           <mxGeometry x="1207.73" y="707.4" width="10.73" height="10.73" as="geometry">
-            <mxPoint x="5.15" y="0" as="offset" />
+            <mxPoint x="5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u56" value="" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=none;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=10.3048;flipV=1;" vertex="1" parent="1">
@@ -986,32 +1042,44 @@
           <mxGeometry x="1237.36" y="707.57" width="10.3" height="10.3" as="geometry" />
         </mxCell>
         <mxCell id="u60" value="CV-308" style="html=1;shape=mxgraph.pid.valves.pneumatic_operated;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="397.09" y="791.46" width="21.04" height="17" as="geometry" />
+          <mxGeometry x="397.09" y="791.46" width="21.04" height="17" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u61" value="HV-308A" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="277.73" y="795.67" width="21.04" height="12.88" as="geometry" />
+          <mxGeometry x="277.73" y="795.67" width="21.04" height="12.88" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u62" value="HV-308B" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="516.45" y="795.67" width="21.04" height="12.88" as="geometry">
-            <mxPoint x="5.15" y="0" as="offset" />
+            <mxPoint x="5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u63" value="HV-308C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="516.45" y="757.03" width="21.04" height="12.88" as="geometry">
-            <mxPoint x="5.15" y="0" as="offset" />
+            <mxPoint x="5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="u64" value="HV-308D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="323.24" y="833.03" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="323.24" y="833.03" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u65" value="HV-308E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
-          <mxGeometry x="479.1" y="833.03" width="12.88" height="21.04" as="geometry" />
+          <mxGeometry x="479.1" y="833.03" width="12.88" height="21.04" as="geometry">
+            <mxPoint x="0" y="-0.56" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u66" value="RD-308A" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
-          <mxGeometry x="360.59" y="796.79" width="10.73" height="10.73" as="geometry" />
+          <mxGeometry x="360.59" y="796.79" width="10.73" height="10.73" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u67" value="RD-308B" style="html=1;shape=mxgraph.pid.piping.concentric_reducer;outlineConnect=0;strokeColor=#111;fillColor=#ffffff;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
-          <mxGeometry x="443.89" y="796.79" width="10.73" height="10.73" as="geometry" />
+          <mxGeometry x="443.89" y="796.79" width="10.73" height="10.73" as="geometry">
+            <mxPoint x="0" y="-3.01" as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="u68" value="" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=none;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=10.3048;flipV=1;" vertex="1" parent="1">
           <mxGeometry x="241.66" y="796.96" width="10.3" height="10.3" as="geometry" />
@@ -1689,7 +1757,7 @@
         </mxCell>
         <mxCell id="s53" value="AE-304-150-80-SS" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.25;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.218579;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1.71746;endArrow=none;startArrow=none;labelBackgroundColor=#ffffff;verticalAlign=middle;align=center;fontSize=8.58731;horizontal=0;" edge="1" parent="1" source="u1" target="u2">
           <mxGeometry relative="1" as="geometry" x="1">
-            <mxPoint x="-76" y="7.73" as="offset" />
+            <mxPoint x="-76" y="2.58" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="s53f00" value="" style="shape=line;rotation=180;strokeColor=#000000;strokeWidth=0.858731;fillColor=none;html=1;resizable=0;movable=1;" vertex="1" connectable="0" parent="s53">
@@ -1714,13 +1782,13 @@
         </mxCell>
         <mxCell id="s53-lead" value="" style="edgeStyle=none;rounded=0;html=1;startArrow=none;endArrow=block;endFill=1;endSize=5.15239;strokeColor=#000000;strokeWidth=0.858731;movable=1;noJump=1;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="879.7" y="524.58" as="sourcePoint" />
+            <mxPoint x="879.7" y="520.59" as="sourcePoint" />
             <mxPoint x="950.11" y="500.19" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="s54" value="CWS-311-150-40-CS" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1.71746;endArrow=none;startArrow=none;labelBackgroundColor=#ffffff;verticalAlign=middle;align=center;fontSize=8.58731;" edge="1" parent="1" source="u6" target="u18">
-          <mxGeometry relative="1" as="geometry" x="0">
-            <mxPoint x="0" y="20.18" as="offset" />
+          <mxGeometry relative="1" as="geometry" x="-0.1">
+            <mxPoint x="0" y="-9.02" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="s54f00" value="" style="shape=line;rotation=270;strokeColor=#000000;strokeWidth=0.858731;fillColor=none;html=1;resizable=0;movable=1;" vertex="1" connectable="0" parent="s54">
@@ -1789,8 +1857,8 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="s57" value="AE-309-100-80-SS" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.743169;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1.71746;endArrow=none;startArrow=none;labelBackgroundColor=#ffffff;verticalAlign=middle;align=center;fontSize=8.58731;horizontal=0;" edge="1" parent="1" source="u2" target="u23">
-          <mxGeometry relative="1" as="geometry" x="0">
-            <mxPoint x="-20.18" y="0" as="offset" />
+          <mxGeometry relative="1" as="geometry" x="0.107143">
+            <mxPoint x="-9.02" y="0" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="s57f00" value="" style="shape=line;rotation=180;strokeColor=#000000;strokeWidth=0.858731;fillColor=none;html=1;resizable=0;movable=1;" vertex="1" connectable="0" parent="s57">
@@ -1994,11 +2062,11 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="s70" value="FB-306-100-160-SS" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.928962;exitY=0.909091;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.626263;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1.71746;endArrow=none;startArrow=none;labelBackgroundColor=#ffffff;verticalAlign=middle;align=center;fontSize=8.58731;" edge="1" parent="1" source="u3" target="u16">
-          <mxGeometry relative="1" as="geometry" x="1">
+          <mxGeometry relative="1" as="geometry" x="0.904821">
             <Array as="points">
               <mxPoint x="767.68" y="841.54" />
             </Array>
-            <mxPoint x="0.88" y="-31.34" as="offset" />
+            <mxPoint x="0" y="-31.34" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="s70f00" value="" style="shape=line;rotation=180;strokeColor=#000000;strokeWidth=0.858731;fillColor=none;html=1;resizable=0;movable=1;" vertex="1" connectable="0" parent="s70">
@@ -2090,8 +2158,8 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="s74" value="CWS-315-100-40-CS" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1.71746;endArrow=none;startArrow=none;labelBackgroundColor=#ffffff;verticalAlign=middle;align=center;fontSize=8.58731;" edge="1" parent="1" source="u8" target="u19">
-          <mxGeometry relative="1" as="geometry" x="0">
-            <mxPoint x="0" y="20.18" as="offset" />
+          <mxGeometry relative="1" as="geometry" x="-0.1">
+            <mxPoint x="0" y="-9.02" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="s74f00" value="" style="shape=line;rotation=270;strokeColor=#000000;strokeWidth=0.858731;fillColor=none;html=1;resizable=0;movable=1;" vertex="1" connectable="0" parent="s74">
