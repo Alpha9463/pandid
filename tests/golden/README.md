@@ -11,9 +11,8 @@ These five fixtures provide exact-output coverage for distinct drawing modes:
 `tests/test_golden.py` compares each current render to its fixture. The gallery
 documents runnable examples and is regenerated after output changes.
 
-SVGs are normalized with `tests/_svg_compare.py` before comparison. The
-normalizer sorts `<defs>` and removes renderer provenance so hash-seed and
-version metadata do not change a fixture.
+The comparison empties the fenced renderer provenance, so a version bump does
+not change a fixture.
 
 ## Regenerating
 

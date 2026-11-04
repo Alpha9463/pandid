@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standoff, unless that adds a finding or a clash.
 - **The alumina refinery example draws three sheets (#622).** Its areas are
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
+- **`to_svg()` writes its `<defs>` entries in id order (#646).** The drawing
+  is unchanged, but a saved SVG may list its markers and symbols in a new order.
 
 ### Deprecated
 

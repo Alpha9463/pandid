@@ -7,12 +7,13 @@ from pathlib import Path
 import pytest
 
 from _render_cases import SCENARIOS as SCENARIOS, copy_settled_case
-from _svg_compare import normalize as _normalize
 from pandid.document import equipment_list
 from pandid.render.debug import _BOX, _PORT
+from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
+_PROVENANCE = re.compile(f"{re.escape(PROVENANCE_OPEN)}.*?{re.escape(PROVENANCE_CLOSE)}", re.S)
 
 #: Representative manual, PFD, P&ID, BFD, and automatic-layout fixtures.
 GOLDEN_SCENARIOS = (
@@ -46,6 +47,22 @@ def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
     assert copied is not source
     assert source.streams[0].route is not None
     assert source_options.get("diagram") != "pfd"
+
+
+def _normalize(svg: str) -> str:
+    """Empty the fenced provenance block of an SVG document.
+
+    Parameters
+    ----------
+    svg : str
+        SVG document.
+
+    Returns
+    -------
+    str
+        SVG document with only the provenance fences left.
+    """
+    return _PROVENANCE.sub(f"{PROVENANCE_OPEN}\n{PROVENANCE_CLOSE}", svg)
 
 
 def _diff_message(name: str, golden: str, actual: str) -> str:

@@ -306,9 +306,8 @@ nozzles that do own a face, and equipment nozzles are never faceless.
 source, not build output, which is why `.gitignore`'s blanket `*.svg` rule
 carries a `!tests/golden/*.svg` negation.
 
-The comparison uses `normalize` in `tests/_svg_compare.py` to sort `<defs>`
-and remove fenced renderer provenance. Geometry, visible labels and title-block
-fields compare verbatim.
+The comparison empties the fenced renderer provenance, which names the
+package version. Everything else compares verbatim.
 
 After an intentional rendering change:
 
