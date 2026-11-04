@@ -1,11 +1,9 @@
 """
 Example 7: Feed conditioning and metering skid
 
-Exercises the inline fittings and actuated valves: feed is strained,
-pumped, metered through a rotameter, throttled by a motor-operated
-valve, held in a surge vessel protected by a relief valve, and checked
-through a sight glass on the way out. Everything sits on one spine, so
-the runs are straight.
+Feed is strained, pumped, metered through a rotameter, throttled by a
+motor-operated valve, held in a surge vessel with a relief valve, and
+checked through a sight glass on the way out.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -36,10 +34,7 @@ def main():
     prod = fs.add(Product("To Unit 200", reference="PFD-200"))
 
     # --- Placement ----------------------------------------------------
-    # Pinned by nozzle, not by corner: pin(port=...) asks each symbol
-    # where its own nozzle sits. A boundary flag is pinned at its arrow
-    # tip. Two elevations, because the pump's discharge nozzle sits
-    # above its suction.
+    # Pin by nozzle; the pump's discharge sits above its suction.
     suction_y = 300
     discharge_y = 280
 
@@ -47,17 +42,13 @@ def main():
     strainer.pin(port="inlet", x=190, y=suction_y)
     pump.pin(port="suction", x=280, y=suction_y)
     meter.pin(port="inlet", x=430, y=discharge_y)
-    # Flipped so the motor operator faces down, on the controller's
-    # side. A flip moves the ports within the box and the offset is read
-    # after it, so the valve still lands on the run.
+    # Flipped so the motor operator faces down, towards the controller.
     fv.pin(port="inlet", x=540, y=discharge_y, mirrored="y")
     surge.pin(port="inlet", x=680, y=discharge_y)
     glass.pin(port="inlet", x=850, y=discharge_y)
     prod.pin(port="inlet", x=980, y=discharge_y)
 
-    # Two pins: how high the PSV stands is a free choice and stays a
-    # corner, while the axis its riser lands on is read off the vessel's
-    # nozzle.
+    # Pin the PSV's height by its corner and its x by its inlet.
     psv.pin(y=110).pin(port="inlet", x=680 + port_offset(surge, "vent")[0])
     flare.pin(port="inlet", x=900, y=110 + port_offset(psv, "outlet")[1])
 
@@ -73,18 +64,11 @@ def main():
     fs.connect(surge.vent, psv.inlet)
     relief_out = fs.connect(psv.outlet, flare.inlet)
 
-    # Hung below the vessel rather than beside it: the east side is the
-    # outlet run, and an instrument placed into equipment fails
-    # validation. display="central" is ISO 15519-2 Table 1's single bar,
-    # the one that puts the reading in the central control system; the
-    # controller reads the drum's level, so the line between them is drawn.
+    # Level controller below the vessel, in the central control system.
     lic = fs.add_instrument("LIC", 101, sensing=surge, face="S", offset=115,
                             display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
 
-    # The surge vessel only buffers what passes through it, so the feed
-    # and the outlet to Unit 200 carry the same number; the relief line
-    # is open only on overpressure and carries none in normal service.
     feed_in.properties = {"Flow (kg/h)": "8000"}
     product_out.properties = {"Flow (kg/h)": "8000"}
     relief_out.properties = {"Flow (kg/h)": ""}

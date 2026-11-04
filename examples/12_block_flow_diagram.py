@@ -1,34 +1,10 @@
 """
 Example 12: Block flow diagram (pinned)
 
-The drawing a level above the PFD: one labelled box per plant section,
-the streams between them named, and nothing inside them drawn.
-`units.Block` is the only symbol on such a sheet.
-
-**Connections on all four sides.** `inputs=` and `outputs=` are one face
-per connection, in declaration order, so air and steam enter the
-reformer from *above* while the gas comes in from the left. A plain
-count is the shorthand for the usual case: `inputs=1` is one connection
-on the west.
-
-**The box sizes itself.** Nothing here carries a `width` or a `height`.
-Each box is as wide as its own name and as tall as the connections on
-its walls need.
-
-**`order_on`**, the only way to say where a connection sits on a wall.
-
-**The sheet says what it is.** `diagram="bfd"` is the drawing declaring
-its own kind, and it is what keeps `validate()` honest here: a block flow
-diagram answers ISO 10628-1 4.2, so the flow rate a process flow diagram
-must state under 4.3.2 d) is not something this sheet is short of. Left
-unsaid, the sheet was checked as a PFD and reported for a stream table
-its own clause never asked it for -- and a genuine boundary balance here
-would need plant-scale ammonia stoichiometry a block-level drawing does
-not model.
-
-**Why it is pinned.** The layout engine does not yet know that a
-connection on the north face wants its source *above* it, so a BFD left
-to lay itself out sends those streams up and over the sheet.
+One `units.Block` per plant section, sized to its name and connections.
+`inputs=` and `outputs=` give one face per connection (a count puts
+them all on the west or east); `order_on` orders a wall's connections.
+`diagram="bfd"` has `validate()` check the sheet as a block flow diagram.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -40,8 +16,6 @@ def main():
     fs = Flowsheet("Ammonia Plant - Block Flow Diagram")
 
     # --- The sections -------------------------------------------------
-    # One box per section, in a row, at one elevation. Each declares the
-    # side of the box every connection is on; nothing declares a size.
     reforming = fs.add(
         Block("Reforming", inputs=["W", "N", "N"], outputs=["E"])
     ).pin(x=260, y=340)
@@ -51,17 +25,13 @@ def main():
     synthesis = fs.add(
         Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"])
     ).pin(x=830, y=340)
-    # Purge west, recycle east along the loop's south wall. Declaration
-    # order puts inputs first, which would land the recycle left of the
-    # purge and send it back across the sheet to reach its own nozzle.
+    # Purge west of the recycle on the south wall.
     synthesis.order_on("S", [synthesis.out_2, synthesis.in_2])
     refrigeration = fs.add(
         Block("Refrigeration", inputs=1, outputs=["E", "S"])
     ).pin(x=1080, y=340)
 
     # --- Where the sheet ends -----------------------------------------
-    # The two above the row feed the reformer's north wall. The purge
-    # flag hangs under the loop, clear of the recycle's channel.
     natural_gas = fs.add(Feed("Natural Gas")).pin(x=110, y=380)
     air = fs.add(Feed("Air")).pin(x=230, y=205)
     steam = fs.add(Feed("Steam")).pin(x=380, y=205)

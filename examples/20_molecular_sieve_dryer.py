@@ -3,30 +3,9 @@ Example 20: Gas Dehydration A500, two molecular sieve driers as a P&ID
 
 Wet natural gas is dried over 4A molecular sieve before it goes to the
 cold end of an NGL plant. One bed is on line and the other is being
-regenerated, and every eight hours the sequence swaps them: that is the
-whole unit, and it is why there are two of everything on this sheet.
-
-**The two beds are one drawing.** ISO 10628-2 gives an adsorber no
-symbol of its own. What it gives is a dished-end shell and item 27.8
-X8141, the crossed bed, and a molecular sieve is that shell with that
-bed in it -- exactly what a packed catalytic converter is. So
-``DistillationColumn(internals="packing", trays=1)`` here draws the same
-mark that ``Reactor(internals="packing")`` draws in example 18's
-methanol converter, and the only things telling a drier from a
-converter, or bed A from bed B, are the tag and the service. The two
-calls below are written out one under the other, identical but for
-those two, so that the sheet says it rather than the docstring.
-
-Each bed takes four lines and they are the four the switching valves
-route: wet gas **down** through the on-line bed, hot regeneration gas
-**up** through the other. Counter-current regeneration is what puts the
-driest gas last against the bed's outlet end, which is the end the next
-adsorption cycle has to hold on specification. The two return nozzles
-that close a distillation column's reflux and boilup loops close
-nothing here -- a bed has no condenser and no reboiler -- but they are
-still the two nozzles a cycle running the opposite way to the ordinary
-feed/product pair actually needs, so ``DistillationColumn`` is what
-draws them; a plain ``Column`` has neither.
+regenerated, and every eight hours the sequence swaps them. Wet gas
+flows down through the on-line bed and hot regeneration gas up through
+the other, entering at ``reflux_in`` and ``boilup_in``.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -56,15 +35,7 @@ def main():
     level504 = fs.add_loop("L", 504)    # regeneration separator level
 
     # --- Equipment ----------------------------------------------------
-    # The same call twice, and that is the point of the sheet: one shell,
-    # one group-27 internal, two tags. Nothing about the drawing knows
-    # which of them is adsorbing.
-    #
-    # No label_pos: a tag written in the middle of a bed is written across
-    # the crossed lines that say it is one. Left unset the engine takes
-    # the first face no nozzle's stream runs through, which puts A's tag
-    # on the wall away from its valves and B's on the wall away from its
-    # -- the pipework's own mirror, carried onto the lettering.
+    # Two identical packed beds.
     bed_a = fs.add(DistillationColumn("V-501A", internals="packing", trays=1, width=90,
                                       height=200,
                                       description="Molecular Sieve Drier A"))
@@ -73,9 +44,6 @@ def main():
                                       description="Molecular Sieve Drier B"))
 
     heater = fs.add(Furnace("H-501", description="Regeneration Gas Heater"))
-    # Air-cooled: a regeneration gas cooler in a gas plant is a fin-fan,
-    # and its air side takes no line, so the sheet draws two nozzles and
-    # not four.
     regen_cooler = fs.add(AirCooledExchanger(
         "E-501", description="Regeneration Gas Cooler"))
     regen_sep = fs.add(KnockoutDrum(
@@ -89,11 +57,7 @@ def main():
     water = fs.add(Product("Free Water to Disposal", reference="P&ID-902"))
 
     # --- Switching valves ---------------------------------------------
-    # Four per bed, and the four are what a cycle *is*: the pair that
-    # puts a bed on line and the pair that puts it on regeneration, never
-    # both. Every one is a solenoid-piloted on/off valve stroked by the
-    # drier sequence, and every one fails to the position that leaves the
-    # bed isolated rather than passing gas nobody is watching.
+    # Four per bed: two put it on line, two on regeneration.
     xv501a = fs.add(SolenoidValve("XV-501A", fail="closed",
                                   description="V-501A Wet Gas Inlet Valve"))
     xv501b = fs.add(SolenoidValve("XV-501B", fail="closed",
@@ -117,8 +81,6 @@ def main():
                                 description="V-502 Water Draw Control Valve"))
 
     # --- Header junctions ---------------------------------------------
-    # All five are tees: a header teed for two beds is piping, not plant,
-    # and none of them takes a tag or an equipment-list row.
     t_wet_in = fs.add(Tee(branch="inlet"))     # regeneration gas rejoins here
     t_wet_a = fs.add(Tee())                    # wet gas splits to bed A
     t_dry = fs.add(Tee(branch="inlet"))        # the two dry gas legs meet
@@ -127,11 +89,8 @@ def main():
     t_slip = fs.add(Tee())                     # the regeneration slipstream
 
     # --- Placement ----------------------------------------------------
-    # Four headers at four elevations with the beds between them, which
-    # is the shape a switching pair really has. The two beds are placed
-    # as mirror images so that each one's side nozzles face its own half
-    # of the sheet; the artwork is symmetric, so nothing about either
-    # drawing changes.
+    # Four headers with the beds between them; bed A is mirrored so each
+    # bed's side nozzles face its own half of the sheet.
     regen_out_y = 130.0
     wet_y = 220.0
     bed_y = 300.0
@@ -148,22 +107,14 @@ def main():
     a_leg_x, b_leg_x = 380.0, 1110.0
 
     wet_gas.pin(port="outlet", x=120, y=wet_y)
-    # mirrored="y" turns the tee's branch to face north, which is where
-    # the returning regeneration gas comes down from. Pinned by the
-    # branch and by the run: the branch fixes the riser's x and the
-    # outlet puts the header on its own elevation, so neither leg leaves
-    # at an angle.
+    # Branch north; the branch pins the riser's x, the outlet the header.
     t_wet_in.pin(mirrored="y").pin(port="branch", x=250).pin(
         port="outlet", y=wet_y)
     t_wet_a.pin(port="inlet", x=a_leg_x - 6, y=wet_y)
     xv501a.pin(port="inlet", x=400, y=top_in_y)
     xv501b.pin(mirrored=True).pin(port="inlet", x=1090, y=top_in_y)
 
-    # orientation stands a valve on a vertical run, and which way round
-    # it is turned is which way the run flows: 90 puts the inlet on top
-    # for the dry gas coming down out of the bed, 270 puts it underneath
-    # for the spent regeneration gas going up out of the crown. Turned
-    # the wrong way the line has to loop round the body to reach it.
+    # orientation=90 puts the inlet on top, 270 underneath.
     xv502a.pin(orientation=90).pin(port="inlet", x=a_axis, y=640)
     xv502b.pin(orientation=90).pin(port="inlet", x=b_axis, y=640)
     xv504a.pin(orientation=270).pin(port="inlet", x=a_axis, y=190)
@@ -171,24 +122,16 @@ def main():
     xv503a.pin(port="inlet", x=400, y=bot_in_y)
     xv503b.pin(mirrored=True).pin(port="inlet", x=1090, y=bot_in_y)
 
-    # Pinned twice, by two different nozzles: the branch fixes the tee on
-    # its riser and the outlet puts the run it joins on the header's own
-    # elevation. Pinned by the branch alone the run would sit half a tee
-    # off the header and step over the gap.
     t_dry.pin(mirrored="y").pin(port="branch", x=b_axis).pin(
         port="outlet", y=dry_y)
     t_regen_out.pin(port="branch", x=b_axis).pin(port="outlet", y=regen_out_y)
-    # The regeneration header's split faces north because bed A's lower
-    # nozzle is above it; the wet gas tee above faces south for the same
-    # reason turned over.
+    # Branch north, towards bed A's lower nozzle.
     t_regen_in.pin(mirrored="y").pin(port="branch", x=a_leg_x).pin(
         port="outlet", y=regen_in_y)
     t_slip.pin(port="inlet", x=1250, y=dry_y)
     dry_gas.pin(port="inlet", x=1560, y=dry_y)
 
-    # The heater is mirrored so its coil inlet faces the slipstream
-    # coming back from the east; the burner stays underneath, where the
-    # stencil draws it.
+    # Mirrored so the coil inlet faces the slipstream from the east.
     heater.pin(mirrored=True).pin(port="inlet", x=420, y=regen_run_y)
     heater_out_y = pinned_y(heater, "outlet")
     fuel_x = pinned_x(heater, "fuel")
@@ -208,9 +151,7 @@ def main():
                sequence=501, spec="CS")
     fs.connect(t_wet_in.outlet, t_wet_a.inlet, size=400, service="WG",
                sequence=502, spec="CS")
-    # Each leg off a header is its own line and takes its own number: a
-    # branch is where the run it came from stops, and a leg that is shut
-    # for half of every cycle is not the header it hangs off.
+    # Each leg off a header takes its own line number.
     fs.connect(t_wet_a.branch, xv501a.inlet, size=400, service="WG",
                sequence=516, spec="CS").via(
                    [(a_leg_x, wet_y), (a_leg_x, top_in_y)])
@@ -221,10 +162,6 @@ def main():
     fs.connect(xv501b.outlet, bed_b.reflux_in)
 
     # --- The dry gas header -------------------------------------------
-    # Down through the bed and out of the floor: adsorption runs
-    # downward so the gas load holds the bed on its support grid instead
-    # of lifting it, and so the mass transfer zone travels with gravity
-    # rather than against it.
     fs.connect(bed_a.bottoms, xv502a.inlet, size=400, service="DG",
                sequence=503, spec="CS")
     fs.connect(xv502a.outlet, t_dry.inlet).via([(a_axis, dry_y)])
@@ -237,9 +174,7 @@ def main():
                sequence=520, spec="CS")
 
     # --- The regeneration circuit -------------------------------------
-    # The regeneration gas is dry gas, taken downstream of both beds:
-    # sending wet gas through a hot bed would load it instead of
-    # stripping it.
+    # A slipstream of dry gas regenerates the off-line bed.
     fs.connect(t_slip.branch, heater.inlet, size=200, service="RG",
                sequence=506, spec="CS").via(
                    [(1256, regen_run_y), (420, regen_run_y)])
@@ -258,10 +193,7 @@ def main():
                    [(b_leg_x, regen_in_y), (b_leg_x, bot_in_y)])
     fs.connect(xv503b.outlet, bed_b.boilup_in)
 
-    # Up and out of the crown, against the direction the bed was loaded
-    # in. The wet end of the bed is the end the gas enters on adsorption,
-    # so regenerating the other way round drives the water back out the
-    # way it came in and leaves the outlet end the driest.
+    # Spent regeneration gas leaves through the crown.
     fs.connect(bed_a.overhead, xv504a.inlet, size=200, service="RG",
                sequence=509, spec="LT")
     fs.connect(xv504a.outlet, t_regen_out.inlet).via([(a_axis, regen_out_y)])
@@ -278,30 +210,18 @@ def main():
     fs.connect(cv504.outlet, water.inlet)
     fs.connect(regen_sep.vapor, regen_k.suction, size=200, service="RG",
                sequence=514, spec="CS").via([(sep_vapor_x, 60)])
-    # Back into the wet gas ahead of the beds, which is where it belongs:
-    # the returning gas is saturated at the separator's temperature and
-    # would put its own water back into whichever bed is on line if it
-    # were let in anywhere downstream.
+    # The regeneration gas rejoins the wet gas ahead of the beds.
     fs.connect(regen_k.discharge, t_wet_in.branch, size=200, service="RG",
                sequence=515, spec="CS", draw_as_recycle=True).via(
                    [(1690, 20), (250, 20)])
 
     # --- The drier switching sequence ---------------------------------
-    # KC-501 is the sequence itself: an eight-hour cycle in the control
-    # system, not a controller holding a measured variable. Each valve
-    # then carries a KY-501 square, and it is the *same* square each
-    # time -- one logic function drawn at each of the eight places it
-    # acts, which is what Instrument(variant="logic") is for. Signal
-    # lines from one balloon to eight valves would say the same thing and
-    # cross most of the sheet doing it.
+    # KC-501 is the sequence; one KY-501 logic square at each valve.
     kc501 = fs.add_instrument("KC", 501, near=bed_a, face="W", offset=170,
                               variant="shared",
                               description="Drier Switching Sequence")
     kc501.annotate(high="KAH")
-    # The face each square hangs off is chosen to stay off the fail-
-    # position mark beside its valve: a turned valve writes FC to one
-    # side, and on the A beds that is the side the sequence square would
-    # otherwise stand on.
+    # Each square's face keeps it off its valve's FC mark.
     for valve, face in ((xv501a, "N"), (xv501b, "N"),
                         (xv502a, "W"), (xv502b, "W"),
                         (xv503a, "N"), (xv503b, "N"),
@@ -310,12 +230,7 @@ def main():
                           variant="logic")
 
     # --- Loop 503: the regeneration gas temperature -------------------
-    # 290 C on the gas leaving the heater is what strips a 4A sieve;
-    # much hotter and the binder starts to break down, which is a bed
-    # change rather than a cycle.
-    # Halfway along puts the tap on the riser out of the heater rather
-    # than on the header at the top of it, which is the stretch the two
-    # bed legs are taken off.
+    # Tap the riser out of the heater.
     tt503 = fs.add_instrument("TT", temp503, sensing=hot_regen, at=0.5,
                               offset=70)
     tic503 = fs.add_instrument("TIC", temp503, near=tt503, face="S", offset=70,
@@ -334,12 +249,7 @@ def main():
     fs.connect(lic504.sig_out, cv504.actuator, kind="pneumatic")
 
     # --- The outlet moisture analyser ---------------------------------
-    # The one measurement that says whether the unit is doing its job,
-    # and the one that can shorten a cycle: AAH puts the on-line bed on
-    # regeneration before the mass transfer zone reaches the floor.
-    # angle=-90 hangs the tap under its run rather than over it: the
-    # regeneration header crosses this stretch of paper on its way to
-    # bed B, and a balloon in it would be crossed by that line.
+    # angle=-90 hangs the tap under its run, clear of the regen header.
     at502 = fs.add_instrument("AT", 502, sensing=dry_header, at=0.4, offset=60,
                               angle=-90)
     ai502 = fs.add_instrument("AI", 502, near=at502, face="S", offset=60,
@@ -349,8 +259,6 @@ def main():
     fs.connect(at502.sig_out, ai502.sig_in, kind="electric")
 
     # --- Sheet furniture ----------------------------------------------
-    # date= and scale= are stated rather than left blank: left blank, the
-    # renderer fills in today's date and the ratio it fitted the sheet at.
     fs.title_block = TitleBlock(
         title="Gas Dehydration",
         subtitle="A500 Process & Instrumentation Diagram 1",
