@@ -3,7 +3,9 @@
 import pytest
 
 from pandid import Flowsheet, ShellAndTubeExchanger, units as U
-from pandid.layout.control import _flaws, _taps_off
+from pandid.devices import ControlValve
+from pandid.layout.attach import stream_path
+from pandid.layout.control import _flaws, _shared, _taps_off
 from pandid.layout.layered import COL_GAP, LANE_PITCH
 from pandid.layout.quality import measure_final
 from pandid.route_geometry import stream_polyline
@@ -102,3 +104,46 @@ def test_a_lateral_keeps_the_instrument_that_taps_it(at):
     assert fs.route_converged
     assert measure_final(fs).crossings == 0
     assert _flaws(fs)["line-on-line"] == 0
+
+
+def test_a_three_way_header_keeps_its_stock_face():
+    fs = Flowsheet("Cooler bank")
+    sp = fs.add(U.Splitter("SP-101", n_outlets=3))
+    mx = fs.add(U.Mixer("MX-101", n_inlets=3))
+    fs.connect(fs.add(U.Feed("Feed")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("Product")).inlet)
+    returns, outlets = [], []
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        exchanger = fs.add(ShellAndTubeExchanger(f"E-{100 + i}"))
+        fs.connect(outlet, exchanger.tube_in)
+        outlets.append(fs.connect(exchanger.tube_out, inlet))
+        fs.connect(fs.add(U.Feed(f"CWS-{i}")).outlet, exchanger.shell_in)
+        returns.append(fs.connect(exchanger.shell_out, fs.add(U.Product(f"CWR-{i}")).inlet))
+    fs.to_svg(diagram="p&id")
+    assert sp.frame is not None and sp.frame.h == 50
+    # No exchanger's tube outlet runs along its own shell return.
+    for tube, shell in zip(outlets, returns):
+        a, b = stream_path(tube), stream_path(shell)
+        assert not any(_shared(p, q, r, t) for p, q in zip(a, a[1:]) for r, t in zip(b, b[1:]))
+
+
+def test_a_grown_header_is_kept_only_where_it_draws_no_worse():
+    fs = Flowsheet("Pump loops")
+    sp = fs.add(U.Splitter("SP", n_outlets=4))
+    mx = fs.add(U.Mixer("MX", n_inlets=4))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    for k, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        i = 10 + k
+        pump = fs.add(U.Pump(f"P-{i}"))
+        exchanger = fs.add(ShellAndTubeExchanger(f"E-{i}"))
+        valve = fs.add(ControlValve(f"FV-{i}"))
+        fs.connect(outlet, pump.suction)
+        fs.connect(pump.discharge, exchanger.tube_in)
+        cooled = fs.connect(exchanger.tube_out, valve.inlet)
+        fs.connect(valve.outlet, inlet)
+        fs.add_control_loop("F", i, measuring=cooled, acting_on=valve, at=0.5)
+    fs.to_svg(diagram="p&id")
+    assert fs.route_converged
+    assert _taps_off(fs) == set()
+    assert not [i for i in fs.validate() if i.code == "route-crosses-unit"]

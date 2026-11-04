@@ -4337,8 +4337,8 @@ class Stripper(Column):
 class Mixer(Unit):
     """Mixer: combines several inlet streams into one outlet.
 
-    Drawn as a triangle whose inlet face grows to keep the inlets 20
-    apart.
+    Drawn as a triangle. From four inlets, the inlet face grows to keep
+    them 20 apart where the sheet draws no worse for it.
 
     Parameters
     ----------
@@ -4392,13 +4392,15 @@ class Mixer(Unit):
             self._add_port(f"in_{i}", "inlet", "process") for i in range(1, n_inlets + 1)
         )
         self._add_port("outlet", "outlet", "process")
+        # Whether the sheet draws the stock face for a face that would grow.
+        self._stock_face = False
 
 
 class Splitter(Unit):
     """Splitter: divides one inlet stream into several outlets.
 
-    Drawn as a triangle whose outlet face grows to keep the outlets 20
-    apart.
+    Drawn as a triangle. From four outlets, the outlet face grows to keep
+    them 20 apart where the sheet draws no worse for it.
 
     Parameters
     ----------
@@ -4453,6 +4455,8 @@ class Splitter(Unit):
         self.outlets = tuple(
             self._add_port(f"out_{i}", "outlet", "process") for i in range(1, n_outlets + 1)
         )
+        # Whether the sheet draws the stock face for a face that would grow.
+        self._stock_face = False
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument: str) -> list[str]:

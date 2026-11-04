@@ -984,7 +984,7 @@ def test_overlapping_heads_are_worded_as_the_overlap_they_are():
     fs, _ = _fed_mixer(n_inlets=4, height=50)
     issues = _found(fs, "nozzles-crowded")
     assert len(issues) == 1
-    assert "overlaps two 12px arrowheads by 0.9px" in issues[0].message
+    assert "overlaps two 12px arrowheads by 0.3px" in issues[0].message
     assert "the tightest of the 4 it carries there" in issues[0].message
 
 

@@ -258,16 +258,19 @@ def _score(fs: "Flowsheet") -> tuple[Counter[str], set[int]]:
     Returns
     -------
     tuple[Counter[str], set[int]]
-        Crossings and bends of the drawn lines with the findings and
-        clashes balloon placement is judged by, and the balloons whose
-        tap is off their line.
+        Crossings and bends of the drawn lines, fallback routes, the
+        findings and clashes balloon placement is judged by, and the
+        balloons whose tap is off their line.
     """
     from pandid.layout.control import _flaws, _taps_off
 
-    paths = [stream_polyline(s) for s in fs.streams if s.route is not None
+    drawn = [s for s in fs.streams if s.route is not None
              and s.source.owner.frame is not None and s.dest.owner.frame is not None]
+    paths = [stream_polyline(s) for s in drawn]
     return (_flaws(fs) + Counter(crossings=crossing_count(paths),
-                                 bends=sum(map(real_bends, paths))), _taps_off(fs))
+                                 bends=sum(map(real_bends, paths)),
+                                 fallback=sum(bool(s.route and s.route.used_fallback)
+                                              for s in drawn)), _taps_off(fs))
 
 
 def _tangled(lines: list[list[Point]]) -> bool:

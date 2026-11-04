@@ -535,6 +535,8 @@ class Flowsheet:
         self._unhung: tuple | None = None
         # Whether a layout engine is running, which routes without hanging.
         self._laying_out = False
+        # Whether the router lays crossing laterals on ordered lanes.
+        self._lanes = True
         # Whether a balloon hung from a balloon keeps off the tapped line,
         # and whether any did since route() turned that on.
         self._keep_clear = False
@@ -2032,6 +2034,57 @@ class Flowsheet:
         tap leaves its line and no finding or clash grows. Where the result
         has a tap off its line that was on it before hanging, the sheet is
         placed as if no controller could hang.
+
+        Where a mixer's or splitter's face grows to hold its nozzles, the
+        sheet is also laid out and routed with the stock face and without
+        lanes, and the grown face is kept only if no crossing, bend,
+        finding, clash or tap off its line grows by it.
+
+        Parameters
+        ----------
+        router : object or None, optional
+            Router with ``route(fs)``; ``None`` uses the default.
+
+        Raises
+        ------
+        ValueError
+            If the default router meets a frame that is not finite.
+        RuntimeError
+            If the default router's path search exceeds its budget.
+        """
+        from pandid.render.symbols import header_grows
+        from pandid.routing import DefaultRouter
+        from pandid.routing.lanes import _score
+
+        headers = [u for u in self.units if getattr(u, "_stock_face", False)]
+        for u in headers:
+            u._stock_face = False
+        if headers:
+            self._layout_stale = True
+        self._lanes = True
+        grown = [u for u in self.units if header_grows(u)]
+        start, start_unhung = self._geometry(), self._unhung
+        self._route_once(router)
+        if not grown or self._laying_out or not (router is None or type(router) is DefaultRouter):
+            return
+        kept, unhung, judged = self._geometry(), self._unhung, _score(self)
+        # Draw the stock faces, without lanes, from the routes and taps
+        # the grown ones started from.
+        self._put_geometry(start, keep_manual=False)
+        self._unhung, self._lanes = start_unhung, False
+        for u in grown:
+            u._stock_face = True
+        self.layout()
+        self._route_once(router)
+        stock = _score(self)
+        if not judged[0] - stock[0] and judged[1] <= stock[1]:
+            for u in grown:
+                u._stock_face = False
+            self._put_geometry(kept, keep_manual=False)
+            self._unhung, self._lanes = unhung, True
+
+    def _route_once(self, router=None) -> None:
+        """Lay out if needed, then route and place balloons once.
 
         Parameters
         ----------

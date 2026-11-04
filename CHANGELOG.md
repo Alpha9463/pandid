@@ -128,9 +128,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **A parallel bank draws without crossings (#458).** A `Mixer` or `Splitter`
-  face grows to keep its nozzles 20 apart, and the laterals from one face to a
-  column of units turn on lanes ordered so they do not cross.
+- **A parallel bank draws without crossings (#458).** From four nozzles, a
+  `Mixer` or `Splitter` face grows to keep them 20 apart where the sheet draws
+  no worse for it, and the laterals from one face to a column of units turn on
+  lanes ordered so they do not cross.
 - **A device with a stated turn and mirror sits on its pipe, inlet upstream
   (#642).** Where `pin(orientation=..., mirrored=...)` would run it against
   its line, it is drawn end for end, and `validate()` reports the pin that

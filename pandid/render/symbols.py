@@ -1056,32 +1056,37 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
     )
 
 
-# Mixer and splitter triangles, their many-nozzle face sized to its count.
+# Mixer and splitter triangles, their many-nozzle face grown to its count
+# where the stock face would crowd it.
 
-#: Depth of a mixer or splitter, and its least face length.
+#: Depth and stock face length of a mixer or splitter.
 JUNCTION_SIZE = 50.0
 
 #: Spacing of the nozzles on a mixer's or splitter's many-nozzle face.
 JUNCTION_PITCH = 20.0
 
-#: Face beyond the end nozzles of a mixer or splitter.
+#: Largest fraction of the stock face the nozzles may span.
+JUNCTION_EXTENT = 0.7
+
+#: Face beyond the end nozzles of a grown mixer or splitter.
 JUNCTION_END = 15.0
 
 
 @lru_cache(maxsize=None)
-def junction_symbol(kind: str, count: int) -> Symbol:
-    """Return a mixer or splitter triangle with a face for its nozzles.
+def junction_symbol(kind: str, count: int = 0) -> Symbol:
+    """Return a mixer or splitter triangle.
 
-    The face holds ``count`` nozzles :data:`JUNCTION_PITCH` apart with
-    :data:`JUNCTION_END` beyond each end, and is at least
-    :data:`JUNCTION_SIZE` long.
+    The stock triangle has a :data:`JUNCTION_SIZE` face, with its
+    nozzles :data:`JUNCTION_PITCH` apart within :data:`JUNCTION_EXTENT`
+    of it. A grown one holds ``count`` nozzles :data:`JUNCTION_PITCH`
+    apart, with :data:`JUNCTION_END` beyond each end.
 
     Parameters
     ----------
     kind : str
         ``"mixer"`` or ``"splitter"``.
-    count : int
-        Inlets of a mixer, or outlets of a splitter.
+    count : int, default=0
+        Nozzles to grow the face for; 0 for the stock triangle.
 
     Returns
     -------
@@ -1089,7 +1094,7 @@ def junction_symbol(kind: str, count: int) -> Symbol:
         Triangle pointing east for a mixer, west for a splitter.
     """
     w = JUNCTION_SIZE
-    h = max(JUNCTION_SIZE, (count - 1) * JUNCTION_PITCH + 2 * JUNCTION_END)
+    h = (count - 1) * JUNCTION_PITCH + 2 * JUNCTION_END if count else JUNCTION_SIZE
     mixer = kind == "mixer"
     points = f"0,0 {w:g},{h / 2:g} 0,{h:g}" if mixer else f"0,{h / 2:g} {w:g},0 {w:g},{h:g}"
     return Symbol(
@@ -1098,30 +1103,55 @@ def junction_symbol(kind: str, count: int) -> Symbol:
         width=w, height=h,
         ports={"outlet": (w, h / 2)} if mixer else {"inlet": (0.0, h / 2)},
         port_series=(PortSeries("in_" if mixer else "out_", "W" if mixer else "E",
-                                pitch=JUNCTION_PITCH, extent=1.0),),
+                                pitch=JUNCTION_PITCH,
+                                extent=1.0 if count else JUNCTION_EXTENT),),
         # Each face length is its own <defs> entry.
-        id_suffix="" if h == JUNCTION_SIZE else f"_{h:g}",
+        id_suffix=f"_{h:g}" if count else "",
     )
 
 
-def _junction(kind: str, count: int) -> Symbol:
-    """Return the registered mixer or splitter, built to its count if stock.
+def header_grows(unit) -> bool:
+    """Return whether a mixer or splitter is drawn with a grown face.
+
+    The face grows where the stock face would set its nozzles closer
+    than :data:`MIN_NOZZLE_PITCH`, unless the unit has a stated
+    ``width`` or ``height``, its drawing is registered again, or the
+    sheet keeps it stock.
 
     Parameters
     ----------
-    kind : str
-        ``"mixer"`` or ``"splitter"``.
-    count : int
-        Inlets of a mixer, or outlets of a splitter.
+    unit : Unit
+        Unit to test.
+
+    Returns
+    -------
+    bool
+        True if the face grows to its nozzle count.
+    """
+    if unit.kind not in ("mixer", "splitter") or getattr(unit, "variant", "default") != "default":
+        return False
+    count = len(unit.inlets if unit.kind == "mixer" else unit.outlets)
+    return (count > 1 and JUNCTION_EXTENT * JUNCTION_SIZE / (count - 1) < MIN_NOZZLE_PITCH
+            and unit.width is None and unit.height is None and not unit._stock_face
+            and default_registry.get(unit.kind) is junction_symbol(unit.kind))
+
+
+def _junction(unit) -> Symbol:
+    """Return a mixer's or splitter's drawing, grown if it grows.
+
+    Parameters
+    ----------
+    unit : Unit
+        Mixer or splitter.
 
     Returns
     -------
     Symbol
-        :func:`junction_symbol` for the stock drawing, else the drawing
-        registered in its place.
+        The grown triangle, else the registered drawing.
     """
-    drawn = default_registry.get(kind)
-    return junction_symbol(kind, count) if drawn is junction_symbol(kind, 2) else drawn
+    if not header_grows(unit):
+        return default_registry.get(unit.kind)
+    return junction_symbol(unit.kind, len(unit.inlets if unit.kind == "mixer" else unit.outlets))
 
 
 def _face_local(face: str, x: float, y: float, width: float, height: float
@@ -1268,8 +1298,8 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length,
                                                               unit.diameter),
     ("block", None): lambda unit: unit.symbol(),
-    ("mixer", "default"): lambda unit: _junction("mixer", len(unit.inlets)),
-    ("splitter", "default"): lambda unit: _junction("splitter", len(unit.outlets)),
+    ("mixer", "default"): _junction,
+    ("splitter", "default"): _junction,
     ("tank", None): lambda unit: unit.symbol(),
     ("vessel", None): lambda unit: unit.symbol(),
 }
@@ -3075,7 +3105,7 @@ class SymbolRegistry:
         ))
 
         # Mixer: a triangle pointing right.
-        self.register("mixer", junction_symbol("mixer", 2))
+        self.register("mixer", junction_symbol("mixer"))
 
         # Belt and screw conveyors at their default length.
         self.register("conveyor", conveyor_symbol())
@@ -3103,7 +3133,7 @@ class SymbolRegistry:
         self.register("block", block_symbol((("in_1", "W"), ("out_1", "E"))))
 
         # Splitter: a triangle pointing left.
-        self.register("splitter", junction_symbol("splitter", 2))
+        self.register("splitter", junction_symbol("splitter"))
 
         # ISA-5.1 instrument balloons, lettered by the renderer. Every
         # port offers all four faces.

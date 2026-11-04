@@ -285,8 +285,9 @@ class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         """Route and separate the sheet's automatic streams.
 
-        Outside layout, laterals that cross, share a run or wind are
-        then laid on ordered lanes (:func:`pandid.routing.lanes.relane`).
+        Outside layout, and unless the sheet asks for none, laterals that
+        cross, share a run or wind are then laid on ordered lanes
+        (:func:`pandid.routing.lanes.relane`).
 
         Parameters
         ----------
@@ -440,5 +441,5 @@ class DefaultRouter:
         from pandid.routing.separation import separate_streams
         separate_streams(fs)
         # Keep the routes layout sets pipe furniture on.
-        if not fs._laying_out:
+        if fs._lanes and not fs._laying_out:
             relane(fs, escapes, graph)
