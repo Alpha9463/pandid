@@ -719,6 +719,25 @@ def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
     assert 265.0 in {y for _, y in wp}, f"F -> P did not take the clear (south) bypass: {wp}"
 
 
+def test_a_balloons_tap_line_is_counted_as_a_crossing():
+    """Route a line clear of a balloon's tap line where an equal route crosses it."""
+    from pandid.route_geometry import stream_polyline
+    from pandid.render.svg import tap_lines, tap_route
+    from pandid.routing.metrics import crossing_count
+
+    fs = Flowsheet("tap-recorded")
+    feed = fs.add(Feed("F")).pin(x=60, y=100)
+    product = fs.add(Product("P")).pin(x=600, y=300)
+    vessel = fs.add(Vessel("V-1")).pin(x=200, y=120)
+    stream = fs.connect(feed.outlet, product.inlet)
+    fs.add_instrument("LT", 1, sensing=vessel, face="W", offset=60)
+    fs.route()
+
+    taps = [tap_route(u, tap, centre) for u, tap, centre in tap_lines(fs)]
+    assert len(taps) == 1
+    assert crossing_count([stream_polyline(stream), *taps]) == 0
+
+
 def test_crossings_along_counts_a_crossing_strictly_inside_the_span_open_on_both_ends():
     """Count recorded spans crossed strictly inside one edge."""
     index = CrossingIndex()
@@ -884,6 +903,8 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     s2 = fs.connect(f2.outlet, p2.inlet).via(
         [(100.0, 50.0), (100.0, 100.0), (400.0, 100.0), (400.0, 150.0)]
     )
+    later = fs.add(Product("P3")).pin(x=3400, y=1000)
+    fs.connect(fs.add(Feed("F3")).pin(x=3000, y=1000).outlet, later.inlet)
 
     fs.layout()
     CrossingIndex.record = spy

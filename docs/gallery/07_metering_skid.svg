@@ -74,13 +74,13 @@
     <path d="M 725.0,210.0 L 725.0,143.8" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 737.3,131.6 L 900.0,131.6" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 703.0,465.0 L 552.2,465.0 L 552.2,294.9" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <rect x="140.8" y="293.5" width="18.4" height="13.0" fill="white" />
+    <rect x="140.9" y="293.5" width="18.2" height="13.0" fill="white" />
     <text x="150.0" y="300.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
-    <rect x="380.8" y="273.5" width="18.4" height="13.0" fill="white" />
+    <rect x="380.9" y="273.5" width="18.2" height="13.0" fill="white" />
     <text x="390.0" y="280.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
-    <rect x="800.8" y="273.5" width="18.4" height="13.0" fill="white" />
+    <rect x="800.9" y="273.5" width="18.2" height="13.0" fill="white" />
     <text x="810.0" y="280.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
-    <rect x="718.5" y="167.7" width="13.0" height="18.4" fill="white" />
+    <rect x="718.5" y="167.8" width="13.0" height="18.2" fill="white" />
     <text x="725.0" y="176.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 725.0, 176.9)">S4</text>
   </g>
   <g id="instrument_taps">

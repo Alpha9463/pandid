@@ -249,6 +249,7 @@ class DefaultRouter:
         UserWarning
             If an end has no frame or anchor; the stream is skipped.
         """
+        from pandid.render.svg import tap_lines, tap_route
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
@@ -257,32 +258,40 @@ class DefaultRouter:
         graph = VisibilityGraph(fs)
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float]
         edge_penalties = defaultdict(float)
-        crossing_index = CrossingIndex()
+        taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
         routed: list["Stream"] = []
 
-        def settle(stream: "Stream") -> None:
-            """Add a routed stream and rebuild the crossing index.
+        def crossable(stream: "Stream") -> "CrossingIndex":
+            """Return the drawn lines a route for a stream would cross.
 
-            The index holds a preview of every routed stream's separated
+            The index holds every tap line but those on the stream
+            itself, and a preview of every routed stream's separated
             waypoints.
 
             Parameters
             ----------
             stream : Stream
-                Stream with a route.
+                Stream about to be routed.
+
+            Returns
+            -------
+            CrossingIndex
+                Lines already on the sheet.
             """
-            nonlocal crossing_index
-            routed.append(stream)
+            index = CrossingIndex()
+            for host, points in taps:
+                if host is not stream:
+                    _record_route(index, points, True)
             preview = preview_separated_waypoints(routed)
-            crossing_index = CrossingIndex()
             for s in routed:
                 assert s.route is not None
                 wp = preview.get(id(s), s.route.waypoints)
-                _record_route(crossing_index, wp, s.route.manual)
+                _record_route(index, wp, s.route.manual)
+            return index
 
         for stream in fs.streams:
             if stream.route and stream.route.manual:
-                settle(stream)
+                routed.append(stream)
                 continue
 
             src_u = stream.source.owner
@@ -337,6 +346,7 @@ class DefaultRouter:
                     clear_stubs = False
 
             is_recycle = getattr(stream, "is_recycle", False)
+            crossing_index = crossable(stream)
             path = []
             if clear_stubs:
                 path = find_path(
@@ -372,8 +382,7 @@ class DefaultRouter:
                 simplified.append(path[-1])
 
             stream.route = Route(waypoints=simplified, used_fallback=not path_found)
-
-            settle(stream)
+            routed.append(stream)
 
         from pandid.routing.separation import separate_streams
         separate_streams(fs)
