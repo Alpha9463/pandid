@@ -128,6 +128,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A signal line leaves its balloon clear of other units (#700).** Where a unit
+  body or tag blocks a balloon's nozzle so its line cannot be routed, `route()`
+  turns the nozzle to a clear face unless `nozzle()` or a pin states it, and
+  keeps that if no finding grows.
 - **Automatic lines keep off units and arrowheads (#640, #661).** Where a
   sheet draws a line along a unit or across an arrowhead, `route()` tries
   routes clear of both, with each balloon that has no `face=` on a free
