@@ -725,16 +725,7 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
     -------
     Symbol
         Symbol ``length`` wide and ``diameter`` deep.
-
-    Raises
-    ------
-    ValueError
-        If ``diameter`` is not positive or ``length`` is too short.
     """
-    if diameter <= 0:
-        raise conveyor_bad_diameter(diameter)
-    if length < conveyor_min_length(diameter):
-        raise conveyor_too_short(length, diameter=diameter)
     r, height = diameter / 2, float(diameter)
     tail, head = r, length - r
     # The default diameter is left out of the id.
@@ -844,16 +835,7 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
     -------
     Symbol
         Symbol ``length`` wide and ``diameter`` deep.
-
-    Raises
-    ------
-    ValueError
-        If ``diameter`` is not positive or ``length`` is too short.
     """
-    if diameter <= 0:
-        raise screw_bad_diameter(diameter)
-    if length < SCREW_MIN_LENGTH:
-        raise screw_too_short(length)
     height = float(diameter)
     axis, reach = height / 2, height * SCREW_SWEEP / 2
     # As many turns as leave SCREW_MARGIN of clear casing at the head.

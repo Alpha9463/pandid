@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
 - **CI checks lint and types in one job (#624).** Ruff, mypy and pyright share
   one install, and the smoke job is gone; the test job covers what it ran.
+- **A conveyor's `variant` is checked when it is reassigned.** Setting it to
+  a variant the conveyor's length is too short for raises `ValueError` at
+  once and keeps the old variant, instead of failing when the sheet is drawn.
 
 ### Deprecated
 

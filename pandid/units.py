@@ -3178,6 +3178,40 @@ class Conveyor(Unit):
         return SCREW_HEIGHT if self.variant == "screw" else CONVEYOR_DIAMETER
 
     @property
+    def variant(self) -> str:
+        """Return the variant drawn.
+
+        Returns
+        -------
+        str
+            ``"default"`` (belt) or ``"screw"``.
+        """
+        return self._variant
+
+    @variant.setter
+    def variant(self, value: str) -> None:
+        """Set the variant, checking the length against its minimum.
+
+        Parameters
+        ----------
+        value : str
+            ``"default"`` (belt) or ``"screw"``.
+
+        Raises
+        ------
+        ValueError
+            If the current length is below the new variant's minimum.
+        """
+        old = getattr(self, "_variant", value)
+        self._variant = value
+        if hasattr(self, "_length"):
+            try:
+                self.length = self._length
+            except ValueError:
+                self._variant = old
+                raise
+
+    @property
     def length(self) -> float:
         """Return the run from tail to head.
 
