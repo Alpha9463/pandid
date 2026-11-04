@@ -1,11 +1,14 @@
 """Test the deprecation mechanism: one declaration, a warning and a finding."""
 
+import importlib
+import pkgutil
 import warnings
 
 import pytest
 
+import pandid
 from pandid import Flowsheet, units as U
-from pandid.deprecation import CODE, Deprecation, declarations
+from pandid.deprecation import CODE, Deprecation
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
@@ -16,6 +19,23 @@ RETIRED = Deprecation(
     instead="Pump(jacket='cooling')",
     removed_in="99.0.0",
 )
+
+
+def declarations() -> dict[str, Deprecation]:
+    """Return every module-level :class:`Deprecation` in pandid.
+
+    Returns
+    -------
+    dict[str, Deprecation]
+        Declarations keyed by ``"module.NAME"``, one per attribute.
+    """
+    found: dict[str, Deprecation] = {}
+    for info in pkgutil.walk_packages(pandid.__path__, prefix="pandid."):
+        module = importlib.import_module(info.name)
+        for name, value in vars(module).items():
+            if isinstance(value, Deprecation):
+                found[f"{info.name}.{name}"] = value
+    return found
 
 
 class _OldPump(U.Pump):
