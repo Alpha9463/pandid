@@ -57,7 +57,10 @@ def _canvas(svg: str) -> tuple[float, float]:
     assert m, "no canvas on the <svg> element"
     view = float(m.group(7)), float(m.group(8))
     declared = float(m.group(1)), float(m.group(3))
-    assert declared == (round(view[0]), round(view[1]))
+    if m.group(2):  # a physical size: it must describe the same sheet
+        assert (declared[0] * PX_PER_MM, declared[1] * PX_PER_MM) == pytest.approx(view, abs=0.1)
+    else:
+        assert declared == (round(view[0]), round(view[1]))
     return view
 
 
