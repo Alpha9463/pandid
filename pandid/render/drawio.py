@@ -20,7 +20,7 @@ from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import fmt, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
-                               _fitted, _LABEL_CODES, _RENDER_CODES,
+                               _LABEL_CODES, _RENDER_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _TAG_TYPE,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH, TITLE,
                                fit_issue, HOP_R,
@@ -202,17 +202,6 @@ class _Fit(NamedTuple):
     dx: float
     dy: float
 
-    @classmethod
-    def identity(cls) -> "_Fit":
-        """Return the identity fit.
-
-        Returns
-        -------
-        _Fit
-            A fit that leaves points unchanged.
-        """
-        return cls(1.0, 0.0, 0.0)
-
     def at(self, x: float, y: float) -> "tuple[float, float]":
         """Return a drawing point on the page.
 
@@ -229,21 +218,6 @@ class _Fit(NamedTuple):
             Page point.
         """
         return (self.dx + self.scale * x, self.dy + self.scale * y)
-
-    def box(self, b) -> "tuple[float, float, float, float]":
-        """Return a drawing box on the page.
-
-        Parameters
-        ----------
-        b : tuple
-            Drawing box ``(x0, y0, x1, y1)``.
-
-        Returns
-        -------
-        tuple[float, float, float, float]
-            Page box ``(x0, y0, x1, y1)``.
-        """
-        return (*self.at(b[0], b[1]), *self.at(b[2], b[3]))
 
     def length(self, v: float) -> float:
         """Return a length scaled to the page.
@@ -896,7 +870,11 @@ class DrawioRenderer:
         """
         # The page size is always stated; page view is on only for a
         # fixed page.
-        page_w, page_h = self._page_box(sheet, frame)
+        if sheet is not None:
+            page_w, page_h = sheet.width, sheet.height
+        else:
+            _ox, _oy, ow, oh = F.sheet_rect(*frame)
+            page_w, page_h = ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN
         paper = (f'page="{0 if sheet is None else 1}" pageScale="1" '
                  f'pageWidth="{fmt(page_w, 2)}" pageHeight="{fmt(page_h, 2)}"')
         # A page id stable across exports.
@@ -1174,7 +1152,8 @@ class DrawioRenderer:
                 f"{u.name} has no draw.io stencil and is exported as a stand-in, "
                 f"which loses {approx.lost}"))
         self._report_reshape(u, sym, approx)
-        x0, y0, x1, y1 = fit.box(self._cell_box(u))
+        cx0, cy0, cx1, cy1 = self._cell_box(u)
+        (x0, y0), (x1, y1) = fit.at(cx0, cy0), fit.at(cx1, cy1)
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
         style = ";".join(["html=1", *self._shape(u, sym, fit), *label_keys, *placement]) + ";"
@@ -1628,27 +1607,6 @@ class DrawioRenderer:
 
     # -------------------------------------------------- furniture
 
-    @staticmethod
-    def _page_box(sheet, frame) -> "tuple[float, float]":
-        """Return the page size the file states.
-
-        Parameters
-        ----------
-        sheet : _Sheet or None
-            Fixed page, or ``None`` to size the page from ``frame``.
-        frame : tuple[float, float, float, float]
-            Furniture frame.
-
-        Returns
-        -------
-        tuple[float, float]
-            ``(width, height)``.
-        """
-        if sheet is not None:
-            return (sheet.width, sheet.height)
-        _ox, _oy, ow, oh = F.sheet_rect(*frame)
-        return (ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN)
-
     def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False,
                    border: str = "none"):
         """Return the furniture cells, the frame and the drawing fit.
@@ -1678,12 +1636,11 @@ class DrawioRenderer:
             If the page is too small for the furniture.
         """
         plan = diagram_plan(fs, sheet, border, show_stream_table)
-        fit = _Fit.identity() if plan.free is None else _Fit(
-            *_fitted(plan.bounds, plan.free))
+        fit = _Fit(1.0, 0.0, 0.0) if plan.fit is None else _Fit(*plan.fit)
         # Fallbacks for the strip's name, date and scale.
         name = fs.name
         date = datetime.now().strftime("%Y-%m-%d")
-        scale = "" if plan.free is None else _scale_text(fit.scale)
+        scale = "" if plan.fit is None else _scale_text(fit.scale)
         out: list[str] = []
         for n, (obj, x, y, w, h) in enumerate(plan.placed):
             out += self._furniture_cell(f"f{n}", plan.block if obj is TITLE else obj,
