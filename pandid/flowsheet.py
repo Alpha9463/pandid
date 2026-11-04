@@ -7,11 +7,11 @@ from __future__ import annotations
 import copy
 from contextlib import contextmanager
 from math import isfinite
+from numbers import Integral
 from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
 
-from pandid._checks import check_whole
 from pandid.deprecation import Deprecation
 from pandid.document import StreamLabelOptions, StreamTableOptions
 from pandid.stations import (
@@ -422,6 +422,34 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
 _UnitT = TypeVar("_UnitT", bound="Unit")
 
 
+def _whole_number(value: Any, name: str) -> int:
+    """Return an integral value as an ``int``.
+
+    Parameters
+    ----------
+    value : Any
+        Value to check.
+    name : str
+        Attribute name, for the message.
+
+    Returns
+    -------
+    int
+        The value as a built-in ``int``.
+
+    Raises
+    ------
+    TypeError
+        If ``value`` is a bool or not an integer.
+    """
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise TypeError(
+            f"{name} must be a whole number (an int), got {value!r}; stream, line "
+            f"and loop numbers are integers"
+        )
+    return int(value)
+
+
 class Flowsheet:
     """A drawing's units, streams, loops and sheet furniture.
 
@@ -618,9 +646,20 @@ class Flowsheet:
         return self._stream_number_start
 
     @stream_number_start.setter
-    def stream_number_start(self, value: int) -> None:  # numpydoc ignore=GL08
-        check_whole(value, "stream_number_start")
-        self._stream_number_start = int(value)
+    def stream_number_start(self, value: int) -> None:
+        """Set the first generated stream number.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is a bool or not an integer.
+        """
+        self._stream_number_start = _whole_number(value, "stream_number_start")
 
     @property
     def line_number_start(self) -> int:
@@ -634,9 +673,20 @@ class Flowsheet:
         return self._line_number_start
 
     @line_number_start.setter
-    def line_number_start(self, value: int) -> None:  # numpydoc ignore=GL08
-        check_whole(value, "line_number_start")
-        self._line_number_start = int(value)
+    def line_number_start(self, value: int) -> None:
+        """Set the first generated line sequence number.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is a bool or not an integer.
+        """
+        self._line_number_start = _whole_number(value, "line_number_start")
 
     @property
     def loop_number_start(self) -> int:
@@ -650,9 +700,20 @@ class Flowsheet:
         return self._loop_number_start
 
     @loop_number_start.setter
-    def loop_number_start(self, value: int) -> None:  # numpydoc ignore=GL08
-        check_whole(value, "loop_number_start")
-        self._loop_number_start = int(value)
+    def loop_number_start(self, value: int) -> None:
+        """Set the first number :meth:`add_loop` allocates.
+
+        Parameters
+        ----------
+        value : int
+            Whole number.
+
+        Raises
+        ------
+        TypeError
+            If ``value`` is a bool or not an integer.
+        """
+        self._loop_number_start = _whole_number(value, "loop_number_start")
 
     def add_annotation(self, annotation):
         """Add an annotation or table box to the sheet.
