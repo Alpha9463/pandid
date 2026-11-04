@@ -75,6 +75,45 @@ class Issue:
         return f"[{self.severity}] {self.code}: {self.message}"
 
 
+def _pin_call(u) -> str:
+    """Return the ``pin()`` call that moves a unit.
+
+    Parameters
+    ----------
+    u : Unit
+        Unit to move.
+
+    Returns
+    -------
+    str
+        Call text for the axes ``u`` is pinned on, or ``x`` and ``y``
+        when it is pinned on neither, naming the port each axis is
+        pinned by, or ``port=None`` for a flag pinned by its corner.
+    """
+    from pandid.units import _Boundary
+
+    pin = u.pin_
+    hosted = getattr(u, "host", None) is not None
+    # Name each pinned axis by the field that places it, x= or y= on a balloon.
+    axes = []
+    for px, grid in (("x", "col"), ("y", "row")):
+        if pin is not None and getattr(pin, px) is not None:
+            axes.append(px)
+        elif pin is not None and getattr(pin, grid) is not None:
+            axes.append(px if hosted else grid)
+    ports = getattr(u, "_pin_ports", None) or {}
+    calls: dict[str, list[str]] = {}
+    for axis in axes or ["x", "y"]:
+        absolute = pin is not None and axis in ("x", "y") and getattr(pin, axis) is not None
+        port = ports.get(axis) if absolute else None
+        # A flag's pin() places its port unless told port=None.
+        spelled = (f"port={port!r}, " if port is not None
+                   else "port=None, " if absolute and isinstance(u, _Boundary) else "")
+        calls.setdefault(spelled, []).append(f"{axis}=...")
+    return " and ".join(f"call .pin({spelled}{', '.join(args)}) on {u.name}"
+                        for spelled, args in calls.items())
+
+
 def _overlap_cure(a, b) -> str:
     """Return a sentence naming the call that clears an overlap.
 
@@ -107,39 +146,6 @@ def _overlap_cure(a, b) -> str:
         axes = ("x", "y") if getattr(u, "host", None) is not None else ("col", "row", "x", "y")
         return pin is not None and any(getattr(pin, f) is not None for f in axes)
 
-    def how(u) -> str:
-        """Return the ``pin()`` call that moves a unit.
-
-        Parameters
-        ----------
-        u : Unit
-            Unit to move.
-
-        Returns
-        -------
-        str
-            Call text for the axes ``u`` is pinned on, or ``x`` and
-            ``y`` when it is pinned on neither, naming the port each
-            axis is pinned by.
-        """
-        pin = u.pin_
-        hosted = getattr(u, "host", None) is not None
-        # Name each pinned axis by the field that places it, x= or y= on a balloon.
-        axes = []
-        for px, grid in (("x", "col"), ("y", "row")):
-            if pin is not None and getattr(pin, px) is not None:
-                axes.append(px)
-            elif pin is not None and getattr(pin, grid) is not None:
-                axes.append(px if hosted else grid)
-        ports = getattr(u, "_pin_ports", None) or {}
-        calls: dict[str | None, list[str]] = {}
-        for axis in axes or ["x", "y"]:
-            calls.setdefault(ports.get(axis), []).append(f"{axis}=...")
-        return " and ".join(
-            f"call .pin({'' if port is None else f'port={port!r}, '}{', '.join(args)}) "
-            f"on {u.name}"
-            for port, args in calls.items())
-
     for u, other in ((b, a), (a, b)):
         host = getattr(u, "host", None)
         if host is None or pinned(u):
@@ -155,7 +161,7 @@ def _overlap_cure(a, b) -> str:
         moves = ["x" if f == "col" else "y" for f in fields]
         grid = (f". Its {' and '.join(f + '=' for f in fields)} pin does not move an "
                 f"attached balloon; {'an' if moves[0] == 'x' else 'a'} "
-                f"{' and '.join(m + '=' for m in moves)} pin does: {how(u)}"
+                f"{' and '.join(m + '=' for m in moves)} pin does: {_pin_call(u)}"
                 if fields else "")
         return (f"{u.name} hangs off {host.name}, so say where on it: {key}= is "
                 f"{where}, and offset= how far it stands off (now {u.offset:g}). "
@@ -163,12 +169,12 @@ def _overlap_cure(a, b) -> str:
                 f"{'stream' if stream else 'unit'}>, {key}=..., offset=...{kept}) on "
                 f"{u.name}{grid}")
     if pinned(a) and pinned(b):
-        return f"Both are pinned, so move one pin clear of the other: {how(b)}"
+        return f"Both are pinned, so move one pin clear of the other: {_pin_call(b)}"
     for u, other in ((b, a), (a, b)):
         if pinned(u):
-            return f"{u.name} is pinned there, so move its pin clear of {other.name}: {how(u)}"
+            return f"{u.name} is pinned there, so move its pin clear of {other.name}: {_pin_call(u)}"
     return (f"Neither is pinned, so the layout placed both there. Pin one clear of "
-            f"the other: {how(b)}")
+            f"the other: {_pin_call(b)}")
 
 
 def _move_cure(u) -> str:
@@ -184,12 +190,11 @@ def _move_cure(u) -> str:
     str
         Advice naming an ``attach()`` or ``pin()`` call.
     """
-    from pandid.portgeom import pin_intent
     from pandid.streams import Stream
 
     host = getattr(u, "host", None)
-    intent = pin_intent(u)
-    if host is not None and not intent:
+    pin = u.pin_
+    if host is not None and (pin is None or (pin.x is None and pin.y is None)):
         stream = isinstance(host, Stream)
         key = "at" if stream else "face"
         now = f"{u.at:g}" if stream else repr(u.face)
@@ -199,13 +204,7 @@ def _move_cure(u) -> str:
                 f"(now {now}) and offset= (now {u.offset:g}): call .attach(<the "
                 f"{host.name} {'stream' if stream else 'unit'}>, {key}=..., "
                 f"offset=...{kept}) on {u.name}")
-    # Name the port each pinned axis is measured to.
-    calls: dict[str | None, list[str]] = {}
-    for axis, (port, _) in (intent or {"x": (None, 0.0), "y": (None, 0.0)}).items():
-        calls.setdefault(port, []).append(f"{axis}=...")
-    return f"Move {u.name} clear of it: " + " and ".join(
-        f"call .pin({'' if port is None else f'port={port!r}, '}{', '.join(axes)}) "
-        f"on {u.name}" for port, axes in calls.items())
+    return f"Move {u.name} clear of it: {_pin_call(u)}"
 
 
 def _is_control_function(letters: str, i: int) -> bool:
