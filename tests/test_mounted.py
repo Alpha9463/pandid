@@ -230,7 +230,7 @@ def test_a_valve_set_on_a_shifted_line_adds_no_bends(upright: bool, at: float) -
 
 
 def test_a_line_between_two_devices_set_on_it_adds_no_bends() -> None:
-    """Check that the line between a valve and a reducer set on one pipe draws straight."""
+    """Check that the lines either side of a reducer set after a valve on one pipe draw straight."""
     from pandid import Reducer
     from pandid.route_geometry import stream_polyline
     from pandid.routing.metrics import real_bends
@@ -240,11 +240,12 @@ def test_a_line_between_two_devices_set_on_it_adds_no_bends() -> None:
     end = fs.add(Product("B")).pin(port="inlet", x=700, y=127.8)
     line = fs.connect(start.outlet, end.inlet)
     valve = fs.add(ControlValve("CV"), on=line, at=0.4)
-    fs.add(Reducer("R", height=27.8), on=line, at=0.7)
+    reducer = fs.add(Reducer("R", height=27.8), on=line, at=0.7)
 
     fs.route()
-    assert valve.outlet.stream is not None
-    assert real_bends(stream_polyline(valve.outlet.stream)) == 0
+    for stream in (valve.outlet.stream, reducer.outlet.stream):
+        assert stream is not None
+        assert real_bends(stream_polyline(stream)) == 0
 
 
 def test_a_valve_whose_nozzles_sit_apart_keeps_the_frame_that_fits_its_line() -> None:
