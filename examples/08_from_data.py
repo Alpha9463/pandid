@@ -115,11 +115,6 @@ SPEC = {
             "FV-201 maintains P-201A/B above 10% of rated flow.",
             "Dissolved oxygen sampled downstream of CV-201.",
         ]},
-        {"type": "legend", "align": "top-left", "margin": 6, "entries": {
-            "BFW": "Boiler Feedwater",
-            "DA": "Deaerator",
-            "NTS": "Not To Scale",
-        }},
     ],
 }
 

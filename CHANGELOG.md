@@ -41,15 +41,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draw.io hatches both take their stroke from `pandid.render.svg.HATCH_ARM`.
 - **A missed attribute lookup on a unit no longer lists its ports (#574).**
   The port list is written only when the `AttributeError` is shown.
-- **`unit-overlap` says how to clear it (#434).** It names the call that moves
-  one of the units: `attach()` with `at=`/`face=` and `offset=` for a balloon,
-  keeping its `relation=` and `angle=`, or `pin()` for any other unit.
+- **`unit-overlap` says how to clear it (#434, #583).** It names the call that
+  moves one of the units: `attach()` with `at=`/`face=` and `offset=` for a
+  balloon, keeping its `relation=` and `angle=`, or `pin()` on only the axes the
+  unit is already pinned on, or on `x=` and `y=` for a unit with no pin.
 - **A controller with no anchor is drawn beyond the valve it drives (#443).**
   A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives one
   valve's `actuator` stands 100 out on its axis, or at the nearest clear
   standoff, unless that adds a finding or a clash.
 - **The alumina refinery example draws three sheets (#622).** Its areas are
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
+- **Examples draw only the furniture their sheet needs (#684).** The control
+  loop and metering skid examples render as the P&IDs they are, without a
+  stream table, and three others drop a legend, line list or title block.
 - **Unit options are keyword-only on 23 classes (#646).** `Feed`, `Product`,
   `Valve`, `Fitting`, `Vessel`, `Tank`, `HeatExchanger`, `Evaporator`,
   `Thickener`, `Reactor`, `Separator`, `Column`, `DistillationColumn`,
@@ -119,6 +123,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#642).** Where `pin(orientation=..., mirrored=...)` would run it against
   its line, it is drawn end for end, and `validate()` reports the pin that
   draws it so.
+- **`validate()` reports a variant no symbol draws (#645).**
+  `Valve("V-1", variant="gat")` is a `variant-unknown` error naming the
+  registered variants, and the render refuses it before any layout.
 - **Numbered nozzles type-check in mypy and pyright (#646).**
   `Mixer("M", n_inlets=3).in_1` and `GasHolder("G", inputs=("N", "S"))` pass
   both checkers, and a nozzle past the count, such as `.in_4`, fails at run
