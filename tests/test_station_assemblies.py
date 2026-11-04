@@ -68,13 +68,7 @@ def test_hand_wired_station_is_set_on_its_pipe() -> None:
 
 @pytest.mark.parametrize("product_col", [1, 3])
 def test_station_uses_receiver_axis_after_a_south_discharge(product_col: int) -> None:
-    """Place a station on the horizontal leg after an elbow.
-
-    Parameters
-    ----------
-    product_col : int
-        Receiver rank, including a skipped grid column.
-    """
+    """Place a station on the horizontal leg after an elbow."""
     fs = Flowsheet("Reactor outlet station")
     reactor = fs.add(Reactor("R-101")).pin(col=0)
     product = fs.add(Product("Product")).pin(col=product_col)

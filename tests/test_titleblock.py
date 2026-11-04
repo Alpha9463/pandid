@@ -11,20 +11,7 @@ from pandid.document import TitleBlock, Revision
 
 
 def _sheet(name: str = "Demo", span: float = 0.0) -> Flowsheet:
-    """Create a pinned feed-to-product flowsheet.
-
-    Parameters
-    ----------
-    name : str, default="Demo"
-        Flowsheet name.
-    span : float, default=0.0
-        Extra horizontal distance between the terminal units.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet with one material stream.
-    """
+    """Create a pinned feed-to-product flowsheet."""
     fs = Flowsheet(name)
     a = fs.add(U.Feed("F")).pin(x=110, y=130)
     b = fs.add(U.Product("P")).pin(x=260 + span, y=130)
@@ -62,13 +49,7 @@ def test_border_and_furniture_are_independent():
     """Verify border and furniture are independent."""
 
     def build():
-        """Create a sheet with title-block furniture.
-
-        Returns
-        -------
-        Flowsheet
-            Sheet containing title-block furniture.
-        """
+        """Create a sheet with title-block furniture."""
         fs = _sheet()
         fs.title_block = TitleBlock(title="Demo Sheet", drawing_number="PFD-9")
         return fs
@@ -127,18 +108,7 @@ def test_the_drawing_number_has_one_budget_however_the_sheet_is_asked_for():
     number = "PFD-A100-0001-REV"
 
     def drawn(**kw):
-        """Render the drawing-number cell and collect truncation findings.
-
-        Parameters
-        ----------
-        **kw : dict
-            Title-block keyword arguments supplied by pytest.
-
-        Returns
-        -------
-        tuple[str, list[str]]
-            Rendered cell text and truncation warnings.
-        """
+        """Render the drawing-number cell and collect truncation findings."""
         fs = _sheet()
         fs.title_block = TitleBlock(title="Demo", drawing_number=number)
         svg = fs.to_svg(border="zone", **kw)
@@ -308,20 +278,7 @@ def test_annotation_absolute_position():
 
 
 def _schedule(fs: Flowsheet, **kwargs: object) -> list[tuple[str, str]]:
-    """Return equipment-schedule rows for a flowsheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to schedule.
-    **kwargs : object
-        Options forwarded to ``equipment_list``.
-
-    Returns
-    -------
-    list[tuple[str, str]]
-        ``(tag, description)`` rows.
-    """
+    """Return equipment-schedule rows for a flowsheet."""
     from pandid.document import equipment_list
 
     return equipment_list(fs, **kwargs).rows
@@ -451,18 +408,7 @@ def test_a_stream_table_section_keyed_to_nothing_warns_instead_of_vanishing():
 
 
 def _columns(fs: Flowsheet) -> list[str]:
-    """Return stream-table column labels.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet containing the stream table.
-
-    Returns
-    -------
-    list[str]
-        Labels of emitted stream columns.
-    """
+    """Return stream-table column labels."""
     from pandid.render.furniture import stream_table_layout
 
     table = stream_table_layout(fs)
@@ -470,33 +416,14 @@ def _columns(fs: Flowsheet) -> list[str]:
 
 
 def _table(fs: Flowsheet, **kwargs: object) -> str:
-    """Render a flowsheet's stream table as SVG.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet containing the table.
-    **kwargs : object
-        Options forwarded to ``Flowsheet.to_svg``.
-
-    Returns
-    -------
-    str
-        SVG stream-table group.
-    """
+    """Render a flowsheet's stream table as SVG."""
     svg = fs.to_svg(show_stream_table=True, **kwargs)
     body = re.search(r'<g id="stream_table">(.*?)</g>', svg, re.S)
     return body.group(1) if body else ""
 
 
 def _two_and_two() -> Flowsheet:
-    """Create a flowsheet with tabulated and boundary-only streams.
-
-    Returns
-    -------
-    Flowsheet
-        Sheet with two feeds and two products.
-    """
+    """Create a flowsheet with tabulated and boundary-only streams."""
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("Raw Feed"))
     pump = fs.add(U.Pump("P-101"))
@@ -536,18 +463,7 @@ def test_a_value_present_and_blank_keeps_the_column():
 
 
 def _layout(fs: Flowsheet):
-    """Return the calculated stream-table layout.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet containing a stream table.
-
-    Returns
-    -------
-    object
-        Non-empty stream-table layout.
-    """
+    """Return the calculated stream-table layout."""
     from pandid.render.furniture import stream_table_layout
 
     table = stream_table_layout(fs)
@@ -556,18 +472,7 @@ def _layout(fs: Flowsheet):
 
 
 def _wide(n: int) -> Flowsheet:
-    """Create a sheet with a requested number of tabulated streams.
-
-    Parameters
-    ----------
-    n : int
-        Number of feed-to-product lines.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet containing ``n`` tabulated streams.
-    """
+    """Create a sheet with a requested number of tabulated streams."""
     fs = Flowsheet("wide")
     for i in range(n):
         feed = fs.add(U.Feed(f"F{i}"))
@@ -600,13 +505,7 @@ def test_a_table_left_alone_is_drawn_exactly_as_it_always_was():
 
 @pytest.mark.parametrize("size", [0, -1, -0.5])
 def test_a_size_that_is_not_a_size_is_refused(size):
-    """Verify a size that is not a size is refused.
-
-    Parameters
-    ----------
-    size : float
-        Text size supplied by pytest.
-    """
+    """Verify a size that is not a size is refused."""
     fs = _two_and_two()
     fs.stream_table.font_size = size
     with pytest.raises(ValueError, match="font_size"):
@@ -634,72 +533,27 @@ def test_the_stated_size_reaches_the_drawio_export_too():
 
 
 def _widths(fs) -> tuple[float, float]:
-    """Return calculated label and stream-column widths.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet containing a stream table.
-
-    Returns
-    -------
-    tuple[float, float]
-        Label-column width followed by stream-column width.
-    """
+    """Return calculated label and stream-column widths."""
     table = _layout(fs)
     return table.rows[0][0].w, table.rows[0][1].w
 
 
 def _with(fs: Flowsheet, **options: object) -> Flowsheet:
-    """Set stream-table options on a flowsheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to update.
-    **options : object
-        Attributes to set on ``fs.stream_table``.
-
-    Returns
-    -------
-    Flowsheet
-        Updated flowsheet.
-    """
+    """Set stream-table options on a flowsheet."""
     for key, value in options.items():
         setattr(fs.stream_table, key, value)
     return fs
 
 
 def _fits(text: str, size: float = 10.5, bold: bool = False) -> float:
-    """Measure a stream-table cell including its gutter.
-
-    Parameters
-    ----------
-    text : str
-        Cell text.
-    size : float, default=10.5
-        Font size.
-    bold : bool, default=False
-        Whether the text is bold.
-
-    Returns
-    -------
-    float
-        Required cell width.
-    """
+    """Measure a stream-table cell including its gutter."""
     from pandid.render.furniture import _STREAM_GUTTER, text_width
 
     return text_width(text, size, bold=bold) + _STREAM_GUTTER
 
 
 def _one_long_value() -> Flowsheet:
-    """Create a table with one value wider than the remaining values.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet with three tabulated streams.
-    """
+    """Create a table with one value wider than the remaining values."""
     fs = Flowsheet("t")
     feed = fs.add(U.Feed("F"))
     pump = fs.add(U.Pump("P-101"))
@@ -797,15 +651,7 @@ def test_auto_composes_with_the_stated_type_size():
 @pytest.mark.parametrize("field", ["label_width", "column_width"])
 @pytest.mark.parametrize("value", ["fit", "", -1, None, True])
 def test_a_width_that_is_not_one_is_refused(field, value):
-    """Verify a width that is not one is refused.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    value : object
-        Value supplied by pytest.
-    """
+    """Verify a width that is not one is refused."""
     fs = _with(_two_and_two(), **{field: value})
     with pytest.raises(ValueError, match=field):
         _layout(fs)
@@ -860,20 +706,7 @@ def test_a_run_is_judged_over_every_segment_it_is_drawn_in():
 
 
 def _row(fs: Flowsheet, key: str) -> list[str]:
-    """Return values from a stream-table property row.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet containing a stream table.
-    key : str
-        Property-row name.
-
-    Returns
-    -------
-    list[str]
-        Values in stream-column order.
-    """
+    """Return values from a stream-table property row."""
     from pandid.render.furniture import stream_table_layout
 
     table = stream_table_layout(fs)
@@ -884,13 +717,7 @@ def _row(fs: Flowsheet, key: str) -> list[str]:
 
 
 def _across_a_valve():
-    """Create a two-segment pressure-drop run.
-
-    Returns
-    -------
-    tuple
-        Flowsheet, upstream stream, and downstream stream.
-    """
+    """Create a two-segment pressure-drop run."""
     fs = Flowsheet("drop")
     feed = fs.add(U.Feed("F"))
     fv = fs.add(U.Valve("FV-1", variant="control"))
@@ -975,18 +802,7 @@ _CELL = re.compile(
 
 
 def _table_cells(svg: str) -> list[tuple[float, float, float, float, str]]:
-    """Extract stream-table cell and text extents from SVG.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    list[tuple[float, float, float, float, str]]
-        Cell bounds, ink bounds, and text for each table cell.
-    """
+    """Extract stream-table cell and text extents from SVG."""
     from pandid.render.furniture import text_width
 
     body = re.search(r'<g id="stream_table">(.*?)</g>', svg, re.S)
@@ -1008,13 +824,7 @@ def _table_cells(svg: str) -> list[tuple[float, float, float, float, str]]:
 
 
 def _wide_table_sheet() -> Flowsheet:
-    """Create a sheet with wide stream-table text.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet containing wide property labels and values.
-    """
+    """Create a sheet with wide stream-table text."""
     fs = _sheet()
     fs.streams[0].properties = {
         "Vapour Fraction (mass)": "0.0441 kg/kg total",
@@ -1087,18 +897,7 @@ def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
     """Verify how much of a title survives does not depend on the sheet count."""
 
     def drawn_title(of_sheets):
-        """Return the rendered title for a sheet-count value.
-
-        Parameters
-        ----------
-        of_sheets : object
-            Value used by the callable.
-
-        Returns
-        -------
-        str
-            Rendered title text.
-        """
+        """Return the rendered title for a sheet-count value."""
         fs = _sheet()
         fs.title_block = TitleBlock(title="Transfer and Relief U100", of_sheets=of_sheets)
         svg = fs.to_svg(border="zone")
@@ -1215,40 +1014,14 @@ def test_a_signatory_with_no_revision_row_to_sign_is_reported():
 
 
 def _findings(fs: Flowsheet) -> list[tuple[str, str]]:
-    """Return sorted title-strip validation findings.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to validate.
-
-    Returns
-    -------
-    list[tuple[str, str]]
-        Finding codes and messages.
-    """
+    """Return sorted title-strip validation findings."""
     return sorted(
         (i.code, i.message) for i in fs.validate() if i.code.startswith(("text-", "title-block"))
     )
 
 
 def _rendered(fs: Flowsheet, how: str, **kw: object) -> list[tuple[str, str]]:
-    """Render a flowsheet and return title-strip findings.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to render.
-    how : str
-        Name of the renderer method.
-    **kw : object
-        Renderer options.
-
-    Returns
-    -------
-    list[tuple[str, str]]
-        Finding codes and messages emitted by the render.
-    """
+    """Render a flowsheet and return title-strip findings."""
     getattr(fs, how)(border="zone", **kw)
     return sorted(
         (w.code, w.message) for w in fs.warnings if w.code.startswith(("text-", "title-block"))
@@ -1256,20 +1029,7 @@ def _rendered(fs: Flowsheet, how: str, **kw: object) -> list[tuple[str, str]]:
 
 
 def _block(name: str = "Ethanol A300", **kw: object) -> Flowsheet:
-    """Create a sheet with a title block.
-
-    Parameters
-    ----------
-    name : str, default="Ethanol A300"
-        Flowsheet name.
-    **kw : object
-        ``TitleBlock`` constructor arguments.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet containing the requested title block.
-    """
+    """Create a sheet with a title block."""
     fs = _sheet(name=name)
     fs.title_block = TitleBlock(**kw)
     return fs
@@ -1288,25 +1048,7 @@ _REV_FIELDS = [
 
 @dataclasses.dataclass(frozen=True)
 class _Answer:
-    """Expected validation and rendering outcome for one field.
-
-    Parameters
-    ----------
-    overlong : str
-        Value that exceeds the field's available space.
-    code : str
-        Expected validation code.
-    named : str
-        Expected source field in the validation message.
-    fits : str
-        Value that fits the field.
-    ink : str, default=""
-        Expected rendered value when it differs from ``fits``.
-    cells : int, default=1
-        Number of title-strip cells that render the value.
-    signed : bool, default=False
-        Whether the value requires a revision row.
-    """
+    """Expected validation and rendering outcome for one field."""
 
     overlong: str
     code: str
@@ -1318,13 +1060,7 @@ class _Answer:
 
     @property
     def drawn(self) -> str:
-        """Return the expected rendered value.
-
-        Returns
-        -------
-        str
-            Explicit ink value, or the fitting value.
-        """
+        """Return the expected rendered value."""
         return self.ink or self.fits
 
 
@@ -1369,20 +1105,7 @@ _REV_ANSWERS: dict[str, _Answer] = {
 
 
 def _kw(field: str, value: "str | None") -> dict:
-    """Create title-block keyword arguments for a field value.
-
-    Parameters
-    ----------
-    field : str
-        Title-block field to set.
-    value : str or None
-        Field value, or ``None`` to leave the field unset.
-
-    Returns
-    -------
-    dict
-        ``TitleBlock`` constructor arguments.
-    """
+    """Create title-block keyword arguments for a field value."""
     kw: dict = {} if field == "title" else {"title": "Demo"}
     if _ANSWERS[field].signed:
         kw["revisions"] = [Revision(*_SIGNED_ROW)]
@@ -1393,13 +1116,7 @@ def _kw(field: str, value: "str | None") -> dict:
 
 @pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_every_title_block_field_reports_a_value_it_cannot_hold(field):
-    """Verify every title block field reports a value it cannot hold.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify every title block field reports a value it cannot hold."""
     answer = _ANSWERS[field]
     fs = _sheet()
     fs.title_block = TitleBlock(**_kw(field, answer.overlong))
@@ -1416,20 +1133,7 @@ _DRAWIO_VALUE = re.compile(r'<mxCell id="([^"]*)" value="([^"]*)"')
 
 
 def _lettering(fs, how: str) -> "list[tuple[str, str]]":
-    """Extract rendered title-strip cell values.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to render.
-    how : str
-        Name of the renderer method.
-
-    Returns
-    -------
-    list[tuple[str, str]]
-        Renderer cell identifiers and decoded values.
-    """
+    """Extract rendered title-strip cell values."""
     out = getattr(fs, how)(border="zone")
     if how == "to_svg":
         return [(x + "," + y, html.unescape(t)) for x, y, t in _SVG_TEXT.findall(out)]
@@ -1437,19 +1141,7 @@ def _lettering(fs, how: str) -> "list[tuple[str, str]]":
 
 
 def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
-    """Assert that a rendered value occupies the expected cells.
-
-    Parameters
-    ----------
-    answer : _Answer
-        Expected field outcome.
-    fs : Flowsheet
-        Flowsheet to render.
-    how : str
-        Name of the renderer method.
-    what : str
-        Field name included in assertion output.
-    """
+    """Assert that a rendered value occupies the expected cells."""
     cells = [cell for cell, text in _lettering(fs, how) if text == answer.drawn]
     assert len(cells) == answer.cells, (what, answer.drawn, cells)
     assert len(set(cells)) == answer.cells, (what, answer.drawn, cells)
@@ -1457,13 +1149,7 @@ def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
 
 @pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field):
-    """Verify every title block field a cell can hold is drawn and silent.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify every title block field a cell can hold is drawn and silent."""
     answer = _ANSWERS[field]
     _drawn_in(answer, _block(**_kw(field, answer.fits)), "to_svg", field)
     assert _findings(_block(**_kw(field, answer.fits))) == []
@@ -1471,13 +1157,7 @@ def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field):
 
 @pytest.mark.parametrize("field", _REV_FIELDS)
 def test_every_revision_field_a_cell_can_hold_is_drawn_and_silent(field):
-    """Verify every revision field a cell can hold is drawn and silent.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify every revision field a cell can hold is drawn and silent."""
     answer = _REV_ANSWERS[field]
     kw = {"title": "Demo", "revisions": [Revision(**{field: answer.fits})]}
     _drawn_in(answer, _block(**kw), "to_svg", field)
@@ -1489,26 +1169,14 @@ def test_every_revision_field_a_cell_can_hold_is_drawn_and_silent(field):
 
 @pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_each_title_block_field_is_drawn_by_drawio(field):
-    """Verify Draw.io renders every fitting title-block field.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify Draw.io renders every fitting title-block field."""
     answer = _ANSWERS[field]
     _drawn_in(answer, _block(**_kw(field, answer.fits)), "to_drawio", field)
 
 
 @pytest.mark.parametrize("field", _REV_FIELDS)
 def test_each_revision_field_is_drawn_by_drawio(field):
-    """Verify Draw.io renders every fitting revision field.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify Draw.io renders every fitting revision field."""
     answer = _REV_ANSWERS[field]
     kw = {"title": "Demo", "revisions": [Revision(**{field: answer.fits})]}
     _drawn_in(answer, _block(**kw), "to_drawio", field)
@@ -1535,13 +1203,7 @@ def test_a_company_name_the_strip_is_deep_enough_for_is_silent():
 
 @pytest.mark.parametrize("field", _REV_FIELDS)
 def test_every_revision_field_reports_a_value_it_cannot_hold(field):
-    """Verify every revision field reports a value it cannot hold.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify every revision field reports a value it cannot hold."""
     fs = _sheet()
     fs.title_block = TitleBlock(
         title="Demo", revisions=[Revision(**{field: _REV_ANSWERS[field].overlong})]
@@ -1558,13 +1220,7 @@ def test_every_revision_field_reports_a_value_it_cannot_hold(field):
 
 @pytest.mark.parametrize("page", ["A4", "A3", "A2", "A1", "A0"])
 def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
-    """Verify a fullwidth title is cut to a width and not to a count.
-
-    Parameters
-    ----------
-    page : str
-        Page size supplied by pytest.
-    """
+    """Verify a fullwidth title is cut to a width and not to a count."""
     from pandid.render.furniture import _TITLE_W, text_width
 
     fs = _sheet()
@@ -1646,13 +1302,7 @@ def test_a_signatory_the_newest_revision_overrides_is_reported():
     ],
 )
 def test_a_signatory_the_sheet_does_draw_is_silent(revision):
-    """Verify a signatory the sheet does draw is silent.
-
-    Parameters
-    ----------
-    revision : Revision
-        Revision value supplied by pytest.
-    """
+    """Verify a signatory the sheet does draw is silent."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", drawn_by="AA", revisions=[revision])
     svg = fs.to_svg(border="zone")
@@ -1676,17 +1326,7 @@ CLIP_CASES = [
 
 @pytest.mark.parametrize("glyph,bold,size", CLIP_CASES)
 def test_a_cut_string_fits_its_cell_and_one_more_character_would_not(glyph, bold, size):
-    """Verify a cut string fits its cell and one more character would not.
-
-    Parameters
-    ----------
-    glyph : str
-        Glyph used to exercise text clipping.
-    bold : bool
-        Whether the clipped text uses bold lettering.
-    size : float
-        Text size supplied by pytest.
-    """
+    """Verify a cut string fits its cell and one more character would not."""
     from pandid.render.furniture import clip, text_width
 
     room = 1.0
@@ -1721,24 +1361,7 @@ def test_a_fitted_scale_or_stamped_date_is_not_reported_as_its_field(date, fit_s
 
 
 def _drawn_sheet(how: str, field: str, value: object | None, *, assigned: bool = False) -> str:
-    """Render a sheet with one title-block field value.
-
-    Parameters
-    ----------
-    how : str
-        Name of the renderer method.
-    field : str
-        Title-block field to set.
-    value : object or None
-        Value to render, or ``None`` to leave the field unset.
-    assigned : bool, default=False
-        Whether to assign the value after construction.
-
-    Returns
-    -------
-    str
-        Rendered document.
-    """
+    """Render a sheet with one title-block field value."""
     fs = _sheet(name="Ethanol Purification A300")
     kw: dict = {} if field == "title" else {"title": "Demo"}
     if value is not None and not assigned:
@@ -1751,13 +1374,7 @@ def _drawn_sheet(how: str, field: str, value: object | None, *, assigned: bool =
 
 @pytest.mark.parametrize("assigned", [False, True], ids=["constructed", "assigned"])
 def test_an_ordinary_whitespace_field_draws_as_unset(assigned):
-    """Verify ordinary whitespace fields draw as unset values.
-
-    Parameters
-    ----------
-    assigned : bool
-        Whether the value is assigned after construction.
-    """
+    """Verify ordinary whitespace fields draw as unset values."""
     unset = _drawn_sheet("to_svg", "project", None)
     assert unset == _drawn_sheet("to_svg", "project", "  \t ", assigned=assigned)
 
@@ -1770,32 +1387,14 @@ def test_an_ordinary_whitespace_field_draws_as_unset(assigned):
     "stated", [0, 0.0, False, 7, 1], ids=["zero", "zero-float", "false", "seven", "one"]
 )
 def test_a_stated_title_block_value_is_drawn_as_stated_however_it_is_typed(stated, how):
-    """Verify a stated title block value is drawn as stated however it is typed.
-
-    Parameters
-    ----------
-    stated : object
-        Value supplied by pytest.
-    how : str
-        Renderer method supplied by pytest.
-    """
+    """Verify a stated title block value is drawn as stated however it is typed."""
     assert _drawn_sheet(how, "project", stated) == _drawn_sheet(how, "project", str(stated))
 
 
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("half,ink", [("sheet", "SHEET 0 of 1"), ("of_sheets", "SHEET 1 of 0")])
 def test_a_stated_sheet_number_is_never_replaced_by_the_default(half, ink, how):
-    """Verify a stated sheet number is never replaced by the default.
-
-    Parameters
-    ----------
-    half : str
-        Selected half of the sheet count.
-    ink : str
-        Expected rendered text.
-    how : str
-        Renderer method supplied by pytest.
-    """
+    """Verify a stated sheet number is never replaced by the default."""
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", **{half: 0})
     assert [text for _cell, text in _lettering(fs, how) if text == ink]
@@ -1807,84 +1406,35 @@ def test_a_stated_sheet_number_is_never_replaced_by_the_default(half, ink, how):
 
 
 def _through_a_spec(tb: TitleBlock) -> TitleBlock:
-    """Round-trip a title block through a flowsheet specification.
-
-    Parameters
-    ----------
-    tb : TitleBlock
-        Title block to serialize and read.
-
-    Returns
-    -------
-    TitleBlock
-        Reconstructed title block.
-    """
+    """Round-trip a title block through a flowsheet specification."""
     read = Flowsheet.from_dict(_sheet_with(tb).to_dict()).title_block
     assert read is not None, "the document lost the block entirely"
     return read
 
 
 def _stating(field: str, value: object | None) -> TitleBlock:
-    """Create a title block with one explicitly stated value.
-
-    Parameters
-    ----------
-    field : str
-        Title-block field to set.
-    value : object or None
-        Value assigned to the field.
-
-    Returns
-    -------
-    TitleBlock
-        Title block with a non-empty title when required.
-    """
+    """Create a title block with one explicitly stated value."""
     kw: dict = {} if field == "title" else {"title": "Demo"}
     kw[field] = value
     return TitleBlock(**kw)
 
 
 def _revising(field: str, value: object | None) -> Revision:
-    """Create a revision with one explicitly stated value.
-
-    Parameters
-    ----------
-    field : str
-        Revision field to set.
-    value : object or None
-        Value assigned to the field.
-
-    Returns
-    -------
-    Revision
-        Revision containing the requested value.
-    """
+    """Create a revision with one explicitly stated value."""
     kw: dict = {field: value}
     return Revision(**kw)
 
 
 @pytest.mark.parametrize("field", _BLOCK_FIELDS)
 def test_each_title_block_text_field_round_trips(field):
-    """Verify every title-block text field survives a specification round trip.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify every title-block text field survives a specification round trip."""
     tb = _stating(field, "Ethanol A300")
     assert getattr(_through_a_spec(tb), field) == "Ethanol A300"
 
 
 @pytest.mark.parametrize("field", _REV_FIELDS)
 def test_each_revision_text_field_round_trips(field):
-    """Verify every revision text field survives a specification round trip.
-
-    Parameters
-    ----------
-    field : str
-        Title-block or revision field supplied by pytest.
-    """
+    """Verify every revision text field survives a specification round trip."""
     tb = TitleBlock(title="Demo", revisions=[_revising(field, "Ethanol A300")])
     assert getattr(_through_a_spec(tb).revisions[0], field) == "Ethanol A300"
 
@@ -1901,17 +1451,7 @@ def test_each_revision_text_field_round_trips(field):
     ],
 )
 def test_a_falsey_title_block_value_draws_the_same_sheet_after_a_spec_round_trip(case, tb, how):
-    """Verify representative falsey values retain rendered output after a spec round trip.
-
-    Parameters
-    ----------
-    case : str
-        Named representative case supplied by pytest.
-    tb : TitleBlock
-        Title block supplied by pytest.
-    how : str
-        Renderer method supplied by pytest.
-    """
+    """Verify representative falsey values retain rendered output after a spec round trip."""
     kw = dict(border="zone", page_size="A3")
     round_tripped = getattr(_sheet_with(_through_a_spec(tb)), how)(**kw)
     assert round_tripped == getattr(_sheet_with(tb), how)(**kw)
@@ -1936,13 +1476,7 @@ def test_the_reader_and_the_writer_cover_every_field_the_block_has():
 
 @pytest.mark.parametrize("stated", ["", "   ", "\t\n "])
 def test_the_date_cell_is_never_blank_on_an_issued_sheet(stated):
-    """Verify the date cell is never blank on an issued sheet.
-
-    Parameters
-    ----------
-    stated : object
-        Value supplied by pytest.
-    """
+    """Verify the date cell is never blank on an issued sheet."""
     import datetime
 
     fs = _sheet()
@@ -1971,18 +1505,7 @@ def test_a_whitespace_date_does_not_issue_a_visually_blank_cell():
 
 
 def _sheet_with(tb: TitleBlock) -> Flowsheet:
-    """Attach a title block to a basic sheet.
-
-    Parameters
-    ----------
-    tb : TitleBlock
-        Title block to attach.
-
-    Returns
-    -------
-    Flowsheet
-        Sheet containing ``tb``.
-    """
+    """Attach a title block to a basic sheet."""
     fs = _sheet()
     fs.title_block = tb
     return fs
@@ -1990,13 +1513,7 @@ def _sheet_with(tb: TitleBlock) -> Flowsheet:
 
 @pytest.mark.parametrize("half", ["sheet", "of_sheets"])
 def test_a_blank_half_of_the_sheet_count_does_not_issue_half_a_count(half):
-    """Verify a blank half of the sheet count does not issue half a count.
-
-    Parameters
-    ----------
-    half : str
-        Selected half of the sheet count.
-    """
+    """Verify a blank half of the sheet count does not issue half a count."""
     tb = TitleBlock(title="Demo", **{half: "   "})
     assert getattr(tb, half) == "   "
 
@@ -2064,17 +1581,7 @@ _VALIDATION_CASES = [
 
 @pytest.mark.parametrize("case,kw,expected", _VALIDATION_CASES)
 def test_representative_title_block_states_report_expected_findings(case, kw, expected):
-    """Verify representative title-block states report expected findings.
-
-    Parameters
-    ----------
-    case : str
-        Named representative case supplied by pytest.
-    kw : dict
-        Title-block keyword arguments supplied by pytest.
-    expected : list
-        Expected validation findings supplied by pytest.
-    """
+    """Verify representative title-block states report expected findings."""
     got = _findings(_block(**kw))
     assert [c for c, _m in got] == [c for c, _n in expected], got
     for (_code, named), (_c, message) in zip(expected, got):
@@ -2083,17 +1590,7 @@ def test_representative_title_block_states_report_expected_findings(case, kw, ex
 
 @pytest.mark.parametrize("case,kw,expected", _VALIDATION_CASES)
 def test_representative_validation_matches_both_backends(case, kw, expected):
-    """Verify representative validation findings match both backends.
-
-    Parameters
-    ----------
-    case : str
-        Named representative case supplied by pytest.
-    kw : dict
-        Title-block keyword arguments supplied by pytest.
-    expected : list
-        Expected validation findings supplied by pytest.
-    """
+    """Verify representative validation findings match both backends."""
     predicted = _findings(_block(**kw))
     assert predicted == _rendered(_block(**kw), "to_svg")
     assert predicted == _rendered(_block(**kw), "to_drawio")

@@ -18,18 +18,7 @@ from pandid.routing.metrics import real_bends
 
 
 def _fingerprint(fs: Flowsheet) -> str:
-    """Hash the resolved frames, port faces, routes, and convergence state.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out and routed flowsheet.
-
-    Returns
-    -------
-    str
-        SHA-256 digest of the drawing geometry, rounded to six decimal places.
-    """
+    """Hash the resolved frames, port faces, routes, and convergence state."""
     geometry = {
         "units": [
             (
@@ -69,13 +58,7 @@ def _fingerprint(fs: Flowsheet) -> str:
 
 @pytest.mark.parametrize("stem", ["04_control_loop", "08_from_data", "16_demineralised_water"])
 def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
-    """Draw the same sheet from author intent and from a fresh build.
-
-    Parameters
-    ----------
-    stem : str
-        Example laid out with its placement stripped.
-    """
+    """Draw the same sheet from author intent and from a fresh build."""
     fs, _ = build_unpinned(stem)
     fs.layout()
     fs.route()
@@ -93,18 +76,7 @@ def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
 
 
 def _sealed_by_alignment(pinned: bool = False) -> tuple[Flowsheet, Frame, Frame, Route]:
-    """Lay out a sheet where lining up S-2's feed with R-1's outlet can seal S-1's exit.
-
-    Parameters
-    ----------
-    pinned : bool, optional
-        Pin every unit at the sealed pixel positions instead of grid ranks.
-
-    Returns
-    -------
-    tuple[Flowsheet, Frame, Frame, Route]
-        The routed sheet, S-1's and S-2's frames and the underflow's route.
-    """
+    """Lay out a sheet where lining up S-2's feed with R-1's outlet can seal S-1's exit."""
     fs = Flowsheet("Sealed exit")
     reactor = fs.add(Reactor("R-1"))
     upper = fs.add(GravitySeparator("S-1"))
@@ -163,13 +135,7 @@ def test_default_route_clears_the_unpinned_biodiesel_sheet() -> None:
 
 @pytest.mark.parametrize("mirror", [None, "y", True])
 def test_a_valve_on_an_upright_leg_runs_along_it(mirror: str | bool | None) -> None:
-    """Turn an in-line valve to run along an upright pipe, mirror or not.
-
-    Parameters
-    ----------
-    mirror : str or bool or None
-        The valve's stated mirror, if any.
-    """
+    """Turn an in-line valve to run along an upright pipe, mirror or not."""
     fs = Flowsheet("Upright valve")
     top = fs.add(U.Tank("T-1"))
     bottom = fs.add(U.Tank("T-2")).nozzle("in_1", "N")
@@ -191,18 +157,7 @@ def test_a_valve_on_an_upright_leg_runs_along_it(mirror: str | bool | None) -> N
 
 
 def _upright_line(valve: U.Valve) -> tuple[Flowsheet, U.Valve]:
-    """Put a valve on a pipe that runs straight down from one tank into another.
-
-    Parameters
-    ----------
-    valve : Valve
-        Valve to put on the pipe.
-
-    Returns
-    -------
-    tuple[Flowsheet, Valve]
-        The sheet and the valve on it.
-    """
+    """Put a valve on a pipe that runs straight down from one tank into another."""
     fs = Flowsheet("Upright line")
     top = fs.add(U.Tank("T-1"))
     bottom = fs.add(U.Tank("T-2")).nozzle("in_1", "N")
@@ -232,13 +187,7 @@ def test_a_stated_level_turn_holds_and_round_trips() -> None:
 
 @pytest.mark.parametrize("pins", [((0, None), (1, None)), ((0, 1), (0, 0))])
 def test_grid_pins_win_over_a_stack(pins: tuple[tuple[int, int | None], ...]) -> None:
-    """Keep two blocks where their grid pins put them, though their pipe would stack them.
-
-    Parameters
-    ----------
-    pins : tuple[tuple[int, int or None], ...]
-        ``(col, row)`` pinned on A, then on B.
-    """
+    """Keep two blocks where their grid pins put them, though their pipe would stack them."""
     fs = Flowsheet("Pinned stack")
     a = fs.add(Block("A", outputs=["S"]))
     b = fs.add(Block("B", inputs=["N"]))
@@ -270,13 +219,7 @@ def test_a_grid_pin_drawn_out_of_order_is_reported() -> None:
 
 
 def _line() -> tuple[Flowsheet, Stream]:
-    """Return a sheet with one level line from a feed to a product.
-
-    Returns
-    -------
-    tuple[Flowsheet, Stream]
-        The sheet and its line.
-    """
+    """Return a sheet with one level line from a feed to a product."""
     fs = Flowsheet("Line")
     feed = fs.add(Feed("Feed"))
     product = fs.add(Product("Product"))
@@ -312,15 +255,7 @@ def test_a_station_member_keeps_its_stated_turn() -> None:
 def test_a_stated_nozzle_face_is_kept_in_every_pose(
     kind: type[U.Valve], port: str, face: str
 ) -> None:
-    """Set a valve with a stated nozzle face on a line, skipping poses that lose it.
-
-    Parameters
-    ----------
-    kind : type[Valve]
-        Valve class set on the line.
-    port, face : str
-        The nozzle and the face its author stated.
-    """
+    """Set a valve with a stated nozzle face on a line, skipping poses that lose it."""
     fs, line = _line()
     valve = fs.add(kind("V-1").nozzle(port, face), on=line)
     fs.route()
@@ -369,13 +304,7 @@ def test_a_turned_device_with_a_stated_face_is_set_on_its_line() -> None:
 
 @pytest.mark.parametrize("reverse", [False, True])
 def test_side_draw_peers_follow_their_nozzle_heights(reverse: bool) -> None:
-    """Draw the stripper on the higher side draw above the other.
-
-    Parameters
-    ----------
-    reverse : bool
-        Add the lower draw's stripper first.
-    """
+    """Draw the stripper on the higher side draw above the other."""
     fs = Flowsheet("Crude")
     tower = fs.add(
         U.Column("T-101", internals="valve_tray", trays=30, n_draws=2, draw_stages=[10, 20])

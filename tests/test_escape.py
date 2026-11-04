@@ -74,36 +74,10 @@ _XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
 
 
 def _plant(payload: str, field: str) -> Flowsheet:
-    """Create a sheet with a payload in one rendered context.
-
-    Parameters
-    ----------
-    payload : str
-        User-controlled value to render.
-    field : str
-        Name of the rendered context containing the value.
-
-    Returns
-    -------
-    Flowsheet
-        Pinned flowsheet with document furniture and annotations.
-    """
+    """Create a sheet with a payload in one rendered context."""
 
     def at(name: str, ordinary: str) -> str:
-        """Select the hostile payload for its named context.
-
-        Parameters
-        ----------
-        name : str
-            Context represented by the current value.
-        ordinary : str
-            Safe value used outside the selected context.
-
-        Returns
-        -------
-        str
-            Payload for the selected context or the ordinary value.
-        """
+        """Select the hostile payload for its named context."""
         return payload if field == name else ordinary
 
     # The custom scheme renders all line-number components.
@@ -171,18 +145,7 @@ def _plant(payload: str, field: str) -> Flowsheet:
 
 
 def _parsed(document: str) -> ET.Element:
-    """Parse XML or fail the current test.
-
-    Parameters
-    ----------
-    document : str
-        XML document to parse.
-
-    Returns
-    -------
-    xml.etree.ElementTree.Element
-        Parsed XML root element.
-    """
+    """Parse XML or fail the current test."""
     try:
         return ET.fromstring(document)
     except ET.ParseError as exc:
@@ -190,13 +153,7 @@ def _parsed(document: str) -> ET.Element:
 
 
 def _carries_no_injected_markup(root: ET.Element) -> None:
-    """Assert that XML contains no injected elements or attributes.
-
-    Parameters
-    ----------
-    root : xml.etree.ElementTree.Element
-        Parsed XML root element.
-    """
+    """Assert that XML contains no injected elements or attributes."""
     for element in root.iter():
         for name in element.attrib:
             assert INJECTED not in name, f"{element.tag} carries an injected {name!r}"
@@ -204,13 +161,7 @@ def _carries_no_injected_markup(root: ET.Element) -> None:
 
 
 def _every_reference_resolves(root: ET.Element) -> None:
-    """Assert that SVG references name defined identifiers.
-
-    Parameters
-    ----------
-    root : xml.etree.ElementTree.Element
-        Parsed SVG root element.
-    """
+    """Assert that SVG references name defined identifiers."""
     ids = {element.get("id") for element in root.iter() if element.get("id") is not None}
     for element in root.iter():
         for value in element.attrib.values():
@@ -223,13 +174,7 @@ def _every_reference_resolves(root: ET.Element) -> None:
 
 @pytest.mark.parametrize("field", ESCAPE_CONTEXTS.values(), ids=tuple(ESCAPE_CONTEXTS))
 def test_a_hostile_value_cannot_break_the_svg_document(field: str) -> None:
-    """Verify SVG escaping in every rendered context.
-
-    Parameters
-    ----------
-    field : str
-        SVG renderer context containing the injection probe.
-    """
+    """Verify SVG escaping in every rendered context."""
     svg = _plant(RENDER_PROBE, field).to_svg(**RENDERED)
     root = _parsed(svg)
     _carries_no_injected_markup(root)
@@ -238,13 +183,7 @@ def test_a_hostile_value_cannot_break_the_svg_document(field: str) -> None:
 
 @pytest.mark.parametrize("field", ESCAPE_CONTEXTS.values(), ids=tuple(ESCAPE_CONTEXTS))
 def test_a_hostile_value_cannot_break_the_drawio_document(field: str) -> None:
-    """Verify Draw.io escaping in every rendered context.
-
-    Parameters
-    ----------
-    field : str
-        Draw.io renderer context containing the injection probe.
-    """
+    """Verify Draw.io escaping in every rendered context."""
     root = _parsed(
         _plant(RENDER_PROBE, field).to_drawio(
             border="zone",
@@ -259,13 +198,7 @@ def test_a_hostile_value_cannot_break_the_drawio_document(field: str) -> None:
 
 
 def _carries_no_html_beyond_br(root: ET.Element) -> None:
-    """Assert that Draw.io cell values contain no HTML markup.
-
-    Parameters
-    ----------
-    root : xml.etree.ElementTree.Element
-        Parsed Draw.io XML root element.
-    """
+    """Assert that Draw.io cell values contain no HTML markup."""
     for element in root.iter():
         value = element.get("value")
         if not value:
@@ -279,13 +212,7 @@ def _carries_no_html_beyond_br(root: ET.Element) -> None:
 
 @pytest.mark.parametrize("payload", PAYLOADS.values(), ids=list(PAYLOADS))
 def test_escaped_hostile_content_is_safe_in_text_and_attributes(payload: str) -> None:
-    """Verify hostile payloads are safe in XML text and attributes.
-
-    Parameters
-    ----------
-    payload : str
-        Hostile string accepted by the escaping primitive.
-    """
+    """Verify hostile payloads are safe in XML text and attributes."""
     content = escaped(payload)
     text = _parsed(f"<value>{content}</value>")
     attribute = _parsed(f'<value payload="{content}"/>')
@@ -295,13 +222,7 @@ def test_escaped_hostile_content_is_safe_in_text_and_attributes(payload: str) ->
 
 
 def test_no_file_path_reaches_the_sheet(tmp_path):
-    """Verify rendered output omits its output path.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    """
+    """Verify rendered output omits its output path."""
     out = tmp_path / f"{INJECTED}.svg"
     _plant("ordinary", "flowsheet name").render(str(out))
     assert INJECTED not in out.read_text(encoding="utf-8")
@@ -321,15 +242,7 @@ HOSTILE_PAINTS = (
 @pytest.mark.parametrize("payload", HOSTILE_PAINTS)
 @pytest.mark.parametrize("field", ["color", "dasharray"])
 def test_a_paint_that_is_not_a_paint_is_refused(field, payload):
-    """Verify invalid colour and dash values are rejected.
-
-    Parameters
-    ----------
-    field : str
-        Paint attribute under validation.
-    payload : str
-        Invalid paint value.
-    """
+    """Verify invalid colour and dash values are rejected."""
     fs = _plant("ordinary", "flowsheet name")
     with pytest.raises(ValueError) as raised:
         setattr(fs.streams[0], field, payload)
@@ -346,25 +259,13 @@ def test_a_paint_that_is_not_a_paint_is_refused(field, payload):
     ],
 )
 def test_a_colour_that_is_a_colour_is_accepted(color):
-    """Verify representative CSS colours are accepted.
-
-    Parameters
-    ----------
-    color : str
-        Valid CSS colour.
-    """
+    """Verify representative CSS colours are accepted."""
     check_color(color)
 
 
 @pytest.mark.parametrize("dash", ["7,4", "9 3 2 3", "none"])
 def test_a_dash_that_is_a_dash_is_accepted(dash):
-    """Verify representative dash patterns are accepted.
-
-    Parameters
-    ----------
-    dash : str
-        Valid dash-array value.
-    """
+    """Verify representative dash patterns are accepted."""
     check_dasharray(dash)
 
 
@@ -426,13 +327,7 @@ def test_the_two_spellings_of_a_name_character_agree():
 
 @pytest.mark.parametrize("value", ["P-101", "FT-301", "6 in", "Cl2", "中文"])
 def test_escaping_ordinary_content_changes_nothing(value):
-    """Verify ordinary text remains unchanged.
-
-    Parameters
-    ----------
-    value : str
-        Safe text value.
-    """
+    """Verify ordinary text remains unchanged."""
     assert escaped(value) == value
 
 
@@ -468,17 +363,7 @@ def test_a_tag_halo_is_as_wide_as_the_text_drawn_not_its_escape():
     [(1234567.0, 2, "1234567"), (100.0, 2, "100"), (-0.001, 2, "0"), (4e-05, 6, "0.00004")],
 )
 def test_a_number_is_written_fixed_point_without_a_negative_zero(value, places, written):
-    """Write numbers the same way in both backends: no exponent, no ``-0``.
-
-    Parameters
-    ----------
-    value : float
-        Number to write.
-    places : int
-        Decimal places.
-    written : str
-        Expected text.
-    """
+    """Write numbers the same way in both backends: no exponent, no ``-0``."""
     from pandid.render.escape import fmt
 
     assert fmt(value, places) == written

@@ -28,20 +28,7 @@ SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 
 def _train(name: str, length: int) -> Flowsheet:
-    """Build a straight run: feed, a line of pumps and drums, product.
-
-    Parameters
-    ----------
-    name : str
-        Sheet name.
-    length : int
-        Number of units between the flags.
-
-    Returns
-    -------
-    Flowsheet
-        Unpinned flowsheet.
-    """
+    """Build a straight run: feed, a line of pumps and drums, product."""
     fs = Flowsheet(name)
     port = fs.add(U.Feed("F")).outlet
     for i in range(length):
@@ -53,13 +40,7 @@ def _train(name: str, length: int) -> Flowsheet:
 
 
 def _tower() -> Flowsheet:
-    """Build a column with an overhead system and a reboiler loop.
-
-    Returns
-    -------
-    Flowsheet
-        Unpinned flowsheet.
-    """
+    """Build a column with an overhead system and a reboiler loop."""
     fs = Flowsheet("tower")
     feed = fs.add(U.Feed("F"))
     col = fs.add(U.DistillationColumn("T-1"))
@@ -81,13 +62,7 @@ def _tower() -> Flowsheet:
 
 
 def _recycle() -> Flowsheet:
-    """Build a loop: mixer, reactor, separator, and the gas back round.
-
-    Returns
-    -------
-    Flowsheet
-        Unpinned flowsheet with one return line, compressor to mixer.
-    """
+    """Build a loop: mixer, reactor, separator, and the gas back round."""
     fs = Flowsheet("recycle")
     feed = fs.add(U.Feed("F"))
     mix = fs.add(U.Mixer("M-1", n_inlets=2))
@@ -105,13 +80,7 @@ def _recycle() -> Flowsheet:
 
 
 def _two_trains() -> Flowsheet:
-    """Build two trains that share no run at all, and an orphan, on one sheet.
-
-    Returns
-    -------
-    Flowsheet
-        Unpinned flowsheet of three disconnected pieces.
-    """
+    """Build two trains that share no run at all, and an orphan, on one sheet."""
     fs = Flowsheet("two trains")
     for tag in ("A", "B"):
         port = fs.add(U.Feed(f"F-{tag}")).outlet
@@ -125,13 +94,7 @@ def _two_trains() -> Flowsheet:
 
 
 def _mocks() -> list[Flowsheet]:
-    """Build every mock sheet afresh.
-
-    Returns
-    -------
-    list[Flowsheet]
-        Unpinned flowsheets.
-    """
+    """Build every mock sheet afresh."""
     return [_train("short train", 3), _train("long train", 9), _tower(), _recycle(), _two_trains()]
 
 
@@ -139,22 +102,7 @@ def _mocks() -> list[Flowsheet]:
 
 
 def _held(fs: Flowsheet, share: float, seed: int) -> dict[U.Unit, tuple[int, int]]:
-    """Pin about ``share`` of a sheet's units to distinct grid cells.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet to pin.
-    share : float
-        Fraction of its units to pin; above 0.99 pins all but one.
-    seed : int
-        Seed for the choice of units and cells.
-
-    Returns
-    -------
-    dict[Unit, tuple[int, int]]
-        The ``(col, row)`` each pinned unit was given.
-    """
+    """Pin about ``share`` of a sheet's units to distinct grid cells."""
     units = [u for u in fs.units if u.kind != "instrument"]
     count = len(units) - 1 if share > 0.99 else round(len(units) * share)
     rng = random.Random(seed)
@@ -241,18 +189,7 @@ def test_flow_runs_east_and_a_return_line_runs_west() -> None:
 
 
 def _pump_line(*, mirrored: bool) -> dict[str, Frame]:
-    """Lay out feed, pump and product with nothing placed but the pump's mirror.
-
-    Parameters
-    ----------
-    mirrored : bool
-        Whether the pump is drawn mirrored.
-
-    Returns
-    -------
-    dict[str, Frame]
-        Frames of ``F``, ``P-1`` and ``Pr``.
-    """
+    """Lay out feed, pump and product with nothing placed but the pump's mirror."""
     fs = Flowsheet("mirrored pump" if mirrored else "plain pump")
     feed = fs.add(U.Feed("F"))
     pump = fs.add(U.Pump("P-1")).pin(mirrored=mirrored)
@@ -357,18 +294,7 @@ def test_a_header_is_not_sunk_by_the_bank_it_supplies() -> None:
 
 
 def _geometry(fs: Flowsheet) -> list[tuple[str, float, float, int | None, int | None]]:
-    """Return each unit's tag, corner and grid cell.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out flowsheet.
-
-    Returns
-    -------
-    list[tuple[str, float, float, int or None, int or None]]
-        ``(name, x, y, col, row)`` per framed unit, in sheet order.
-    """
+    """Return each unit's tag, corner and grid cell."""
     return [
         (u.name, u.frame.x, u.frame.y, u.frame.col, u.frame.row)
         for u in fs.units
@@ -419,13 +345,7 @@ def test_the_sheet_does_not_depend_on_the_string_hash_seed() -> None:
 
 
 def _shipped_unit_classes() -> list[type[U.Unit]]:
-    """Return every ``Unit`` subclass pandid itself defines.
-
-    Returns
-    -------
-    list[type[Unit]]
-        Shipped unit classes, ``Unit`` included.
-    """
+    """Return every ``Unit`` subclass pandid itself defines."""
     found: dict[type[U.Unit], None] = {}
     pending: list[type[U.Unit]] = [U.Unit]
     while pending:

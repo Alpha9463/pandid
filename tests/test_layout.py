@@ -22,18 +22,7 @@ Box = tuple[float, float, float, float]
 
 
 def _drawn_boxes(fs: Flowsheet) -> dict[str, Box]:
-    """Return every unit's drawn box, by name.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out sheet.
-
-    Returns
-    -------
-    dict[str, tuple[float, float, float, float]]
-        Each unit's drawn box; a feed flag's is left of its frame.
-    """
+    """Return every unit's drawn box, by name."""
     boxes = {}
     for unit in fs.units:
         assert unit.frame is not None, unit.name
@@ -42,51 +31,18 @@ def _drawn_boxes(fs: Flowsheet) -> dict[str, Box]:
 
 
 def _overlapping(fs: Flowsheet) -> list[tuple[str, str]]:
-    """Return the pairs of units whose drawn boxes overlap.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out sheet.
-
-    Returns
-    -------
-    list[tuple[str, str]]
-        Names of each overlapping pair.
-    """
+    """Return the pairs of units whose drawn boxes overlap."""
     boxes = _drawn_boxes(fs)
     return [(a, b) for a, b in combinations(boxes, 2) if overlaps(boxes[a], boxes[b])]
 
 
 def _unit_overlaps(fs: Flowsheet) -> list[str]:
-    """Return the messages of the sheet's unit-overlap findings.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out sheet.
-
-    Returns
-    -------
-    list[str]
-        One message per overlap ``validate()`` reports.
-    """
+    """Return the messages of the sheet's unit-overlap findings."""
     return [issue.message for issue in fs.validate() if issue.code == "unit-overlap"]
 
 
 def _long_train(n: int) -> Flowsheet:
-    """Return *n* blocks in one straight line, each feeding the next.
-
-    Parameters
-    ----------
-    n : int
-        Number of blocks.
-
-    Returns
-    -------
-    Flowsheet
-        Unlaid sheet.
-    """
+    """Return *n* blocks in one straight line, each feeding the next."""
     fs = Flowsheet("train")
     port = fs.add(U.Feed("F")).outlet
     for i in range(n):
@@ -98,18 +54,7 @@ def _long_train(n: int) -> Flowsheet:
 
 
 def _width_and_rows(fs: Flowsheet) -> tuple[float, int]:
-    """Return a laid-out sheet's drawn width and how many unit heights it has.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Laid-out sheet.
-
-    Returns
-    -------
-    tuple[float, int]
-        Drawn width, and the count of distinct unit centre heights.
-    """
+    """Return a laid-out sheet's drawn width and how many unit heights it has."""
     boxes = _drawn_boxes(fs).values()
     width = max(box[2] for box in boxes) - min(box[0] for box in boxes)
     return width, len({round((box[1] + box[3]) / 2) for box in boxes})
@@ -174,13 +119,7 @@ def test_a_pipe_from_a_north_nozzle_to_a_south_nozzle_stacks_its_units() -> None
 
 
 def _syngas_block() -> tuple[Flowsheet, U.Feed, U.Feed, U.Feed, U.Block]:
-    """Return a sheet with two north inlets on one block.
-
-    Returns
-    -------
-    tuple
-        The unlaid sheet, its natural gas, air and steam feeds, and the block.
-    """
+    """Return a sheet with two north inlets on one block."""
     fs = Flowsheet("north face")
     ng = fs.add(U.Feed("Natural Gas"))
     air = fs.add(U.Feed("Air"))
@@ -215,19 +154,7 @@ def test_a_feed_on_a_north_nozzle_is_drawn_above_it() -> None:
 
 
 def _legs(path: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    """Return the straight runs of a routed path, in order, as unit steps.
-
-    Parameters
-    ----------
-    path : list[tuple[float, float]]
-        Routed waypoints.
-
-    Returns
-    -------
-    list[tuple[float, float]]
-        One direction per leg; zero-length repeats and a stand-off waypoint
-        that continues a leg are folded in, so this counts turns.
-    """
+    """Return the straight runs of a routed path, in order, as unit steps."""
     out: list[tuple[float, float]] = []
     for a, b in zip(path, path[1:]):
         dx, dy = b[0] - a[0], b[1] - a[1]
@@ -631,13 +558,7 @@ def test_a_row_pinned_above_row_zero_draws() -> None:
 
 @pytest.mark.parametrize("pin_row", [None, 0, 1, 2, -1])
 def test_pinning_a_row_does_not_flip_a_north_feed(pin_row: int | None) -> None:
-    """Check that a block's row pin leaves its roof feed above it.
-
-    Parameters
-    ----------
-    pin_row : int or None
-        Row pinned on the block, or ``None`` for no pin.
-    """
+    """Check that a block's row pin leaves its roof feed above it."""
     fs = Flowsheet("stack")
     block = fs.add(U.Block("Reaction", inputs=["W", "N"], outputs=1))
     feed = fs.add(U.Feed("Main"))
@@ -677,20 +598,7 @@ def test_x_and_y_pins_are_exact_even_when_they_conflict() -> None:
 def _pixel_anchored_pump(
     dx: float = 0, dy: float = 0, vertical: bool = False
 ) -> tuple[Flowsheet, U.Pump]:
-    """Return a laid-out free pump between a pinned feed and product.
-
-    Parameters
-    ----------
-    dx, dy : float
-        Offset added to both flags' pins.
-    vertical : bool
-        Whether the three are turned to run down the sheet.
-
-    Returns
-    -------
-    tuple[Flowsheet, Pump]
-        The laid-out sheet and its pump.
-    """
+    """Return a laid-out free pump between a pinned feed and product."""
     fs = Flowsheet("Pixel anchors")
     feed = fs.add(U.Feed("Feed"))
     pump = fs.add(U.Pump("P-1"))
@@ -923,13 +831,7 @@ def test_a_ribbon_that_fits_the_paper_is_left_alone() -> None:
 
 @pytest.mark.parametrize("axis", ["x", "y"])
 def test_a_pixel_pinned_ribbon_is_not_folded(axis: str) -> None:
-    """Check that a wide train with one unit pinned in x or y is not folded onto the pin.
-
-    Parameters
-    ----------
-    axis : str
-        Axis pinned on the first block.
-    """
+    """Check that a wide train with one unit pinned in x or y is not folded onto the pin."""
     fs = _long_train(30)
     fs.units[1].pin(**{axis: 200})
     fs.layout()
@@ -1034,13 +936,7 @@ def test_laying_out_twice_gives_identical_frames() -> None:
 
 
 def _interlock_on_a_signal() -> tuple[Flowsheet, U.Unit]:
-    """Return ``examples/04_control_loop.py``'s shape: a balloon on a balloon's line.
-
-    Returns
-    -------
-    tuple[Flowsheet, Unit]
-        The unlaid sheet and its interlock.
-    """
+    """Return ``examples/04_control_loop.py``'s shape: a balloon on a balloon's line."""
     fs = Flowsheet("interlock")
     feed = fs.add(U.Feed("Feed"))
     drum = fs.add(U.Vessel("V-101"))
@@ -1082,13 +978,7 @@ def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed() -
 
 @pytest.mark.parametrize("skip", ["s103", "dirty_water"])
 def test_an_unpinned_sheet_matches_a_fresh_build_and_keeps_remaining_pins(skip: str) -> None:
-    """Check that removing a pin draws what a build without it draws.
-
-    Parameters
-    ----------
-    skip : str
-        Key of the unit whose pin is removed.
-    """
+    """Check that removing a pin draws what a build without it draws."""
     live, units = build()
     live.layout()
     live.route()
@@ -1108,13 +998,7 @@ def test_an_unpinned_sheet_matches_a_fresh_build_and_keeps_remaining_pins(skip: 
 
 
 def test_full_layout_via_render(tmp_path: Path) -> None:
-    """Check that rendering an unlaid sheet lays it out first.
-
-    Parameters
-    ----------
-    tmp_path : Path
-        Output directory.
-    """
+    """Check that rendering an unlaid sheet lays it out first."""
     fs = Flowsheet("Test")
     reactor = fs.add(U.Reactor("R1"))
     separator = fs.add(U.Separator("S1"))
@@ -1131,13 +1015,7 @@ def test_full_layout_via_render(tmp_path: Path) -> None:
 
 
 def _panel() -> tuple[Flowsheet, U.Instrument, D.ControlValve]:
-    """Return a feed, control valve and product with a free-standing controller on the valve.
-
-    Returns
-    -------
-    tuple[Flowsheet, Instrument, ControlValve]
-        The unlaid sheet, its controller and its valve.
-    """
+    """Return a feed, control valve and product with a free-standing controller on the valve."""
     fs = Flowsheet("panel")
     feed = fs.add(U.Feed("Feed"))
     valve = fs.add(D.ControlValve("FV-101"))

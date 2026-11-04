@@ -11,18 +11,7 @@ from pandid import Flowsheet
 
 @cache
 def _script(name: str) -> Any:
-    """Import a script from ``scripts/`` by name, once.
-
-    Parameters
-    ----------
-    name : str
-        Script stem.
-
-    Returns
-    -------
-    module
-        Imported script module.
-    """
+    """Import a script from ``scripts/`` by name, once."""
     path = Path(__file__).resolve().parent.parent / "scripts" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(f"_pandid_script_{name}", path)
     assert spec is not None and spec.loader is not None
@@ -43,19 +32,6 @@ SCENARIOS = {
 def copy_settled_case(
     cases: dict[str, tuple[Flowsheet, dict[str, Any]]], stem: str
 ) -> tuple[Flowsheet, dict[str, Any]]:
-    """Copy one cached gallery case for a test that may mutate it.
-
-    Parameters
-    ----------
-    cases : dict[str, tuple[Flowsheet, dict[str, Any]]]
-        Settled gallery flowsheets and their render options.
-    stem : str
-        Gallery example name.
-
-    Returns
-    -------
-    tuple[Flowsheet, dict[str, Any]]
-        Independent flowsheet and render options.
-    """
+    """Copy one cached gallery case for a test that may mutate it."""
     fs, kwargs = cases[stem]
     return copy.deepcopy(fs), kwargs.copy()

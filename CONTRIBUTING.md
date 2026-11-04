@@ -61,6 +61,9 @@ it and test it; if it cannot, fix the types or the API. For example,
 `portgeom.pinned_x()` replaces `unit.pin_.x + port_offset(unit, p)[0]`, which
 read through two optional values and paired the index with the axis by hand.
 
+Docstrings in `tests/` carry no numpydoc sections (Parameters, Returns and the
+rest); those are for `pandid/`.
+
 Keep a PR to one concern. If a change touches rendering, say so and show what
 moved (see *Goldens* below).
 

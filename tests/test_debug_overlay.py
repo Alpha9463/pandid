@@ -21,13 +21,7 @@ _FIT = re.compile(
 
 
 def _sheet() -> Flowsheet:
-    """Build a small flowsheet with corner and port pins.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet used for coordinate-overlay checks.
-    """
+    """Build a small flowsheet with corner and port pins."""
     fs = Flowsheet("overlay")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     hx = fs.add(U.HeatExchanger("E-1")).pin(x=210).pin(port="tube_in", y=330)
@@ -38,23 +32,7 @@ def _sheet() -> Flowsheet:
 
 
 def _group(svg: str) -> ET.Element:
-    """Return the coordinate-overlay SVG group.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    ET.Element
-        Coordinate-overlay group.
-
-    Raises
-    ------
-    AssertionError
-        If the SVG does not contain the coordinate overlay.
-    """
+    """Return the coordinate-overlay SVG group."""
     root = ET.fromstring(svg)
     for g in root.iter(f"{SVG}g"):
         if g.get("id") == "debug":
@@ -63,45 +41,17 @@ def _group(svg: str) -> ET.Element:
 
 
 def _texts(g: ET.Element) -> list[str]:
-    """Return text written in the coordinate overlay.
-
-    Parameters
-    ----------
-    g : ET.Element
-        Coordinate-overlay group.
-
-    Returns
-    -------
-    list[str]
-        Text content in drawing order.
-    """
+    """Return text written in the coordinate overlay."""
     return [(t.text or "") for t in g.iter(f"{SVG}text")]
 
 
 def _rules(g: ET.Element) -> list[ET.Element]:
-    """Return dashed grid rules from a coordinate overlay.
-
-    Parameters
-    ----------
-    g : ET.Element
-        Coordinate-overlay group.
-
-    Returns
-    -------
-    list[ET.Element]
-        Dashed grid-rule elements.
-    """
+    """Return dashed grid rules from a coordinate overlay."""
     return [ln for ln in g.iter(f"{SVG}line") if ln.get("stroke-dasharray")]
 
 
 def _wide() -> Flowsheet:
-    """Build a flowsheet that requires fixed-page scaling.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet used for fixed-page overlay checks.
-    """
+    """Build a flowsheet that requires fixed-page scaling."""
     fs = Flowsheet("wide")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     hx = fs.add(U.HeatExchanger("E-1")).pin(x=1200).pin(port="tube_in", y=330)
@@ -116,13 +66,7 @@ def _wide() -> Flowsheet:
 
 @pytest.mark.parametrize("off", [False, None])
 def test_a_sheet_drawn_without_it_is_the_sheet_that_was_drawn_before_it_existed(off):
-    """Test that disabled overlays leave SVG output unchanged.
-
-    Parameters
-    ----------
-    off : bool | None
-        Debug option that disables the overlay.
-    """
+    """Test that disabled overlays leave SVG output unchanged."""
     assert _sheet().to_svg(debug=off) == _sheet().to_svg()
     assert "debug" not in _sheet().to_svg()
 
@@ -250,15 +194,7 @@ def test_true_is_the_default_spacing_and_false_is_nothing():
     [(0, "debug=0"), (1, "debug=True"), ("fine", "must be True, False"), (-5, None)],
 )
 def test_a_value_that_is_not_a_spacing_is_refused_before_a_sheet_is_built(value, match):
-    """Test that an invalid spacing is refused by name and leaves the flowsheet unchanged.
-
-    Parameters
-    ----------
-    value : object
-        Invalid ``debug`` value.
-    match : str or None
-        Text the refusal must contain, if any.
-    """
+    """Test that an invalid spacing is refused by name and leaves the flowsheet unchanged."""
     fs = _sheet()
     with pytest.raises(ValueError, match=match):
         fs.to_svg(debug=value)
@@ -294,18 +230,7 @@ def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
 
 
 def _placed(svg: str) -> "list[tuple[tuple[float, float, float, float], str]]":
-    """Return non-axis overlay-label boxes and text.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    list[tuple[tuple[float, float, float, float], str]]
-        Bounding boxes and text for placed overlay labels.
-    """
+    """Return non-axis overlay-label boxes and text."""
     out = []
     for t in _group(svg).iter(f"{SVG}text"):
         if t.get("fill") == D._NUMBER:
@@ -353,18 +278,7 @@ _CROWDED = {
 
 @pytest.fixture(scope="module")
 def corpus_drawings(corpus_svg):
-    """Render each debug-overlay corpus sheet with its overlay.
-
-    Parameters
-    ----------
-    corpus_svg : dict[str, tuple[Flowsheet, dict, str]]
-        Shared corpus flowsheets, render options and plain SVGs.
-
-    Returns
-    -------
-    dict[str, tuple[Flowsheet, str, str]]
-        Flowsheets with debug and plain SVGs by corpus name.
-    """
+    """Render each debug-overlay corpus sheet with its overlay."""
     return {
         name: (fs, fs.to_svg(**options, debug=True), svg)
         for name, (fs, options, svg) in corpus_svg.items()
@@ -373,15 +287,7 @@ def corpus_drawings(corpus_svg):
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
-    """Test that corpus overlay labels remain visible and distinct.
-
-    Parameters
-    ----------
-    corpus_drawings : dict[str, tuple[Flowsheet, str, str]]
-        Cached flowsheets with debug and plain SVGs.
-    name : str
-        Corpus sheet name.
-    """
+    """Test that corpus overlay labels remain visible and distinct."""
     fs, svg, _plain = corpus_drawings[name]
     halos, labels = _halos(svg), _placed(svg)
     expected = sum(1 + len(u.ports) for u in fs.units if u.frame is not None)
@@ -432,15 +338,7 @@ def test_a_label_still_against_its_own_marker_is_left_alone():
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_the_drawing_is_the_same_drawing_with_the_overlay_lifted_off(corpus_drawings, name):
-    """Test that removing the overlay restores the plain SVG.
-
-    Parameters
-    ----------
-    corpus_drawings : dict[str, tuple[Flowsheet, str, str]]
-        Cached flowsheets with debug and plain SVGs.
-    name : str
-        Corpus sheet name.
-    """
+    """Test that removing the overlay restores the plain SVG."""
     _fs, marked, plain = corpus_drawings[name]
     head, rest = marked.split('  <g id="debug">', 1)
     assert head + rest.split("  </g>\n", 1)[1] == plain

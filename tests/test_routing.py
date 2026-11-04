@@ -31,13 +31,7 @@ _BLOCKED_NOZZLES = {
 
 @pytest.mark.parametrize("case", list(_BLOCKED_NOZZLES))
 def test_a_blocked_nozzle_escapes_by_a_reachable_lane_or_reports_its_fallback(case: str) -> None:
-    """Check that a blocked nozzle stub routes clear or draws a reported fallback.
-
-    Parameters
-    ----------
-    case : str
-        Key in ``_BLOCKED_NOZZLES``.
-    """
+    """Check that a blocked nozzle stub routes clear or draws a reported fallback."""
     (width, height, side), corner, recover, hidden, blocked = _BLOCKED_NOZZLES[case]
     fs = Flowsheet(case)
     feed = fs.add(Feed("F")).pin(x=60, y=100)
@@ -271,18 +265,7 @@ def test_the_fallback_drops_a_corner_that_repeats_the_projection():
 
 
 def _straight_run(bad=None):
-    """Build a feed, heat exchanger, and product in one row.
-
-    Parameters
-    ----------
-    bad : float or None, optional
-        Replacement x coordinate for the heat exchanger.
-
-    Returns
-    -------
-    Flowsheet
-        Sheet with all three units pinned.
-    """
+    """Build a feed, heat exchanger, and product in one row."""
     fs = Flowsheet("Non-finite")
     feed = fs.add(Feed("Raw Feed")).pin(x=0, y=100)
     hx = fs.add(HeatExchanger("E-101"))
@@ -295,13 +278,7 @@ def _straight_run(bad=None):
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
 def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
-    """Reject a non-finite coordinate before the path search starts.
-
-    Parameters
-    ----------
-    bad : float
-        Non-finite x coordinate given to the heat exchanger.
-    """
+    """Reject a non-finite coordinate before the path search starts."""
     with pytest.raises(ValueError, match="E-101: pin x must be a finite number"):
         _straight_run(bad)
     fs = _straight_run()
@@ -407,19 +384,7 @@ def test_crossing_index_crosses_counts_rather_than_answers_yes_or_no():
 
 
 def _graph(*paths: list[tuple[float, float]]) -> VisibilityGraph:
-    """Build a stand-in search graph that joins consecutive points of each path.
-
-    Parameters
-    ----------
-    *paths : list[tuple[float, float]]
-        Point sequences; each consecutive pair becomes a two-way edge.
-
-    Returns
-    -------
-    VisibilityGraph
-        Stand-in carrying the ``nodes``, ``edges`` and ``recycle_y`` that
-        ``find_path`` reads.
-    """
+    """Build a stand-in search graph that joins consecutive points of each path."""
     edges: dict[tuple[float, float], list[tuple[float, float]]] = {}
     for path in paths:
         for a, b in zip(path, path[1:]):
@@ -489,40 +454,12 @@ def test_a_crossing_is_kept_rather_than_bought_off_with_two_more_bends():
 
 
 def _final_g(graph, start, goal, start_dir, goal_dir, crossing_index=None):
-    """Return the cost of the state ``find_path`` stops on.
-
-    Parameters
-    ----------
-    graph : VisibilityGraph
-        Search graph.
-    start, goal : tuple[float, float]
-        Search endpoints.
-    start_dir, goal_dir : str or None
-        Required endpoint directions.
-    crossing_index : CrossingIndex or None, optional
-        Routes already drawn.
-
-    Returns
-    -------
-    float
-        Accumulated cost of the returned route.
-    """
+    """Return the cost of the state ``find_path`` stops on."""
     original = heapq.heappop
     popped: list = []
 
     def logging_pop(heap):
-        """Pop one search state and keep a copy.
-
-        Parameters
-        ----------
-        heap : list
-            Search priority queue.
-
-        Returns
-        -------
-        object
-            Item removed by the original heap operation.
-        """
+        """Pop one search state and keep a copy."""
         item = original(heap)
         popped.append(item)
         return item
@@ -583,18 +520,7 @@ def test_crossing_index_crosses_refuses_an_invalid_axis():
 
 
 def _obstacle_bypass_tie(fs):
-    """Add a stream whose north and south bypasses are exactly tied.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Sheet that receives the feed, product, and central vessel.
-
-    Returns
-    -------
-    Stream
-        The F -> P stream, connected last.
-    """
+    """Add a stream whose north and south bypasses are exactly tied."""
     f = fs.add(Feed("F")).pin(x=0, y=200)
     p = fs.add(Product("P")).pin(x=400, y=200)
     fs.add(Vessel("V-101", width=100, height=100, label_pos="center")).pin(x=150, y=150)
@@ -620,13 +546,7 @@ def test_via_waypoints_on_a_shared_track_stay_where_they_were_put():
 
 @pytest.mark.parametrize("x", [175.0, 176.0], ids=["on-a-lane", "off-every-lane"])
 def test_a_manual_routes_geometry_is_recorded_for_later_streams(x: float):
-    """Record a manual route so a later stream avoids crossing it.
-
-    Parameters
-    ----------
-    x : float
-        Column the manual route is drawn down.
-    """
+    """Record a manual route so a later stream avoids crossing it."""
     fs = Flowsheet("manual-recorded")
     f1 = fs.add(Feed("F1")).pin(x=1000, y=1000)
     p1 = fs.add(Product("P1")).pin(x=1000, y=1000)
@@ -678,22 +598,7 @@ def test_a_fallback_routes_geometry_is_recorded_for_later_streams():
     original_penalty = astar.CROSSING_PENALTY
 
     def forced_empty_for_first(graph, start, *args, **kwargs):
-        """Return no path for a search that starts on F1's outlet row.
-
-        Parameters
-        ----------
-        graph : VisibilityGraph
-            Graph whose port anchors identify the first stream.
-        start : tuple[float, float]
-            Search start node.
-        *args, **kwargs
-            Remaining ``find_path`` arguments.
-
-        Returns
-        -------
-        list[tuple[float, float]]
-            An empty path for F1 -> P1, otherwise the real search result.
-        """
+        """Return no path for a search that starts on F1's outlet row."""
         if start[1] == graph.port_anchors[("F1", "outlet")][1]:
             return []
         return original_find_path(graph, start, *args, **kwargs)
@@ -847,28 +752,11 @@ def test_preview_separated_waypoints_does_not_mutate_and_matches_the_real_pass()
 
 
 def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
-    """Record the separated route so later streams price its drawn path.
-
-    Parameters
-    ----------
-    monkeypatch : pytest.MonkeyPatch
-        Replaces the separation preview.
-    """
+    """Record the separated route so later streams price its drawn path."""
     from pandid.routing import separation
 
     def lowered(streams: list[Stream]) -> dict[int, list[tuple[float, float]]]:
-        """Return every route 6 px lower, as a separation preview.
-
-        Parameters
-        ----------
-        streams : list[Stream]
-            Streams routed so far.
-
-        Returns
-        -------
-        dict[int, list[tuple[float, float]]]
-            Lowered waypoints keyed by ``id(stream)``.
-        """
+        """Return every route 6 px lower, as a separation preview."""
         return {
             id(s): [(x, y + 6.0) for x, y in s.route.waypoints]
             for s in streams
@@ -880,15 +768,7 @@ def test_a_later_streams_recording_uses_separated_not_raw_geometry(monkeypatch):
     original_record = CrossingIndex.record
 
     def spy(self, path):
-        """Record one path and keep a copy of it.
-
-        Parameters
-        ----------
-        self : CrossingIndex
-            Index receiving the path.
-        path : list[tuple[float, float]]
-            Route waypoints.
-        """
+        """Record one path and keep a copy of it."""
         recorded.append(list(path))
         return original_record(self, path)
 

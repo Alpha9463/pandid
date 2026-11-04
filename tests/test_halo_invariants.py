@@ -92,19 +92,7 @@ class Drawn(NamedTuple):
 
 @pytest.fixture(scope="module")
 def drawn(corpus_svg):
-    """Find the halos and flange faces of every corpus sheet once.
-
-    Parameters
-    ----------
-    corpus_svg : dict[str, tuple[Flowsheet, dict, str]]
-        Shared corpus flowsheets, render options and SVGs.
-
-    Returns
-    -------
-    dict
-        Rendered flowsheets, label halos, flange faces and letter-code halos
-        keyed by corpus name.
-    """
+    """Find the halos and flange faces of every corpus sheet once."""
     return {
         name: Drawn(fs, _halos(svg), _flange_bars(fs, options), _code_boxes(svg, fs))
         for name, (fs, options, svg) in corpus_svg.items()

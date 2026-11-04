@@ -279,18 +279,7 @@ def _is_own_run(box, upright, label, name, run):
 
 @pytest.fixture(scope="module")
 def drawn(settled_gallery):
-    """Render every general visual-invariant corpus sheet once.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared, routed gallery flowsheets and their render options.
-
-    Returns
-    -------
-    dict
-        Flowsheets and default SVG documents keyed by corpus name.
-    """
+    """Render every general visual-invariant corpus sheet once."""
     sheets = {}
     for name, build in CORPUS.items():
         if name in settled_gallery:

@@ -39,20 +39,7 @@ _IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
 def _compose(parent: Matrix, child: Matrix) -> Matrix:
-    """Compose two affine transforms.
-
-    Parameters
-    ----------
-    parent : Matrix
-        Outer transform.
-    child : Matrix
-        Inner transform.
-
-    Returns
-    -------
-    Matrix
-        Combined transform.
-    """
+    """Compose two affine transforms."""
     pa, pb, pc, pd, pe, pf = parent
     ca, cb, cc, cd, ce, cf = child
     return (
@@ -66,20 +53,7 @@ def _compose(parent: Matrix, child: Matrix) -> Matrix:
 
 
 def _apply(m: Matrix, x: float, y: float) -> Point:
-    """Apply an affine transform to a point.
-
-    Parameters
-    ----------
-    m : Matrix
-        Affine transform.
-    x, y : float
-        Point coordinates.
-
-    Returns
-    -------
-    Point
-        Transformed point.
-    """
+    """Apply an affine transform to a point."""
     a, b, c, d, e, f = m
     return (a * x + c * y + e, b * x + d * y + f)
 
@@ -88,18 +62,7 @@ _NUM = r"-?\d*\.?\d+(?:[eE][-+]?\d+)?"
 
 
 def _nums(s: str) -> list[float]:
-    """Parse numeric SVG values.
-
-    Parameters
-    ----------
-    s : str
-        SVG attribute text.
-
-    Returns
-    -------
-    list[float]
-        Parsed values.
-    """
+    """Parse numeric SVG values."""
     return [float(x) for x in re.findall(_NUM, s)]
 
 
@@ -146,26 +109,7 @@ def _parse_transform(s: str) -> Matrix:
 
 
 def _arc_points(x1, y1, rx, ry, phi_deg, large_arc, sweep, x2, y2, n=12):
-    """Sample an SVG elliptical arc.
-
-    Parameters
-    ----------
-    x1, y1, x2, y2 : float
-        Arc endpoints.
-    rx, ry : float
-        Arc radii.
-    phi_deg : float
-        Arc rotation in degrees.
-    large_arc, sweep : int
-        SVG arc flags.
-    n : int
-        Number of intervals.
-
-    Returns
-    -------
-    list[Point]
-        Sampled arc points.
-    """
+    """Sample an SVG elliptical arc."""
     if rx == 0 or ry == 0:
         return [(x1, y1), (x2, y2)]
     phi = math.radians(phi_deg)
@@ -189,18 +133,7 @@ def _arc_points(x1, y1, rx, ry, phi_deg, large_arc, sweep, x2, y2, n=12):
     cy = sphi * cxp + cphi * cyp + (y1 + y2) / 2.0
 
     def _ang(ux, uy, vx, vy):
-        """Return the signed angle between two vectors.
-
-        Parameters
-        ----------
-        ux, uy, vx, vy : float
-            Vector coordinates.
-
-        Returns
-        -------
-        float
-            Signed angle in radians.
-        """
+        """Return the signed angle between two vectors."""
         dot = ux * vx + uy * vy
         lu, lv = math.hypot(ux, uy), math.hypot(vx, vy)
         c = max(-1.0, min(1.0, dot / (lu * lv))) if lu and lv else 1.0
@@ -277,22 +210,7 @@ def _path_segments(d: str) -> list[Segment]:
 
 
 def _ellipse_segments(cx, cy, rx, ry, n=48) -> list[Segment]:
-    """Approximate an ellipse with line segments.
-
-    Parameters
-    ----------
-    cx, cy : float
-        Ellipse centre.
-    rx, ry : float
-        Ellipse radii.
-    n : int
-        Number of segments.
-
-    Returns
-    -------
-    list[Segment]
-        Ellipse segments.
-    """
+    """Approximate an ellipse with line segments."""
     pts = [
         (cx + rx * math.cos(2 * math.pi * k / n), cy + ry * math.sin(2 * math.pi * k / n))
         for k in range(n)
@@ -301,20 +219,7 @@ def _ellipse_segments(cx, cy, rx, ry, n=48) -> list[Segment]:
 
 
 def _poly_segments(points_attr: str, *, closed: bool) -> list[Segment]:
-    """Convert polygon coordinates to segments.
-
-    Parameters
-    ----------
-    points_attr : str
-        SVG points attribute.
-    closed : bool
-        Whether to close the final segment.
-
-    Returns
-    -------
-    list[Segment]
-        Polygon or polyline segments.
-    """
+    """Convert polygon coordinates to segments."""
     nums = _nums(points_attr)
     pts = list(zip(nums[0::2], nums[1::2]))
     segs = list(zip(pts, pts[1:]))
@@ -324,31 +229,12 @@ def _poly_segments(points_attr: str, *, closed: bool) -> list[Segment]:
 
 
 def _collect_segments(svg: str) -> list[Segment]:
-    """Flatten drawn SVG primitives into world-space segments.
-
-    Parameters
-    ----------
-    svg : str
-        Symbol artwork.
-
-    Returns
-    -------
-    list[Segment]
-        Drawn segments.
-    """
+    """Flatten drawn SVG primitives into world-space segments."""
     root = ET.fromstring(svg)
     segs: list[Segment] = []
 
     def walk(el, m: Matrix) -> None:
-        """Traverse one SVG element tree.
-
-        Parameters
-        ----------
-        el : Element
-            Current SVG element.
-        m : Matrix
-            Parent transform.
-        """
+        """Traverse one SVG element tree."""
         tag = el.tag.split("}")[-1]
         m2 = _compose(m, _parse_transform(el.get("transform", "")))
         local: list[Segment] = []
@@ -389,20 +275,7 @@ def _collect_segments(svg: str) -> list[Segment]:
 
 
 def _point_segment_distance(p: Point, a: Point, b: Point) -> float:
-    """Measure point-to-segment distance.
-
-    Parameters
-    ----------
-    p : Point
-        Measured point.
-    a, b : Point
-        Segment endpoints.
-
-    Returns
-    -------
-    float
-        Minimum distance.
-    """
+    """Measure point-to-segment distance."""
     px, py = p
     ax, ay = a
     bx, by = b
@@ -414,20 +287,7 @@ def _point_segment_distance(p: Point, a: Point, b: Point) -> float:
 
 
 def _nearest_distance(p: Point, segments: list[Segment]) -> float:
-    """Find the nearest segment distance.
-
-    Parameters
-    ----------
-    p : Point
-        Measured point.
-    segments : list[Segment]
-        Candidate segments.
-
-    Returns
-    -------
-    float
-        Minimum distance or infinity.
-    """
+    """Find the nearest segment distance."""
     return min((_point_segment_distance(p, a, b) for a, b in segments), default=math.inf)
 
 
@@ -566,30 +426,11 @@ _NOT_NOZZLES = {("separator", "knockout")}
 
 
 def _rects(svg: str) -> list[tuple[float, float, float, float]]:
-    """Read transformed SVG rectangles.
-
-    Parameters
-    ----------
-    svg : str
-        Symbol artwork.
-
-    Returns
-    -------
-    list[tuple[float, float, float, float]]
-        Rectangle bounds.
-    """
+    """Read transformed SVG rectangles."""
     out: list[tuple[float, float, float, float]] = []
 
     def walk(el, m: Matrix) -> None:
-        """Traverse SVG elements for rectangles.
-
-        Parameters
-        ----------
-        el : Element
-            Current SVG element.
-        m : Matrix
-            Parent transform.
-        """
+        """Traverse SVG elements for rectangles."""
         m2 = _compose(m, _parse_transform(el.get("transform", "")))
         if el.tag.split("}")[-1] == "rect":
             x, y = float(el.get("x", 0)), float(el.get("y", 0))
@@ -604,17 +445,7 @@ def _rects(svg: str) -> list[tuple[float, float, float, float]]:
 
 
 class _Nozzle(NamedTuple):
-    """Describe a detected artwork nozzle.
-
-    Attributes
-    ----------
-    face : str
-        Outward face.
-    point : Point
-        Connection point.
-    lo, hi : float
-        Nozzle span along its face.
-    """
+    """Describe a detected artwork nozzle."""
 
     face: str
     point: Point
@@ -623,18 +454,7 @@ class _Nozzle(NamedTuple):
 
 
 def _drawn_nozzles(sym: Symbol) -> list[_Nozzle]:
-    """Find flanged nozzle stubs in artwork.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol definition.
-
-    Returns
-    -------
-    list[_Nozzle]
-        Detected nozzles.
-    """
+    """Find flanged nozzle stubs in artwork."""
     segments = _collect_segments(sym.svg)
     found: list[_Nozzle] = []
     for x0, y0, x1, y1 in _rects(sym.svg):
@@ -706,20 +526,7 @@ _DISPLAYS = {"panel": "central", "aux": "subsidiary"}
 
 
 def _drawing(cls, variant: str) -> dict[str, Any]:
-    """Return the keyword that asks ``cls`` for a registered drawing.
-
-    Parameters
-    ----------
-    cls : type
-        Unit class.
-    variant : str
-        Registered variant.
-
-    Returns
-    -------
-    dict[str, Any]
-        ``display=``, ``characteristic=`` or ``variant=``, whichever reaches it.
-    """
+    """Return the keyword that asks ``cls`` for a registered drawing."""
     if cls is units.Instrument and variant in _DISPLAYS:
         return {"display": _DISPLAYS[variant]}
     key = "characteristic" if variant in getattr(cls, "_CHARACTERISTICS", ()) else "variant"
@@ -730,22 +537,7 @@ def _drawing(cls, variant: str) -> dict[str, Any]:
 
 
 def _unit(kind: str, variant: str, index: int = 1, **size: float):
-    """Construct a unit drawing a registered symbol.
-
-    Parameters
-    ----------
-    kind, variant : str
-        Registered symbol key.
-    index : int
-        Number that keeps the name unique on a sheet.
-    **size : float
-        ``width`` and ``height``, if given.
-
-    Returns
-    -------
-    units.Unit
-        Configured unit.
-    """
+    """Construct a unit drawing a registered symbol."""
     cls = _UNIT_BY_KIND[kind]
     if kind == "instrument":  # tagged (type, number) rather than named
         return cls("XX", index, **_drawing(cls, variant), **size)
@@ -774,18 +566,7 @@ def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
 
 
 def _invert(m: Matrix) -> Matrix:
-    """Invert an affine transform.
-
-    Parameters
-    ----------
-    m : Matrix
-        Invertible transform.
-
-    Returns
-    -------
-    Matrix
-        Inverse transform.
-    """
+    """Invert an affine transform."""
     a, b, c, d, e, f = m
     det = a * d - b * c
     return (
@@ -799,18 +580,7 @@ def _invert(m: Matrix) -> Matrix:
 
 
 def _natives(fs) -> dict[str, tuple[float, float]]:
-    """Read native definition sizes from a flowsheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Settled flowsheet.
-
-    Returns
-    -------
-    dict[str, tuple[float, float]]
-        Definition sizes by identifier.
-    """
+    """Read native definition sizes from a flowsheet."""
     from pandid.render.svg import SvgRenderer
 
     renderer = SvgRenderer()
@@ -862,13 +632,7 @@ def _placements(
 
 @pytest.fixture(scope="module")
 def odd_box_sheets():
-    """Provide settled sheets for odd-sized symbols.
-
-    Returns
-    -------
-    dict
-        Units and placement transforms by box.
-    """
+    """Provide settled sheets for odd-sized symbols."""
     from pandid import Flowsheet
 
     sheets: dict[tuple, dict[tuple[str, str], tuple]] = {}
@@ -1036,20 +800,7 @@ def test_a_turned_fitting_opens_out_where_the_reduction_closes_in(entry):
     _, sym, turned = entry
 
     def face_height(symbol: Symbol, x: float) -> float:
-        """Measure ink height at a vertical coordinate.
-
-        Parameters
-        ----------
-        symbol : Symbol
-            Symbol definition.
-        x : float
-            Vertical coordinate.
-
-        Returns
-        -------
-        float
-            Ink height.
-        """
+        """Measure ink height at a vertical coordinate."""
         ys = [
             y
             for (ax, ay), (bx, by) in _collect_segments(symbol.svg)
@@ -1090,18 +841,7 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
 
 
 def _colliding_symbol(**kwargs) -> Symbol:
-    """Build a symbol with expected coincident ports.
-
-    Parameters
-    ----------
-    **kwargs
-        Symbol constructor arguments.
-
-    Returns
-    -------
-    Symbol
-        Constructed symbol.
-    """
+    """Build a symbol with expected coincident ports."""
     with pytest.warns(UserWarning, match="Only ports named in faceless_ports"):
         return Symbol(svg='<g id="sym_under_test"/>', **kwargs)
 
@@ -1457,20 +1197,7 @@ ON_BODY_TOL = 1e-6
 
 
 def _holdup(kind: str, variant: str, role: str, faces: list[str]) -> units.Unit:
-    """Build a tank or vessel family case.
-
-    Parameters
-    ----------
-    kind, variant, role : str
-        Unit configuration.
-    faces : list[str]
-        Requested family faces.
-
-    Returns
-    -------
-    units.Unit
-        Configured holdup unit.
-    """
+    """Build a tank or vessel family case."""
     cls = units.Tank if kind == "tank" else units.Vessel
     if role == "inlet":
         return cls("X-1", variant=variant, inputs=faces)
@@ -1478,37 +1205,13 @@ def _holdup(kind: str, variant: str, role: str, faces: list[str]) -> units.Unit:
 
 
 def _has_wall(sym: Symbol, face: str) -> bool:
-    """Report whether a face supports multiple connections.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol definition.
-    face : str
-        Candidate face.
-
-    Returns
-    -------
-    bool
-        Whether the face has a non-zero wall.
-    """
+    """Report whether a face supports multiple connections."""
     band = sym.bands.get(face)
     return band is None or band[0] < band[1]
 
 
 def _role_menus(kind: str, variant: str):
-    """Yield inlet and outlet face menus.
-
-    Parameters
-    ----------
-    kind, variant : str
-        Registered body key.
-
-    Yields
-    ------
-    tuple[str, str, dict]
-        Role, port prefix, and face menu.
-    """
+    """Yield inlet and outlet face menus."""
     sym = default_registry.get(kind, variant)
     for role, prefix in (("inlet", "in_"), ("outlet", "out_")):
         yield role, prefix, sym.port_faces.get(role, {})
@@ -1808,13 +1511,7 @@ _PEN_LANDS_AT = {
 
 
 def _stencil_arcs() -> list[tuple[str, tuple]]:
-    """Read arcs used by vendored stencil shapes.
-
-    Returns
-    -------
-    list[tuple[str, tuple]]
-        Shape names and arc parameters.
-    """
+    """Read arcs used by vendored stencil shapes."""
     mx, vendor = _script("mxgraph_to_svg"), _script("vendor_symbols")
     shapes = sorted({(stencil, shape) for stencil, shape, _ in vendor.KIND_MAP.values()})
     index = {}
@@ -1862,18 +1559,7 @@ def _stencil_arcs() -> list[tuple[str, tuple]]:
 
 
 def _arc_ids(arcs: list[tuple[str, tuple]]) -> list[str]:
-    """Build stable identifiers for stencil arcs.
-
-    Parameters
-    ----------
-    arcs : list[tuple[str, tuple]]
-        Named arcs.
-
-    Returns
-    -------
-    list[str]
-        Arc identifiers.
-    """
+    """Build stable identifiers for stencil arcs."""
     seen: dict[str, int] = {}
     ids = []
     for shape, _ in arcs:
@@ -1969,46 +1655,16 @@ def test_a_closed_drawing_may_not_be_registered_without_an_open_one():
 
 
 def _artwork(sym: Symbol) -> str:
-    """Remove a symbol identifier from artwork.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol definition.
-
-    Returns
-    -------
-    str
-        Identifier-free artwork.
-    """
+    """Remove a symbol identifier from artwork."""
     return re.sub(r'id="[^"]*"', "", sym.svg)
 
 
 def _ink_extents(svg: str) -> list[tuple[str, float, float]]:
-    """Measure extents of filled SVG elements.
-
-    Parameters
-    ----------
-    svg : str
-        Symbol artwork.
-
-    Returns
-    -------
-    list[tuple[str, float, float]]
-        Element tags and extents.
-    """
+    """Measure extents of filled SVG elements."""
     found: list[tuple[str, float, float]] = []
 
     def walk(el, m: Matrix) -> None:
-        """Traverse SVG elements for filled extents.
-
-        Parameters
-        ----------
-        el : Element
-            Current SVG element.
-        m : Matrix
-            Parent transform.
-        """
+        """Traverse SVG elements for filled extents."""
         tag = el.tag.split("}")[-1]
         if el.get("fill", "none") not in ("none", "white"):
             solo = _collect_segments(f"<g>{ET.tostring(el, encoding='unicode')}</g>")
@@ -2090,18 +1746,7 @@ _OFF_THE_RUN = {
 
 
 def _ink_below_the_run(sym: Symbol) -> float:
-    """Measure ink depth below a valve run.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Valve symbol.
-
-    Returns
-    -------
-    float
-        Ink depth.
-    """
+    """Measure ink depth below a valve run."""
     lowest = max(max(ay, by) for (_, ay), (_, by) in _collect_segments(sym.svg))
     return lowest - sym.ports["inlet"][1]
 
@@ -2199,13 +1844,7 @@ _STILL_UNDERSIZED = {
 
 
 def _valve_stencil_boxes():
-    """Read valve stencil dimensions.
-
-    Returns
-    -------
-    tuple[module, dict[str, tuple[float, float]]]
-        Generator module and dimensions.
-    """
+    """Read valve stencil dimensions."""
     vendor = _script("vendor_symbols")
     shapes = {
         variant: shape
@@ -2262,13 +1901,7 @@ def test_the_pneumatic_butterfly_is_back_on_the_run_because_it_is_rescaled():
 
 
 def _every_drawing():
-    """Yield registered symbols and supplementary parts.
-
-    Yields
-    ------
-    tuple[str, str]
-        Drawing name and SVG artwork.
-    """
+    """Yield registered symbols and supplementary parts."""
     for key, sym in sorted(default_registry._symbols.items(), key=lambda kv: str(kv[0])):
         yield f"{key[0]}/{key[1]}", sym.svg
     for key, part in sorted(default_registry._parts.items(), key=lambda kv: str(kv[0])):

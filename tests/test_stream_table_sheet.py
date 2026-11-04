@@ -22,20 +22,7 @@ _HAS_PDF_EXTRA = all(
 
 
 def _sheet(streams: int = 21, rows: int = 4) -> Flowsheet:
-    """Create a flowsheet with tabulated feed-to-product streams.
-
-    Parameters
-    ----------
-    streams : int, default=21
-        Number of connected feed and product pairs.
-    rows : int, default=4
-        Number of properties assigned to each stream.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet with a title block, table section, and populated streams.
-    """
+    """Create a flowsheet with tabulated feed-to-product streams."""
     fs = Flowsheet("Aromatics Recovery A100")
     fs.title_block = TitleBlock(
         title="Aromatics Recovery A100",
@@ -60,34 +47,12 @@ def _sheet(streams: int = 21, rows: int = 4) -> Flowsheet:
 
 
 def _blocks(svg: str) -> list[str]:
-    """Extract stream-table block markup from an SVG export.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    list[str]
-        Markup for each stream-table block in document order.
-    """
+    """Extract stream-table block markup from an SVG export."""
     return re.findall(r'<g id="stream_table_\d+">.*?</g>', svg, re.S)
 
 
 def _cells(block: str) -> list[tuple[float, float, float, float]]:
-    """Extract ruled table-cell bounds from a table block.
-
-    Parameters
-    ----------
-    block : str
-        SVG markup for one stream-table block.
-
-    Returns
-    -------
-    list[tuple[float, float, float, float]]
-        Cell ``(x, y, width, height)`` bounds.
-    """
+    """Extract ruled table-cell bounds from a table block."""
     return [
         (float(m[0]), float(m[1]), float(m[2]), float(m[3]))
         for m in re.findall(
@@ -97,34 +62,12 @@ def _cells(block: str) -> list[tuple[float, float, float, float]]:
 
 
 def _texts(block: str) -> list[str]:
-    """Extract text values from a stream-table block.
-
-    Parameters
-    ----------
-    block : str
-        SVG markup for one stream-table block.
-
-    Returns
-    -------
-    list[str]
-        Text values in document order.
-    """
+    """Extract text values from a stream-table block."""
     return re.findall(r"<text[^>]*>([^<]*)</text>", block)
 
 
 def _lettering(block: str) -> list[tuple[float, str, float, bool, str]]:
-    """Extract table-cell text and its rendered style.
-
-    Parameters
-    ----------
-    block : str
-        SVG markup for one stream-table block.
-
-    Returns
-    -------
-    list[tuple[float, str, float, bool, str]]
-        Cell width, text, font size, bold flag, and text anchor for each cell.
-    """
+    """Extract table-cell text and its rendered style."""
     root = ET.fromstring(block)
     out: list[tuple[float, str, float, bool, str]] = []
     width: float | None = None
@@ -146,18 +89,7 @@ def _lettering(block: str) -> list[tuple[float, str, float, bool, str]]:
 
 
 def _zone_letters(svg: str) -> list[str]:
-    """Extract row-zone letters from a table-sheet border.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    list[str]
-        Zone letters in top-to-bottom order.
-    """
+    """Extract row-zone letters from a table-sheet border."""
     return re.findall(r'<text[^>]*font-size="9.0"[^>]*>([A-Z])</text>', svg)[::2]
 
 
@@ -287,18 +219,7 @@ def test_how_many_streams_a_block_holds_comes_from_the_page():
     """Verify that page size determines stream-table block capacity."""
 
     def blocks(page: str) -> int:
-        """Count stream-table blocks on a page size.
-
-        Parameters
-        ----------
-        page : str
-            Requested paper size.
-
-        Returns
-        -------
-        int
-            Number of rendered stream-table blocks.
-        """
+        """Count stream-table blocks on a page size."""
         return len(_blocks(_sheet(streams=21).to_svg(show_stream_table="sheet", page_size=page)))
 
     assert blocks("A4") > blocks("A3") >= blocks("A2") == 1
@@ -356,18 +277,7 @@ def test_a_sheet_with_no_page_takes_the_table_in_one_block():
 
 
 def _viewbox(svg: str) -> tuple[float, float, float, float]:
-    """Extract the SVG view box.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    tuple[float, float, float, float]
-        View-box ``(x, y, width, height)`` values.
-    """
+    """Extract the SVG view box."""
     m = re.search(r'viewBox="([-\d. ]+)"', svg)
     assert m
     x, y, w, h = (float(v) for v in m.group(1).split())
@@ -377,15 +287,7 @@ def _viewbox(svg: str) -> tuple[float, float, float, float]:
 @pytest.mark.parametrize("page", ["A4", "A3", "A2", "A1", None])
 @pytest.mark.parametrize("streams", [1, 8, 21])
 def test_every_cell_is_drawn_inside_the_sheet(page, streams):
-    """Verify that every cell is drawn inside the sheet.
-
-    Parameters
-    ----------
-    page : str | None
-        Requested paper size.
-    streams : int
-        Number of tabulated streams.
-    """
+    """Verify that every cell is drawn inside the sheet."""
     fs = _sheet(streams=streams)
     svg = fs.to_svg(show_stream_table="sheet", page_size=page)
     vx, vy, vw, vh = _viewbox(svg)
@@ -488,13 +390,7 @@ def test_the_drawio_export_opens_on_the_same_paper():
 
 
 def test_render_writes_the_table_sheet_to_whatever_the_extension_asks_for(tmp_path):
-    """Verify that render writes the requested table-sheet format.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    """
+    """Verify that render writes the requested table-sheet format."""
     fs = _sheet(streams=21)
     out = tmp_path / "stream_table.svg"
     fs.render(out, show_stream_table="sheet", page_size="A4")
@@ -509,28 +405,14 @@ def test_render_writes_the_table_sheet_to_whatever_the_extension_asks_for(tmp_pa
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 @pytest.mark.parametrize("ext", [".pdf", ".png"])
 def test_the_raster_paths_produce_the_table_sheet_too(tmp_path, ext):
-    """Verify that raster exports include the table sheet.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    ext : str
-        Raster output extension.
-    """
+    """Verify that raster exports include the table sheet."""
     out = tmp_path / f"stream_table{ext}"
     _sheet(streams=21).render(out, show_stream_table="sheet", page_size="A4")
     assert out.stat().st_size > 1000
 
 
 def test_the_option_reaches_the_drafting_call(caught):
-    """Verify that table-sheet options reach the drafting call.
-
-    Parameters
-    ----------
-    caught : dict[str, str]
-        What ``show()`` handed the preview.
-    """
+    """Verify that table-sheet options reach the drafting call."""
     fs = _sheet(streams=21)
     fs.show(show_stream_table="sheet", page_size="A4")
     assert caught["svg"] == _sheet(streams=21).to_svg(show_stream_table="sheet", page_size="A4")
@@ -540,18 +422,7 @@ def test_the_option_reaches_the_drafting_call(caught):
 
 
 def _unnumbered(fs: Flowsheet) -> list:
-    """Find missing-number warnings on a table sheet.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Rendered flowsheet to inspect.
-
-    Returns
-    -------
-    list
-        Warnings with the ``table-sheet-unnumbered`` code.
-    """
+    """Find missing-number warnings on a table sheet."""
     return [w for w in fs.warnings if w.code == "table-sheet-unnumbered"]
 
 
@@ -606,18 +477,7 @@ def test_the_drawio_export_reports_it_in_the_same_words():
 
 
 def _unresolved(fs) -> bool:
-    """Report whether a flowsheet has unresolved geometry.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to inspect.
-
-    Returns
-    -------
-    bool
-        Whether any unit frame or stream route is absent.
-    """
+    """Report whether a flowsheet has unresolved geometry."""
     return all(u.frame is None for u in fs.units) and all(s.route is None for s in fs.streams)
 
 
@@ -660,17 +520,7 @@ def test_a_duplicate_number_is_refused_before_the_geometry():
 )
 @pytest.mark.parametrize("table", [False, True, "sheet"])
 def test_an_unknown_sheet_option_is_refused_whatever_the_sheet_holds(kwargs, match, table):
-    """Verify that unknown table-sheet options are always rejected.
-
-    Parameters
-    ----------
-    kwargs : dict[str, object]
-        Unknown table-sheet option.
-    match : str
-        Expected validation-error text.
-    table : bool
-        Whether the fixture contains a stream table.
-    """
+    """Verify that unknown table-sheet options are always rejected."""
     fs = _sheet(streams=3)
     for render in (fs.to_svg, fs.to_drawio):
         with pytest.raises(ValueError, match=match):
@@ -742,13 +592,7 @@ def test_every_keyword_the_entry_points_pass_is_one_its_backend_names():
 
 
 def test_the_supported_extensions_still_write(tmp_path):
-    """Verify that the supported extensions still write.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    """
+    """Verify that the supported extensions still write."""
     fs = _sheet(streams=3)
     for name in ("sheet.svg", "sheet", "sheet.drawio"):
         out = tmp_path / name
@@ -760,18 +604,7 @@ def test_the_supported_extensions_still_write(tmp_path):
 
 
 def _with_an_unused_section(streams: int = 3) -> Flowsheet:
-    """Create a flowsheet that reports an unused table section.
-
-    Parameters
-    ----------
-    streams : int, default=3
-        Number of tabulated streams.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet configured to emit one stream-table warning.
-    """
+    """Create a flowsheet that reports an unused table section."""
     fs = _sheet(streams=streams)
     fs.stream_table_sections = [("Nothing Sets This", "Mass Fraction")]
     return fs
@@ -824,15 +657,7 @@ def test_a_successful_render_still_replaces_the_last_one_s_findings():
     ],
 )
 def test_which_numbers_count_as_the_diagram_s_own(stated, collides):
-    """Verify drawing-number collisions after canonicalisation.
-
-    Parameters
-    ----------
-    stated : str
-        Candidate table-sheet drawing number.
-    collides : bool
-        Whether the candidate conflicts after canonicalisation.
-    """
+    """Verify drawing-number collisions after canonicalisation."""
     fs = _sheet(streams=3)
     fs.stream_table.sheet_drawing_number = stated
     if collides:
@@ -856,13 +681,7 @@ def test_a_ligature_is_the_same_number_as_the_letters_it_stands_for():
 
 @pytest.fixture(scope="module")
 def table_sheet_noop_baselines() -> dict[str, str]:
-    """Render plain table-sheet baselines for both backends.
-
-    Returns
-    -------
-    dict[str, str]
-        SVG and Draw.io output keyed by ``Flowsheet`` export method.
-    """
+    """Render plain table-sheet baselines for both backends."""
     options = {"show_stream_table": "sheet", "page_size": "A4", "diagram": "p&id"}
     return {
         "to_svg": _sheet(streams=21).to_svg(**options),
@@ -882,15 +701,7 @@ def table_sheet_noop_baselines() -> dict[str, str]:
 def test_an_option_a_table_sheet_cannot_show_leaves_the_drawing_identical(
     kwargs: dict[str, str], table_sheet_noop_baselines: dict[str, str]
 ) -> None:
-    """Verify that table-sheet no-op options preserve both backend exports.
-
-    Parameters
-    ----------
-    kwargs : dict[str, str]
-        Valid option with no table-sheet effect.
-    table_sheet_noop_baselines : dict[str, str]
-        Shared SVG and Draw.io baseline output.
-    """
+    """Verify that table-sheet no-op options preserve both backend exports."""
     for render in ("to_svg", "to_drawio"):
         plain = table_sheet_noop_baselines[render]
         stated = getattr(_sheet(streams=21), render)(
@@ -903,13 +714,7 @@ def test_the_same_option_does_change_a_diagram_that_can_show_it():
     """Verify that the same option changes a normal diagram export."""
 
     def build() -> Flowsheet:
-        """Create a diagram that can show flanged connections.
-
-        Returns
-        -------
-        Flowsheet
-            Pinned feed, pump, and product diagram.
-        """
+        """Create a diagram that can show flanged connections."""
         fs = Flowsheet("joints")
         feed = fs.add(U.Feed("F")).pin(x=100, y=100)
         pump = fs.add(U.Pump("P-101")).pin(x=280, y=100)
@@ -953,15 +758,7 @@ def test_the_state_check_can_see_a_change_the_old_one_could_not():
 )
 @pytest.mark.parametrize("numbering", [False, True])
 def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
-    """Verify that a refused render leaves the whole flowsheet alone.
-
-    Parameters
-    ----------
-    kwargs : dict[str, object]
-        Rejected rendering options.
-    numbering : int
-        Requested stream-number starting value.
-    """
+    """Verify that a refused render leaves the whole flowsheet alone."""
     fs = _sheet(streams=3)
     if numbering:
         fs.stream_number_start = 90
@@ -980,13 +777,7 @@ def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
     ],
 )
 def test_a_refused_drawio_export_leaves_the_whole_flowsheet_alone(kwargs):
-    """Verify that a refused draw.io export leaves the whole flowsheet alone.
-
-    Parameters
-    ----------
-    kwargs : dict[str, object]
-        Rejected Draw.io export options.
-    """
+    """Verify that a refused draw.io export leaves the whole flowsheet alone."""
     bare = Flowsheet("bare")
     pump = bare.add(U.Pump("P-101")).pin(x=100, y=100)
     tank = bare.add(U.Tank("T-101")).pin(x=300, y=100)
@@ -1008,13 +799,7 @@ def test_a_refused_render_leaves_the_flowsheet_alone_after_a_successful_one():
 
 
 def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
-    """Verify that an unsupported extension leaves the whole flowsheet alone.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    """
+    """Verify that an unsupported extension leaves the whole flowsheet alone."""
     fs = _sheet(streams=3)
     before = pickle.dumps(fs)
     with pytest.raises(ValueError, match="Unsupported output format"):
@@ -1056,13 +841,7 @@ def test_a_model_error_erases_no_finding_from_the_last_render():
     ],
 )
 def test_a_refused_render_keeps_the_very_list_object_fs_warnings_had(kwargs):
-    """Verify that a rejected render preserves warning-list identity.
-
-    Parameters
-    ----------
-    kwargs : dict[str, object]
-        Rejected rendering options.
-    """
+    """Verify that a rejected render preserves warning-list identity."""
     fs = _with_an_unused_section()
     fs.stream_table.sheet_drawing_number = "PFD-1001"  # refused: the diagram's
     fs.stream_table_sections = []
@@ -1096,40 +875,14 @@ A4_ROOM = 1122.5196850393702 - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER
 
 
 def _long_section(streams: int = 21, width: int = 101) -> Flowsheet:
-    """Create a flowsheet with a long stream-table section heading.
-
-    Parameters
-    ----------
-    streams : int, default=21
-        Number of tabulated streams.
-    width : int, default=101
-        Number of wide glyphs in the section heading.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet that requires partitioning to fit an A4 table sheet.
-    """
+    """Create a flowsheet with a long stream-table section heading."""
     fs = _sheet(streams=streams, rows=1)
     fs.stream_table_sections = [("Temperature (C)", "W" * width)]
     return fs
 
 
 def _ruled_width(m, chunks: list) -> float:
-    """Calculate the table width required by a partition.
-
-    Parameters
-    ----------
-    m : object
-        Stream-table measurement object.
-    chunks : list
-        Stream-column partitions.
-
-    Returns
-    -------
-    float
-        Width required by the shared label and stream columns.
-    """
+    """Calculate the table width required by a partition."""
     return F._section_span(m, min(len(c) for c in chunks)) + m.name_w * max(len(c) for c in chunks)
 
 
@@ -1221,22 +974,7 @@ def test_a_stub_block_no_longer_widens_the_label_column_into_a_refusal():
 
 
 def _division_count(m, n: int, room: float) -> int:
-    """Calculate the legacy stream-table partition count.
-
-    Parameters
-    ----------
-    m : object
-        Stream-table measurement object.
-    n : int
-        Number of stream columns.
-    room : float
-        Available table width.
-
-    Returns
-    -------
-    int
-        Number of blocks chosen by the division-based calculation.
-    """
+    """Calculate the legacy stream-table partition count."""
     per = max(1, int((room - m.label_w) // m.name_w))
     return (n + per - 1) // per
 
@@ -1279,36 +1017,12 @@ def test_the_search_is_not_the_division_and_is_not_claimed_to_be():
 
 
 def _full_disk(*_args: object, **_kwargs: object) -> bytes:
-    """Raise the output failure used by render rollback tests.
-
-    Parameters
-    ----------
-    *_args : object
-        Ignored positional arguments from the patched writer.
-    **_kwargs : object
-        Ignored keyword arguments from the patched writer.
-
-    Raises
-    ------
-    OSError
-        Always raised with a disk-full error.
-    """
+    """Raise the output failure used by render rollback tests."""
     raise OSError(28, "No space left on device")
 
 
 def _without_geometry(fs) -> tuple[set[str], set[str]]:
-    """Capture units and streams without derived geometry.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to inspect.
-
-    Returns
-    -------
-    tuple[set[str], set[str]]
-        Names of units without frames and streams without routes.
-    """
+    """Capture units and streams without derived geometry."""
     return (
         {u.name for u in fs.units if u.frame is None},
         {s.name for s in fs.streams if s.route is None},
@@ -1316,13 +1030,7 @@ def _without_geometry(fs) -> tuple[set[str], set[str]]:
 
 
 def _damageable() -> Flowsheet:
-    """Create a flowsheet with rendered and unresolved state.
-
-    Returns
-    -------
-    Flowsheet
-        Flowsheet used to verify that failed rendering rolls state back.
-    """
+    """Create a flowsheet with rendered and unresolved state."""
     fs = _with_an_unused_section()
     fs.to_svg(show_stream_table="sheet", page_size="A3")
     assert [w.code for w in fs.warnings] == ["stream-table-section-unused"]
@@ -1334,13 +1042,7 @@ def _damageable() -> Flowsheet:
 
 
 def test_the_write_failure_checks_can_see_the_mutation_they_forbid(tmp_path):
-    """Verify that rollback assertions detect a successful render mutation.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    """
+    """Verify that rollback assertions detect a successful render mutation."""
     fs = _damageable()
     state, held, finding = pickle.dumps(fs), fs.warnings, fs.warnings[0]
     unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]
@@ -1370,19 +1072,7 @@ _NEEDS_PDF = pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not
 def test_a_render_that_cannot_be_written_leaves_the_whole_flowsheet_alone(
     tmp_path, monkeypatch, ext, injection
 ):
-    """Verify that write failures restore the complete flowsheet state.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Temporary output directory supplied by pytest.
-    monkeypatch : pytest.MonkeyPatch
-        Patching helper supplied by pytest.
-    ext : str
-        Requested output extension.
-    injection : str
-        Render operation forced to fail.
-    """
+    """Verify that write failures restore the complete flowsheet state."""
     fs = _damageable()
     state, held, finding = pickle.dumps(fs), fs.warnings, fs.warnings[0]
     unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]

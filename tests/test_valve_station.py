@@ -15,18 +15,7 @@ RUN_Y = 400.0
 
 
 def _sheet(**kwargs):
-    """Return a sheet with a pinned station spliced into a feed-to-product run.
-
-    Parameters
-    ----------
-    **kwargs : Any
-        Options passed to :meth:`~pandid.flowsheet.Flowsheet.add_valve_station`.
-
-    Returns
-    -------
-    tuple of (Flowsheet, ValveStation)
-        The sheet and the station.
-    """
+    """Return a sheet with a pinned station spliced into a feed-to-product run."""
     fs = Flowsheet("station")
     feed = fs.add(units.Feed("IN"))
     prod = fs.add(units.Product("OUT"))
@@ -237,18 +226,7 @@ def test_a_member_is_an_ordinary_unit_that_can_still_be_moved_and_instrumented()
 
 
 def _drawn(station: ValveStation) -> list[tuple[float, float, bool, bool]]:
-    """Return where each member is drawn and which way round.
-
-    Parameters
-    ----------
-    station : ValveStation
-        Station on a laid-out sheet.
-
-    Returns
-    -------
-    list of tuple of (float, float, bool, bool)
-        Each member's ``x``, ``y``, ``mirrored`` and ``mirror_y``.
-    """
+    """Return where each member is drawn and which way round."""
     return [
         (frame_of(u).x, frame_of(u).y, frame_of(u).mirrored, frame_of(u).mirror_y)
         for u in station.members
@@ -397,15 +375,7 @@ def test_a_branch_takes_the_number_the_station_was_given():
     ],
 )
 def test_a_refused_call_says_why_and_leaves_the_sheet_exactly_as_it_was(kwargs, match):
-    """Check that a refused call names its fault and adds no unit or stream to the sheet.
-
-    Parameters
-    ----------
-    kwargs : dict
-        Options passed to ``add_valve_station``.
-    match : str
-        Pattern the refusal must contain.
-    """
+    """Check that a refused call names its fault and adds no unit or stream to the sheet."""
     fs = Flowsheet("bad")
     before_units, before_streams = list(fs.units), list(fs.streams)
     with pytest.raises(ValueError, match=match):

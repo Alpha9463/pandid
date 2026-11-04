@@ -31,15 +31,7 @@ GOLDEN_FINDINGS = {
 
 
 def _check_golden(name: str, svg: str) -> None:
-    """Compare an SVG document with its approved fixture.
-
-    Parameters
-    ----------
-    name : str
-        Golden fixture name.
-    svg : str
-        Rendered SVG document text.
-    """
+    """Compare an SVG document with its approved fixture."""
     path = GOLDEN_DIR / f"{name}.svg"
     normalized = _normalize(svg)
     if UPDATE:
@@ -56,15 +48,7 @@ def _check_golden(name: str, svg: str) -> None:
 
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
 def test_golden_svg(settled_gallery, name):
-    """Match representative renders and their findings to approved fixtures.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Settled gallery flowsheets and render options.
-    name : str
-        Scenario or stream identifier under test.
-    """
+    """Match representative renders and their findings to approved fixtures."""
     fs, kwargs = copy_settled_case(settled_gallery, name)
     svg = fs.to_svg(**kwargs)
     assert [warning.code for warning in fs.warnings] == GOLDEN_FINDINGS.get(name, []), (
@@ -74,13 +58,7 @@ def test_golden_svg(settled_gallery, name):
 
 
 def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
-    """Keep golden fixtures independent of version metadata.
-
-    Parameters
-    ----------
-    monkeypatch : pytest.MonkeyPatch
-        Fixture used to replace runtime state.
-    """
+    """Keep golden fixtures independent of version metadata."""
     import pandid
 
     name = "03_distillation_train"
@@ -104,32 +82,13 @@ _DEBUG_BOX = re.compile(
 
 
 def _drawn(value: "str | float") -> float:
-    """Round a coordinate to SVG serialization precision.
-
-    Parameters
-    ----------
-    value : str | float
-        Coordinate captured from SVG or resolved by the model.
-
-    Returns
-    -------
-    float
-        Coordinate rounded to one decimal place.
-    """
+    """Round a coordinate to SVG serialization precision."""
     return round(float(value), 1)
 
 
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
 def test_representative_sheets_draw_nozzles_on_their_own_bodies(settled_gallery, name):
-    """Test that representative sheets draw nozzles on their own bodies.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Settled gallery flowsheets and render options.
-    name : str
-        Scenario or stream identifier under test.
-    """
+    """Test that representative sheets draw nozzles on their own bodies."""
     from pandid.portgeom import resolve_port, unit_box
 
     fs, kwargs = copy_settled_case(settled_gallery, name)
