@@ -1,5 +1,5 @@
 """
-Example 12: Block flow diagram (pinned)
+Example 11: Block flow diagram (pinned)
 
 One `units.Block` per plant section, sized to its name and connections.
 `inputs=` and `outputs=` give one face per connection (a count puts

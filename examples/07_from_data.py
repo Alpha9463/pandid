@@ -1,5 +1,5 @@
 """
-Example 8: Building a flowsheet from data
+Example 7: Building a flowsheet from data
 
 The sheet is one plain mapping handed to ``Flowsheet.from_dict``; the
 same spec loads from ``Flowsheet.from_json`` or ``Flowsheet.from_yaml``

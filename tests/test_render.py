@@ -413,7 +413,7 @@ def test_a_sheet_whose_crossings_all_have_room_says_nothing():
 
     from test_golden import SCENARIOS
 
-    build, kwargs = SCENARIOS["21_alumina_refinery_3"]
+    build, kwargs = SCENARIOS["20_alumina_refinery_3"]
     fs = build()
     fs.to_svg(**kwargs)
     assert unmarked_crossings(fs) == []

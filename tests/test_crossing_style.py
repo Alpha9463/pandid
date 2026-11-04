@@ -26,8 +26,8 @@ from pandid.render.svg import (
 )
 
 MARKED = (
-    "16_demineralised_water",
-    "18_fixed_bed_recycle",
+    "15_demineralised_water",
+    "17_fixed_bed_recycle",
 )
 
 _ARC = f"A {HOP_R:g} {HOP_R:g} 0 0 1 "

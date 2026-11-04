@@ -21,8 +21,9 @@ from pandid.render import export  # noqa: E402
 EXAMPLES = ROOT / "examples"
 GALLERY = ROOT / "docs" / "gallery"
 
-# PyPI's 0.1.5 description embeds this PNG by its raw URL; keep writing it.
-PYPI_PNG = "11_ethanol_pid"
+# PyPI's 0.1.5 description embeds this PNG by its raw URL and old number; keep writing it.
+PYPI_PNG = "11_ethanol_pid.png"
+PYPI_PNG_SHEET = "10_ethanol_pid"
 
 # Keep the smallest title-block lettering readable in the PNG.
 WIDTH = 2400
@@ -236,7 +237,7 @@ def rasterize(svg: str, width: int = WIDTH) -> bytes:
 
 
 def main() -> None:
-    """Write every gallery sheet as an SVG, and :data:`PYPI_PNG` as a PNG.
+    """Write every gallery sheet as an SVG, and :data:`PYPI_PNG_SHEET` as :data:`PYPI_PNG`.
 
     Returns
     -------
@@ -249,9 +250,9 @@ def main() -> None:
         svg = fs.to_svg(**kwargs)
         (GALLERY / f"{stem}.svg").write_text(svg, encoding="utf-8")
         print(f"wrote {stem}.svg")
-        if stem == PYPI_PNG:
-            (GALLERY / f"{stem}.png").write_bytes(rasterize(svg))
-            print(f"wrote {stem}.png")
+        if stem == PYPI_PNG_SHEET:
+            (GALLERY / PYPI_PNG).write_bytes(rasterize(svg))
+            print(f"wrote {PYPI_PNG}")
 
 
 if __name__ == "__main__":

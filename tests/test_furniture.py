@@ -59,7 +59,7 @@ def test_a_docked_tables_own_column_centres_the_same_either_way():
 
 def test_the_absorber_stripper_scenario_renders_the_same_either_way():
     """Check that the absorber-stripper sheet renders the same either way."""
-    build, kwargs = SCENARIOS["19_absorber_stripper"]
+    build, kwargs = SCENARIOS["18_absorber_stripper"]
     compensated = _rendered_with(sum, build, **kwargs)
     naive = _rendered_with(_naive_sum, build, **kwargs)
     assert compensated == naive

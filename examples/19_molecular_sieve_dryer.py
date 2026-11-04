@@ -1,5 +1,5 @@
 """
-Example 20: Gas Dehydration A500, two molecular sieve driers as a P&ID
+Example 19: Gas Dehydration A500, two molecular sieve driers as a P&ID
 
 Wet natural gas is dried over 4A molecular sieve before it goes to the
 cold end of an NGL plant. One bed is on line and the other is being

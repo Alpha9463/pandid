@@ -1,5 +1,5 @@
 """
-Example 2: Manual placement, and the debug overlay
+Example 1: Manual placement, and the debug overlay
 
 ``pin(x=, y=)`` places a unit's top-left corner (a Feed or Product
 flag's tip); ``pin(port=..., y=)`` places a nozzle. ``via([...])`` gives

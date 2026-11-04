@@ -1,5 +1,5 @@
 """
-Example 4: Instrumentation and control loops (ISA-5.1)
+Example 3: Instrumentation and control loops (ISA-5.1)
 
 A surge drum with a flow loop (FE-101, FT-101, FIC-101 on FV-101), a
 level loop (LT-101, LIC-101 on LV-101), two level alarms and an

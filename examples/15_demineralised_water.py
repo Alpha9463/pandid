@@ -1,5 +1,5 @@
 """
-Example 16: Demineralised water plant, laid out automatically
+Example 15: Demineralised water plant, laid out automatically
 
 Raw water is stored, strained and pumped through a multimedia filter
 and an activated carbon bed, then through a cation exchanger. A packed

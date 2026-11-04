@@ -1,5 +1,5 @@
 """
-Example 5: Reactor loop with recycle and purge (fully automatic)
+Example 4: Reactor loop with recycle and purge (fully automatic)
 
 No pins and no via() waypoints: the engine lays out and routes
 everything from the topology. The splitter -> mixer recycle is routed as

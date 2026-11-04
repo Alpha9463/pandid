@@ -17,10 +17,10 @@ from test_line_weight import drawn_pens
 UNIT_MM = 0.25
 _LINE_GROUPS = ("streams", "instrument_taps", "units")
 WIDTH_CASES = (
-    "10_ethanol_pfd",
-    "11_ethanol_pid",
-    "12_block_flow_diagram",
-    "18_fixed_bed_recycle",
+    "09_ethanol_pfd",
+    "10_ethanol_pid",
+    "11_block_flow_diagram",
+    "17_fixed_bed_recycle",
 )
 
 ROOT = Path(__file__).resolve().parent.parent

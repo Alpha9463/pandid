@@ -348,7 +348,7 @@ def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
 
 def test_the_p_and_id_needs_exactly_one_leader(sheets):
     """Check that the P&ID needs exactly one leader."""
-    _fs, labels = sheets["11_ethanol_pid"]
+    _fs, labels = sheets["10_ethanol_pid"]
     led = sorted(lab.name for lab in labels if lab.leader)
     assert led == ["AE-304-150-80-SS"]
 

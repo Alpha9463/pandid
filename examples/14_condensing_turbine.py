@@ -1,5 +1,5 @@
 """
-Example 15: Condensing steam turbine, laid out automatically
+Example 14: Condensing steam turbine, laid out automatically
 
 HP steam is dried, its separated condensate is trapped off to the
 condensate header, and the dry steam passes a trip-and-throttle valve

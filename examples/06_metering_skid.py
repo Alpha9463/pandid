@@ -1,5 +1,5 @@
 """
-Example 7: Feed conditioning and metering skid
+Example 6: Feed conditioning and metering skid
 
 Feed is strained, pumped, metered through a rotameter, throttled by a
 motor-operated valve, held in a surge vessel with a relief valve, and

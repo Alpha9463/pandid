@@ -276,7 +276,7 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
     from PIL import Image
 
     # Many stream numbers, all capitals and figures, so no descender moves the ink box.
-    svg = (GOLDEN_DIR / "03_distillation_train.svg").read_text(encoding="utf-8")
+    svg = (GOLDEN_DIR / "02_distillation_train.svg").read_text(encoding="utf-8")
     vx, vy, vw, _ = (float(v) for v in re.search(r'viewBox="([^"]+)"', svg).group(1).split())
     # Two device pixels per user unit.
     im = Image.open(io.BytesIO(export.to_png(svg, scale=2 * export._PX_PER_PT))).convert("L")

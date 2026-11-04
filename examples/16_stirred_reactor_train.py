@@ -1,5 +1,5 @@
 """
-Example 17: Propylene Glycol Reaction A200, a jacketed CSTR as a P&ID
+Example 16: Propylene Glycol Reaction A200, a jacketed CSTR as a P&ID
 
 Propylene oxide and process water are metered, mixed and charged to
 R-101, a jacketed continuous stirred tank with a turbine agitator. The

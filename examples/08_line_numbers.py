@@ -1,5 +1,5 @@
 """
-Example 9: Line numbers
+Example 8: Line numbers
 
 A line number such as `6"-P-1001-A1A` is size, service, sequence and
 spec, given on `connect()`; the sequence is numbered automatically. One
