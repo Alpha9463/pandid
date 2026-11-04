@@ -1366,6 +1366,55 @@ def test_the_two_halves_are_the_whole_of_validate():
     )
 
 
+# --- a variant no symbol draws ------------------------------------------------
+
+
+def _misspelt(build: str) -> Flowsheet:
+    """Build a Feed -> unit -> Product run whose unit names an unknown variant."""
+    fs = Flowsheet("variant")
+    feed = fs.add(U.Feed("F"))
+    product = fs.add(U.Product("P"))
+    if build == "valve":
+        valve = fs.add(U.Valve("V-1", variant="gat"))
+        fs.connect(feed.outlet, valve.inlet)
+        fs.connect(valve.outlet, product.inlet)
+    else:
+        reactor = fs.add(U.Reactor("R-1", variant="plain"))
+        fs.connect(feed.outlet, reactor.feed)
+        fs.connect(reactor.outlet, product.inlet)
+    return fs
+
+
+_REGISTRY_SAYS = {
+    "valve": "valve has no variant 'gat' (did you mean 'gate'?); registered valve variants: ",
+    "reactor": "reactor has no variant 'plain'; registered reactor variants: default, jacketed, tubular",
+}
+
+
+@pytest.mark.parametrize(("build", "tag"), [("valve", "V-1"), ("reactor", "R-1")])
+def test_an_unknown_variant_is_a_model_error(no_geometry, build, tag):
+    """Check that validate() reports an unknown variant before any layout."""
+    (issue,) = _found(_misspelt(build), "variant-unknown")
+    assert issue.severity == "error"
+    assert issue.message.startswith(f"{tag}: {_REGISTRY_SAYS[build]}")
+
+
+@pytest.mark.parametrize("build", ["valve", "reactor"])
+def test_to_svg_refuses_an_unknown_variant_before_layout(no_geometry, build):
+    """Check that to_svg() refuses an unknown variant as a model error."""
+    with pytest.raises(ValueError, match="variant-unknown") as caught:
+        _misspelt(build).to_svg()
+    assert _REGISTRY_SAYS[build] in str(caught.value)
+
+
+@pytest.mark.parametrize("build", ["valve", "reactor"])
+def test_check_false_refuses_an_unknown_variant_in_the_same_words(build):
+    """Check that to_svg(check=False) raises the registry's message at layout."""
+    with pytest.raises(ValueError) as caught:
+        _misspelt(build).to_svg(check=False)
+    assert str(caught.value).startswith(_REGISTRY_SAYS[build])
+
+
 # --- a run drawn on the slant -------------------------------------------------
 
 
