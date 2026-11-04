@@ -1573,10 +1573,8 @@ class DrawioRenderer:
                 *geometry,
                 '        </mxCell>',
             ]
-            if s.kind == "pneumatic":
-                cells[n] += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
-            cells[n] += _flanges(f"s{n}", s, points, resolve_connections(s, joints),
-                                 s.color or _LINE_INK, fit)
+            cells[n] += _line_marks(f"s{n}", s, points, resolve_connections(s, joints),
+                                    s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
             if boxed:
@@ -1995,67 +1993,11 @@ _HATCH_ANGLE = round(math.degrees(math.atan2(-2 * _svg.HATCH_ARM[1], 2 * _svg.HA
 _HATCH_LEN = round(2 * math.hypot(*_svg.HATCH_ARM), 2)
 
 
-def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
-    """Return the double cross-hatch marking a pneumatic line.
+def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
+    """Return the pneumatic cross-hatches and the flanged-joint marks on one line.
 
-    Each stroke is a ``line`` child vertex of the edge, placed by arc
-    length.
-
-    Parameters
-    ----------
-    edge_id : str
-        Id of the stream's edge.
-    points : list[tuple[float, float]]
-        Stream polyline.
-    ink : str
-        Line colour.
-    fit : _Fit
-        Drawing fit.
-
-    Returns
-    -------
-    list[str]
-        XML lines for the hatch cells.
-    """
-    from pandid.render.svg import pneumatic_marks
-
-    total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
-                for (ax, ay), (bx, by) in zip(points, points[1:]))
-    if total <= 0:
-        return []
-
-    length = fit.length(_HATCH_LEN)
-    half = length / 2
-    out: list[str] = []
-    for n, mark in enumerate(pneumatic_marks(points)):
-        # -1 to +1 from source to target by arc length.
-        rel = max(-1.0, min(1.0, 2.0 * mark.along / total - 1.0))
-        horiz = mark.horizontal
-        angle = _HATCH_ANGLE if horiz else _HATCH_ANGLE + 90.0
-        style = (f"shape=line;rotation={angle:g};strokeColor={ink};"
-                 f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};fillColor={_NO_FILL};html=1;"
-                 "resizable=0;movable=1;")
-        for k, off in enumerate(_svg.HATCH_ALONG):
-            step = fit.length(off)
-            dx, dy = (step, 0.0) if horiz else (0.0, step)
-            out += [
-                f'        <mxCell id="{edge_id}h{n}{k}" value="" style={_attr(style)} '
-                f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
-                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
-                'relative="1" as="geometry">',
-                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
-                'as="offset" />',
-                '          </mxGeometry>',
-                '        </mxCell>',
-            ]
-    return out
-
-
-def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
-    """Return the flanged-joint marks on one line.
-
-    Each mark is two bars, each a ``line`` child vertex of the edge.
+    Each hatch is two strokes and each flange two bars, every one a
+    ``line`` child vertex of the edge placed by arc length.
 
     Parameters
     ----------
@@ -2075,37 +2017,52 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
     Returns
     -------
     list[str]
-        XML lines for the flange cells.
+        XML lines for the hatch cells, then the flange cells.
     """
+    from pandid.render.svg import pneumatic_marks
+
     total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
                 for (ax, ay), (bx, by) in zip(points, points[1:]))
     if total <= 0:
         return []
-
-    length = fit.length(_svg.FLANGE_TICK)
-    half = length / 2
+    gap = fit.length(_svg.FLANGE_GAP / 2)
+    # Per family: id letter, stroke length, and each mark's arc length,
+    # rotation and stroke offsets. A further quarter turn makes a flange
+    # bar cross the run.
+    families = (
+        ("h", _HATCH_LEN, [
+            (m.along, _HATCH_ANGLE if m.horizontal else _HATCH_ANGLE + 90.0,
+             [(fit.length(off), 0.0) if m.horizontal else (0.0, fit.length(off))
+              for off in _svg.HATCH_ALONG])
+            for m in (pneumatic_marks(points) if s.kind == "pneumatic" else [])]),
+        ("f", _svg.FLANGE_TICK, [
+            (m.along, m.angle + 90.0,
+             [(math.cos(math.radians(m.angle)) * step, math.sin(math.radians(m.angle)) * step)
+              for step in (-gap, gap)])
+            for m in flange_marks(s, points, ends)]),
+    )
     out: list[str] = []
-    for n, mark in enumerate(flange_marks(s, points, ends)):
-        rel = max(-1.0, min(1.0, 2.0 * mark.along / total - 1.0))
-        # A further quarter turn makes the bar cross the run.
-        style = (f"shape=line;rotation={mark.angle + 90.0:g};strokeColor={ink};"
-                 f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};fillColor={_NO_FILL};"
-                 "html=1;resizable=0;movable=1;")
-        rad = math.radians(mark.angle)
-        for k, sign in enumerate((-1, 1)):
-            step = fit.length(_svg.FLANGE_GAP / 2) * sign
-            dx, dy = math.cos(rad) * step, math.sin(rad) * step
-            out += [
-                f'        <mxCell id="{edge_id}f{n}{k}" value="" style={_attr(style)} '
-                f'vertex="1" connectable="0" parent="{edge_id}">',
-                f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
-                f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
-                'relative="1" as="geometry">',
-                f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
-                'as="offset" />',
-                '          </mxGeometry>',
-                '        </mxCell>',
-            ]
+    for letter, size, marks in families:
+        length = fit.length(size)
+        half = length / 2
+        for n, (along, angle, offsets) in enumerate(marks):
+            # -1 to +1 from source to target by arc length.
+            rel = max(-1.0, min(1.0, 2.0 * along / total - 1.0))
+            style = (f"shape=line;rotation={angle:g};strokeColor={ink};"
+                     f"strokeWidth={fit.length(LineWeight.DETAIL.width):g};"
+                     f"fillColor={_NO_FILL};html=1;resizable=0;movable=1;")
+            for k, (dx, dy) in enumerate(offsets):
+                out += [
+                    f'        <mxCell id="{edge_id}{letter}{n}{k}" value="" '
+                    f'style={_attr(style)} vertex="1" connectable="0" parent="{edge_id}">',
+                    f'          <mxGeometry x="{fmt(rel, 6)}" y="0" '
+                    f'width="{fmt(length, 2)}" height="{fmt(length, 2)}" '
+                    'relative="1" as="geometry">',
+                    f'            <mxPoint x="{fmt(dx - half, 2)}" y="{fmt(dy - half, 2)}" '
+                    'as="offset" />',
+                    '          </mxGeometry>',
+                    '        </mxCell>',
+                ]
     return out
 
 
