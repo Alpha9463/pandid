@@ -21,7 +21,7 @@ from pandid.stations import (
     DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
 from pandid.inline import _INLINE_KINDS
-from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
+from pandid.streams import LINE_NUMBER_FIELDS, PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -141,7 +141,8 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
     """
     if callable(scheme):
         return scheme(stream)
-    parts = stream.line_components()
+    parts = {f: "" if getattr(stream, f) is None else str(getattr(stream, f))
+             for f in LINE_NUMBER_FIELDS}
     out: list[str] = []
     pending = ""  # separator held until the next component is present
     for literal, name, format_spec, _ in Formatter().parse(scheme):
@@ -1129,8 +1130,7 @@ class Flowsheet:
             self._invalidate_layout()
             return
         if (stream.kind != "material" or stream.draw_as_recycle
-                or stream.is_recycle or unit is None
-                or unit.kind not in _INLINE_KINDS):
+                or stream.is_recycle or unit.kind not in _INLINE_KINDS):
             raise ValueError("inline position requires a material stream entering an inline device")
         if stream.dest.name != "inlet" or stream.dest.stream is not stream:
             raise ValueError("inline position requires the device inlet stream")

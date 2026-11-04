@@ -82,5 +82,4 @@ def process_streams(fs: "Flowsheet") -> list["Stream"]:
         Material streams between process units.
     """
     return [s for s in fs.streams if s.kind == "material"
-            and s.source.owner is not None and s.dest.owner is not None
             and not is_control(s.source.owner) and not is_control(s.dest.owner)]
