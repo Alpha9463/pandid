@@ -126,8 +126,9 @@ def _regroup(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
     -------
     str
         A sentence naming the line, into or out of ``item``, for each
-        device, valve station and balloon on the line; ``""`` when the
-        line carries none.
+        device, valve station and balloon on the line, by its fraction
+        of the whole line, or the part of the line a balloon taps when
+        that fraction is unknown; ``""`` when the line carries none.
     """
     from pandid.units import Instrument
 
@@ -138,23 +139,30 @@ def _regroup(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
         low, start = stated[-1] if stated else (-1, 0.0)
         count = len(segments) - 1
         at = start + (1 - start) * (count - low) / (count + 1 - low)
-    sides: dict[bool, list[str]] = {True: [], False: []}
+    # Fractions of the whole line: its ends and each item's position.
+    ends: list[float | None] = [0.0, *(position(s) for s in segments[:-1]), 1.0]
+    sides: dict[str, list[str]] = {"into": [], "out of": [], "": []}
     for k, segment in enumerate(segments[:-1]):
         station = next((a.station for a in fs._station_assemblies
                         if a.station.inlet is segment.dest), None)
-        sides[k < index].append(f"valve station {station.control.name}" if station
-                                else segment.dest.owner.name)
+        sides["into" if k < index else "out of"].append(
+            f"valve station {station.control.name}" if station else segment.dest.owner.name)
     for u in fs.units:
-        if (isinstance(u, Instrument) and u.at is not None
-                and any(u.host is s for s in (line, *segments))):
-            sides[u.at < at].append(u.name)
+        if not isinstance(u, Instrument):
+            continue
+        part = next((i for i, s in enumerate(segments) if u.host is s), None)
+        if part is None:
+            continue
+        # A balloon on a part of the line taps a fraction of that part.
+        a, b = (0.0, 1.0) if part == 0 else (ends[part], ends[part + 1])
+        key = None if u.at is None or a is None or b is None else a + u.at * (b - a)
+        sides["" if key is None else "into" if key < at else "out of"].append(u.name)
     groups = [f"{' and '.join(filter(None, (', '.join(names[:-1]), names[-1])))} "
-              f"on the line {where} {item}"
-              for names, where in ((sides[True], "into"), (sides[False], "out of"))
-              if names]
+              + (f"on the line {where} {item}" if where else "on the part of the line it taps")
+              for where, names in sides.items() if names]
     if not groups:
         return ""
-    each = "each " if len(sides[True]) + len(sides[False]) > 1 else ""
+    each = "each " if sum(map(len, sides.values())) > 1 else ""
     return (f". Then put {', and '.join(groups)}, {each}by the call that put it on "
             f"{line.name}, given that line instead")
 

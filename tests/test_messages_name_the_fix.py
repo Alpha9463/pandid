@@ -152,11 +152,27 @@ def test_stream_table_missing_on_an_instrumented_sheet_suggests_a_pid() -> None:
 
 
 def _carry(fs: Flowsheet, on: Callable[[str], Stream]) -> None:
-    """Put HV-1, valve station FV-101, PT-102 and FT-101 on the lines *on* names."""
+    """Put HV-1, valve station FV-101 and four balloons on the lines *on* names."""
     fs.add(Valve("HV-1"), on=on("HV-1"), at=0.1)
-    fs.add_valve_station("FV-101", on=on("FV-101"), at=0.6)
+    fs.add_valve_station("FV-101", on=on("FV-101"), at=0.7)
     fs.add_instrument("FT", 101, sensing=on("FT-101"), at=0.8)
     fs.add_instrument("PT", 102, sensing=on("PT-102"), at=0.2)
+    fs.add_instrument("PT", 103, sensing=on("PT-103"), at=0.2)
+    fs.add_instrument("PT", 104, sensing=on("PT-104"), at=0.1)
+
+
+def _taps(line: Stream) -> Callable[[str], Stream]:
+    """Return *line* for each item, but its parts after HV-1 and FV-101 for PT-103 and PT-104."""
+    return lambda name: (
+        line._logical_segments[{"PT-103": 1, "PT-104": 2}[name]]
+        if name in ("PT-103", "PT-104")
+        else line
+    )
+
+
+#: The side of the new item, at 0.5, each balloon taps; PT-103 and PT-104
+#: are 0.2 and 0.1 along their own parts of the line.
+_SIDES = {"FT-101": "out of", "PT-102": "into", "PT-103": "into", "PT-104": "out of"}
 
 
 def _sides(message: str, item: str) -> dict[str, str]:
@@ -178,18 +194,22 @@ def _drawn(start: Port, stop: Unit) -> list[str]:
     return [name for name in order if name in ("HV-1", "FV-101", "T", "V")]
 
 
-def _hosts(fs: Flowsheet) -> dict[str, object]:
-    """Return the line each balloon taps."""
-    return {u.name: u.host for u in fs.units if isinstance(u, Instrument)}
+def _hosts(fs: Flowsheet, lines: dict[str, Stream]) -> dict[str, str]:
+    """Return which of *lines* each balloon taps."""
+    return {
+        u.name: next((side for side, line in lines.items() if u.host is line), "elsewhere")
+        for u in fs.units
+        if isinstance(u, Instrument)
+    }
 
 
 def test_following_the_tee_advice_keeps_every_item_on_its_side() -> None:
     """Check that the hand-piped tee keeps each device and balloon on its side of the branch."""
     fs, feed, product = _line()
     line = fs.connect(feed.outlet, product.inlet)
-    _carry(fs, lambda name: line)
+    _carry(fs, _taps(line))
     with pytest.raises(ValueError) as refused:
-        fs.add(Tee("T"), on=line, at=0.3)
+        fs.add(Tee("T"), on=line, at=0.5)
     sides = _sides(str(refused.value), "T")
 
     fs, feed, product = _line()
@@ -202,7 +222,7 @@ def test_following_the_tee_advice_keeps_every_item_on_its_side() -> None:
     _carry(fs, lambda name: lines[sides[name]])
 
     assert _drawn(feed.outlet, product) == ["HV-1", "T", "FV-101"]
-    assert _hosts(fs) == {"FT-101": lines["out of"], "PT-102": lines["into"]}
+    assert _hosts(fs, lines) == _SIDES
 
 
 def test_following_the_recycle_advice_keeps_every_item_on_its_side() -> None:
@@ -218,10 +238,10 @@ def test_following_the_recycle_advice_keeps_every_item_on_its_side() -> None:
 
     fs, split, drum = loop()
     back = fs.connect(split.out_2, drum.port("in_2"))
-    _carry(fs, lambda name: back)
+    _carry(fs, _taps(back))
     fs.route()
     with pytest.raises(ValueError, match="recycle") as refused:
-        fs.add(Valve("V"), on=back, at=0.3)
+        fs.add(Valve("V"), on=back, at=0.5)
     sides = _sides(str(refused.value), "<device>")
 
     fs, split, drum = loop()
@@ -233,4 +253,4 @@ def test_following_the_recycle_advice_keeps_every_item_on_its_side() -> None:
     _carry(fs, lambda name: lines[sides[name]])
 
     assert _drawn(split.out_2, drum) == ["HV-1", "V", "FV-101"]
-    assert _hosts(fs) == {"FT-101": lines["out of"], "PT-102": lines["into"]}
+    assert _hosts(fs, lines) == _SIDES
