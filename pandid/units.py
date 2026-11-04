@@ -3098,6 +3098,7 @@ class Instrument(Unit):
         self.host: "Stream | Unit | None" = None
         self.at: float | None = None
         self.face: str | None = None
+        self._face_stated = False
         self.offset: float = 45.0
         self.angle: float = 90.0
         self.relation: str = "sensing"
@@ -3335,7 +3336,8 @@ class Instrument(Unit):
         face : str, optional
             Face of a unit, ``"N"``, ``"S"``, ``"E"`` or ``"W"``, or
             ``"top"``, ``"bottom"``, ``"left"`` or ``"right"``; default
-            ``"E"``.
+            ``"E"``, or on equipment the first of ``"N"``, ``"S"`` and
+            ``"W"`` that no line leaves when one leaves ``"E"``.
         offset : float, default=45.0
             Requested tap-to-centre distance in pixels; 0 on a stream
             draws the balloon in the line.
@@ -3465,6 +3467,7 @@ class Instrument(Unit):
         self.host = on
         self.at = fraction
         self.face = side
+        self._face_stated = face is not None or old
         self.offset = offset
         self.angle = angle
         self.relation = relation

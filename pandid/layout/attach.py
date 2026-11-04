@@ -208,8 +208,29 @@ def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
         return _along(points, float(inst.at if inst.at is not None else 0.5))
     if host.frame is None:
         return None
-    (px, py), (nx, ny) = face_point(host, host.frame, inst.face or "E")
+    face = inst.face if inst._face_stated or is_attached(host) else _free_face(host)
+    (px, py), (nx, ny) = face_point(host, host.frame, face or "E")
     return (px, py), (-ny, nx)
+
+
+def _free_face(host: "Unit") -> str:
+    """Return the first of E, N, S and W that no line leaves.
+
+    Parameters
+    ----------
+    host : Unit
+        Placed unit a balloon hangs from.
+
+    Returns
+    -------
+    str
+        That face, or ``"E"`` if a line leaves every face.
+    """
+    from pandid.portgeom import resolve_port
+
+    used = {resolve_port(host, host.frame, name).face
+            for name, port in host.ports.items() if port.stream is not None}
+    return next((face for face in "ENSW" if face not in used), "E")
 
 
 def _intrusion(a: Box, b: Box, gap: float) -> float:
