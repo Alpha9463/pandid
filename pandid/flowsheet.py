@@ -535,7 +535,8 @@ class Flowsheet:
         self._unhung: tuple | None = None
         # Whether a layout engine is running, which routes without hanging.
         self._laying_out = False
-        # Whether the router lays crossing laterals on ordered lanes.
+        # Whether layout widens gaps for lanes and the router lays
+        # crossing laterals on them.
         self._lanes = True
         # Whether a balloon hung from a balloon keeps off the tapped line,
         # and whether any did since route() turned that on.

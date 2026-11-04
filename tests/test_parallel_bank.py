@@ -4,11 +4,14 @@ import pytest
 
 from pandid import Flowsheet, ShellAndTubeExchanger, units as U
 from pandid.devices import ControlValve
+from pandid.streams import Stream
 from pandid.layout.attach import stream_path
 from pandid.layout.control import _flaws, _shared, _taps_off
+from pandid.layout import layered
 from pandid.layout.layered import COL_GAP, LANE_PITCH
 from pandid.layout.quality import measure_final
 from pandid.route_geometry import stream_polyline
+from pandid.routing import lanes
 from pandid.routing.metrics import real_bends
 from pandid.routing.visibility import MIN_ESCAPE
 
@@ -106,25 +109,55 @@ def test_a_lateral_keeps_the_instrument_that_taps_it(at):
     assert _flaws(fs)["line-on-line"] == 0
 
 
-def test_a_three_way_header_keeps_its_stock_face():
+def _coolers(n: int) -> tuple[Flowsheet, list[Stream], list[Stream]]:
+    """Return n exchangers between headers, each with its own cooling water."""
     fs = Flowsheet("Cooler bank")
-    sp = fs.add(U.Splitter("SP-101", n_outlets=3))
-    mx = fs.add(U.Mixer("MX-101", n_inlets=3))
+    sp = fs.add(U.Splitter("SP-101", n_outlets=n))
+    mx = fs.add(U.Mixer("MX-101", n_inlets=n))
     fs.connect(fs.add(U.Feed("Feed")).outlet, sp.inlet)
     fs.connect(mx.outlet, fs.add(U.Product("Product")).inlet)
-    returns, outlets = [], []
+    outlets, returns = [], []
     for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
         exchanger = fs.add(ShellAndTubeExchanger(f"E-{100 + i}"))
         fs.connect(outlet, exchanger.tube_in)
         outlets.append(fs.connect(exchanger.tube_out, inlet))
         fs.connect(fs.add(U.Feed(f"CWS-{i}")).outlet, exchanger.shell_in)
         returns.append(fs.connect(exchanger.shell_out, fs.add(U.Product(f"CWR-{i}")).inlet))
+    return fs, outlets, returns
+
+
+def _drawing(fs: Flowsheet) -> tuple[list, list]:
+    """Return every unit's frame and every stream's waypoints."""
+    frames = [(u.name, u.frame) for u in fs.units]
+    routes = [s.route.waypoints if s.route is not None else None for s in fs.streams]
+    return frames, routes
+
+
+def test_a_three_way_header_keeps_its_stock_face():
+    fs, outlets, returns = _coolers(3)
     fs.to_svg(diagram="p&id")
-    assert sp.frame is not None and sp.frame.h == 50
+    assert [u.frame.h for u in fs.units[:2] if u.frame is not None] == [50, 50]
     # No exchanger's tube outlet runs along its own shell return.
     for tube, shell in zip(outlets, returns):
         a, b = stream_path(tube), stream_path(shell)
         assert not any(_shared(p, q, r, t) for p, q in zip(a, a[1:]) for r, t in zip(b, b[1:]))
+
+
+def test_a_header_kept_stock_draws_as_the_stock_header_without_lanes(monkeypatch):
+    fs = _coolers(10)[0]
+    fs.to_svg(diagram="p&id")
+    assert [u.frame.h for u in fs.units[:2] if u.frame is not None] == [50, 50]
+    assert measure_final(fs).crossings == 103
+    # The same sheet with stock headers, no lane gaps and no lanes.
+    stock = _coolers(10)[0]
+    monkeypatch.setattr(layered, "_lanes", lambda segs: {})
+    monkeypatch.setattr(lanes, "relane", lambda *args: None)
+    for header in stock.units[:2]:
+        header._stock_face = True
+    stock.renumber_streams()
+    stock.layout()
+    stock._route_once()
+    assert _drawing(fs) == _drawing(stock)
 
 
 def test_a_grown_header_is_kept_only_where_it_draws_no_worse():

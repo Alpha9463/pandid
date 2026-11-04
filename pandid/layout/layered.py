@@ -301,7 +301,7 @@ def place_equipment(fs: Flowsheet, units: list[Unit], links: list[Link]) -> None
     _row_pins(layers)
     _rank(layers)
     _straighten(layers, segs)
-    xs = _columns(layers, segs)
+    xs = _columns(layers, segs, fs._lanes)
     if not any(u.pin_ is not None and (u.pin_.x is not None or u.pin_.y is not None)
                for u in units):
         _fold(layers, segs, xs)
@@ -776,7 +776,8 @@ def _row_pins(layers: dict[int, list[_Node]]) -> None:
             layer[i] = n
 
 
-def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, float]:
+def _columns(layers: dict[int, list[_Node]], segs: list[_Seg],
+             widen: bool) -> dict[_Node, float]:
     """Return each node's left edge.
 
     Parameters
@@ -785,6 +786,8 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
         Stacks and dummies in each layer, in order.
     segs : list[_Seg]
         Pipe steps between adjacent layers.
+    widen : bool
+        Widen each gap for the lanes its laterals need.
 
     Returns
     -------
@@ -800,7 +803,7 @@ def _columns(layers: dict[int, list[_Node]], segs: list[_Seg]) -> dict[_Node, fl
     for s in segs:
         if s.link.room and s.lport is not None:
             room[s.left.layer] = max(room[s.left.layer], s.link.room + END_ROOM)
-    for k, lanes in _lanes(segs).items():
+    for k, lanes in (_lanes(segs) if widen else {}).items():
         room[k] = max(room[k], 2 * MIN_ESCAPE + (lanes + 1) * LANE_PITCH)
     left, x = {}, MARGIN + west[lo]
     for k in range(lo, hi + 1):
