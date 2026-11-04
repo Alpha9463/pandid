@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 Point = tuple[float, float]
 
-#: Clearance a lateral keeps from every obstacle.
+#: Clearance a lateral's lane keeps from every obstacle.
 CLEAR = 15.0
 
 #: Sign of a lateral by its source and destination faces.
@@ -125,7 +125,7 @@ class _Lateral:
 
 
 def _lateral(stream: "Stream", escapes: tuple[Point, Point],
-             obstacles: "list[Rect]") -> "_Lateral | None":
+             obstacles: "list[Rect]", taps: list[Point]) -> "_Lateral | None":
     """Return a stream as a lateral, or None if it is not one.
 
     Parameters
@@ -136,6 +136,8 @@ def _lateral(stream: "Stream", escapes: tuple[Point, Point],
         Ends of its source and destination stand-offs.
     obstacles : list[Rect]
         Unit bodies and tag halos.
+    taps : list[Point]
+        Where balloons tap the stream.
 
     Returns
     -------
@@ -154,14 +156,24 @@ def _lateral(stream: "Stream", escapes: tuple[Point, Point],
     y0, y1 = sorted((sy, dy))
     for o in obstacles:
         a, b = sorted((sign * o.x_min, sign * o.x_max))
-        a, b, top, bottom = a - CLEAR, b + CLEAR, o.y_min - CLEAR, o.y_max + CLEAR
-        if b <= lateral.lo or a >= lateral.hi or bottom <= y0 or top >= y1:
+        a, b = a - CLEAR, b + CLEAR
+        if (b <= lateral.lo or a >= lateral.hi
+                or o.y_max + CLEAR <= y0 or o.y_min - CLEAR >= y1):
             continue
-        # The lane misses the obstacle; the source run stops short of
-        # it, and the destination run starts past it.
-        a = a if not top < dy < bottom else -math.inf
-        b = b if not top < sy < bottom else math.inf
+        # The lane keeps clear of the obstacle; a run at a nozzle's
+        # height that meets it stops short of it, or starts past it.
+        a = a if not o.y_min <= dy <= o.y_max else -math.inf
+        b = b if not o.y_min <= sy <= o.y_max else math.inf
         lateral.free = _cut(lateral.free, a, b)
+    for tx, ty in taps:
+        # Keep each tap on its run, clear of the corner.
+        x = sign * tx
+        if abs(ty - sy) < 0.5:
+            lateral.free = _cut(lateral.free, -math.inf, x + CLEAR)
+        elif abs(ty - dy) < 0.5:
+            lateral.free = _cut(lateral.free, x - CLEAR, math.inf)
+        else:
+            lateral.free = []
     return lateral if lateral.free else None
 
 
@@ -236,8 +248,8 @@ def _lanes(group: list[_Lateral]) -> dict[int, float] | None:
     return {i: lo + (s + 1) * pitch for i, s in slot.items()}
 
 
-def _score(fs: "Flowsheet") -> Counter[str]:
-    """Return the sheet's crossings, bends, findings and clashes.
+def _score(fs: "Flowsheet") -> tuple[Counter[str], set[int]]:
+    """Return what the sheet is judged by after routing.
 
     Parameters
     ----------
@@ -246,16 +258,17 @@ def _score(fs: "Flowsheet") -> Counter[str]:
 
     Returns
     -------
-    Counter[str]
-        Crossings and bends of the drawn lines, with the findings and
-        clashes the balloon placement is judged by.
+    tuple[Counter[str], set[int]]
+        Crossings and bends of the drawn lines with the findings and
+        clashes balloon placement is judged by, and the balloons whose
+        tap is off their line.
     """
-    from pandid.layout.control import _flaws
+    from pandid.layout.control import _flaws, _taps_off
 
     paths = [stream_polyline(s) for s in fs.streams if s.route is not None
              and s.source.owner.frame is not None and s.dest.owner.frame is not None]
-    return _flaws(fs) + Counter(crossings=crossing_count(paths),
-                                bends=sum(map(real_bends, paths)))
+    return (_flaws(fs) + Counter(crossings=crossing_count(paths),
+                                 bends=sum(map(real_bends, paths))), _taps_off(fs))
 
 
 def _tangled(lines: list[list[Point]]) -> bool:
@@ -284,7 +297,8 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
     """Re-lay each group of laterals that cross, touch or wind.
 
     A group's new routes are kept only if no crossing, bend, finding or
-    clash grows in number and one falls.
+    clash grows in number, no balloon's tap leaves its line, and one of
+    them falls.
 
     Parameters
     ----------
@@ -295,8 +309,15 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
     obstacles : list[Rect]
         Unit bodies and tag halos.
     """
+    from pandid.layout.attach import is_attached
+
+    taps: dict[int, list[Point]] = {}
+    for u in fs.units:
+        if is_attached(u) and getattr(u, "tap", None) is not None:
+            taps.setdefault(id(u.host), []).append(u.tap)
     laterals = [lateral for s in fs.streams if id(s) in escapes
-                and (lateral := _lateral(s, escapes[id(s)], obstacles)) is not None]
+                and (lateral := _lateral(s, escapes[id(s)], obstacles,
+                                         taps.get(id(s), []))) is not None]
     groups: list[list[_Lateral]] = []
     for lateral in laterals:
         joined = [g for g in groups if any(lateral.meets(other) for other in g)]
@@ -315,7 +336,7 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
         for i, a in enumerate(group):
             a.stream.route = a.step(lanes[i])
         after = _score(fs)
-        if after != before and not after - before:
+        if after != before and not after[0] - before[0] and after[1] <= before[1]:
             before = after
             continue
         for a, route in zip(group, old):

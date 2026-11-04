@@ -3,7 +3,7 @@
 import pytest
 
 from pandid import Flowsheet, ShellAndTubeExchanger, units as U
-from pandid.layout.control import _flaws
+from pandid.layout.control import _flaws, _taps_off
 from pandid.layout.layered import COL_GAP, LANE_PITCH
 from pandid.layout.quality import measure_final
 from pandid.route_geometry import stream_polyline
@@ -82,3 +82,20 @@ def test_a_mixer_drawing_registered_again_is_drawn():
     finally:
         default_registry.register("mixer", stock)
     assert default_registry.for_unit(U.Mixer("M-1", n_inlets=4)).height == 90
+
+
+def test_a_lateral_keeps_the_instrument_that_taps_it():
+    fs = Flowsheet("Tapped bank")
+    sp = fs.add(U.Splitter("SP", n_outlets=4))
+    mx = fs.add(U.Mixer("MX", n_inlets=4))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    suctions = []
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        suctions.append(fs.connect(outlet, pump.suction))
+        fs.connect(pump.discharge, inlet)
+    fs.add_instrument("PI", 100, sensing=suctions[3], at=0.25)
+    fs.to_svg(diagram="p&id")
+    assert _taps_off(fs) == set()
+    assert fs.route_converged
