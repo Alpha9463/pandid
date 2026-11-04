@@ -382,12 +382,15 @@ def test_the_description_is_words_not_the_kind_key():
 
 
 def test_every_registered_kind_names_itself():
-    """Verify every registered kind names itself."""
+    """Verify every unit kind gets a capitalised schedule label."""
     from pandid.document import _KIND_LABELS
 
-    kinds = {getattr(U, name).kind for name in U.__all__ if name != "Unit"}
-    assert kinds <= set(_KIND_LABELS)
-    assert not [label for label in _KIND_LABELS.values() if not label[:1].isupper()]
+    fs = Flowsheet("Kinds")
+    for i, name in enumerate(n for n in U.__all__ if n != "Unit"):
+        fs.add(getattr(U, name)(f"X-{i}"))
+    rows = _schedule(fs, include=[u.name for u in fs.units])
+    assert [label for _tag, label in rows if not label[:1].isupper()] == []
+    assert set(_KIND_LABELS) <= {u.kind for u in fs.units}
 
 
 def test_include_builds_a_schedule_of_its_own():
