@@ -301,29 +301,12 @@ nozzles that do own a face, and equipment nozzles are never faceless.
 
 ## 3. Goldens: a changed golden means changed rendering
 
-`tests/golden/*.svg` are five representative committed SVG fixtures.
-`tests/test_golden.py` renders and compares those scenarios. The fixtures are
-source, not build output, which is why `.gitignore`'s blanket `*.svg` rule
-carries a `!tests/golden/*.svg` negation.
-
-The comparison uses `normalize` in `tests/_svg_compare.py` to sort `<defs>`
-and remove fenced renderer provenance. Geometry, visible labels and title-block
-fields compare verbatim.
-
-After an intentional rendering change:
-
-```bash
-python scripts/gallery.py
-PANDID_UPDATE_GOLDEN=1 python -m pytest tests/test_golden.py -q
-```
-
-(on Windows PowerShell: `python scripts/gallery.py; $env:PANDID_UPDATE_GOLDEN=1; python -m pytest tests/test_golden.py -q`)
-
-Then inspect `git diff tests/golden/ docs/gallery/` before committing. Explain
-every drawing change in the commit or PR description.
-
-`tests/golden/README.md` describes fixture selection and regeneration. Read it
-before changing a golden scenario.
+`tests/test_golden.py` renders five representative sheets and compares each
+with its committed `docs/gallery/<sheet>.svg`, after `normalize` in
+`tests/_svg_compare.py` sorts `<defs>` and empties the fenced provenance, which
+names the package version. After an intentional rendering change, regenerate
+the gallery with `python scripts/gallery.py`, inspect `git diff docs/gallery/`,
+and explain every drawing change in the commit or PR description.
 
 ## 4. Port geometry goes through `pandid/portgeom.py`
 
