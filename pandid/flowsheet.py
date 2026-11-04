@@ -21,7 +21,7 @@ from pandid.stations import (
     DEFAULT_VALVE_STATION_TAG_SCHEME,
 )
 from pandid.inline import _INLINE_KINDS
-from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
+from pandid.streams import LINE_NUMBER_FIELDS, PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -141,7 +141,8 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
     """
     if callable(scheme):
         return scheme(stream)
-    parts = stream.line_components()
+    parts = {f: "" if getattr(stream, f) is None else str(getattr(stream, f))
+             for f in LINE_NUMBER_FIELDS}
     out: list[str] = []
     pending = ""  # separator held until the next component is present
     for literal, name, format_spec, _ in Formatter().parse(scheme):

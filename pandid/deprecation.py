@@ -12,10 +12,9 @@ import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pandid.validate import Issue
-
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.validate import Issue
 
 #: Validation code for every deprecation finding.
 CODE = "deprecated"
@@ -115,6 +114,8 @@ class Deprecation:
                 f"construction, the stream, the flowsheet -- and {carrier!r} cannot "
                 f"hold one"
             )
+        from pandid.validate import Issue
+
         text = self.message(where)
         warnings.warn(text, DeprecationWarning, stacklevel=stacklevel)
         bucket = vars(carrier).setdefault(_ATTR, [])

@@ -74,6 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Vessel` (#624).** Choose faces with `inputs=` and `outputs=`, and read
   them from `input_faces` and `output_faces`. A subclass that overrides
   either is still honoured, and reported, until 0.1.7.
+- **`routing.Router`, `DefaultRouter(recover_exits=)` and
+  `Stream.line_components()` (#646).** Pass `fs.route()` any object with a
+  `route(fs)` method, build `DefaultRouter()`, which always recovers a blocked
+  exit, and read a stream's `size`, `service` and other fields directly.
 
 ### Removed
 
