@@ -169,6 +169,21 @@ def test_a_header_kept_stock_draws_as_the_stock_header_without_lanes(monkeypatch
     assert _drawing(fs) == _drawing(plain)
 
 
+def test_a_sheet_routed_again_draws_as_it_would_without_lanes(monkeypatch):
+    fs = _tapped_coolers(4, 0.5)
+    fs.to_svg(diagram="p&id")
+    fs.route()
+    fs.route()
+    fs.to_svg(diagram="p&id")
+    _as_main(monkeypatch)
+    plain = _tapped_coolers(4, 0.5)
+    plain.to_svg(diagram="p&id")
+    plain.route()
+    plain.route()
+    plain.to_svg(diagram="p&id")
+    assert _drawing(fs) == _drawing(plain)
+
+
 def test_a_grown_header_is_kept_only_where_it_draws_no_worse():
     fs = Flowsheet("Pump loops")
     sp = fs.add(U.Splitter("SP", n_outlets=4))

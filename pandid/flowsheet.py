@@ -2059,11 +2059,12 @@ class Flowsheet:
 
         Where a mixer's or splitter's face grows to hold its nozzles, or
         laterals are laid on lanes, the sheet is also drawn as it would be
-        without them: stock faces, no lane gaps and no lanes. The grown
-        faces and lanes are kept only if no crossing, bend, fallback,
-        finding, clash or tap off its line grows by them; otherwise, and
-        wherever lanes changed no route and no face grew, the sheet is
-        drawn without them.
+        without them: stock faces, no lane gaps and no lanes, routed again
+        on its own layout where it came laid out so, else laid out again.
+        The grown faces and lanes are kept only if no crossing, bend,
+        fallback, finding, clash or tap off its line grows by them;
+        otherwise, and wherever lanes changed no route and no face grew,
+        the sheet is drawn without them.
 
         Parameters
         ----------
@@ -2082,34 +2083,61 @@ class Flowsheet:
         from pandid.routing.lanes import _score
 
         headers = [u for u in self.units if getattr(u, "_stock_face", False)]
+        # Whether the sheet comes laid out as it would be without grown
+        # faces or lane gaps, as after a route() that kept neither.
+        plain_in = (not self._layout_stale and all(u.frame is not None for u in self.units)
+                    and not self._widened and not any(header_grows(u) for u in self.units))
         for u in headers:
             u._stock_face = False
-        if headers or not self._lanes:
+        if headers:
             self._layout_stale = True
         self._lanes, self._relaned = True, False
         grown = [u for u in self.units if header_grows(u)]
-        start, start_unhung = self._geometry(), self._unhung
+        start = self._state()
         self._route_once(router)
         laned = bool(grown) or self._relaned
         if (not (laned or self._widened) or self._laying_out
                 or not (router is None or type(router) is DefaultRouter)):
             return
-        kept, unhung, free = self._geometry(), self._unhung, self._free_faces
-        judged = _score(self)
-        # Draw stock faces without lanes from the routes and taps the
-        # first drawing started from.
-        self._put_geometry(start, keep_manual=False)
-        self._unhung, self._lanes = start_unhung, False
+        kept, judged = self._state(), _score(self)
+        # Draw stock faces without lanes from the sheet as it came: route
+        # its layout again where that is already plain, else lay it out.
+        self._put_state(start)
+        self._lanes = False
         for u in grown:
             u._stock_face = True
-        self.layout(self._engine)
+        if not plain_in:
+            self.layout(self._engine)
         self._route_once(router)
         plain = _score(self)
         if laned and not judged[0] - plain[0] and judged[1] <= plain[1]:
             for u in grown:
                 u._stock_face = False
-            self._put_geometry(kept, keep_manual=False)
-            self._unhung, self._lanes, self._free_faces = unhung, True, free
+            self._put_state(kept)
+            self._lanes = True
+
+    def _state(self) -> tuple:
+        """Return the geometry and the layout and routing state with it.
+
+        Returns
+        -------
+        tuple
+            State for :meth:`_put_state`.
+        """
+        return (self._geometry(), self._unhung, self._free_faces, self._exit_tight,
+                self._mounted_layout, self._widened)
+
+    def _put_state(self, state: tuple) -> None:
+        """Put back what :meth:`_state` returned.
+
+        Parameters
+        ----------
+        state : tuple
+            What :meth:`_state` returned.
+        """
+        geometry, self._unhung, self._free_faces, self._exit_tight,             self._mounted_layout, self._widened = state
+        self._put_geometry(geometry, keep_manual=False)
+        self._layout_stale = False
 
     def _route_once(self, router=None) -> None:
         """Lay out if needed, then route and place balloons once.
