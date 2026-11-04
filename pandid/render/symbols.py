@@ -19,6 +19,7 @@ from typing import Callable
 
 from pandid._checks import suggest
 from pandid.portgeom import outward_dir
+from pandid.render.iso_parts import _DASH_LONG, _SQ2
 from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS
 
@@ -33,6 +34,12 @@ MIN_HEAD_CLEARANCE = 2 * LineWeight.MAIN_FLOW.width
 
 #: Smallest pitch between two nozzles that both carry an arrowhead.
 MIN_NOZZLE_PITCH = ARROWHEAD + MIN_HEAD_CLEARANCE
+
+# Outline weight (ISO 10628-1 5.3.1 b), unfilled and filled white, and
+# detail weight (5.3.1 c).
+_INK = 'fill="none" stroke="#111" stroke-width="2"'
+_OUTLINE = 'fill="white" stroke="#111" stroke-width="2"'
+_DETAIL = 'fill="none" stroke="#111" stroke-width="1"'
 
 
 def wears_arrowhead(stream, registry) -> bool:
@@ -751,14 +758,13 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH,
     # The default diameter is left out of the id.
     suffix = f"_L{length:g}" + (f"_D{diameter:g}"
                                 if diameter != CONVEYOR_DIAMETER else "")
-    roller = ('<ellipse cx="{:g}" cy="{:g}" rx="{:g}" ry="{:g}" fill="none" '
-              'stroke="#111" stroke-width="2"/>')
+    roller = '<ellipse cx="{:g}" cy="{:g}" rx="{:g}" ry="{:g}" ' + _INK + "/>"
     svg = (
         f'<g id="sym_conveyor{suffix}">'
         + roller.format(tail, r, r, r)
         + roller.format(head, r, r, r)
         + f'<path d="M {tail:g} 0 L {head:g} 0 M {tail:g} {height:g} '
-          f'L {head:g} {height:g}" fill="none" stroke="#111" stroke-width="2"/>'
+          f'L {head:g} {height:g}" {_INK}/>'
         + '</g>'
     )
     return Symbol(
@@ -883,10 +889,8 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
                                 if diameter != SCREW_HEIGHT else "")
     svg = (
         f'<g id="sym_conveyor_screw{suffix}">'
-        f'<rect x="0" y="0" width="{length:g}" height="{height:g}" '
-        f'fill="white" stroke="#111" stroke-width="2"/>'
-        f'<path d="M 0 {axis:g} L {length:g} {axis:g} {turns}" '
-        f'fill="none" stroke="#111" stroke-width="2"/>'
+        f'<rect x="0" y="0" width="{length:g}" height="{height:g}" {_OUTLINE}/>'
+        f'<path d="M 0 {axis:g} L {length:g} {axis:g} {turns}" {_INK}/>'
         f'</g>'
     )
     return Symbol(
@@ -923,8 +927,7 @@ def _lift_pulley(cx: float, cy: float) -> str:
     str
         SVG ``<circle>``.
     """
-    return (f'<circle cx="{cx:g}" cy="{cy:g}" r="{_LIFT_R:g}" '
-            f'fill="none" stroke="#111" stroke-width="2"/>')
+    return f'<circle cx="{cx:g}" cy="{cy:g}" r="{_LIFT_R:g}" {_INK}/>'
 
 
 def _lift_chute(x: float, y: float, dx: float, dy: float) -> str:
@@ -946,8 +949,7 @@ def _lift_chute(x: float, y: float, dx: float, dy: float) -> str:
     """
     r = abs(dx)
     return (f'<path d="M {x:g} {y:g} L {x + dx:g} {y:g} '
-            f'A {r:g} {r:g} 0 0 0 {x:g} {y + dy:g}" '
-            f'fill="none" stroke="#111" stroke-width="2"/>')
+            f'A {r:g} {r:g} 0 0 0 {x:g} {y + dy:g}" {_INK}/>')
 
 
 # Block flow diagram box, sized to its connections.
@@ -1853,8 +1855,7 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
 # compositions.
 _SEPARATING_VESSEL = Symbol(
     svg='<g id="sym_separator_vessel">'
-        '<path d="M 0 0 L 80 0 L 80 80 L 40 120 L 0 80 Z" '
-        'fill="white" stroke="#111" stroke-width="2"/></g>',
+        f'<path d="M 0 0 L 80 0 L 80 80 L 40 120 L 0 80 Z" {_OUTLINE}/></g>',
     width=80.0, height=120.0,
     # High draw opposite the feed, collected phase out of the apex.
     ports={"vapor": (80.0, 12.0), "liquid": (40.0, 120.0)},
@@ -1888,7 +1889,7 @@ def _centrifuge_outline(ox: float) -> str:
     """
     return (f'<path d="M {ox:g} 0 L {ox + _CENTRIFUGE_SQ:g} 0 '
             f'L {ox + _CENTRIFUGE_SQ:g} {_CENTRIFUGE_SQ:g} '
-            f'L {ox:g} {_CENTRIFUGE_SQ:g} Z" fill="white" stroke="#111" stroke-width="2"/>')
+            f'L {ox:g} {_CENTRIFUGE_SQ:g} Z" {_OUTLINE}/>')
 
 
 # Ink runs of a perforated wall, as (start, end) offsets from the
@@ -1917,11 +1918,9 @@ def _dashed_wall(fixed: float, offset: float, vertical: bool) -> str:
     for a, b in _CENTRIFUGE_DASH:
         p0, p1 = offset + a, offset + b
         if vertical:
-            out.append(f'<line x1="{fixed:g}" y1="{p0:g}" x2="{fixed:g}" y2="{p1:g}" '
-                       f'fill="none" stroke="#111" stroke-width="2"/>')
+            out.append(f'<line x1="{fixed:g}" y1="{p0:g}" x2="{fixed:g}" y2="{p1:g}" {_INK}/>')
         else:
-            out.append(f'<line x1="{p0:g}" y1="{fixed:g}" x2="{p1:g}" y2="{fixed:g}" '
-                       f'fill="none" stroke="#111" stroke-width="2"/>')
+            out.append(f'<line x1="{p0:g}" y1="{fixed:g}" x2="{p1:g}" y2="{fixed:g}" {_INK}/>')
     return "".join(out)
 
 
@@ -1941,62 +1940,58 @@ _CENTRIFUGE_SIDE_PORTS = {
 
 # Item 9.1 X2619: an open funnel on a shaft.
 _CENTRIFUGE_ROTOR = (
-    '<path d="M 10 70 L 30 20 M 50 20 L 70 70 L 10 70" '
-    'fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M 10 70 L 30 20 M 50 20 L 70 70 L 10 70" {_INK}/>'
+    f'<line x1="40" y1="70" x2="40" y2="90" {_INK}/>'
 )
 
 # Item 9.2 X2614: a basket with perforated side walls.
 _CENTRIFUGE_BASKET_DASHED = (
     _dashed_wall(10.0, 0.0, True) + _dashed_wall(70.0, 0.0, True) +
-    '<line x1="10" y1="70" x2="70" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="10" y1="70" x2="70" y2="70" {_INK}/>'
+    f'<line x1="40" y1="70" x2="40" y2="90" {_INK}/>'
 )
 
 # Item 9.3 X8035: 9.2's basket with solid side walls.
 _CENTRIFUGE_BASKET_SOLID = (
-    '<path d="M 10 70 L 10 10 M 70 70 L 70 10 M 10 70 L 70 70" '
-    'fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M 10 70 L 10 10 M 70 70 L 70 10 M 10 70 L 70 70" {_INK}/>'
+    f'<line x1="40" y1="70" x2="40" y2="90" {_INK}/>'
 )
 
 # Item 9.4 X8036: a disc stack edge on, on a shaft.
 _CENTRIFUGE_DISC_STACK = (
-    '<path d="M 10 24 L 40 10 L 70 24 M 10 44 L 40 30 L 70 44" '
-    'fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="40" y1="10" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M 10 24 L 40 10 L 70 24 M 10 44 L 40 30 L 70 44" {_INK}/>'
+    f'<line x1="40" y1="10" x2="40" y2="90" {_INK}/>'
 )
 
 # Item 9.5 X8037: a horizontal perforated basket with a screw flight.
 _CENTRIFUGE_SCREW_PERFORATED = (
-    '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="20" y1="10" x2="20" y2="70" {_INK}/>'
     + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
-    '<line x1="0" y1="40" x2="80" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
-    '<path d="M 30 40 L 40 20 L 60 60 L 70 40" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="0" y1="40" x2="80" y2="40" {_INK}/>'
+    f'<path d="M 30 40 L 40 20 L 60 60 L 70 40" {_INK}/>'
 )
 
 # Item 9.6 X8082, the decanter: 9.5 with a solid roof and floor.
 _CENTRIFUGE_SCREW_SOLID = (
-    '<path d="M 20 70 L 20 10 L 80 10 M 20 70 L 80 70" '
-    'fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="0" y1="40" x2="80" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
-    '<path d="M 30 40 L 40 20 L 60 60 L 70 40" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M 20 70 L 20 10 L 80 10 M 20 70 L 80 70" {_INK}/>'
+    f'<line x1="0" y1="40" x2="80" y2="40" {_INK}/>'
+    f'<path d="M 30 40 L 40 20 L 60 60 L 70 40" {_INK}/>'
 )
 
 # Item 9.7 X8038: 9.5's basket with a pusher rod for the screw.
 _CENTRIFUGE_PUSHER = (
-    '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="20" y1="10" x2="20" y2="70" {_INK}/>'
     + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
-    '<line x1="0" y1="40" x2="30" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="30" y1="20" x2="30" y2="60" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="0" y1="40" x2="30" y2="40" {_INK}/>'
+    f'<line x1="30" y1="20" x2="30" y2="60" {_INK}/>'
 )
 
 # Item 9.8 X8039: 9.5's basket with a skimmer tube.
 _CENTRIFUGE_SKIMMER = (
-    '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="20" y1="10" x2="20" y2="70" {_INK}/>'
     + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
-    '<line x1="0" y1="40" x2="20" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
-    '<path d="M 70 20 L 50 20 L 50 10 L 60 20" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="0" y1="40" x2="20" y2="40" {_INK}/>'
+    f'<path d="M 70 20 L 50 20 L 50 10 L 60 20" {_INK}/>'
 )
 
 
@@ -2037,8 +2032,7 @@ _CRUSHER_W, _CRUSHER_H = 100.0, 60.0
 # The group-11 trapezoid outline.
 _CRUSHER_OUTLINE = (
     f'<path d="M 0 0 L {_CRUSHER_W:g} 0 L {_CRUSHER_W * 0.8:g} {_CRUSHER_H:g} '
-    f'L {_CRUSHER_W * 0.2:g} {_CRUSHER_H:g} Z" '
-    f'fill="white" stroke="#111" stroke-width="2"/>'
+    f'L {_CRUSHER_W * 0.2:g} {_CRUSHER_H:g} Z" {_OUTLINE}/>'
 )
 
 # Foot of the mill's corner chord on the sloping wall (item 11.8).
@@ -2079,22 +2073,17 @@ def _crushing_machine(name: str, reg: str, *detail: str) -> Symbol:
 # Crusher mark, ISO item 11.2 X8085: two full-depth verticals.
 _CRUSHER_JAWS = (
     f'<path d="M {_CRUSHER_W * 0.2:g} 0 L {_CRUSHER_W * 0.2:g} {_CRUSHER_H:g} '
-    f'M {_CRUSHER_W * 0.8:g} 0 L {_CRUSHER_W * 0.8:g} {_CRUSHER_H:g}" '
-    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'M {_CRUSHER_W * 0.8:g} 0 L {_CRUSHER_W * 0.8:g} {_CRUSHER_H:g}" {_INK}/>'
 )
 
 # Mill mark, ISO item 11.8 X8086: two chords cutting the top corners.
 _MILL_CHAMFERS = (
     f'<path d="M 25 0 L {_MILL_CHORD_X:.4f} {_MILL_CHORD_Y:.4f} '
-    f'M 75 0 L {_CRUSHER_W - _MILL_CHORD_X:.4f} {_MILL_CHORD_Y:.4f}" '
-    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'M 75 0 L {_CRUSHER_W - _MILL_CHORD_X:.4f} {_MILL_CHORD_Y:.4f}" {_INK}/>'
 )
 
 # Vibration mill drum, ISO item 11.12 X8054: a 4 M circle.
-_VIBRATION_DRUM = (
-    f'<circle cx="{_CRUSHER_W / 2:g}" cy="{_CRUSHER_H / 2:g}" r="20" '
-    f'fill="none" stroke="#111" stroke-width="2"/>'
-)
+_VIBRATION_DRUM = f'<circle cx="{_CRUSHER_W / 2:g}" cy="{_CRUSHER_H / 2:g}" r="20" {_INK}/>'
 
 
 # Stack inlet on the tapering west wall, 8 M down.
@@ -2104,10 +2093,7 @@ _STACK_INLET_X = 20.0 - (20.0 - 10.0) * (_STACK_INLET_Y / 100.0)
 
 # ISO 10628-2 group-10 dryer casing, from item 10.1.
 _DRIER_W, _DRIER_H = 80.0, 120.0
-_DRIER_OUTLINE = (
-    '<path d="M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" '
-    'fill="white" stroke="#111" stroke-width="2"/>'
-)
+_DRIER_OUTLINE = f'<path d="M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" {_OUTLINE}/>'
 
 # Group-10 ports: feed and product on the walls, heating_in on the
 # floor and vent on the top.
@@ -2147,30 +2133,27 @@ def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Sy
 
 # Item 10.2 X8083: three shelves.
 _DRIER_SHELVES = "".join(
-    f'<line x1="20" y1="{y:g}" x2="60" y2="{y:g}" fill="none" stroke="#111" '
-    f'stroke-width="2"/>' for y in (30, 40, 50))
+    f'<line x1="20" y1="{y:g}" x2="60" y2="{y:g}" {_INK}/>' for y in (30, 40, 50))
 
 # Item 10.3 X8040: a rotating disc stack on a shaft.
 _DRIER_TURBO = (
     '<path d="M 20 30 L 60 30 M 20 50 L 60 50 M 0 40 L 30 40 M 50 40 L 80 40 '
-    'M 40 50 L 40 0" fill="none" stroke="#111" stroke-width="2"/>'
+    f'M 40 50 L 40 0" {_INK}/>'
 )
 
 # Item 10.6 X8043: a belt between two rollers.
 _DRIER_BELT = (
-    '<circle cx="17.5" cy="40" r="7.5" fill="none" stroke="#111" stroke-width="2"/>'
-    '<circle cx="62.5" cy="40" r="7.5" fill="none" stroke="#111" stroke-width="2"/>'
-    '<path d="M 17.5 32.5 L 62.5 32.5 M 17.5 47.5 L 62.5 47.5" '
-    'fill="none" stroke="#111" stroke-width="2"/>'
+    f'<circle cx="17.5" cy="40" r="7.5" {_INK}/>'
+    f'<circle cx="62.5" cy="40" r="7.5" {_INK}/>'
+    f'<path d="M 17.5 32.5 L 62.5 32.5 M 17.5 47.5 L 62.5 47.5" {_INK}/>'
 )
 
 
 # ISO 10628-2 group-5 cooling tower outline, from item 5.1.
-_TOWER_W, _TOWER_TRAP_H, _TOWER_H = 80.0, 80.0, 100.0
+_TOWER_W, _TOWER_H = 80.0, 100.0
 _TOWER_OUTLINE = (
-    '<path d="M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" '
-    'fill="white" stroke="#111" stroke-width="2"/>'
-    '<line x1="0" y1="80" x2="80" y2="80" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" {_OUTLINE}/>'
+    f'<line x1="0" y1="80" x2="80" y2="80" {_INK}/>'
 )
 
 # CoolingTower ports: air out of the apex, water and air in at the
@@ -2183,16 +2166,12 @@ _TOWER_PORTS = {
 
 # Dry-fill mark (items 5.2-5.4 and 5.8): a ticked rule.
 _TOWER_DRY = (
-    '<line x1="0" y1="90" x2="80" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
-    + "".join(f'<line x1="{x:g}" y1="85" x2="{x:g}" y2="95" fill="none" stroke="#111" '
-              f'stroke-width="2"/>' for x in range(10, 71, 10))
+    f'<line x1="0" y1="90" x2="80" y2="90" {_INK}/>'
+    + "".join(f'<line x1="{x:g}" y1="85" x2="{x:g}" y2="95" {_INK}/>' for x in range(10, 71, 10))
 )
 
 # Wet-fill mark (items 5.5-5.8): a distribution stub and arrow.
-_TOWER_WET = (
-    '<path d="M 10 40 L 40 40 M 30 50 L 40 40 L 50 50 M 40 40 L 40 50" '
-    'fill="none" stroke="#111" stroke-width="2"/>'
-)
+_TOWER_WET = f'<path d="M 10 40 L 40 40 M 30 50 L 40 40 L 50 50 M 40 40 L 40 50" {_INK}/>'
 
 def _tower_fan(cy: float) -> str:
     """Return a 2 M fan with bow-tie blades.
@@ -2208,9 +2187,8 @@ def _tower_fan(cy: float) -> str:
         SVG elements.
     """
     return (
-        f'<circle cx="40" cy="{cy:g}" r="10" fill="none" stroke="#111" stroke-width="2"/>'
-        f'<path d="M 36 {cy - 9:g} L 31 {cy + 5:g} M 44 {cy - 9:g} L 49 {cy + 5:g}" '
-        f'fill="none" stroke="#111" stroke-width="2"/>'
+        f'<circle cx="40" cy="{cy:g}" r="10" {_INK}/>'
+        f'<path d="M 36 {cy - 9:g} L 31 {cy + 5:g} M 44 {cy - 9:g} L 49 {cy + 5:g}" {_INK}/>'
     )
 
 
@@ -2223,10 +2201,8 @@ _TOWER_FAN_INDUCED = _tower_fan(15.0)
 # as N and S faces.
 _BUCKET_ELEVATOR = Symbol(
     svg='<g id="sym_elevator">'
-        '<rect x="0" y="0" width="80" height="120" '
-        'fill="white" stroke="#111" stroke-width="2"/>'
-        '<path d="M 30 20 L 30 100 M 50 20 L 50 100" '
-        'fill="none" stroke="#111" stroke-width="2"/>'
+        f'<rect x="0" y="0" width="80" height="120" {_OUTLINE}/>'
+        f'<path d="M 30 20 L 30 100 M 50 20 L 50 100" {_INK}/>'
         + _lift_pulley(40, 20) + _lift_pulley(40, 100)
         # Head chute east and boot chute west.
         + _lift_chute(50, 40, 2 * _LIFT_M, -2 * _LIFT_M)
@@ -2247,11 +2223,10 @@ _BUCKET_ELEVATOR = Symbol(
 _Z_ELEVATOR = Symbol(
     svg='<g id="sym_elevator_z_form">'
         '<path d="M 0 120 L 0 80 L 80 80 L 80 0 L 200 0 L 200 40 '
-        'L 120 40 L 120 120 Z" fill="white" stroke="#111" stroke-width="2"/>'
+        f'L 120 40 L 120 120 Z" {_OUTLINE}/>'
         '<path d="M 20 90 L 100 90 M 20 110 L 100 110 '
         'M 90 20 L 90 100 M 110 20 L 110 100 '
-        'M 100 10 L 180 10 M 100 30 L 180 30" '
-        'fill="none" stroke="#111" stroke-width="2"/>'
+        f'M 100 10 L 180 10 M 100 30 L 180 30" {_INK}/>'
         # Pulleys at the loop's ends and at its two corners.
         + _lift_pulley(20, 100) + _lift_pulley(100, 100)
         + _lift_pulley(100, 20) + _lift_pulley(180, 20)
@@ -2290,8 +2265,7 @@ def _feeder_circle(name: str, reg: str, mark: str) -> Symbol:
     """
     return Symbol(
         svg=f'<g id="sym_feeder_{name}">'
-            f'<circle cx="20" cy="20" r="20" fill="white" stroke="#111" '
-            f'stroke-width="2"/>{mark}</g>',
+            f'<circle cx="20" cy="20" r="20" {_OUTLINE}/>{mark}</g>',
         width=_FEEDER_CIRCLE, height=_FEEDER_CIRCLE,
         ports=dict(_FEEDER_CIRCLE_PORTS),
         gravity_fixed=True,
@@ -2300,10 +2274,7 @@ def _feeder_circle(name: str, reg: str, mark: str) -> Symbol:
 
 
 # Item 19.1 C2056: a Z in one stroke.
-_FEEDER_Z = (
-    '<path d="M 37.3 30 L 2.7 30 L 37.3 10 L 2.7 10" '
-    'fill="none" stroke="#111" stroke-width="2"/>'
-)
+_FEEDER_Z = f'<path d="M 37.3 30 L 2.7 30 L 37.3 10 L 2.7 10" {_INK}/>'
 
 # Item 19.2 X8067: a rotary valve rotor end-on, a hub and six spokes.
 _FEEDER_HUB_R = 3.0
@@ -2325,15 +2296,14 @@ def _feeder_rotor(cx: float, cy: float, hub_r: float, rim_r: float) -> str:
     str
         SVG elements.
     """
-    ink = 'fill="none" stroke="#111" stroke-width="2"'
     spokes = "".join(
         f'<line x1="{cx + hub_r * math.cos(math.radians(a)):g}" '
         f'y1="{cy + hub_r * math.sin(math.radians(a)):g}" '
         f'x2="{cx + rim_r * math.cos(math.radians(a)):g}" '
-        f'y2="{cy + rim_r * math.sin(math.radians(a)):g}" {ink}/>'
+        f'y2="{cy + rim_r * math.sin(math.radians(a)):g}" {_INK}/>'
         for a in _FEEDER_ROTOR_ANGLES
     )
-    return f'<circle cx="{cx:g}" cy="{cy:g}" r="{hub_r:g}" {ink}/>' + spokes
+    return f'<circle cx="{cx:g}" cy="{cy:g}" r="{hub_r:g}" {_INK}/>' + spokes
 
 
 _FEEDER_ROTOR_MARK = _feeder_rotor(20.0, 20.0, _FEEDER_HUB_R, 20.0)
@@ -2344,13 +2314,11 @@ _FEEDER_ROTOR_MARK = _feeder_rotor(20.0, 20.0, _FEEDER_HUB_R, 20.0)
 _FEEDER_TABLE_W = 50.0
 _FEEDER_TABLE_H = 60.0
 _FEEDER_TABLE = (
-    '<line x1="0" y1="0" x2="50" y2="0" fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="25" y1="0" x2="25" y2="60" fill="none" stroke="#111" stroke-width="2"/>'
-    '<ellipse cx="25" cy="37.5" rx="25" ry="12.5" fill="none" stroke="#111" '
-    'stroke-width="2"/>'
+    f'<line x1="0" y1="0" x2="50" y2="0" {_INK}/>'
+    f'<line x1="25" y1="0" x2="25" y2="60" {_INK}/>'
+    f'<ellipse cx="25" cy="37.5" rx="25" ry="12.5" {_INK}/>'
     # Rotation arrow up the east tangent.
-    '<line x1="50" y1="37.5" x2="50" y2="30.5" fill="none" stroke="#111" '
-    'stroke-width="2"/>'
+    f'<line x1="50" y1="37.5" x2="50" y2="30.5" {_INK}/>'
     '<polygon points="50,27.5 47.3,30.5 52.7,30.5" fill="#111" stroke="none"/>'
 )
 
@@ -2361,16 +2329,13 @@ _METER_H = 33.0
 _METER_BEAM_Y = 3.0
 _METER_PAN_R = 22.0
 _METER = (
-    f'<line x1="0" y1="{_METER_BEAM_Y:g}" x2="{_METER_W:g}" y2="{_METER_BEAM_Y:g}" '
-    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'<line x1="0" y1="{_METER_BEAM_Y:g}" x2="{_METER_W:g}" y2="{_METER_BEAM_Y:g}" {_INK}/>'
     f'<path d="M 0 {_METER_BEAM_Y:g} A {_METER_PAN_R:g} {_METER_PAN_R:g} 0 0 1 '
-    f'{2 * _METER_PAN_R:g} {_METER_BEAM_Y:g}" fill="none" stroke="#111" stroke-width="2"/>'
+    f'{2 * _METER_PAN_R:g} {_METER_BEAM_Y:g}" {_INK}/>'
     f'<path d="M {_METER_W - 2 * _METER_PAN_R:g} {_METER_BEAM_Y:g} '
-    f'A {_METER_PAN_R:g} {_METER_PAN_R:g} 0 0 1 {_METER_W:g} {_METER_BEAM_Y:g}" '
-    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'A {_METER_PAN_R:g} {_METER_PAN_R:g} 0 0 1 {_METER_W:g} {_METER_BEAM_Y:g}" {_INK}/>'
     f'<path d="M {_METER_W / 2:g} {_METER_BEAM_Y:g} L {_METER_W / 2 - 17:g} '
-    f'{_METER_BEAM_Y + 30:g} L {_METER_W / 2 + 17:g} {_METER_BEAM_Y + 30:g} Z" '
-    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'{_METER_BEAM_Y + 30:g} L {_METER_W / 2 + 17:g} {_METER_BEAM_Y + 30:g} Z" {_INK}/>'
 )
 
 # ISO item 19.5 2037, the spray nozzle: three prongs under a header.
@@ -2380,10 +2345,8 @@ _SPRAY_H = 20.0
 _SPRAY_PORT_Y = 1.0
 _SPRAY_NOZZLE = Symbol(
     svg='<g id="sym_spray_nozzle">'
-        f'<line x1="0" y1="0" x2="{_SPRAY_W:g}" y2="0" fill="none" stroke="#111" '
-        f'stroke-width="2"/>'
-        '<path d="M 20 0 L 0 20 M 20 0 L 20 20 M 20 0 L 40 20" '
-        'fill="none" stroke="#111" stroke-width="2"/></g>',
+        f'<line x1="0" y1="0" x2="{_SPRAY_W:g}" y2="0" {_INK}/>'
+        f'<path d="M 20 0 L 0 20 M 20 0 L 20 20 M 20 0 L 40 20" {_INK}/></g>',
     width=_SPRAY_W, height=_SPRAY_H,
     ports={"inlet": (0.0, _SPRAY_PORT_Y)},
     port_faces={"inlet": {"E": (_SPRAY_W, _SPRAY_PORT_Y)}},
@@ -2407,10 +2370,9 @@ def _mix_element(x0: float) -> str:
     str
         SVG ``<path>``.
     """
-    ink = 'fill="none" stroke="#111" stroke-width="2"'
     return (
         f'<path d="M {x0:g} 5 L {x0:g} 25 M {x0:g} 5 L {x0 + 40:g} 55 '
-        f'M {x0 + 40:g} 35 L {x0 + 40:g} 55" {ink}/>'
+        f'M {x0 + 40:g} 35 L {x0 + 40:g} 55" {_INK}/>'
     )
 
 
@@ -2421,10 +2383,8 @@ _MIXER_H = 60.0
 _MIXER_PORTS = {"inlet": (0.0, 30.0), "outlet": (_MIXER_W, 30.0)}
 _ROTARY_MIXER = Symbol(
     svg='<g id="sym_fitting_rotary_mixer">'
-        '<path d="M 10 0 L 130 0 L 130 60 L 10 60 Z" '
-        'fill="white" stroke="#111" stroke-width="2"/>'
-        '<line x1="0" y1="30" x2="130" y2="30" fill="none" stroke="#111" '
-        'stroke-width="2"/>'
+        f'<path d="M 10 0 L 130 0 L 130 60 L 10 60 Z" {_OUTLINE}/>'
+        f'<line x1="0" y1="30" x2="130" y2="30" {_INK}/>'
         + _mix_element(20.0) + _mix_element(70.0)
         + '</g>',
     width=_MIXER_W, height=_MIXER_H,
@@ -2438,8 +2398,7 @@ _PATH_W = 160.0
 _PATH_H = 60.0
 _MIXING_PATH = Symbol(
     svg='<g id="sym_fitting_mixing_path">'
-        '<path d="M 0 0 L 160 0 L 160 60 L 0 60 Z" '
-        'fill="white" stroke="#111" stroke-width="2"/>'
+        f'<path d="M 0 0 L 160 0 L 160 60 L 0 60 Z" {_OUTLINE}/>'
         + _mix_element(10.0) + _mix_element(60.0) + _mix_element(110.0)
         + '</g>',
     width=_PATH_W, height=_PATH_H,
@@ -2454,10 +2413,8 @@ _KNEADER_H = 60.0
 _KNEADER_PORTS = {"inlet": (0.0, 30.0), "outlet": (_KNEADER_W, 30.0)}
 _KNEADER = Symbol(
     svg='<g id="sym_kneader">'
-        '<path d="M 10 0 L 110 0 L 110 60 L 10 60 Z" '
-        'fill="white" stroke="#111" stroke-width="2"/>'
-        '<path d="M 0 30 L 20 30 L 40 20 L 70 40 L 100 30 L 110 30" '
-        'fill="none" stroke="#111" stroke-width="2"/></g>',
+        f'<path d="M 10 0 L 110 0 L 110 60 L 10 60 Z" {_OUTLINE}/>'
+        f'<path d="M 0 30 L 20 30 L 40 20 L 70 40 L 100 30 L 110 30" {_INK}/></g>',
     width=_KNEADER_W, height=_KNEADER_H,
     ports=dict(_KNEADER_PORTS),
     gravity_fixed=True,
@@ -2488,15 +2445,11 @@ _TRAP_PORTS = {"inlet": (0.0, _TRAP_CY), "outlet": (TRAP_W, _TRAP_CY)}
 # Layer 1: the run into and out of the body.
 _TRAP_RUN = (
     f'<path d="M 0 {_TRAP_CY:g} L {TRAP_LEAD:g} {_TRAP_CY:g} '
-    f'M {TRAP_LEAD + TRAP_BODY_D:g} {_TRAP_CY:g} L {TRAP_W:g} {_TRAP_CY:g}" '
-    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'M {TRAP_LEAD + TRAP_BODY_D:g} {_TRAP_CY:g} L {TRAP_W:g} {_TRAP_CY:g}" {_INK}/>'
 )
 
 # Layer 2: the body, filled white.
-_TRAP_BODY = (
-    f'<circle cx="{_TRAP_CX:g}" cy="{_TRAP_CY:g}" r="{_TRAP_R:g}" '
-    f'fill="white" stroke="#111" stroke-width="2"/>'
-)
+_TRAP_BODY = f'<circle cx="{_TRAP_CX:g}" cy="{_TRAP_CY:g}" r="{_TRAP_R:g}" {_OUTLINE}/>'
 
 # Layer 3: the half below the diameter, filled, as two quarter arcs.
 _TRAP_DISCHARGE = (
@@ -2524,23 +2477,14 @@ _STEAM_TRAP = Symbol(
 
 # Group-7 outline, from item 7.1 (all items but 7.7).
 _SCREEN_W, _SCREEN_H = 60.0, 90.0
-_SCREEN_OUTLINE = (
-    '<path d="M 0 0 L 60 0 L 60 60 L 30 90 L 0 60 Z" '
-    'fill="white" stroke="#111" stroke-width="2"/>'
-)
+_SCREEN_OUTLINE = f'<path d="M 0 0 L 60 0 L 60 60 L 30 90 L 0 60 Z" {_OUTLINE}/>'
 
 # Group-7 ports, from item 7.1.
 _SCREEN_PORTS = {"feed": (30.0, 0.0), "oversize": (60.0, 50.0), "undersize": (30.0, 90.0)}
 
-# A 2 M dash and a 1 M gap.
-_SCREEN_DASH = 'stroke-dasharray="20,10"'
-
 # The dashed mesh diagonal: item 7.1 X8123's mark and the base of
 # 7.2-7.5.
-_SCREEN_MESH = (
-    f'<line x1="0" y1="0" x2="60" y2="60" fill="none" stroke="#111" '
-    f'stroke-width="2" {_SCREEN_DASH}/>'
-)
+_SCREEN_MESH = f'<line x1="0" y1="0" x2="60" y2="60" {_INK} {_DASH_LONG}/>'
 
 
 def _screen(name: str, reg: str, mark: str) -> Symbol:
@@ -2569,10 +2513,6 @@ def _screen(name: str, reg: str, mark: str) -> Symbol:
     )
 
 
-# cos 45 = sin 45.
-_SCREEN_SQ2 = math.sqrt(2) / 2
-
-
 def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
     """Return rake teeth across the mesh diagonal.
 
@@ -2588,13 +2528,12 @@ def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
     str
         SVG ``<line>`` elements.
     """
-    ink = 'fill="none" stroke="#111" stroke-width="2"'
     out = []
     for t in points:
         x, y = 60 * t, 60 * t
-        dx = dy = half_len * _SCREEN_SQ2
+        dx = dy = half_len * _SQ2
         out.append(f'<line x1="{x + dx:g}" y1="{y - dy:g}" x2="{x - dx:g}" '
-                    f'y2="{y + dy:g}" {ink}/>')
+                    f'y2="{y + dy:g}" {_INK}/>')
     return "".join(out)
 
 
@@ -2606,9 +2545,8 @@ def _screen_vibration() -> str:
     str
         Two opposed arrows on tracks either side of the diagonal.
     """
-    along = (_SCREEN_SQ2, _SCREEN_SQ2)
-    across = (_SCREEN_SQ2, -_SCREEN_SQ2)
-    ink = 'fill="none" stroke="#111" stroke-width="2"'
+    along = (_SQ2, _SQ2)
+    across = (_SQ2, -_SQ2)
 
     def track(tail: "tuple[float, float]", tip: "tuple[float, float]") -> str:
         """Return one arrow from ``tail`` to ``tip``.
@@ -2629,7 +2567,7 @@ def _screen_vibration() -> str:
         right = (base[0] - wing * across[0], base[1] - wing * across[1])
         return (
             f'<line x1="{tail[0]:g}" y1="{tail[1]:g}" x2="{base[0]:g}" '
-            f'y2="{base[1]:g}" {ink}/>'
+            f'y2="{base[1]:g}" {_INK}/>'
             f'<polygon points="{tip[0]:g},{tip[1]:g} {left[0]:g},{left[1]:g} '
             f'{right[0]:g},{right[1]:g}" fill="#111" stroke="none"/>'
         )
@@ -2649,29 +2587,21 @@ def _screen_vibration() -> str:
 _SCREEN_VIBRATION = _screen_vibration()
 
 # Item 7.6 X8029: the rotating drum, dashed.
-_SCREEN_DRUM = (
-    '<circle cx="30" cy="45" r="15" fill="none" stroke="#111" stroke-width="2" '
-    + _SCREEN_DASH + "/>"
-)
+_SCREEN_DRUM = f'<circle cx="30" cy="45" r="15" {_INK} {_DASH_LONG}/>'
 
 # ISO item 7.7 X8030's outline, taller for the rollers.
 _REEL_W, _REEL_H = 80.0, 160.0
-_REEL_OUTLINE = (
-    '<path d="M 0 0 L 80 0 L 80 120 L 40 160 L 0 120 Z" '
-    'fill="white" stroke="#111" stroke-width="2"/>'
-)
+_REEL_OUTLINE = f'<path d="M 0 0 L 80 0 L 80 120 L 40 160 L 0 120 Z" {_OUTLINE}/>'
 
 # Item 7.7 is ported on the walls level with the top roller.
 _REEL_PORTS = {"feed": (0.0, 20.0), "oversize": (_REEL_W, 20.0), "undersize": (40.0, 160.0)}
 
 # Item 7.7 X8030: two rollers joined by dashed rails, the wire basket.
 _REEL_MARK = (
-    '<circle cx="40" cy="20" r="10" fill="none" stroke="#111" stroke-width="2"/>'
-    '<circle cx="40" cy="100" r="10" fill="none" stroke="#111" stroke-width="2"/>'
-    '<line x1="30" y1="30" x2="30" y2="90" fill="none" stroke="#111" stroke-width="2" '
-    + _SCREEN_DASH + "/>"
-    '<line x1="50" y1="30" x2="50" y2="90" fill="none" stroke="#111" stroke-width="2" '
-    + _SCREEN_DASH + "/>"
+    f'<circle cx="40" cy="20" r="10" {_INK}/>'
+    f'<circle cx="40" cy="100" r="10" {_INK}/>'
+    f'<line x1="30" y1="30" x2="30" y2="90" {_INK} {_DASH_LONG}/>'
+    f'<line x1="50" y1="30" x2="50" y2="90" {_INK} {_DASH_LONG}/>'
 )
 
 _REEL_BODY = Symbol(
@@ -2685,11 +2615,6 @@ _REEL_BODY = Symbol(
 
 # Evaporators and kilns: original drawings with no registration number.
 
-# Detail weight (ISO 10628-1 5.3.1 c) and outline weight (5.3.1 b).
-_DETAIL = 'fill="none" stroke="#111" stroke-width="1"'
-_OUTLINE = 'fill="white" stroke="#111" stroke-width="2"'
-
-
 # Evaporator body: dished head, straight side, dished bottom.
 _EVAP_W = 80.0
 _EVAP_HEAD = 12.0
@@ -2700,8 +2625,7 @@ _EVAP_OUTLINE = (
     f'<path d="M 0 {_EVAP_HEAD:g} '
     f'A {_EVAP_W / 2:g} {_EVAP_HEAD:g} 0 0 1 {_EVAP_W:g} {_EVAP_HEAD:g} '
     f'L {_EVAP_W:g} {_EVAP_HEAD + _EVAP_SHELL:g} '
-    f'A {_EVAP_W / 2:g} {_EVAP_HEAD:g} 0 0 1 0 {_EVAP_HEAD + _EVAP_SHELL:g} Z" '
-    f'{_OUTLINE}/>'
+    f'A {_EVAP_W / 2:g} {_EVAP_HEAD:g} 0 0 1 0 {_EVAP_HEAD + _EVAP_SHELL:g} Z" {_OUTLINE}/>'
 )
 
 # Long-tube heating band (falling film, climbing film and general).
@@ -2912,7 +2836,7 @@ _FBC_OUTLINE = (
 )
 _FBC_GRID = (
     f'<line x1="0" y1="{_FBC_GRID_Y:g}" x2="{_FBC_W:g}" y2="{_FBC_GRID_Y:g}" '
-    f'{_DETAIL} {_SCREEN_DASH}/>'
+    f'{_DETAIL} {_DASH_LONG}/>'
 )
 
 # Feed high, product low over a weir, offgas off the crown, fuel into
@@ -3393,11 +3317,9 @@ class SymbolRegistry:
         # Tubular reactor: a rectangular shell with a serpentine tube.
         self.register("reactor", Symbol(
             svg='<g id="sym_reactor_tubular">'
-                '<rect x="0" y="0" width="120" height="40" fill="white" '
-                'stroke="#111" stroke-width="2"/>'
+                f'<rect x="0" y="0" width="120" height="40" {_OUTLINE}/>'
                 '<path d="M 15 10 L 105 10 A 5 5 0 0 1 105 20 L 15 20 '
-                'A 5 5 0 0 0 15 30 L 105 30" fill="none" stroke="#111" '
-                'stroke-width="1"/></g>',
+                f'A 5 5 0 0 0 15 30 L 105 30" {_DETAIL}/></g>',
             width=120.0, height=40.0,
             ports={"outlet": (120.0, 20.0), "duty": (60.0, 0.0)},
             port_series=(PortSeries(prefix="feed_", face="W", pitch=10.0,
@@ -3409,8 +3331,7 @@ class SymbolRegistry:
         # Item 4.1, 2532, boiler with dome.
         self.register("boiler", Symbol(
             svg='<g id="sym_boiler"><path d="M 25 25 A 25 25 0 0 1 75 25 '
-                'L 100 25 L 100 125 L 0 125 L 0 25 Z" '
-                'fill="white" stroke="#111" stroke-width="2"/></g>',
+                f'L 100 25 L 100 125 L 0 125 L 0 25 Z" {_OUTLINE}/></g>',
             width=100.0, height=125.0,
             ports={"feedwater": (0.0, 50.0), "steam": (50.0, 0.0)},
             gravity_fixed=True,
@@ -3420,8 +3341,7 @@ class SymbolRegistry:
         # Item 4.7, 2041, stack: a tapering shaft on a flange.
         self.register("stack", Symbol(
             svg='<g id="sym_stack"><path d="M 20 0 L 40 0 M 20 0 L 10 100 '
-                'M 40 0 L 50 100 M 0 100 L 60 100" '
-                'fill="none" stroke="#111" stroke-width="2"/></g>',
+                f'M 40 0 L 50 100 M 0 100 L 60 100" {_INK}/></g>',
             width=60.0, height=100.0,
             ports={"inlet": (_STACK_INLET_X, _STACK_INLET_Y)},
             gravity_fixed=True,
@@ -3431,10 +3351,9 @@ class SymbolRegistry:
         # Item 4.8, 2591, gas flare: a shaft with a flame on top.
         self.register("flare", Symbol(
             svg='<g id="sym_flare">'
-                '<path d="M 30 40 A 25 25 0 0 1 30 0 A 25 25 0 0 1 30 40 Z" '
-                'fill="none" stroke="#111" stroke-width="2"/>'
+                f'<path d="M 30 40 A 25 25 0 0 1 30 0 A 25 25 0 0 1 30 40 Z" {_INK}/>'
                 '<path d="M 20 40 L 40 40 M 20 40 L 20 120 M 40 40 L 40 120 '
-                'M 0 120 L 60 120" fill="none" stroke="#111" stroke-width="2"/>'
+                f'M 0 120 L 60 120" {_INK}/>'
                 '</g>',
             width=60.0, height=120.0,
             # Inlet on the west wall, two modules up.
@@ -3614,8 +3533,7 @@ class SymbolRegistry:
         self.register("screening_device", _screen(
             "coarse_and_fine", "X8028",
             _SCREEN_MESH
-            + f'<line x1="20" y1="0" x2="60" y2="40" fill="none" stroke="#111" '
-              f'stroke-width="2" {_SCREEN_DASH}/>'), "coarse_and_fine")
+            + f'<line x1="20" y1="0" x2="60" y2="40" {_INK} {_DASH_LONG}/>'), "coarse_and_fine")
         self.register("screening_device", _screen(
             "vibrating", "X2605", _SCREEN_MESH + _SCREEN_VIBRATION), "vibrating")
         self.register("screening_device", _screen(
