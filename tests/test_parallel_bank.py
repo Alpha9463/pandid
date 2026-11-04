@@ -84,7 +84,8 @@ def test_a_mixer_drawing_registered_again_is_drawn():
     assert default_registry.for_unit(U.Mixer("M-1", n_inlets=4)).height == 90
 
 
-def test_a_lateral_keeps_the_instrument_that_taps_it():
+@pytest.mark.parametrize("at", [0.25, 0.5, 0.75])
+def test_a_lateral_keeps_the_instrument_that_taps_it(at):
     fs = Flowsheet("Tapped bank")
     sp = fs.add(U.Splitter("SP", n_outlets=4))
     mx = fs.add(U.Mixer("MX", n_inlets=4))
@@ -95,7 +96,9 @@ def test_a_lateral_keeps_the_instrument_that_taps_it():
         pump = fs.add(U.Pump(f"P-{i}"))
         suctions.append(fs.connect(outlet, pump.suction))
         fs.connect(pump.discharge, inlet)
-    fs.add_instrument("PI", 100, sensing=suctions[3], at=0.25)
+    fs.add_instrument("PI", 100, sensing=suctions[3], at=at)
     fs.to_svg(diagram="p&id")
     assert _taps_off(fs) == set()
     assert fs.route_converged
+    assert measure_final(fs).crossings == 0
+    assert _flaws(fs)["line-on-line"] == 0

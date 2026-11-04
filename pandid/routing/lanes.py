@@ -4,9 +4,10 @@ A lateral runs from an east nozzle to a west nozzle further east, or
 the mirror, at another height, and can turn on a lane between its
 stand-offs clear of every obstacle. Laterals that share a gap and a
 height range form a group. Where two in a group cross or share a run,
-or one turns more than twice, each is drawn as one step on its own
-lane, the lanes ordered so that the fewest cross and spread evenly
-across the widest stretch of the gap that all of them may use.
+one turns more than twice, or a balloon on one taps off its line, each
+is drawn as one step on its own lane, the lanes ordered so that the
+fewest cross and spread evenly across the widest stretch of the gap
+that all of them may use.
 """
 
 import math
@@ -21,7 +22,7 @@ from pandid.routing.separation import SPACING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
-    from pandid.routing.visibility import Rect
+    from pandid.routing.visibility import Rect, VisibilityGraph
     from pandid.streams import Stream
 
 Point = tuple[float, float]
@@ -135,9 +136,9 @@ def _lateral(stream: "Stream", escapes: tuple[Point, Point],
     escapes : tuple[Point, Point]
         Ends of its source and destination stand-offs.
     obstacles : list[Rect]
-        Unit bodies and tag halos.
+        Unit bodies and tag halos in its way.
     taps : list[Point]
-        Where balloons tap the stream.
+        Where balloons tap the stream on its line.
 
     Returns
     -------
@@ -166,14 +167,12 @@ def _lateral(stream: "Stream", escapes: tuple[Point, Point],
         b = b if not o.y_min <= sy <= o.y_max else math.inf
         lateral.free = _cut(lateral.free, a, b)
     for tx, ty in taps:
-        # Keep each tap on its run, clear of the corner.
+        # Keep a tap on a level run there, clear of the corner.
         x = sign * tx
         if abs(ty - sy) < 0.5:
             lateral.free = _cut(lateral.free, -math.inf, x + CLEAR)
         elif abs(ty - dy) < 0.5:
             lateral.free = _cut(lateral.free, x - CLEAR, math.inf)
-        else:
-            lateral.free = []
     return lateral if lateral.free else None
 
 
@@ -293,11 +292,12 @@ def _tangled(lines: list[list[Point]]) -> bool:
 
 
 def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
-           obstacles: "list[Rect]") -> None:
+           graph: "VisibilityGraph") -> None:
     """Re-lay each group of laterals that cross, touch or wind.
 
-    A group's new routes are kept only if no crossing, bend, finding or
-    clash grows in number, no balloon's tap leaves its line, and one of
+    A group is also re-laid where a balloon it carries taps off its
+    line. A group's new routes are kept only if no crossing, bend,
+    finding or clash grows in number, no tap leaves its line, and one of
     them falls.
 
     Parameters
@@ -306,15 +306,25 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
         Routed and separated sheet.
     escapes : dict[int, tuple[Point, Point]]
         Ends of each routed stream's stand-offs, by ``id(stream)``.
-    obstacles : list[Rect]
-        Unit bodies and tag halos.
+    graph : VisibilityGraph
+        Graph the sheet was routed on, for its obstacles.
     """
     from pandid.layout.attach import is_attached
+    from pandid.layout.control import _taps_off
+    from pandid.streams import Stream
 
+    # Balloons on lines follow their lines, so are in no lateral's way.
+    carried = [u for u in fs.units if is_attached(u) and isinstance(u.host, Stream)
+               and getattr(u, "tap", None) is not None]
+    off = _taps_off(fs)
     taps: dict[int, list[Point]] = {}
-    for u in fs.units:
-        if is_attached(u) and getattr(u, "tap", None) is not None:
+    for u in carried:
+        if id(u) not in off:
             taps.setdefault(id(u.host), []).append(u.tap)
+    adrift = {id(u.host) for u in carried if id(u) in off}
+    followers = {id(body) for u, body in graph.body_obstacles
+                 if any(u is c for c in carried)}
+    obstacles = [o for o in graph.obstacles if id(o) not in followers]
     laterals = [lateral for s in fs.streams if id(s) in escapes
                 and (lateral := _lateral(s, escapes[id(s)], obstacles,
                                          taps.get(id(s), []))) is not None]
@@ -325,7 +335,8 @@ def relane(fs: "Flowsheet", escapes: dict[int, tuple[Point, Point]],
         groups = [g for g in groups if all(g is not j for j in joined)] + [merged]
     before = None
     for group in groups:
-        if not _tangled([stream_polyline(a.stream) for a in group]):
+        if (not any(id(a.stream) in adrift for a in group)
+                and not _tangled([stream_polyline(a.stream) for a in group])):
             continue
         group.sort(key=lambda a: fs.streams.index(a.stream))
         lanes = _lanes(group)

@@ -441,4 +441,4 @@ class DefaultRouter:
         separate_streams(fs)
         # Keep the routes layout sets pipe furniture on.
         if not fs._laying_out:
-            relane(fs, escapes, graph.obstacles)
+            relane(fs, escapes, graph)
