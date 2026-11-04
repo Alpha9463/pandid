@@ -14,7 +14,6 @@ from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
-_PROVENANCE = re.compile(f"{re.escape(PROVENANCE_OPEN)}.*?{re.escape(PROVENANCE_CLOSE)}", re.S)
 
 #: Representative manual, PFD, P&ID, BFD, and automatic-layout fixtures.
 GOLDEN_SCENARIOS = (
@@ -53,6 +52,9 @@ def _check_golden(name: str, svg: str) -> None:
     assert golden == normalized, "".join(
         difflib.unified_diff(golden.splitlines(True), normalized.splitlines(True), n=2)
     )
+
+
+_PROVENANCE = re.compile(f"{re.escape(PROVENANCE_OPEN)}.*?{re.escape(PROVENANCE_CLOSE)}", re.S)
 
 
 def _normalize(svg: str) -> str:
