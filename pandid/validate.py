@@ -23,6 +23,9 @@ _TOL = 1.0  # tolerance in px
 #: Distance in px a drawn coordinate may sit from its pin.
 _PIN_TOL = 0.05
 
+#: ``mirrored=`` spelling of each ``(mirrored, mirror_y)`` pair.
+_MIRRORED = {(False, False): "False", (True, False): "True",
+             (False, True): '"y"', (True, True): '"xy"'}
 
 #: ``(kind, variant)`` pairs whose nozzles step in height by design.
 OFFSET_BY_DESIGN = frozenset({
@@ -112,18 +115,27 @@ def _overlap_cure(a, b) -> str:
         Returns
         -------
         str
-            Call text, naming the port each axis is pinned by.
+            Call text for the axes ``u`` is pinned on, or ``x`` and
+            ``y`` when it is pinned on neither, naming the port each
+            axis is pinned by.
         """
         pin = u.pin_
-        if getattr(u, "host", None) is None and pin is not None and pin.x is None and pin.y is None:
-            return f"call .pin(col=..., row=...) on {u.name}"
-        # Name the port each axis is pinned by.
+        hosted = getattr(u, "host", None) is not None
+        # Name each pinned axis by the field that places it, x= or y= on a balloon.
+        axes = []
+        for px, grid in (("x", "col"), ("y", "row")):
+            if pin is not None and getattr(pin, px) is not None:
+                axes.append(px)
+            elif pin is not None and getattr(pin, grid) is not None:
+                axes.append(px if hosted else grid)
         ports = getattr(u, "_pin_ports", None) or {}
-        calls = ([(ports.get("x"), "x=..., y=...")] if ports.get("x") == ports.get("y")
-                 else [(ports.get("x"), "x=..."), (ports.get("y"), "y=...")])
+        calls: dict[str | None, list[str]] = {}
+        for axis in axes or ["x", "y"]:
+            calls.setdefault(ports.get(axis), []).append(f"{axis}=...")
         return " and ".join(
-            f"call .pin({'' if port is None else f'port={port!r}, '}{axes}) on {u.name}"
-            for port, axes in calls)
+            f"call .pin({'' if port is None else f'port={port!r}, '}{', '.join(args)}) "
+            f"on {u.name}"
+            for port, args in calls.items())
 
     for u, other in ((b, a), (a, b)):
         host = getattr(u, "host", None)
@@ -136,9 +148,12 @@ def _overlap_cure(a, b) -> str:
         kept = ((f", angle={u.angle!r}" if u.angle != 90.0 else "")
                 + (f", relation={u.relation!r}" if u.relation != "sensing" else ""))
         pin = u.pin_
-        grid = (f". Its col= and row= pin does not move an attached balloon; an "
-                f"x= and y= pin does: {how(u)}"
-                if pin is not None and (pin.col is not None or pin.row is not None) else "")
+        fields = [f for f in ("col", "row") if pin is not None and getattr(pin, f) is not None]
+        moves = ["x" if f == "col" else "y" for f in fields]
+        grid = (f". Its {' and '.join(f + '=' for f in fields)} pin does not move an "
+                f"attached balloon; {'an' if moves[0] == 'x' else 'a'} "
+                f"{' and '.join(m + '=' for m in moves)} pin does: {how(u)}"
+                if fields else "")
         return (f"{u.name} hangs off {host.name}, so say where on it: {key}= is "
                 f"{where}, and offset= how far it stands off (now {u.offset:g}). "
                 f"Change them on add_instrument(), or call .attach(<the {host.name} "
@@ -437,6 +452,13 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
               f"no ports. Register artwork for it with "
               f"default_registry.register({u.kind!r}, Symbol(...))"))
 
+    # --- a variant the symbol library has no artwork for ---
+    for u in fs.units:
+        try:
+            default_registry.get(u.kind, getattr(u, "variant", "default"))
+        except ValueError as refused:
+            errors.append(Issue("error", "variant-unknown", f"{u.name}: {refused}"))
+
     # --- a turned gravity-fixed symbol (ISO 15519-1 11.4.2) ---
     for u in fs.units:
         placed = u.frame if u.frame is not None else u.pin_
@@ -704,6 +726,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     list[Issue]
         Errors, then warnings.
     """
+    from pandid.inline import _INLINE_KINDS
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces,
                                  port_point, resolve_port, unit_box)
@@ -758,11 +781,21 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if pin is not None and u._turn_stated and u.frame.orientation % 360 != pin.orientation % 360:
                 missed.append(f"{u.name} was pinned orientation={pin.orientation:g} and is "
                               f"drawn at {u.frame.orientation:g}")
+            reversed_in_line = ""
             if pin is not None and u._mirror_stated and (
                     (u.frame.mirrored, u.frame.mirror_y) != (pin.mirrored, pin.mirror_y)):
-                missed.append(f"{u.name} was pinned with mirrored="
-                              f"{(pin.mirrored, pin.mirror_y)} and is drawn with "
-                              f"{(u.frame.mirrored, u.frame.mirror_y)}")
+                stated = _MIRRORED[pin.mirrored, pin.mirror_y]
+                drawn_mirror = _MIRRORED[u.frame.mirrored, u.frame.mirror_y]
+                missed.append(f"{u.name} was pinned with mirrored={stated} and is "
+                              f"drawn with mirrored={drawn_mirror}")
+                if (u.kind in _INLINE_KINDS
+                        and u.frame.orientation % 360 == pin.orientation % 360):
+                    reversed_in_line = (
+                        f"A device in a line is drawn with its inlet upstream, so "
+                        f"{u.name} is drawn end for end. Pin it with "
+                        f"mirrored={drawn_mirror} to draw it so, or with "
+                        f"orientation={(pin.orientation + 180) % 360:g} to keep "
+                        f"mirrored={stated}")
             # Compare pinned col/row with the frame's, skipping an axis
             # with an absolute pin.
             for axis, absolute in (("col", "x"), ("row", "y")) if pin is not None else ():
@@ -781,6 +814,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                     "offset=..., angle=...), or "
                     "detach it to have it laid out like any other unit"
                     if getattr(u, "host", None) is not None else
+                    reversed_in_line or
                     "A pinned axis is honoured exactly, so something moved "
                     "this unit after the solver read the pin")
             for said in missed:

@@ -190,6 +190,51 @@ def test_a_valve_set_on_a_shifted_line_adds_no_bends(upright: bool, at: float) -
     assert measure_final(fs).bends == 0
 
 
+@pytest.mark.parametrize("at", [-128.0, 211.3])
+@pytest.mark.parametrize("sized", [False, True])
+@pytest.mark.parametrize("mirrored", [False, True, "x", "y", "xy"])
+@pytest.mark.parametrize("turn", [90, 270, 0, 180])
+@pytest.mark.parametrize("flow", [1, -1])
+def test_a_turned_and_mirrored_valve_sits_on_its_pipe(
+    flow: int, turn: int, mirrored: bool | str, sized: bool, at: float
+) -> None:
+    """Check that a valve with a stated turn and mirror sits in its line with the flow."""
+    from pandid.portgeom import port_offset
+
+    upright = turn in (90, 270)
+    first, last = (100.0, 500.0)[::flow]
+    end_turn = (90 if upright else 0) + (0 if flow > 0 else 180)
+    fs = Flowsheet("Turned and mirrored")
+    start = fs.add(Valve("A")).pin(orientation=end_turn)
+    end = fs.add(Valve("B")).pin(orientation=end_turn)
+    if upright:
+        start.pin(port="outlet", x=at, y=first)
+        end.pin(port="inlet", x=at, y=last)
+    else:
+        start.pin(port="outlet", x=first, y=at)
+        end.pin(port="inlet", x=last, y=at)
+    valve = ControlValve("CV", width=27.3, height=31.7) if sized else ControlValve("CV")
+    valve.pin(orientation=turn, mirrored=mirrored)
+    stated = valve.pin_
+    assert stated is not None
+    across = 0 if upright else 1
+    inlet, outlet = (port_offset(valve, name)[1 - across] for name in ("inlet", "outlet"))
+    backwards = (outlet - inlet) * flow < 0
+    fs.add(valve, on=fs.connect(start.outlet, end.inlet))
+
+    fs.route()
+    assert valve.frame is not None
+    for name in ("inlet", "outlet"):
+        assert port_point(valve, valve.frame, name)[across] == pytest.approx(at, abs=1e-6)
+    assert measure_final(fs).bends == 0
+    drawn = valve.frame
+    assert (drawn.orientation, drawn.mirror_y) == (turn, stated.mirror_y)
+    assert drawn.mirrored == (stated.mirrored != backwards)
+    warned = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
+    assert bool(warned) == backwards
+    assert all("end for end" in said for said in warned)
+
+
 def test_a_line_between_two_devices_set_on_it_adds_no_bends() -> None:
     """Check that the lines either side of a reducer set after a valve on one pipe draw straight."""
     from pandid import Reducer

@@ -11,7 +11,6 @@ hand.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import ControlValve, Feed, Fitting, Flowsheet, Product, Pump, ReliefValve, Valve, Vessel
-from pandid.document import Revision, TitleBlock
 from pandid.portgeom import port_offset
 
 
@@ -19,7 +18,7 @@ def main():
     fs = Flowsheet("Transfer and Relief")
 
     # --- Equipment ----------------------------------------------------
-    feed = fs.add(Feed("Raw Feed", reference="PFD-100"))
+    feed = fs.add(Feed("Raw Feed", reference="P&ID-100"))
     hv = fs.add(Valve("HV-101", description="Suction Isolation Valve"))
     strainer = fs.add(Fitting("ST-101", variant="strainer",
                               description="Suction Strainer"))
@@ -30,8 +29,8 @@ def main():
                           description="Surge Vessel"))
     psv = fs.add(ReliefValve("PSV-101", variant="psv",
                              description="Vessel Relief Valve"))
-    flare = fs.add(Product("To Flare", reference="PFD-900"))
-    prod = fs.add(Product("To Unit 200", reference="PFD-200"))
+    flare = fs.add(Product("To Flare", reference="P&ID-900"))
+    prod = fs.add(Product("To Unit 200", reference="P&ID-200"))
 
     # The two spec breaks; everything else keeps its run whole.
     fv.new_line_number = True
@@ -56,58 +55,20 @@ def main():
 
     # --- Connections --------------------------------------------------
     # One line number over three segments, set on the first.
-    suction = fs.connect(feed.outlet, hv.inlet, size='8"', service="P", spec="A1A")
+    fs.connect(feed.outlet, hv.inlet, size='8"', service="P", spec="A1A")
     fs.connect(hv.outlet, strainer.inlet)
     fs.connect(strainer.outlet, pump.suction)
 
-    discharge = fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
-    downstream = fs.connect(fv.outlet, surge.inlet, size='6"', service="P", spec="D1B")
-    to_unit = fs.connect(surge.outlet, prod.inlet, size='6"', service="P", spec="D1B")
+    fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
+    fs.connect(fv.outlet, surge.inlet, size='6"', service="P", spec="D1B")
+    fs.connect(surge.outlet, prod.inlet, size='6"', service="P", spec="D1B")
 
-    relief = fs.connect(surge.vent, psv.inlet, size='3"', service="P", spec="A1A")
+    fs.connect(surge.vent, psv.inlet, size='3"', service="P", spec="A1A")
     # sequence= set by hand; the automatic sequence runs on regardless.
-    tail = fs.connect(psv.outlet, flare.inlet, size='4"', service="FL",
-                      sequence=2740, spec="A1A")
-
-    # --- Line list ----------------------------------------------------
-    conditions = [
-        (suction, "25 C", "1.2 bara", "42000"),
-        (discharge, "26 C", "9.5 bara", "42000"),
-        (downstream, "26 C", "4.0 bara", "42000"),
-        (to_unit, "26 C", "3.6 bara", "42000"),
-        (relief, "26 C", "4.0 bara", "0"),
-        (tail, "26 C", "1.1 bara", "0"),
-    ]
-    for stream, temperature, pressure, flow in conditions:
-        stream.properties = {
-            "Temperature": temperature,
-            "Pressure": pressure,
-            "Mass Flow (kg/h)": flow,
-        }
-
-    fs.title_block = TitleBlock(
-        title="Transfer and Relief U100",
-        subtitle="Piping and Instrumentation Diagram",
-        drawing_number="P&ID-1009",
-        project="Feed Transfer Package",
-        company="PANDID",
-        status="ISSUED FOR REVIEW",
-        sheet="1",
-        of_sheets="1",
-        scale="NTS",
-        drawn_by="AA",
-        checked_by="JS",
-        # Left blank, the date is today's.
-        date="2026-07-15",
-        revisions=[
-            Revision("A", "2026-06-20", "Issued for internal review", "AA"),
-            Revision("B", "2026-07-15", "Line numbers added", "AA", "JS"),
-        ],
-    )
+    fs.connect(psv.outlet, flare.inlet, size='4"', service="FL", sequence=2740, spec="A1A")
 
     # diagram="p&id" is what drops the arrowheads off the process lines.
-    fs.render(out("line_numbers.svg"), border="zone", diagram="p&id",
-              show_stream_table=True)
+    fs.render(out("line_numbers.svg"), diagram="p&id")
     print("Generated line_numbers.svg")
     for stream in fs.streams:
         print(f"  {stream.source.owner.name} -> {stream.dest.owner.name}: {stream.name}")

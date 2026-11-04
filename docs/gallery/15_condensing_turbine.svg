@@ -37,13 +37,13 @@
   <g id="units">
     <polygon points="51.331999999999994,461.0 121.01599999999999,461.0 136.016,474.0 121.01599999999999,487.0 51.331999999999994,487.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="86.17399999999999" y="470.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">HP Steam</text>
-    <text x="86.17399999999999" y="482.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-700</text>
+    <text x="86.17399999999999" y="482.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-700</text>
     <use href="#sym_separator_knockout" x="256.02" y="419" width="51.0" height="95.4" />
     <use href="#sym_valve_globe" x="184.02" y="608.6" width="24.5" height="15.0" />
     <use href="#sym_fitting_steam_trap" x="355.02" y="534.4" width="60.0" height="40.0" />
     <polygon points="529.016,541.4 651.404,541.4 666.404,554.4 651.404,567.4 529.016,567.4" fill="transparent" stroke="black" stroke-width="2" />
     <text x="590.2099999999999" y="550.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Condensate Header</text>
-    <text x="590.2099999999999" y="562.4" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-800</text>
+    <text x="590.2099999999999" y="562.4" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-800</text>
     <use href="#sym_valve_hydraulic" x="382.61" y="364.1" width="24.5" height="22.2" />
     <use href="#sym_turbine" x="548.71" y="349" width="98.0" height="60.0" />
     <use href="#sym_hex_air_cooled" x="990.4" y="299" width="100.0" height="100.0" />
@@ -55,12 +55,12 @@
     <use href="#sym_heater" x="1916.4" y="319" width="80.0" height="80.0" />
     <polygon points="50.0,603.1 121.01599999999999,603.1 136.016,616.1 121.01599999999999,629.1 50.0,629.1" fill="transparent" stroke="black" stroke-width="2" />
     <text x="85.508" y="612.1" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">MP Steam</text>
-    <text x="85.508" y="624.1" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-700</text>
+    <text x="85.508" y="624.1" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-700</text>
     <use href="#sym_valve_control" x="2032.55" y="346.6" width="24.5" height="19.8" />
     <use href="#sym_valve_butterfly_pneumatic" x="2090.85" y="336.5" width="24.5" height="30.0" />
     <polygon points="2161.404,346.0 2247.096,346.0 2262.096,359.0 2247.096,372.0 2161.404,372.0" fill="transparent" stroke="black" stroke-width="2" />
     <text x="2204.25" y="355.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">To Deaerator</text>
-    <text x="2204.25" y="367.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-800</text>
+    <text x="2204.25" y="367.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">P&amp;ID-800</text>
   </g>
   <g id="streams">
     <path d="M 136.016,474.0 L 256.01599999999996,474.0" fill="none" stroke="black" stroke-width="2" />
