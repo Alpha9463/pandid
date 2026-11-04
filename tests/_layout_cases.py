@@ -1,5 +1,11 @@
 """Reusable flowsheets and drawn-geometry helpers for layout regression tests."""
 
+import contextlib
+import io
+
+import pytest
+
+from _render_cases import gallery
 from pandid import (
     DistillationColumn,
     Feed,
@@ -7,11 +13,13 @@ from pandid import (
     GravitySeparator,
     Product,
     Reactor,
+    portgeom,
 )
 from pandid.geometry import Frame
 from pandid.portgeom import port_point
 from pandid.stations import ValveStation
-from pandid.units import Unit
+from pandid.streams import Stream
+from pandid.units import _UNCHANGED, Unit
 
 
 PINS = {
@@ -106,6 +114,36 @@ def build(pinned=True, skip=None):
     for source, source_port, dest, dest_port in EDGES:
         fs.connect(getattr(items[source], source_port), getattr(items[dest], dest_port))
     return fs, items
+
+
+def build_unpinned(stem: str) -> tuple[Flowsheet, dict]:
+    """Build a gallery sheet afresh with its placement stripped.
+
+    While the example builds, ``pin()`` keeps only ``orientation=`` and
+    ``mirrored=``, ``Stream.via()`` does nothing, and ``pinned_x()`` and
+    ``pinned_y()`` return ``0.0``.
+
+    Parameters
+    ----------
+    stem : str
+        Gallery sheet name.
+
+    Returns
+    -------
+    tuple[Flowsheet, dict]
+        The flowsheet and its render options.
+    """
+    pin = Unit.pin
+
+    def stripped_pin(self, *, orientation=_UNCHANGED, mirrored=_UNCHANGED, **_):
+        return pin(self, orientation=orientation, mirrored=mirrored, port=None)
+
+    with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(io.StringIO()):
+        patch.setattr(Unit, "pin", stripped_pin)
+        patch.setattr(Stream, "via", lambda self, waypoints: self)
+        patch.setattr(portgeom, "pinned_x", lambda unit, port_name=None: 0.0)
+        patch.setattr(portgeom, "pinned_y", lambda unit, port_name=None: 0.0)
+        return gallery.flowsheet(stem)
 
 
 def frame_of(unit: Unit | None) -> Frame:
