@@ -23,6 +23,11 @@ GOLDEN_SCENARIOS = (
     "18_fixed_bed_recycle",
 )
 
+#: Finding codes a golden sheet is drawn with.
+GOLDEN_FINDINGS = {
+    "18_fixed_bed_recycle": ["route-along-unit", "route-crosses-near-nozzle"],
+}
+
 
 def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
     """Keep copied settled flowsheets independent.
@@ -102,7 +107,7 @@ def _check_golden(name: str, svg: str) -> None:
 
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
 def test_golden_svg(settled_gallery, name):
-    """Match representative warning-free renders to approved SVG fixtures.
+    """Match representative renders and their findings to approved fixtures.
 
     Parameters
     ----------
@@ -113,7 +118,9 @@ def test_golden_svg(settled_gallery, name):
     """
     fs, kwargs = copy_settled_case(settled_gallery, name)
     svg = fs.to_svg(**kwargs)
-    assert not fs.warnings, f"{name}: {[str(warning) for warning in fs.warnings]}"
+    assert [warning.code for warning in fs.warnings] == GOLDEN_FINDINGS.get(name, []), (
+        f"{name}: {[str(warning) for warning in fs.warnings]}"
+    )
     _check_golden(name, svg)
 
 
