@@ -40,13 +40,13 @@ def main():
         port="inlet", x=420 + port_offset(drum, "vent")[0])
     flare = fs.add(Product("To Flare", reference="P&ID-902")).pin(x=630, y=30)
 
-    feed_in = fs.connect(feed.outlet, fe.inlet)
+    fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
-    product_out = fs.connect(lv.outlet, prod.inlet)
+    fs.connect(lv.outlet, prod.inlet)
     fs.connect(drum.vent, psv.inlet)
-    relief_out = fs.connect(psv.outlet, flare.inlet)
+    fs.connect(psv.outlet, flare.inlet)
 
     # Flow loop. add_balloon moves the plate's tag into a balloon.
     fe_b = fs.add_balloon(fe, face="N", offset=38)
@@ -70,11 +70,7 @@ def main():
     fs.add_instrument("I", 1, sensing=level_loop.measurement, at=0.5, offset=44,
                       angle=90, variant="logic")
 
-    feed_in.properties = {"Flow (kg/h)": "3000"}
-    product_out.properties = {"Flow (kg/h)": "3000"}
-    relief_out.properties = {"Flow (kg/h)": ""}
-
-    fs.render(out("control_loop.svg"), show_stream_table=True)
+    fs.render(out("control_loop.svg"), diagram="p&id")
     print("Generated control_loop.svg")
 
 
