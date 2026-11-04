@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypedDict, TypeVar, Unpack
 
 from pandid._checks import check_real, check_whole, is_whole, suggest
 from pandid.deprecation import Deprecation
@@ -168,6 +168,22 @@ _DEFAULT_FACES = Deprecation(
              "output_faces to read them"),
     removed_in="0.1.7",
 )
+
+
+class _UnitOptions(TypedDict, total=False):
+    """Keyword options a unit class passes on to :class:`Unit`.
+
+    Attributes
+    ----------
+    width, height, label_pos, description, reference
+        As for :class:`Unit`.
+    """
+
+    width: float | None
+    height: float | None
+    label_pos: str | None
+    description: str
+    reference: str
 
 
 class Unit:
@@ -982,10 +998,13 @@ class _Boundary(Unit):
 
     Parameters
     ----------
-    name, variant, width, height, label_pos, description, reference
+    name, variant
         As for :class:`Unit`.
     header : bool, default=False
         Whether the flag is a utility header drawn at several taps.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
     """
 
     ONE_NOZZLE_MANY_RUNS = True
@@ -994,22 +1013,11 @@ class _Boundary(Unit):
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         header: bool = False,
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.header = bool(header)
         # Drawn label, kept when a repeated header is renamed.
         self._tag = name
@@ -1140,10 +1148,13 @@ class _NormallyPositioned(Unit):
 
     Parameters
     ----------
-    name, variant, width, height, label_pos, description, reference
+    name, variant
         As for :class:`Unit`.
     normal_position : str, default="open"
         ``"open"`` or ``"closed"`` in normal operation.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
     """
 
     #: Normal positions a device may declare.
@@ -1153,22 +1164,11 @@ class _NormallyPositioned(Unit):
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         normal_position: str = "open",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._normal_position = "open"
         self.normal_position = normal_position
 
@@ -1226,12 +1226,13 @@ class Valve(_NormallyPositioned):
     actuator : str, default=""
         ``"diaphragm"``, ``"motor"``, ``"solenoid"``, ``"hydraulic"``,
         ``"handwheel"`` or empty.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
     normal_position : str, default="open"
         ``"open"`` or ``"closed"``.
     fail : str, default=""
         Position on loss of actuating energy; see :attr:`fail`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Raises
     ------
@@ -1265,25 +1266,12 @@ class Valve(_NormallyPositioned):
         variant: str = "default",
         *,
         actuator: str = "",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
         normal_position: str = "open",
         fail: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         variant = self._resolve(name, variant, actuator)
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-            normal_position=normal_position,
-        )
+        super().__init__(name, variant=variant, normal_position=normal_position, **options)
         # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -1946,8 +1934,9 @@ class Vessel(_MultiPortVessel):
         ``"leg"`` (26.1), ``"bracket"`` (26.2) or ``"ring"`` (26.4).
         Set at construction only; assigning it later raises
         ``AttributeError``.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Raises
     ------
@@ -1992,21 +1981,9 @@ class Vessel(_MultiPortVessel):
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
         supports: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._init_connections(inputs, outputs)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
@@ -2035,8 +2012,9 @@ class Tank(_MultiPortVessel):
         Number of inlets or outlets, or one face per port.
     variant : str, default="default"
         Tank drawing.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Raises
     ------
@@ -2076,21 +2054,9 @@ class Tank(_MultiPortVessel):
         inputs: "int | Sequence[str]" = 1,
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._init_connections(inputs, outputs)
 
 
@@ -2118,10 +2084,11 @@ class Reducer(Unit):
         Tag.
     variant : str, default="default"
         Body style.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
     large_end : {"inlet", "outlet"}, default="inlet"
         Port on the wide face.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -2146,22 +2113,11 @@ class Reducer(Unit):
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         large_end: str = "inlet",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._large_end = "inlet"
         self.large_end = large_end
 
@@ -2218,8 +2174,9 @@ class Tee(Unit):
         ``"outlet"`` takes flow off the run; ``"inlet"`` returns it.
     variant : str, default="default"
         Drawing variant.
-    width, height, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``description`` or ``reference``, as for
+        :class:`Unit`.
 
     Attributes
     ----------
@@ -2230,6 +2187,8 @@ class Tee(Unit):
 
     Raises
     ------
+    TypeError
+        If ``label_pos`` is given.
     ValueError
         If ``branch`` is not in :attr:`BRANCH_DIRECTIONS`.
     """
@@ -2251,11 +2210,10 @@ class Tee(Unit):
         name: str = "",
         branch: str = "outlet",
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
+        if "label_pos" in options:
+            raise TypeError(f"{name or self.DEFAULT_NAME}: a tee has no tag, so it takes no label_pos")
         if branch not in self.BRANCH_DIRECTIONS:
             raise ValueError(
                 f"{name or self.DEFAULT_NAME}: branch= is "
@@ -2263,14 +2221,7 @@ class Tee(Unit):
                 f"the third connection takes flow off the run or returns it; got "
                 f"{branch!r}"
             )
-        super().__init__(
-            name or self.DEFAULT_NAME,
-            variant=variant,
-            width=width,
-            height=height,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name or self.DEFAULT_NAME, variant=variant, **options)
         self._add_port("branch", branch, "process")
 
     @property
@@ -2514,29 +2465,20 @@ class _VariantPorted(Unit):
 
     Parameters
     ----------
-    name, variant, width, height, label_pos, description, reference
+    name, variant
         As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
     """
 
     def __init__(  # numpydoc ignore=GL08
         self,
         name: str,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         # Use the resolved variant, not the argument.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -2792,10 +2734,10 @@ class Conveyor(Unit):
         Belt roller or screw bore; :meth:`default_diameter` if omitted.
     variant : str, default="default"
         ``"default"`` (belt) or ``"screw"``.
-    width, height : None
-        Refused; use ``length`` and ``diameter``.
-    label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``label_pos``, ``description`` or ``reference``, as for
+        :class:`Unit`. ``width`` and ``height`` are refused; use
+        ``length`` and ``diameter``.
 
     Raises
     ------
@@ -2819,14 +2761,11 @@ class Conveyor(Unit):
         length: float | None = None,
         diameter: float | None = None,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         from pandid.render.symbols import CONVEYOR_LENGTH
 
+        width, height = options.get("width"), options.get("height")
         if width is not None or height is not None:
             # Suggest the keyword the given number belongs on.
             given = width if width is not None else height
@@ -2839,9 +2778,7 @@ class Conveyor(Unit):
                 f"swaps and which would stretch a belt's rollers out of round "
                 f"and a screw's flight off its pitch. Pass {instead}={given!r}."
             )
-        super().__init__(
-            name, variant=variant, label_pos=label_pos, description=description, reference=reference
-        )
+        super().__init__(name, variant=variant, **options)
         # The length check reads the diameter.
         self.diameter = self.default_diameter() if diameter is None else diameter
         self.length = CONVEYOR_LENGTH if length is None else length
@@ -3049,10 +2986,11 @@ class Instrument(Unit):
     variant : str, default="default"
         Symbol type: ``"default"``, ``"shared"``, ``"computer"``,
         ``"sis"``, ``"logic"`` or ``"interlock"``.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
     display : str, optional
         One of :data:`DISPLAYS`; implied by ``variant`` when omitted.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -3107,27 +3045,16 @@ class Instrument(Unit):
         type: str,
         number: str | int = "",
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        *,
         display: str | None = None,
+        **options: Unpack[_UnitOptions],
     ):
         letters, num = split_tag(type, number)
         name = f"{letters}-{num}" if letters and num else letters + num
         # _resolved_variant sets the final display.
         self.display = "field"
         variant = self._resolved_variant(name, variant, display)
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.type = letters
         self.number = num
         self.symbol_type = _BALLOON_SHAPES.get(variant, variant)
@@ -3624,8 +3551,9 @@ class Evaporator(Unit):
     supports : str, optional
         ``"leg"``, ``"bracket"``, ``"skirt"`` or ``"ring"``; fixed at
         construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -3660,21 +3588,9 @@ class Evaporator(Unit):
         name: str,
         variant: str = "default",
         supports: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         from pandid.render.iso_parts import support_overlays
 
         self.supports = supports
@@ -3700,8 +3616,9 @@ class Thickener(Unit):
     rake : str or None, default=DEFAULT_RAKE
         Stirrer on the shaft, one of :class:`Reactor`'s ``agitator``
         names, or ``None``. Fixed at construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -3732,21 +3649,9 @@ class Thickener(Unit):
         name: str,
         variant: str = "default",
         rake: str | None = DEFAULT_RAKE,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         from pandid.render.iso_parts import rake_overlays
 
         self.rake = rake
@@ -3878,8 +3783,9 @@ class Reactor(Unit):
         ``"valve_tray"``, ``"sieve_tray"``, ``"filter_insert"``,
         ``"fluidised_bed"``, ``"packing"`` or ``None``. Fixed at
         construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -3972,22 +3878,10 @@ class Reactor(Unit):
         variant: str = "default",
         agitator: str | None = _UNSTATED,
         internals: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         names = _feed_names(n_feeds, "Reactor")
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         if agitator is _UNSTATED:
             agitator = self.composition_defaults(self.variant, {"internals": internals})["agitator"]
         self.agitator = agitator
@@ -4033,8 +3927,9 @@ class Separator(Unit):
     characteristic : str, optional
         Group-29 mark: ``"gravity"``, ``"electrostatic"`` or
         ``"electromagnetic"``. Replaces ``variant``.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4134,11 +4029,7 @@ class Separator(Unit):
         n_feeds: int = 1,
         variant: str = "default",
         characteristic: str | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         names = _feed_names(n_feeds, "Separator")
         if variant in self._CHARACTERISTICS:
@@ -4164,15 +4055,7 @@ class Separator(Unit):
                     f"so each is a variant= of its own"
                 )
             variant = characteristic
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.characteristic = self.variant if self.variant in self._CHARACTERISTICS else None
         # Check the variant after VARIANT_ALIASES.
         instead = self._ONE_FEED_VARIANTS.get(self.variant)
@@ -4231,8 +4114,9 @@ class Column(Unit):
     draw_stages : list[int or None], optional
         Stage per draw; ``None`` keeps the even spread. Fixed at
         construction.
-    width, height, label_pos, description, reference
-        As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4305,25 +4189,13 @@ class Column(Unit):
         feed_stages: list[int | None] | None = None,
         n_draws: int = 0,
         draw_stages: list[int | None] | None = None,
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         names = _feed_names(n_feeds, "Column")
         if n_draws < 0:
             raise ValueError(f"Column cannot take a negative number of draws, got {n_draws}")
         draw_names = ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         if internals is _UNSTATED:
             internals = self.composition_defaults(self.variant)["internals"]
         self.internals = internals
@@ -4434,8 +4306,11 @@ class Mixer(Unit):
         Tag.
     n_inlets : int, default=2
         Number of inlets.
-    variant, width, height, label_pos, description, reference
+    variant
         As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4468,23 +4343,11 @@ class Mixer(Unit):
         name: str,
         n_inlets: int = 2,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         if n_inlets < 1:
             raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self.inlets = tuple(
             self._add_port(f"in_{i}", "inlet", "process") for i in range(1, n_inlets + 1)
         )
@@ -4502,8 +4365,11 @@ class Splitter(Unit):
         Tag.
     n_outlets : int, default=2
         Number of outlets.
-    variant, width, height, label_pos, description, reference
+    variant
         As for :class:`Unit`.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4537,23 +4403,11 @@ class Splitter(Unit):
         name: str,
         n_outlets: int = 2,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         if n_outlets < 1:
             raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._add_port("inlet", "inlet", "process")
         self.outlets = tuple(
             self._add_port(f"out_{i}", "outlet", "process") for i in range(1, n_outlets + 1)
@@ -4650,8 +4504,11 @@ class Block(_FaceFamilies):
         Section name, written inside the box.
     inputs, outputs : int or Sequence[str], default=1
         Count on the default face, or one face per connection.
-    variant, width, height, label_pos, description, reference
+    variant
         As for :class:`Unit`; there are no variants.
+    **options
+        ``width``, ``height``, ``label_pos``, ``description`` or
+        ``reference``, as for :class:`Unit`.
 
     Attributes
     ----------
@@ -4689,11 +4546,7 @@ class Block(_FaceFamilies):
         inputs: "int | Sequence[str]" = 1,
         outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
-        width: float | None = None,
-        height: float | None = None,
-        label_pos: str | None = None,
-        description: str = "",
-        reference: str = "",
+        **options: Unpack[_UnitOptions],
     ):
         in_faces = _block_faces(inputs, self.DEFAULT_INPUT_FACE, name, "inputs")
         out_faces = _block_faces(outputs, self.DEFAULT_OUTPUT_FACE, name, "outputs")
@@ -4703,15 +4556,7 @@ class Block(_FaceFamilies):
                 f"in it, which nothing can be routed to. Give it at least one "
                 f"inputs= or outputs=."
             )
-        super().__init__(
-            name,
-            variant=variant,
-            width=width,
-            height=height,
-            label_pos=label_pos,
-            description=description,
-            reference=reference,
-        )
+        super().__init__(name, variant=variant, **options)
         self._faces = {}
         self.inlets = tuple(
             self._add_connection(f"in_{i}", "inlet", face)

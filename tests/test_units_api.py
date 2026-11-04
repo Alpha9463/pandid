@@ -46,6 +46,26 @@ def test_an_off_page_reference_on_equipment_is_refused(unit):
     assert "Feed or Product" in str(excinfo.value)
 
 
+@pytest.mark.parametrize(
+    ("cls", "args"),
+    [
+        (U.Block, ("B-1", 1, 1, "default", 120)),
+        (U.Feed, ("F-1", "default", 40)),
+        (U.Reducer, ("R-1", "default", 40)),
+        (U.Instrument, ("PI", 101, "default", 40)),
+    ],
+)
+def test_a_unit_option_given_by_position_is_refused(cls, args):
+    """Check that a size given by position raises rather than filling another keyword."""
+    with pytest.raises(TypeError, match="positional argument"):
+        cls(*args)
+
+
+def test_a_unit_that_restates_no_option_still_takes_them_by_position():
+    """Check that a class on the base constructor keeps its positional size."""
+    assert U.Pump("P-1", "default", 40).width == 40
+
+
 # The layer as API
 
 
