@@ -211,3 +211,13 @@ def test_lanes_are_kept_only_where_they_draw_no_worse_than_without():
     fs.to_svg(diagram="p&id")
     assert _flaws(fs)["line-on-line"] == 0
     assert measure_final(fs).bends == 20
+
+
+def test_a_restored_drawing_shares_no_frame_with_the_one_it_was_saved_from():
+    fs = _tapped_coolers(3, 0.75)
+    fs.to_svg(diagram="p&id")
+    state = fs._state()
+    fs._put_state(state)
+    fs._put_state(state)
+    saved = {id(frame) for _, frame, _ in state[0][0]}
+    assert not saved & {id(u.frame) for u in fs.units}
