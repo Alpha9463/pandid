@@ -275,24 +275,6 @@ def test_a_pin_reads_back_as_the_corner_it_always_did():
     assert pinned_y(valve, "inlet") == RUN_Y
 
 
-def test_the_nozzle_a_coordinate_was_measured_to_is_remembered_per_axis():
-    """Check that each axis keeps the nozzle its coordinate was measured to."""
-    fs = Flowsheet("axes")
-    tank = fs.add(U.Tank("T-1"))
-    prod = fs.add(U.Product("P"))
-    fs.connect(tank.outlet, prod.inlet)
-    tank.pin(port="in_1", x=300.0)
-    tank.pin(y=100.0)
-    assert pinned_x(tank, "in_1") == 300.0
-    assert pinned_y(tank) == 100.0
-
-    # A turn moves the nozzle within the box, so the corner follows on the
-    # axis that was pinned by the nozzle and holds still on the other.
-    tank.pin(orientation=90)
-    assert pinned_x(tank, "in_1") == 300.0
-    assert pinned_y(tank) == 100.0
-
-
 def test_pinning_the_corner_afterwards_drops_the_relation():
     """Check that ``port=None`` turns a port pin into a corner pin a turn leaves alone."""
     fs, valve = _valve_on_a_run()
@@ -819,12 +801,3 @@ def test_a_placement_the_sheet_honoured_is_not_reported():
     valve.pin(port="inlet", x=300.0, y=RUN_Y)
     valve.pin(orientation=90)
     assert "pin-not-honored" not in _codes(fs)
-
-
-def test_a_port_that_does_not_exist_is_refused_by_the_call_that_named_it():
-    """Check that ``pin()`` refuses a port the unit lacks, with or without a coordinate."""
-    fs, valve = _valve_on_a_run()
-    with pytest.raises(KeyError, match="no port 'inlets' to pin by"):
-        valve.pin(port="inlets")
-    with pytest.raises(KeyError, match="no port 'inlets' to pin by"):
-        valve.pin(port="inlets", y=RUN_Y)

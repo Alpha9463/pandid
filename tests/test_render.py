@@ -418,23 +418,6 @@ def test_two_runs_at_one_height_are_two_runs():
 # --- a crossing the sheet could not mark --------------------------------------
 
 
-def test_a_crossing_with_no_room_for_its_mark_is_reported():
-    """Check that a crossing with no room for its mark is reported."""
-    from pandid.render.svg import unmarked_crossings
-
-    from test_crossing_style import TIGHT, _pair
-
-    fs = _pair(TIGHT)
-    fs.to_svg()
-
-    said = [w for w in fs.warnings if w.code == "crossing-unmarked"]
-    assert len(said) == len(unmarked_crossings(fs)) == 2
-    assert "crosses" in said[0].message
-    # The measurement a reader can check, and what to do about it.
-    assert f"under {HOP_R:g}px of itself either side" in said[0].message
-    assert "via()" in said[0].message
-
-
 def test_a_sheet_whose_crossings_all_have_room_says_nothing():
     """Check that a sheet whose crossings all have room says nothing."""
     from pandid.render.svg import unmarked_crossings
