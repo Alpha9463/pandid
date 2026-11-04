@@ -619,8 +619,9 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
     """Return whether proposed frames keep clear of other units.
 
     Each frame keeps :data:`ALONG` along the pipe or :data:`GAP` across
-    it from every obstacle and zone. Each signal exit stays off
-    obstacles, zones, end units and pipes.
+    it from every obstacle and zone. Each signal exit keeps
+    :data:`~pandid.routing.visibility.MARGIN` from obstacles, zones and
+    end units, and stays off pipes.
 
     Parameters
     ----------

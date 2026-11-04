@@ -1192,7 +1192,8 @@ class Flowsheet:
         at : float, str or None, optional
             Deprecated; use ``face``.
         face : str or None, optional
-            Face of the element to hang the balloon from; default ``"E"``.
+            Face of the element to hang the balloon from, as for
+            :meth:`~pandid.units.Instrument.attach`.
         offset : float, default=46.0
             Distance from the tap to the balloon centre.
         angle : float, default=90.0
