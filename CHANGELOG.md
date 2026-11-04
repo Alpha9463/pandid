@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- **`routing.Router`, `DefaultRouter(recover_exits=)` and
+  `Stream.line_components()` (#646).** Pass `fs.route()` any object with a
+  `route(fs)` method, build `DefaultRouter()`, which always recovers a blocked
+  exit, and read a stream's `size`, `service` and other fields directly.
 - **`PLACES` and `LAYOUT_CONFIDENCE` on a unit class (#564).** Layout no
   longer reads them, and a subclass that sets them is reported. Point a
   nozzle with `nozzle(port, face)` or `pin(orientation=..., mirrored=...)`.
