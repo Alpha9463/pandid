@@ -113,13 +113,11 @@ def measure_final(fs: Flowsheet) -> Quality:
         if route.manual:
             continue
         source, dest = stream.source.owner, stream.dest.owner
-        if source is None or dest is None or source.frame is None or dest.frame is None:
+        if source.frame is None or dest.frame is None:
             continue
         x1, y1, face1 = port_anchor(source, source.frame, stream.source.name)
         x2, y2, face2 = port_anchor(dest, dest.frame, stream.dest.name)
-        minimum = min_bends((x1, y1), face1, (x2, y2), face2)
-        if minimum is not None:
-            excess += max(0, actual - minimum)
+        excess += max(0, actual - min_bends((x1, y1), face1, (x2, y2), face2))
 
     hard = (
         sum(issue.severity == "error" for issue in issues),

@@ -498,7 +498,7 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
         if stream is None:
             continue
         peer = stream.dest.owner if stream.source.owner is inst else stream.source.owner
-        if peer is not None and peer is not inst and peer.frame is not None:
+        if peer is not inst and peer.frame is not None:
             points.append((peer.frame.cx, peer.frame.cy))
     if points:
         return (sum(p[0] for p in points) / len(points),

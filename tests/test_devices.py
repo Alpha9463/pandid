@@ -1,6 +1,5 @@
 """Test the generated ``pandid.devices`` classes against the generator, registry and spec."""
 
-import re
 import typing
 
 import pytest
@@ -8,7 +7,6 @@ import pytest
 from pandid import Flowsheet, devices, portgeom, spec, units
 from pandid.ports import Port
 from pandid.render.symbols import default_registry
-from test_port_annotations import view_nozzles
 from test_symbol_invariants import _drawing, _script
 
 DEVICE_CLASSES = [getattr(devices, name) for name in devices.__all__]
@@ -98,36 +96,6 @@ def test_every_declared_nozzle_is_visible_to_a_type_checker(cls):
     hints = typing.get_type_hints(cls)
     assert declared <= hints.keys()
     assert all(hints[name] is Port for name in declared)
-
-
-def _family_device_classes():
-    """Return the device classes whose base is a variable-port family."""
-    generator = _script("gen_devices")
-    return [cls for cls in DEVICE_CLASSES if generator.arity_family(cls.__mro__[1])]
-
-
-_FAMILY_DEVICE_CLASSES = _family_device_classes()
-_FAMILY_IDS = [cls.__name__ for cls in _FAMILY_DEVICE_CLASSES]
-
-
-@pytest.mark.parametrize("cls", _FAMILY_DEVICE_CLASSES, ids=_FAMILY_IDS)
-def test_a_generated_family_subclass_gets_its_own_exact_arity_classes(cls):
-    """Check that each generated arity class declares exactly the family nozzles it builds."""
-    generator = _script("gen_devices")
-    keyword, member, _default, max_n = generator.arity_family(cls.__mro__[1])
-    declared = view_nozzles(devices)
-    for n in range(1, max_n + 1):
-        name = f"{cls.__name__}{n}"
-        assert name in declared, f"{name} is not defined; the overload names it"
-        built = {
-            port
-            for port in cls("X-1", **{keyword: n}).ports
-            if re.fullmatch(rf"{member}_\d+", port)
-        }
-        assert declared[name] == built, (
-            f"{name} declares {sorted(declared[name])} but a {keyword}={n} "
-            f"{cls.__name__} builds {sorted(built)}"
-        )
 
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)

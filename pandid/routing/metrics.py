@@ -10,27 +10,25 @@ from pandid.routing.visibility import TRAVEL
 Point = tuple[float, float]
 
 
-def min_bends(a: Point, dir_a: Optional[str], b: Point, dir_b: Optional[str]) -> Optional[int]:
+def min_bends(a: Point, dir_a: str, b: Point, dir_b: str) -> int:
     """Return the fewest bends between two ports, aligned within 1e-6.
 
     Parameters
     ----------
     a : Point
         Source port anchor.
-    dir_a : str or None
-        Source port's outward direction: N, S, E, W or None.
+    dir_a : str
+        Source port's outward direction: N, S, E or W.
     b : Point
         Destination port anchor.
-    dir_b : str or None
-        Destination port's outward direction: N, S, E, W or None.
+    dir_b : str
+        Destination port's outward direction: N, S, E or W.
 
     Returns
     -------
-    int or None
-        Fewest bends, or None if either direction is unknown.
+    int
+        Fewest bends.
     """
-    if dir_a is None or dir_b is None:
-        return None
     s_axis, s_sign = TRAVEL[dir_a]
     t_dir = OPPOSITE[dir_b]
     t_axis, t_sign = TRAVEL[t_dir]

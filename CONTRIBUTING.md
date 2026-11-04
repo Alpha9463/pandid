@@ -302,11 +302,11 @@ nozzles that do own a face, and equipment nozzles are never faceless.
 ## 3. Goldens: a changed golden means changed rendering
 
 `tests/test_golden.py` renders five representative sheets and compares each
-with its committed `docs/gallery/<sheet>.svg`, after `normalize` in
-`tests/_svg_compare.py` sorts `<defs>` and empties the fenced provenance, which
-names the package version. After an intentional rendering change, regenerate
-the gallery with `python scripts/gallery.py`, inspect `git diff docs/gallery/`,
-and explain every drawing change in the commit or PR description.
+with its committed `docs/gallery/<sheet>.svg`, apart from the fenced
+provenance, which names the package version. After an intentional rendering
+change, regenerate the gallery with `python scripts/gallery.py`, inspect
+`git diff docs/gallery/`, and explain every drawing change in the commit or PR
+description.
 
 ## 4. Port geometry goes through `pandid/portgeom.py`
 

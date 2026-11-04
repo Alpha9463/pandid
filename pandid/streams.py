@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pandid._checks import check_real
+from pandid.deprecation import Deprecation
 from pandid.geometry import Route
 
 if TYPE_CHECKING:
@@ -21,6 +22,13 @@ if TYPE_CHECKING:
 
 #: Line-number components, in conventional order.
 LINE_NUMBER_FIELDS = ("size", "schedule", "service", "sequence", "spec", "insulation")
+
+#: Deprecation of Stream.line_components().
+_LINE_COMPONENTS = Deprecation(
+    what="Stream.line_components()",
+    instead="the stream's size, schedule, service, sequence, spec and insulation",
+    removed_in="0.1.7",
+)
 
 #: Kinds that carry process fluid or duty.
 PROCESS_KINDS = frozenset({"material", "energy"})
@@ -251,7 +259,13 @@ class Stream:
         -------
         dict[str, str]
             Value per field in :data:`LINE_NUMBER_FIELDS`.
+
+        Warns
+        -----
+        DeprecationWarning
+            Always.
         """
+        _LINE_COMPONENTS.warn(self)
         return {f: "" if getattr(self, f) is None else str(getattr(self, f))
                 for f in LINE_NUMBER_FIELDS}
 

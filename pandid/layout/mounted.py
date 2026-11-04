@@ -997,7 +997,6 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         True if every element found clear room.
     """
     source, dest = run.source.owner, run.dest.owner
-    assert source is not None and dest is not None
     assert source.frame is not None and dest.frame is not None
     legs: list[Leg] = list(zip(points, points[1:]))
     if not legs:
