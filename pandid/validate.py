@@ -22,6 +22,10 @@ _TOL = 1.0  # tolerance in px
 #: Distance in px a drawn coordinate may sit from its pin.
 _PIN_TOL = 0.05
 
+#: Distance in px within which a line lies on a box edge: one main-flow
+#: line width.
+_EDGE_TOL = 2.0
+
 #: ``(kind, variant)`` pairs whose nozzles step in height by design.
 OFFSET_BY_DESIGN = frozenset({
     ("reducer", "eccentric"),
@@ -286,6 +290,33 @@ def _pierced_end(path, ends):
             if k not in clear and segment_crosses_box(path[k], path[k + 1], end[2]):
                 return end
     return None
+
+
+def _along_edge(a, b, box) -> bool:
+    """Return whether an orthogonal segment runs along an edge of a box.
+
+    Parameters
+    ----------
+    a, b : tuple[float, float]
+        Segment ends.
+    box : tuple[float, float, float, float]
+        Box as left, top, right, bottom.
+
+    Returns
+    -------
+    bool
+        True if the segment lies within :data:`_EDGE_TOL` of an edge for
+        more than ``_BODY_TOL`` of that edge's length.
+    """
+    x0, y0, x1, y1 = box
+    if abs(a[1] - b[1]) < _SQUARE_TOL:
+        at, lo, hi, edges, span = a[1], min(a[0], b[0]), max(a[0], b[0]), (y0, y1), (x0, x1)
+    elif abs(a[0] - b[0]) < _SQUARE_TOL:
+        at, lo, hi, edges, span = a[0], min(a[1], b[1]), max(a[1], b[1]), (x0, x1), (y0, y1)
+    else:
+        return False
+    return (any(abs(at - e) < _EDGE_TOL for e in edges)
+            and min(hi, span[1]) - max(lo, span[0]) > _BODY_TOL)
 
 
 def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
@@ -699,6 +730,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, pin_intent, port_faces,
                                  port_point, resolve_port, unit_box)
+    from pandid.render.svg import crossings, stream_polyline
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
                                        label_span, wears_arrowhead)
@@ -932,6 +964,14 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                                               f"stream {s.name} crosses {u.name}"))
                         break
 
+            # Soft: a route drawn on the edge of a unit's box.
+            for u, box, host in hosted:
+                if u is src_u or u is dst_u or host is s:
+                    continue
+                if any(_along_edge(a, b, box) for a, b in zip(pts, pts[1:])):
+                    warnings.append(Issue("warning", "route-along-unit",
+                                          f"stream {s.name} runs along the edge of {u.name}"))
+
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
             ends = [(u, name, unit_box(u, u.frame), resolve_port(u, u.frame, name).face)
@@ -988,6 +1028,19 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 warnings.append(Issue("warning", "route-detour",
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
+
+        # Soft: a crossing within an arrowhead length of either line's nozzle.
+        lines = {n: stream_polyline(s) for n, s in enumerate(drawn)}
+        for n, _, m, x, y, _ in crossings(lines, "vertical"):
+            d, k, port = min(((math.dist((x, y), lines[k][i]), k, port)
+                              for k in (n, m)
+                              for i, port in ((0, drawn[k].source), (-1, drawn[k].dest))),
+                             key=lambda near: near[0])
+            if d <= ARROWHEAD:
+                warnings.append(Issue(
+                    "warning", "route-crosses-near-nozzle",
+                    f"stream {drawn[m if k == n else n].name} crosses {drawn[k].name} "
+                    f"{d:.1f}px from {port.owner.name}.{port.name}"))
 
         # Soft: a horizontal run whose ends nearly share an elevation.
         for s in drawn:

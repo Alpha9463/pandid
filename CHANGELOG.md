@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Devices and valve stations go in a line with `on=` (#564).** Type
   `fs.add(Valve("HV-101"), on=line)` or `fs.add_valve_station("CV-101",
   on=line)`, with `at=` for a rough position along the line.
+- **`validate()` reports lines that touch (#621).** `route-crosses-near-nozzle`
+  is a crossing within an arrowhead length of a nozzle and `route-along-unit`
+  a line drawn on a unit's box edge; the router also counts instrument tap
+  lines as crossings.
 
 ### Changed
 
@@ -116,6 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Hanging a controller off its actuator no longer takes a tap off its line
+  (#636).** Where hanging leaves a balloon's tap off its line, `route()` places
+  the sheet as if no controller could hang.
 - **A balloon hung from another balloon no longer sits on the line it taps
   (#619).** After the controller-hanging attempt, `route()` tries keeping it
   clear of that line, and keeps the result only if no balloon's tap leaves its
