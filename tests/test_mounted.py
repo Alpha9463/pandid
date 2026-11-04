@@ -199,26 +199,38 @@ def test_a_control_valve_sits_on_its_pipe_without_a_jog(
     assert measure_final(fs).bends == 0
 
 
-@pytest.mark.parametrize("shift", [0.0, 25.7, 26.3, 27.8])
-def test_a_valve_set_on_a_shifted_level_line_adds_no_bends(shift: float) -> None:
-    """Check that a valve set on a level line shifted down the sheet adds no bends.
+@pytest.mark.parametrize(
+    ("upright", "at"),
+    [(False, 100.0), (False, 125.7), (False, 126.3), (False, 127.8), (True, -128.0)],
+)
+def test_a_valve_set_on_a_shifted_line_adds_no_bends(upright: bool, at: float) -> None:
+    """Check that a valve set on a line shifted across the sheet adds no bends.
 
     Parameters
     ----------
-    shift : float
-        Distance the whole sheet is shifted down.
+    upright : bool
+        Run the line down the sheet between two turned valves, else across it
+        between flags.
+    at : float
+        Coordinate the line runs at.
     """
     fs = Flowsheet("Shifted")
-    feed = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=100 + shift)
-    product = fs.add(Product("Product")).pin(port="inlet", x=500, y=100 + shift)
-    line = fs.connect(feed.outlet, product.inlet)
-    valve = fs.add(ControlValve("FV-101"), on=line)
+    if upright:
+        start = fs.add(Valve("A")).pin(orientation=90).pin(port="outlet", x=at, y=100)
+        end = fs.add(Valve("B")).pin(orientation=90).pin(port="inlet", x=at, y=500)
+        valve = ControlValve("CV", width=27.3, height=31.7).pin(orientation=90)
+    else:
+        start = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=at)
+        end = fs.add(Product("Product")).pin(port="inlet", x=500, y=at)
+        valve = ControlValve("FV-101")
+    fs.add(valve, on=fs.connect(start.outlet, end.inlet))
 
     fs.route()
-    assert feed.frame is not None and valve.frame is not None
-    pipe_y = port_point(feed, feed.frame, "outlet")[1]
-    assert port_point(valve, valve.frame, "inlet")[1] == pipe_y
-    assert port_point(valve, valve.frame, "outlet")[1] == pipe_y
+    assert start.frame is not None and valve.frame is not None
+    across = 0 if upright else 1
+    pipe = port_point(start, start.frame, "outlet")[across]
+    assert port_point(valve, valve.frame, "inlet")[across] == pipe
+    assert port_point(valve, valve.frame, "outlet")[across] == pipe
     assert measure_final(fs).excess_bends == 0
 
 

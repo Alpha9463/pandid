@@ -467,12 +467,18 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
     fits = []
     for turn, flip in poses:
         candidate = _candidate(unit, point, turn, flip)
-        # Set the frame from the inlet's offset in one step so the inlet lands on the leg.
-        # shortcut: a few leg coordinates, more below zero, admit no frame that lands it exactly;
-        # snap near-equal ends in the router if those jogs show.
+        inlet = port_point(unit, candidate, "inlet")
+        shift = ordinate - inlet[across]
+        shifted = replace(candidate, x=candidate.x + (0.0 if level else shift),
+                          y=candidate.y + (shift if level else 0.0))
         offset = port_point(unit, replace(candidate, x=0.0, y=0.0), "inlet")
-        candidate = (replace(candidate, y=ordinate - offset[1]) if level
-                     else replace(candidate, x=ordinate - offset[0]))
+        direct = (replace(candidate, y=ordinate - offset[1]) if level
+                  else replace(candidate, x=ordinate - offset[0]))
+        # Each rounds differently; keep the inlet nearer the leg, the shifted frame on a tie.
+        # shortcut: some leg coordinates admit no frame that lands it exactly;
+        # snap near-equal ends in the router if those jogs show.
+        candidate = min((shifted, direct),
+                        key=lambda c: abs(port_point(unit, c, "inlet")[across] - ordinate))
         # Keep a pose with both nozzles on the leg's line, in flow order.
         inlet = port_point(unit, candidate, "inlet")
         outlet = port_point(unit, candidate, "outlet")
