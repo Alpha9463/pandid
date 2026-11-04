@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`help(pandid)` is a guide to using the package (#174).** It gives the
   model, a runnable example, port names, common mistakes and how to check a
   sheet; `pandid --help`, `help(pandid.Flowsheet)` and `AGENTS.md` point to it.
+- **`validate()` reports material that crosses an exchanger's sides (#661).**
+  `exchanger-sides-crossed` warns when a line enters one side, such as
+  `shell_in`, and leaves the other, such as `tube_out`, and names the
+  `connect()` that keeps it on one side.
 
 ### Changed
 
