@@ -1097,7 +1097,8 @@ class DrawioRenderer:
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(LineWeight.EQUIPMENT.width):g}"]
 
-    def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
+    def _label(self, u, fit: "_Fit", tags: "_Tags",
+               wraps: bool) -> "tuple[str, list[str], tuple]":
         """Return a unit's label text, placing keys and tag offset.
 
         An instrument's tag goes inside its balloon; other tags go on
@@ -1112,6 +1113,8 @@ class DrawioRenderer:
             Drawing fit.
         tags : _Tags
             Tag placements from the tag pass.
+        wraps : bool
+            Whether draw.io wraps the label to the cell's width.
 
         Returns
         -------
@@ -1153,8 +1156,11 @@ class DrawioRenderer:
         side, dx, dy, near = tags.at.get(id(u), (
             (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0, None))
         offset = (fit.length(dx), fit.length(dy))
-        if near is not None and len(lines) == 1:
-            # A lone tag sits on its halo; a stacked label keeps draw.io's spot.
+        x0, _y0, x1, _y1 = fit.box(self._cell_box(u))
+        one_line = len(lines) == 1 and not (
+            wraps and F.text_width(lines[0], fit.length(_TAG_TYPE)) > x1 - x0 - 2 * _TEXT_INSET)
+        if near is not None and one_line:
+            # A one-line tag sits on its halo; any other label keeps draw.io's spot.
             gx, gy = _SIDE_LABEL_GAP[side]
             offset = (fit.length(near[0]) - gx, fit.length(near[1]) - gy)
         # No cap: a side label sits outside the cell.
@@ -1209,8 +1215,9 @@ class DrawioRenderer:
         self._report_reshape(u, sym, approx)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
-        text, label_keys, (dx, dy) = self._label(u, fit, tags)
-        style = ";".join(["html=1", *self._shape(u, sym, fit), *label_keys, *placement]) + ";"
+        shape = self._shape(u, sym, fit)
+        text, label_keys, (dx, dy) = self._label(u, fit, tags, "whiteSpace=wrap" in shape)
+        style = ";".join(["html=1", *shape, *label_keys, *placement]) + ";"
         geometry = (f'          <mxGeometry x="{fmt(x0, 2)}" y="{fmt(y0, 2)}" '
                     f'width="{fmt(x1 - x0, 2)}" height="{fmt(y1 - y0, 2)}" as="geometry"')
         body = ([geometry + ">",

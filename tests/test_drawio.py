@@ -2981,6 +2981,22 @@ def test_an_equipment_tag_is_written_inside_its_halo_on_the_sheet(
     assert not adrift, f"{stem}: tags off their halos {adrift}"
 
 
+def test_a_tag_draw_io_wraps_keeps_off_the_unit_above():
+    """Keep a tag that wraps to two lines in its cell clear of the unit above it."""
+    fs = Flowsheet("wrapped tag")
+    fs.add(pandid.Block("U-1", width=60, height=40)).pin(x=100, y=100)
+    fs.add(pandid.Mixer("M-101 A/B", label_pos="top")).pin(x=115, y=172)
+    cells = _drawio_cells_from_document(fs.to_drawio())
+    assert "whiteSpace=wrap" in (cells["u1"].get("style") or "")
+    geometry = cells["u1"].find("mxGeometry")
+    assert geometry is not None
+    offset = geometry.find("mxPoint[@as='offset']")
+    # Two wrapped lines rise from draw.io's own spot, three above the cell.
+    top = float(geometry.get("y", 0)) - 3.0 - 2 * 1.2 * 12.0
+    top += float(offset.get("y", 0)) if offset is not None else 0.0
+    assert top >= 140.0, f"the wrapped tag reaches up to {top:.1f}, into U-1"
+
+
 def test_a_tag_stacked_with_fail_letters_keeps_off_the_unit_above():
     """Keep a two-line tag label clear of the unit above its symbol."""
     fs = Flowsheet("stacked equipment")
