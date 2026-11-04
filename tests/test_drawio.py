@@ -1345,7 +1345,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
         Shared default SVG and Draw.io outputs.
     """
     from pandid.render.drawio import _TEXT_INSET
-    from pandid.render.svg import quadrant_labels, sheet_connections
+    from pandid.render.svg import quadrant_labels
 
     written, counted = {}, {}
     for stem in INSTRUMENT_CODE_SHEETS:
@@ -1353,8 +1353,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
         svg = rendered_gallery[stem].svg
         cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
-        joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
-        codes = quadrant_labels(fs, joints, "vertical")
+        codes = quadrant_labels(fs, "vertical")
         written[stem] = {item[5] for item in codes}
         counted[stem] = len(codes)
         for n, (lx, ly, anchor, _baseline, _lpos, text) in enumerate(codes):

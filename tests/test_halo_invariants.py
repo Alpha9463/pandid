@@ -1,5 +1,6 @@
 """Check what label halos, flange marks and letter codes may cover on every corpus sheet."""
 
+import html
 import math
 import re
 from typing import NamedTuple
@@ -112,7 +113,7 @@ def drawn(settled_gallery):
         else:
             fs, kwargs = build()
         svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS})
-        out[name] = Drawn(fs, _halos(svg), _flange_bars(fs, kwargs), _code_boxes(fs, kwargs))
+        out[name] = Drawn(fs, _halos(svg), _flange_bars(fs, kwargs), _code_boxes(svg, fs))
     return out
 
 
@@ -247,13 +248,23 @@ def test_the_corpus_has_flange_marks_to_check(drawn):
 # A letter code clears every line, pipe and signal alike, and the label passes dodge it.
 
 
-def _code_boxes(fs, kwargs) -> "list[tuple[float, float, float, float]]":
-    """Return the halo of every letter code written outside a symbol on this sheet."""
-    from pandid.render.svg import _unit_label_box, quadrant_labels, sheet_connections
+_LABEL = re.compile(
+    r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />'
+    r"\s*<text [^>]*>([^<]*)</text>"
+)
 
-    joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
-    codes = quadrant_labels(fs, joints, "vertical")
-    return [b for b in map(_unit_label_box, codes) if b is not None]
+
+def _code_boxes(svg: str, fs) -> "list[tuple[float, float, float, float]]":
+    """Return the halo of every letter code the sheet writes outside a symbol."""
+    written = {
+        code for u in fs.units for codes in getattr(u, "quadrants", {}).values() for code in codes
+    }
+    group = svg.split('<g id="unit_labels">', 1)[-1].split("</g>", 1)[0]
+    return [
+        (float(x), float(y), float(x) + float(w), float(y) + float(h))
+        for x, y, w, h, text in _LABEL.findall(group)
+        if html.unescape(text) in written
+    ]
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
@@ -327,11 +338,19 @@ def _codes_beside_another_balloon() -> "tuple[Flowsheet, dict]":
     return fs, kwargs
 
 
+def _codes_beside_a_closed_valve() -> "tuple[Flowsheet, dict]":
+    """Build a flanged sheet whose codes could leave a flange only for a valve's NC."""
+    fs, kwargs = CORPUS["codes_beside_a_flange"]()
+    fs.add(U.Valve("HV-3", variant="butterfly", normal_position="closed")).pin(x=20, y=144)
+    return fs, kwargs
+
+
 #: Flanged sheets where a letter code by a flange mark has nowhere better to go.
 CROWDED_CODES = {
     "a_flange_and_a_line": _codes_between_a_flange_and_a_line,
     "a_fixed_tag": _codes_beside_a_fixed_tag,
     "another_balloon": _codes_beside_another_balloon,
+    "a_closed_valve": _codes_beside_a_closed_valve,
 }
 
 
@@ -340,7 +359,7 @@ def test_a_letter_code_by_a_flange_mark_lands_on_no_line_or_label(build):
     """Check that a letter code by a flange mark lands on no line and no other label."""
     fs, kwargs = build()
     svg = fs.to_svg(**kwargs)
-    codes = _code_boxes(fs, kwargs)
+    codes = _code_boxes(svg, fs)
     labels = [
         h
         for h in _halos(svg)

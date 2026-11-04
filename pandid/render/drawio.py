@@ -26,7 +26,7 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
                                fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag, diagram_plan, enclosure_shape,
                                label_findings,
-                               draws_arrowheads, flange_marks, impulse_tap,
+                               draws_arrowheads, drawn_codes, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines, tap_route)
 from pandid.render.symbols import (ARROWHEAD, _BODY_INK, TRAP_BODY_D, TRAP_LEAD, TRAP_W,
@@ -590,12 +590,9 @@ class _Tags(NamedTuple):
         ``id(unit)`` -> ``(side, dx, dy)``, offset from the side's spot.
     plates : list
         Opaque boxes of tags and ``NC``/fail letters.
-    codes : list
-        Quadrant label items.
     """
     at: dict
     plates: list
-    codes: list
 
 
 def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
@@ -615,7 +612,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     Returns
     -------
     _Tags
-        Tag placements, plates and quadrant codes.
+        Tag placements and plates.
     """
     from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
                                    flange_boxes, quadrant_labels)
@@ -625,7 +622,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
     # Reserve the quadrant codes' boxes before placing tags.
-    codes = quadrant_labels(fs, joints, direction)
+    codes = quadrant_labels(fs, direction)
     symbols += [(None, b) for b in map(_unit_label_box, codes) if b is not None]
     at: dict = {}
     items: list = []
@@ -649,8 +646,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
         if letters:
             items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
                                                 ink, symbols))
-    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None],
-                 codes)
+    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None])
 
 
 def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
@@ -858,7 +854,7 @@ class DrawioRenderer:
                                 crossing_style))
         body.extend(self._taps(fs, fit))
         body.extend(balloons)
-        for n, code in enumerate(tags.codes):
+        for n, code in enumerate(drawn_codes(fs, joints, jump_direction, tags.plates)):
             body.extend(_quadrant_cell(f"q{n}", code, fit))
 
         return self._document(fs, sheet, frame, body)
@@ -1477,7 +1473,8 @@ class DrawioRenderer:
             Cell XML lines: edges in hop order, then number enclosures.
         """
         index = {id(u): i for i, u in enumerate(fs.units)}
-        placed = stream_numbers(fs, list(tags.plates), joints, direction)
+        # The numbers' boxes join the tag plates, which the codes keep off.
+        placed = stream_numbers(fs, tags.plates, joints, direction)
         numbers = {number.name: number for number in placed}
         shape = enclosure_shape(fs)
         self._findings += label_findings(fs, shape, placed, direction)

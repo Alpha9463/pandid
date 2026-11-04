@@ -361,18 +361,13 @@ _QUADRANT_PITCH = 15.0
 _QUADRANT_REACH = 60.0
 
 
-def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
+def quadrant_labels(fs, direction: str) -> list:
     """Return every letter code written outside a symbol, placed.
 
     Parameters
     ----------
     fs : Flowsheet
         Laid-out and routed sheet.
-    joints : str or None
-        :func:`sheet_connections` result. Codes are placed clear of the
-        sheet's symbols, lines and earlier codes; then a pair on one of its
-        flange marks moves to a spot clear of those, every other code, the
-        flange marks and the tags set on a side, if there is one.
     direction : str
         ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
 
@@ -381,6 +376,69 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
     list
         Label items ``(x, y, anchor, baseline, lpos, text)``.
     """
+    return [item for pair in _quadrant_pairs(fs, direction) for item in pair[3]]
+
+
+def drawn_codes(fs, joints: "str | None", direction: str, labels) -> list:
+    """Return the letter codes as drawn, after every other label is placed.
+
+    A pair from :func:`quadrant_labels` on a flange mark moves to a spot
+    clear of the symbols, lines, flange marks, every other code and
+    ``labels``; with no such spot it stays.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    joints : str or None
+        :func:`sheet_connections` result.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+    labels : Sequence[tuple[float, float, float, float]]
+        Every other label's final box.
+
+    Returns
+    -------
+    list
+        Label items ``(x, y, anchor, baseline, lpos, text)``.
+    """
+    from pandid.portgeom import unit_box
+
+    pairs = _quadrant_pairs(fs, direction)
+    flanges = [_obstacle(b) for b in flange_boxes(fs, joints)]
+    if pairs and flanges:
+        ink = _ink(fs, direction)
+        held = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+        held += flanges + [_obstacle(b) for b in labels]
+        for pair in pairs:
+            box, codes, prefers, placed = pair
+            if not any(boxes_overlap(b, f) for b in map(_unit_label_box, placed)
+                       if b is not None for f in flanges):
+                continue
+            others = [b for other in pairs if other is not pair
+                      for b in map(_unit_label_box, other[3]) if b is not None]
+            damage, moved = _quadrant_side(box, codes, prefers, ink, held + others)
+            if damage == (0, 0, 0):
+                pair[3] = moved
+    return [item for pair in pairs for item in pair[3]]
+
+
+def _quadrant_pairs(fs, direction: str) -> list:
+    """Return every symbol's pairs of letter codes, placed in turn.
+
+    Parameters
+    ----------
+    fs : Flowsheet
+        Laid-out and routed sheet.
+    direction : str
+        ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
+
+    Returns
+    -------
+    list
+        ``[box, codes, prefers, items]`` for each pair: the symbol box, the
+        codes by quadrant, the preferred side and the placed label items.
+    """
     from pandid.portgeom import unit_box
 
     annotated = [u for u in fs.units
@@ -388,9 +446,8 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
     if not annotated:
         return []
     ink = _ink(fs, direction)
-    units = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
 
-    symbols = list(units)
     pairs: list = []
     for u in annotated:
         box = unit_box(u, u.frame)
@@ -402,27 +459,7 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
             pairs.append([box, codes, prefers, placed])
             # Placed codes become obstacles for later pairs.
             symbols += [b for b in map(_unit_label_box, placed) if b is not None]
-
-    # Then move a pair off a flange mark, only to a spot clear of everything else.
-    flanges = [_obstacle(b) for b in flange_boxes(fs, joints)]
-    # A tag on a side its author set does not move out of a code's way.
-    fixed = [(*SvgRenderer._label_place(u.frame.label_pos, u.frame.x, u.frame.y,
-                                        u.frame.w, u.frame.h), u.frame.label_pos, u.tag)
-             for u in fs.units
-             if u.frame is not None and u.tag and getattr(u, "label_pos", None)
-             and u.kind not in ("feed", "product", "instrument")]
-    held = units + flanges + [_obstacle(b) for b in map(_unit_label_box, fixed) if b is not None]
-    for pair in pairs:
-        box, codes, prefers, placed = pair
-        if not any(boxes_overlap(b, f) for b in map(_unit_label_box, placed)
-                   if b is not None for f in flanges):
-            continue
-        others = [b for other in pairs if other is not pair
-                  for b in map(_unit_label_box, other[3]) if b is not None]
-        damage, moved = _quadrant_side(box, codes, prefers, ink, held + others)
-        if damage == (0, 0, 0):
-            pair[3] = moved
-    return [item for pair in pairs for item in pair[3]]
+    return pairs
 
 
 def _quadrant_side(box, codes, prefers: int, ink, symbols):
@@ -1316,7 +1353,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     ]
 
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
-    symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, joints, direction))
+    symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
                 if b is not None]
 
     # One number per run name, through inline valves and fittings.
@@ -3594,11 +3631,10 @@ class SvgRenderer:
         unit_labels: list = []
         balloons: list = []
         ink = _ink(fs, jump_direction)
-        quadrants = quadrant_labels(fs, joints, jump_direction)
+        quadrants = quadrant_labels(fs, jump_direction)
         drawing: list[str] = []
-        # Opaque plates, collected for the debug overlay.
-        plates: "list[tuple[float, float, float, float]] | None" = (
-            [] if grid is not None else None)
+        # Opaque plates, for the debug overlay and the codes drawn last.
+        plates: "list[tuple[float, float, float, float]]" = []
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints,
                                         quadrants))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
@@ -3610,12 +3646,12 @@ class SvgRenderer:
             drawing.extend(balloons)
             drawing.append('  </g>')
         # Tags and quadrant codes go last, on halos, over every line.
-        drawing.extend(self._draw_unit_labels(unit_labels + quadrants))
+        drawing.extend(self._draw_unit_labels(
+            unit_labels + drawn_codes(fs, joints, jump_direction, plates)))
         fs.warnings = fs.warnings + self._findings
 
         # The debug overlay is drawn first, under the sheet's ink.
         if grid is not None:
-            assert plates is not None
             drawing[:0] = _debug.overlay(
                 fs, (dx0, dy0, dx1, dy1), grid,
                 _fit_scale(dx1 - dx0, dy1 - dy0, free) if free is not None else 1.0,
@@ -4048,8 +4084,7 @@ class SvgRenderer:
                        f'dominant-baseline="middle">{escaped(bot)}</text>')
         return out
 
-    @staticmethod
-    def _label_place(lpos: str, x: float, y: float, u_width: float,
+    def _label_place(self, lpos: str, x: float, y: float, u_width: float,
                      u_height: float) -> "tuple[float, float, str, str]":
         """Return a label's anchor and text alignment for one side.
 
