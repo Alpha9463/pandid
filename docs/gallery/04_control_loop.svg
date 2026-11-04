@@ -76,11 +76,11 @@
     <line x1="277.2" y1="168.6" x2="287.2" y2="174.6" stroke="black" stroke-width="1" />
     <path d="M 451.0,337.0 L 451.0,410.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 473.0,432.0 L 652.2,432.0 L 652.2,207.4" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <rect x="135.8" y="188.5" width="18.4" height="13.0" fill="white" />
+    <rect x="135.9" y="188.5" width="18.2" height="13.0" fill="white" />
     <text x="145.0" y="195.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
-    <rect x="551.8" y="188.5" width="18.4" height="13.0" fill="white" />
+    <rect x="551.9" y="188.5" width="18.2" height="13.0" fill="white" />
     <text x="561.0" y="195.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
-    <rect x="444.5" y="101.8" width="13.0" height="18.4" fill="white" />
+    <rect x="444.5" y="101.9" width="13.0" height="18.2" fill="white" />
     <text x="451.0" y="111.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 451.0, 111.0)">S3</text>
   </g>
   <g id="instrument_taps">
