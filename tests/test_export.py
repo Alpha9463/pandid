@@ -318,8 +318,8 @@ def test_the_written_out_metrics_are_the_ones_the_backend_will_draw_with():
     """Match export.py's Helvetica metrics to ReportLab's."""
     from reportlab.pdfbase import pdfmetrics
 
-    for bold, face in export._FACES.items():
-        assert pdfmetrics.getAscentDescent(face, 1.0) == pytest.approx(export._HELVETICA_EM), bold
+    for face in ("Helvetica", "Helvetica-Bold"):
+        assert pdfmetrics.getAscentDescent(face, 1.0) == pytest.approx(export._HELVETICA_EM), face
 
 
 # --- the files that come out --------------------------------------------------
