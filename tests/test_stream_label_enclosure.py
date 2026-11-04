@@ -467,9 +467,9 @@ def test_the_sheet_draws_a_bare_label_s_leader_over_its_halo(settled_gallery):
 
 # Label plates and crossing streams.
 
-#: Gallery sheet and label with no safe opaque plate, as the sheet is laid out.
-PLATELESS_SHEET = "15_condensing_turbine"
-PLATELESS = "S13"
+#: Gallery sheet and labels with no safe opaque plate, as the sheet is laid out.
+PLATELESS_SHEET = "14_tank_farm"
+PLATELESS = {"MS-601-200-40-CS", "ETH-607-80-40-SS"}
 
 
 def foreign(fs, name) -> list:
@@ -584,7 +584,7 @@ def test_a_label_with_nowhere_clear_for_its_plate_lays_none(shape, settled_galle
     fs.stream_labels.enclosure = shape
     svg = fs.to_svg(**kwargs)
     placed = placed_numbers(fs, **kwargs)
-    assert [n.name for n in placed if n.words is None] == [PLATELESS]
+    assert {n.name for n in placed if n.words is None} == PLATELESS
 
     for number in placed:
         w, h = halo(number.name)
@@ -609,13 +609,15 @@ def test_the_author_is_told_when_the_number_itself_is_written_across_a_run(shape
     fs.stream_labels.enclosure = shape
     fs.to_svg(**kwargs)
     said = {i.message.split("'s ")[0]: i.message for i in findings(fs, {"label-over-line"})}
-    assert set(said) == {PLATELESS}, "only the plateless label is written across"
-    assert "is written across" in said[PLATELESS]
-    # The finding names each crossing stream.
-    crossed = next(n.crossed for n in placed_numbers(fs, **kwargs) if n.name == PLATELESS)
-    assert crossed
-    for run in crossed:
-        assert run in said[PLATELESS]
+    assert set(said) == PLATELESS, "only the plateless labels are written across"
+    for number in placed_numbers(fs, **kwargs):
+        if number.name not in PLATELESS:
+            continue
+        assert "is written across" in said[number.name]
+        # The finding names each crossing stream.
+        assert number.crossed
+        for run in number.crossed:
+            assert run in said[number.name]
     # The enclosure finding does not duplicate the label warning.
     for issue in findings(fs, {"enclosure-over-line"}):
         assert "written on clear paper" not in issue.message
@@ -987,7 +989,7 @@ def test_the_export_lays_down_no_plate_where_the_sheet_lays_none(settled_gallery
     fs, kwargs = copy_settled_case(settled_gallery, PLATELESS_SHEET)
     fs.stream_labels.enclosure = "diamond"
     bare = {n.name for n in numbers(fs, **kwargs) if n.words is None}
-    assert bare == {PLATELESS}
+    assert bare == PLATELESS
     checked = 0
     for cell in cells(fs, **kwargs):
         if (cell.get("id") or "").endswith("-box"):
