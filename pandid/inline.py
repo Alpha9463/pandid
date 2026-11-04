@@ -125,12 +125,28 @@ def _regroup(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
     Returns
     -------
     str
-        A sentence naming the line, into or out of ``item``, for each
-        device, valve station and balloon on the line, by its fraction
-        of the whole line, or the part of the line a balloon taps when
-        that fraction is unknown; ``""`` when the line carries none.
+        Sentences naming the line, into or out of ``item``, for each
+        device, valve station and balloon on the line handle, and
+        keeping the call of a balloon on a part between devices;
+        ``""`` when the line carries none.
     """
     from pandid.units import Instrument
+
+    def named(port: Port) -> str:
+        """Return the device or valve station a line enters or leaves.
+
+        Parameters
+        ----------
+        port : Port
+            Port the line enters or leaves at.
+
+        Returns
+        -------
+        str
+            ``"valve station <tag>"`` or the device's name.
+        """
+        return next((f"valve station {a.station.control.name}" for a in fs._station_assemblies
+                     if port is a.station.inlet or port is a.station.outlet), port.owner.name)
 
     if at is None:
         # Spread after the last stated position, as position() draws it.
@@ -139,32 +155,28 @@ def _regroup(fs: Flowsheet, line: Stream, segments: list[Stream], index: int,
         low, start = stated[-1] if stated else (-1, 0.0)
         count = len(segments) - 1
         at = start + (1 - start) * (count - low) / (count + 1 - low)
-    # Fractions of the whole line: its ends and each item's position.
-    ends: list[float | None] = [0.0, *(position(s) for s in segments[:-1]), 1.0]
-    sides: dict[str, list[str]] = {"into": [], "out of": [], "": []}
+    sides: dict[str, list[str]] = {"into": [], "out of": []}
     for k, segment in enumerate(segments[:-1]):
-        station = next((a.station for a in fs._station_assemblies
-                        if a.station.inlet is segment.dest), None)
-        sides["into" if k < index else "out of"].append(
-            f"valve station {station.control.name}" if station else segment.dest.owner.name)
+        sides["into" if k < index else "out of"].append(named(segment.dest))
+    kept = []
     for u in fs.units:
         if not isinstance(u, Instrument):
             continue
-        part = next((i for i, s in enumerate(segments) if u.host is s), None)
-        if part is None:
+        if u.host is line:
+            # A balloon on the line handle taps a fraction of the whole line.
+            sides["into" if (0.5 if u.at is None else u.at) < at else "out of"].append(u.name)
             continue
-        # A balloon on a part of the line taps a fraction of that part.
-        a, b = (0.0, 1.0) if part == 0 else (ends[part], ends[part + 1])
-        key = None if u.at is None or a is None or b is None else a + u.at * (b - a)
-        sides["" if key is None else "into" if key < at else "out of"].append(u.name)
+        # A balloon on a part after a device keeps that part as its host.
+        part = next((s for s in segments[1:] if u.host is s), None)
+        if part is not None:
+            kept.append(f"{u.name}'s call stays as it is: its host moves with "
+                        f"{named(part.source)}")
     groups = [f"{' and '.join(filter(None, (', '.join(names[:-1]), names[-1])))} "
-              + (f"on the line {where} {item}" if where else "on the part of the line it taps")
-              for where, names in sides.items() if names]
-    if not groups:
-        return ""
+              f"on the line {where} {item}" for where, names in sides.items() if names]
     each = "each " if sum(map(len, sides.values())) > 1 else ""
-    return (f". Then put {', and '.join(groups)}, {each}by the call that put it on "
-            f"{line.name}, given that line instead")
+    return ((f". Then put {', and '.join(groups)}, {each}by the call that put it on "
+             f"{line.name}, given that line instead" if groups else "")
+            + "".join(f". {sentence}" for sentence in kept))
 
 
 def position(segment: Stream) -> float | None:
