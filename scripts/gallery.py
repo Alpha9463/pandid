@@ -16,9 +16,16 @@ ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
 from pandid import Flowsheet  # noqa: E402
+from pandid.render import export  # noqa: E402
 
 EXAMPLES = ROOT / "examples"
 GALLERY = ROOT / "docs" / "gallery"
+
+# PyPI's 0.1.5 description embeds this PNG by its raw URL; keep writing it.
+PYPI_PNG = "11_ethanol_pid"
+
+# Keep the smallest title-block lettering readable in the PNG.
+WIDTH = 2400
 
 
 def _pandid_is_this_checkout() -> None:
@@ -237,8 +244,29 @@ def normalize(svg: str) -> str:
     return "\n".join(lines[: start + 1] + new_body + lines[end:])
 
 
+def rasterize(svg: str, width: int = WIDTH) -> bytes:
+    """Rasterize an SVG document to a PNG of the requested width.
+
+    Parameters
+    ----------
+    svg : str
+        SVG document to convert.
+    width : int, optional
+        Output width in device pixels.
+
+    Returns
+    -------
+    bytes
+        PNG image data.
+    """
+    import pypdfium2
+
+    page_pt = pypdfium2.PdfDocument(export.to_pdf(svg))[0].get_width()
+    return export.to_png(svg, scale=width / page_pt)
+
+
 def main() -> None:
-    """Write every gallery sheet as an SVG.
+    """Write every gallery sheet as an SVG, and :data:`PYPI_PNG` as a PNG.
 
     Returns
     -------
@@ -251,6 +279,9 @@ def main() -> None:
         svg = normalize(fs.to_svg(**kwargs))
         (GALLERY / f"{stem}.svg").write_text(svg, encoding="utf-8")
         print(f"wrote {stem}.svg")
+        if stem == PYPI_PNG:
+            (GALLERY / f"{stem}.png").write_bytes(rasterize(svg))
+            print(f"wrote {stem}.png")
 
 
 if __name__ == "__main__":
