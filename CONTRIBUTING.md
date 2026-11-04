@@ -22,12 +22,6 @@ and macOS for every supported Python. A dependency that loads a system library
 at import time installs cleanly and then fails on the first export. Read the
 `pandid/render/export.py` docstring before changing that dependency list.
 
-Optionally install the commit hooks, which mirror the CI lint gates:
-
-```bash
-pip install pre-commit && pre-commit install
-```
-
 ## The gates
 
 CI (`.github/workflows/ci.yml`) runs these checks:
@@ -120,9 +114,7 @@ rewriting shared branch history after review begins.
 Geometry separates *intent* (`Pin`, written by `pin()`) from *result* (`Frame`,
 written by the layout engine), which is what makes `layout()` idempotent.
 
-`scripts/route_bench.py` times `layout()` and `route()` over the examples, which
-is where a geometry change shows up as runtime. Section 1 covers the symbol
-scripts.
+Section 1 covers the symbol scripts.
 
 ---
 

@@ -14,12 +14,10 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
-#: Representative examples that cover document, P&ID, PFD, and BFD exports.
+#: The examples the gallery links as draw.io documents.
 SAMPLES = {
     "11_ethanol_pid": "a full P&ID on A3 paper, with every piece of furniture",
     "03_distillation_train": "a bordered PFD sized to its own drawing",
-    "04_control_loop": "the unpaged model, at the drawing's own coordinates",
-    "12_block_flow_diagram": "a block flow diagram, drawn from plain rectangles",
 }
 
 OUT = ROOT / "drawio-samples"
