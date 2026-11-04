@@ -119,12 +119,12 @@ def test_two_placements_are_not_enough_for_a_crowded_sheet():
 
 
 def test_a_settled_sheet_says_so():
-    """Mark a converged control layout as settled, finding only its nozzle crossing."""
+    """Mark a converged control layout as settled, with nothing to find."""
     fs = _crowded_taps()
     fs.layout()
     fs.route()
     assert fs.route_converged is True
-    assert [issue.code for issue in fs.validate()] == ["route-crosses-near-nozzle"]
+    assert fs.validate() == []
 
 
 # Bounded non-convergence
