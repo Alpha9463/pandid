@@ -1084,8 +1084,8 @@ def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
 
 #: Font size of a line number.
 NUMBER_TYPE = 10
-# Halo width per character, added width and depth.
-_HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
+# Halo width added to the words, and depth.
+_HALO_PAD, _HALO_DEEP = 6.0, 13.0
 
 # Gap a box enclosure leaves outside the halo on each side.
 _ENCLOSURE_PAD = 4.0
@@ -1299,7 +1299,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
 
     # Enclosures are one size per sheet, fitted to the longest label.
     shape = enclosure_shape(fs)
-    widest = max((len(name) * _HALO_CHAR + _HALO_PAD
+    widest = max((F.text_width(name, NUMBER_TYPE) + _HALO_PAD
                   for _s, name, _c, _k in label_items), default=0.0)
     uniform = enclosure_box(shape, widest, _HALO_DEEP)
 
@@ -1307,7 +1307,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     for seg, name, color, keep in label_items:
         (sx1, sy1), (sx2, sy2) = seg
         # The words' size, and the reserved size.
-        tw, th = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
+        tw, th = F.text_width(name, NUMBER_TYPE) + _HALO_PAD, _HALO_DEEP
         hw, hh = (tw, th) if shape == "none" else uniform
         cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
         vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
