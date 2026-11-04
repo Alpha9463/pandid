@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from pandid import Condenser, Flowsheet, Pin, units as U
-from pandid.portgeom import pin_intent, pinned_y, port_point
+from pandid.portgeom import pin_intent, pinned_x, pinned_y, port_point
 from pandid.render.symbols import default_registry
 from pandid.validate import OFFSET_BY_DESIGN
 from test_symbol_invariants import _drawing
@@ -2000,18 +2000,25 @@ def test_a_crossing_an_arrowhead_length_clear_of_the_nozzle_is_not_reported():
     assert _found(_crossing_from_nozzle(20.0), "route-crosses-near-nozzle") == []
 
 
-def _run_over_vessel(offset: float) -> Flowsheet:
-    """Build a run drawn *offset* px above the top edge of V-1's box."""
+def _run_over_vessel(offset: float, balloon: bool = False, flag: bool = False) -> Flowsheet:
+    """Build a run drawn *offset* px above V-1's box, its LT-1, or a corner-pinned flag Q."""
     from pandid.portgeom import unit_box
 
     fs = Flowsheet("edge")
     v = fs.add(U.Vessel("V-1")).pin(x=300, y=200)
+    lt = (
+        fs.add_instrument("LT", 1, sensing=v, face="N")
+        if balloon
+        else fs.add(U.Product("Q")).pin(port=None, x=300, y=40)
+        if flag
+        else v
+    )
     a = fs.add(U.Feed("A")).pin(x=60, y=100)
     ap = fs.add(U.Product("AP")).pin(x=700, y=100)
     run = fs.connect(a.outlet, ap.inlet)
     fs.layout()
-    assert v.frame is not None and a.frame is not None and ap.frame is not None
-    top = unit_box(v, v.frame)[1] - offset
+    assert lt.frame is not None and a.frame is not None and ap.frame is not None
+    top = unit_box(lt, lt.frame)[1] - offset
     (ax, ay), (bx, by) = port_point(a, a.frame, "outlet"), port_point(ap, ap.frame, "inlet")
     run.via([(ax + 30, ay), (ax + 30, top), (bx - 30, top), (bx - 30, by)])
     return fs
@@ -2021,7 +2028,48 @@ def test_a_line_drawn_along_a_box_edge_is_reported():
     """Check that a run 1.5px off V-1's top edge is reported."""
     (issue,) = _found(_run_over_vessel(1.5), "route-along-unit")
     assert issue.severity == "warning"
-    assert issue.message == "stream S1 runs along the edge of V-1"
+    assert issue.message == (
+        "stream S1 runs along the edge of V-1. Move V-1 clear of it: call .pin(x=..., y=...) on V-1"
+    )
+
+
+def test_a_line_along_a_balloon_says_how_to_move_the_balloon():
+    """Check that a run along an attached balloon names attach(), not pin()."""
+    (issue,) = _found(_run_over_vessel(1.5, balloon=True), "route-along-unit")
+    assert issue.message.startswith("stream S1 runs along the edge of LT-1. LT-1 hangs off V-1")
+    assert "call .attach(<the V-1 unit>, face=..., offset=...) on LT-1" in issue.message
+    assert "pin(" not in issue.message
+
+
+def _follow_pin(advice: str, unit: U.Unit, x: float, y: float) -> None:
+    """Make the pin() call *advice* names for *unit*, with *x* and *y* in its blanks."""
+    (args,) = re.findall(rf"call \.pin\(([^)]*)\) on {re.escape(unit.name)}(?![\w-])", advice)
+    kwargs: dict[str, Any] = {}
+    for arg in args.split(", "):
+        key, value = arg.split("=")
+        kwargs[key] = {"x": x, "y": y}[key] if value == "..." else ast.literal_eval(value)
+    unit.pin(**kwargs)
+
+
+def test_route_along_unit_advice_moves_a_corner_pinned_flag_by_its_corner():
+    """Check that following the advice for a corner-pinned flag lands its corner there."""
+    fs = _run_over_vessel(1.5, flag=True)
+    (issue,) = _found(fs, "route-along-unit")
+    flag = next(u for u in fs.units if u.name == "Q")
+    _follow_pin(issue.message, flag, 500, 300)
+    assert (pinned_x(flag), pinned_y(flag)) == (500, 300)
+
+
+def test_unit_overlap_advice_moves_a_corner_pinned_flag_by_its_corner():
+    """Check that following the overlap advice for a corner-pinned flag lands its corner there."""
+    fs = Flowsheet("overlap")
+    flag = fs.add(U.Feed("A")).pin(port=None, x=300, y=200)
+    pump = fs.add(U.Pump("B"))
+    fs.layout()
+    assert flag.frame is not None and pump.frame is not None
+    pump.frame = replace(pump.frame, x=flag.frame.x, y=flag.frame.y)
+    _follow_pin(_overlap_message(fs), flag, 500, 300)
+    assert (pinned_x(flag), pinned_y(flag)) == (500, 300)
 
 
 def test_a_line_clear_of_a_box_edge_is_not_reported():
