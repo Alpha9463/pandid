@@ -1945,8 +1945,8 @@ def _line_marks(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[st
         Stream.
     points : list[tuple[float, float]]
         Stream polyline.
-    ends : str or None
-        Joint for the stream's ends.
+    ends : tuple[str, str]
+        Resolved ``(source, dest)`` joint settings.
     ink : str
         Line colour.
     fit : _Fit
