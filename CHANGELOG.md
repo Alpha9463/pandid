@@ -57,6 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Conveyor`, `Instrument` and `Block`, and the device classes built on them,
   take `width`, `height`, `label_pos`, `description` and `reference` by keyword
   only, such as `Block("B-1", width=120)`; a positional value raises `TypeError`.
+- **A conveyor's `variant` is checked when it is reassigned.** Setting it to
+  a variant the conveyor's length is too short for raises `ValueError` at
+  once and keeps the old variant, instead of failing when the sheet is drawn.
 
 ### Deprecated
 
