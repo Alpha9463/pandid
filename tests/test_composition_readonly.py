@@ -23,6 +23,13 @@ from pandid import units as U
         (lambda: U.Reactor("R-1", agitator="turbine"), "agitator", "propeller"),
         (lambda: U.Reactor("R-1", internals="packing"), "internals", "fluidised_bed"),
         (lambda: U.Vessel("V-1", supports="leg"), "supports", "skirt"),
+        (lambda: U.Absorber("X-1"), "internals", "baffle_tray"),
+        (lambda: U.Stripper("X-1", internals="tray", trays=10), "internals", "baffle_tray"),
+        (
+            lambda: U.DistillationColumn("X-1", internals="tray", trays=10),
+            "internals",
+            "baffle_tray",
+        ),
     ],
 )
 def test_a_composition_keyword_refuses_reassignment_naming_the_kwarg(build, attr, new_value):
@@ -31,15 +38,6 @@ def test_a_composition_keyword_refuses_reassignment_naming_the_kwarg(build, attr
     with pytest.raises(AttributeError, match=attr):
         setattr(unit, attr, new_value)
     assert getattr(unit, attr) == before
-
-
-@pytest.mark.parametrize("cls", [U.Absorber, U.Stripper, U.DistillationColumn])
-def test_every_column_subclass_refuses_internals_reassignment_uniformly(cls):
-    """Check that every column subclass refuses reassigning ``internals``."""
-    kwargs = {"internals": "tray", "trays": 10} if cls is not U.Absorber else {}
-    unit = cls("X-1", **kwargs)
-    with pytest.raises(AttributeError, match="internals"):
-        unit.internals = "baffle_tray"
 
 
 def test_width_and_height_are_unaffected_and_still_live():

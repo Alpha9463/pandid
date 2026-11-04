@@ -445,7 +445,7 @@ def test_ident_leaves_a_name_alone():
 
 def test_ident_is_a_function_of_its_input_alone():
     """Verify identifier generation is deterministic."""
-    assert ident("arrow", "rgb(1, 2, 3)") == ident("arrow", "rgb(1, 2, 3)")
+    assert ident("arrow", "rgb(1, 2, 3)") == "arrow_rgb_1_2_3_e278ea93"
 
 
 def test_the_two_spellings_of_a_name_character_agree():

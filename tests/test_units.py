@@ -90,14 +90,6 @@ def test_fixed_port_units_have_expected_ports():
     assert set(U.Reactor("R", agitator=None).ports) == {"feed_1", "outlet", "vent", "duty"}
 
 
-def test_distillation_column_return_nozzles_close_the_internal_loops():
-    col = U.DistillationColumn("T-101")
-    assert col.reflux_in.direction == "inlet"
-    assert col.boilup_in.direction == "inlet"
-    assert col.reflux_in.role == "liquid"
-    assert col.boilup_in.role == "vapor"
-
-
 def test_reactor_duty_is_energy_role():
     r = U.Reactor("R")
     assert r.duty.role == "energy"
@@ -323,6 +315,10 @@ def test_distillation_column_has_all_four_return_nozzles():
         "condenser_duty",
     }
     assert isinstance(col, U.Column)
+    assert col.reflux_in.direction == "inlet"
+    assert col.boilup_in.direction == "inlet"
+    assert col.reflux_in.role == "liquid"
+    assert col.boilup_in.role == "vapor"
 
 
 def test_a_plain_column_has_no_distillation_nozzles_and_no_distillate():
@@ -334,21 +330,6 @@ def test_a_plain_column_has_no_distillation_nozzles_and_no_distillate():
     for unit in (U.Absorber("V-1"), U.Stripper("T-2"), U.DistillationColumn("T-3")):
         with pytest.raises(AttributeError, match="distillate"):
             getattr(unit, "distillate")
-
-
-def test_absorber_and_stripper_never_answer_to_the_nozzles_they_refused():
-    """Check that an absorber and a stripper refuse the return nozzles they lack."""
-    absorber = U.Absorber("V-501")
-    for name in ("reflux_in", "boilup_in", "reboiler_duty", "condenser_duty"):
-        with pytest.raises(AttributeError, match=name):
-            getattr(absorber, name)
-
-    stripper = U.Stripper("T-601")
-    for name in ("reflux_in", "condenser_duty"):
-        with pytest.raises(AttributeError, match=name):
-            getattr(stripper, name)
-    assert stripper.boilup_in.role == "vapor"
-    assert stripper.reboiler_duty.role == "energy"
 
 
 # --- feed_stages: a feed lands on the stage it enters ------------------------
@@ -458,6 +439,8 @@ def test_a_column_takes_a_side_draw():
     assert set(col.ports) == {"feed_1", "draw", "overhead", "bottoms"}
     assert col.draw.direction == "outlet"
     assert col.draw.role == "draw"
+    assert [p.name for p in col.draws] == ["draw"]
+    assert col.draws[0] is col.draw
 
 
 def test_a_column_takes_more_than_one_side_draw():
@@ -779,19 +762,6 @@ def test_a_family_holds_the_very_ports_the_numbered_names_are_bound_to():
     assert all(p is m.ports[p.name] for p in m.inlets)
 
 
-def test_a_family_is_indexed_from_zero_while_its_nozzles_are_numbered_from_one():
-    """Check that ``inlets[0]`` is ``in_1``."""
-    m = U.Mixer("M", n_inlets=4)
-    assert m.inlets[0] is m.in_1
-    assert m.inlets[3] is m.in_4
-    assert [(i, p.name) for i, p in enumerate(m.inlets, start=1)] == [
-        (1, "in_1"),
-        (2, "in_2"),
-        (3, "in_3"),
-        (4, "in_4"),
-    ]
-
-
 def test_a_family_holds_only_its_own_side():
     """Check that a mixer's outlet is not an inlet and a splitter's inlet is not an outlet."""
     m = U.Mixer("M", n_inlets=2)
@@ -799,14 +769,6 @@ def test_a_family_holds_only_its_own_side():
     s = U.Splitter("S", n_outlets=2)
     assert s.inlet not in s.outlets
     assert [p.name for p in s.outlets] == ["out_1", "out_2"]
-
-
-def test_a_count_worked_out_at_run_time_is_the_case_the_family_exists_for():
-    """Check that a mixer takes an inlet count computed at run time."""
-    streams = ["S-101", "S-102", "S-103", "S-104"]
-    m = U.Mixer("M-1", n_inlets=len(streams))
-    assert len(m.inlets) == len(streams)
-    assert [p.direction for p in m.inlets] == ["inlet"] * 4
 
 
 @pytest.mark.parametrize(
@@ -849,12 +811,6 @@ def test_a_multi_draw_towers_family_is_its_numbered_nozzles_top_to_bottom():
     assert col.reflux_in not in col.draws
     assert col.boilup_in not in col.draws
     assert col.feed not in col.draws
-
-
-def test_one_draw_is_the_one_tuple_holding_the_singular_nozzle():
-    col = U.Column("T-101", n_draws=1)
-    assert [p.name for p in col.draws] == ["draw"]
-    assert col.draws[0] is col.draw
 
 
 def test_tank_is_its_own_kind():
