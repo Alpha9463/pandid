@@ -719,6 +719,9 @@ def crossings(polylines: dict, direction: str):
 
     A crossing lies strictly inside both segments. With
     ``direction="vertical"`` the vertical segment carries the mark.
+    Each yield names the marked run, its segment index, the crossed
+    run, the crossing point, and whether the segment has
+    :data:`HOP_R` either side for the mark.
 
     Parameters
     ----------
@@ -730,9 +733,7 @@ def crossings(polylines: dict, direction: str):
     Yields
     ------
     tuple
-        ``(key, seg, other, x, y, room)``: marked run, segment index,
-        crossed run, crossing point, and whether the segment has
-        :data:`HOP_R` either side for the mark.
+        ``(key, seg, other, x, y, room)`` for each crossing.
 
     Raises
     ------

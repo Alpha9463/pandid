@@ -103,6 +103,8 @@ def _viewbox(el: ET.Element) -> tuple[float, float, float, float]:
     ------
     RuntimeError
         If it has no four-number viewBox.
+    ValueError
+        If a viewBox part is not a number.
     """
     parts = [float(v) for v in (el.get("viewBox") or "").replace(",", " ").split()]
     if len(parts) != 4:

@@ -1232,7 +1232,7 @@ class _NormallyPositioned(Unit):
         self._normal_position = value
 
     def _refuse_closed(self) -> None:
-        """Accept a closed position; subclasses refuse it where needed."""
+        """Accept a closed position; a subclass may refuse it."""
 
 
 class Valve(_NormallyPositioned):

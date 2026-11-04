@@ -296,7 +296,7 @@ class _Approximation(NamedTuple):
     shape : str or None
         Built-in shape name; ``None`` is the rectangle.
     lost : str
-        What the stand-in does not draw; empty when nothing is lost.
+        Symbol parts missing from the stand-in, or empty.
     flip_h : bool
         Mirror the built-in.
     fill : str

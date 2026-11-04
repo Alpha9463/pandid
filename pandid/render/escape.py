@@ -74,6 +74,11 @@ def fmt(value: float, places: int) -> str:
     -------
     str
         Number text, with ``-0`` written as ``0``.
+
+    Raises
+    ------
+    ValueError
+        If ``places`` is negative.
     """
     s = f"{value:.{places}f}"
     if "." in s:

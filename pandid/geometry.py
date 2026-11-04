@@ -185,7 +185,21 @@ class Frame:
 
 @dataclass
 class _Slot:
-    """Mutable solver state for one unit during layout."""
+    """Mutable solver state for one unit during layout.
+
+    Attributes
+    ----------
+    w, h : float
+        Resolved size.
+    col, row : int or None
+        Grid rank.
+    x, y : float or None
+        Top-left corner in pixels.
+    orientation : float
+        Clockwise quarter turn in degrees.
+    mirrored, mirror_y : bool
+        Left-right and top-bottom flips.
+    """
     w: float
     h: float
     col: int | None = None
