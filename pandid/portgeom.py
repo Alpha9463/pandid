@@ -249,10 +249,16 @@ def is_anchored(unit: "Unit", port_name: str) -> bool:
             or _series_point(unit, sym, port_name) is not None)
 
 
+#: Inset of a flag's pennant from its frame's top and bottom, without
+#: and with a reference under the tag.
+FLAG_INSET, FLAG_INSET_REF = 15.0, 12.0
+
+
 def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     """Return a unit's drawn box.
 
     An unmirrored feed extends left from its port at ``frame.x + 50``.
+    A flag's box is its pennant, inset from the frame's top and bottom.
 
     Parameters
     ----------
@@ -266,8 +272,10 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     tuple[float, float, float, float]
         ``(x_min, y_min, x_max, y_max)``.
     """
-    if unit.kind == "feed" and not frame.mirrored:
-        return (frame.x + 50.0 - frame.w, frame.y, frame.x + 50.0, frame.y + frame.h)
+    if unit.kind in ("feed", "product"):
+        inset = FLAG_INSET_REF if _flag_reference(unit) else FLAG_INSET
+        x0 = frame.x + 50.0 - frame.w if unit.kind == "feed" and not frame.mirrored else frame.x
+        return (x0, frame.y + inset, x0 + frame.w, frame.y + frame.h - inset)
     return (frame.x, frame.y, frame.x + frame.w, frame.y + frame.h)
 
 
