@@ -7,8 +7,7 @@ degasser tower stripped with blower air takes the carbon dioxide off
 before the anion exchanger, and a mixed bed polishes the water into
 the demineralised water tank.
 
-Nothing is pinned: the whole sheet is ranked, ordered, placed and
-routed from the connections alone.
+Nothing is pinned; the engine places and routes the whole sheet.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -45,14 +44,7 @@ def main():
                          description="Activated Carbon Filter"))
     ix801 = fs.add(IonExchanger("IX-801", description="Cation Exchanger"))
 
-    # Packing, not a deck: a CO2 stripper wants surface area and the
-    # lowest pressure drop the blower can push air through, and it has
-    # no separation to hold on spec. ``variant="packed"`` is the body
-    # that draws its own two beds on their support grids, so it takes no
-    # ``internals=`` -- composing one onto it would draw a third bed.
-    # ``Stripper``, not a plain ``Column``: it reboils on nothing but air,
-    # so ``boilup_in`` is real and ``reflux_in``/``condenser_duty`` would
-    # be two unconnected nozzles this tower never has.
+    # The packed variant draws its own beds; the air enters at boilup_in.
     d801 = fs.add(Stripper("D-801", variant="packed",
                            description="Degasser Tower"))
     air = fs.add(Feed("Stripping Air"))
@@ -87,16 +79,10 @@ def main():
     fs.connect(t802.outlet, hv801.inlet)
     product_out = fs.connect(hv801.outlet, header.inlet)
 
-    # Raw water and stripping air in; demineralised water out. The
-    # difference is the degasser's vent (equipment, not a sheet edge,
-    # so it is not tabulated) plus the filter backwash and resin
-    # regeneration this sheet does not draw.
     raw_in.properties = {"Flow (kg/h)": "10000"}
     air_in.properties = {"Flow (kg/h)": "200"}
     product_out.properties = {"Flow (kg/h)": "9700"}
 
-    # date= is stated rather than left blank: left blank, the renderer
-    # fills in today's.
     fs.title_block = TitleBlock(
         title="Demineralised Water",
         subtitle="U800 Process Flow Diagram",
@@ -111,8 +97,7 @@ def main():
             Revision("B", "03/08/26", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
-    # The duplex strainer and the outlet valve are bulk items bought by
-    # the line, so neither takes an equipment-list row.
+    # List every item but the strainer and the outlet valve.
     fs.add_annotation(equipment_list(fs, align="top", include=[
         "T-801", "P-801A/B", "F-801", "F-802", "IX-801", "D-801", "B-801",
         "P-802A/B", "IX-802", "IX-803", "T-802",

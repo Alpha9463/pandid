@@ -7,7 +7,7 @@ import re
 import pytest
 
 from pandid import Flowsheet, units as U
-from pandid.document import TitleBlock, Revision
+from pandid.document import Annotation, Revision, TableBox, TitleBlock
 
 
 def _sheet(name: str = "Demo", span: float = 0.0) -> Flowsheet:
@@ -258,6 +258,25 @@ def test_align_nine_point():
     assert Annotation(align="bottom-left").align == "bottom-left"
     with pytest.raises(ValueError):
         Annotation(align="middle-ish")
+
+
+@pytest.mark.parametrize("cls", [Annotation, TableBox])
+def test_an_alignment_assigned_later_is_checked_at_once(cls: type[Annotation | TableBox]) -> None:
+    """Check that ``align`` set after construction is checked, and ``None`` means the default."""
+    box = cls(align="top")
+    with pytest.raises(ValueError, match="align must be one of .*, got 'middle-ish'"):
+        box.align = "middle-ish"
+    assert box.align == "top"
+    setattr(box, "align", None)
+    assert box.align == cls().align
+
+
+def test_a_column_alignment_assigned_later_is_checked_at_once() -> None:
+    """Check that ``col_align`` set after construction is checked."""
+    table = TableBox(headers=["A", "B"], rows=[["1", "2"]])
+    with pytest.raises(ValueError, match=r"col_align\[1\] must be one of"):
+        table.col_align = ["l", "left"]
+    assert table.col_align is None
 
 
 def test_annotation_docks_flush_to_frame():
@@ -1125,16 +1144,20 @@ def test_the_revision_date_column_holds_a_full_date():
     assert not fs.warnings
 
 
-def test_a_box_narrower_than_its_own_rows_is_reported():
-    """Verify a box narrower than its own rows is reported."""
+def test_a_box_narrower_than_its_own_rows_is_reported_by_both_renderers() -> None:
+    """Verify a box narrower than its own rows is reported alike in SVG and draw.io."""
     from pandid.document import Annotation
 
     fs = _sheet()
     fs.add_annotation(
         Annotation(title="NOTES", width=60, rows=["Sampling point on every product line."])
     )
-    fs.to_svg(border="zone")
-    assert [w for w in fs.warnings if w.code == "text-overruns-cell" and "NOTES" in w.message]
+    found: list[list[str]] = []
+    for render in (fs.to_svg, fs.to_drawio):
+        render(border="zone")
+        found.append([w.message for w in fs.warnings if w.code == "text-overruns-cell"])
+    assert found[0] == found[1]
+    assert len(found[0]) == 1 and found[0][0].startswith("annotation 'NOTES' (width=60)")
 
 
 def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():

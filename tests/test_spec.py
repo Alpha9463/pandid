@@ -300,11 +300,11 @@ def test_a_stage_list_of_the_wrong_length_is_refused_from_a_spec(count, stages):
         ("n_draws", 2, "a Column"),
         ("n_feeds", 2, "a Column or a Reactor or a Separator"),
         ("n_inlets", 3, "a Mixer"),
-        ("supports", "skirt", "a Evaporator or a Vessel"),
+        ("supports", "skirt", "an Evaporator or a Vessel"),
         ("diameter", 40, "a Conveyor"),
         ("length", 200, "a Conveyor"),
         ("large_end", "outlet", "a Reducer"),
-        ("normal_position", "closed", "a Valve or a Fitting"),
+        ("normal_position", "closed", "a Fitting or a Valve"),
         ("header", True, "a Feed or a Product"),
         ("fail", "closed", "a Valve"),
         ("branch", "inlet", "a Tee"),
@@ -477,6 +477,13 @@ def test_composition_keywords_read_from_a_hand_written_spec():
     assert _drawn(vessel) == [(26, "leg", False), (26, "leg", False)]
 
 
+def test_a_key_refused_on_a_kind_starting_with_a_vowel_names_it_with_an():
+    """Check that the refusal writes "an" before a refused kind that starts with a vowel."""
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(_spec(units=[{"kind": "Evaporator", "name": "E-1", "n_inlets": 2}]))
+    assert "only a Mixer takes 'n_inlets', not an Evaporator" in str(excinfo.value)
+
+
 def test_a_part_no_such_group_has_names_the_ones_it_does():
     """Check that a misspelt agitator is refused on read, naming the part meant."""
     with pytest.raises(SpecError) as excinfo:
@@ -507,14 +514,16 @@ def test_no_constructor_argument_is_unreachable_from_a_spec():
     import inspect
 
     from pandid import spec as spec_module
+    from pandid.units import _UnitOptions
 
     known = set(spec_module._UNIT_KEYS) | set(spec_module._KIND_KEYS) | {"actuator"}
     for name, cls in spec_module._CLASSES.items():
         if name == "Instrument":
             continue
-        for argument in inspect.signature(cls.__init__).parameters:
-            if argument == "self":
-                continue
+        arguments = set(inspect.signature(cls.__init__).parameters) - {"self"}
+        if "options" in arguments:
+            arguments = arguments - {"options"} | _UnitOptions.__optional_keys__
+        for argument in arguments:
             assert argument in known, f"{name}({argument}=...) can be neither written nor read"
 
 

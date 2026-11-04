@@ -126,4 +126,10 @@ def check_whole(value: Any, where: str) -> None:
         If :func:`is_whole` is false.
     """
     if not is_whole(value):
-        raise TypeError(f"{where} must be a whole number (an int), got {value!r}{_hint(value)}")
+        # Advise int() only for an integral Decimal or Fraction.
+        exact = (isinstance(value, numbers.Rational) and not isinstance(value, numbers.Integral)
+                 and value.denominator == 1
+                 or isinstance(value, Decimal) and value.is_finite()
+                 and value == value.to_integral_value())
+        raise TypeError(f"{where} must be a whole number (an int), got {value!r}"
+                        + ("; pass int(value)" if exact else ""))

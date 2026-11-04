@@ -900,17 +900,17 @@
             <mxPoint x="0" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u27" value="HV-301C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
+        <mxCell id="u27" value="HV-301C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="750.46" y="341.32" width="21.04" height="12.88" as="geometry">
             <mxPoint x="-5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u28" value="HV-301D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u28" value="HV-301D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="718.25" y="417.32" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u29" value="HV-301E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u29" value="HV-301E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="874.11" y="417.32" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>
@@ -952,17 +952,17 @@
             <mxPoint x="0" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u39" value="HV-303C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
+        <mxCell id="u39" value="HV-303C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;flipH=1;" vertex="1" parent="1">
           <mxGeometry x="829.46" y="607.53" width="21.04" height="12.88" as="geometry">
             <mxPoint x="0" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u40" value="HV-303D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u40" value="HV-303D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="869.82" y="683.53" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u41" value="HV-303E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u41" value="HV-303E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="713.96" y="683.53" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>
@@ -1004,17 +1004,17 @@
             <mxPoint x="0" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u51" value="HV-305C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;" vertex="1" parent="1">
+        <mxCell id="u51" value="HV-305C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="1133.02" y="667.64" width="21.04" height="12.88" as="geometry">
             <mxPoint x="-5.15" y="-0.56" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u52" value="HV-305D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u52" value="HV-305D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="1107.69" y="743.64" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u53" value="HV-305E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u53" value="HV-305E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="1236.07" y="743.64" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>
@@ -1056,17 +1056,17 @@
             <mxPoint x="5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u63" value="HV-308C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
+        <mxCell id="u63" value="HV-308C" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=top;verticalAlign=bottom;align=center;fontSize=10.3048;" vertex="1" parent="1">
           <mxGeometry x="516.45" y="757.03" width="21.04" height="12.88" as="geometry">
             <mxPoint x="5.15" y="-3.01" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u64" value="HV-308D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u64" value="HV-308D" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="323.24" y="833.03" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u65" value="HV-308E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=1.71746;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
+        <mxCell id="u65" value="HV-308E" style="html=1;shape=mxgraph.pid.valves.gate_valve;outlineConnect=0;strokeColor=#111;fillColor=#111;strokeWidth=0.858731;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=10.3048;direction=south;anchorPointDirection=0;legacyAnchorPoints=1;" vertex="1" parent="1">
           <mxGeometry x="479.1" y="833.03" width="12.88" height="21.04" as="geometry">
             <mxPoint x="0" y="-0.56" as="offset" />
           </mxGeometry>

@@ -293,6 +293,32 @@ def measure_annotation(ann) -> tuple[float, float]:
     return w, h
 
 
+def check_annotation_fit(ann, report: "Reporter") -> None:
+    """Report an Annotation whose explicit width is too small for its text.
+
+    Parameters
+    ----------
+    ann : Annotation
+        Titled box.
+    report : Reporter
+        Receives the finding, naming the title if it overruns, else the
+        widest row.
+    """
+    if ann.width is None:
+        return
+    size, _row_h, _title_h, col_w = _ann_layout(ann)
+    body_w = _total(col_w) + _ANN_GAP * (len(col_w) - 1)
+    inner = max(body_w, text_width(ann.title, size + 1, bold=True))
+    if ann.width < inner + 2 * _ANN_PAD:
+        # A row of cells reads as one string, the cells spaced apart.
+        rows = ("   ".join(str(c) for c in r) if isinstance(r, (tuple, list))
+                else str(r) for r in ann.rows)
+        over = (ann.title if text_width(ann.title, size + 1, bold=True) > body_w
+                else max(rows, key=lambda s: text_width(s, size), default=ann.title))
+        report(f"annotation {ann.title!r} (width={ann.width:g})", over, over,
+               ann.width, inner + 2 * _ANN_PAD)
+
+
 def draw_annotation(ann, x: float, y: float, *,
                     report: "Reporter | None" = None) -> list[str]:
     """Return an Annotation drawn with its top-left at ``(x, y)``.
@@ -314,18 +340,8 @@ def draw_annotation(ann, x: float, y: float, *,
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = _ANN_PAD, _ANN_GAP
     w, h = measure_annotation(ann)
-    if report is not None and ann.width is not None:
-        body_w = _total(col_w) + gap * (len(col_w) - 1)
-        inner = max(body_w, text_width(ann.title, size + 1, bold=True))
-        if ann.width < inner + 2 * pad:
-            # Name the title if it overruns, else the widest row, its
-            # cells spaced apart.
-            rows = ("   ".join(str(c) for c in r) if isinstance(r, (tuple, list))
-                    else str(r) for r in ann.rows)
-            over = (ann.title if text_width(ann.title, size + 1, bold=True) > body_w
-                    else max(rows, key=lambda s: text_width(s, size), default=ann.title))
-            report(f"annotation {ann.title!r} (width={ann.width:g})", over, over,
-                   ann.width, inner + 2 * pad)
+    if report is not None:
+        check_annotation_fit(ann, report)
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
          f'fill="white" stroke="black" stroke-width="{_BOX_RULE:g}"/>']
     if ann.title:

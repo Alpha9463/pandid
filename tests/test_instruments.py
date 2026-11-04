@@ -2267,6 +2267,14 @@ def test_an_empty_letter_code_is_refused_rather_than_written():
         U.Instrument("LIC", 304).annotate(high=("LAH", ""))
 
 
+def test_a_refused_annotation_leaves_every_quadrant_as_it_was():
+    """Check that a refused ``annotate`` writes and clears no quadrant."""
+    inst = U.Instrument("LIC", 304).annotate(safety="SIL1", variable="pH", low="LAL")
+    with pytest.raises(ValueError, match="empty letter code"):
+        inst.annotate(safety="SIL2", variable=(), high=["LAH", " "])
+    assert inst.quadrants == {"a": ("SIL1",), "b": ("pH",), "d": ("LAL",)}
+
+
 def test_an_annotated_balloon_spends_no_face():
     """Check that annotations are drawn as text and add no units."""
     fs = Flowsheet("annotated")

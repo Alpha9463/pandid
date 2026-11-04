@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import re
+from dataclasses import fields, replace
 
 import pytest
 
 from pandid import Flowsheet, spec, units
-from pandid.render.symbols import NC_DARKENS, NC_FORBIDDEN, closed_marking
+from pandid.render.symbols import (
+    NC_DARKENS,
+    NC_FORBIDDEN,
+    Overlay,
+    PortSeries,
+    Symbol,
+    closed_marking,
+    darkened,
+)
 from pandid.render.symbols import default_registry as registry
 
 BODY_FILL = 'fill="#111"'
@@ -95,6 +104,33 @@ def test_darkening_leaves_the_nozzles_exactly_where_they_were():
         assert closed.ports == plain.ports
         assert closed.port_faces == plain.port_faces
         assert closed.stretchable == plain.stretchable
+
+
+def test_darkening_keeps_every_field_but_the_artwork_the_id_and_the_fill() -> None:
+    """Check that darkening keeps every field but the artwork, the id and the draw.io fill."""
+    plain = replace(
+        registry.get("valve", "gate"),
+        faceless_ports=frozenset({"actuator"}),
+        port_series=(PortSeries("drain_", "S"),),
+        bands={"S": (2.0, 20.0)},
+        label_pos="center",
+        id_suffix="_x",
+        stretchable=False,
+        bare_run=True,
+        gravity_fixed=True,
+        directional=True,
+        drawio_flip_h=True,
+        drawio_body_shape="mxgraph.pid.valves.valve",
+        overlays=(Overlay(26, "bracket", 0.1, 0.2, 0.2, 0.1),),
+        iso_reg="X8063",
+    )
+    closed = darkened(plain)
+    assert (closed.id_suffix, closed.drawio_fill) == ("_x_nc", "#111")
+    blank = Symbol(svg="", width=1.0, height=1.0)
+    for f in fields(Symbol):
+        if f.name not in {"svg", "id_suffix", "drawio_fill"}:
+            assert getattr(plain, f.name) != getattr(blank, f.name), f"set {f.name} above"
+            assert getattr(closed, f.name) == getattr(plain, f.name), f.name
 
 
 def test_a_darkened_globe_is_not_confusable_with_an_ordinary_one():

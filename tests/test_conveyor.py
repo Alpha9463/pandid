@@ -152,6 +152,25 @@ def test_growing_the_roller_under_a_belt_too_short_for_it_is_refused():
     assert conveyor.diameter == 45
 
 
+def test_changing_to_a_variant_the_length_is_too_short_for_is_refused() -> None:
+    """Check that a variant the length cannot draw is refused and the old one kept."""
+    screw = U.Conveyor("SC-301", variant="screw", length=40)
+    with pytest.raises(ValueError, match=r"rollers.*would overlap"):
+        screw.variant = "default"
+    assert screw.variant == "screw"
+    belt = U.Conveyor("BC-301", length=10, diameter=5)
+    with pytest.raises(ValueError, match=r"screw conveyor can be drawn"):
+        belt.variant = "screw"
+    assert belt.variant == "default"
+
+
+def test_changing_to_a_variant_the_length_fits_is_accepted() -> None:
+    """Check that a variant the length can draw is accepted."""
+    conveyor = U.Conveyor("CV-301", length=80)
+    conveyor.variant = "screw"
+    assert conveyor.variant == "screw"
+
+
 @pytest.mark.parametrize(
     "kwargs,message",
     [
