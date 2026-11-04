@@ -304,7 +304,7 @@ def test_a_stage_list_of_the_wrong_length_is_refused_from_a_spec(count, stages):
         ("diameter", 40, "a Conveyor"),
         ("length", 200, "a Conveyor"),
         ("large_end", "outlet", "a Reducer"),
-        ("normal_position", "closed", "a Valve or a Fitting"),
+        ("normal_position", "closed", "a Fitting or a Valve"),
         ("header", True, "a Feed or a Product"),
         ("fail", "closed", "a Valve"),
         ("branch", "inlet", "a Tee"),
@@ -507,14 +507,16 @@ def test_no_constructor_argument_is_unreachable_from_a_spec():
     import inspect
 
     from pandid import spec as spec_module
+    from pandid.units import _UnitOptions
 
     known = set(spec_module._UNIT_KEYS) | set(spec_module._KIND_KEYS) | {"actuator"}
     for name, cls in spec_module._CLASSES.items():
         if name == "Instrument":
             continue
-        for argument in inspect.signature(cls.__init__).parameters:
-            if argument == "self":
-                continue
+        arguments = set(inspect.signature(cls.__init__).parameters) - {"self"}
+        if "options" in arguments:
+            arguments = arguments - {"options"} | _UnitOptions.__optional_keys__
+        for argument in arguments:
             assert argument in known, f"{name}({argument}=...) can be neither written nor read"
 
 

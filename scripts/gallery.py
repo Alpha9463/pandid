@@ -51,40 +51,65 @@ def _pandid_is_this_checkout() -> None:
         )
 
 
+def captures() -> "dict[str, tuple[Flowsheet, dict]]":
+    """Run every example once and capture its sheets in filename order.
+
+    Returns
+    -------
+    dict[str, tuple[pandid.Flowsheet, dict]]
+        Each sheet's flowsheet and SVG render options, keyed by sheet name.
+
+    Raises
+    ------
+    SystemExit
+        If an example cannot be imported or draws no sheet.
+    """
+    out = {}
+    for stem in sorted(p.stem for p in EXAMPLES.glob("[0-9]*.py")):
+        out |= _sheets(stem)
+    return out
+
+
 def sheets() -> list[str]:
     """Return gallery sheet names in filename order.
-
-    A one-sheet example's sheet is named by its stem, and sheet *n* of a
-    longer example by ``{stem}_{n}``.
 
     Returns
     -------
     list[str]
         Sheet names used for gallery asset names.
     """
-    names = []
-    for stem in sorted(p.stem for p in EXAMPLES.glob("[0-9]*.py")):
-        with contextlib.redirect_stdout(io.StringIO()):
-            names += _names(stem, len(_capture(stem)))
-    return names
+    with contextlib.redirect_stdout(io.StringIO()):
+        return list(captures())
 
 
-def _names(stem: str, count: int) -> list[str]:
-    """Return the sheet names of an example that draws *count* sheets.
+def _sheets(stem: str) -> "dict[str, tuple[Flowsheet, dict]]":
+    """Run one example and capture its sheets with their title blocks dated.
+
+    A one-sheet example's sheet is named by its stem, and sheet *n* of a
+    longer example by ``{stem}_{n}``.
 
     Parameters
     ----------
     stem : str
         Example filename stem.
-    count : int
-        Number of sheets the example draws.
 
     Returns
     -------
-    list[str]
-        ``[stem]`` for at most one sheet, else ``{stem}_1`` to ``{stem}_{count}``.
+    dict[str, tuple[pandid.Flowsheet, dict]]
+        Each sheet's flowsheet and SVG render options, keyed by sheet name.
+
+    Raises
+    ------
+    SystemExit
+        If the example cannot be imported or draws no sheet.
     """
-    return [stem] if count <= 1 else [f"{stem}_{n}" for n in range(1, count + 1)]
+    caught = _capture(stem)
+    if not caught:
+        raise SystemExit(f"examples/{stem}.py drew no sheet.")
+    for fs, _kwargs in caught:
+        _stamp(fs)
+    names = [stem] if len(caught) == 1 else [f"{stem}_{n}" for n in range(1, len(caught) + 1)]
+    return dict(zip(names, caught))
 
 
 def _stamp(fs: Flowsheet) -> None:
@@ -181,62 +206,10 @@ def flowsheet(name: str) -> "tuple[Flowsheet, dict]":
         If the example draws no sheet, or no sheet of that name.
     """
     stem = name if (EXAMPLES / f"{name}.py").exists() else name.rpartition("_")[0]
-    caught = _capture(stem)
-    names = _names(stem, len(caught))
-    if not caught:
-        raise SystemExit(f"examples/{stem}.py drew no sheet.")
-    if name not in names:
-        raise SystemExit(f"examples/{stem}.py has no sheet {name!r}; its sheets are {', '.join(names)}.")
-    fs, kwargs = caught[names.index(name)]
-    _stamp(fs)
-    return fs, kwargs
-
-
-def render(stem: str) -> str:
-    """Render one gallery sheet as canonical SVG without writing output files.
-
-    Parameters
-    ----------
-    stem : str
-        Sheet name from :func:`sheets`.
-
-    Returns
-    -------
-    str
-        Canonical SVG document.
-    """
-    fs, kwargs = flowsheet(stem)
-    return normalize(fs.to_svg(**kwargs))
-
-
-def normalize(svg: str) -> str:
-    """Canonicalize unordered SVG definitions for reproducible assets.
-
-    Parameters
-    ----------
-    svg : str
-        Rendered SVG document.
-
-    Returns
-    -------
-    str
-        SVG document with sorted marker and definition entries.
-    """
-    lines = svg.split("\n")
-    try:
-        start = next(i for i, ln in enumerate(lines) if ln.strip() == "<defs>")
-        end = next(i for i, ln in enumerate(lines) if ln.strip() == "</defs>")
-    except StopIteration:
-        return svg
-    body = lines[start + 1 : end]
-    markers = []
-    j = 0
-    while j < len(body) and body[j].strip().startswith("<marker "):
-        markers.append(tuple(body[j : j + 3]))
-        j += 3
-    markers.sort()
-    new_body = [line for group in markers for line in group] + sorted(body[j:])
-    return "\n".join(lines[: start + 1] + new_body + lines[end:])
+    caught = _sheets(stem)
+    if name not in caught:
+        raise SystemExit(f"examples/{stem}.py has no sheet {name!r}; its sheets are {', '.join(caught)}.")
+    return caught[name]
 
 
 def rasterize(svg: str, width: int = WIDTH) -> bytes:
@@ -280,8 +253,8 @@ def main() -> None:
 
     _pandid_is_this_checkout()
     GALLERY.mkdir(parents=True, exist_ok=True)
-    for stem in sheets():
-        svg = render(stem)
+    for stem, (fs, kwargs) in captures().items():
+        svg = fs.to_svg(**kwargs)
         (GALLERY / f"{stem}.svg").write_text(svg, encoding="utf-8")
         if args.svg_only:
             print(f"wrote {stem}.svg")

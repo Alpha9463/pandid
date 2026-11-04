@@ -36,7 +36,7 @@ def stream_polyline(stream: Stream) -> list[Point]:
         If either endpoint unit has no resolved frame.
     """
     source, dest = stream.source.owner, stream.dest.owner
-    if source is None or dest is None or source.frame is None or dest.frame is None:
+    if source.frame is None or dest.frame is None:
         raise ValueError("stream_polyline requires placed endpoint units")
     start = port_point(source, source.frame, stream.source.name)
     end = port_point(dest, dest.frame, stream.dest.name)

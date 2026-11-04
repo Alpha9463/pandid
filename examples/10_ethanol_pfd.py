@@ -163,8 +163,7 @@ def main():
     #
     # Both elevations are asked of the symbol rather than written down as
     # a fraction of the box. A fraction is a fraction of the box *before*
-    # the drive motor grew it, and the one that used to be here put the
-    # water flag 10 units off the nozzle it feeds.
+    # the drive motor grew it.
     mix1_y = 620.0
     mix1.pin(x=560, y=mix1_y)
     # x=190 puts every flag tip on one line.

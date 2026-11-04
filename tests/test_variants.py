@@ -1,28 +1,17 @@
-"""Test ``VARIANTS``: construction refuses a drawing the class does not own.
-
-Check that the ``pandid.units`` classes still accept every variant of their kind.
-"""
+"""Test ``VARIANTS``: a class accepts every variant of its kind and refuses the rest."""
 
 import pytest
 
 import pandid
 from pandid import Flowsheet, devices, units
 from pandid.render.symbols import default_registry
+from test_placement import _shipped_unit_classes
 from test_symbol_invariants import _drawing
 
 
 def _unit_classes():
     """Return every ``Unit`` subclass :mod:`pandid.units` itself defines."""
-    found: dict[type, None] = {}
-    pending = [units.Unit]
-    while pending:
-        cls = pending.pop()
-        if cls in found:
-            continue
-        pending.extend(cls.__subclasses__())
-        if cls.__module__ == units.__name__:
-            found[cls] = None
-    return list(found)
+    return [cls for cls in _shipped_unit_classes() if cls.__module__ == units.__name__]
 
 
 def _shipped_cases():

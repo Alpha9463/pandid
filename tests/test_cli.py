@@ -334,7 +334,15 @@ def test_the_pdf_extra_is_named_when_the_backend_is_missing(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize(
-    "argv", [[], ["draw"], ["validate"], ["frobnicate"], ["draw", "x.json", "--border", "fancy"]]
+    "argv",
+    [
+        [],
+        ["draw"],
+        ["validate"],
+        ["frobnicate"],
+        ["draw", "x.json", "--border", "fancy"],
+        ["draw", "x.json", "--nonsense"],
+    ],
 )
 def test_a_command_line_that_cannot_be_parsed_exits_two(argv):
     assert main(argv) == EXIT_USAGE

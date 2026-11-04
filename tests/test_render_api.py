@@ -4,7 +4,6 @@ whose format is inferred from the extension and returns None."""
 import re
 import string
 import sys
-import zlib
 
 import pytest
 
@@ -58,6 +57,7 @@ def _canvas(svg: str) -> tuple[float, float]:
     assert m, "no canvas on the <svg> element"
     view = float(m.group(7)), float(m.group(8))
     declared = float(m.group(1)), float(m.group(3))
+    assert m.group(2) == m.group(4), "width and height in different units"
     if m.group(2):  # a physical size: it must describe the same sheet
         assert (declared[0] * PX_PER_MM, declared[1] * PX_PER_MM) == pytest.approx(view, abs=0.1)
     else:
@@ -76,19 +76,10 @@ def _sheet_mm(svg: str) -> "tuple[float, float] | None":
 
 def _pdf_page_pt(pdf: bytes) -> tuple[float, float]:
     """Return the page size a PDF declares, in points, from its first ``/MediaBox``."""
-    bodies = [pdf]
-    for m in re.finditer(rb"/Type\s*/ObjStm.*?stream\r?\n", pdf, re.S):
-        chunk = pdf[m.end() :]
-        try:
-            bodies.append(zlib.decompress(chunk[: chunk.find(b"\nendstream")]))
-        except zlib.error:  # not the stream we are after
-            continue
-    for body in bodies:
-        box = re.search(rb"/MediaBox\s*\[([^\]]*)\]", body)
-        if box:
-            _, _, width, height = (float(v) for v in box.group(1).split())
-            return width, height
-    raise AssertionError("no /MediaBox in the exported PDF")
+    box = re.search(rb"/MediaBox\s*\[([^\]]*)\]", pdf)
+    assert box, "no /MediaBox in the exported PDF"
+    _, _, width, height = (float(v) for v in box.group(1).split())
+    return width, height
 
 
 def _fit(svg: str) -> tuple[float, float, float]:
