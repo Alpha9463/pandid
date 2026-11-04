@@ -587,8 +587,9 @@ class _Tags(NamedTuple):
     Attributes
     ----------
     at : dict
-        ``id(unit)`` -> ``(side, dx, dy)``, offset from the middle of the
-        cell's side to the middle of the tag halo's near edge.
+        ``id(unit)`` -> ``(side, dx, dy, near)``: the offset from the side's
+        spot, and the offset from the middle of the cell's side to the middle
+        of the tag halo's near edge, or ``None`` with no halo.
     plates : list
         Opaque boxes of tags and ``NC``/fail letters.
     codes : list
@@ -640,12 +641,16 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
             item = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols)
             tag_box = _unit_label_box(item)
             items.append(item)
+            # The side, the offset from its default spot, and the halo's near edge.
+            side = item[4]
+            base = sheet._label_place(side, x, y, w, h)
+            near = None
             if tag_box is not None:
-                # From the middle of the cell's side to the middle of the halo's near edge.
                 hx0, hy0, hx1, hy1 = tag_box
                 mx, my = (hx0 + hx1 - 2 * x - w) / 2, (hy0 + hy1 - 2 * y - h) / 2
-                at[id(u)] = (item[4], *{"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
-                                       "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[item[4]])
+                near = {"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
+                        "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[side]
+            at[id(u)] = (side, item[0] - base[0], item[1] - base[1], near)
         if closed_marking(u, registry) == "NC":
             items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
         letters = fail_marking(u)
@@ -1145,13 +1150,17 @@ class DrawioRenderer:
         letters = fail_marking(u)
         if letters:
             lines.append(letters)
-        side, dx, dy = tags.at.get(id(u), (
-            (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0))
-        gx, gy = _SIDE_LABEL_GAP[side] if id(u) in tags.at else (0.0, 0.0)
+        side, dx, dy, near = tags.at.get(id(u), (
+            (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0, None))
+        offset = (fit.length(dx), fit.length(dy))
+        if near is not None and len(lines) == 1:
+            # A lone tag sits on its halo; a stacked label keeps draw.io's spot.
+            gx, gy = _SIDE_LABEL_GAP[side]
+            offset = (fit.length(near[0]) - gx, fit.length(near[1]) - gy)
         # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
-        ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx) - gx, fit.length(dy) - gy)
+        ) + [_drawn_type(_TAG_TYPE, fit)], offset
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":

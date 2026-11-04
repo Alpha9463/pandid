@@ -2981,6 +2981,17 @@ def test_an_equipment_tag_is_written_inside_its_halo_on_the_sheet(
     assert not adrift, f"{stem}: tags off their halos {adrift}"
 
 
+def test_a_tag_stacked_with_fail_letters_keeps_off_the_unit_above():
+    """Keep a two-line tag label clear of the unit above its symbol."""
+    fs = Flowsheet("stacked equipment")
+    fs.add(pandid.Pump("P-1", width=60, height=40, label_pos="center")).pin(x=100, y=100)
+    fs.add(pandid.ControlValve("CV-1", fail="closed")).pin(x=115, y=172)
+    cells = _drawio_cells_from_document(fs.to_drawio())
+    symbols, tags, _numbers = _drawn_boxes(fs, {}, cells)
+    assert cells["u1"].get("value") == "CV-1<br>FC"
+    assert not overlaps(tags["u1"], symbols["u0"]), (tags["u1"], symbols["u0"])
+
+
 @pytest.mark.parametrize("stem", LEADER_SHEETS, ids=LEADER_SHEETS)
 def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, rendered_gallery, stem):
     """Connect a displaced line number to its stream with a leader.
