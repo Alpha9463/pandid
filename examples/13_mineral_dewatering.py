@@ -5,8 +5,8 @@ The first sheet in the gallery that is not a fluids plant. A flotation
 concentrate arrives as a dilute slurry and leaves as a dry,
 magnetics-free powder, and everything between those two flags is a
 solid-liquid or a solid-gas separation: a thickener, a vacuum belt
-filter, a rotary dryer, the cyclone that takes the dried product back
-out of the gas that dried it, and the scrubber that cleans what is left
+filter, a rotary dryer, the cyclone that takes the dust back out of
+the gas that dried it, and the scrubber that cleans what is left
 before it reaches the stack.
 
 Drawn as a PFD -- an equipment list, a stream table sectioned into a
@@ -14,7 +14,7 @@ Drawn as a PFD -- an equipment list, a stream table sectioned into a
 process line, with no instrument balloon, signal line or valve anywhere
 on it.
 
-Sized to the drawing rather than to a page: twenty-four streams side by
+Sized to the drawing rather than to a page: twenty-five streams side by
 side is a wider table than A3 takes beside a utilities summary.
 ``page_size="A2"`` draws the same sheet on real paper.
 """
@@ -78,11 +78,10 @@ PROPERTIES = {
     "S-412": ("15", "1.0", "30.5", "", "", "", "", "", "1.000", ""),
     "S-413": ("15", "2.0", "0.43", "", "", "", "", "", "", "1.000"),
     "S-414": ("650", "0.99", "30.93", "", "0.031", "", "", "", "0.969", ""),
-    # Temperature deliberately blank, which renders as "-".
-    "S-415": ("", "0.98", "99.83", "62.8", "0.072", "0.6280", "5.0E-05", "",
-              "0.300", ""),
-    "S-416": ("115", "0.98", "99.83", "62.8", "0.072", "0.6280", "5.0E-05", "",
-              "0.300", ""),
+    "S-415": ("115", "0.98", "46.45", "20.5", "0.150", "0.2045", "", "",
+              "0.645", ""),
+    "S-416": ("110", "1.0", "53.38", "99.5", "0.005", "0.9949", "9.4E-05", "",
+              "", ""),
     "S-417": ("115", "0.97", "37.03", "0.35", "0.187", "3.5E-03", "", "",
               "0.809", ""),
     "S-418": ("28", "3.0", "41.5", "", "1.000", "", "", "", "", ""),
@@ -92,11 +91,12 @@ PROPERTIES = {
               ""),
     "S-421": ("62", "1.0", "43.45", "0.30", "0.997", "3.0E-03", "", "", "",
               ""),
-    "S-422": ("110", "1.0", "62.80", "99.5", "0.005", "0.9949", "8.0E-05", "",
+    "S-422": ("110", "1.0", "9.42", "99.5", "0.005", "0.995", "", "", "", ""),
+    "S-423": ("110", "1.0", "62.80", "99.5", "0.005", "0.9949", "8.0E-05", "",
               "", ""),
-    "S-423": ("110", "1.0", "62.79", "99.5", "0.005", "0.995", "", "", "",
+    "S-424": ("110", "1.0", "62.79", "99.5", "0.005", "0.995", "", "", "",
               ""),
-    "S-424": ("110", "1.0", "0.005", "100.0", "", "", "1.000", "", "", ""),
+    "S-425": ("110", "1.0", "0.005", "100.0", "", "", "1.000", "", "", ""),
 }
 
 
@@ -165,15 +165,6 @@ def main():
     # classes is the ``fuel`` nozzle, and the fuel line is why this item
     # is here.
     heater = fs.add(Furnace("FH-401", description="Dryer Air Heater"))
-    # The dryer's feed breeching is bought and tagged with the dryer, so
-    # it is a tee rather than an item of its own.
-    breeching = fs.add(Tee(branch="inlet"))
-    # **Two nozzles where the plant has four.** ``units.Dryer`` declares
-    # only ``feed`` and ``product``, so the solids chute and the gas
-    # duct at each end share one connection. It costs the drawing S-416,
-    # which carries the whole product in the gas. A ``Dryer`` with gas
-    # nozzles of its own is the fix, and this sheet wants redrawing
-    # around them.
     dryer = fs.add(Dryer("DR-401",
                          description="Concentrate Rotary Dryer"))
 
@@ -207,6 +198,8 @@ def main():
         description="Product Magnetic Separator"))
     product = fs.add(Product("Dry Concentrate", reference="PFD-402"))
     tramp = fs.add(Product("Tramp Metal"))
+    # The cyclone's dust rejoins the dryer's product ahead of the magnet.
+    fines = fs.add(Tee(branch="inlet"))
 
     # --- Placement ----------------------------------------------------
     # A tee is a 12-unit square with a port on the middle of each face
@@ -254,10 +247,9 @@ def main():
     filtrate.pin(port="inlet", x=800, y=suction_y)
 
     # The belt runs under the filter, so the cake drops out of the floor
-    # onto its tail and throws off into the breeching.
+    # onto its tail and throws off into the dryer.
     belt_y, dryer_y = 480.0, 490.0
     conveyor.pin(port="feed", x=cake_x, y=belt_y)
-    breeching.pin(port="inlet", x=950, y=dryer_y)
     dryer.pin(port="feed", x=1000, y=dryer_y)
 
     # The burner sits at grade under the feed end. Its fuel arrives from
@@ -265,7 +257,6 @@ def main():
     heater.pin(port="inlet", x=860, y=654.5)
     air.pin(port="outlet", x=790, y=654.5)   # clear of the burner wall
     gas.pin(port="outlet", x=750, y=740)
-    hot_gas_x = pinned_x(breeching) + tee_w / 2
 
     cyclone.pin(port="feed", x=1180, y=322)
     # Above the gas riser rather than beside it: the scrub-water line
@@ -280,6 +271,8 @@ def main():
               y=60)
 
     magnet.pin(port="feed", x=1300, y=532)
+    fines.pin(mirrored="y").pin(port="branch", x=pinned_x(cyclone, "underflow"),
+                               y=532 - tee_w / 2)
     product.pin(port="inlet", x=1430, y=532)
     tramp.pin(port="inlet", x=1430, y=680)
 
@@ -316,17 +309,14 @@ def main():
     fs.connect(belt_filter.port("outlet"), filtrate.inlet, name="S-410")
 
     fs.connect(belt_filter.port("cake"), conveyor.feed, name="S-411")
-    fs.connect(conveyor.discharge, breeching.inlet, name="S-411")
+    fs.connect(conveyor.discharge, dryer.feed, name="S-411")
 
     fs.connect(air.outlet, heater.inlet, name="S-412")
     fs.connect(gas.outlet, heater.fuel, name="S-413").via([(900, 740)])
-    # Pinned by hand: left to itself the router takes the burner duct
-    # the long way round the dryer.
-    fs.connect(heater.outlet, breeching.branch, name="S-414").via(
-        [(hot_gas_x, 654.5 + 25)])
+    fs.connect(heater.outlet, dryer.heating_in, name="S-414")
 
-    fs.connect(breeching.outlet, dryer.feed, name="S-415")
-    fs.connect(dryer.product, cyclone.feed, name="S-416")
+    fs.connect(dryer.vent, cyclone.feed, name="S-415")
+    fs.connect(dryer.product, fines.inlet, name="S-416")
 
     fs.connect(cyclone.overflow, scrub_tee.inlet, name="S-417")
     fs.connect(scrub_water.outlet, scrub_tee.branch, name="S-418")
@@ -336,9 +326,10 @@ def main():
     fs.connect(fan.discharge, stack.inlet, name="S-420")
     fs.connect(scrubber.liquid, effluent.inlet, name="S-421")
 
-    fs.connect(cyclone.underflow, magnet.feed, name="S-422")
-    fs.connect(magnet.overflow, product.inlet, name="S-423")
-    fs.connect(magnet.underflow, tramp.inlet, name="S-424")
+    fs.connect(cyclone.underflow, fines.branch, name="S-422")
+    fs.connect(fines.outlet, magnet.feed, name="S-423")
+    fs.connect(magnet.overflow, product.inlet, name="S-424")
+    fs.connect(magnet.underflow, tramp.inlet, name="S-425")
 
     for s in fs.streams:
         values = PROPERTIES.get(s.name)
