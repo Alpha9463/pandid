@@ -1,4 +1,4 @@
-﻿"""
+"""
 Example 17: Propylene Glycol Reaction A200, a jacketed CSTR as a P&ID
 
 Propylene oxide and process water are metered, mixed and charged to
@@ -231,13 +231,6 @@ def main():
                               (vent_riser_x, vent_run_y)])
     fs.connect(cv204.outlet, vent_gas.inlet)
 
-    # **The jacket has one nozzle where the plant has two.**
-    # ``units.Reactor`` declares a single ``duty`` connection, so cooling
-    # water can be drawn onto the jacket and cannot be drawn off it: the
-    # return to CWRH that every jacket really has is not on this sheet,
-    # and it is the one line here a reader should not take from the
-    # drawing. A ``duty_out`` on the vessel is the fix; until then the
-    # note below says where the return is.
     fs.connect(cws_jkt.outlet, hv205.inlet, size=150, service="CWS",
                sequence=207, spec="CS")
     fs.connect(hv205.outlet, fe205.inlet)

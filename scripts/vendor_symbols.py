@@ -1063,30 +1063,15 @@ def render() -> str:
             + ", ".join(f"{stencil}:{shape}" for stencil, shape in missing)
         )
     # Refuse a table entry for a symbol KIND_MAP does not draw.
-    orphans = sorted(key for key in CLOSED_SHAPES if key not in KIND_MAP)
-    if orphans:
-        raise SystemExit(
-            "CLOSED_SHAPES names symbols KIND_MAP does not draw: "
-            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
-        )
-    orphans = sorted(key for key in GRAVITY_FIXED if key not in KIND_MAP)
-    if orphans:
-        raise SystemExit(
-            "GRAVITY_FIXED names symbols KIND_MAP does not draw: "
-            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
-        )
-    orphans = sorted(key for key in DIRECTIONAL if key not in KIND_MAP)
-    if orphans:
-        raise SystemExit(
-            "DIRECTIONAL names symbols KIND_MAP does not draw: "
-            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
-        )
-    orphans = sorted(key for key in BANDS if key not in KIND_MAP)
-    if orphans:
-        raise SystemExit(
-            "BANDS names symbols KIND_MAP does not draw: "
-            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
-        )
+    tables = {"CLOSED_SHAPES": CLOSED_SHAPES, "GRAVITY_FIXED": GRAVITY_FIXED,
+              "DIRECTIONAL": DIRECTIONAL, "BANDS": BANDS}
+    for table_name, table in tables.items():
+        orphans = sorted(key for key in table if key not in KIND_MAP)
+        if orphans:
+            raise SystemExit(
+                f"{table_name} names symbols KIND_MAP does not draw: "
+                + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
+            )
 
     specs = [spec for _, _, port_map in KIND_MAP.values() for spec in port_map.values()]
     names = ["Symbol"]
@@ -1104,7 +1089,7 @@ def render() -> str:
         "",
         "",
         "def register_vendored(registry):",
-        '    """Register the vendored symbols, replacing same-key defaults.',
+        '    """Register the vendored symbols.',
         "",
         '    Parameters',
         '    ----------',
@@ -1146,8 +1131,6 @@ def render() -> str:
             sid = kind if variant == "default" else f"{kind}_{variant}"
             svg = f'<g id="sym_{sid}{suffix}">{inner}</g>'
             lines += [
-                f"    # draw.io {stencil}:{shape_name} (aspect={aspect}) -> {kind}/{variant}"
-                + (" [normally closed]" if suffix else ""),
                 f"    registry.{method}({kind!r}, Symbol(",
                 f"        svg={svg!r},",
                 f"        width={w}, height={h},",

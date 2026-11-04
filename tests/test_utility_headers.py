@@ -214,15 +214,9 @@ def test_the_coincidence_a_flag_draws_is_not_reported():
 
 def test_only_a_boundary_flag_draws_its_runs_on_one_point():
     """Check that only the boundary flags set ``ONE_NOZZLE_MANY_RUNS``."""
-    from pandid import units
+    from test_placement import _shipped_unit_classes
 
-    def walk(cls):
-        yield cls
-        for sub in cls.__subclasses__():
-            if sub.__module__.startswith("pandid."):
-                yield from walk(sub)
-
-    exempt = {c.__name__ for c in walk(units.Unit) if c.ONE_NOZZLE_MANY_RUNS}
+    exempt = {c.__name__ for c in _shipped_unit_classes() if c.ONE_NOZZLE_MANY_RUNS}
     assert exempt == {"_Boundary", "Feed", "Product"}
 
 
