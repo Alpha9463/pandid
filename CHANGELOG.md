@@ -116,14 +116,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **A letter code beside a balloon keeps off flange marks (#624).** On a
-  flanged P&ID, the alarm and other codes written outside a balloon no longer
-  cover a flange mark, in SVG or draw.io.
-
 - **A balloon hung from another balloon no longer sits on the line it taps
   (#619).** After the controller-hanging attempt, `route()` tries keeping it
   clear of that line, and keeps the result only if no balloon's tap leaves its
   line and no finding or clash grows.
+- **A letter code beside a balloon keeps off flange marks (#624).** On a
+  flanged P&ID, the alarm and other codes written outside a balloon no longer
+  cover a flange mark, in SVG or draw.io.
 - **A refused balloon placement changes nothing (#438).** `attach()` with a
   bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
   face no longer leaves the balloon on the sheet, and `add_instrument()`
