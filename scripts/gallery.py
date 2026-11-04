@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Generate SVG and PNG gallery assets from example flowsheets.
+"""Generate the SVG gallery from example flowsheets.
 
 Run ``python scripts/gallery.py`` after an example or renderer change, then
 review the generated assets. A version-only package update needs no redraw.
 """
 
-import argparse
 import contextlib
 import importlib.util
 import io
@@ -17,13 +16,9 @@ ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
 from pandid import Flowsheet  # noqa: E402
-from pandid.render import export  # noqa: E402
 
 EXAMPLES = ROOT / "examples"
 GALLERY = ROOT / "docs" / "gallery"
-
-# Keep the smallest title-block lettering readable in gallery previews.
-WIDTH = 2400
 
 
 def _pandid_is_this_checkout() -> None:
@@ -242,58 +237,20 @@ def normalize(svg: str) -> str:
     return "\n".join(lines[: start + 1] + new_body + lines[end:])
 
 
-def rasterize(svg: str, width: int = WIDTH) -> bytes:
-    """Rasterize an SVG document to a PNG of the requested width.
-
-    Parameters
-    ----------
-    svg : str
-        SVG document to convert.
-    width : int, optional
-        Output width in device pixels.
-
-    Returns
-    -------
-    bytes
-        PNG image data.
-    """
-    import pypdfium2
-
-    page_pt = pypdfium2.PdfDocument(export.to_pdf(svg))[0].get_width()
-    return export.to_png(svg, scale=width / page_pt)
-
-
 def main() -> None:
-    """Generate SVG assets and, unless disabled, PNG gallery previews.
+    """Write every gallery sheet as an SVG.
 
     Returns
     -------
     None
-        Assets are written to :data:`GALLERY`.
+        Sheets are written to :data:`GALLERY`.
     """
-    description = __doc__.split("\n", 1)[0] if __doc__ is not None else "Generate gallery assets"
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "--svg-only",
-        action="store_true",
-        help="rewrite the .svg sheets and leave the .png rasters alone "
-        "(they need the optional [pdf] backend)",
-    )
-    args = parser.parse_args()
-
     _pandid_is_this_checkout()
     GALLERY.mkdir(parents=True, exist_ok=True)
     for stem, (fs, kwargs) in captures().items():
         svg = normalize(fs.to_svg(**kwargs))
         (GALLERY / f"{stem}.svg").write_text(svg, encoding="utf-8")
-        if args.svg_only:
-            print(f"wrote {stem}.svg")
-            continue
-        # Rasterise the sheet just written, not the one in hand, so a PNG can
-        # never show a drawing its own SVG does not.
-        png = rasterize((GALLERY / f"{stem}.svg").read_text(encoding="utf-8"))
-        (GALLERY / f"{stem}.png").write_bytes(png)
-        print(f"wrote {stem}.svg and {stem}.png ({len(png) / 1024:.0f} KiB)")
+        print(f"wrote {stem}.svg")
 
 
 if __name__ == "__main__":

@@ -347,9 +347,9 @@ them by `scripts/gallery.py`, as `docs/gallery/README.md` describes:
 python scripts/gallery.py
 ```
 
-Regenerate and review gallery images when an example or rendering change affects
-them. If you add an example, run that command and commit its two files in the
-same PR, add a section for it to
+Regenerate and review the gallery when an example or rendering change affects
+it. If you add an example, run that command and commit its SVG in the same PR,
+add a section for it to
 `docs/gallery/README.md`, and consider adding the scenario to
 `tests/test_golden.py`.
 
