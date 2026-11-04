@@ -882,8 +882,11 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
         if any(issubclass(cls, _CLASSES[owner]) for owner in owners):
             allowed.add(key)
         elif key in data:
-            takers = " or ".join(f"a {owner}" for owner in owners)
-            raise SpecError(f"{where}: only {takers} takes {key!r}, not a {cls.__name__}")
+            named = [f"{'an' if kind[0] in 'AEIOU' else 'a'} {kind}"
+                     for kind in (*owners, cls.__name__)]
+            raise SpecError(
+                f"{where}: only {' or '.join(named[:-1])} takes {key!r}, not {named[-1]}"
+            )
     _check_keys(data, allowed, where)
 
     kwargs = _read_fields(data, where, (

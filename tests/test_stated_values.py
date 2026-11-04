@@ -276,6 +276,25 @@ def test_a_grid_rank_must_be_a_whole_number():
     assert pin is not None and (pin.col, pin.row) == (2, 3)
 
 
+@pytest.mark.parametrize("value", [Decimal(1), Fraction(1)], ids=["Decimal", "Fraction"])
+def test_a_decimal_or_fraction_grid_rank_is_told_a_conversion_pin_takes(value: Any):
+    """Check that the refusal advises ``int(value)``, which pin then takes."""
+    pump = U.Pump("P-1")
+    with pytest.raises(TypeError, match=r"whole number.*; pass int\(value\)$"):
+        pump.pin(col=value)
+    pump.pin(col=int(value))
+    pin = pump.pin_
+    assert pin is not None and pin.col == 1
+
+
+@pytest.mark.parametrize("value", [Decimal("1.5"), Fraction(3, 2)], ids=["Decimal", "Fraction"])
+def test_a_fractional_grid_rank_is_not_told_to_truncate_it(value: Any):
+    """Check that refusing a fractional rank does not advise ``int(value)``."""
+    with pytest.raises(TypeError, match=r"whole number") as caught:
+        U.Pump("P-1").pin(col=value)
+    assert "int(value)" not in str(caught.value)
+
+
 def _numbered_labels() -> Flowsheet:
     """Return a sheet with numbers in its drawn-text fields.
 

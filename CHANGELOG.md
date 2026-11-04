@@ -131,6 +131,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A tank or vessel drawing registered again is drawn (#646).** A sheet drawn
   after `default_registry.register("tank", ...)`, `register("vessel", ...)` or
   `register_part(...)` uses the new drawing, not the one drawn before it.
+- **A refused `Instrument.annotate()` changes no quadrant (#646).**
+  `annotate(safety="SIL2", high=["LAH", " "])` used to write `SIL2` before
+  refusing the empty code.
+- **A refused `Decimal` or `Fraction` grid position gets advice `pin` takes
+  (#646).** `pin(col=Decimal(1))` is told to pass `int(value)` instead of
+  `float(value)`, and `Decimal("1.5")` gets no conversion advice.
+- **A refused count names the class built, and a spec refusal says "an
+  Evaporator" (#646).** A bad `n_feeds` or `n_draws` on an `Absorber` or a
+  `Cyclone` names that class, not `Column` or `Separator`.
 - **Line-number plates fit their text, and draw.io tags sit on their halos
   (#618).** A line number is measured with the face's letter widths, and one
   beside less than half its length of line gets a leader. draw.io writes an

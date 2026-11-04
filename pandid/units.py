@@ -3288,6 +3288,7 @@ class Instrument(Unit):
         ValueError
             If a code is empty.
         """
+        quadrants = dict(self.quadrants)
         for name, codes in (("a", safety), ("b", variable), ("c", high), ("d", low)):
             if codes is None:
                 continue
@@ -3301,10 +3302,12 @@ class Instrument(Unit):
                     f"high='LAH'; leave the argument out to write nothing there"
                 )
             if written:
-                self.quadrants[name] = tuple(sorted(written, key=lambda code: next(
+                quadrants[name] = tuple(sorted(written, key=lambda code: next(
                     (" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)))
             else:
-                self.quadrants.pop(name, None)
+                quadrants.pop(name, None)
+        self.quadrants.clear()
+        self.quadrants.update(quadrants)
         return self
 
     def attach(
@@ -3914,7 +3917,7 @@ class Reactor(Unit):
         internals: str | None = None,
         **options: Unpack[_UnitOptions],
     ):
-        names = _feed_names(n_feeds, "Reactor")
+        names = _feed_names(n_feeds, type(self).__name__)
         super().__init__(name, variant=variant, **options)
         if agitator is _UNSTATED:
             agitator = self.composition_defaults(self.variant, {"internals": internals})["agitator"]
@@ -4065,7 +4068,7 @@ class Separator(Unit):
         characteristic: str | None = None,
         **options: Unpack[_UnitOptions],
     ):
-        names = _feed_names(n_feeds, "Separator")
+        names = _feed_names(n_feeds, type(self).__name__)
         if variant in self._CHARACTERISTICS:
             raise ValueError(
                 f"{name}: {variant!r} is a characteristic, not a variant; "
@@ -4225,9 +4228,11 @@ class Column(Unit):
         draw_stages: list[int | None] | None = None,
         **options: Unpack[_UnitOptions],
     ):
-        names = _feed_names(n_feeds, "Column")
+        names = _feed_names(n_feeds, type(self).__name__)
         if n_draws < 0:
-            raise ValueError(f"Column cannot take a negative number of draws, got {n_draws}")
+            raise ValueError(
+                f"{type(self).__name__} cannot take a negative number of draws, got {n_draws}"
+            )
         draw_names = ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
         super().__init__(name, variant=variant, **options)
         if internals is _UNSTATED:
