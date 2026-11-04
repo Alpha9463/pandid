@@ -139,6 +139,8 @@ def _parse_transform(s: str) -> Matrix:
                 )
             else:
                 f = rot
+        elif name == "matrix" and len(vals) >= 6:
+            f = (vals[0], vals[1], vals[2], vals[3], vals[4], vals[5])
         else:
             continue
         m = _compose(m, f)
@@ -250,26 +252,37 @@ def _path_segments(d: str) -> list[Segment]:
         if cmd is None:
             break
         upper = cmd.upper()
+        relative = cmd.islower()
         nargs = _PATH_CMD_ARGS[upper]
         if upper == "Z":
             segs.append((cur, start))
             cur = start
             cmd = None
             continue
-        assert cmd == upper, f"relative path command in {d!r}"
+        if i + nargs > n:
+            break
         args = [float(tokens[i + k]) for k in range(nargs)]
         i += nargs
         if upper == "A":
             rx, ry, rot, laf, sf = args[0], args[1], args[2], args[3], args[4]
             x, y = args[5], args[6]
+            if relative:
+                x, y = x + cur[0], y + cur[1]
             pts = _arc_points(cur[0], cur[1], rx, ry, rot, int(laf), int(sf), x, y)
             segs.extend(zip(pts, pts[1:]))
             cur = (x, y)
             continue
-        x, y = args[-2], args[-1]
+        if upper == "H":
+            x, y = args[0] + (cur[0] if relative else 0.0), cur[1]
+        elif upper == "V":
+            x, y = cur[0], args[0] + (cur[1] if relative else 0.0)
+        else:
+            x, y = args[-2], args[-1]
+            if relative:
+                x, y = x + cur[0], y + cur[1]
         newp = (x, y)
         if upper == "M":
-            start, cmd = newp, "L"
+            start, cmd = newp, ("l" if relative else "L")
         else:
             segs.append((cur, newp))
         cur = newp
@@ -850,8 +863,11 @@ def _placements(
         ux, uy = float(attr["x"]), float(attr["y"])
         uw, uh = float(attr["width"]), float(attr["height"])
         _, _, vw, vh = _nums(re.search(r'viewBox="([^"]+)"', defs[sym_id]).group(1))
-        sx = sy = min(uw / vw, uh / vh)
-        ox, oy = (uw - sx * vw) / 2, (uh - sy * vh) / 2
+        if 'preserveAspectRatio="none"' in defs[sym_id]:
+            sx, sy, ox, oy = uw / vw, uh / vh, 0.0, 0.0
+        else:
+            sx = sy = min(uw / vw, uh / vh)
+            ox, oy = (uw - sx * vw) / 2, (uh - sy * vh) / 2
         fit: Matrix = (sx, 0.0, 0.0, sy, ux + ox, uy + oy)
         nw, nh = natives.get(sym_id, (vw, vh))
         redraw: Matrix = (vw / nw, 0.0, 0.0, vh / nh, 0.0, 0.0)
