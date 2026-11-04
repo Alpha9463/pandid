@@ -1,14 +1,8 @@
 """
 Example 6: Distillation column with reflux and reboiler loops
 
-The column stands tall on the left, its overhead condenser high and to
-the right with the reflux drum beneath it, and the kettle reboiler off
-the bottom of the tower. Both loops close on the column's ``reflux_in``
-and ``boilup_in`` nozzles, and the bottoms leaves from the reboiler's
-own weir draw.
-
-That arrangement is a drawing convention rather than something a
-topological layout can infer, so the equipment is pinned. Routing,
+A column with its overhead condenser and reflux drum, a kettle reboiler
+off the bottom, and two side draws. The equipment is pinned; routing,
 stream numbering and labels are automatic.
 """
 
@@ -32,25 +26,15 @@ def main():
 
     # --- Equipment ----------------------------------------------------
     feed = fs.add(Feed("Feed", reference="PFD-100"))
-    # Baffle trays: a main fractionator takes a hot, wide-boiling,
-    # coke-forming feed, and a shed deck is what goes in there because
-    # it has no perforation to plug and no valve to stick. They are
-    # inefficient, so the tower is few decks and tall sections.
-    # Trays count from the top: the feed enters on tray 10, and n_draws=2
-    # adds two side draws on the east wall, on trays 6 and 8.
+    # Trays count from the top: feed on tray 10, side draws on 6 and 8.
     col = fs.add(DistillationColumn("T-701", internals="baffle_tray", trays=10,
                                     feed_stages=[10], n_draws=2, draw_stages=[6, 8],
                                     description="Main Fractionator"))
     light = fs.add(Product("Light Cycle Oil", reference="PFD-400"))
     heavy = fs.add(Product("Heavy Cycle Oil", reference="PFD-500"))
 
-    # width/height stay close to each symbol's native proportions:
-    # scaling one far past its drawn aspect is what makes a sheet look
-    # wrong.
     cond = fs.add(ShellAndTubeExchanger("E-701", variant="straight_tubes", width=120,
                                         height=36, description="Overhead Condenser"))
-    # The drum's inlet is authored on three faces and the engine picks
-    # the top one unaided, so nothing here has to override it.
     drum = fs.add(Vessel("V-701", variant="horizontal", width=130, height=42,
                          description="Reflux Drum"))
     vent = fs.add(Product("Vent Gas", reference="PFD-900"))
@@ -62,13 +46,9 @@ def main():
     bot = fs.add(Product("Bottoms", reference="PFD-300"))
 
     # --- Placement ----------------------------------------------------
-    # A port sits at a fixed fraction of its symbol's box, so lining two
-    # items up means matching those fractions rather than measuring.
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
-    # The feed nozzle's elevation is asked of the symbol rather than
-    # measured, and the flag is pinned by its own tip, so the two meet
-    # without any arithmetic in between.
+    # Pin the flag's tip level with the column's feed nozzle.
     feed.pin(x=140, y=col_y + port_offset(col, "feed")[1])
     light.pin(x=900, y=430)
     heavy.pin(x=900, y=500)
@@ -79,24 +59,19 @@ def main():
     cond.pin(x=cond_x, y=cond_y, mirrored="x")
     cond_drain_x = cond_x + 0.75 * cond_w
 
-    # Drum hung so its top inlet (20/91.5 along the shell) sits directly
-    # under the condenser drain, which makes that run a straight drop.
+    # Drum's top inlet (20/91.5 along the shell) under the condenser drain.
     drum_w, drum_y = 130, 170
     drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
     drum_x = cond_drain_x - (20 / 91.5) * drum_w
     drum_draw_x = drum_x + (68 / 91.5) * drum_w        # bottom liquid draw
     vent.pin(x=880, y=125)                             # flag tip clears the condenser
 
-    # Turned a quarter turn: inlet up, both outlets down. Placed so its
-    # inlet is under the drum's draw, and high enough that reflux drops
-    # to the tower's reflux nozzle rather than climbing back up.
+    # Splitter turned inlet up, under the drum's draw.
     split_y = 240
     split.pin(x=drum_draw_x - 25, y=split_y, orientation=90)
     dist.pin(x=900, y=340)
 
-    # Kettle off the tower bottom. Its shell inlet faces down, so the
-    # sump line drops out of the tower, runs across and rises into the
-    # nozzle.
+    # Kettle off the tower bottom.
     reb.pin(x=660, y=512)
     bot.pin(x=900, y=645)                              # below the kettle's draw
 
@@ -116,8 +91,7 @@ def main():
     light_out = fs.connect(col.draws[0], light.inlet)
     heavy_out = fs.connect(col.draws[1], heavy.inlet)
 
-    # A coherent split of one feed: the overhead vent, the distillate,
-    # the two side draws and the bottoms add back up to it.
+    # The products add up to the feed.
     feed_in.properties = {"Flow (kg/h)": "10000"}
     vent_out.properties = {"Flow (kg/h)": "200"}
     dist_out.properties = {"Flow (kg/h)": "4000"}

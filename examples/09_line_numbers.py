@@ -1,21 +1,11 @@
 """
 Example 9: Line numbers
 
-The identifier that ties a line on the sheet to the line list, the
-stress calculation and the isometric: `6"-P-1001-A1A` is size, service,
-sequence, spec. Each line's components go in on `connect()` and the
-sequence is filled by the same numbering that hands out `S1`, `S2`.
-
-The two rules a line number inherits from the stream number are what
-make it match the piping:
-
-- it carries **through** a hand valve and a strainer, so one line keeps
-  one number over its whole run;
-- it **breaks** at a unit marked `new_line_number`, which is exactly
-  where the spec breaks, at the control valve and the relief valve.
-
-The tail-pipe to flare shows the other half: `sequence` set by hand, for
-a line that already exists on someone else's line list.
+A line number such as `6"-P-1001-A1A` is size, service, sequence and
+spec, given on `connect()`; the sequence is numbered automatically. One
+number carries through the hand valve and strainer and breaks at each
+unit marked `new_line_number`. The flare tail-pipe sets `sequence` by
+hand.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -48,13 +38,7 @@ def main():
     psv.new_line_number = True
 
     # --- Placement ----------------------------------------------------
-    # Pinned by nozzle, not by corner: pin(port=...) asks each symbol
-    # where its own nozzle sits. A boundary flag is pinned at its arrow
-    # tip.
-    #
-    # The run off the feed flag is long on purpose: a line number is a
-    # dozen characters wide and is labelled on the longest segment it
-    # has.
+    # Pin by nozzle, with a long run off the feed for its line number.
     suction_y = 300
     discharge_y = 280
 
@@ -66,9 +50,7 @@ def main():
     surge.pin(port="inlet", x=725, y=discharge_y)
     prod.pin(port="inlet", x=925, y=discharge_y)
 
-    # Two pins: how high the PSV stands is a free choice and stays a
-    # corner, while the axis its riser lands on is read off the vessel's
-    # nozzle.
+    # Pin the PSV's height by its corner and its x by its inlet.
     psv.pin(y=110).pin(port="inlet", x=725 + port_offset(surge, "vent")[0])
     flare.pin(port="inlet", x=945, y=110 + port_offset(psv, "outlet")[1])
 
@@ -115,9 +97,7 @@ def main():
         scale="NTS",
         drawn_by="AA",
         checked_by="JS",
-        # Fixed rather than left blank: left blank, the renderer fills
-        # in today's date and the sheet moves by a day on every re-
-        # render.
+        # Left blank, the date is today's.
         date="2026-07-15",
         revisions=[
             Revision("A", "2026-06-20", "Issued for internal review", "AA"),
