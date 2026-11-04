@@ -594,17 +594,18 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             # Name the far ends of the lines as connect() was given them.
             entering = a_in.stream._logical_root or a_in.stream
             leaving = b_out.stream
-            source = entering.source
-            dest = leaving._logical_to or leaving.dest
+            # Name a pool member by its pool, as connect() was given it.
+            source, dest = (f"{p.owner.name}.{p.owner._pool_of(p.name) or p.name}"
+                            for p in (entering.source, leaving._logical_to or leaving.dest))
             warnings.append(Issue(
                 "warning", "exchanger-sides-crossed",
                 f"{u.name} is fed at {a_in.name} and drained at {b_out.name}, with "
                 f"nothing on {a_out.name} or {b_in.name}, so the material goes in on "
                 f"the {a} side and comes out on the {b} side. Keep it on one side, "
                 f"with the other arguments of the connect() it replaces: "
-                f"fs.connect({u.name}.{a_out.name}, {dest.owner.name}.{dest.name}) in "
+                f"fs.connect({u.name}.{a_out.name}, {dest}) in "
                 f"place of the one from {u.name}.{b_out.name}, or "
-                f"fs.connect({source.owner.name}.{source.name}, {u.name}.{b_in.name}) "
+                f"fs.connect({source}, {u.name}.{b_in.name}) "
                 f"in place of the one to {u.name}.{a_in.name}"))
 
     # --- a counted number landing on a name already taken ---

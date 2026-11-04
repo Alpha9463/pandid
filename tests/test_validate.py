@@ -926,6 +926,21 @@ def test_an_exchanger_piped_side_by_side_is_not_reported(piped: tuple[str, ...])
     assert _found(_exchanger("default", *piped), "exchanger-sides-crossed") == []
 
 
+def test_crossed_sides_advice_names_flag_ports_as_connect_took_them():
+    """Check that a flag's second line is named by the port typed, not outlet_2."""
+    fs = Flowsheet("exchanger")
+    feed, product = fs.add(U.Feed("F")), fs.add(U.Product("P"))
+    hx = fs.add(U.HeatExchanger("E-101"))
+    fs.connect(feed.outlet, fs.add(U.Product("Q")).inlet)
+    fs.connect(fs.add(U.Feed("R")).outlet, product.inlet)
+    fs.connect(feed.outlet, hx.shell_in)
+    fs.connect(hx.tube_out, product.inlet)
+
+    (issue,) = _found(fs, "exchanger-sides-crossed")
+    assert "fs.connect(E-101.shell_out, P.inlet)" in issue.message
+    assert "fs.connect(F.outlet, E-101.tube_in)" in issue.message
+
+
 # --- nozzles crowded under their own arrowheads -------------------------------
 
 
