@@ -67,24 +67,21 @@ def suggest(value: str, candidates: Iterable[str]) -> str:
     return f" (did you mean {close[0]!r}?)" if close else ""
 
 
-def _hint(value: Any, advice: str) -> str:
+def _hint(value: Any) -> str:
     """Return advice for a ``Decimal`` or ``Fraction``, or ``""``.
 
     Parameters
     ----------
     value : Any
         Refused value.
-    advice : str
-        Text to append to the error message for a ``Decimal`` or
-        ``Fraction``.
 
     Returns
     -------
     str
-        ``advice``, or ``""``.
+        Text to append to the error message.
     """
     if isinstance(value, (Decimal, numbers.Rational)) and not isinstance(value, numbers.Integral):
-        return advice
+        return "; layout computes with floats, so pass float(value)"
     return ""
 
 
@@ -107,8 +104,7 @@ def check_real(value: Any, where: str) -> None:
     """
     if not is_real(value):
         raise TypeError(
-            f"{where} must be a number (an int or float), got {value!r}"
-            f"{_hint(value, '; layout computes with floats, so pass float(value)')}"
+            f"{where} must be a number (an int or float), got {value!r}{_hint(value)}"
         )
     if not math.isfinite(value):
         raise ValueError(f"{where} must be a finite number, got {value!r}")
@@ -130,7 +126,10 @@ def check_whole(value: Any, where: str) -> None:
         If :func:`is_whole` is false.
     """
     if not is_whole(value):
-        raise TypeError(
-            f"{where} must be a whole number (an int), got {value!r}"
-            f"{_hint(value, '; pass int(value)')}"
-        )
+        # Advise int() only for an integral Decimal or Fraction.
+        exact = (isinstance(value, numbers.Rational) and not isinstance(value, numbers.Integral)
+                 and value.denominator == 1
+                 or isinstance(value, Decimal) and value.is_finite()
+                 and value == value.to_integral_value())
+        raise TypeError(f"{where} must be a whole number (an int), got {value!r}"
+                        + ("; pass int(value)" if exact else ""))
