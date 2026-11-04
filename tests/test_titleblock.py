@@ -1152,16 +1152,20 @@ def test_the_revision_date_column_holds_a_full_date():
     assert not fs.warnings
 
 
-def test_a_box_narrower_than_its_own_rows_is_reported():
-    """Verify a box narrower than its own rows is reported."""
+def test_a_box_narrower_than_its_own_rows_is_reported_by_both_renderers() -> None:
+    """Verify a box narrower than its own rows is reported alike in SVG and draw.io."""
     from pandid.document import Annotation
 
     fs = _sheet()
     fs.add_annotation(
         Annotation(title="NOTES", width=60, rows=["Sampling point on every product line."])
     )
-    fs.to_svg(border="zone")
-    assert [w for w in fs.warnings if w.code == "text-overruns-cell" and "NOTES" in w.message]
+    found: list[list[str]] = []
+    for render in (fs.to_svg, fs.to_drawio):
+        render(border="zone")
+        found.append([w.message for w in fs.warnings if w.code == "text-overruns-cell"])
+    assert found[0] == found[1]
+    assert len(found[0]) == 1 and found[0][0].startswith("annotation 'NOTES' (width=60)")
 
 
 def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():

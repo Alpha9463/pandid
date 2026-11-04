@@ -1749,6 +1749,7 @@ class DrawioRenderer:
                           col_keys=[_ALIGN_KEY.get(align[c] if c < len(align) else "c",
                                                    "align=center;")
                                     for c in range(len(col_w))])
+        F.check_annotation_fit(obj, lambda *cell: self._findings.append(fit_issue(*cell)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar rows, at the sheet's column widths. The first
