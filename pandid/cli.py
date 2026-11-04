@@ -106,28 +106,6 @@ def _fold(name: str) -> str:
     return name.lower().replace("_", "").replace("-", "")
 
 
-def _suggest(value: str, candidates: Sequence[str]) -> str:
-    """Return a "did you mean" hint, or an empty string.
-
-    Parameters
-    ----------
-    value : str
-        Name the user typed.
-    candidates : Sequence[str]
-        Valid names.
-
-    Returns
-    -------
-    str
-        Hint naming the closest candidate, or ``""``.
-    """
-    close = difflib.get_close_matches(_fold(value), [_fold(c) for c in candidates], n=1, cutoff=0.6)
-    if not close:
-        return ""
-    match = next(c for c in candidates if _fold(c) == close[0])
-    return f" (did you mean {match!r}?)"
-
-
 # Subcommands
 
 
@@ -263,57 +241,6 @@ def _validate(args: argparse.Namespace) -> int:
     return EXIT_FAILED if errors else EXIT_OK
 
 
-def _catalogue() -> list[tuple[str, str, list[str]]]:
-    """Return ``(class name, kind, variants)`` for each drawable kind.
-
-    A kind shared by several classes is listed once, under the class
-    ``spec._ALIASES`` resolves it to.
-
-    Returns
-    -------
-    list[tuple[str, str, list[str]]]
-        Rows sorted by class name.
-    """
-    from pandid.render.symbols import default_registry
-
-    rows = []
-    for name in units.__all__:
-        kind = getattr(units, name).kind
-        if spec._ALIASES.get(kind) != name:
-            continue
-        variants = default_registry.variants(kind)
-        if variants:
-            rows.append((name, kind, variants))
-    return sorted(rows)
-
-
-def _row(label: str, items: Sequence[str], pad: int, width: int) -> list[str]:
-    """Format a label and its items, wrapped under a hanging indent.
-
-    Parameters
-    ----------
-    label : str
-        Row label.
-    items : Sequence[str]
-        Items to list after the label.
-    pad : int
-        Width of the label column.
-    width : int
-        Line width past which the next item starts a new line.
-
-    Returns
-    -------
-    list[str]
-        Output lines.
-    """
-    lines = [label.ljust(pad)]
-    for item in items:
-        if len(lines[-1]) > pad and len(lines[-1]) + len(item) > width:
-            lines.append(" " * pad)
-        lines[-1] += item + "  "
-    return [line.rstrip() for line in lines]
-
-
 def _symbols(args: argparse.Namespace) -> int:
     """Print the symbol catalogue, optionally for one kind.
 
@@ -332,15 +259,25 @@ def _symbols(args: argparse.Namespace) -> int:
     _Failure
         If ``--kind`` names no kind (exit 2).
     """
-    catalogue = _catalogue()
+    from pandid.render.symbols import default_registry
+
+    catalogue = []
+    for name in units.__all__:
+        kind = getattr(units, name).kind
+        # List a kind several classes share once, under the class spec._ALIASES names.
+        if spec._ALIASES.get(kind) == name and (variants := default_registry.variants(kind)):
+            catalogue.append((name, kind, variants))
+    catalogue.sort()
     rows = catalogue
     if args.kind is not None:
         wanted = _fold(args.kind)
         rows = [row for row in catalogue if wanted in (_fold(row[0]), _fold(row[1]))]
         if not rows:
             names = [name for name, _, _ in catalogue]
+            close = difflib.get_close_matches(wanted, [_fold(n) for n in names], n=1, cutoff=0.6)
+            hint = next((f" (did you mean {n!r}?)" for n in names if _fold(n) in close), "")
             raise _Failure(
-                f"no equipment kind called {args.kind!r}{_suggest(args.kind, names)}; "
+                f"no equipment kind called {args.kind!r}{hint}; "
                 f"available kinds: {', '.join(names)}",
                 EXIT_USAGE,
             )
@@ -349,9 +286,15 @@ def _symbols(args: argparse.Namespace) -> int:
     labels = [name if _fold(name) == kind else f"{name} ({kind})" for name, kind, _ in rows]
     pad = max(len(label) for label in labels) + 2
     width = max(shutil.get_terminal_size(fallback=(100, 24)).columns - 1, pad + 24)
+    # Wrap each row's variants under a hanging indent.
     for label, (_, _, variants) in zip(labels, rows):
-        for line in _row(label, variants, pad, width):
-            print(line)
+        lines = [label.ljust(pad)]
+        for item in variants:
+            if len(lines[-1]) > pad and len(lines[-1]) + len(item) > width:
+                lines.append(" " * pad)
+            lines[-1] += item + "  "
+        for line in lines:
+            print(line.rstrip())
     if args.kind is None:
         total = sum(len(variants) for _, _, variants in rows)
         _note(
@@ -389,6 +332,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pandid",
         description="Draw a P&ID or process flow diagram from a flowsheet spec file.",
+        epilog='Python API guide: python -c "import pandid; print(pandid.__doc__)"',
     )
     parser.add_argument("--version", action="version", version=f"pandid {__version__}")
     commands = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)

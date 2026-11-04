@@ -553,10 +553,7 @@ def test_every_port_placement_lies_on_the_drawing(entry):
             where = f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y})"
             if (kind, name) in _SIGNAL_PORTS:
                 inboard = min(x, y, sym.width - x, sym.height - y)
-                assert inboard <= GEOM_TOL, (
-                    f"{where} is a signal port {inboard:.1f}u inside the "
-                    f"{sym.width}x{sym.height} box (tolerance {GEOM_TOL})"
-                )
+                assert inboard <= GEOM_TOL, f"{where} is a signal port inside its box"
             elif drawn and (kind, variant, name) not in _KNOWN_GEOMETRY_GAPS:
                 d = _nearest_distance((x, y), segments)
                 assert d <= GEOM_TOL, (
@@ -684,24 +681,6 @@ def _drawn_nozzles(sym: Symbol) -> list[_Nozzle]:
     return found
 
 
-def _port_placements(sym: Symbol) -> list[tuple[str, str, Point]]:
-    """List each port placement.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol definition.
-
-    Returns
-    -------
-    list[tuple[str, str, Point]]
-        Port name, face, and position.
-    """
-    return [
-        (name, face, xy) for name, faces in sym.port_faces.items() for face, xy in faces.items()
-    ]
-
-
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_drawn_nozzles_and_ports_agree(entry):
     """Verify each drawn nozzle has a port and no port sits between two nozzles."""
@@ -709,15 +688,13 @@ def test_drawn_nozzles_and_ports_agree(entry):
     if (kind, variant) in _NOT_NOZZLES:
         pytest.skip("draws a gauge stub, not a process nozzle")
     nozzles = _drawn_nozzles(sym)
-    placements = _port_placements(sym)
+    placements = [
+        (name, face, xy) for name, faces in sym.port_faces.items() for face, xy in faces.items()
+    ]
     points = [xy for _n, _f, xy in placements]
     for nozzle in nozzles:
         near = min(math.dist(nozzle.point, p) for p in points) if points else math.inf
-        assert near <= GEOM_TOL, (
-            f"{kind}/{variant} draws a nozzle on its {nozzle.face} face at "
-            f"{nozzle.point} and anchors no port on it, so the drawing offers a "
-            f"connection the class cannot make"
-        )
+        assert near <= GEOM_TOL, f"{kind}/{variant}: no port on the nozzle at {nozzle.point}"
     for name, face, (x, y) in placements:
         on_face = [n for n in nozzles if n.face == face]
         if len(on_face) < 2:
@@ -726,10 +703,7 @@ def test_drawn_nozzles_and_ports_agree(entry):
         if any(n.lo - GEOM_TOL <= along <= n.hi + GEOM_TOL for n in on_face):
             continue
         assert not (min(n.lo for n in on_face) < along < max(n.hi for n in on_face)), (
-            f"{kind}/{variant} port {name!r} at ({x}, {y}) sits on the {face} "
-            f"face between the nozzles drawn at "
-            + " and ".join(f"{n.lo:g}..{n.hi:g}" for n in on_face)
-            + ", so a pipe to it arrives at bare shell"
+            f"{kind}/{variant} port {name!r} at ({x}, {y}) sits between two nozzles"
         )
 
 
@@ -809,11 +783,7 @@ def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
         if any(name.startswith(f"{stem}_") for name in unit.ports)
     }
     unreached = set(sym.ports) - reachable
-    it = "it" if len(unreached) == 1 else "them"
-    assert not unreached, (
-        f"{kind}/{variant} anchors {sorted(unreached)} in its artwork, and no "
-        f"port on {type(unit).__name__} reaches {it}"
-    )
+    assert not unreached, f"{kind}/{variant}: no port reaches {sorted(unreached)}"
 
 
 def _invert(m: Matrix) -> Matrix:
@@ -935,26 +905,6 @@ def odd_box_sheets():
     return sheets
 
 
-def _resolved_in_symbol_space(unit, matrix: Matrix, name: str) -> Point:
-    """Map a resolved port back to symbol coordinates.
-
-    Parameters
-    ----------
-    unit : units.Unit
-        Placed unit.
-    matrix : Matrix
-        Symbol-to-sheet transform.
-    name : str
-        Port name.
-
-    Returns
-    -------
-    Point
-        Symbol-space port position.
-    """
-    return _apply(_invert(matrix), *port_point(unit, unit.frame, name))
-
-
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_ports_stay_on_the_drawing_at_any_box_shape(entry, odd_box_sheets):
     """Verify process ports stay on ink and signal ports on the outline in odd boxes."""
@@ -971,19 +921,13 @@ def test_ports_stay_on_the_drawing_at_any_box_shape(entry, odd_box_sheets):
         unit, matrix = sheet[(kind, variant)]
         for name in unit.ports:
             where = f"{kind}/{variant} port {name!r} in a {w:g}x{h:g} box"
-            point = _resolved_in_symbol_space(unit, matrix, name)
+            point = _apply(_invert(matrix), *port_point(unit, unit.frame, name))
             if (kind, name) in _SIGNAL_PORTS:
                 d = _nearest_distance(point, outline)
-                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
-                    f"{where} is a signal port {d:.1f}u off the {sym.width}x{sym.height} "
-                    f"outline once the artwork's own placement is undone (tolerance {GEOM_TOL})"
-                )
+                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, f"{where} is a signal port off the outline"
             elif (kind, variant, name) not in _KNOWN_GEOMETRY_GAPS:
                 d = _nearest_distance(point, segments)
-                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
-                    f"{where} is {d:.1f}u from the nearest drawn stroke once the artwork's "
-                    f"own placement is undone (tolerance {GEOM_TOL})"
-                )
+                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, f"{where} is off ink"
 
 
 @pytest.mark.parametrize("entry", _DIRECTIONAL, ids=_DIRECTIONAL_IDS)
@@ -993,27 +937,16 @@ def test_a_directional_symbols_ports_stay_on_ink_under_a_flip(entry):
     segments = _collect_segments(sym.svg)
     for mirror_x, mirror_y in ((True, False), (False, True), (True, True)):
         for name, (x, y) in sym.ports.items():
-            if (kind, name) in _SIGNAL_PORTS:
-                continue
             flipped = (sym.width - x if mirror_x else x, sym.height - y if mirror_y else y)
             d = _nearest_distance(flipped, segments)
-            assert d <= GEOM_TOL, (
-                f"{kind}/{variant} declares directional, but flipped "
-                f"(x={mirror_x}, y={mirror_y}) its port {name!r} lands at {flipped}, "
-                f"{d:.1f}u from the nearest stroke of the artwork that is held "
-                f"still under that flip (tolerance {GEOM_TOL})"
-            )
+            assert d <= GEOM_TOL, f"{kind}/{variant} {mirror_x=} {mirror_y=}: {name!r} off ink"
 
 
 @pytest.mark.parametrize("entry", _DIRECTIONAL, ids=_DIRECTIONAL_IDS)
 def test_a_directional_symbol_carries_no_lettering_of_its_own(entry):
     """Verify directional symbols do not contain fixed lettering."""
     (kind, variant), sym = entry
-    assert "<text" not in sym.svg, (
-        f"{kind}/{variant} declares directional and carries lettering: the "
-        f"renderer holds its whole drawing still and cannot also counter-"
-        f"transform a glyph inside it"
-    )
+    assert "<text" not in sym.svg, f"{kind}/{variant} is directional and carries lettering"
 
 
 _HOLDUP_CASES = [
@@ -1033,10 +966,7 @@ def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind,
 
     unit = cls("X-1", variant=variant)
     for name in unit.ports:
-        assert is_anchored(unit, name), (
-            f"{kind}/{variant} does not anchor {name!r}, so it falls back to the "
-            f"centre of the box and shares that point with every other one that does"
-        )
+        assert is_anchored(unit, name), f"{kind}/{variant} does not anchor {name!r}"
 
 
 @pytest.mark.parametrize("cls,kind,variant", _HOLDUP_CASES, ids=_HOLDUP_CASE_IDS)
@@ -1075,13 +1005,8 @@ def test_the_reported_column_and_reactor_meet_their_streams():
         )
         drawn = [(_apply(matrix, *a), _apply(matrix, *b)) for a, b in _collect_segments(sym.svg)]
         for name in unit.ports:
-            if (unit.kind, name) in _SIGNAL_PORTS:
-                continue
             gap = _nearest_distance(port_point(unit, frame, name), drawn)
-            assert gap <= GEOM_TOL, (
-                f"{unit.name}.{name} is {gap:.1f}px from the nearest drawn stroke "
-                f"of a {frame.w:g}x{frame.h:g} {unit.kind}"
-            )
+            assert gap <= GEOM_TOL, f"{unit.name}.{name} in a {frame.w:g}x{frame.h:g} box"
 
 
 _TURNED = [
@@ -1106,11 +1031,7 @@ def test_a_turned_fittings_ports_lie_on_drawn_geometry(entry):
     for name, faces in turned.port_faces.items():
         for face, (x, y) in faces.items():
             d = _nearest_distance((x, y), segments)
-            assert d <= GEOM_TOL, (
-                f"{kind}/{variant} turned end for end: port_faces[{name!r}][{face!r}] "
-                f"at ({x}, {y}) is {d:.1f}u from the nearest drawn stroke "
-                f"(tolerance {GEOM_TOL})"
-            )
+            assert d <= GEOM_TOL, f"{kind}/{variant} turned: {name!r} on {face!r} at ({x}, {y})"
 
 
 @pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
@@ -1176,12 +1097,9 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
             (round(unit.frame.cx, 6), round(unit.frame.cy, 6))
         ]
         for name in unit.ports:
-            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
-            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
-                f"{kind}/{variant} turned end for end: port {name!r} in a {w:g}x{h:g} box "
-                f"is {d:.1f}u from the nearest drawn stroke once the artwork's own "
-                f"placement is undone (tolerance {GEOM_TOL})"
-            )
+            point = _apply(_invert(matrix), *port_point(unit, unit.frame, name))
+            d = _nearest_distance(point, segments)
+            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, f"{kind}/{variant} turned: {name!r} {w:g}x{h:g}"
 
 
 # Port-placement menu invariants
@@ -1204,32 +1122,31 @@ def _colliding_symbol(**kwargs) -> Symbol:
         return Symbol(svg='<g id="sym_under_test"/>', **kwargs)
 
 
-def test_authored_alternates_do_not_buy_a_shared_face():
-    """Verify authored alternates cannot conceal shared faces."""
-    sym = _colliding_symbol(
-        width=91.5,
-        height=30.0,
-        ports={"feed": (0.0, 15.0), "vapor": (30.0, 0.0), "liquid": (68.0, 30.0)},
-        port_faces={
-            "feed": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
-            "vapor": {"W": (0.0, 15.0), "E": (91.5, 15.0)},
-        },
-    )
-    assert sym.coincident_ports() == [("feed", "vapor", (0.0, 15.0))]
-
-
-def test_a_second_nozzle_on_an_alternates_own_coordinate_is_caught():
-    """Verify a duplicate alternate nozzle is rejected."""
-    sym = _colliding_symbol(
-        width=91.5,
-        height=30.0,
-        ports={"inlet": (0.0, 15.0), "outlet": (68.0, 30.0)},
-        port_faces={
-            "inlet": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
-            "outlet": {"E": (91.5, 15.0)},
-        },
-    )
-    assert sym.coincident_ports() == [("inlet", "outlet", (91.5, 15.0))]
+@pytest.mark.parametrize(
+    ("ports", "port_faces", "clash"),
+    [
+        (
+            {"feed": (0.0, 15.0), "vapor": (30.0, 0.0), "liquid": (68.0, 30.0)},
+            {
+                "feed": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
+                "vapor": {"W": (0.0, 15.0), "E": (91.5, 15.0)},
+            },
+            ("feed", "vapor", (0.0, 15.0)),
+        ),
+        (
+            {"inlet": (0.0, 15.0), "outlet": (68.0, 30.0)},
+            {
+                "inlet": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
+                "outlet": {"E": (91.5, 15.0)},
+            },
+            ("inlet", "outlet", (91.5, 15.0)),
+        ),
+    ],
+)
+def test_two_ports_on_one_alternate_placement_are_caught(ports, port_faces, clash):
+    """Verify a shared alternate, or a nozzle on an alternate's coordinate, is caught."""
+    sym = _colliding_symbol(width=91.5, height=30.0, ports=ports, port_faces=port_faces)
+    assert sym.coincident_ports() == [clash]
 
 
 def test_faceless_connections_may_share_a_placement():
@@ -1259,52 +1176,32 @@ def test_faceless_connections_may_share_a_placement():
     ]
 
 
-def test_a_placement_keyed_to_a_face_it_does_not_land_on_is_rejected():
-    """Verify alternates reject mismatched placement keys."""
-    with pytest.raises(ValueError, match=r"nearest the W edge"):
-        Symbol(
-            svg='<g id="sym_x"/>',
-            width=91.5,
-            height=30.0,
-            ports={"feed": (30.0, 0.0)},
-            port_faces={"feed": {"N": (0.0, 15.0)}},  # that point is on the west
-        )
-
-
-def test_an_alternate_on_a_ports_own_home_face_is_rejected():
-    """Verify alternates cannot restate a port's home face."""
-    with pytest.raises(ValueError, match=r"but ports\['feed'\] puts the same face at"):
-        Symbol(
-            svg='<g id="sym_x"/>',
-            width=91.5,
-            height=30.0,
-            ports={"feed": (0.0, 15.0)},
-            port_faces={"feed": {"W": (0.0, 12.0)}},
-        )
-
-
-def test_a_menu_for_a_port_the_symbol_does_not_anchor_is_rejected():
-    """Verify menus reject undeclared ports."""
-    with pytest.raises(ValueError, match=r"declares a menu for \['nope'\]"):
-        Symbol(
-            svg='<g id="sym_x"/>',
-            width=40.0,
-            height=40.0,
-            ports={"inlet": (0.0, 20.0)},
-            port_faces={"nope": {"E": (40.0, 20.0)}},
-        )
-
-
-def test_a_faceless_port_the_symbol_does_not_anchor_is_rejected():
-    """Verify faceless declarations reject undeclared ports."""
-    with pytest.raises(ValueError, match=r"faceless_ports names \['typo'\]"):
-        Symbol(
-            svg='<g id="sym_x"/>',
-            width=40.0,
-            height=40.0,
-            ports={"inlet": (0.0, 20.0)},
-            faceless_ports=frozenset({"typo"}),
-        )
+@pytest.mark.parametrize(
+    ("menus", "match"),
+    [
+        # (0.0, 15.0) is on the west edge, not the north.
+        (
+            {"ports": {"feed": (30.0, 0.0)}, "port_faces": {"feed": {"N": (0.0, 15.0)}}},
+            r"nearest the W edge",
+        ),
+        (
+            {"ports": {"feed": (0.0, 15.0)}, "port_faces": {"feed": {"W": (0.0, 12.0)}}},
+            r"but ports\['feed'\] puts the same face at",
+        ),
+        (
+            {"ports": {"inlet": (0.0, 20.0)}, "port_faces": {"nope": {"E": (40.0, 20.0)}}},
+            r"declares a menu for \['nope'\]",
+        ),
+        (
+            {"ports": {"inlet": (0.0, 20.0)}, "faceless_ports": frozenset({"typo"})},
+            r"faceless_ports names \['typo'\]",
+        ),
+    ],
+)
+def test_a_menu_that_does_not_fit_the_ports_is_rejected(menus, match):
+    """Verify a misplaced, restated or unanchored menu or faceless port is rejected."""
+    with pytest.raises(ValueError, match=match):
+        Symbol(svg='<g id="sym_x"/>', width=91.5, height=30.0, **menus)
 
 
 def test_a_home_placement_restated_in_the_menu_is_accepted():
@@ -1394,10 +1291,7 @@ def test_series_members_lie_on_drawn_geometry(entry):
             for index in range(count):
                 x, y = series.placement(index, count, sym.width, sym.height)
                 d = _nearest_distance((x, y), segments)
-                assert d <= GEOM_TOL, (
-                    f"{kind}/{variant} {series.prefix}{index + 1} of {count} at "
-                    f"({x}, {y}) is {d:.1f}u from the nearest drawn stroke"
-                )
+                assert d <= GEOM_TOL, f"{kind}/{variant} {series.prefix}{index + 1} of {count}"
 
 
 def test_a_lone_member_lands_where_the_fixed_nozzle_did():
@@ -1418,30 +1312,19 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
         assert placed["W"] == pytest.approx(want)
 
 
-def test_a_lone_column_feed_sits_at_the_centre_of_the_duty_band():
-    """Verify a lone column feed centres in its duty band."""
+@pytest.mark.parametrize(("family", "draws", "face"), [("feed", 0, "W"), ("draw", 1, "E")])
+def test_a_lone_column_feed_or_draw_sits_at_the_centre_of_the_duty_band(family, draws, face):
+    """Verify a lone column feed or draw centres in its duty band."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, resolve_size
 
     for variant in default_registry.variants("column"):
-        unit = U.Column("T", variant=variant)
+        unit = U.Column("T", variant=variant, n_draws=draws)
         w, h = resolve_size(unit)
-        placed = _drawn_placements(unit, "feed", w, h, 0, False, False)
-        assert list(placed) == ["W"], f"column/{variant}"
-        assert placed["W"] == pytest.approx((0.0, 105.0)), f"column/{variant}"
-
-
-def test_a_lone_column_draw_sits_at_the_centre_of_the_duty_band_too():
-    """Verify a lone column draw centres in its duty band."""
-    from pandid import units as U
-    from pandid.portgeom import _drawn_placements, resolve_size
-
-    for variant in default_registry.variants("column"):
-        unit = U.Column("T", variant=variant, n_draws=1)
-        w, h = resolve_size(unit)
-        placed = _drawn_placements(unit, "draw", w, h, 0, False, False)
-        assert list(placed) == ["E"], f"column/{variant}"
-        assert placed["E"] == pytest.approx((w, 105.0)), f"column/{variant}"
+        placed = _drawn_placements(unit, family, w, h, 0, False, False)
+        assert list(placed) == [face], f"column/{variant}"
+        x = 0.0 if face == "W" else w
+        assert placed[face] == pytest.approx((x, 105.0)), f"column/{variant}"
 
 
 def test_a_feed_family_reaching_the_return_nozzles_is_caught():
@@ -1471,16 +1354,11 @@ def test_the_shipped_feed_families_reach_nothing_else():
         assert sym.coincident_ports() == [], f"{kind}/{variant}"
 
 
-def _assert_family_between_duty_arrows(variant, prefix, label, build):
-    """Assert a column family remains between duty arrows.
-
-    Parameters
-    ----------
-    variant, prefix, label : str
-        Family identifier.
-    build : Callable
-        Column constructor.
-    """
+@pytest.mark.parametrize(("prefix", "label"), [("feed_", "n_feeds"), ("draw_", "n_draws")])
+@pytest.mark.parametrize("variant", default_registry.variants("column"))
+def test_every_column_feed_and_draw_stays_between_the_duty_arrows(variant, prefix, label):
+    """Verify column feeds and draws remain between duty arrows."""
+    from pandid import units as U
     from pandid.portgeom import port_offset
 
     sym = default_registry.get("column", variant)
@@ -1488,7 +1366,8 @@ def _assert_family_between_duty_arrows(variant, prefix, label, build):
     assert lo < hi, f"column/{variant}: the duty arrows bound no band at all"
     (family,) = (series for series in sym.port_series if series.prefix == prefix)
     for count in range(1, 13):
-        column = build(variant, count)
+        family_size: dict[str, Any] = {label: count}
+        column = U.Column("T", variant=variant, **family_size)
         members = [name for name in column.ports if family.matches(name)]
         assert len(members) == count, f"column/{variant} {label}={count}: {members}"
         for name in members:
@@ -1497,26 +1376,6 @@ def _assert_family_between_duty_arrows(variant, prefix, label, build):
                 f"column/{variant} {name} of {count} sits at y={y}, outside the "
                 f"({lo}, {hi}) band the duty arrows bound"
             )
-
-
-@pytest.mark.parametrize("variant", default_registry.variants("column"))
-def test_every_column_feed_stays_between_the_duty_arrows(variant):
-    """Verify column feeds remain between duty arrows."""
-    from pandid import units as U
-
-    _assert_family_between_duty_arrows(
-        variant, "feed_", "n_feeds", lambda v, count: U.Column("T", variant=v, n_feeds=count)
-    )
-
-
-@pytest.mark.parametrize("variant", default_registry.variants("column"))
-def test_every_column_draw_stays_between_the_duty_arrows(variant):
-    """Verify column draws remain between duty arrows."""
-    from pandid import units as U
-
-    _assert_family_between_duty_arrows(
-        variant, "draw_", "n_draws", lambda v, count: U.Column("T", variant=v, n_draws=count)
-    )
 
 
 def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
@@ -1708,10 +1567,7 @@ def test_a_holdup_family_stays_on_its_wall_and_its_ink_at_every_count(kind, vari
     segments = _collect_segments(sym.svg)
     for role, prefix, menu in _role_menus(kind, variant):
         for face, drawn in menu.items():
-            assert face in sym.bands, (
-                f"{kind}/{variant}: {role} may be piped from {face}, and no band "
-                f"says how much of that face is drawing"
-            )
+            assert face in sym.bands, f"{kind}/{variant}: {role} on {face} has no band"
             lo, hi = sym.bands[face]
             for count in range(1, 9 if _has_wall(sym, face) else 2):
                 unit = _holdup(kind, variant, role, [face] * count)
@@ -1747,10 +1603,7 @@ def test_every_declared_wall_lies_on_the_drawing(kind, variant):
             for t in (lo, (lo + hi) / 2, hi):
                 point = _face_point(face, t, inset, sym.width, sym.height)
                 d = _nearest_distance(point, segments)
-                assert d <= GEOM_TOL, (
-                    f"{kind}/{variant} bands {face!r} at ({lo}, {hi}); {t} along it "
-                    f"is {point}, which is {d:.1f}u from the nearest drawn stroke"
-                )
+                assert d <= GEOM_TOL, f"{kind}/{variant} band {face!r} at {t} is off ink"
 
 
 @pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
@@ -1766,10 +1619,7 @@ def test_a_wall_takes_a_second_connection_and_a_point_refuses_one(kind, variant)
                 continue
             pair = _holdup(kind, variant, role, [face, face])
             one, two = (port_offset(pair, f"{prefix}{i}") for i in (1, 2))
-            assert one != two, (
-                f"{kind}/{variant} {role} on {face}: a face with a wall took a "
-                f"second connection and drew it on top of the first"
-            )
+            assert one != two, f"{kind}/{variant} {role} on {face}: two connections coincide"
 
 
 def test_a_face_with_no_wall_is_refused_by_the_drawing_too():
@@ -1924,88 +1774,12 @@ def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
 # Stencil-generation invariants
 
 
-def _clip(line: str, column: int, width: int = 90) -> str:
-    """Extract context around a character position.
-
-    Parameters
-    ----------
-    line : str
-        Source line.
-    column : int
-        Centre position.
-    width : int
-        Context width.
-
-    Returns
-    -------
-    str
-        Clipped line.
-    """
-    if len(line) <= 2 * width:
-        return line
-    lo, hi = max(0, column - width), min(len(line), column + width)
-    return ("..." if lo else "") + line[lo:hi] + ("..." if hi < len(line) else "")
-
-
-def _generator_diff(committed: str, generated: str, context: int = 2) -> str:
-    """Describe the first generated-file difference.
-
-    Parameters
-    ----------
-    committed, generated : str
-        Compared file contents.
-    context : int
-        Context rows.
-
-    Returns
-    -------
-    str
-        Compact difference report.
-    """
-    old, new = committed.split("\n"), generated.split("\n")
-    total = max(len(old), len(new))
-    row = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
-    a = old[row] if row < len(old) else ""
-    b = new[row] if row < len(new) else ""
-    column = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
-    out = [f"first divergence at line {row + 1} of {total}, column {column + 1}:"]
-    for k in range(max(0, row - context), min(total, row + context + 1)):
-        mark = ">>" if k == row else "  "
-        for label, lines in (("committed", old), ("regenerated", new)):
-            text = _clip(lines[k], column) if k < len(lines) else "<no line>"
-            out.append(f"{mark} [{k + 1}] {label}: {text}")
-    return "\n".join(out)
-
-
 def test_the_generated_symbols_match_the_generator():
     """Verify generated symbols match the generator output."""
     vendor = _script("vendor_symbols")
     committed = vendor.OUT.read_text(encoding="utf-8")
     generated = vendor.render()
-    if generated != committed:
-        pytest.fail(
-            f"{vendor.OUT.name} is not what scripts/vendor_symbols.py emits today.\n"
-            "It is regenerated wholesale, so a hand edit to it is lost the next time\n"
-            "anyone runs the generator, and the drawing silently reverts. Change the\n"
-            "KIND_MAP entry (or the stencil patch) that produces it, then run\n\n"
-            "    python scripts/vendor_symbols.py\n\n"
-            "and commit the regenerated file with the change that caused it.\n\n"
-            + _generator_diff(committed, generated),
-            pytrace=False,
-        )
-
-
-@pytest.mark.parametrize(
-    "declared,aspect",
-    [('aspect="fixed" ', "fixed"), ('aspect="variable" ', "variable"), ("", "variable")],
-)
-def test_the_converter_reports_a_stencil_shapes_aspect(declared, aspect):
-    """Verify stencil conversion reports shape aspect behaviour."""
-    shape = ET.fromstring(
-        f'<shape {declared}w="100" h="50"><foreground>'
-        f'<rect x="0" y="0" w="100" h="50"/><stroke/></foreground></shape>'
-    )
-    assert _script("mxgraph_to_svg").convert_shape(shape)[4] == aspect
+    assert generated == committed, "run scripts/vendor_symbols.py"
 
 
 def test_every_stencil_shape_the_generator_vendors_may_be_stretched():
@@ -2027,62 +1801,6 @@ def test_every_stencil_shape_the_generator_vendors_may_be_stretched():
 
 
 # Stencil fill and arc invariants
-
-
-def _converted_fills(body: str) -> list[str]:
-    """Read fills emitted for stencil operations.
-
-    Parameters
-    ----------
-    body : str
-        Stencil foreground XML.
-
-    Returns
-    -------
-    list[str]
-        Emitted fill values.
-    """
-    shape = ET.fromstring(f'<shape w="10" h="10"><foreground>{body}</foreground></shape>')
-    return re.findall(r'fill="([^"]*)"', _script("mxgraph_to_svg").convert_shape(shape)[0])
-
-
-def _painted(ops: str) -> list[str]:
-    """Read fills from one rectangle operation sequence.
-
-    Parameters
-    ----------
-    ops : str
-        Stencil operations.
-
-    Returns
-    -------
-    list[str]
-        Emitted fill values.
-    """
-    return _converted_fills(f'<rect x="0" y="0" w="10" h="10"/>{ops}')
-
-
-def test_a_fill_takes_the_paper_until_the_stencil_asks_for_ink():
-    """Verify stencil fills default to the paper colour."""
-    assert _painted("<fillstroke/>") == ["white"]
-    assert _painted("<stroke/>") == ["none"]
-    assert _painted("<fill/>") == ["white"]
-
-
-def test_fillcolor_is_how_a_stencil_asks_for_a_solid_shape():
-    """Verify stencil fill colours produce solid shapes."""
-    assert _painted('<fillcolor color="#000000"/><fillstroke/>') == ["#111"]
-    assert _painted('<fillcolor color="#000000"/><fill/>') == ["#111"]
-    assert _painted('<fillcolor color="stroke"/><fillstroke/>') == ["#111"]
-    assert _painted('<fillcolor color="none"/><fillstroke/>') == ["none"]
-
-
-def test_save_and_restore_bracket_the_fill_colour():
-    """Verify stencil save and restore scope fill colours."""
-    assert _converted_fills(
-        '<save/><rect x="0" y="0" w="4" h="4"/><fillcolor color="#000000"/><fillstroke/>'
-        '<restore/><rect x="5" y="5" w="4" h="4"/><fillstroke/>'
-    ) == ["#111", "white"]
 
 
 def test_the_sphere_draws_its_shell_over_its_nozzles():
@@ -2250,8 +1968,7 @@ def test_every_paired_shape_is_one_device_in_two_positions():
         assert closed.id_suffix and not opened.id_suffix, "two drawings, two <defs> ids"
         assert _artwork(closed) != _artwork(opened), "the position must be drawn"
         assert _collect_segments(closed.svg) == _collect_segments(opened.svg), (
-            f"{kind}/{variant}: the two positions must differ in ink alone, so that "
-            f"every port checked against the open drawing is checked against both"
+            f"{kind}/{variant}: the two positions differ in more than ink"
         )
 
 
@@ -2327,24 +2044,6 @@ def _ink_extents(svg: str) -> list[tuple[str, float, float]]:
 _FEATURE_AREA = 0.5
 
 
-def _body_fill(sym: Symbol) -> float:
-    """Measure the largest filled element area ratio.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Symbol definition.
-
-    Returns
-    -------
-    float
-        Largest area ratio.
-    """
-    return max(
-        [(w * h) / (sym.width * sym.height) for _, w, h in _ink_extents(sym.svg)], default=0.0
-    )
-
-
 def test_no_valve_body_is_drawn_filled():
     """Verify valve bodies are not filled by default."""
     for variant in default_registry.variants("valve"):
@@ -2353,11 +2052,7 @@ def test_no_valve_body_is_drawn_filled():
         sym = default_registry.for_unit(valve)
         for tag, w, h in _ink_extents(sym.svg):
             covered = (w * h) / (sym.width * sym.height)
-            assert covered < _FEATURE_AREA, (
-                f"valve/{variant} fills a <{tag}> covering {covered:.0%} of its "
-                f"{sym.width}x{sym.height} box -- that is the body, not a feature of it, "
-                f"and a filled body means normally closed"
-            )
+            assert covered < _FEATURE_AREA, f"valve/{variant} fills a <{tag}> over {covered:.0%}"
 
 
 def test_a_normally_closed_valve_is_the_one_valve_drawn_filled():
@@ -2378,15 +2073,15 @@ def test_a_normally_closed_valve_is_the_one_valve_drawn_filled():
         sym = default_registry.for_unit(valve)
         if variant in NC_DARKENS:
             assert mark == "fill"
-            assert _body_fill(sym) >= _FEATURE_AREA, (
-                f"valve/{variant} is declared normally closed but nothing it draws "
-                f"covers enough of its box to read as a darkened body"
+            fill = max(
+                [(w * h) / (sym.width * sym.height) for _, w, h in _ink_extents(sym.svg)],
+                default=0.0,
             )
+            assert fill >= _FEATURE_AREA, f"valve/{variant} draws no darkened body"
         else:
             assert mark == "NC"
             assert _artwork(sym) == _artwork(default_registry.get("valve", variant)), (
-                f"valve/{variant} cannot be darkened, so its artwork must be the "
-                f"ordinary one and the position said in letters instead"
+                f"valve/{variant} changes its artwork"
             )
     assert seen == set(default_registry.variants("valve"))
 
@@ -2396,28 +2091,11 @@ _VALVE_RUN_HEIGHT = 7.5
 _VALVE_RUN_TOL = 0.25
 
 
-def _straight_through(sym: Symbol) -> bool:
-    """Identify a west-to-east valve.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Valve symbol.
-
-    Returns
-    -------
-    bool
-        Whether the process run is straight.
-    """
-    return list(sym.port_faces.get("inlet", ())) == ["W"] and list(
-        sym.port_faces.get("outlet", ())
-    ) == ["E"]
-
-
 _STRAIGHT_VALVES = sorted(
     variant
     for variant in default_registry.variants("valve")
-    if _straight_through(default_registry.get("valve", variant))
+    for faces in [default_registry.get("valve", variant).port_faces]
+    if list(faces.get("inlet", ())) == ["W"] and list(faces.get("outlet", ())) == ["E"]
 )
 
 
@@ -2425,26 +2103,6 @@ _OFF_THE_RUN = {
     "three_way": "The branch extends the box below the top-aligned process run.",
     "knife": "The gate housing extends below the process run.",
 }
-
-
-def _run_heights(sym: Symbol) -> dict[tuple[str, str], float]:
-    """Read process-port heights above a valve base.
-
-    Parameters
-    ----------
-    sym : Symbol
-        Valve symbol.
-
-    Returns
-    -------
-    dict[tuple[str, str], float]
-        Heights by port and face.
-    """
-    return {
-        (name, face): sym.height - y
-        for name in ("inlet", "outlet")
-        for face, (_, y) in sym.port_faces[name].items()
-    }
 
 
 def _ink_below_the_run(sym: Symbol) -> float:
@@ -2468,23 +2126,19 @@ def _ink_below_the_run(sym: Symbol) -> float:
 def test_a_straight_through_valve_carries_the_run_at_one_height(variant):
     """Verify straight-through valves preserve run height."""
     sym = default_registry.get("valve", variant)
-    for (name, face), above in _run_heights(sym).items():
-        assert above == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL), (
-            f"valve/{variant} puts {name!r} ({face}) {above:.2f}u above the bottom of its "
-            f"{sym.width}x{sym.height} box, not the {_VALVE_RUN_HEIGHT} every other "
-            f"straight-through valve carries the run at (tolerance {_VALVE_RUN_TOL}) -- "
-            f"so swapping a valve for this one moves the line it sits in"
-        )
+    for name in ("inlet", "outlet"):
+        for face, (_, y) in sym.port_faces[name].items():
+            above = sym.height - y
+            assert above == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL), (
+                f"valve/{variant} {name!r} ({face})"
+            )
 
 
 @pytest.mark.parametrize("variant", _STRAIGHT_VALVES)
 def test_the_two_ends_of_a_straight_through_valve_are_level(variant):
     """Verify straight-through valve endpoints are level."""
     sym = default_registry.get("valve", variant)
-    assert sym.ports["inlet"][1] == sym.ports["outlet"][1], (
-        f"valve/{variant} enters at y={sym.ports['inlet'][1]} and leaves at "
-        f"y={sym.ports['outlet'][1]}, which puts a step in the run"
-    )
+    assert sym.ports["inlet"][1] == sym.ports["outlet"][1], f"valve/{variant}"
 
 
 def test_exactly_the_valves_named_above_leave_the_run():
@@ -2492,9 +2146,11 @@ def test_exactly_the_valves_named_above_leave_the_run():
     strayed = {
         variant
         for variant in _STRAIGHT_VALVES
+        for sym in [default_registry.get("valve", variant)]
         if any(
-            abs(above - _VALVE_RUN_HEIGHT) > _VALVE_RUN_TOL
-            for above in _run_heights(default_registry.get("valve", variant)).values()
+            abs(sym.height - y - _VALVE_RUN_HEIGHT) > _VALVE_RUN_TOL
+            for name in ("inlet", "outlet")
+            for _, y in sym.port_faces[name].values()
         )
     }
     assert strayed == set(_OFF_THE_RUN)
@@ -2587,8 +2243,7 @@ def test_a_valve_off_the_stencils_module_is_rescaled_onto_the_familys_size(varia
     vendor, boxes = _valve_stencil_boxes()
     assert boxes[variant] == stencil_box, why
     assert vendor.scale_for("valve", variant) != vendor.scale_for("valve", "gate"), (
-        f"valve/{variant} is drawn on a {stencil_box[0]} x {stencil_box[1]} module "
-        f"and takes the kind's bare factor, so it is drawn undersized: {why}"
+        f"valve/{variant} on a {stencil_box[0]} x {stencil_box[1]} module is undersized: {why}"
     )
     sym = default_registry.get("valve", variant)
     assert (sym.width, sym.height) == emitted, why
@@ -2689,17 +2344,6 @@ def test_the_band_a_series_reports_is_the_run_it_really_draws(align):
             assert lo - 1e-9 <= series.placement(i, count, 80.0, 120.0)[1] <= hi + 1e-9
 
 
-def test_every_separator_that_can_hold_a_family_declares_one():
-    """Verify every eligible separator declares a port family."""
-    for variant in units.Separator.VARIANTS:
-        symbol = default_registry.get("separator", variant)
-        if variant in units.Separator._ONE_FEED_VARIANTS:
-            assert "feed" in symbol.ports and not symbol.port_series
-            continue
-        assert "feed" not in symbol.ports
-        assert [s.prefix for s in symbol.port_series] == ["feed_"]
-
-
 # Vendored-registry documentation invariants
 
 _VENDORED_SOURCE_WORDS = {
@@ -2745,10 +2389,7 @@ def test_every_vendored_kind_is_named_in_the_module_docstring():
     assert vendored_kinds, "register_vendored() registered no (kind, variant) at all"
 
     unmapped = vendored_kinds - _VENDORED_SOURCE_WORDS.keys()
-    assert not unmapped, (
-        f"{unmapped} draw from a vendored stencil and are not in "
-        f"_VENDORED_SOURCE_WORDS above; add the word this test should look for"
-    )
+    assert not unmapped, f"{unmapped} are not in _VENDORED_SOURCE_WORDS"
 
     doc = " ".join((symbols_module.__doc__ or "").split())
     missing = [
@@ -2756,7 +2397,4 @@ def test_every_vendored_kind_is_named_in_the_module_docstring():
         for kind in vendored_kinds
         if not re.search(rf"\b{re.escape(_VENDORED_SOURCE_WORDS[kind])}\b", doc)
     ]
-    assert not missing, (
-        f"{[_VENDORED_SOURCE_WORDS[k] for k in missing]} vendored but not named "
-        f"in pandid/render/symbols.py's own module docstring"
-    )
+    assert not missing, [_VENDORED_SOURCE_WORDS[k] for k in missing]

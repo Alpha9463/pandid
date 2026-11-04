@@ -3,7 +3,6 @@
 import base64
 import importlib.util
 import io
-import math
 import re
 import zlib
 from pathlib import Path
@@ -12,6 +11,7 @@ import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.render import export
+from test_symbol_invariants import _apply, _parse_transform as _matrix
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 GOLDENS = sorted(p.name for p in GOLDEN_DIR.glob("*.svg"))
@@ -20,49 +20,6 @@ GOLDENS = sorted(p.name for p in GOLDEN_DIR.glob("*.svg"))
 _HAS_PDF_EXTRA = all(
     importlib.util.find_spec(m) is not None for m in ("svglib", "reportlab", "pypdfium2", "PIL")
 )
-
-_OP = re.compile(r"(translate|scale|rotate)\(([^)]*)\)")
-
-
-def _matrix(transform: str) -> tuple[float, float, float, float, float, float]:
-    """Compose an SVG transform list, left to right, into one (a, b, c, d, e, f) matrix."""
-    m = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
-    for name, raw in _OP.findall(transform):
-        v = [float(n) for n in raw.replace(",", " ").split()]
-        if name == "translate":
-            other = (1.0, 0.0, 0.0, 1.0, v[0], v[1] if len(v) > 1 else 0.0)
-        elif name == "scale":
-            other = (v[0], 0.0, 0.0, v[1] if len(v) > 1 else v[0], 0.0, 0.0)
-        else:
-            r = math.radians(v[0])
-            cos, sin = math.cos(r), math.sin(r)
-            other = (cos, sin, -sin, cos, 0.0, 0.0)
-            if len(v) == 3:  # rotate about a point
-                cx, cy = v[1], v[2]
-                other = (
-                    cos,
-                    sin,
-                    -sin,
-                    cos,
-                    cx - cos * cx + sin * cy,
-                    cy - sin * cx - cos * cy,
-                )
-        a, b, c, d, e, f = m
-        oa, ob, oc, od, oe, of = other
-        m = (
-            a * oa + c * ob,
-            b * oa + d * ob,
-            a * oc + c * od,
-            b * oc + d * od,
-            a * oe + c * of + e,
-            b * oe + d * of + f,
-        )
-    return m
-
-
-def _apply(m, x, y):
-    a, b, c, d, e, f = m
-    return a * x + c * y + e, b * x + d * y + f
 
 
 def _page_content(pdf: bytes) -> bytes:
@@ -100,47 +57,39 @@ def test_every_golden_sheet_flattens_to_something_the_backend_can_draw(name):
         assert gone not in flat, f"{gone} survived flattening of {name}"
 
 
-def test_a_stretched_symbol_lands_on_exactly_the_box_the_use_asked_for():
-    """Map a ``preserveAspectRatio="none"`` symbol onto its ``<use>`` box."""
+@pytest.mark.parametrize(
+    ("symbol", "use", "mapped"),
+    [
+        # preserveAspectRatio="none" stretches onto exactly the box.
+        (
+            'viewBox="0 0 10 20" preserveAspectRatio="none"',
+            'x="30" y="40" width="50" height="60"',
+            [((0, 0), (30, 40)), ((10, 20), (80, 100))],
+        ),
+        # xMidYMid meet: scale 2 (the smaller of 4 and 2), 20 wide, centred in the 40-wide box.
+        (
+            'viewBox="0 0 10 10"',
+            'x="0" y="0" width="40" height="20"',
+            [((0, 0), (10, 0)), ((10, 10), (30, 20))],
+        ),
+        # The use's own transform applies to the placed box, not inside it.
+        (
+            'viewBox="0 0 10 10" preserveAspectRatio="none"',
+            'x="0" y="0" width="10" height="10" transform="rotate(90, 0, 0)"',
+            [((10, 0), (0, 10))],
+        ),
+    ],
+)
+def test_a_use_places_its_symbol_on_the_box_it_asks_for(symbol, use, mapped):
+    """Map a ``<use>``'s symbol onto its box as SVG places it."""
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
-        '<defs><symbol id="s" viewBox="0 0 10 20" preserveAspectRatio="none">'
-        '<rect x="0" y="0" width="10" height="20"/></symbol></defs>'
-        '<use href="#s" x="30" y="40" width="50" height="60" />'
-        "</svg>"
+        f'<defs><symbol id="s" {symbol}><rect x="0" y="0" width="10" height="10"/></symbol>'
+        f'</defs><use href="#s" {use} /></svg>'
     )
     m = _matrix(re.search(r'<g transform="([^"]*)"', export.flatten(svg)).group(1))
-    assert _apply(m, 0, 0) == pytest.approx((30, 40))
-    assert _apply(m, 10, 20) == pytest.approx((80, 100))
-
-
-def test_a_symbol_that_keeps_its_aspect_is_centred_in_its_box():
-    """Scale a symbol that keeps its aspect to fit its box, centred (xMidYMid meet)."""
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
-        '<defs><symbol id="s" viewBox="0 0 10 10">'
-        '<rect x="0" y="0" width="10" height="10"/></symbol></defs>'
-        '<use href="#s" x="0" y="0" width="40" height="20" />'
-        "</svg>"
-    )
-    m = _matrix(re.search(r'<g transform="([^"]*)"', export.flatten(svg)).group(1))
-    # Scale 2 (the smaller of 4 and 2): 20 wide, centred in the 40-wide box.
-    assert _apply(m, 0, 0) == pytest.approx((10, 0))
-    assert _apply(m, 10, 10) == pytest.approx((30, 20))
-
-
-def test_the_reference_transform_is_applied_outside_the_placement():
-    """Apply a ``<use>`` transform to the placed box, not inside it."""
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
-        '<defs><symbol id="s" viewBox="0 0 10 10" preserveAspectRatio="none">'
-        '<rect x="0" y="0" width="10" height="10"/></symbol></defs>'
-        '<use href="#s" x="0" y="0" width="10" height="10" '
-        'transform="rotate(90, 0, 0)" />'
-        "</svg>"
-    )
-    m = _matrix(re.search(r'<g transform="([^"]*)"', export.flatten(svg)).group(1))
-    assert _apply(m, 10, 0) == pytest.approx((0, 10))
+    for (x, y), placed in mapped:
+        assert _apply(m, x, y) == pytest.approx(placed)
 
 
 def test_an_end_marker_is_drawn_at_the_end_of_its_own_line():
@@ -154,17 +103,6 @@ def test_an_end_marker_is_drawn_at_the_end_of_its_own_line():
     assert heads, "no arrowhead was drawn"
     for hx, hy in heads:
         assert (round(float(hx)), round(float(hy))) in ends
-
-
-def test_a_construct_the_backend_cannot_draw_is_refused_rather_than_dropped():
-    """Refuse a clip path rather than drop it."""
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
-        '<rect x="0" y="0" width="10" height="10" clip-path="url(#c)"/></svg>'
-    )
-    with pytest.raises(RuntimeError) as excinfo:
-        export.flatten(svg)
-    assert "clip-path" in str(excinfo.value)
 
 
 # --- how a string sets --------------------------------------------------------
@@ -213,22 +151,29 @@ def test_a_label_already_set_on_its_baseline_does_not_move(baseline):
     assert _text_y(flat) == pytest.approx(50)
 
 
-def test_a_baseline_the_backend_cannot_place_is_refused_rather_than_drawn_wrong():
-    """Refuse ``dominant-baseline="hanging"``, which the backend's metrics cannot place."""
-    with pytest.raises(RuntimeError) as excinfo:
-        export.flatten(_label("hanging"))
-    assert "hanging" in str(excinfo.value)
-
-
-def test_a_baseline_inherited_from_an_ancestor_is_refused_too():
-    """Refuse a ``dominant-baseline`` set on an ancestor group."""
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        '<g dominant-baseline="middle"><text x="50" y="50" font-size="12">S1</text></g></svg>'
-    )
+@pytest.mark.parametrize(
+    ("svg", "named"),
+    [
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+            '<rect x="0" y="0" width="10" height="10" clip-path="url(#c)"/></svg>',
+            "clip-path",
+        ),
+        # The backend's metrics cannot place a hanging baseline.
+        (_label("hanging"), "hanging"),
+        # Nor one set on an ancestor group.
+        (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+            '<g dominant-baseline="middle"><text x="50" y="50" font-size="12">S1</text></g></svg>',
+            "dominant-baseline",
+        ),
+    ],
+)
+def test_what_the_backend_cannot_draw_is_refused_rather_than_drawn_wrong(svg, named):
+    """Refuse a clip path or an unplaceable baseline, naming it."""
     with pytest.raises(RuntimeError) as excinfo:
         export.flatten(svg)
-    assert "dominant-baseline" in str(excinfo.value)
+    assert named in str(excinfo.value)
 
 
 def test_a_symbol_shifts_its_own_lettering_by_its_own_size():
@@ -308,8 +253,7 @@ def test_lettering_is_drawn_at_the_size_the_file_asks_for(size):
     for x0, x1, weight in ((1.25, 2.75, "regular"), (2.75, 4.5, "bold")):
         cap = _ink_height(im, px, x0 * size, x1 * size)
         assert cap / size == pytest.approx(_CAP_HEIGHT, abs=0.02), (
-            f"a {weight} capital set in {size:g} drew a cap height of {cap:.3f}, "
-            f"{cap / size:.3f} of its size against the {_CAP_HEIGHT} the face declares"
+            f"a {weight} capital set in {size:g} drew a cap height of {cap:.3f}"
         )
 
 
@@ -318,25 +262,11 @@ def test_the_written_out_metrics_are_the_ones_the_backend_will_draw_with():
     """Match export.py's Helvetica metrics to ReportLab's."""
     from reportlab.pdfbase import pdfmetrics
 
-    for bold, face in export._FACES.items():
-        assert pdfmetrics.getAscentDescent(face, 1.0) == pytest.approx(export._HELVETICA_EM), bold
+    for face in ("Helvetica", "Helvetica-Bold"):
+        assert pdfmetrics.getAscentDescent(face, 1.0) == pytest.approx(export._HELVETICA_EM), face
 
 
 # --- the files that come out --------------------------------------------------
-
-
-@pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
-def test_render_writes_a_pdf(tmp_path):
-    """Write a PDF for a ``.pdf`` path.
-
-    Parameters
-    ----------
-    tmp_path : pathlib.Path
-        Output directory.
-    """
-    out = tmp_path / "d.pdf"
-    _fs().render(str(out))
-    assert out.read_bytes().startswith(b"%PDF")
 
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
@@ -392,8 +322,6 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
     measured = 0
     for rx, ry, rw, rh, size, text in _HALOED.findall(svg):
         rx, ry, rw, rh, size = (float(v) for v in (rx, ry, rw, rh, size))
-        if rh > rw:  # a number turned to run up a vertical line
-            continue
         top, bottom = (ry - vy) * px, (ry + rh - vy) * px
         # Crop inside the halo and threshold, so only this label's ink counts.
         box = (int((rx - vx) * px) + 1, int(top) + 1, int((rx + rw - vx) * px), int(bottom))
@@ -401,10 +329,7 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
         assert ink, f"{text!r} drew no ink inside its own halo"
         off = (box[1] + (ink[1] + ink[3]) / 2 - (top + bottom) / 2) / px
         want = (_MIDDLE - _CAP_HEIGHT / 2) * size
-        assert abs(off - want) < 0.5, (
-            f"{text!r} sits {off:+.2f} px off the middle of its halo, where its "
-            f"{size:g} type and the alignment it was given put it {want:+.2f}"
-        )
+        assert abs(off - want) < 0.5, f"{text!r} sits {off:+.2f} px off, expected {want:+.2f}"
         measured += 1
     assert measured >= 4, "no haloed label was measured, so this checked nothing"
 

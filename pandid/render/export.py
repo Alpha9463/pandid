@@ -103,6 +103,8 @@ def _viewbox(el: ET.Element) -> tuple[float, float, float, float]:
     ------
     RuntimeError
         If it has no four-number viewBox.
+    ValueError
+        If a viewBox part is not a number.
     """
     parts = [float(v) for v in (el.get("viewBox") or "").replace(",", " ").split()]
     if len(parts) != 4:
@@ -297,60 +299,9 @@ _BASELINES = {
     "central": (0.5, 0.5),
 }
 
-# ReportLab face for pandid's sans-serif, by boldness.
-_FACES = {False: "Helvetica", True: "Helvetica-Bold"}
-# Helvetica ascent and descent in ems, used when ReportLab is absent.
-_HELVETICA_EM = (0.718, -0.207)
-
-
-def _ascent_descent(bold: bool) -> tuple[float, float]:
-    """Return the drawing face's ascent and descent, in ems.
-
-    Parameters
-    ----------
-    bold : bool
-        Whether the face is bold.
-
-    Returns
-    -------
-    tuple[float, float]
-        Ascent and (negative) descent.
-    """
-    try:
-        from reportlab.pdfbase import pdfmetrics
-    except ImportError:
-        return _HELVETICA_EM
-    ascent, descent = pdfmetrics.getAscentDescent(_FACES[bold], 1.0)
-    return float(ascent), float(descent)
-
-
-def _font_size(el: ET.Element, inherited: float | None) -> float | None:
-    """Return the font size an element sets, or the inherited one.
-
-    Parameters
-    ----------
-    el : Element
-        Element that may set ``font-size``.
-    inherited : float or None
-        Font size from its ancestors.
-
-    Returns
-    -------
-    float or None
-        Font size in user units, or ``None`` if none applies.
-
-    Raises
-    ------
-    RuntimeError
-        If the size is not a user-unit length.
-    """
-    raw = (el.get("font-size") or "").strip().removesuffix("px")
-    if not raw:
-        return inherited
-    try:
-        return float(raw)
-    except ValueError:
-        raise RuntimeError(f"font-size={el.get('font-size')!r} is not a user-unit length") from None
+# Ascent and descent in ems of Helvetica and Helvetica-Bold, as
+# ReportLab computes them.
+_HELVETICA_EM = (718 * 0.001, -207 * 0.001)
 
 
 def _set_baseline(text: ET.Element, size: float | None) -> None:
@@ -382,7 +333,7 @@ def _set_baseline(text: ET.Element, size: float | None) -> None:
             f"and this <text> sets none and inherits none"
         )
     wa, wd = _BASELINES[value]
-    ascent, descent = _ascent_descent((text.get("font-weight") or "").strip() == "bold")
+    ascent, descent = _HELVETICA_EM
     shift = (wa * ascent + wd * descent) * size
     if shift:
         text.set("y", fmt(float(text.get("y") or 0) + shift, 6))
@@ -403,7 +354,13 @@ def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
     RuntimeError
         If a font size is invalid or a baseline unsupported.
     """
-    size = _font_size(el, size)
+    raw = (el.get("font-size") or "").strip().removesuffix("px")
+    if raw:
+        try:
+            size = float(raw)
+        except ValueError:
+            raise RuntimeError(
+                f"font-size={el.get('font-size')!r} is not a user-unit length") from None
     if _local(el.tag) == "text":
         _set_baseline(el, size)
         return
@@ -574,21 +531,6 @@ def _type_scale() -> float:
     return rule[0] / letter[0]
 
 
-def _rescale_type(drawing, factor: float) -> None:
-    """Scale every string's font size in a drawing.
-
-    Parameters
-    ----------
-    drawing : reportlab Drawing
-        Drawing from svglib, changed in place.
-    factor : float
-        Scale factor.
-    """
-    for shape, _ in _leaves(drawing):
-        if hasattr(shape, "fontSize"):
-            shape.fontSize *= factor
-
-
 def to_pdf(svg: str) -> bytes:
     """Return SVG as a one-page vector PDF at its own size.
 
@@ -616,7 +558,10 @@ def to_pdf(svg: str) -> bytes:
     drawing = svglib.svg2rlg(io.BytesIO(flatten(svg).encode("utf-8")))
     if drawing is None:
         raise RuntimeError("the PDF backend could not read the rendered SVG")
-    _rescale_type(drawing, _type_scale())
+    factor = _type_scale()
+    for shape, _ in _leaves(drawing):
+        if hasattr(shape, "fontSize"):
+            shape.fontSize *= factor
     return renderPDF.drawToString(drawing)
 
 

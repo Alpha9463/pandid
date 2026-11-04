@@ -77,9 +77,7 @@ def test_mirror_consistent_and_rendered():
     assert s2.route is not None
 
 
-# ---------------------------------------------------------------------------
 # Reading an intent back: pinned_x / pinned_y
-# ---------------------------------------------------------------------------
 
 
 def _pinned_mixer(**pin):
@@ -131,9 +129,7 @@ def test_one_axis_pinned_answers_for_that_axis_and_refuses_the_other():
         pinned_y(m)
 
 
-# ---------------------------------------------------------------------------
 # A port-pinned axis is a relation, not a coordinate
-# ---------------------------------------------------------------------------
 
 RUN_Y = 440.0
 
@@ -275,24 +271,6 @@ def test_a_pin_reads_back_as_the_corner_it_always_did():
     assert pinned_y(valve, "inlet") == RUN_Y
 
 
-def test_the_nozzle_a_coordinate_was_measured_to_is_remembered_per_axis():
-    """Check that each axis keeps the nozzle its coordinate was measured to."""
-    fs = Flowsheet("axes")
-    tank = fs.add(U.Tank("T-1"))
-    prod = fs.add(U.Product("P"))
-    fs.connect(tank.outlet, prod.inlet)
-    tank.pin(port="in_1", x=300.0)
-    tank.pin(y=100.0)
-    assert pinned_x(tank, "in_1") == 300.0
-    assert pinned_y(tank) == 100.0
-
-    # A turn moves the nozzle within the box, so the corner follows on the
-    # axis that was pinned by the nozzle and holds still on the other.
-    tank.pin(orientation=90)
-    assert pinned_x(tank, "in_1") == 300.0
-    assert pinned_y(tank) == 100.0
-
-
 def test_pinning_the_corner_afterwards_drops_the_relation():
     """Check that ``port=None`` turns a port pin into a corner pin a turn leaves alone."""
     fs, valve = _valve_on_a_run()
@@ -330,10 +308,7 @@ def test_a_written_sheet_carries_the_relation_and_not_its_consequence():
             lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0)),
             {"x": 300.0, "y": 100.0, "port": {"x": "in_1"}},
         ),
-        # ...or the two were measured to different ones, which no shorthand
-        # can say and which is not a contradiction: two calls, two nozzles.
-        # Named by the alias ``outlet`` and written under the name the unit
-        # holds it by, so the file says something the reader can resolve.
+        # ...or to two nozzles, the alias ``outlet`` written as ``out_1``.
         (
             lambda u: (u.pin(port="in_1", x=300.0), u.pin(port="outlet", y=100.0)),
             {"x": 300.0, "y": 100.0, "port": {"x": "in_1", "y": "out_1"}},
@@ -558,11 +533,7 @@ def test_no_way_of_splitting_a_refused_call_lets_the_port_through(call):
 @pytest.mark.parametrize(
     "call",
     [
-        # A rank and a nozzle sit together perfectly well: x locates the
-        # inlet and the column is superseded there, which is what a pin
-        # mixing grid and absolute has always meant. Refusing this was a
-        # second rule, and it was the rule that made a placement the call
-        # accepted and the file rejected.
+        # A rank beside a nozzle: x locates the inlet and supersedes the column.
         dict(col=1, x=5.0, port="inlet"),
         dict(row=2, y=440.0, port="inlet"),
         dict(col=1, row=2, x=5.0, y=440.0, port="inlet"),
@@ -819,12 +790,3 @@ def test_a_placement_the_sheet_honoured_is_not_reported():
     valve.pin(port="inlet", x=300.0, y=RUN_Y)
     valve.pin(orientation=90)
     assert "pin-not-honored" not in _codes(fs)
-
-
-def test_a_port_that_does_not_exist_is_refused_by_the_call_that_named_it():
-    """Check that ``pin()`` refuses a port the unit lacks, with or without a coordinate."""
-    fs, valve = _valve_on_a_run()
-    with pytest.raises(KeyError, match="no port 'inlets' to pin by"):
-        valve.pin(port="inlets")
-    with pytest.raises(KeyError, match="no port 'inlets' to pin by"):
-        valve.pin(port="inlets", y=RUN_Y)

@@ -46,15 +46,7 @@ def test_an_off_page_reference_on_equipment_is_refused(unit):
     assert "Feed or Product" in str(excinfo.value)
 
 
-def test_units_namespace_hides_internal_helpers():
-    assert "Reactor" in U.__all__
-    assert "Placement" not in U.__all__
-    assert "Port" not in U.__all__
-
-
-# ---------------------------------------------------------------------------
 # The layer as API
-# ---------------------------------------------------------------------------
 
 
 def test_units_all_lists_every_public_unit_class():

@@ -94,32 +94,6 @@ TRAVEL: Dict[str, Tuple[int, float]] = {
 }
 
 
-def escape_distance(kind: str, label_pos: str | None, face: str) -> float:
-    """Return a port's nominal escape distance from its anchor.
-
-    Parameters
-    ----------
-    kind : str
-        Kind of the port's unit.
-    label_pos : str or None
-        Side of the unit its tag is drawn on.
-    face : str
-        Compass face of the port.
-
-    Returns
-    -------
-    float
-        Escape distance.
-    """
-    if kind in ("feed", "product"):
-        return MIN_ESCAPE
-    if (face, label_pos) in (("N", "top"), ("S", "bottom")):
-        return 45.0
-    if (face, label_pos) in (("W", "left"), ("E", "right")):
-        return 50.0
-    return MIN_ESCAPE
-
-
 def share_escape_room(
     start: Tuple[float, float],
     start_dir: str,
@@ -177,6 +151,42 @@ def share_escape_room(
     return shared
 
 
+def _tag_halo(u: "Unit", f) -> "Rect | None":
+    """Return the box the halo behind a unit's tag blocks.
+
+    Parameters
+    ----------
+    u : Unit
+        Unit whose tag it is.
+    f : Frame
+        The unit's placed frame.
+
+    Returns
+    -------
+    Rect or None
+        The halo, or ``None`` for a flag, an untagged unit or a centred
+        tag.
+    """
+    from pandid.portgeom import tag_width
+
+    lpos = f.label_pos or "top"
+    if u.kind in ("feed", "product") or lpos not in ("top", "bottom", "left", "right") or not u.tag:
+        return None
+    label_w = tag_width(u.tag) + 2 * TAG_CLEAR
+    # Room for a valve's fail letters past its tag.
+    fail = 25.0 if getattr(u, "fail", "") else 0.0
+    if lpos == "top":
+        cx = f.x + f.w / 2
+        return Rect(cx - label_w / 2, cx + label_w / 2, f.y - 20, f.y)
+    if lpos == "bottom":
+        cx = f.x + f.w / 2
+        return Rect(cx - label_w / 2, cx + label_w / 2, f.y + f.h, f.y + f.h + 25 + fail)
+    cy = f.y + f.h / 2
+    if lpos == "left":
+        return Rect(f.x - label_w - 15, f.x, cy - 10, cy + 10)
+    return Rect(f.x + f.w, f.x + f.w + label_w + 15 + fail, cy - 10, cy + 10)
+
+
 class VisibilityGraph:
     """Graph of clear orthogonal lanes around units and tags.
 
@@ -214,7 +224,7 @@ class VisibilityGraph:
 
     def __init__(self, fs: "Flowsheet"):  # numpydoc ignore=GL08
         from pandid.layout.attach import is_attached
-        from pandid.portgeom import COMPASS, port_anchor, tag_width, unit_box
+        from pandid.portgeom import COMPASS, port_anchor, unit_box
 
         margin = 15.0  # clearance around unit and label obstacles
 
@@ -248,37 +258,20 @@ class VisibilityGraph:
                 self.body_obstacles.append((u, body))
 
             lpos = f.label_pos or "top"
-            # Block the halo drawn behind the tag.
-            if u.kind not in ("feed", "product") and lpos != "center" and u.tag:
-                label_w = tag_width(u.tag) + 2 * TAG_CLEAR
-                # Room for a valve's fail letters past its tag.
-                fail = 25.0 if getattr(u, "fail", "") else 0.0
+            halo = _tag_halo(u, f)
+            if halo is not None:
+                self.obstacles.append(halo)
                 if lpos == "top":
-                    cx = f.x + u_width / 2
-                    self.obstacles.append(Rect(cx - label_w / 2, cx + label_w / 2, f.y - 20, f.y))
                     y_set.add(f.y - 20.0 - margin)
                     y_set.add(f.y - 10.0)
                 elif lpos == "bottom":
-                    cx = f.x + u_width / 2
-                    self.obstacles.append(
-                        Rect(
-                            cx - label_w / 2, cx + label_w / 2,
-                            f.y + u_height, f.y + u_height + 25 + fail,
-                        )
-                    )
-                    y_set.add(f.y + u_height + 25.0 + fail + margin)
+                    y_set.add(halo.y_max + margin)
                     y_set.add(f.y + u_height + 10.0)
                 elif lpos == "left":
-                    cy = f.y + u_height / 2
-                    self.obstacles.append(Rect(f.x - label_w - 15, f.x, cy - 10, cy + 10))
-                    x_set.add(f.x - label_w - 15.0 - margin)
+                    x_set.add(halo.x_min - margin)
                     x_set.add(f.x - 5.0)
-                elif lpos == "right":
-                    cy = f.y + u_height / 2
-                    self.obstacles.append(
-                        Rect(f.x + u_width, f.x + u_width + label_w + 15 + fail, cy - 10, cy + 10)
-                    )
-                    x_set.add(f.x + u_width + label_w + 15.0 + fail + margin)
+                else:
+                    x_set.add(halo.x_max + margin)
                     x_set.add(f.x + u_width + 5.0)
 
             x_set.add(f.x - margin)
@@ -291,7 +284,15 @@ class VisibilityGraph:
                 self.port_anchors[(u.name, name)] = (ax, ay)
                 self.port_dirs[(u.name, name)] = o_dir
 
-                proj_dist = escape_distance(u.kind, lpos, o_dir)
+                # Escape past a tag drawn on the port's side, except from a flag.
+                if u.kind in ("feed", "product"):
+                    proj_dist = MIN_ESCAPE
+                elif (o_dir, lpos) in (("N", "top"), ("S", "bottom")):
+                    proj_dist = 45.0
+                elif (o_dir, lpos) in (("W", "left"), ("E", "right")):
+                    proj_dist = 50.0
+                else:
+                    proj_dist = MIN_ESCAPE
                 dx, dy = COMPASS[o_dir]
                 px_proj, py_proj = ax + proj_dist * dx, ay + proj_dist * dy
                 self.port_projs[(u.name, name)] = (px_proj, py_proj)
