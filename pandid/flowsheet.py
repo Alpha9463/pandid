@@ -313,7 +313,7 @@ def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
 _CONTROLLER_AT = Deprecation(
     what="add_control_loop(controller_at=...)",
     instead="controller_face=...",
-    removed_in="0.1.7",
+    removed_in="0.3.0",
 )
 
 
