@@ -446,6 +446,8 @@ def _stacks(units: list[Unit], links: list[Link]
 
     col = {u: None if u.pin_ is None else u.pin_.col for u in units}
     row = {u: None if u.pin_ is None else u.pin_.row for u in units}
+    # Each column-and-row pin.
+    grid = {u: (c, r) for u in units if (c := col[u]) is not None and (r := row[u]) is not None}
     # Each unit's depth down its stack.
     depth = dict.fromkeys(units, 0)
     group = {u: [u] for u in units}
@@ -460,19 +462,18 @@ def _stacks(units: list[Unit], links: list[Link]
         drop = depth[upper] + 1 - depth[lower]
         merged = [(u, depth[u]) for u in group[top]] + [(u, depth[u] + drop) for u in group[bottom]]
         ranked = [(r, d) for u, d in merged if (r := row[u]) is not None]
-        here = col[top] if col[top] is not None else col[bottom]
-        lo, hi = min((r for r, _ in ranked), default=0), max((r for r, _ in ranked), default=0)
+        held = [grid[u] for u, _ in merged if u in grid]
         # Skip merges that break column or row pins, or that leave no
-        # room for a unit pinned to a row between two of the stack's.
+        # room for a unit pinned between two of the stack's rows in its
+        # column.
         if (col[top] is not None and col[bottom] is not None and col[top] != col[bottom]) or any(
-                r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked) or (
-                here is not None and any(
-                    lo < r < hi for u, r in row.items() if r is not None
-                    and find(u) is not top and find(u) is not bottom and col[find(u)] == here)):
+                r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked) or any(
+                r1 < r < r2 for u, (c, r) in grid.items() if find(u) is not top and find(u) is not bottom
+                for c1, r1 in held if c1 == c for c2, r2 in held if c2 == c):
             continue
         for u in group[bottom]:
             depth[u] += drop
-        col[top] = here
+        col[top] = col[top] if col[top] is not None else col[bottom]
         group[top] += group.pop(bottom)
         lead[bottom] = top
         stacked.append((upper, lower, link))

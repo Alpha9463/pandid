@@ -306,6 +306,48 @@ def test_a_row_pin_between_two_stacking_units_holds(
     assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
 
 
+@pytest.mark.parametrize("col", [None, 0])
+def test_row_pins_hold_whether_or_not_a_stack_forms(col: int | None) -> None:
+    """Keep row pins in order when the lower of two stacking units has a column pin or not."""
+    fs = Flowsheet("Row pins")
+    a = fs.add(Block("A", inputs=[], outputs=["S"])).pin(col=0, row=0)
+    b = fs.add(Block("B", inputs=["N"], outputs=["E"])).pin(col=col, row=2)
+    c = fs.add(Block("C", inputs=["W"], outputs=[])).pin(col=0, row=1)
+    d = fs.add(Block("D", inputs=["W"], outputs=["E"])).pin(row=3)
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.connect(b.ports["out_1"], d.ports["in_1"])
+    fs.connect(d.ports["out_1"], c.ports["in_1"])
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None
+    assert c.frame is not None and d.frame is not None
+    if col is None:
+        assert b.frame.cy < d.frame.cy
+    else:
+        assert a.frame.cy < c.frame.cy < b.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
+def test_row_only_pins_hold_beside_a_column_split_by_a_row_pin() -> None:
+    """Keep two units pinned by row alone in order beside a column whose stack splits."""
+    fs = Flowsheet("Mixed pins")
+    a = fs.add(Block("A", inputs=[], outputs=["S"])).pin(col=0, row=0)
+    b = fs.add(Block("B", inputs=["N"], outputs=["E"])).pin(col=0, row=2)
+    c = fs.add(Block("C", inputs=[], outputs=["E"])).pin(col=0, row=1)
+    d = fs.add(Block("D", inputs=["W"], outputs=[])).pin(row=3)
+    e = fs.add(Block("E", inputs=["W"], outputs=[])).pin(row=4)
+    fs.connect(a.ports["out_1"], b.ports["in_1"])
+    fs.connect(b.ports["out_1"], d.ports["in_1"])
+    fs.connect(c.ports["out_1"], e.ports["in_1"])
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None and c.frame is not None
+    assert d.frame is not None and e.frame is not None
+    assert a.frame.cy < c.frame.cy < b.frame.cy
+    assert d.frame.cy < e.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
 def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
     """Report a unit drawn in another turn or mirror than its author stated."""
     fs, line = _line()
