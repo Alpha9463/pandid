@@ -4,8 +4,9 @@ import warnings
 
 import pytest
 
-from pandid import Flowsheet, units as U
+from pandid import ControlValve, Flowsheet, Instrument, units as U
 from pandid.document import equipment_list
+from pandid.spec import from_dict, to_dict
 from pandid.validate import validate
 
 
@@ -554,6 +555,38 @@ def test_the_balloons_it_places_land_clear_of_the_sheet():
     assert fs.unplaced_instruments == []
     assert [f.code for f in findings if f.code == "unit-overlap"] == []
     assert [f.code for f in findings if f.code == "instrument-unplaced"] == []
+
+
+def _level_loop(**placement):
+    """Return an unpinned drum and valve with a level loop on them, routed."""
+    fs = Flowsheet("level")
+    feed, drum = fs.add(U.Feed("Feed")), fs.add(U.Vessel("V-101"))
+    lv, prod = fs.add(ControlValve("LV-101")), fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, lv.inlet)
+    fs.connect(lv.outlet, prod.inlet)
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, **placement)
+    fs.route()
+    return fs, drum, loop
+
+
+def test_the_default_transmitter_hangs_off_a_face_no_line_leaves():
+    """Check that the default level loop hangs LT-101 off the drum's top, clear of its lines."""
+    from pandid.portgeom import face_point
+
+    fs, drum, loop = _level_loop()
+    assert drum.frame is not None
+    assert loop.transmitter.tap == face_point(drum, drum.frame, "N")[0]
+    assert "route-along-unit" not in {f.code for f in validate(fs)}
+    # A spec keeps the face unstated.
+    back = from_dict(to_dict(fs))
+    back.route()
+    (lt,) = [u for u in back.units if isinstance(u, Instrument) and u.name == "LT-101"]
+    assert lt.tap == loop.transmitter.tap
+    # A stated face is kept, though a line leaves it.
+    _, drum, loop = _level_loop(face="E")
+    assert drum.frame is not None
+    assert loop.transmitter.tap == face_point(drum, drum.frame, "E")[0]
 
 
 def test_the_parts_stay_reachable_and_pinnable():

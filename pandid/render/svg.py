@@ -1679,9 +1679,6 @@ def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
 
 #: Depth of an off-page flag's point.
 FLAG_POINT = 15
-# Pennant inset from the top and bottom of the flag box, without and
-# with a reference under the tag.
-_FLAG_INSET, _FLAG_INSET_REF = 15, 12
 
 
 class Pennant(NamedTuple):
@@ -1704,8 +1701,8 @@ class Pennant(NamedTuple):
 def boundary_flag(u, frame) -> Pennant:
     """Return the pennant an off-page flag is drawn as.
 
-    The pennant points east, or west when mirrored. It spans the unit
-    box's width and is inset from its top and bottom.
+    The pennant fills :func:`~pandid.portgeom.drawn_box` and points
+    east, or west when mirrored.
 
     Parameters
     ----------
@@ -1719,15 +1716,9 @@ def boundary_flag(u, frame) -> Pennant:
     Pennant
         Flag geometry.
     """
-    from pandid.portgeom import _flag_reference
+    from pandid.portgeom import drawn_box
 
-    inset = _FLAG_INSET_REF if _flag_reference(u) else _FLAG_INSET
-    if u.kind == "feed" and not frame.mirrored:
-        x0, x1 = frame.x + 50 - frame.w, frame.x + 50
-    else:
-        x0, x1 = frame.x, frame.x + frame.w
-    return Pennant((x0, frame.y + inset, x1, frame.y + frame.h - inset),
-                   FLAG_POINT, not frame.mirrored)
+    return Pennant(drawn_box(u, frame), FLAG_POINT, not frame.mirrored)
 
 
 #: Positions of the two strokes of a pneumatic double cross-hatch along

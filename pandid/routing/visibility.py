@@ -14,6 +14,13 @@ TAG_CLEAR = 3.0
 #: Least distance a route runs straight out of a nozzle.
 MIN_ESCAPE = 25.0
 
+#: Clearance of the lanes around a unit or tag obstacle.
+MARGIN = 15.0
+
+#: Distance in px within which a line lies on a box edge: one main-flow
+#: line width.
+EDGE_TOL = 2.0
+
 
 @dataclass
 class Rect:
@@ -84,6 +91,46 @@ def clear_gaps(lane: List[float], spans: List[Tuple[float, float]]) -> List[bool
         for k in range(first, last):
             clear[k] = False
     return clear
+
+
+def hugging_edges(
+    edges: Dict[Tuple[float, float], List[Tuple[float, float]]],
+    xs: List[float],
+    ys: List[float],
+    bodies: List[Tuple["Unit", Rect]],
+) -> Dict[Tuple[Tuple[float, float], Tuple[float, float]], Set[int]]:
+    """Return the edges that run within :data:`EDGE_TOL` outside a side.
+
+    Parameters
+    ----------
+    edges : dict
+        Clear neighbours of each node.
+    xs, ys : list[float]
+        Sorted lane coordinates.
+    bodies : list[tuple[Unit, Rect]]
+        Unit bodies with their units.
+
+    Returns
+    -------
+    dict[tuple[tuple[float, float], tuple[float, float]], set[int]]
+        ``id()`` of each unit beside each such edge, by edge both ways.
+    """
+    out: Dict[Tuple[Tuple[float, float], Tuple[float, float]], Set[int]] = {}
+    for unit, o in bodies:
+        for row, lo, hi, start, end in ((True, o.y_min, o.y_max, o.x_min, o.x_max),
+                                        (False, o.x_min, o.x_max, o.y_min, o.y_max)):
+            across, along = (ys, xs) if row else (xs, ys)
+            near = (across[bisect_right(across, lo - EDGE_TOL):bisect_left(across, lo)]
+                    + across[bisect_right(across, hi):bisect_left(across, hi + EDGE_TOL)])
+            for c in near:
+                for t in along[:bisect_left(along, end)]:
+                    node = (t, c) if row else (c, t)
+                    for other in edges.get(node, ()):
+                        reach, lane = (other[0], other[1]) if row else (other[1], other[0])
+                        if lane == c and reach > max(t, start):
+                            for edge in ((node, other), (other, node)):
+                                out.setdefault(edge, set()).add(id(unit))
+    return out
 
 
 TRAVEL: Dict[str, Tuple[int, float]] = {
@@ -226,7 +273,7 @@ class VisibilityGraph:
         from pandid.layout.attach import is_attached
         from pandid.portgeom import COMPASS, port_anchor, unit_box
 
-        margin = 15.0  # clearance around unit and label obstacles
+        margin = MARGIN
 
         self.obstacles: List[Rect] = []
         self.body_obstacles: List[Tuple["Unit", Rect]] = []

@@ -16,6 +16,14 @@ Axis = Literal["h", "v"]
 CROSSING_PENALTY = 10.0
 
 
+#: Cost of crossing another line within an arrowhead of its nozzle.
+NOZZLE_PENALTY = BEND_PENALTY
+
+
+#: Cost of a lane edge run within EDGE_TOL beside a unit's side.
+TOUCH_PENALTY = BEND_PENALTY
+
+
 #: Crossing queries before a search caches the sorted tracks locally.
 _INLINE_CROSSING_QUERY_THRESHOLD = 500
 
@@ -270,6 +278,7 @@ def find_path(
     edge_penalties: Optional[Dict[Tuple[Tuple[float, float], Tuple[float, float]], float]] = None,
     is_recycle: bool = False,
     crossing_index: Optional[CrossingIndex] = None,
+    nozzle_index: Optional[CrossingIndex] = None,
 ) -> List[Tuple[float, float]]:
     """Return the cheapest orthogonal path on the graph.
 
@@ -282,11 +291,15 @@ def find_path(
     start_dir, goal_dir : str or None, optional
         Outward directions at the source and destination ports.
     edge_penalties : dict, optional
-        Penalties on directed edges used by earlier routes.
+        Penalties on directed edges: lanes beside a unit and runs used
+        by earlier routes.
     is_recycle : bool, default=False
         Favour recycle lanes and halve the bend cost.
     crossing_index : CrossingIndex or None, optional
         Routes drawn before this one.
+    nozzle_index : CrossingIndex or None, optional
+        The first arrowhead length of each line from each of its
+        nozzles, each on a lane of the graph.
 
     Returns
     -------
@@ -391,6 +404,10 @@ def find_path(
                                 for lo, hi in crossing_index.h[y]
                                 if lo < x < hi
                             )
+
+            # Charge passing straight through another line's arrowhead.
+            if nozzle_index is not None and cur_dir and ndir == cur_dir:
+                cost += NOZZLE_PENALTY * nozzle_index.crosses(current, _AXIS[cur_dir])
 
             bend_cost = BEND_PENALTY
             if is_recycle:

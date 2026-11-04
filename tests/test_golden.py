@@ -23,9 +23,7 @@ GOLDEN_SCENARIOS = (
 )
 
 #: Finding codes a golden sheet is drawn with.
-GOLDEN_FINDINGS = {
-    "18_fixed_bed_recycle": ["route-along-unit", "route-crosses-near-nozzle"],
-}
+GOLDEN_FINDINGS: dict[str, list[str]] = {}
 
 
 def _check_golden(name: str, svg: str) -> None:
