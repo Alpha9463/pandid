@@ -445,7 +445,6 @@ class Unit:
         self,
         name: str,
         variant: str = "default",
-        *,
         width: float | None = None,
         height: float | None = None,
         label_pos: str | None = None,
