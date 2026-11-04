@@ -111,9 +111,7 @@ def _wide() -> Flowsheet:
     return fs
 
 
-# ---------------------------------------------------------------------------
 # Default behavior
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("off", [False, None])
@@ -135,9 +133,7 @@ def test_it_is_off_by_default_everywhere_a_sheet_can_be_asked_for():
         assert 'id="debug"' not in svg
 
 
-# ---------------------------------------------------------------------------
 # Coordinate mapping
-# ---------------------------------------------------------------------------
 
 
 def test_the_marker_sits_on_the_point_pin_set():
@@ -197,9 +193,7 @@ def test_the_overlay_is_drawn_before_the_diagram():
     assert svg.index('<g id="debug">') < svg.index('<g id="units">')
 
 
-# ---------------------------------------------------------------------------
 # Fixed-page rendering
-# ---------------------------------------------------------------------------
 
 
 def test_a_fixed_page_does_not_move_the_numbers():
@@ -232,9 +226,7 @@ def test_a_fixed_page_holds_the_lettering_to_a_constant_size_on_paper():
         assert got * s == pytest.approx(want, abs=0.01)
 
 
-# ---------------------------------------------------------------------------
 # Export compatibility
-# ---------------------------------------------------------------------------
 
 
 def test_the_overlay_survives_the_route_to_pdf_and_png():
@@ -243,9 +235,7 @@ def test_the_overlay_survives_the_route_to_pdf_and_png():
     assert 'id="debug"' in flat
 
 
-# ---------------------------------------------------------------------------
 # Validation
-# ---------------------------------------------------------------------------
 
 
 def test_true_is_the_default_spacing_and_false_is_nothing():
@@ -275,9 +265,7 @@ def test_a_value_that_is_not_a_spacing_is_refused_before_a_sheet_is_built(value,
     assert "debug" not in fs.to_svg()
 
 
-# ---------------------------------------------------------------------------
 # Pin placement
-# ---------------------------------------------------------------------------
 
 
 def test_a_turned_or_mirrored_unit_still_marks_the_point_pin_set():
@@ -302,9 +290,7 @@ def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
     )
 
 
-# ---------------------------------------------------------------------------
 # Label placement
-# ---------------------------------------------------------------------------
 
 
 def _placed(svg: str) -> "list[tuple[tuple[float, float, float, float], str]]":
@@ -399,10 +385,7 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
     fs, svg, _plain = corpus_drawings[name]
     halos, labels = _halos(svg), _placed(svg)
     expected = sum(1 + len(u.ports) for u in fs.units if u.frame is not None)
-    assert len(labels) == expected, (
-        f"{name}: the overlay wrote {len(labels)} labels where the sheet has "
-        f"{expected} to write -- one per placed unit and one per nozzle"
-    )
+    assert len(labels) == expected, f"{name}: {len(labels)} labels, expected {expected}"
     buried = [
         text
         for i, (box, text) in enumerate(labels)
@@ -410,8 +393,7 @@ def test_the_overlay_writes_where_the_sheet_left_it_room(corpus_drawings, name):
         or any(overlaps(box, other) for j, (other, _) in enumerate(labels) if j != i)
     ]
     assert len(buried) <= _CROWDED.get(name, 0), (
-        f"{name}: {len(buried)} of {len(labels)} overlay labels are written under a "
-        f"halo or over another label, e.g. {buried[:5]}"
+        f"{name}: {len(buried)} of {len(labels)} labels are covered, e.g. {buried[:5]}"
     )
 
 
@@ -445,9 +427,7 @@ def test_a_label_still_against_its_own_marker_is_left_alone():
     )
 
 
-# ---------------------------------------------------------------------------
 # Diagram invariants
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))

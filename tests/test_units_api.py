@@ -46,9 +46,7 @@ def test_an_off_page_reference_on_equipment_is_refused(unit):
     assert "Feed or Product" in str(excinfo.value)
 
 
-# ---------------------------------------------------------------------------
 # The layer as API
-# ---------------------------------------------------------------------------
 
 
 def test_units_all_lists_every_public_unit_class():

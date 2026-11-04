@@ -78,9 +78,7 @@ def _belt_runs(el):
     return runs
 
 
-# ---------------------------------------------------------------------------
 # The second dimension: the roller, set independently of the run.
-# ---------------------------------------------------------------------------
 
 DIAMETERS = [8.0, 2 * R, 45.0, 120.0]
 #: Every length with every diameter, and the default roller at every legal length.
@@ -190,9 +188,7 @@ def test_a_conveyor_round_trips_through_a_spec_with_its_roller():
     assert rebuilt.to_dict() == spec
 
 
-# ---------------------------------------------------------------------------
 # Two numbers, and the box is neither of them.
-# ---------------------------------------------------------------------------
 
 
 def test_the_length_is_the_symbols_width_so_nothing_else_states_it():
@@ -247,9 +243,7 @@ def test_shortening_an_existing_conveyor_is_refused_too():
         conveyor.length = 5
 
 
-# ---------------------------------------------------------------------------
 # Placement: a conveyor turned and flipped still meets its streams.
-# ---------------------------------------------------------------------------
 
 
 def _world_segments(unit):
@@ -289,9 +283,7 @@ def test_a_turned_or_flipped_conveyor_still_meets_its_streams(pin):
         assert _nearest_distance(point, segments) <= GEOM_TOL, name
 
 
-# ---------------------------------------------------------------------------
 # Scheduled equipment, and the spec round trip.
-# ---------------------------------------------------------------------------
 
 
 def test_a_conveyor_is_scheduled_on_the_equipment_list():
@@ -341,9 +333,7 @@ def test_the_default_length_is_the_stencils_own_proportion():
     assert U.Conveyor("BC-301").length == CONVEYOR_LENGTH
 
 
-# ---------------------------------------------------------------------------
 # The screw conveyor, ISO 10628-2 item 18.5 X8063
-# ---------------------------------------------------------------------------
 
 
 def _screw_turns(length, diameter=SCREW_HEIGHT):
@@ -468,9 +458,7 @@ def test_a_screw_too_short_for_one_turn_is_refused_in_its_own_words():
     assert U.Conveyor("SC-302", variant="screw", length=SCREW_MIN_LENGTH)
 
 
-# ---------------------------------------------------------------------------
 # The bucket elevators, ISO 10628-2 items 18.7 X8065 and 18.8 X8066
-# ---------------------------------------------------------------------------
 
 
 def test_the_elevators_are_the_boxes_their_rows_draw():

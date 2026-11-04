@@ -3,7 +3,6 @@
 import dataclasses
 import html
 import re
-from typing import Any
 
 import pytest
 
@@ -1279,24 +1278,12 @@ def _block(name: str = "Ethanol A300", **kw: object) -> Flowsheet:
 # --- title-block field coverage ------------------------------------------------
 
 
-def _scalar_fields(cls: type[Any]) -> list[str]:
-    """Return scalar dataclass fields.
-
-    Parameters
-    ----------
-    cls : type[Any]
-        Dataclass to inspect.
-
-    Returns
-    -------
-    list[str]
-        Fields that are not built by a default factory.
-    """
-    return [f.name for f in dataclasses.fields(cls) if f.default_factory is dataclasses.MISSING]
-
-
-_BLOCK_FIELDS = _scalar_fields(TitleBlock)
-_REV_FIELDS = _scalar_fields(Revision)
+_BLOCK_FIELDS = [
+    f.name for f in dataclasses.fields(TitleBlock) if f.default_factory is dataclasses.MISSING
+]
+_REV_FIELDS = [
+    f.name for f in dataclasses.fields(Revision) if f.default_factory is dataclasses.MISSING
+]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1449,26 +1436,6 @@ def _lettering(fs, how: str) -> "list[tuple[str, str]]":
     return [(cid, html.unescape(v)) for cid, v in _DRAWIO_VALUE.findall(out)]
 
 
-def _cells_drawing(fs, how: str, ink: str) -> "list[str]":
-    """Return cells that render a requested value.
-
-    Parameters
-    ----------
-    fs : Flowsheet
-        Flowsheet to render.
-    how : str
-        Name of the renderer method.
-    ink : str
-        Rendered value to locate.
-
-    Returns
-    -------
-    list[str]
-        Matching cell identifiers.
-    """
-    return [cell for cell, text in _lettering(fs, how) if text == ink]
-
-
 def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
     """Assert that a rendered value occupies the expected cells.
 
@@ -1483,7 +1450,7 @@ def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
     what : str
         Field name included in assertion output.
     """
-    cells = _cells_drawing(fs, how, answer.drawn)
+    cells = [cell for cell, text in _lettering(fs, how) if text == answer.drawn]
     assert len(cells) == answer.cells, (what, answer.drawn, cells)
     assert len(set(cells)) == answer.cells, (what, answer.drawn, cells)
 
@@ -1839,24 +1806,6 @@ def test_a_stated_sheet_number_is_never_replaced_by_the_default(half, ink, how):
 # --- title-block document round trips ------------------------------------------
 
 
-def _file(tb: TitleBlock, how: str) -> str:
-    """Render a sheet containing a title block.
-
-    Parameters
-    ----------
-    tb : TitleBlock
-        Title block to render.
-    how : str
-        Name of the renderer method.
-
-    Returns
-    -------
-    str
-        Rendered document.
-    """
-    return getattr(_sheet_with(tb), how)(border="zone", page_size="A3")
-
-
 def _through_a_spec(tb: TitleBlock) -> TitleBlock:
     """Round-trip a title block through a flowsheet specification.
 
@@ -1963,7 +1912,9 @@ def test_a_falsey_title_block_value_draws_the_same_sheet_after_a_spec_round_trip
     how : str
         Renderer method supplied by pytest.
     """
-    assert _file(_through_a_spec(tb), how) == _file(tb, how)
+    kw = dict(border="zone", page_size="A3")
+    round_tripped = getattr(_sheet_with(_through_a_spec(tb)), how)(**kw)
+    assert round_tripped == getattr(_sheet_with(tb), how)(**kw)
 
 
 def test_spec_coerces_representative_title_block_scalars():
