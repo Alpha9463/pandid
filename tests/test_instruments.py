@@ -2673,7 +2673,9 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
         ), (tt.name, tt.tap, points)
 
 
-def _valved_bank(**loop_kw: object) -> tuple[Flowsheet, list[Stream]]:
+def _valved_bank(
+    at: float | None = None, offset: float | None = None, controller_variant: str = "shared"
+) -> tuple[Flowsheet, list[Stream]]:
     """Route three pumps in parallel, each with a flow loop on its valved suction line."""
     from pandid.devices import ControlValve
 
@@ -2689,7 +2691,15 @@ def _valved_bank(**loop_kw: object) -> tuple[Flowsheet, list[Stream]]:
         fs.connect(pump.discharge, inlet)
         pairs.append((line, fs.add(ControlValve(f"FV-{200 + i}"), on=line, at=0.5)))
     loops = [
-        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve, **loop_kw)  # pyright: ignore[reportArgumentType]
+        fs.add_control_loop(
+            "F",
+            200 + i,
+            measuring=line,
+            acting_on=valve,
+            at=at,
+            offset=offset,
+            controller_variant=controller_variant,
+        )
         for i, (line, valve) in enumerate(pairs)
     ]
     fs.route()
