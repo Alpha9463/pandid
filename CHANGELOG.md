@@ -290,6 +290,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Example 13 pipes the dryer's gas through `heating_in` and `vent` (#646).**
   The dried product leaves by `product` and joins the cyclone's dust ahead of
   the magnetic separator.
+- **A unit pinned to a row between two stacking units is drawn between them
+  (#596).** Two units joined top to bottom stay unstacked when another unit
+  in their column is pinned to a row between theirs.
 
 ## [0.1.5] - 2026-08-26
 

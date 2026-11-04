@@ -280,6 +280,32 @@ def test_row_pins_order_a_whole_stack() -> None:
     assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
 
 
+@pytest.mark.parametrize(
+    "upper, out, lower, inlet",
+    [
+        (U.HeatExchanger("A"), "shell_out", U.HeatExchanger("B"), "shell_in"),
+        (U.Feeder("A"), "discharge", U.Crusher("B"), "feed"),
+        (U.Tank("A"), "out_1", U.Tank("B").nozzle("in_1", "N"), "in_1"),
+        (U.Column("A"), "bottoms", U.Tank("B").nozzle("in_1", "N"), "in_1"),
+        (U.Separator("A"), "liquid", U.Tank("B").nozzle("in_1", "N"), "in_1"),
+    ],
+)
+def test_a_row_pin_between_two_stacking_units_holds(
+    upper: U.Unit, out: str, lower: U.Unit, inlet: str
+) -> None:
+    """Draw a unit pinned between two units whose pipe would stack them."""
+    fs = Flowsheet("Interleaved")
+    a = fs.add(upper).pin(col=0, row=0)
+    b = fs.add(lower).pin(col=0, row=2)
+    c = fs.add(Block("C")).pin(col=0, row=1)
+    fs.connect(a.ports[out], b.ports[inlet])
+    fs.route()
+
+    assert a.frame is not None and b.frame is not None and c.frame is not None
+    assert a.frame.cy < c.frame.cy < b.frame.cy
+    assert not [i for i in fs.validate() if i.code == "pin-not-honored"]
+
+
 def test_a_stated_turn_drawn_otherwise_is_reported() -> None:
     """Report a unit drawn in another turn or mirror than its author stated."""
     fs, line = _line()

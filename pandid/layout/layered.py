@@ -460,13 +460,19 @@ def _stacks(units: list[Unit], links: list[Link]
         drop = depth[upper] + 1 - depth[lower]
         merged = [(u, depth[u]) for u in group[top]] + [(u, depth[u] + drop) for u in group[bottom]]
         ranked = [(r, d) for u, d in merged if (r := row[u]) is not None]
-        # Skip merges that break column or row pins.
+        here = col[top] if col[top] is not None else col[bottom]
+        lo, hi = min((r for r, _ in ranked), default=0), max((r for r, _ in ranked), default=0)
+        # Skip merges that break column or row pins, or that leave no
+        # room for a unit pinned to a row between two of the stack's.
         if (col[top] is not None and col[bottom] is not None and col[top] != col[bottom]) or any(
-                r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked):
+                r1 < r2 and d1 > d2 for r1, d1 in ranked for r2, d2 in ranked) or (
+                here is not None and any(
+                    lo < r < hi for u, r in row.items() if r is not None
+                    and find(u) is not top and find(u) is not bottom and col[find(u)] == here)):
             continue
         for u in group[bottom]:
             depth[u] += drop
-        col[top] = col[top] if col[top] is not None else col[bottom]
+        col[top] = here
         group[top] += group.pop(bottom)
         lead[bottom] = top
         stacked.append((upper, lower, link))
