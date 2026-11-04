@@ -49,22 +49,6 @@ def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
     assert source_options.get("diagram") != "pfd"
 
 
-def _normalize(svg: str) -> str:
-    """Empty the fenced provenance block of an SVG document.
-
-    Parameters
-    ----------
-    svg : str
-        SVG document.
-
-    Returns
-    -------
-    str
-        SVG document with only the provenance fences left.
-    """
-    return _PROVENANCE.sub(f"{PROVENANCE_OPEN}\n{PROVENANCE_CLOSE}", svg)
-
-
 def _diff_message(name: str, golden: str, actual: str) -> str:
     """Describe the first difference between normalized SVG documents.
 
@@ -120,6 +104,22 @@ def _check_golden(name: str, svg: str) -> None:
     golden = _normalize(path.read_text(encoding="utf-8"))
     if golden != normalized:
         pytest.fail(_diff_message(name, golden, normalized), pytrace=False)
+
+
+def _normalize(svg: str) -> str:
+    """Empty the fenced provenance block of an SVG document.
+
+    Parameters
+    ----------
+    svg : str
+        SVG document.
+
+    Returns
+    -------
+    str
+        SVG document with only the provenance fences left.
+    """
+    return _PROVENANCE.sub(f"{PROVENANCE_OPEN}\n{PROVENANCE_CLOSE}", svg)
 
 
 @pytest.mark.parametrize("name", GOLDEN_SCENARIOS, ids=GOLDEN_SCENARIOS)
