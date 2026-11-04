@@ -234,6 +234,38 @@ def test_a_valve_set_on_a_shifted_line_adds_no_bends(upright: bool, at: float) -
     assert measure_final(fs).excess_bends == 0
 
 
+def test_a_valve_whose_nozzles_sit_apart_keeps_the_frame_that_fits_its_line() -> None:
+    """Check that a frame whose outlet misses the line is not chosen over one that fits.
+
+    The two nozzles of this drawing sit 1.0 apart across the line, so the frame
+    that lands the inlet exactly puts the outlet a full unit off.
+    """
+    from pandid.render.symbols import Symbol, default_registry
+
+    default_registry.register(
+        "valve",
+        Symbol(
+            svg='<g id="skew"><path d="M0 80.1 L50 81.1"/></g>',
+            width=50,
+            height=100,
+            ports={"inlet": (0, 80.1), "outlet": (50, 81.1)},
+        ),
+        variant="skew",
+    )
+    try:
+        fs = Flowsheet("Offset ports")
+        feed = fs.add(Feed("A")).pin(port="outlet", x=100, y=125.7)
+        prod = fs.add(Product("B")).pin(port="inlet", x=500, y=125.7)
+        valve = fs.add(
+            Valve("V", variant="skew").pin(orientation=0), on=fs.connect(feed.outlet, prod.inlet)
+        )
+        fs.route()
+        assert valve.frame is not None
+        assert port_point(valve, valve.frame, "inlet")[1] == pytest.approx(125.7)
+    finally:
+        default_registry._symbols.pop(("valve", "skew"), None)
+
+
 @pytest.mark.parametrize("mirrored", [None, True])
 def test_valves_on_an_upright_pipe_turn_and_get_room(mirrored: bool | None) -> None:
     """Check that valves between stacked units are turned onto the pipe and fit.

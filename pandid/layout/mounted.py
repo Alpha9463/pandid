@@ -474,17 +474,19 @@ def _device_frame(unit: Unit, point: Point, leg: Leg) -> Frame:
         offset = port_point(unit, replace(candidate, x=0.0, y=0.0), "inlet")
         direct = (replace(candidate, y=ordinate - offset[1]) if level
                   else replace(candidate, x=ordinate - offset[0]))
-        # Each rounds differently; keep the inlet nearer the leg, the shifted frame on a tie.
+        # Keep a pose with both nozzles on the leg's line, in flow order. Each
+        # frame rounds differently; keep the inlet nearer the leg, the shifted
+        # frame on a tie.
         # shortcut: some leg coordinates admit no frame that lands it exactly;
         # snap near-equal ends in the router if those jogs show.
-        candidate = min((shifted, direct),
-                        key=lambda c: abs(port_point(unit, c, "inlet")[across] - ordinate))
-        # Keep a pose with both nozzles on the leg's line, in flow order.
-        inlet = port_point(unit, candidate, "inlet")
-        outlet = port_point(unit, candidate, "outlet")
-        if (abs(inlet[across] - ordinate) < 1.0 and abs(outlet[across] - ordinate) < 1.0
-                and (outlet[along] - inlet[along]) * forward > 0):
-            fits.append(candidate)
+        on_leg = []
+        for c in (shifted, direct):
+            inlet, outlet = port_point(unit, c, "inlet"), port_point(unit, c, "outlet")
+            if (abs(inlet[across] - ordinate) < 1.0 and abs(outlet[across] - ordinate) < 1.0
+                    and (outlet[along] - inlet[along]) * forward > 0):
+                on_leg.append((abs(inlet[across] - ordinate), c))
+        if on_leg:
+            fits.append(min(on_leg, key=lambda e: e[0])[1])
     if not fits:
         return _candidate(unit, point, *poses[0])
     if turned or level or "actuator" not in unit.ports:
