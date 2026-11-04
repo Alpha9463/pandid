@@ -7,7 +7,7 @@ Before you start:
    stream.properties = {"Flow (kg/h)": ...};
    render(show_stream_table=True) tabulates them.
 2. Check in this order: render, then fs.validate(), then look. render()
-   raises ValueError listing every error finding; before a render,
+   raises ValueError when it finds an error; before a render,
    fs.validate() misses findings that need the drawing and uses PFD
    rules. Act on every finding, warnings too, then open the drawing and
    look for lines through units, crowded labels and balloons on the wrong
