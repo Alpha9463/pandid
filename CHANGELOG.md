@@ -13,23 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fs.add(Valve("HV-101"), on=line)` or `fs.add_valve_station("CV-101",
   on=line)`, with `at=` for a rough position along the line.
 - **`validate()` reports lines that touch (#621).** `route-crosses-near-nozzle`
-  is a crossing within an arrowhead length of a nozzle and `route-along-unit`
-  a line drawn on a unit's box edge; the router also counts instrument tap
-  lines as crossings.
+  flags a crossing within an arrowhead length of a nozzle and `route-along-unit`
+  a line on a unit's box edge; the router counts tap lines as crossings.
 
 ### Changed
 
 - **Python 3.15 is supported and tested in CI** alongside 3.11, the oldest
   supported version.
-- **Layout draws equipment as a layered graph (#564).** Equipment and
-  boundary flags are set in columns by flow and nozzle faces, ordered to cut
-  crossings, and lined up nozzle to nozzle. Valves, fittings and valve
-  stations are then set on their routed pipes. Sheets without pins draw
-  differently.
+- **Layout draws equipment as a layered graph (#564).** Equipment and flags are
+  set in columns by flow, then valves, fittings and valve stations on their
+  routed pipes, so sheets without pins draw differently.
 - **An in-line device turns to run along its pipe (#564).** A valve on an
-  upright pipe is drawn upright, unless its author stated a turn with
-  `pin(orientation=...)`; a stated 0 keeps it level, and a stated
-  `mirrored=` is kept too.
+  upright pipe is drawn upright unless `pin(orientation=...)` states a turn,
+  and a stated `mirrored=` is kept.
 - **`Instrument.at` is only a fraction along a line (#438).** A balloon on a
   unit keeps its side in the new `Instrument.face`, and its `at` is `None`.
 - **`pin(row=...)` orders units down their column (#564).** A lower row is
@@ -39,28 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `line_number_start` and `loop_number_start` raise `TypeError` for anything
   but an integer, and store any integer type as an `int`.
 - **The pneumatic hatch is drawn from `HATCH_ARM` (#304).** The SVG and
-  draw.io pneumatic hatches both take their stroke from
-  `pandid.render.svg.HATCH_ARM`.
+  draw.io hatches both take their stroke from `pandid.render.svg.HATCH_ARM`.
 - **A missed attribute lookup on a unit no longer lists its ports (#574).**
-  The port list in the `AttributeError` for an unknown attribute is written
-  only when the error is shown.
-- **CI and release actions are pinned to commit SHAs (#574).** Every action
-  in `ci.yml` and `release.yml` names a commit, with its version in a
-  comment.
-- **`unit-overlap` says how to clear it (#434).** The finding names one of
-  the two units and the call that moves it: `at=`/`face=` and `offset=` for
-  an attached balloon, `pin()` for any other unit. A suggested `attach()`
-  repeats the balloon's `relation=` and `angle=`.
+  The port list is written only when the `AttributeError` is shown.
+- **`unit-overlap` says how to clear it (#434).** It names the call that moves
+  one of the units: `attach()` with `at=`/`face=` and `offset=` for a balloon,
+  keeping its `relation=` and `angle=`, or `pin()` for any other unit.
 - **A controller with no anchor is drawn beyond the valve it drives (#443).**
-  A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives
-  exactly one valve's `actuator` stands 100 out from it, on its axis, or at
-  the nearest clear standoff, when the default router runs. If no standoff
-  is clear, or hanging adds any finding or any line or balloon over a unit
-  or tag, the sheet is routed as it was before this rule.
+  A balloon with no `near=`, `sensing=`, `acting_on=` or pin that drives one
+  valve's `actuator` stands 100 out on its axis, or at the nearest clear
+  standoff, unless that adds a finding or a clash.
 - **The alumina refinery example draws three sheets (#622).** Its areas are
   joined by off-page `Feed`/`Product` flags that name each other's drawing.
-- **CI checks lint and types in one job (#624).** Ruff, mypy and pyright share
-  one install, and the smoke job is gone; the test job covers what it ran.
 
 ### Deprecated
 
@@ -70,44 +56,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A unit's side given as `at=` (#438).** Use `face="N"` in
   `add_instrument()`, `add_balloon()`, `add_control_loop()` and `attach()`,
   `face: N` in a spec, and `controller_face=` for `controller_at=`.
-- **`default_input_face()` and `default_output_face()` on `Tank` and
-  `Vessel` (#624).** Choose faces with `inputs=` and `outputs=`, and read
-  them from `input_faces` and `output_faces`. A subclass that overrides
-  either is still honoured, and reported, until 0.1.7.
+- **`default_input_face()` and `default_output_face()` on `Tank` and `Vessel`
+  (#624).** Use `inputs=` and `outputs=`, and read `input_faces` and
+  `output_faces`; an override is honoured, and reported, until 0.1.7.
 
 ### Removed
 
 - **The ammonia loop example (#624).** Example 05 draws the same loop with more
   equipment. The other examples keep their numbers.
-- **Layout refinement and search after routing (#564).** `Flowsheet.route()`
-  no longer moves units once it has routed them. `pandid.layout.search`,
-  `trials`, `candidates` and `settle` are deleted, with the
-  `layout-search-*` warnings.
+- **Layout refinement and search after routing (#564).** `route()` no longer
+  moves units, and `pandid.layout.search`, `trials`, `candidates`, `settle` and
+  the `layout-search-*` warnings are deleted.
 - **The grid placement modules (#564).** `pandid.layout.place`, `claims`,
-  `coordinates`, `coarse`, `pixel`, `solver` and `structure` are deleted, as
-  is `pandid.portgeom.drawn_direction`. Label placement is in
+  `coordinates`, `coarse`, `pixel`, `solver`, `structure` and
+  `pandid.portgeom.drawn_direction` are deleted. Label placement is in
   `pandid.layout.labels`.
 - **`Port.side` (#304).** It was always `None`.
 - **Unused code (#574).** `pandid.layout.stages.control_units` and
-  `signal_streams`, `Edge.source_role`, `Edge.dest_role`,
-  `ArmRegion.entry_stream` and `ArmRegion.streams` in
-  `pandid.layout.structure`, `_EVAP_CALANDRIA_PITCH`, and
-  `scripts/ports_bench.py`, `renumber_bench.py` and `layout_bench.py` are
-  deleted.
-- **Unused dev tools (#624).** `scripts/layout_compare.py`, `route_quality.py`
-  and the unused `instruments.xml` stencil file are deleted, and
-  `scripts/layout_quality.py` keeps only what the tests use.
+  `signal_streams` are deleted.
 - **Unused code (#579).** `pandid.routing.get_outward_dir` is deleted; use
   `pandid.portgeom.outward_dir`. The `pandid.render.Renderer` protocol, which
   nothing used, is deleted.
 - **The twelve spellings 0.1.3 and 0.1.4 deprecated (#579).** Use
-  `Vessel(supports="leg")` or `supports="skirt"` for `variant="legs"` or
-  `"skirted"`, `Reactor(internals="packing")` for `variant="plain"`,
-  `Reactor(agitator="disc")` for `variant="mixing"`, and
-  `Separator(characteristic=...)` for a `"gravity"`, `"electrostatic"` or
-  `"electromagnetic"` variant. Use `DistillationColumn` for a `Column`'s
-  `reflux_in`, `boilup_in`, `reboiler_duty` and `condenser_duty`, and
-  `overhead` for `distillate`.
+  `Vessel(supports="leg")` or `"skirt"` for `variant="legs"` or `"skirted"`,
+  `Reactor(internals="packing")` for `variant="plain"`, `agitator="disc"` for
+  `"mixing"`, `Separator(characteristic=...)` for a `"gravity"`,
+  `"electrostatic"` or `"electromagnetic"` variant, `DistillationColumn` for a
+  `Column`'s `reflux_in`, `boilup_in`, `reboiler_duty` and `condenser_duty`,
+  and `overhead` for `distillate`.
 - **`pandid.document.location_reference` (#579).** It is deleted, with no
   replacement.
 - **`Port.state` and `Unit.params` (#579).** Both are deleted. Stream
@@ -129,29 +105,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   step (#611).** Coordinates within 1e-6 of the previous point's are drawn on
   its track, so a valve set a rounding step off its pipe adds no bends.
 - **Hanging a controller off its actuator no longer takes a tap off its line
-  (#636).** Where hanging leaves a balloon's tap off its line, `route()` places
-  the sheet as if no controller could hang.
+  (#636).** Where it would, `route()` places the sheet as if no controller
+  could hang.
 - **A balloon hung from another balloon no longer sits on the line it taps
-  (#619).** After the controller-hanging attempt, `route()` tries keeping it
-  clear of that line, and keeps the result only if no balloon's tap leaves its
-  line and no finding or clash grows.
+  (#619).** `route()` keeps it clear of that line unless that takes a tap off
+  its line or adds a finding or a clash.
 - **A letter code beside a balloon keeps off flange marks (#624).** On a
   flanged P&ID, an alarm or other code written over a flange mark moves to a
   spot clear of every mark, line, symbol and label, if there is one, and
   nothing else on the sheet moves. draw.io leaves the codes in place on a
   sheet where a tag is stacked with NC or fail letters, or wraps.
-- **A refused balloon placement changes nothing (#438).** `attach()` with a
-  bad `angle=` no longer moves the balloon first, `add_balloon()` with a bad
-  face no longer leaves the balloon on the sheet, and `add_instrument()`
-  refuses `at=` or `face=` given with no `sensing=`, `acting_on=` or `near=`
-  instead of dropping them.
-- **A control loop refused while it is added leaves the sheet as it was
-  (#438).** `add_control_loop()` refused at its second signal line, such as by
-  a `stream_naming_scheme` that cannot name it, used to leave the loop, both
-  balloons and the first line behind.
+- **A refused balloon placement changes nothing (#438).** A bad `angle=` to
+  `attach()` or a bad face to `add_balloon()` leaves the balloon as it was, and
+  `add_instrument()` refuses `at=` or `face=` given with no `sensing=`,
+  `acting_on=` or `near=` instead of dropping them.
+- **A refused `add_control_loop()` leaves the sheet as it was (#438).** It had
+  left the loop, both balloons and the first signal line behind.
 - **An expander keeps every field of the reducer it is turned from (#508).**
-  `large_end="outlet"` now draws at the reducer's trim weight, and its bands
-  are mirrored with the artwork.
+  `large_end="outlet"` draws at the reducer's trim weight, with its bands
+  mirrored with the artwork.
 - **`Feeder` and `ScreeningDevice` draw without a `variant=` (#604).** Both
   default to their `"general"` drawing instead of raising `ValueError` at
   render.
@@ -162,43 +134,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or `0` raises `ValueError`, as the constructor does, and leaves the size
   unchanged.
 - **No stencil draws ink below 0,1 M (#500).** The bars across the panel,
-  auxiliary and shared-display balloons, and the ticks on the hairpin
-  exchanger, now meet the ISO 10628-1 5.3.1 c) floor.
+  auxiliary and shared-display balloons and the hairpin exchanger's ticks are
+  drawn at least that wide.
 - **A multi-feed `Separator` round-trips through a spec (#579).**
   `to_dict()` writes its `n_feeds` and `from_dict()` reads it back.
 - **Tag halos and self-sized blocks and flags fit their text (#579).** They
-  are measured with the face's own letter widths, so wide capitals are
-  covered and lower-case names no longer pad their box.
+  are measured with the face's own letter widths.
 - **draw.io letters table and revision cells where the sheet does (#579).**
   Their text had sat one or two units further in.
 - **A tap line to a balloon off its tap's axis is drawn square (#170).** It
   leaves the host at a right angle and turns once onto the balloon, or twice
-  when the balloon is behind the tapped face, instead of running diagonally.
+  when the balloon is behind the tapped face.
 - **A refused `add_valve_station()` leaves the sheet unchanged (#564).** A
-  station refused part-way, such as on a member tag clash, used to leave
-  the members already built.
+  station refused part-way, such as on a member tag clash, had left the
+  members already built.
 - **`route-crosses-unit` sees a line drawn through its own unit (#468).** A
-  line that crosses the box of a unit it connects anywhere but at its nozzle
-  is reported. A route with no waypoints, such as `via([])`, is checked like
-  any other.
+  line crossing the box of a unit it connects anywhere but at its nozzle is
+  reported, `via([])` routes included.
 - **`to_dict()` keeps a stated annotation title that is falsy (#533).** A
   title such as `0` or `None` is written as stated, so `from_dict()` refuses
   it with `SpecError`.
 - **The spec reader accepts numpy numbers (#536).** Numeric fields take any
-  `int`, `float` or numpy number, and whole-number fields any
-  `numbers.Integral`. `Decimal` is accepted only in line-number components
-  and stream properties.
-- **Values that drew wrongly or crashed a render are refused or drawn as
-  text (#536).** A `Decimal` or `Fraction` size, `pin()` coordinate, `via()`
-  waypoint or annotation margin, width, font size or position raises
-  `TypeError`, as do a non-whole `pin()` rank and a non-text `Stream.color`
-  or `dasharray`. A numeric flag `reference`, `sheet_drawing_number` or
-  `sheet_subtitle` is drawn as text.
+  `int`, `float` or numpy number and whole-number fields any
+  `numbers.Integral`; only line-number components and stream properties take
+  a `Decimal`.
+- **Values that drew wrongly or crashed a render are refused or drawn as text
+  (#536).** A `Decimal` or `Fraction` size, `pin()` coordinate, `via()`
+  waypoint or annotation margin, width, font size or position, a non-whole
+  `pin()` rank and a non-text `Stream.color` or `dasharray` raise `TypeError`;
+  a numeric flag `reference`, `sheet_drawing_number` or `sheet_subtitle` is
+  drawn as text.
 - **The spec reader reads a number in drawn text as the text drawn (#534).**
   A description, reference, formula, flowsheet name, section heading, note,
-  box row or cell, or table header given as a number reads as its text.
-  Names, settings such as `variant` and annotation titles must still be
-  text.
+  box row or cell, or table header given as a number reads as its text; names,
+  settings such as `variant` and annotation titles must still be text.
 - **A float loop or instrument number is refused (#534).** `add_loop()`,
   `Loop` and `Instrument` raise `TypeError` for a number such as `303.0`.
 - **`add_valve_station()` names `mirrored=False` on an unplaced station
@@ -206,20 +175,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuses any `mirrored=` by name.
 - **A `via()` route keeps the points it was given (#574).** Line separation
   no longer moves or rewrites any run of a `via()` route.
-- **A part the body cannot carry is refused when the unit is built
-  (#574).** A unit given `supports=`, `agitator=`, `internals=` or `rake=`
-  that its variant cannot carry, such as
-  `Vessel(variant="horizontal", supports="ring")`, raises `ValueError`
-  naming the variants that can.
+- **A part the body cannot carry is refused when the unit is built (#574).**
+  `supports=`, `agitator=`, `internals=` or `rake=` that the variant cannot
+  carry, such as `Vessel(variant="horizontal", supports="ring")`, raises
+  `ValueError`.
 - **A draw.io dash matches the SVG dash (#574).** `dasharray="7, 4"`
   exports as `dashPattern=7 4`, and `dasharray="none"` as a solid line.
 - **A tag halo is measured on the text drawn (#574).** A tag such as `R&D`
   gets a halo as wide as the characters drawn, in both backends.
 - **An interlock diamond with letters and no number is lettered in capitals
   in SVG (#574).** It matches draw.io.
-- **The router keeps lines off the tag that is drawn (#574).** The router
-  reserves the halo the renderer draws behind a tag,
-  `pandid.portgeom.tag_width` wide, and nothing for a unit with no tag.
+- **The router keeps lines off the tag that is drawn (#574).** It reserves the
+  halo the renderer draws behind a tag, `pandid.portgeom.tag_width` wide, and
+  nothing for a unit with no tag.
 - **A recycle line takes its cheapest route (#574).** The route search
   prices a recycle's remaining bend at what a recycle bend costs.
 - **Layout keeps clear of a feed flag where it is drawn (#574).** Column
@@ -232,8 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `from_json()` and `from_yaml()` raise `SpecError` naming the key.
 - **A bad field in `stream_naming_scheme` raises `ValueError` when set
   (#574).** A scheme that cannot write the number, such as `"S-{num}"` or
-  `"S-{n.foo}"`, is refused on construction or assignment, naming the
-  scheme.
+  `"S-{n.foo}"`, is refused when constructed or assigned.
 - **`valve_station_tag_scheme` round-trips through a spec (#574).**
   `to_dict()` writes it when it differs from the default, and `from_dict()`
   reads it.
@@ -241,9 +208,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `via()` waypoint or annotation margin, width, font size or position raises
   `ValueError` for either, and the spec reader `SpecError`.
 - **Table cells and legend entries read as the text drawn (#574).** A `None`
-  line or cell in an `Annotation`, `TableBox` or `legend()` is blank, whether
-  built in Python or read from a spec. A legend entry in a spec that is not a
-  pair raises `SpecError`.
+  line or cell in an `Annotation`, `TableBox` or `legend()` is blank, and a
+  legend entry in a spec that is not a pair raises `SpecError`.
 - **`vessel_symbol()` refuses an inlet and an outlet on one point face
   (#507).** It raises the error the unit's constructor raises when an inlet
   and an outlet share a face that meets the box at a single point.
@@ -255,9 +221,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   title strip without a title block, the strip keeps the bottom-right corner
   when a box shares it, and a sheet with no furniture has the SVG's margin.
 - **Annotation columns start where the sheet writes them (#579).** draw.io
-  takes its column widths from the sheet, and both backends measure a
-  box's bold first column bold, so a long first cell no longer runs into the
-  next.
+  takes its column widths from the sheet, and both backends measure a box's
+  bold first column bold.
 
 ## [0.1.5] - 2026-08-26
 

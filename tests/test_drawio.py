@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import importlib.util
 import math
 from dataclasses import dataclass
 from decimal import Decimal
@@ -13,7 +12,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from _render_cases import copy_settled_case
+from _render_cases import _script, copy_settled_case
 from test_crossing_style import _ARC, MARKED, _paths
 from _layout_cases import overlaps
 import pandid
@@ -59,9 +58,7 @@ _DRAWIO_SHAPES = {"offPageConnector", "table", "tableRow", "partialRectangle"}
 _BUILTIN_SHAPES = _MXGRAPH_SHAPES | _DRAWIO_SHAPES
 
 
-# ---------------------------------------------------------------------------
 # Derive stencil keys independently from the vendored XML.
-# ---------------------------------------------------------------------------
 
 
 def _stencil_keys() -> set[str]:
@@ -126,23 +123,11 @@ def test_every_drawing_exports_as_a_stencil_or_a_written_down_approximation(entr
     kind, variant, sym = entry
     assert ";" not in sym.drawio_shape and "=" not in sym.drawio_shape
     if sym.drawio_shape:
-        assert sym.drawio_shape in STENCIL_KEYS, (
-            f"{kind}/{variant} references {sym.drawio_shape!r}, which no vendored "
-            f"stencil defines. draw.io answers an unresolvable shape with a plain "
-            f"rectangle and no error, so this would export a sheet of boxes."
-        )
-        assert sym.stretchable, (
-            f"{kind}/{variant} references a fixed-aspect stencil. Check its "
-            f"SCALE entry: if it is uneven, the exported box has to be mapped "
-            f"onto the stencil's own aspect rather than copied."
-        )
+        assert sym.drawio_shape in STENCIL_KEYS, f"{kind}/{variant}: no {sym.drawio_shape!r}"
+        assert sym.stretchable, f"{kind}/{variant} references a fixed-aspect stencil"
         return
     base = variant.split(" [")[0]
-    assert (kind, base) in _APPROXIMATIONS, (
-        f"{kind}/{base} has no draw.io stencil behind it and no entry in "
-        f"pandid.render.drawio._APPROXIMATIONS, so it would export as an "
-        f"undocumented rectangle"
-    )
+    assert (kind, base) in _APPROXIMATIONS, f"{kind}/{base} has no stencil and no approximation"
     assert _APPROXIMATIONS[(kind, base)].shape in _BUILTIN_SHAPES
 
 
@@ -153,20 +138,13 @@ def test_the_approximations_name_only_shapes_and_symbols_that_exist():
             f"_APPROXIMATIONS names {kind}/{variant}, which the registry does not draw"
         )
         assert not default_registry._symbols[(kind, variant)].drawio_shape, (
-            f"{kind}/{variant} has a draw.io stencil of its own, so approximating "
-            f"it throws the real shape away"
+            f"{kind}/{variant} has a draw.io stencil of its own"
         )
         for shape in (approx.shape, approx.inscribed):
-            assert shape in _BUILTIN_SHAPES or shape is None, (
-                f"{kind}/{variant} is approximated with {shape!r}, which is not "
-                f"an mxGraph built-in; a stencil key here could go stale, and the "
-                f"whole point of an approximation is a shape that is certainly there"
-            )
+            assert shape in _BUILTIN_SHAPES or shape is None, f"{kind}/{variant}: {shape!r}"
 
 
-# ---------------------------------------------------------------------------
 # Export warnings.
-# ---------------------------------------------------------------------------
 
 
 def test_a_stand_in_says_on_fs_warnings_what_it_lost():
@@ -238,9 +216,7 @@ def test_the_export_reports_a_title_block_cell_it_had_to_abbreviate():
     assert any("status" in w.message for w in truncated)
 
 
-# ---------------------------------------------------------------------------
 # A sheet carrying one of everything.
-# ---------------------------------------------------------------------------
 
 
 #: Registered ``(kind, variant)`` pairs selected by ``display=``.
@@ -311,9 +287,7 @@ def test_an_exported_sheet_references_only_shapes_that_resolve(every_symbol_shee
     assert not unresolved, f"unresolvable shape references: {unresolved}"
 
 
-# ---------------------------------------------------------------------------
 # The document draw.io expects.
-# ---------------------------------------------------------------------------
 
 
 def _model(fs: Flowsheet, **kwargs) -> ET.Element:
@@ -444,15 +418,9 @@ def test_every_instrument_connection_is_exported_as_an_edge(sample):
         # The balloon end lands on the balloon's centre.
         landed = _drawio_connection_point(inst, at[taps[f"t{n}"].get("target")], style, "entry")
         assert landed == pytest.approx(centre, abs=0.01)
-        source = taps[f"t{n}"].get("source")
-        if source is None:
-            point = taps[f"t{n}"].find('mxGeometry/mxPoint[@as="sourcePoint"]')
-            assert (float(point.get("x")), float(point.get("y"))) == pytest.approx(tap, abs=0.01)
-        else:
-            host = inst.host
-            assert _drawio_connection_point(host, at[source], style, "exit") == pytest.approx(
-                tap, abs=0.01
-            )
+        point = taps[f"t{n}"].find('mxGeometry/mxPoint[@as="sourcePoint"]')
+        assert point is not None and taps[f"t{n}"].get("source") is None
+        assert (float(point.attrib["x"]), float(point.attrib["y"])) == pytest.approx(tap, abs=0.01)
 
 
 def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
@@ -504,10 +472,7 @@ def test_a_label_written_inside_its_shape_fits_inside_it(settled_gallery, render
                 continue
             box = _LINE_BOX * float(style["fontSize"]) * (value.count("<br>") + 1)
             height = float(cell.find("mxGeometry").get("height"))
-            assert box <= height + 0.01, (
-                f"{stem}: {unit.name} writes {value!r} as {box:.2f} units of "
-                f"line box inside a {height:.2f}-unit shape"
-            )
+            assert box <= height + 0.01, f"{stem}: {unit.name} {value!r} {box:.2f} > {height:.2f}"
 
 
 def _unit_label_sizes(fs, kwargs, **over) -> list[float]:
@@ -822,9 +787,7 @@ def test_a_far_coordinate_is_written_in_full():
     assert max(xs) > 1_234_000, "the pinned coordinates did not reach the file"
 
 
-# ---------------------------------------------------------------------------
 # The geometry, against the renderer's.
-# ---------------------------------------------------------------------------
 
 
 def _cells(fs: Flowsheet, **kwargs) -> dict[str, ET.Element]:
@@ -968,9 +931,7 @@ def test_a_connection_point_resolves_back_onto_its_nozzle(orientation, mirrored)
             landed = _drawio_connection_point(port.owner, at[id(port.owner)], style, prefix)
             drawn = port_point(port.owner, port.owner.frame, port.name)
             assert landed == pytest.approx(drawn, abs=0.01), (
-                f"{port.owner.name}.{port.name} at orientation={orientation} "
-                f"mirrored={mirrored!r}: the {prefix} constraint lands at {landed}, "
-                f"and the nozzle is drawn at {drawn}"
+                f"{port.owner.name}.{port.name} {orientation=} {mirrored=} {prefix}"
             )
 
 
@@ -996,9 +957,7 @@ def test_a_feed_pinned_to_a_stage_resolves_to_the_same_point_in_both_backends():
         assert landed == pytest.approx(drawn, abs=0.01)
 
 
-# ---------------------------------------------------------------------------
 # What the style says about a placement.
-# ---------------------------------------------------------------------------
 
 
 def _one_unit(unit, **pin) -> dict[str, str]:
@@ -1194,9 +1153,7 @@ def test_a_repeated_tag_gets_a_cell_of_its_own():
     assert len(ids) == 2 + 3
 
 
-# ---------------------------------------------------------------------------
 # Streams: weight, dash and arrowhead.
-# ---------------------------------------------------------------------------
 
 
 def test_a_signal_line_is_dashed_and_drawn_half_the_weight_of_pipe(sample):
@@ -1302,9 +1259,6 @@ def test_a_line_number_is_written_where_the_sheet_writes_it(settled_gallery, ren
 
     for stem in LINE_NUMBER_SHEETS:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
-        # Enclosed numbers use a separate cell, checked in test_stream_label_enclosure.py.
-        if fs.stream_labels.enclosure != "none":
-            continue
         cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         plates = _tag_pass(fs, default_registry, None, "vertical").plates
@@ -1442,9 +1396,6 @@ def test_a_letter_code_by_a_flange_mark_is_exported_clear_of_every_line_and_tag(
     marks += [fit.box(bar) for bar in _hatch_bars(fs)] + list(tags.values())
     hit = [text for text, box in codes for mark in marks if overlaps(box, mark)]
     assert not hit, f"letter codes exported over a line or tag: {hit}"
-
-
-# ---------------------------------------------------------------------------
 
 
 def _titled() -> Flowsheet:
@@ -1727,22 +1678,6 @@ def _drawio_root(document: str) -> ET.Element:
     return root
 
 
-def _drawio_cells_from_document(document: str) -> dict:
-    """Index cells from an already-rendered Draw.io document.
-
-    Parameters
-    ----------
-    document : str
-        Draw.io XML document.
-
-    Returns
-    -------
-    dict[str, ET.Element]
-        Exported cells keyed by identifier.
-    """
-    return {cell.get("id"): cell for cell in _drawio_root(document).iter("mxCell")}
-
-
 def _drawio_furniture(fs, kwargs):
     """Build furniture with the export options used by the gallery.
 
@@ -1857,10 +1792,7 @@ def test_no_table_row_is_shorter_than_the_line_box_of_its_own_text(rendered_gall
         for cell, row, _table in _table_cells(_gallery_cells(rendered_gallery, stem)):
             box = _line_box(_cell_font(cell))
             height = float(row.find("mxGeometry").get("height"))
-            assert box <= height + 0.01, (
-                f"{stem}: {cell.get('id')} {cell.get('value')!r} sets a "
-                f"{box:.2f}-unit line in a {height:.2f}-unit row"
-            )
+            assert box <= height + 0.01, f"{stem}: {cell.get('id')} {box:.2f} > {height:.2f}"
 
 
 def test_no_furniture_text_is_drawn_under_the_frames_own_rule(rendered_gallery):
@@ -1889,10 +1821,7 @@ def test_no_furniture_text_is_drawn_under_the_frames_own_rule(rendered_gallery):
             height = float(row.find("mxGeometry").get("height"))
             # Centred in its row, which is what verticalAlign=middle does.
             ink = top + height - (height - _line_box(_cell_font(cell))) / 2
-            assert ink <= paper + 0.01, (
-                f"{stem}: {cell.get('id')} {cell.get('value')!r} is drawn to "
-                f"{ink:.2f}, past the frame's own ink at {paper:.2f}"
-            )
+            assert ink <= paper + 0.01, f"{stem}: {cell.get('id')} {ink:.2f} > {paper:.2f}"
 
 
 def _legend_sheet() -> Flowsheet:
@@ -2309,8 +2238,6 @@ def test_the_stream_table_is_the_grid_the_sheet_draws(settled_gallery, rendered_
     checked = []
     for stem in TABLE_REPRESENTATIVES:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
-        if not kwargs.get("show_stream_table"):
-            continue
         drawn = _svg_stream_table(rendered_gallery[stem].svg)
         table, exported = _drawio_stream_table(_gallery_cells(rendered_gallery, stem))
         assert len(exported) == len(drawn), (
@@ -2359,8 +2286,6 @@ def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(
     checked = []
     for stem in TABLE_REPRESENTATIVES:
         fs, kwargs = copy_settled_case(settled_gallery, stem)
-        if not kwargs.get("show_stream_table"):
-            continue
         cells = _gallery_cells(rendered_gallery, stem)
         table, _drawn = _drawio_stream_table(cells)
         style = _style(table)
@@ -2382,10 +2307,7 @@ def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it(
         for w in widths:
             assert len(w) in (1, ncol), f"{stem}: a row of {len(w)} of {ncol} cells"
             assert sum(w) == pytest.approx(total, abs=0.01)
-        assert len([w for w in widths if len(w) == 1]) == len(fs.stream_table_sections), (
-            f"{stem}: {len(fs.stream_table_sections)} section headings, "
-            f"{len([w for w in widths if len(w) == 1])} rows spanning the table"
-        )
+        assert len([w for w in widths if len(w) == 1]) == len(fs.stream_table_sections), stem
         checked.append(stem)
     assert checked, "no example in the gallery draws a stream table"
 
@@ -2459,10 +2381,7 @@ def _page_states(fs: Flowsheet, **kwargs) -> "tuple[str, float, float]":
     """
     model = ET.fromstring(fs.to_drawio(**kwargs)).find("diagram/mxGraphModel")
     assert model.get("pageWidth") is not None and model.get("pageHeight") is not None, (
-        "a model that states no page size does not open unpaged -- draw.io's "
-        "Editor.readGraphState leaves graph.pageFormat at the prototype default, "
-        "which js/grapheditor/Graph.js sets to A4 or US Letter by the *reader's* "
-        "locale, and js/export.js then bounds every PDF by it"
+        "the model states no page size"
     )
     return (model.get("page"), float(model.get("pageWidth")), float(model.get("pageHeight")))
 
@@ -2713,9 +2632,7 @@ def test_each_paged_representative_lands_on_its_configured_paper(settled_gallery
             border=kwargs.get("border"),
         )
         root = ET.fromstring(doc)
-        if sheet is None:
-            assert root.find("diagram/mxGraphModel").get("page") == "0"
-            continue
+        assert sheet is not None
         for cell in root.iter("mxCell"):
             geo = cell.find("mxGeometry")
             if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
@@ -2751,9 +2668,23 @@ def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path,
         sample.render(tmp_path / "sheet.dwg")
 
 
-# ---------------------------------------------------------------------------
 # Shipped gallery examples.
-# ---------------------------------------------------------------------------
+
+
+def _drawio_cells_from_document(document: str) -> dict:
+    """Index cells from an already-rendered Draw.io document.
+
+    Parameters
+    ----------
+    document : str
+        Draw.io XML document.
+
+    Returns
+    -------
+    dict[str, ET.Element]
+        Exported cells keyed by identifier.
+    """
+    return {cell.get("id"): cell for cell in _drawio_root(document).iter("mxCell")}
 
 
 #: Representative sheets for cross-backend Draw.io export checks.
@@ -3116,9 +3047,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
         )
 
 
-# ---------------------------------------------------------------------------
 # Line weight
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
@@ -3152,10 +3081,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(
             # A pipe tee draws no ink, so it has no pen to state.
             if style.get("strokeColor") == "none":
                 continue
-            assert "strokeWidth" in style, (
-                f"{stem}: {u.kind}/{getattr(u, 'variant', 'default')} leaves its "
-                f"pen to draw.io, which draws it at 1 whatever rung it is on"
-            )
+            assert "strokeWidth" in style, f"{stem}: {u.kind}/{getattr(u, 'variant', 'default')}"
             assert float(style["strokeWidth"]) == pytest.approx(want, abs=0.01)
             seen += 1
     assert seen, f"{stem}: no unit cell was checked"
@@ -3183,9 +3109,7 @@ def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(rendered_gallery
     assert not silent, f"{stem}: cells drawn at draw.io's default weight: {silent}"
 
 
-# ---------------------------------------------------------------------------
 # Line jumps, resolved from exported edge order and styles.
-# ---------------------------------------------------------------------------
 
 
 def _intersection(p0, p1, p2, p3):
@@ -3370,13 +3294,9 @@ def test_each_marked_representative_accounts_for_every_drawio_hop(settled_galler
         )
     drawn = _drawio_hops(edges)
     sheet = _sheet_hops(fs, fit, style=style)
-    assert drawn <= sheet, (
-        f"{stem}: draw.io hops {sorted(drawn - sheet)} at crossing_style="
-        f"{style!r}, which the sheet does not"
-    )
+    assert drawn <= sheet, f"{stem}: draw.io alone hops {sorted(drawn - sheet)} at {style!r}"
     assert len(sheet - drawn) == len([w for w in fs.warnings if w.code == HOP_DROPPED]), (
-        f"{stem}: {len(sheet - drawn)} crossing(s) exported flat, "
-        f"{len([w for w in fs.warnings if w.code == HOP_DROPPED])} reported"
+        f"{stem}: {len(sheet - drawn)} crossing(s) exported flat"
     )
 
 
@@ -3471,10 +3391,7 @@ def test_only_a_stream_hops_or_is_hopped(rendered_gallery):
     assert edges, "no edges at all"
     for cid, cell in edges.items():
         stream = cid.startswith("s") and cid[1:].isdigit()
-        assert (_style(cell).get("noJump") == "1") != stream, (
-            f"{cid}: a {'stream' if stream else 'rule or tap'} says "
-            f"noJump={_style(cell).get('noJump')}"
-        )
+        assert (_style(cell).get("noJump") == "1") != stream, cid
 
 
 def test_a_run_is_written_before_the_run_that_hops_it():
@@ -3484,10 +3401,7 @@ def test_a_run_is_written_before_the_run_that_hops_it():
         "vertical",
     )
     assert hops == {"v"}, "the vertical run hops the horizontal one"
-    assert order.index("h") < order.index("v"), (
-        "draw.io intersects an edge only against the edges before it, so the "
-        "hopper has to be written second"
-    )
+    assert order.index("h") < order.index("v"), "the hopper is written first"
 
 
 def _drawn(polylines, order, hops):
@@ -3564,9 +3478,7 @@ def test_a_cycle_costs_only_the_runs_inside_it():
     assert _drawn(polylines, order, hops) == {("c", "h")}
 
 
-# ---------------------------------------------------------------------------
 # The committed samples, and the script that makes them.
-# ---------------------------------------------------------------------------
 
 
 def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
@@ -3577,11 +3489,7 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     monkeypatch : pytest.MonkeyPatch
         Fixture used to replace the package version during the test.
     """
-    path = ROOT / "scripts" / "drawio_samples.py"
-    spec = importlib.util.spec_from_file_location("_pandid_script_drawio_samples", path)
-    assert spec is not None and spec.loader is not None
-    samples = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(samples)
+    samples = _script("drawio_samples")
     current, _dropped = samples.sample("04_control_loop")
     monkeypatch.setattr(pandid, "__version__", "99.99.99")
     bumped, _dropped = samples.sample("04_control_loop")
@@ -3591,39 +3499,29 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     assert agent.sub(r"\1", current) == agent.sub(r"\1", bumped)
 
 
-# ---------------------------------------------------------------------------
 # Compositions: the two backends drawing the same thing.
-# ---------------------------------------------------------------------------
 
 
-def _composed_units():
-    """Build one unit for each supported symbol composition.
-
-    Returns
-    -------
-    list[Unit]
-        Units with representative overlays and body variants.
-    """
-    return [
-        units.Reactor("R-101"),
-        units.Reactor("R-102", agitator="turbine"),
-        units.Reactor("R-103", variant="jacketed", agitator="propeller"),
-        units.Reactor("R-201", internals="packing", agitator=None),
-        units.Reactor("R-202", internals="fluidised_bed", agitator="anchor"),
-        units.Column("T-101", internals="tray"),
-        units.Column("T-102", internals="bubble_cap_tray", trays=6),
-        units.Column("T-103", internals="packing", trays=2),
-        units.Vessel("D-301", supports="leg"),
-        units.Vessel("D-302", supports="skirt"),
-        units.Vessel("D-303", supports="bracket"),
-        units.Vessel("D-304", supports="ring"),
-        units.Separator("V-201", characteristic="gravity"),
-        units.Separator("V-202", characteristic="electrostatic"),
-        units.Separator("V-203", characteristic="electromagnetic"),
-    ]
+_COMPOSED = [
+    units.Reactor("R-101"),
+    units.Reactor("R-102", agitator="turbine"),
+    units.Reactor("R-103", variant="jacketed", agitator="propeller"),
+    units.Reactor("R-201", internals="packing", agitator=None),
+    units.Reactor("R-202", internals="fluidised_bed", agitator="anchor"),
+    units.Column("T-101", internals="tray"),
+    units.Column("T-102", internals="bubble_cap_tray", trays=6),
+    units.Column("T-103", internals="packing", trays=2),
+    units.Vessel("D-301", supports="leg"),
+    units.Vessel("D-302", supports="skirt"),
+    units.Vessel("D-303", supports="bracket"),
+    units.Vessel("D-304", supports="ring"),
+    units.Separator("V-201", characteristic="gravity"),
+    units.Separator("V-202", characteristic="electrostatic"),
+    units.Separator("V-203", characteristic="electromagnetic"),
+]
 
 
-COMPOSED_IDS = [f"{u.kind}/{u.name}" for u in _composed_units()]
+COMPOSED_IDS = [f"{u.kind}/{u.name}" for u in _COMPOSED]
 
 
 @pytest.fixture(scope="module")
@@ -3636,7 +3534,7 @@ def composed_sheet() -> Flowsheet:
         Grid of composed units.
     """
     fs = Flowsheet("compositions")
-    for i, unit in enumerate(_composed_units()):
+    for i, unit in enumerate(_COMPOSED):
         fs.add(unit).pin(x=(i % 5) * 400.0, y=(i // 5) * 400.0)
     fs.layout()
     return fs
@@ -3682,8 +3580,7 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
 
     children = [cell for key, cell in cells.items() if key.startswith(f"{cid}-p")]
     assert len(children) == len(sym.overlays), (
-        f"{unit.name}: the sheet draws {len(sym.overlays)} parts and the export "
-        f"draws {len(children)}"
+        f"{unit.name}: the sheet draws {len(sym.overlays)} parts, the export {len(children)}"
     )
     # The SVG draws at least as many parts.
     inner = _GROUP.match(sym.svg).group(2)
@@ -3693,10 +3590,7 @@ def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, in
         box = cell.find("mxGeometry")
         got = tuple(float(box.get(k)) for k in ("x", "y", "width", "height"))
         want = (overlay.x * w, overlay.y * h, overlay.w * w, overlay.h * h)
-        assert got == pytest.approx(want, abs=0.02), (
-            f"{unit.name}: part {overlay.group}/{overlay.name} is at {got} in the "
-            f"export and at {want} on the sheet"
-        )
+        assert got == pytest.approx(want, abs=0.02), f"{unit.name}: {overlay.group}/{overlay.name}"
         assert _style(cell)["movable"] == "0" and _style(cell)["connectable"] == "0"
 
 
@@ -3736,18 +3630,13 @@ def test_every_part_resolves_to_a_stencil_or_a_documented_built_in(part):
         Composed-symbol part definition under test.
     """
     if part.drawio_shape:
-        assert part.drawio_shape in STENCIL_KEYS, (
-            f"{part.iso.group}/{part.name} names {part.drawio_shape!r}, which no "
-            f"vendored stencil defines"
-        )
+        assert part.drawio_shape in STENCIL_KEYS, f"{part.iso.group}/{part.name}"
         assert part.key() not in _PART_APPROXIMATIONS, (
             "approximating a part that has a stencil throws the real shape away"
         )
         return
     assert part.key() in _PART_APPROXIMATIONS, (
-        f"{part.iso.group}/{part.name} has neither a stencil nor an entry in "
-        f"pandid.render.drawio._PART_APPROXIMATIONS, so it would export as an "
-        f"undocumented rectangle"
+        f"{part.iso.group}/{part.name} has no stencil and no approximation"
     )
     assert _PART_APPROXIMATIONS[part.key()].shape in _BUILTIN_SHAPES
 
@@ -3755,10 +3644,7 @@ def test_every_part_resolves_to_a_stencil_or_a_documented_built_in(part):
 def test_the_part_table_names_only_parts_that_exist():
     """Check each part approximation names a registered part."""
     registered = {p.key() for p in default_registry.parts()}
-    assert set(_PART_APPROXIMATIONS) <= registered, (
-        f"_PART_APPROXIMATIONS names parts nobody registers: "
-        f"{sorted(set(_PART_APPROXIMATIONS) - registered)}"
-    )
+    assert set(_PART_APPROXIMATIONS) <= registered, sorted(set(_PART_APPROXIMATIONS) - registered)
 
 
 def test_an_annotation_of_empty_rows_exports() -> None:
