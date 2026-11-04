@@ -304,7 +304,7 @@ def test_a_stage_list_of_the_wrong_length_is_refused_from_a_spec(count, stages):
         ("diameter", 40, "a Conveyor"),
         ("length", 200, "a Conveyor"),
         ("large_end", "outlet", "a Reducer"),
-        ("normal_position", "closed", "a Valve or a Fitting"),
+        ("normal_position", "closed", "a Fitting or a Valve"),
         ("header", True, "a Feed or a Product"),
         ("fail", "closed", "a Valve"),
         ("branch", "inlet", "a Tee"),
