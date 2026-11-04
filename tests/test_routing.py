@@ -112,8 +112,11 @@ def test_a_lane_a_pixel_off_a_unit_carries_no_route_along_it():
     fs.add(Vessel("V-1", width=60, height=100)).pin(x=380, y=50)
     # V-2's lower lane runs one pixel under V-1.
     fs.add(Vessel("V-2", width=60, height=86)).pin(x=1000, y=50)
-    fs.connect(feed.outlet, product.inlet)
+    line = fs.connect(feed.outlet, product.inlet)
     fs.route()
+    assert line.route is not None
+    # V-1's bottom edge is at y=150.
+    assert all(abs(y - 150.0) >= 2.0 for _, y in line.route.waypoints), line.route.waypoints
     assert "route-along-unit" not in {issue.code for issue in fs.validate()}
 
 
