@@ -8,6 +8,7 @@ import pytest
 
 from _layout_cases import overlaps
 from _render_cases import copy_settled_case
+from pandid import Flowsheet, units as U
 from pandid.portgeom import unit_box
 from pandid.render.svg import _PLATE_CLEARANCE, _ink, _obstacle
 from pandid.render.weights import LineWeight
@@ -283,6 +284,38 @@ def test_no_letter_code_lands_on_a_tag_or_a_line_number(drawn, name):
     assert not hit, f"{name}: a letter code is written over a label at " + "; ".join(
         sorted(set(hit))
     )
+
+
+def _codes_between_a_flange_and_a_line() -> "tuple[Flowsheet, dict]":
+    """Build a flanged sheet whose alarm codes have no spot clear of both a flange and a line."""
+    fs = Flowsheet("codes between a flange and a line")
+    feed = fs.add(U.Feed("F"))
+    valve = fs.add(U.Valve("HV-1"))
+    prod = fs.add(U.Product("P"))
+    feed.pin(port="outlet", x=300, y=300)
+    valve.pin(port="inlet", x=380, y=240)
+    prod.pin(port="inlet", x=580, y=240)
+    riser = fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    fs.add_instrument("PI", 1, sensing=riser, at=0.6).annotate(high="PAH", low="PAL")
+    other, out = fs.add(U.Feed("F2")), fs.add(U.Product("P2"))
+    other.pin(port="outlet", x=100, y=229)
+    out.pin(port="inlet", x=600, y=100)
+    fs.connect(other.outlet, out.inlet).via([(290, 229), (290, 100)])
+    return fs, {"diagram": "p&id", "connections": "flanged"}
+
+
+def test_a_letter_code_kept_off_a_flange_mark_lands_on_no_line():
+    """Check that a letter code with no spot clear of a flange mark lands on no line."""
+    fs, kwargs = _codes_between_a_flange_and_a_line()
+    fs.to_svg(**kwargs)
+    struck = [
+        f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
+        for box in _code_boxes(fs, kwargs)
+        for line in _ink(fs, "vertical")
+        if overlaps(box, line.box)
+    ]
+    assert not struck, "a letter code lies on " + "; ".join(sorted(set(struck)))
 
 
 def test_the_corpus_has_letter_codes_to_check(drawn):

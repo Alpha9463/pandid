@@ -369,7 +369,8 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
     fs : Flowsheet
         Laid-out and routed sheet.
     joints : str or None
-        :func:`sheet_connections` result, whose flange marks the codes avoid.
+        :func:`sheet_connections` result; a code on one of its flange marks
+        moves to a spot clear of everything, if there is one.
     direction : str
         ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
 
@@ -386,7 +387,7 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
         return []
     ink = _ink(fs, direction)
     symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
-    symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
+    flanges = [_obstacle(b) for b in flange_boxes(fs, joints)]
 
     out: list = []
     for u in annotated:
@@ -395,21 +396,52 @@ def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
             codes = {name: u.quadrants.get(name) or () for name in names}
             if not any(codes.values()):
                 continue
-            # The other side wins only if it is cleaner.
-            best = None
-            for side in (prefers, -prefers):
-                block = _quadrant_block(box, codes, side)
-                shift, damage = _quadrant_stand_off(block, side, ink, symbols)
-                if best is None or damage < best[0]:
-                    best = (damage, [(x + side * shift, y, *rest)
-                                     for x, y, *rest in block])
+            _damage, placed = _quadrant_side(box, codes, prefers, ink, symbols)
+            plates = [b for b in map(_unit_label_box, placed) if b is not None]
+            if any(boxes_overlap(b, f) for b in plates for f in flanges):
+                # Leave a flange mark only for a spot clear of everything.
+                damage, clear = _quadrant_side(box, codes, prefers, ink, symbols + flanges)
                 if damage == (0, 0, 0):
-                    break
-            assert best is not None
-            out.extend(best[1])
+                    placed = clear
+            out.extend(placed)
             # Placed codes become obstacles for later pairs.
-            symbols += [b for b in map(_unit_label_box, best[1]) if b is not None]
+            symbols += [b for b in map(_unit_label_box, placed) if b is not None]
     return out
+
+
+def _quadrant_side(box, codes, prefers: int, ink, symbols):
+    """Return a pair of codes placed on the cleaner side of a symbol.
+
+    The other side wins only if it is cleaner.
+
+    Parameters
+    ----------
+    box : tuple[float, float, float, float]
+        Symbol box.
+    codes : dict[str, tuple[str, ...]]
+        Codes keyed by quadrant letter.
+    prefers : int
+        Preferred side: ``1`` for right, ``-1`` for left.
+    ink : list[_Ink]
+        Drawn lines.
+    symbols : list[tuple[float, float, float, float]]
+        Obstacle boxes.
+
+    Returns
+    -------
+    tuple[tuple[int, int, int], list]
+        The :func:`_erases` score and the placed label items.
+    """
+    best = None
+    for side in (prefers, -prefers):
+        block = _quadrant_block(box, codes, side)
+        shift, damage = _quadrant_stand_off(block, side, ink, symbols)
+        if best is None or damage < best[0]:
+            best = (damage, [(x + side * shift, y, *rest) for x, y, *rest in block])
+        if damage == (0, 0, 0):
+            break
+    assert best is not None
+    return best
 
 
 def _quadrant_block(box, codes, side: int) -> list:

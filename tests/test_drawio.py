@@ -1386,25 +1386,49 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
     assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
 
 
+def _exported_codes(fs, kwargs) -> tuple:
+    """Return each exported letter code with the page box its halo paints, and the fit."""
+    from pandid.render.drawio import _TEXT_INSET
+
+    cells = _drawio_cells_from_document(fs.to_drawio(**kwargs))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+    codes = []
+    for cid, cell in cells.items():
+        if not re.fullmatch(r"q\d+", cid or ""):
+            continue
+        geometry = cell.find("mxGeometry")
+        assert geometry is not None
+        x, y = float(geometry.get("x", 0)), float(geometry.get("y", 0))
+        w, h = float(geometry.get("width", 0)), float(geometry.get("height", 0))
+        # The halo fills the cell inside draw.io's text inset.
+        inset = _TEXT_INSET
+        codes.append((cell.get("value"), (x + inset, y + inset, x + w - inset, y + h - inset)))
+    assert codes, "the sheet exports no letter code"
+    return codes, fit
+
+
 def test_a_letter_code_is_exported_clear_of_a_flange_mark():
     """Export each letter code clear of the flange marks on its sheet."""
     from test_halo_invariants import _flange_bars
     from test_label_invariants import CORPUS
 
     fs, kwargs = CORPUS["codes_beside_a_flange"]()
-    cells = _drawio_cells_from_document(fs.to_drawio(**kwargs))
-    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+    codes, fit = _exported_codes(fs, kwargs)
     faces = [fit.box(face.box) for face in _flange_bars(fs, kwargs)]
-    codes = [cell for cid, cell in cells.items() if re.fullmatch(r"q\d+", cid or "")]
-    hit = []
-    for cell in codes:
-        geometry = cell.find("mxGeometry")
-        assert geometry is not None
-        x, y = float(geometry.get("x", 0)), float(geometry.get("y", 0))
-        box = (x, y, x + float(geometry.get("width", 0)), y + float(geometry.get("height", 0)))
-        hit += [cell.get("value") for face in faces if overlaps(box, face)]
-    assert codes, "the sheet exports no letter code"
+    hit = [text for text, box in codes for face in faces if overlaps(box, face)]
     assert not hit, f"letter codes exported over a flange mark: {hit}"
+
+
+def test_a_letter_code_kept_off_a_flange_mark_is_exported_clear_of_every_line():
+    """Export a letter code that has no spot clear of a flange mark clear of every line."""
+    from pandid.render.svg import _ink
+    from test_halo_invariants import _codes_between_a_flange_and_a_line
+
+    fs, kwargs = _codes_between_a_flange_and_a_line()
+    codes, fit = _exported_codes(fs, kwargs)
+    lines = [fit.box(line.box) for line in _ink(fs, "vertical")]
+    hit = [text for text, box in codes for line in lines if overlaps(box, line)]
+    assert not hit, f"letter codes exported over a line: {hit}"
 
 
 # ---------------------------------------------------------------------------
