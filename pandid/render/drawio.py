@@ -13,7 +13,8 @@ from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 from xml.sax.saxutils import escape
 
-from pandid.portgeom import _flag_reference, _xform, port_point, symbol_to_box, unit_box
+from pandid.layout.labels import _DIR_OF_SIDE
+from pandid.portgeom import COMPASS, _flag_reference, _xform, port_point, symbol_to_box, unit_box
 from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
@@ -587,7 +588,8 @@ class _Tags(NamedTuple):
     Attributes
     ----------
     at : dict
-        ``id(unit)`` -> ``(side, dx, dy)``, offset from the side's spot.
+        ``id(unit)`` -> ``(side, dx, dy)``, offset from the middle of the
+        cell's side to the middle of the tag halo's near edge.
     plates : list
         Opaque boxes of tags and ``NC``/fail letters.
     codes : list
@@ -639,10 +641,12 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
             item = sheet._tag_item(u, f, x, y, w, h, u.tag, ink, symbols)
             tag_box = _unit_label_box(item)
             items.append(item)
-            # The side and the offset from that side's default spot.
-            side = item[4]
-            base = sheet._label_place(side, x, y, w, h)
-            at[id(u)] = (side, item[0] - base[0], item[1] - base[1])
+            if tag_box is not None:
+                # From the middle of the cell's side to the middle of the halo's near edge.
+                hx0, hy0, hx1, hy1 = tag_box
+                mx, my = (hx0 + hx1 - 2 * x - w) / 2, (hy0 + hy1 - 2 * y - h) / 2
+                at[id(u)] = (item[4], *{"top": (mx, hy1 - y), "bottom": (mx, hy0 - y - h),
+                                       "left": (hx1 - x, my), "right": (hx0 - x - w, my)}[item[4]])
         if closed_marking(u, registry) == "NC":
             items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
         letters = fail_marking(u)
@@ -1144,10 +1148,13 @@ class DrawioRenderer:
             lines.append(letters)
         side, dx, dy = tags.at.get(id(u), (
             (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0))
+        # draw.io already holds a side label _TEXT_INSET off the cell.
+        nx, ny = COMPASS[_DIR_OF_SIDE[side]] if id(u) in tags.at else (0, 0)
         # No cap: a side label sits outside the cell.
         return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
             side, _LABEL_SIDE["top"]
-        ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx), fit.length(dy))
+        ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx) - nx * _TEXT_INSET,
+                                            fit.length(dy) - ny * _TEXT_INSET)
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
