@@ -128,6 +128,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Automatic lines keep off units and arrowheads (#640, #661).** Where a
+  sheet draws a line along a unit or across an arrowhead, `route()` tries
+  routes clear of both, with each balloon that has no `face=` on a free
+  nozzle's face, and keeps them if no finding grows. A flag is measured, and
+  tapped, at its drawn pennant.
 - **A device with a stated turn and mirror sits on its pipe, inlet upstream
   (#642).** Where `pin(orientation=..., mirrored=...)` would run it against
   its line, it is drawn end for end, and `validate()` reports the pin that

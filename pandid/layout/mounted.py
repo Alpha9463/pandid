@@ -18,6 +18,7 @@ from pandid.layout.conflicts import boxes_overlap
 from pandid.layout.stages import process_streams, process_units, slot
 from pandid.portgeom import port_point, resolve_size, unit_box
 from pandid.routing.metrics import path_length
+from pandid.routing.visibility import MARGIN
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -614,12 +615,13 @@ def _frames_at(element: Element, centre: float, leg: Leg) -> dict[Unit, Frame]:
 
 
 def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
-           zones: list[Box], pipes: list[list[Point]], ends: tuple[Unit, ...] = ()) -> bool:
+           zones: list[Box], pipes: list[list[Point]], ends: tuple[Unit, ...] = (),
+           exit_gap: float = 0.0) -> bool:
     """Return whether proposed frames keep clear of other units.
 
     Each frame keeps :data:`ALONG` along the pipe or :data:`GAP` across
-    it from every obstacle and zone. Each signal exit stays off
-    obstacles, zones, end units and pipes.
+    it from every obstacle and zone. Each signal exit keeps ``exit_gap``
+    from obstacles, zones and end units, and stays off pipes.
 
     Parameters
     ----------
@@ -635,6 +637,8 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
         Routed lines the signal exits keep off.
     ends : tuple[Unit, ...], optional
         The pipe's own end units.
+    exit_gap : float, default=0.0
+        Clearance each signal exit keeps.
 
     Returns
     -------
@@ -653,7 +657,7 @@ def _clear(frames: dict[Unit, Frame], obstacles: list[Unit], level: bool,
     lines = [(a, b) for line in pipes for a, b in zip(line, line[1:])]
     boxes += [unit_box(unit, unit.frame) for unit in ends if unit.frame is not None]
     for left, top, right, bottom in _signal_exits(frames):
-        if any(boxes_overlap((left, top, right, bottom), o) for o in boxes):
+        if any(boxes_overlap((left, top, right, bottom), o, exit_gap) for o in boxes):
             return False
         if any(max(a[0], b[0]) >= left and right >= min(a[0], b[0])
                and max(a[1], b[1]) >= top and bottom >= min(a[1], b[1]) for a, b in lines):
@@ -977,7 +981,7 @@ def _centres(wanted: list[float], lengths: list[float], size: float,
 
 
 def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
-             zones: list[Box], pipes: list[list[Point]]) -> bool:
+             zones: list[Box], pipes: list[list[Point]], exit_gap: float = 0.0) -> bool:
     """Set a pipe's elements on its routed polyline.
 
     With no route, one straight leg from the source nozzle along the
@@ -995,6 +999,8 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
         Ground covered by stations set so far; extended in place.
     pipes : list[list[Point]]
         Routed lines between placed equipment, every pipe included.
+    exit_gap : float, default=0.0
+        Clearance each element's signal exits keep from other units.
 
     Returns
     -------
@@ -1060,7 +1066,7 @@ def _set_run(run: MountedRun, points: list[Point], obstacles: list[Unit],
                     if not low - 1e-6 <= at <= high + 1e-6:
                         continue
                     frames = _frames_at(run.elements[i], at, leg)
-                    if _clear(frames, others, level, mine, pipes, (source, dest)):
+                    if _clear(frames, others, level, mine, pipes, (source, dest), exit_gap):
                         chosen = (at, frames)
                         break
                 if chosen is None:
@@ -1091,7 +1097,10 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     """Place equipment and loose stations, then set pipe furniture.
 
     Each furnished pipe reserves its furniture's room in the equipment
-    solve (:class:`pandid.layout.layered.Link`).
+    solve (:class:`pandid.layout.layered.Link`). With
+    ``fs._exit_clear`` set, each signal exit keeps
+    :data:`~pandid.routing.visibility.MARGIN` from other units;
+    ``fs._exit_tight`` records whether any comes closer.
 
     Parameters
     ----------
@@ -1126,5 +1135,11 @@ def place_mounted(fs: Flowsheet, runs: list[MountedRun]) -> None:
     routes, lines = _routed_pipes(fs, runs, retained)
     obstacles = list(retained)
     zones: list[Box] = []
+    exit_gap = MARGIN if fs._exit_clear else 0.0
     for i in sorted(range(len(runs)), key=lambda i: (-_chain_width(runs[i]), i)):
-        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes])
+        _set_run(runs[i], routes[i], obstacles, zones, [*lines, *routes], exit_gap)
+    # Note a signal exit drawn within MARGIN of another unit.
+    fs._exit_tight = any(boxes_overlap(box, unit_box(other, other.frame), MARGIN)
+                         for unit in members if unit.frame is not None
+                         for box in _signal_exits({unit: unit.frame})
+                         for other in obstacles if other is not unit and other.frame is not None)

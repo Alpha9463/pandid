@@ -328,6 +328,23 @@ def test_face_names_the_side_of_a_unit_and_defaults_to_east():
     assert fs.add_instrument("LT", 4, sensing=drum, face=" w ").face == "W"
 
 
+def test_a_balloon_on_a_flag_taps_the_pennant_it_draws():
+    """Check that a balloon on a feed flag taps its pennant, unfaced or on its top."""
+    from pandid.render.svg import boundary_flag
+
+    fs = Flowsheet("feed pressure")
+    feed, pump, out = fs.add(U.Feed("Feed")), fs.add(U.Pump("P-101")), fs.add(U.Product("Out"))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, out.inlet)
+    unfaced = fs.add_instrument("PI", 101, sensing=feed)
+    north = fs.add_instrument("PI", 102, sensing=feed, face="N")
+    fs.route()
+    assert feed.frame is not None
+    x0, y0, x1, y1 = boundary_flag(feed, feed.frame).box
+    assert unfaced.tap == (x1, (y0 + y1) / 2)
+    assert north.tap == ((x0 + x1) / 2, y0)
+
+
 def test_a_balloon_on_a_line_has_a_fraction_and_no_face():
     fs, _, _, line = _hosts()
     ft = fs.add_instrument("FT", 1, sensing=line, at=0.3)
