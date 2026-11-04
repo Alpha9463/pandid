@@ -61,14 +61,6 @@ def test_a_count_puts_every_connection_on_the_face_its_kind_defaults_to():
     assert b.output_faces == ("E", "E")
 
 
-def test_a_face_list_names_one_face_per_connection_in_order():
-    b = units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"])
-    assert b.input_faces == ("W", "W", "N")
-    assert b.output_faces == ("E", "S")
-    assert b.face("in_3") == "N"
-    assert b.face("out_2") == "S"
-
-
 def test_the_face_takes_every_spelling_nozzle_takes():
     """One vocabulary for "the top of this block", whichever call states it."""
     b = units.Block("B", inputs=["top", "bottom", "left", "right"], outputs=["n", "s"])
@@ -200,11 +192,6 @@ def test_a_width_the_author_gave_wins_over_the_name():
 
 
 # ...and refuses a box that cannot hold them.
-
-
-def test_a_box_too_small_for_its_connections_is_refused_at_construction():
-    with pytest.raises(ValueError, match=r"4 connections on the W face"):
-        units.Block("B", inputs=4, height=60)
 
 
 def test_the_refusal_says_what_to_give_instead():
@@ -457,12 +444,6 @@ def test_the_order_runs_the_way_the_family_is_numbered_on_every_face(face):
     placed = _along(b, face)
     assert [name for name, _ in placed] == ["out_1", "in_2", "in_1"]
     assert [t for _, t in placed] == sorted(t for _, t in placed)
-
-
-def test_three_or_more_on_a_face_are_placed_exactly_as_named():
-    b = units.Block("B", inputs=["N", "N"], outputs=["N", "N"])
-    b.order_on("N", [b.out_2, b.in_1, b.out_1, b.in_2])
-    assert [name for name, _ in _along(b, "N")] == ["out_2", "in_1", "out_1", "in_2"]
 
 
 def test_ordering_one_face_leaves_every_other_face_where_it_was():

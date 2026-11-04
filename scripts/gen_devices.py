@@ -16,7 +16,6 @@ Three tables hold the mapping:
 
 Run:  python scripts/gen_devices.py
 """
-import ast
 import functools
 import inspect
 import pathlib
@@ -585,34 +584,21 @@ def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
 # (count keyword, port prefix, default count, highest typed arity).
 _Family = tuple[str, str, int, int]
 
-_ARITY_CLASS_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
+# A typed view in units.py, such as ``class Reactor3(Reactor, _Feed3): ...``.
+_VIEW_RE = re.compile(r"^    class (\w+?)(\d+)\(\1, _([A-Z][a-z]+)\d+\): \.\.\.$", re.M)
 
 
-@functools.lru_cache(maxsize=None)
-def _arity_families() -> dict[str, dict[int, list[str]]]:
-    """Return each base's ``{arity: port names}`` from units.py.
+@functools.cache
+def _arity_families() -> dict[str, tuple[str, int]]:
+    """Return each family base's nozzle prefix and highest typed arity.
 
     Returns
     -------
-    dict[str, dict[int, list[str]]]
-        Base name to its per-arity annotated port names.
+    dict[str, tuple[str, int]]
+        Base name to the prefix its views declare and their count.
     """
-    tree = ast.parse((HERE.parent / "pandid" / "units.py").read_text(encoding="utf-8"))
-    families: dict[str, dict[int, list[str]]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        m = _ARITY_CLASS_RE.match(node.name)
-        if not m:
-            continue
-        base_name, n = m.group(1), int(m.group(2))
-        members = [
-            stmt.target.id
-            for stmt in node.body
-            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-        ]
-        families.setdefault(base_name, {})[n] = members
-    return families
+    src = (HERE.parent / "pandid" / "units.py").read_text(encoding="utf-8")
+    return {base: (mixin.lower(), int(n)) for base, n, mixin in _VIEW_RE.findall(src)}
 
 
 def arity_family(base: type) -> "_Family | None":
@@ -633,24 +619,10 @@ def arity_family(base: type) -> "_Family | None":
     SystemExit
         If the family cannot be derived from the base.
     """
-    arities = _arity_families().get(base.__name__)
-    if not arities:
+    family = _arity_families().get(base.__name__)
+    if family is None:
         return None
-    max_n = max(arities)
-    sample = next((members for n, members in arities.items() if n >= 2 and members), None)
-    if sample is None:
-        raise SystemExit(
-            f"{base.__name__} declares arity classes 1..{max_n} but none past "
-            f"1 has a numbered nozzle; cannot tell what a device subclass's "
-            f"own arity classes should be named"
-        )
-    prefixes = {name.rsplit("_", 1)[0] for name in sample}
-    if len(prefixes) != 1:
-        raise SystemExit(
-            f"{base.__name__}'s numbered nozzles ({sorted(sample)}) do not "
-            f"share one prefix; cannot derive the member name"
-        )
-    member = next(iter(prefixes))
+    member, max_n = family
     # The class signature omits self.
     params = list(inspect.signature(base).parameters.values())
     if not params or params[0].name != "name":
@@ -787,17 +759,18 @@ Each class subclasses a :mod:`pandid.units` base and draws one of its
 variants by default, so ``Cyclone("S-1")`` draws
 ``Separator("S-1", variant="cyclone")``.
 """
-{typing_import}
+
+from typing import TYPE_CHECKING, Any, Literal, overload
+
 from pandid.ports import Port
 from pandid.units import (
 {imports})
 
+if TYPE_CHECKING:
+{mixins}
 __all__ = [
 {exports}]
 '''
-
-#: Typing import added to :data:`HEADER` when a class has overloads.
-_TYPING_IMPORT = "\nfrom typing import TYPE_CHECKING, Any, Literal, overload\n"
 
 
 def render() -> str:
@@ -825,9 +798,14 @@ def render() -> str:
             "re-exports both: " + ", ".join(clashes)
         )
 
+    families = sorted({(s["family"][1].title(), s["family"][3]) for s in specs if s["family"]})
     lines = [HEADER.format(
-        typing_import=_TYPING_IMPORT if any(s["family"] for s in specs) else "",
         imports="".join(f"    {base},\n" for base in sorted({s["base"] for s in specs})),
+        mixins="".join(
+            "    from pandid.units import "
+            + ", ".join(f"_{member}{n}" for n in range(1, top + 1)) + "\n"
+            for member, top in families
+        ),
         exports="".join(f'    "{spec["name"]}",\n' for spec in specs),
     )]
     for spec in specs:
@@ -886,21 +864,17 @@ def _family_overload_lines(name: str, family: "_Family") -> list[str]:
     list[str]
         Source lines, indented for the class body.
     """
-    keyword, _member, default, max_n = family
-    lines = ["    if TYPE_CHECKING:", ""]
+    keyword, member, default, max_n = family
+    head = "        def __new__(cls, name: str, {}: {}, *args: Any,"
+    tail = '                    **kwargs: Any) -> "{}": ...'
+    lines = [f"    # A literal {keyword} returns a view declaring {member}_1 to {member}_n.",
+             "    if TYPE_CHECKING:"]
     for n in range(1, max_n + 1):
         default_clause = f" = {default}" if n == default else ""
-        lines.append("        @overload")
-        lines.append(
-            f"        def __new__(cls, name: str, {keyword}: Literal[{n}]{default_clause},"
-        )
-        lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}{n}": ...')
-        lines.append("")
-    lines.append("        @overload")
-    lines.append(f"        def __new__(cls, name: str, {keyword}: int,")
-    lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}": ...')
-    lines.append(f"        def __new__(cls, name: str, {keyword}: int = {default},")
-    lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}": ...')
+        lines += ["        @overload", head.format(keyword, f"Literal[{n}]{default_clause}"),
+                  tail.format(f"{name}{n}")]
+    lines += ["        @overload", head.format(keyword, "int"), tail.format(name),
+              head.format(keyword, f"int = {default}"), tail.format(name)]
     return lines
 
 
@@ -920,15 +894,8 @@ def _family_class_block(name: str, family: "_Family") -> str:
         Block declaring ``Name1`` to ``Name{max_n}``.
     """
     _keyword, member, _default, max_n = family
-    lines = ["if TYPE_CHECKING:", ""]
-    for n in range(1, max_n + 1):
-        lines.append(f"    class {name}{n}({name}):")
-        ports = f"``{member}_1``" if n == 1 else f"``{member}_1`` to ``{member}_{n}``"
-        lines.append(f'        """Typed view declaring {ports}."""')
-        lines.append("")
-        lines += [f"        {member}_{i}: Port" for i in range(1, n + 1)]
-        lines.append("")
-    return "\n".join(lines)
+    views = [f"    class {name}{n}({name}, _{member.title()}{n}): ..." for n in range(1, max_n + 1)]
+    return "\n".join(["if TYPE_CHECKING:", *views, ""])
 
 
 def _q(text: str) -> str:

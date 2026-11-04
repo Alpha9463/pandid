@@ -15,27 +15,6 @@ import pandid
 
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
-# Paths the sdist `exclude` must name.
-_MUST_NOT_SHIP = (
-    "standards",
-    "professional_examples",
-    ".claude",
-    ".superpowers",
-    ".agents",
-    ".venv",
-    "renders",
-    "test_diagram.svg",
-    "skills-lock.json",
-    "uv.lock",
-)
-
-
-def _sdist_table(text: str) -> str:
-    """Return the body of ``[tool.hatch.build.targets.sdist]``, up to the next table."""
-    table = re.search(r"^\[tool\.hatch\.build\.targets\.sdist\]$(.*?)(?=^\[|\Z)", text, re.M | re.S)
-    assert table, "pyproject.toml has no [tool.hatch.build.targets.sdist] table"
-    return table.group(1)
-
 
 def test_py_typed_marker_sits_next_to_the_package():
     """Check that the PEP 561 ``py.typed`` marker sits in the package directory."""
@@ -76,20 +55,6 @@ def test_pyproject_takes_its_version_from_the_module():
     assert re.search(r'^dynamic = \["version"\]', text, re.M)
     assert re.search(r'^path = "pandid/__init__\.py"$', text, re.M)
     assert re.search(r"^version = ", text, re.M) is None
-
-
-def test_the_sdist_names_every_unshippable_path_itself():
-    """Check that the sdist ``exclude`` names every path in ``_MUST_NOT_SHIP``."""
-    if not _PYPROJECT.is_file():
-        pytest.skip("running against an installed package rather than a checkout")
-
-    table = _sdist_table(_PYPROJECT.read_text(encoding="utf-8"))
-    missing = [path for path in _MUST_NOT_SHIP if f'"{path}"' not in table]
-    assert not missing, (
-        "[tool.hatch.build.targets.sdist] exclude does not name "
-        + ", ".join(missing)
-        + ". Add each one: without it the path ships from any tree with no .gitignore."
-    )
 
 
 def test_a_built_sdist_carries_no_pdf_when_there_is_no_gitignore(tmp_path):

@@ -807,11 +807,19 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     for inst, entry, where_i in pending:
         _attach_instrument(fs, inst, entry, where_i)
 
-    fs.stream_table_sections = [
-        _read_section(entry, f"stream_table_sections[{i}]")
-        for i, entry in enumerate(_sequence(data.get("stream_table_sections", []),
-                                            "stream_table_sections"))
-    ]
+    sections = []
+    for i, entry in enumerate(_sequence(data.get("stream_table_sections", []),
+                                        "stream_table_sections")):
+        where_i = f"stream_table_sections[{i}]"
+        pair = _sequence(entry, where_i)
+        if len(pair) != 2:
+            raise SpecError(
+                f"{where_i}: a section is [before_key, heading] (the property row the heading "
+                f"is injected above), got {pair!r}"
+            )
+        # The key is matched against property names; the heading is drawn.
+        sections.append((_text(pair[0], f"{where_i}[0]"), _drawn(pair[1], f"{where_i}[1]")))
+    fs.stream_table_sections = sections
     if "stream_table" in data:
         fs.stream_table = _read_stream_table(data["stream_table"], "stream_table")
     if "stream_labels" in data:
@@ -856,24 +864,6 @@ def _read_component(entry: Any, where: str) -> Component:
     )
 
 
-def _takes(cls: type[Unit], owners: tuple[str, ...]) -> bool:
-    """Return whether ``cls`` is or subclasses one of ``owners``.
-
-    Parameters
-    ----------
-    cls : type[Unit]
-        Class to test.
-    owners : tuple[str, ...]
-        Class names in ``_CLASSES``.
-
-    Returns
-    -------
-    bool
-        True if it is or subclasses one of them.
-    """
-    return any(issubclass(cls, _CLASSES[owner]) for owner in owners)
-
-
 def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     """Read one ``units:`` entry and add the unit to the sheet.
 
@@ -910,7 +900,7 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     allowed = set(_UNIT_KEYS)
     for key, owners in _KIND_KEYS.items():
         # Match by inheritance: a device class takes its base's keys.
-        if _takes(cls, owners):
+        if any(issubclass(cls, _CLASSES[owner]) for owner in owners):
             allowed.add(key)
         elif key in data:
             takers = " or ".join(f"a {owner}" for owner in owners)
@@ -939,7 +929,11 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     # Order faces after _read_common has moved ports onto them.
     if "port_order" in data and isinstance(unit, (unit_types.Block, unit_types.Tank,
                                                    unit_types.Vessel)):
-        _read_port_order(unit, data["port_order"], f"{where}.port_order")
+        for face, names in _mapping(data["port_order"], f"{where}.port_order").items():
+            at = f"{where}.port_order.{face}"
+            ports = [_find_port(unit, name, at) for name in _sequence(names, at)]
+            with _blame(at):
+                unit.order_on(_text(face, at), ports)
     return unit
 
 
@@ -1339,7 +1333,8 @@ def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
     # _find_port creates pooled ports and names this key in an error.
     if isinstance(entry, str):
         _find_port(unit, entry, where)
-        _refuse_port(port_refusal(entry, ("x", "y"), stated, ranks, key), where)
+        if (complaint := port_refusal(entry, ("x", "y"), stated, ranks, key)) is not None:
+            raise SpecError(f"{where}: {complaint}")
         return dict.fromkeys(sorted(stated), entry)
     axes = _mapping(entry, where)
     _check_keys(axes, {"x", "y"}, where)
@@ -1349,28 +1344,9 @@ def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
     for axis, name in named.items():
         _find_port(unit, name, f"{where}.{axis}")
     for axis, name in named.items():
-        _refuse_port(port_refusal(name, (axis,), stated, ranks, f"{key}.{axis}"),
-                     f"{where}.{axis}")
+        if (complaint := port_refusal(name, (axis,), stated, ranks, f"{key}.{axis}")) is not None:
+            raise SpecError(f"{where}.{axis}: {complaint}")
     return named
-
-
-def _refuse_port(complaint: str | None, where: str) -> None:
-    """Raise a ``port_refusal`` complaint, if any.
-
-    Parameters
-    ----------
-    complaint : str or None
-        Message from ``port_refusal``, or ``None``.
-    where : str
-        Entry path for error messages.
-
-    Raises
-    ------
-    SpecError
-        If ``complaint`` is not ``None``.
-    """
-    if complaint is not None:
-        raise SpecError(f"{where}: {complaint}")
 
 
 def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
@@ -1394,33 +1370,6 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
         _find_port(unit, port_name, where)
         with _blame(f"{where}.{port_name}"):
             unit.nozzle(port_name, _text(face, f"{where}.{port_name}"))
-
-
-def _read_port_order(
-    unit: "unit_types.Block | unit_types.Tank | unit_types.Vessel", entry: Any, where: str
-) -> None:
-    """Apply a ``port_order:`` mapping, one ``order_on`` per face.
-
-    Parameters
-    ----------
-    unit : Block, Tank or Vessel
-        Unit whose ports are ordered.
-    entry : Any
-        The ``port_order:`` mapping of face to port names.
-    where : str
-        Entry path for error messages.
-
-    Raises
-    ------
-    SpecError
-        If it is malformed, a port is unknown or an order is refused.
-    """
-    for face, names in _mapping(entry, where).items():
-        at = f"{where}.{face}"
-        ports = [_find_port(unit, name, at)
-                 for name in _sequence(names, at)]
-        with _blame(at):
-            unit.order_on(_text(face, at), ports)
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
@@ -1566,15 +1515,18 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
             )
     src = _read_endpoint(fs, data["from"], f"{where}.from")
     dst = _read_endpoint(fs, data["to"], f"{where}.to")
-    kwargs: dict[str, Any] = {}
-    if "kind" in data:
-        kwargs["kind"] = _text(data["kind"], f"{where}.kind")
-    if "name" in data:
-        kwargs["name"] = _text(data["name"], f"{where}.name")
-    if "draw_as_recycle" in data:
-        kwargs["draw_as_recycle"] = _flag(data["draw_as_recycle"], f"{where}.draw_as_recycle")
+    kwargs = _read_fields(data, where, ((("kind", "name"), _text),
+                                        (("draw_as_recycle",), _flag)))
     if "ends" in data:
-        kwargs["ends"] = _read_ends(data["ends"], f"{where}.ends")
+        ends = data["ends"]
+        if isinstance(ends, (list, tuple)) and len(ends) == 2:
+            ends = (_text(ends[0], f"{where}.ends[0]"), _text(ends[1], f"{where}.ends[1]"))
+        elif not isinstance(ends, str):
+            raise SpecError(
+                f"{where}.ends must be a connection name for both ends or a two-item "
+                f"[source, dest] list, got {ends!r}"
+            )
+        kwargs["ends"] = ends
     kwargs.update(_read_fields(data, where, ((LINE_NUMBER_FIELDS, _component),)))
     with _blame(where):
         stream = fs.connect(src, dst, **kwargs)
@@ -1583,102 +1535,26 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         if key in data:
             setattr(stream, key, _text(data[key], f"{where}.{key}"))
     if "properties" in data:
-        stream.properties = _read_properties(data["properties"], f"{where}.properties")
+        properties = _mapping(data["properties"], f"{where}.properties")
+        for key, value in properties.items():
+            if not _shown(value):
+                raise SpecError(
+                    f"{where}.properties[{key!r}] must be text or a number (values carry "
+                    f"their own units, e.g. '25 C'), got {value!r}"
+                )
+        stream.properties = dict(properties)
     if "tabulate" in data:
         stream.tabulate = _flag(data["tabulate"], f"{where}.tabulate")
     if "via" in data:
-        stream.via(_read_waypoints(data["via"], f"{where}.via"))
+        points = []
+        for i, item in enumerate(_sequence(data["via"], f"{where}.via")):
+            at = f"{where}.via[{i}]"
+            pair = _sequence(item, at)
+            if len(pair) != 2:
+                raise SpecError(f"{at}: a waypoint is [x, y], got {pair!r}")
+            points.append((_number(pair[0], f"{at}.x"), _number(pair[1], f"{at}.y")))
+        stream.via(points)
     return stream
-
-
-def _read_ends(entry: Any, where: str) -> "str | tuple[str, str]":
-    """Read a stream's ``ends``: one connection name or a pair.
-
-    Parameters
-    ----------
-    entry : Any
-        Connection name, or ``[source, dest]``.
-    where : str
-        Entry path for error messages.
-
-    Returns
-    -------
-    str or tuple[str, str]
-        The connection name or pair.
-
-    Raises
-    ------
-    SpecError
-        If it is neither text nor a pair of text.
-    """
-    if isinstance(entry, str):
-        return entry
-    if isinstance(entry, (list, tuple)) and len(entry) == 2:
-        return (_text(entry[0], f"{where}[0]"), _text(entry[1], f"{where}[1]"))
-    raise SpecError(
-        f"{where} must be a connection name for both ends or a two-item "
-        f"[source, dest] list, got {entry!r}"
-    )
-
-
-def _read_properties(entry: Any, where: str) -> dict[str, str | float]:
-    """Read a stream's ``properties`` mapping.
-
-    Parameters
-    ----------
-    entry : Any
-        The ``properties`` mapping.
-    where : str
-        Entry path for error messages.
-
-    Returns
-    -------
-    dict[str, str or float]
-        Value per property name.
-
-    Raises
-    ------
-    SpecError
-        If it is not a mapping, or a value is not text or a number.
-    """
-    out: dict[str, str | float] = {}
-    for key, value in _mapping(entry, where).items():
-        if not _shown(value):
-            raise SpecError(
-                f"{where}[{key!r}] must be text or a number (values carry their own "
-                f"units, e.g. '25 C'), got {value!r}"
-            )
-        out[key] = value
-    return out
-
-
-def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
-    """Read a stream's ``via`` list of ``[x, y]`` waypoints.
-
-    Parameters
-    ----------
-    entry : Any
-        The ``via`` list.
-    where : str
-        Entry path for error messages.
-
-    Returns
-    -------
-    list[tuple[float, float]]
-        The waypoints.
-
-    Raises
-    ------
-    SpecError
-        If it is not a sequence of ``[x, y]`` pairs of finite numbers.
-    """
-    points = []
-    for i, item in enumerate(_sequence(entry, where)):
-        pair = _sequence(item, f"{where}[{i}]")
-        if len(pair) != 2:
-            raise SpecError(f"{where}[{i}]: a waypoint is [x, y], got {pair!r}")
-        points.append((_number(pair[0], f"{where}[{i}].x"), _number(pair[1], f"{where}[{i}].y")))
-    return points
 
 
 def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
@@ -1777,36 +1653,6 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
                                              (("face",), _text))))
     with _blame(where, (TypeError, ValueError)):
         inst.attach(host, **kwargs)
-
-
-def _read_section(entry: Any, where: str) -> tuple[str, str]:
-    """Read a stream-table section, ``[before_key, heading]``.
-
-    Parameters
-    ----------
-    entry : Any
-        The section.
-    where : str
-        Entry path for error messages.
-
-    Returns
-    -------
-    tuple[str, str]
-        The property key and the heading.
-
-    Raises
-    ------
-    SpecError
-        If it is not a pair of a text key and a scalar heading.
-    """
-    pair = _sequence(entry, where)
-    if len(pair) != 2:
-        raise SpecError(
-            f"{where}: a section is [before_key, heading] (the property row the heading "
-            f"is injected above), got {pair!r}"
-        )
-    # The key is matched against property names; the heading is drawn.
-    return _text(pair[0], f"{where}[0]"), _drawn(pair[1], f"{where}[1]")
 
 
 def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
@@ -1958,36 +1804,6 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
     return out
 
 
-def _read_rows(entry: Any, where: str) -> list:
-    """Read annotation rows: text lines, or lists of cells.
-
-    Parameters
-    ----------
-    entry : Any
-        The ``rows`` list.
-    where : str
-        Entry path for error messages.
-
-    Returns
-    -------
-    list
-        Each row as text or a tuple of cells.
-
-    Raises
-    ------
-    SpecError
-        If a row is malformed.
-    """
-    rows: list = []
-    for i, row in enumerate(_sequence(entry, where)):
-        if isinstance(row, (list, tuple)):
-            cells = _sequence(row, f"{where}[{i}]")
-            rows.append(tuple(_drawn(c, f"{where}[{i}][{j}]") for j, c in enumerate(cells)))
-        else:
-            rows.append(_drawn(row, f"{where}[{i}]"))
-    return rows
-
-
 def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | TableBox:
     """Read one ``annotations:`` entry.
 
@@ -2068,7 +1884,15 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
                               for i, row in enumerate(_sequence(data.get("rows", []),
                                                                 f"{where}.rows"))]
             return TableBox(**kwargs)
-        kwargs["rows"] = _read_rows(data.get("rows", []), f"{where}.rows")
+        rows: list = []
+        for i, row in enumerate(_sequence(data.get("rows", []), f"{where}.rows")):
+            if isinstance(row, (list, tuple)):
+                cells = _sequence(row, f"{where}.rows[{i}]")
+                rows.append(tuple(_drawn(c, f"{where}.rows[{i}][{j}]")
+                                  for j, c in enumerate(cells)))
+            else:
+                rows.append(_drawn(row, f"{where}.rows[{i}]"))
+        kwargs["rows"] = rows
         return Annotation(**kwargs)
     except SpecError:
         raise  # already carries its own path
@@ -2324,7 +2148,8 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     _write_common(unit, entry)
     _write_composition(unit, entry)
     # One feed is the default.
-    if _takes(type(unit), _VARIABLE_PORTS["n_feeds"]) and len(getattr(unit, "feeds")) > 1:
+    if (any(issubclass(type(unit), _CLASSES[owner]) for owner in _VARIABLE_PORTS["n_feeds"])
+            and len(getattr(unit, "feeds")) > 1):
         entry["n_feeds"] = len(getattr(unit, "feeds"))
     if isinstance(unit, unit_types.Block):
         _write_connection_faces(unit, entry, unit.DEFAULT_INPUT_FACE, unit.DEFAULT_OUTPUT_FACE)

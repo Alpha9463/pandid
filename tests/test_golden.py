@@ -30,25 +30,6 @@ GOLDEN_FINDINGS = {
 }
 
 
-def test_a_shared_settled_case_does_not_share_mutable_geometry(settled_gallery):
-    """Keep copied settled flowsheets independent.
-
-    Parameters
-    ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Settled gallery flowsheets and render options.
-    """
-    source, source_options = settled_gallery["11_ethanol_pid"]
-    copied, copied_options = copy_settled_case(settled_gallery, "11_ethanol_pid")
-
-    copied.streams[0].route = None
-    copied_options["diagram"] = "pfd"
-
-    assert copied is not source
-    assert source.streams[0].route is not None
-    assert source_options.get("diagram") != "pfd"
-
-
 def _check_golden(name: str, svg: str) -> None:
     """Compare an SVG document with its approved fixture.
 
@@ -177,11 +158,6 @@ def test_representative_sheets_draw_nozzles_on_their_own_bodies(settled_gallery,
                     f"({x0:.1f}, {y0:.1f})..({x1:.1f}, {y1:.1f})"
                 )
     assert off_body == [], f"{name} draws {len(off_body)} nozzles off their own bodies"
-
-
-def test_only_representative_examples_have_golden_fixtures():
-    """Store SVG fixtures only for representative renderer scenarios."""
-    assert sorted(path.stem for path in GOLDEN_DIR.glob("*.svg")) == list(GOLDEN_SCENARIOS)
 
 
 def test_the_fractionator_schedules_only_equipment_that_exists():

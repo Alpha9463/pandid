@@ -121,6 +121,47 @@ def test_save_and_restore_bracket_the_pen_as_well_as_the_fill():
     assert outside.get("stroke-width") == "2.0"
 
 
+# --- the fill and the shape ---
+
+#: A square for the fill specimens to paint.
+BOX = '<rect x="0" y="0" w="10" h="10"/>'
+
+
+@pytest.mark.parametrize(
+    ("body", "fills"),
+    [
+        (f"{BOX}<fillstroke/>", ["white"]),
+        (f"{BOX}<stroke/>", ["none"]),
+        (f"{BOX}<fill/>", ["white"]),
+        (f'{BOX}<fillcolor color="#000000"/><fillstroke/>', ["#111"]),
+        (f'{BOX}<fillcolor color="#000000"/><fill/>', ["#111"]),
+        (f'{BOX}<fillcolor color="stroke"/><fillstroke/>', ["#111"]),
+        (f'{BOX}<fillcolor color="none"/><fillstroke/>', ["none"]),
+        (
+            '<save/><rect x="0" y="0" w="4" h="4"/><fillcolor color="#000000"/><fillstroke/>'
+            '<restore/><rect x="5" y="5" w="4" h="4"/><fillstroke/>',
+            ["#111", "white"],
+        ),
+    ],
+)
+def test_a_fill_takes_the_paper_until_fillcolor_asks_for_ink(body, fills):
+    """Check that a shape fills with paper until fillcolor sets ink, and restore puts it back."""
+    assert [el.get("fill") for el in _drawn(body)] == fills
+
+
+@pytest.mark.parametrize(
+    "declared,aspect",
+    [('aspect="fixed" ', "fixed"), ('aspect="variable" ', "variable"), ("", "variable")],
+)
+def test_the_converter_reports_a_stencil_shapes_aspect(declared, aspect):
+    """Verify stencil conversion reports shape aspect behaviour."""
+    shape = ET.fromstring(
+        f'<shape {declared}w="100" h="50"><foreground>'
+        f'<rect x="0" y="0" w="100" h="50"/><stroke/></foreground></shape>'
+    )
+    assert _script("mxgraph_to_svg").convert_shape(shape)[4] == aspect
+
+
 # --- the two backends ---
 
 
