@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from _layout_cases import build as build_biodiesel
+from _layout_cases import build as build_biodiesel, build_unpinned
 from pandid import Block, Feed, Flowsheet, GravitySeparator, Product, Reactor
 from pandid import devices as D, units as U
 from pandid.layout.quality import measure_final
@@ -15,7 +15,6 @@ from pandid.portgeom import port_point, resolve_port
 from pandid.geometry import Frame, Route
 from pandid.streams import Stream
 from pandid.routing.metrics import real_bends
-from scripts import layout_quality
 
 
 def _fingerprint(fs: Flowsheet) -> str:
@@ -77,7 +76,7 @@ def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     stem : str
         Example laid out with its placement stripped.
     """
-    fs, _ = layout_quality.build(stem, True)
+    fs, _ = build_unpinned(stem)
     fs.layout()
     fs.route()
     fingerprint = _fingerprint(fs)
@@ -87,7 +86,7 @@ def test_layout_repeats_from_author_intent_and_fresh_builds(stem: str) -> None:
     fs.route()
     assert _fingerprint(fs) == fingerprint
 
-    fresh, _ = layout_quality.build(stem, True)
+    fresh, _ = build_unpinned(stem)
     fresh.layout()
     fresh.route()
     assert _fingerprint(fresh) == fingerprint

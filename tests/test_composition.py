@@ -1,6 +1,4 @@
-"""Check composing a symbol from a body and ISO 10628-2 group 26-29 parts,
-and the ISO rows the registry draws.
-"""
+"""Test symbol composition from ISO 10628-2 group 26-29 parts and the registry's ISO rows."""
 
 import re
 import subprocess

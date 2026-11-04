@@ -109,13 +109,7 @@ def test_the_vendored_stencils_hold_exactly_the_duplicate_groups_recorded_here()
         stencil: tuple(sorted(tuple(sorted(g)) for g in groups))
         for stencil, groups in UPSTREAM_DUPLICATE_GROUPS.items()
     }
-    assert found == want, (
-        "the vendored stencil files no longer hold exactly the duplicate groups "
-        "tests/test_symbol_identity.UPSTREAM_DUPLICATE_GROUPS records. A group that "
-        "appeared is a placeholder nobody has looked at yet -- check what it draws "
-        "before mapping either member in KIND_MAP -- and one that vanished means the "
-        "record is stale. Update the constant with the reason, either way."
-    )
+    assert found == want, "the vendored stencils no longer match UPSTREAM_DUPLICATE_GROUPS"
 
 
 def test_no_duplicate_group_reaches_the_registry_undistinguished():
@@ -134,12 +128,7 @@ def test_no_duplicate_group_reaches_the_registry_undistinguished():
                 name: _digest(vendor.patch_shape(stencil, name, index[name])) for name in live
             }
             assert len(set(digests.values())) == len(live), (
-                f"{stencil}.xml's {sorted(live)} are byte-identical upstream and are "
-                f"still identical after STENCIL_PATCHES, yet both are registered: "
-                f"{sorted(n for name in live for n in registered[(stencil, name)])}. "
-                f"That ships one drawing under two device names. Either patch the "
-                f"one the standard draws differently, or draw it by hand and stop "
-                f"vendoring it -- which is what fitting/steam_trap did for #367."
+                f"{stencil}.xml {sorted(live)} are registered and identical after patching"
             )
 
 
@@ -162,18 +151,7 @@ def test_no_two_registered_drawings_are_byte_identical():
             continue  # one vendored stencil, two names
         offenders.append(", ".join(f"{kind}/{variant}" for kind, variant in sorted(keys)))
 
-    assert offenders == [], (
-        "these registered drawings are byte-identical, and nothing in the "
-        "library says they are meant to be the one drawing -- they are neither "
-        "the same Symbol object nor the same vendored stencil. So the library "
-        "ships one picture under two device names and a sheet asking for either "
-        "gets the other one's equipment: "
-        + "; ".join(sorted(offenders))
-        + ". If they are meant to be one drawing, register the one object twice "
-        "the way centrifuge/default does; if they are meant to be two, one of "
-        "them has no artwork yet and must not be registered until it does "
-        "(#367)."
-    )
+    assert offenders == [], "byte-identical registered drawings: " + "; ".join(sorted(offenders))
 
 
 @pytest.mark.parametrize("kind,variant", sorted(default_registry._symbols))
@@ -182,11 +160,7 @@ def test_no_registered_drawing_is_a_bare_box(kind: str, variant: str):
     if (kind, variant) in BARE_BOX_BY_DESIGN:
         return
     assert not _is_bare_box(default_registry.get(kind, variant)), (
-        f"{kind}/{variant} draws nothing but its own bounding box, which says "
-        f"nothing about what the equipment is. That is what an unconverted "
-        f"placeholder stencil looks like (#367). Either draw it, or leave it "
-        f"unregistered so that asking for it is refused; if it really is a plain "
-        f"box, name it in BARE_BOX_BY_DESIGN with the reason."
+        f"{kind}/{variant} draws only its bounding box"
     )
 
 
@@ -196,9 +170,5 @@ def test_the_bare_box_guard_still_has_a_placeholder_to_catch():
     index = dict(_shapes(pathlib.Path(vendor.STENCILS) / "piping.xml"))
     body, width, height, *_rest = _script("mxgraph_to_svg").convert_shape(index["Steam Trap"])
     placeholder = Symbol(svg=f"<g>{body}</g>", width=width, height=height)
-    assert _is_bare_box(placeholder), (
-        "the draw.io Steam Trap no longer converts to a bare box, so the guard "
-        "that catches a placeholder registered on its own is no longer known "
-        "to catch anything. Check what it draws now."
-    )
+    assert _is_bare_box(placeholder), "the draw.io Steam Trap no longer converts to a bare box"
     assert not _is_bare_box(default_registry.get("fitting", "steam_trap"))
