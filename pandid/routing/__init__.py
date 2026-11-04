@@ -311,18 +311,22 @@ class DefaultRouter:
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
+        # Price arrowheads and lanes beside units, except on the routes
+        # layout sets pipe furniture on, or where route() asks not to.
+        priced = fs._priced and not fs._laying_out
+        hugging = graph.hugging if priced else {}
         # The first arrowhead length of each line out of each nozzle,
         # but a balloon's, which moves with the routes.
-        nozzle_index = CrossingIndex()
-        for s in fs.streams:
+        heads = CrossingIndex()
+        for s in fs.streams if priced else ():
             for port in (s.source, s.dest):
                 if port.owner.frame is not None and port.owner.kind != "instrument":
                     (px, py), _, face = resolve_port(port.owner, port.owner.frame, port.name)
                     dx, dy = COMPASS[face]
-                    nozzle_index.record([(px, py), (px + ARROWHEAD * dx, py + ARROWHEAD * dy)])
+                    heads.record([(px, py), (px + ARROWHEAD * dx, py + ARROWHEAD * dy)])
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float]
         edge_penalties = defaultdict(float)
-        for run in graph.hugging:
+        for run in hugging:
             edge_penalties[run] += TOUCH_PENALTY
         taps = [(u.host, tap_route(u, tap, centre)) for u, tap, centre in tap_lines(fs)]
         routed: list["Stream"] = []
@@ -407,7 +411,7 @@ class DefaultRouter:
             is_recycle = getattr(stream, "is_recycle", False)
             crossing_index = crossable(stream)
             # A run beside only the stream's own ends goes uncharged.
-            own = [run for run, units in graph.hugging.items()
+            own = [run for run, units in hugging.items()
                    if units <= {id(src_u), id(dst_u)}]
             for run in own:
                 edge_penalties[run] -= TOUCH_PENALTY
@@ -415,7 +419,7 @@ class DefaultRouter:
             if clear_stubs:
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
-                    edge_penalties, is_recycle, crossing_index, nozzle_index,
+                    edge_penalties, is_recycle, crossing_index, heads,
                 )
             for run in own:
                 edge_penalties[run] += TOUCH_PENALTY

@@ -444,17 +444,20 @@ def test_an_actuator_exit_keeps_off_a_units_side() -> None:
     assert _clear({valve: valve.frame}, [vessel], True, [], [], (), MARGIN)
 
 
-def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows() -> None:
-    """Check that a valve clears a cooler only where its controller's line stays off it."""
+@pytest.mark.parametrize(("drum_height", "cooler_at"), [(140, (500, 160)), (100, (420, 240))])
+def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows(
+    drum_height: float, cooler_at: tuple[float, float]
+) -> None:
+    """Check that a valve is set and kept where no line is drawn through it."""
     from pandid import Pump, ShellAndTubeExchanger, Vessel
 
     fs = Flowsheet("Cooling")
-    feed, drum = fs.add(Feed("Feed")), fs.add(Vessel("V-101", width=60, height=140))
+    feed, drum = fs.add(Feed("Feed")), fs.add(Vessel("V-101", width=60, height=drum_height))
     valve, pump = fs.add(ControlValve("LV-101")), fs.add(Pump("P-101"))
     cooler, out = fs.add(ShellAndTubeExchanger("E-101")), fs.add(Product("Product"))
     cws, cwr = fs.add(Feed("CWS")), fs.add(Product("CWR"))
     drum.pin(x=280, y=180)
-    cooler.pin(x=500, y=160)
+    cooler.pin(x=cooler_at[0], y=cooler_at[1])
     fs.connect(feed.outlet, drum.inlet)
     fs.connect(drum.outlet, valve.inlet)
     fs.connect(valve.outlet, pump.suction)

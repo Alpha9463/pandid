@@ -534,6 +534,8 @@ class Flowsheet:
         self._exit_tight = False
         # Engine the last layout ran.
         self._engine = None
+        # Whether the router prices arrowheads and lanes beside units.
+        self._priced = True
         # Whether route() may hang a controller off its actuator, the
         # controllers it hung, and the sheet as routed without them.
         self._may_hang = False
@@ -2063,6 +2065,7 @@ class Flowsheet:
         if router is None:
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, _chained
+        from pandid.layout.conflicts import analyze_conflicts
         from pandid.layout.control import _flaws, _hangable, _taps_off, place_control
 
         def place() -> None:
@@ -2132,6 +2135,25 @@ class Flowsheet:
         # The checks assume the default router.
         tries = type(router) is DefaultRouter and not self._laying_out
         settle()
+        # Where a line is drawn through a unit, route again without
+        # pricing arrowheads and lanes beside units, and keep the priced
+        # routes only if no tap leaves its line and no finding or clash
+        # grows.
+        if tries and any(c.kind == "route-crosses-unit" for c in analyze_conflicts(self)):
+            priced, unhung = self._geometry(), self._unhung
+            after, off = _flaws(self), _taps_off(self)
+            self._priced = False
+            try:
+                settle()
+                kept = off <= _taps_off(self) and not any(
+                    n > _flaws(self)[k] for k, n in after.items())
+            except Exception:
+                kept = True
+            finally:
+                self._priced = True
+            if kept:
+                self._put_geometry(priced, keep_manual=False)
+                self._unhung = unhung
         # Lay out again with every signal exit a lane clear, kept only if
         # no tap leaves its line and no finding or clash grows.
         if tries and self._exit_tight:
