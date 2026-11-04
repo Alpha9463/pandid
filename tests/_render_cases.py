@@ -2,7 +2,7 @@
 
 import copy
 import importlib.util
-from functools import cache, partial
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -33,25 +33,11 @@ def _script(name: str) -> Any:
 
 gallery = _script("gallery")
 
-
-def _build(stem: str) -> Flowsheet:
-    """Build one example without writing its output files.
-
-    Parameters
-    ----------
-    stem : str
-        Example filename stem.
-
-    Returns
-    -------
-    Flowsheet
-        Fresh flowsheet captured from the example.
-    """
-    return gallery.flowsheet(stem)[0]
-
-
 # Capture options once; builders return a new mutable model on every call.
-SCENARIOS = {stem: (partial(_build, stem), gallery.flowsheet(stem)[1]) for stem in gallery.sheets()}
+SCENARIOS = {
+    stem: (lambda stem=stem: gallery.flowsheet(stem)[0], kwargs)
+    for stem, (_fs, kwargs) in gallery.captures().items()
+}
 
 
 def copy_settled_case(

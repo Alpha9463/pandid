@@ -207,9 +207,4 @@ def test_the_two_backends_draw_the_same_equipment(entry):
     (kind, variant), sym = entry
     upstream = sym.drawio_shape in DASHED_STENCILS
     inlined = "stroke-dasharray" in sym.svg
-    assert inlined == upstream, (
-        f"{kind}/{variant}: draw.io draws {sym.drawio_shape} "
-        f"{'dashed' if upstream else 'solid'} and the inlined SVG draws it "
-        f"{'dashed' if inlined else 'solid'}, so one flowsheet exports two "
-        f"drawings that disagree about the equipment"
-    )
+    assert inlined == upstream, f"{kind}/{variant}: the backends disagree on dashing"
