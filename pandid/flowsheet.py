@@ -528,6 +528,12 @@ class Flowsheet:
         self.route_converged: bool = True
         # Whether the last layout set pipe furniture on routed pipe.
         self._mounted_layout = False
+        # Whether layout keeps each valve's signal exit a lane clear of
+        # other units, and whether the last layout drew one closer.
+        self._exit_clear = False
+        self._exit_tight = False
+        # Engine the last layout ran.
+        self._engine = None
         # Whether route() may hang a controller off its actuator, the
         # controllers it hung, and the sheet as routed without them.
         self._may_hang = False
@@ -2009,9 +2015,10 @@ class Flowsheet:
         from pandid.layout import default_layout_engine
 
         self._unhang()
-        self._mounted_layout = False
+        self._mounted_layout = self._exit_tight = False
         if engine is None:
             engine = default_layout_engine
+        self._engine = engine
         outer, self._laying_out = self._laying_out, True
         try:
             engine.layout(self)
@@ -2032,7 +2039,10 @@ class Flowsheet:
         from balloons kept off the line their chain taps, kept only if no
         tap leaves its line and no finding or clash grows. Where the result
         has a tap off its line that was on it before hanging, the sheet is
-        placed as if no controller could hang.
+        placed as if no controller could hang. Where the last layout drew
+        a valve's signal exit within a lane of another unit, the sheet is
+        laid out and routed again, once, with every exit a lane clear,
+        kept only if no tap leaves its line and no finding or clash grows.
 
         Parameters
         ----------
@@ -2096,27 +2106,51 @@ class Flowsheet:
             elif self._unhung is None:
                 self._unhung = prior
 
-        # Start from the sheet as routed without hanging, not from a hung
-        # controller left by the last route().
-        self._unhang()
-        router.route(self)
-        place()
-        # Hang each controller it can off its actuator, then keep each
-        # chained balloon off its tapped line, hanging as kept. The check
-        # assumes the default router.
-        tries = type(router) is DefaultRouter and not self._laying_out
-        hang = tries and any(_hangable(self, u) for u in self.units)
-        chained = tries and any(_chained(u) for u in self.units)
-        off = _taps_off(self) if hang else set()
-        if hang:
-            attempt(may_hang=True, keep_clear=False)
-        if chained:
-            attempt(may_hang=self._unhung is not None, keep_clear=True)
-        # Where hanging left a tap off its line, place as if nothing could hang.
-        if hang and not _taps_off(self) <= off:
+        def settle() -> None:
+            """Route the laid-out sheet and place its balloons."""
+            # Start from the sheet as routed without hanging, not from a
+            # hung controller left by the last route().
             self._unhang()
+            router.route(self)
+            place()
+            # Hang each controller it can off its actuator, then keep each
+            # chained balloon off its tapped line, hanging as kept.
+            hang = tries and any(_hangable(self, u) for u in self.units)
+            chained = tries and any(_chained(u) for u in self.units)
+            off = _taps_off(self) if hang else set()
+            if hang:
+                attempt(may_hang=True, keep_clear=False)
             if chained:
-                attempt(may_hang=False, keep_clear=True)
+                attempt(may_hang=self._unhung is not None, keep_clear=True)
+            # Where hanging left a tap off its line, place as if nothing
+            # could hang.
+            if hang and not _taps_off(self) <= off:
+                self._unhang()
+                if chained:
+                    attempt(may_hang=False, keep_clear=True)
+
+        # The checks assume the default router.
+        tries = type(router) is DefaultRouter and not self._laying_out
+        settle()
+        # Lay out again with every signal exit a lane clear, kept only if
+        # no tap leaves its line and no finding or clash grows.
+        if tries and self._exit_tight:
+            prior, unhung = self._geometry(), self._unhung
+            before, off = _flaws(self), _taps_off(self)
+            self._exit_clear = True
+            try:
+                self.layout(self._engine)
+                settle()
+                kept = _taps_off(self) <= off and not any(
+                    n > before[k] for k, n in _flaws(self).items())
+            except Exception:
+                kept = False
+            finally:
+                self._exit_clear = False
+            if not kept:
+                self._put_geometry(prior, keep_manual=False)
+                self._unhung = unhung
+            self._exit_tight = False
         self._route_stale = False
 
     def _geometry(self) -> tuple:

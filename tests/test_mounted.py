@@ -419,10 +419,11 @@ def test_an_actuator_needs_a_clear_exit() -> None:
 
 
 def test_an_actuator_exit_keeps_off_a_units_side() -> None:
-    """Check that a spot is refused when a unit's side runs beside an actuator's exit."""
+    """Check that an exit kept a lane clear refuses a spot beside a unit's side."""
     from pandid import Instrument, Vessel
     from pandid.geometry import Frame
     from pandid.layout.mounted import _clear
+    from pandid.routing.visibility import MARGIN
 
     fs = Flowsheet("Actuator beside a vessel")
     feed = fs.add(Feed("Feed"))
@@ -437,9 +438,33 @@ def test_an_actuator_exit_keeps_off_a_units_side() -> None:
     # The vessel's west side runs half a pixel east of the exit.
     vessel.frame = Frame(x=x + 0.5, y=y - 100, w=60, h=80)
 
-    assert not _clear({valve: valve.frame}, [vessel], True, [], [])
-    vessel.frame = Frame(x=x + 20, y=y - 100, w=60, h=80)
     assert _clear({valve: valve.frame}, [vessel], True, [], [])
+    assert not _clear({valve: valve.frame}, [vessel], True, [], [], (), MARGIN)
+    vessel.frame = Frame(x=x + 20, y=y - 100, w=60, h=80)
+    assert _clear({valve: valve.frame}, [vessel], True, [], [], (), MARGIN)
+
+
+def test_a_valve_moved_clear_of_a_unit_is_kept_only_if_no_finding_grows() -> None:
+    """Check that a valve clears a cooler only where its controller's line stays off it."""
+    from pandid import Pump, ShellAndTubeExchanger, Vessel
+
+    fs = Flowsheet("Cooling")
+    feed, drum = fs.add(Feed("Feed")), fs.add(Vessel("V-101", width=60, height=140))
+    valve, pump = fs.add(ControlValve("LV-101")), fs.add(Pump("P-101"))
+    cooler, out = fs.add(ShellAndTubeExchanger("E-101")), fs.add(Product("Product"))
+    cws, cwr = fs.add(Feed("CWS")), fs.add(Product("CWR"))
+    drum.pin(x=280, y=180)
+    cooler.pin(x=500, y=160)
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, valve.inlet)
+    fs.connect(valve.outlet, pump.suction)
+    fs.connect(pump.discharge, cooler.tube_in)
+    fs.connect(cooler.tube_out, out.inlet)
+    fs.connect(cws.outlet, cooler.shell_in)
+    fs.connect(cooler.shell_out, cwr.inlet)
+    fs.add_control_loop("L", 101, measuring=drum, acting_on=valve, face="E")
+    fs.to_svg(diagram="p&id")
+    assert "route-crosses-unit" not in {i.code for i in fs.validate(diagram="p&id")}
 
 
 def test_an_eccentric_reducer_is_set_on_its_pipe() -> None:
