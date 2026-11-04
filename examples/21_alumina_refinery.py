@@ -637,6 +637,7 @@ def _furnish(fs, number, sheet, area, equipment, utilities, general_notes):
 
 def main():
     for fs in (digestion(), clarification(), precipitation()):
+        assert fs.title_block is not None
         name = f"{fs.title_block.drawing_number}.svg"
         fs.render(out(name), border="zone", show_stream_table=True)
         print(f"Generated {name}")
