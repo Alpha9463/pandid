@@ -1809,3 +1809,63 @@ def test_a_straight_line_drawn_through_the_unit_it_runs_to_is_reported():
 
     (said,) = _own_unit_findings(fs)
     assert said.startswith("stream S1 is drawn through E-101, which it runs to")
+
+
+# --- a crossing on a nozzle, a line along a box edge --------------------------
+
+
+def _crossing_from_nozzle(gap: float) -> Flowsheet:
+    """Build a run into AP crossed by a second run *gap* px before AP's inlet."""
+    fs = Flowsheet("nozzle crossing")
+    a = fs.add(U.Feed("A")).pin(x=60, y=200)
+    ap = fs.add(U.Product("AP")).pin(x=400, y=200)
+    b = fs.add(U.Feed("B")).pin(x=60, y=60)
+    bp = fs.add(U.Product("BP")).pin(x=600, y=340)
+    fs.connect(a.outlet, ap.inlet)
+    over = fs.connect(b.outlet, bp.inlet)
+    fs.layout()
+    assert ap.frame is not None and b.frame is not None and bp.frame is not None
+    x = port_point(ap, ap.frame, "inlet")[0] - gap
+    over.via([(x, port_point(b, b.frame, "outlet")[1]), (x, port_point(bp, bp.frame, "inlet")[1])])
+    return fs
+
+
+def test_a_crossing_inside_an_arrowhead_length_of_a_nozzle_is_reported():
+    """Check that a line crossed 5px before the nozzle it runs to is reported."""
+    (issue,) = _found(_crossing_from_nozzle(5.0), "route-crosses-near-nozzle")
+    assert issue.severity == "warning"
+    assert issue.message == "stream S2 crosses S1 5.0px from AP.inlet"
+
+
+def test_a_crossing_an_arrowhead_length_clear_of_the_nozzle_is_not_reported():
+    """Check that the same crossing 20px before the nozzle is not reported."""
+    assert _found(_crossing_from_nozzle(20.0), "route-crosses-near-nozzle") == []
+
+
+def _run_over_vessel(offset: float) -> Flowsheet:
+    """Build a run drawn *offset* px above the top edge of V-1's box."""
+    from pandid.portgeom import unit_box
+
+    fs = Flowsheet("edge")
+    v = fs.add(U.Vessel("V-1")).pin(x=300, y=200)
+    a = fs.add(U.Feed("A")).pin(x=60, y=100)
+    ap = fs.add(U.Product("AP")).pin(x=700, y=100)
+    run = fs.connect(a.outlet, ap.inlet)
+    fs.layout()
+    assert v.frame is not None and a.frame is not None and ap.frame is not None
+    top = unit_box(v, v.frame)[1] - offset
+    (ax, ay), (bx, by) = port_point(a, a.frame, "outlet"), port_point(ap, ap.frame, "inlet")
+    run.via([(ax + 30, ay), (ax + 30, top), (bx - 30, top), (bx - 30, by)])
+    return fs
+
+
+def test_a_line_drawn_along_a_box_edge_is_reported():
+    """Check that a run 1.5px off V-1's top edge is reported."""
+    (issue,) = _found(_run_over_vessel(1.5), "route-along-unit")
+    assert issue.severity == "warning"
+    assert issue.message == "stream S1 runs along the edge of V-1"
+
+
+def test_a_line_clear_of_a_box_edge_is_not_reported():
+    """Check that a run 10px off V-1's top edge is not reported."""
+    assert _found(_run_over_vessel(10.0), "route-along-unit") == []

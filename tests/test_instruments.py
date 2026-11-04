@@ -2493,7 +2493,7 @@ def test_routing_again_draws_the_same_sheet():
 
 
 def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
-    """Keep main's hung drawing when keeping chained balloons clear adds a crossing.
+    """Keep the hung drawing when keeping chained balloons clear adds a crossing.
 
     Returns
     -------
@@ -2502,13 +2502,11 @@ def test_keeping_chained_balloons_clear_after_a_hang_adds_no_crossing():
     """
     fs = Flowsheet("crossing")
     feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=100)
-    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=300)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=200)
     line = fs.connect(feed.outlet, prod.inlet)
-    chains = [(0.6, 35, 45, "N", 100, 45), (0.6, 35, 0, "N", 35, 0), (0.5, 50, 270, "E", 70, 90)]
-    for i, (at, offset, angle, face, near_offset, near_angle) in enumerate(chains, 1):
-        tt = fs.add_instrument("TT", i, sensing=line, at=at, offset=offset, angle=angle)
-        fs.add_instrument("TIC", i, near=tt, face=face, offset=near_offset, angle=near_angle)
-    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=100, orientation=180)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=35, angle=0)
+    fs.add_instrument("TIC", 1, near=tt, face="S", offset=70, angle=0)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=100, orientation=270)
     lic = fs.add_instrument("LIC", 99)
     fs.connect(lic.sig_out, valve.actuator, kind="electric")
     fs.route()
@@ -2567,3 +2565,92 @@ def test_a_run_that_doubles_back_is_two_runs():
         ((0.0, 0.0), (0.0, 30.0)),
         ((0.0, 30.0), (5.0, 30.0)),
     ]
+
+
+def test_an_unsettled_hang_is_not_kept():
+    """Keep the unhung drawing when hanging the controller takes a tap off its line.
+
+    Returns
+    -------
+    None
+        TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("unsettled hang")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=200)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=200)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=35, angle=30)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=500, orientation=180)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)
+
+
+def test_an_unsettled_hang_that_puts_the_tap_on_its_line_is_kept():
+    """Keep an unsettled hang whose tap lies on its line where the unhung one does not.
+
+    Returns
+    -------
+    None
+        TT's tap lies on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("hang rollback")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=400)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=400, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt = fs.add_instrument("TT", 1, sensing=line, at=0.6, offset=35, angle=30)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=500, y=300, orientation=270)
+    lic = fs.add_instrument("LIC", 1)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert tt.tap is not None
+    points = stream_path(line)
+    assert any(
+        min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+        for (ax, ay), (bx, by) in zip(points, points[1:])
+    ), (tt.tap, points)
+
+
+def test_a_hang_whose_taps_end_on_their_line_is_kept():
+    """Keep a hang that takes a tap off its line where keeping balloons clear puts it back.
+
+    Returns
+    -------
+    None
+        The sheet settles with both taps on the final line.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = Flowsheet("hang put right")
+    feed = fs.add(U.Feed("F")).pin(port="outlet", x=100, y=100)
+    prod = fs.add(U.Product("P")).pin(port="inlet", x=500, y=100)
+    line = fs.connect(feed.outlet, prod.inlet)
+    tt1 = fs.add_instrument("TT", 1, sensing=line, at=0.5, offset=35, angle=45)
+    fs.add_instrument("TIC", 1, near=tt1, face="W", offset=50, angle=0)
+    tt2 = fs.add_instrument("TT", 2, sensing=line, at=0.3, offset=70, angle=270)
+    fs.add_instrument("TIC", 2, near=tt2, face="W", offset=70, angle=0)
+    valve = fs.add(U.Valve("V", variant="control")).pin(x=400, y=400, orientation=270)
+    lic = fs.add_instrument("LIC", 99)
+    fs.connect(lic.sig_out, valve.actuator, kind="electric")
+    fs.route()
+
+    assert fs.route_converged
+    points = stream_path(line)
+    for tt in (tt1, tt2):
+        assert tt.tap is not None
+        assert any(
+            min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
+            for (ax, ay), (bx, by) in zip(points, points[1:])
+        ), (tt.name, tt.tap, points)
