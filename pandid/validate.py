@@ -75,6 +75,45 @@ class Issue:
         return f"[{self.severity}] {self.code}: {self.message}"
 
 
+def _pin_call(u) -> str:
+    """Return the ``pin()`` call that moves a unit.
+
+    Parameters
+    ----------
+    u : Unit
+        Unit to move.
+
+    Returns
+    -------
+    str
+        Call text for the axes ``u`` is pinned on, or ``x`` and ``y``
+        when it is pinned on neither, naming the port each axis is
+        pinned by, or ``port=None`` for a flag pinned by its corner.
+    """
+    from pandid.units import _Boundary
+
+    pin = u.pin_
+    hosted = getattr(u, "host", None) is not None
+    # Name each pinned axis by the field that places it, x= or y= on a balloon.
+    axes = []
+    for px, grid in (("x", "col"), ("y", "row")):
+        if pin is not None and getattr(pin, px) is not None:
+            axes.append(px)
+        elif pin is not None and getattr(pin, grid) is not None:
+            axes.append(px if hosted else grid)
+    ports = getattr(u, "_pin_ports", None) or {}
+    calls: dict[str, list[str]] = {}
+    for axis in axes or ["x", "y"]:
+        absolute = pin is not None and axis in ("x", "y") and getattr(pin, axis) is not None
+        port = ports.get(axis) if absolute else None
+        # A flag's pin() places its port unless told port=None.
+        spelled = (f"port={port!r}, " if port is not None
+                   else "port=None, " if absolute and isinstance(u, _Boundary) else "")
+        calls.setdefault(spelled, []).append(f"{axis}=...")
+    return " and ".join(f"call .pin({spelled}{', '.join(args)}) on {u.name}"
+                        for spelled, args in calls.items())
+
+
 def _overlap_cure(a, b) -> str:
     """Return a sentence naming the call that clears an overlap.
 
@@ -107,39 +146,6 @@ def _overlap_cure(a, b) -> str:
         axes = ("x", "y") if getattr(u, "host", None) is not None else ("col", "row", "x", "y")
         return pin is not None and any(getattr(pin, f) is not None for f in axes)
 
-    def how(u) -> str:
-        """Return the ``pin()`` call that moves a unit.
-
-        Parameters
-        ----------
-        u : Unit
-            Unit to move.
-
-        Returns
-        -------
-        str
-            Call text for the axes ``u`` is pinned on, or ``x`` and
-            ``y`` when it is pinned on neither, naming the port each
-            axis is pinned by.
-        """
-        pin = u.pin_
-        hosted = getattr(u, "host", None) is not None
-        # Name each pinned axis by the field that places it, x= or y= on a balloon.
-        axes = []
-        for px, grid in (("x", "col"), ("y", "row")):
-            if pin is not None and getattr(pin, px) is not None:
-                axes.append(px)
-            elif pin is not None and getattr(pin, grid) is not None:
-                axes.append(px if hosted else grid)
-        ports = getattr(u, "_pin_ports", None) or {}
-        calls: dict[str | None, list[str]] = {}
-        for axis in axes or ["x", "y"]:
-            calls.setdefault(ports.get(axis), []).append(f"{axis}=...")
-        return " and ".join(
-            f"call .pin({'' if port is None else f'port={port!r}, '}{', '.join(args)}) "
-            f"on {u.name}"
-            for port, args in calls.items())
-
     for u, other in ((b, a), (a, b)):
         host = getattr(u, "host", None)
         if host is None or pinned(u):
@@ -155,7 +161,7 @@ def _overlap_cure(a, b) -> str:
         moves = ["x" if f == "col" else "y" for f in fields]
         grid = (f". Its {' and '.join(f + '=' for f in fields)} pin does not move an "
                 f"attached balloon; {'an' if moves[0] == 'x' else 'a'} "
-                f"{' and '.join(m + '=' for m in moves)} pin does: {how(u)}"
+                f"{' and '.join(m + '=' for m in moves)} pin does: {_pin_call(u)}"
                 if fields else "")
         return (f"{u.name} hangs off {host.name}, so say where on it: {key}= is "
                 f"{where}, and offset= how far it stands off (now {u.offset:g}). "
@@ -163,12 +169,42 @@ def _overlap_cure(a, b) -> str:
                 f"{'stream' if stream else 'unit'}>, {key}=..., offset=...{kept}) on "
                 f"{u.name}{grid}")
     if pinned(a) and pinned(b):
-        return f"Both are pinned, so move one pin clear of the other: {how(b)}"
+        return f"Both are pinned, so move one pin clear of the other: {_pin_call(b)}"
     for u, other in ((b, a), (a, b)):
         if pinned(u):
-            return f"{u.name} is pinned there, so move its pin clear of {other.name}: {how(u)}"
+            return f"{u.name} is pinned there, so move its pin clear of {other.name}: {_pin_call(u)}"
     return (f"Neither is pinned, so the layout placed both there. Pin one clear of "
-            f"the other: {how(b)}")
+            f"the other: {_pin_call(b)}")
+
+
+def _move_cure(u) -> str:
+    """Return a sentence naming the call that moves a unit off a line.
+
+    Parameters
+    ----------
+    u : Unit
+        Unit a line is drawn against.
+
+    Returns
+    -------
+    str
+        Advice naming an ``attach()`` or ``pin()`` call.
+    """
+    from pandid.streams import Stream
+
+    host = getattr(u, "host", None)
+    pin = u.pin_
+    if host is not None and (pin is None or (pin.x is None and pin.y is None)):
+        stream = isinstance(host, Stream)
+        key = "at" if stream else "face"
+        now = f"{u.at:g}" if stream else repr(u.face)
+        kept = ((f", angle={u.angle!r}" if u.angle != 90.0 else "")
+                + (f", relation={u.relation!r}" if u.relation != "sensing" else ""))
+        return (f"{u.name} hangs off {host.name}, so move it with {key}= "
+                f"(now {now}) and offset= (now {u.offset:g}): call .attach(<the "
+                f"{host.name} {'stream' if stream else 'unit'}>, {key}=..., "
+                f"offset=...{kept}) on {u.name}")
+    return f"Move {u.name} clear of it: {_pin_call(u)}"
 
 
 def _is_control_function(letters: str, i: int) -> bool:
@@ -396,7 +432,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     """
     from pandid import units
     from pandid.deprecation import findings as deprecation_findings
-    from pandid.portgeom import resolve_size
+    from pandid.portgeom import pinned_x, pinned_y, resolve_size
     from pandid.render.svg import LABEL_POSITIONS
     from pandid.render.symbols import default_registry
     from pandid.units import Instrument
@@ -408,6 +444,33 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
     warnings.extend(deprecation_findings(fs))
 
     # --- pin sanity ---
+    # A pinned station off the sheet is reported once, by its own position.
+    grouped: set[int] = set()
+    for assembly in fs._station_assemblies:
+        station = assembly.station
+        corner = (station.control, station.inlet.owner, station.outlet.owner)
+        if not all(u.pin_ is not None and u.pin_.x is not None and u.pin_.y is not None
+                   for u in corner):
+            continue
+        short = {axis: max((-v for m in station.members if m.pin_ is not None
+                            and (v := getattr(m.pin_, axis)) is not None
+                            and math.isfinite(v) and v < 0), default=0.0)
+                 for axis in ("x", "y")}
+        if not any(short.values()):
+            continue
+        at = {"x": min(pinned_x(u) for u in corner[1:]),
+              "y": pinned_y(station.control, "inlet")}
+        # Round a move up to a tenth, so the members land on the sheet.
+        to = {axis: math.ceil(round((v + short[axis]) * 10, 6)) / 10 if short[axis]
+              else round(v, 3) for axis, v in at.items()}
+        tag = station.control.name
+        errors.append(Issue(
+            "error", "pin-out-of-bounds",
+            f"valve station {tag} at x={round(at['x'], 3):g}, y={round(at['y'], 3):g} "
+            f"puts members off the sheet. Move the whole station: give "
+            f"add_valve_station({tag!r}, ...) x={to['x']:g}, y={to['y']:g}, the "
+            f"nearest position that keeps every member on it"))
+        grouped.update(id(m) for m in station.members)
     for u in fs.units:
         pin = u.pin_
         if pin is None:
@@ -418,7 +481,7 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
             if not math.isfinite(v):
                 errors.append(Issue("error", "pin-not-finite",
                                     f"{u.name} pinned {axis}={v!r} is not a finite number"))
-            elif v < 0:
+            elif v < 0 and id(u) not in grouped:
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
 
@@ -740,7 +803,9 @@ def model_issues(fs: "Flowsheet", *, tabulates: bool = True) -> list["Issue"]:
                     f"name every ingoing and outgoing material and state its "
                     f"flow rate or quantity. Set properties="
                     f"{{'Flow (kg/h)': ...}} on the lines that carry one and "
-                    f"render(show_stream_table=True) to report it."))
+                    f"render(show_stream_table=True) to report it."
+                    + (" If this sheet is a P&ID, render with diagram=\"p&id\"."
+                       if any(isinstance(u, Instrument) for u in fs.units) else "")))
 
     return errors + warnings
 
@@ -1017,8 +1082,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 if u is src_u or u is dst_u or host is s:
                     continue
                 if any(_along_edge(a, b, box) for a, b in zip(pts, pts[1:])):
-                    warnings.append(Issue("warning", "route-along-unit",
-                                          f"stream {s.name} runs along the edge of {u.name}"))
+                    warnings.append(Issue(
+                        "warning", "route-along-unit",
+                        f"stream {s.name} runs along the edge of {u.name}. {_move_cure(u)}"))
 
             # Soft: a line drawn through a unit it connects to.
             path = _corners(pts)
