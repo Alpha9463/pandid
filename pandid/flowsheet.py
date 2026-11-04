@@ -2044,15 +2044,16 @@ class Flowsheet:
         from balloons kept off the line their chain taps, kept only if no
         tap leaves its line and no finding or clash grows. Where the result
         has a tap off its line that was on it before hanging, the sheet is
-        placed as if no controller could hang. Each balloon nozzle where a
-        unit blocks a line the router could not route is then turned to the
-        cheapest clear face with which the routed sheet takes no tap off
-        its line and grows no finding or clash. Where the result draws a
+        placed as if no controller could hang. Where the result draws a
         line along a unit or across an arrowhead, the sheet is routed again
         pricing both, with each unfaced balloon on equipment on a free face,
         kept only if no tap leaves its line and no finding or clash grows. Where the last layout drew a valve's signal exit
         within a lane of another unit, the sheet is laid out and routed
         again, once, with every exit a lane clear, kept on the same terms.
+        Last, each balloon nozzle where a unit blocks a line the router
+        could not route is turned to the cheapest clear face with which the
+        routed sheet takes no tap off its line and grows no finding or
+        clash.
 
         Parameters
         ----------
@@ -2143,8 +2144,6 @@ class Flowsheet:
                 self._unhang()
                 if chained:
                     attempt(may_hang=False, keep_clear=True)
-            if tries:
-                turn()
 
         def turn() -> None:
             """Turn each blocked balloon nozzle to the cheapest clear face
@@ -2224,6 +2223,8 @@ class Flowsheet:
         if tries and self._exit_tight:
             keep_if_better(relaid, _flaws(self))
             self._exit_tight = False
+        if tries:
+            turn()
         self._route_stale = False
 
     def _geometry(self) -> tuple:
@@ -2249,13 +2250,22 @@ class Flowsheet:
         state : tuple
             What :meth:`_geometry` returned.
         keep_manual : bool
-            Keep a route now drawn by hand rather than the saved one.
+            Keep a route now drawn by hand, and the faces of the nozzles at
+            its ends, rather than the saved ones.
         """
         frames, routes, converged = state
         units = {id(u) for u in self.units}
         streams = {id(st) for st in self.streams}
         for u, frame, tap in frames:
             if id(u) in units:
+                if keep_manual and u.frame is not None and frame is not None:
+                    for name, port in u.ports.items():
+                        if port.stream is None or port.stream.route is None:
+                            continue
+                        if port.stream.route.manual:
+                            frame.port_faces.pop(name, None)
+                            if name in u.frame.port_faces:
+                                frame.port_faces[name] = u.frame.port_faces[name]
                 u.frame = frame
                 if hasattr(u, "tap"):
                     u.tap = tap
