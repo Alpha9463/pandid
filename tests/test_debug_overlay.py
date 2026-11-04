@@ -5,14 +5,13 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from _render_cases import copy_settled_case
 from pandid import Flowsheet, units as U
 from pandid.render import debug as D
 from pandid.render.export import flatten
 
 from _layout_cases import overlaps
 from test_halo_invariants import _halos
-from test_label_invariants import CORPUS, _RENDER_OPTS
+from test_label_invariants import CORPUS
 
 SVG = "{http://www.w3.org/2000/svg}"
 
@@ -366,28 +365,23 @@ _CROWDED = {
 
 
 @pytest.fixture(scope="module")
-def corpus_drawings(settled_gallery):
-    """Render each debug-overlay corpus sheet in both modes.
+def corpus_drawings(corpus_svg):
+    """Render each debug-overlay corpus sheet with its overlay.
 
     Parameters
     ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared routed gallery flowsheets and render options.
+    corpus_svg : dict[str, tuple[Flowsheet, dict, str]]
+        Shared corpus flowsheets, render options and plain SVGs.
 
     Returns
     -------
     dict[str, tuple[Flowsheet, str, str]]
         Flowsheets with debug and plain SVGs by corpus name.
     """
-    drawings = {}
-    for name, build in CORPUS.items():
-        if name in settled_gallery:
-            fs, kwargs = copy_settled_case(settled_gallery, name)
-        else:
-            fs, kwargs = build()
-        options = {key: value for key, value in kwargs.items() if key in _RENDER_OPTS}
-        drawings[name] = (fs, fs.to_svg(**options, debug=True), fs.to_svg(**options))
-    return drawings
+    return {
+        name: (fs, fs.to_svg(**options, debug=True), svg)
+        for name, (fs, options, svg) in corpus_svg.items()
+    }
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))

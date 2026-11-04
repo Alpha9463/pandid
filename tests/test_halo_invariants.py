@@ -7,12 +7,11 @@ from typing import NamedTuple
 import pytest
 
 from _layout_cases import overlaps
-from _render_cases import copy_settled_case
 from pandid.portgeom import unit_box
 from pandid.render.svg import _PLATE_CLEARANCE, _ink, _obstacle
 from pandid.render.weights import LineWeight
 
-from test_label_invariants import CORPUS, _RENDER_OPTS
+from test_label_invariants import CORPUS
 
 _HALO = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" '
@@ -89,28 +88,23 @@ class Drawn(NamedTuple):
 
 
 @pytest.fixture(scope="module")
-def drawn(settled_gallery):
-    """Render every halo-invariant corpus sheet once.
+def drawn(corpus_svg):
+    """Find the halos and flange faces of every corpus sheet once.
 
     Parameters
     ----------
-    settled_gallery : dict[str, tuple[Flowsheet, dict]]
-        Shared, routed gallery flowsheets and their render options.
+    corpus_svg : dict[str, tuple[Flowsheet, dict, str]]
+        Shared corpus flowsheets, render options and SVGs.
 
     Returns
     -------
     dict
         Rendered flowsheets, label halos, and flange faces keyed by corpus name.
     """
-    out = {}
-    for name, build in CORPUS.items():
-        if name in settled_gallery:
-            fs, kwargs = copy_settled_case(settled_gallery, name)
-        else:
-            fs, kwargs = build()
-        svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS})
-        out[name] = Drawn(fs, _halos(svg), _flange_bars(fs, kwargs))
-    return out
+    return {
+        name: Drawn(fs, _halos(svg), _flange_bars(fs, options))
+        for name, (fs, options, svg) in corpus_svg.items()
+    }
 
 
 def _inked(box):

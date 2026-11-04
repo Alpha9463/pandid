@@ -7,7 +7,7 @@ import pytest
 
 from pandid import Flowsheet, units as U
 
-from _render_cases import gallery
+from _render_cases import copy_settled_case, gallery
 
 
 @pytest.fixture(scope="session")
@@ -28,6 +28,36 @@ def settled_gallery() -> dict[str, tuple[Flowsheet, dict]]:
         fs.layout()
         fs.route()
     return cases
+
+
+@pytest.fixture(scope="session")
+def corpus_svg(settled_gallery) -> dict[str, tuple[Flowsheet, dict, str]]:
+    """Render every line-number corpus sheet once with the options it ships with.
+
+    Parameters
+    ----------
+    settled_gallery : dict[str, tuple[Flowsheet, dict]]
+        Routed gallery flowsheets and render options.
+
+    Returns
+    -------
+    dict[str, tuple[Flowsheet, dict, str]]
+        Flowsheet, render options and SVG keyed by corpus name.
+
+    Notes
+    -----
+    The label, halo and debug-overlay checks share these flowsheets; read them, never change them.
+    """
+    from test_label_invariants import _RENDER_OPTS, CORPUS
+
+    out = {}
+    for name, build in CORPUS.items():
+        fs, kwargs = (
+            copy_settled_case(settled_gallery, name) if name in settled_gallery else build()
+        )
+        options = {k: v for k, v in kwargs.items() if k in _RENDER_OPTS}
+        out[name] = fs, options, fs.to_svg(**options)
+    return out
 
 
 @pytest.fixture
