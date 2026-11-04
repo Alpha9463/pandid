@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **More refusals and findings name the call that fixes them (#661).** These
+  include `connect()` to a unit or a valve inside a station, `on=` on a tee or a
+  recycle line, a second loop on one valve, `acting_on=` a process nozzle, a
+  device class looked up in `pandid.units`, `route-along-unit`, and a valve
+  station off the sheet, which is now reported once.
 - **Python 3.15 is supported and tested in CI** alongside 3.11, the oldest
   supported version.
 - **Layout draws equipment as a layered graph (#564).** Equipment and flags are
