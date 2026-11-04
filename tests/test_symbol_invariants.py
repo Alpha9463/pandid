@@ -1451,7 +1451,8 @@ def test_every_column_feed_and_draw_stays_between_the_duty_arrows(variant, prefi
     assert lo < hi, f"column/{variant}: the duty arrows bound no band at all"
     (family,) = (series for series in sym.port_series if series.prefix == prefix)
     for count in range(1, 13):
-        column = U.Column("T", variant=variant, **{label: count})
+        family_size: dict[str, Any] = {label: count}
+        column = U.Column("T", variant=variant, **family_size)
         members = [name for name in column.ports if family.matches(name)]
         assert len(members) == count, f"column/{variant} {label}={count}: {members}"
         for name in members:
