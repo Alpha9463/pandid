@@ -41,9 +41,7 @@ def _distance(p, segments):
     return best
 
 
-# ---------------------------------------------------------------------------
 # The declaration: a count, or a face per connection.
-# ---------------------------------------------------------------------------
 
 
 def test_a_block_asked_for_by_name_is_one_line_through_a_box():
@@ -134,9 +132,7 @@ def test_a_block_declares_no_variants_and_owns_its_whole_kind():
     assert default_registry.variants("block") == ["default"]
 
 
-# ---------------------------------------------------------------------------
 # The box sizes itself to what it carries.
-# ---------------------------------------------------------------------------
 
 
 def test_the_pitch_is_measured_off_the_arrowhead_the_renderer_draws():
@@ -203,9 +199,7 @@ def test_a_width_the_author_gave_wins_over_the_name():
     assert resolve_size(named) == (140, BLOCK_MIN_HEIGHT)
 
 
-# ---------------------------------------------------------------------------
 # ...and refuses a box that cannot hold them.
-# ---------------------------------------------------------------------------
 
 
 def test_a_box_too_small_for_its_connections_is_refused_at_construction():
@@ -271,9 +265,7 @@ def test_a_turn_that_still_fits_is_allowed():
     assert b.pin_.orientation == 90
 
 
-# ---------------------------------------------------------------------------
 # Every nozzle on drawn ink, on every face, at every count and box shape.
-# ---------------------------------------------------------------------------
 
 #: The three box shapes and the tolerance ``tests/test_symbol_invariants.py`` uses.
 _ODD_BOXES = ((300.0, 300.0), (400.0, 160.0), (200.0, 400.0))
@@ -373,9 +365,7 @@ def test_a_series_member_really_does_offer_only_its_series_face():
         m.nozzle("in_2", "S")
 
 
-# ---------------------------------------------------------------------------
 # nozzle(): moving a connection means changing the declaration.
-# ---------------------------------------------------------------------------
 
 
 def test_nozzle_moves_a_connection_and_the_ink_follows():
@@ -425,9 +415,7 @@ def test_the_layout_engine_never_moves_a_connection_off_its_declared_face():
     assert port_point(b, b.frame, "in_1")[1] == b.frame.y
 
 
-# ---------------------------------------------------------------------------
 # order_on(): where a connection sits along the face it is on.
-# ---------------------------------------------------------------------------
 
 
 def _along(block, face):
@@ -659,9 +647,7 @@ def test_only_a_block_or_a_tank_or_a_vessel_takes_an_order_and_a_bad_one_names_t
         )
 
 
-# ---------------------------------------------------------------------------
 # The spreading rule is shared, not reimplemented.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("count", range(1, 9))
@@ -675,9 +661,7 @@ def test_a_port_series_spreads_its_members_with_the_shared_rule(count, extent):
         )
 
 
-# ---------------------------------------------------------------------------
 # The rest of the package.
-# ---------------------------------------------------------------------------
 
 
 def test_a_block_is_not_scheduled_equipment():

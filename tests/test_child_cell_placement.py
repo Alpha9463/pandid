@@ -45,12 +45,7 @@ def _children(cells, marker: str):
     return cells[root], [cells[cid] for cid in sorted(cells) if cid.startswith(f"{root}-")]
 
 
-#: The two ways a symbol gets child cells, and a unit that exercises each.
-#:
-#: ``SteamTrap`` is the ``pieces=`` case: a body between two leads, which
-#: is the mechanism this repository added for it. ``Reactor`` is the
-#: ``overlays`` case, and its agitator is the part that had been drawn
-#: across a vessel lying the other way.
+#: Units that draw child cells through ``pieces=`` and through ``overlays``.
 MECHANISMS = [
     pytest.param(lambda: SteamTrap("T-701"), "-s", id="pieces/steam_trap"),
     pytest.param(lambda: units.Reactor("R-1", agitator="disc"), "-p", id="overlays/reactor"),

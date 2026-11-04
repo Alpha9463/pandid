@@ -759,9 +759,7 @@ def test_series_membership_is_cached_and_the_cache_answers_a_wider_family():
     assert s._series_members(series) == {"out_1": 0, "out_2": 1, "out_3": 2}
 
 
-# ---------------------------------------------------------------------------
 # The families, as sequences.
-# ---------------------------------------------------------------------------
 
 
 def test_a_family_holds_the_very_ports_the_numbered_names_are_bound_to():
@@ -857,9 +855,7 @@ def test_tank_is_its_own_kind():
     assert U.Vessel("V-1").kind == "vessel"
 
 
-# ---------------------------------------------------------------------------
 # A vessel's and a tank's five nozzles
-# ---------------------------------------------------------------------------
 
 #: The five nozzles both classes offer, by the name an author writes.
 _HOLDUP_PORTS = ["inlet", "outlet", "vent", "relief", "drain"]

@@ -24,9 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SHARES = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 
-# ---------------------------------------------------------------------------
 # The mock flowsheets the sweeps run over
-# ---------------------------------------------------------------------------
 
 
 def _train(name: str, length: int) -> Flowsheet:
@@ -137,9 +135,7 @@ def _mocks() -> list[Flowsheet]:
     return [_train("short train", 3), _train("long train", 9), _tower(), _recycle(), _two_trains()]
 
 
-# ---------------------------------------------------------------------------
 # Pins
-# ---------------------------------------------------------------------------
 
 
 def _held(fs: Flowsheet, share: float, seed: int) -> dict[U.Unit, tuple[int, int]]:
@@ -203,9 +199,7 @@ def test_a_row_pin_orders_its_column_at_every_density() -> None:
                     )
 
 
-# ---------------------------------------------------------------------------
 # Separation
-# ---------------------------------------------------------------------------
 
 
 def test_no_two_units_overlap_when_nothing_is_pinned() -> None:
@@ -232,9 +226,7 @@ def test_a_disconnected_piece_gets_a_band_of_its_own() -> None:
         assert bottom <= top, f"two pieces share a band: {spans}"
 
 
-# ---------------------------------------------------------------------------
 # Direction: nozzle faces and flow
-# ---------------------------------------------------------------------------
 
 
 def test_flow_runs_east_and_a_return_line_runs_west() -> None:
@@ -361,9 +353,7 @@ def test_a_header_is_not_sunk_by_the_bank_it_supplies() -> None:
     assert top <= header.y and header.y_max <= bottom, f"bank {top:.0f}..{bottom:.0f}"
 
 
-# ---------------------------------------------------------------------------
 # The same model draws the same sheet
-# ---------------------------------------------------------------------------
 
 
 def _geometry(fs: Flowsheet) -> list[tuple[str, float, float, int | None, int | None]]:
@@ -425,9 +415,7 @@ def test_the_sheet_does_not_depend_on_the_string_hash_seed() -> None:
     assert len(answers) == 1, "the sheet changed with PYTHONHASHSEED"
 
 
-# ---------------------------------------------------------------------------
 # The retired placement hints
-# ---------------------------------------------------------------------------
 
 
 def _shipped_unit_classes() -> list[type[U.Unit]]:

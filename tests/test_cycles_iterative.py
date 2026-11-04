@@ -84,10 +84,8 @@ def test_long_chain_with_a_recycle_still_marks_it():
     assert recycles[0].dest.owner is head
 
 
-# --------------------------------------------------------------------
 # Property test: the iterative walk marks the same edges the original
 # recursive one did, over many generated topologies.
-# --------------------------------------------------------------------
 
 
 def _reference_recursive_marks(fs: Flowsheet) -> set[int]:

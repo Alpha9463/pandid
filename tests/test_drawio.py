@@ -60,9 +60,7 @@ _DRAWIO_SHAPES = {"offPageConnector", "table", "tableRow", "partialRectangle"}
 _BUILTIN_SHAPES = _MXGRAPH_SHAPES | _DRAWIO_SHAPES
 
 
-# ---------------------------------------------------------------------------
 # Derive stencil keys independently from the vendored XML.
-# ---------------------------------------------------------------------------
 
 
 def _stencil_keys() -> set[str]:
@@ -148,9 +146,7 @@ def test_the_approximations_name_only_shapes_and_symbols_that_exist():
             assert shape in _BUILTIN_SHAPES or shape is None, f"{kind}/{variant}: {shape!r}"
 
 
-# ---------------------------------------------------------------------------
 # Export warnings.
-# ---------------------------------------------------------------------------
 
 
 def test_a_stand_in_says_on_fs_warnings_what_it_lost():
@@ -222,9 +218,7 @@ def test_the_export_reports_a_title_block_cell_it_had_to_abbreviate():
     assert any("status" in w.message for w in truncated)
 
 
-# ---------------------------------------------------------------------------
 # A sheet carrying one of everything.
-# ---------------------------------------------------------------------------
 
 
 #: Registered ``(kind, variant)`` pairs selected by ``display=``.
@@ -295,9 +289,7 @@ def test_an_exported_sheet_references_only_shapes_that_resolve(every_symbol_shee
     assert not unresolved, f"unresolvable shape references: {unresolved}"
 
 
-# ---------------------------------------------------------------------------
 # The document draw.io expects.
-# ---------------------------------------------------------------------------
 
 
 def _model(fs: Flowsheet, **kwargs) -> ET.Element:
@@ -803,9 +795,7 @@ def test_a_far_coordinate_is_written_in_full():
     assert max(xs) > 1_234_000, "the pinned coordinates did not reach the file"
 
 
-# ---------------------------------------------------------------------------
 # The geometry, against the renderer's.
-# ---------------------------------------------------------------------------
 
 
 def _cells(fs: Flowsheet, **kwargs) -> dict[str, ET.Element]:
@@ -975,9 +965,7 @@ def test_a_feed_pinned_to_a_stage_resolves_to_the_same_point_in_both_backends():
         assert landed == pytest.approx(drawn, abs=0.01)
 
 
-# ---------------------------------------------------------------------------
 # What the style says about a placement.
-# ---------------------------------------------------------------------------
 
 
 def _one_unit(unit, **pin) -> dict[str, str]:
@@ -1173,9 +1161,7 @@ def test_a_repeated_tag_gets_a_cell_of_its_own():
     assert len(ids) == 2 + 3
 
 
-# ---------------------------------------------------------------------------
 # Streams: weight, dash and arrowhead.
-# ---------------------------------------------------------------------------
 
 
 def test_a_signal_line_is_dashed_and_drawn_half_the_weight_of_pipe(sample):
@@ -1361,9 +1347,6 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
     assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
     assert written["04_control_loop"] == {"LAH", "LAL"}
     assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
-
-
-# ---------------------------------------------------------------------------
 
 
 def _titled() -> Flowsheet:
@@ -2643,9 +2626,7 @@ def test_an_unsupported_extension_still_names_drawio_among_the_options(tmp_path,
         sample.render(tmp_path / "sheet.dwg")
 
 
-# ---------------------------------------------------------------------------
 # Shipped gallery examples.
-# ---------------------------------------------------------------------------
 
 
 #: Representative sheets for cross-backend Draw.io export checks.
@@ -2924,9 +2905,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(settled_gallery, render
         )
 
 
-# ---------------------------------------------------------------------------
 # Line weight
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("stem", DRAWIO_REPRESENTATIVES, ids=DRAWIO_REPRESENTATIVES)
@@ -2988,9 +2967,7 @@ def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(rendered_gallery
     assert not silent, f"{stem}: cells drawn at draw.io's default weight: {silent}"
 
 
-# ---------------------------------------------------------------------------
 # Line jumps, resolved from exported edge order and styles.
-# ---------------------------------------------------------------------------
 
 
 def _intersection(p0, p1, p2, p3):
@@ -3359,9 +3336,7 @@ def test_a_cycle_costs_only_the_runs_inside_it():
     assert _drawn(polylines, order, hops) == {("c", "h")}
 
 
-# ---------------------------------------------------------------------------
 # The committed samples, and the script that makes them.
-# ---------------------------------------------------------------------------
 
 
 def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
@@ -3386,9 +3361,7 @@ def test_a_version_bump_changes_only_sample_provenance(monkeypatch):
     assert agent.sub(r"\1", current) == agent.sub(r"\1", bumped)
 
 
-# ---------------------------------------------------------------------------
 # Compositions: the two backends drawing the same thing.
-# ---------------------------------------------------------------------------
 
 
 _COMPOSED = [

@@ -77,9 +77,7 @@ def test_mirror_consistent_and_rendered():
     assert s2.route is not None
 
 
-# ---------------------------------------------------------------------------
 # Reading an intent back: pinned_x / pinned_y
-# ---------------------------------------------------------------------------
 
 
 def _pinned_mixer(**pin):
@@ -131,9 +129,7 @@ def test_one_axis_pinned_answers_for_that_axis_and_refuses_the_other():
         pinned_y(m)
 
 
-# ---------------------------------------------------------------------------
 # A port-pinned axis is a relation, not a coordinate
-# ---------------------------------------------------------------------------
 
 RUN_Y = 440.0
 
@@ -330,10 +326,7 @@ def test_a_written_sheet_carries_the_relation_and_not_its_consequence():
             lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0)),
             {"x": 300.0, "y": 100.0, "port": {"x": "in_1"}},
         ),
-        # ...or the two were measured to different ones, which no shorthand
-        # can say and which is not a contradiction: two calls, two nozzles.
-        # Named by the alias ``outlet`` and written under the name the unit
-        # holds it by, so the file says something the reader can resolve.
+        # ...or to two nozzles, the alias ``outlet`` written as ``out_1``.
         (
             lambda u: (u.pin(port="in_1", x=300.0), u.pin(port="outlet", y=100.0)),
             {"x": 300.0, "y": 100.0, "port": {"x": "in_1", "y": "out_1"}},
@@ -558,11 +551,7 @@ def test_no_way_of_splitting_a_refused_call_lets_the_port_through(call):
 @pytest.mark.parametrize(
     "call",
     [
-        # A rank and a nozzle sit together perfectly well: x locates the
-        # inlet and the column is superseded there, which is what a pin
-        # mixing grid and absolute has always meant. Refusing this was a
-        # second rule, and it was the rule that made a placement the call
-        # accepted and the file rejected.
+        # A rank beside a nozzle: x locates the inlet and supersedes the column.
         dict(col=1, x=5.0, port="inlet"),
         dict(row=2, y=440.0, port="inlet"),
         dict(col=1, row=2, x=5.0, y=440.0, port="inlet"),

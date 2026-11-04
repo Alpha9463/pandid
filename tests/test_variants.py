@@ -1,7 +1,4 @@
-"""Test ``VARIANTS``: construction refuses a drawing the class does not own.
-
-Check that the ``pandid.units`` classes still accept every variant of their kind.
-"""
+"""Test ``VARIANTS``: a class accepts every variant of its kind and refuses the rest."""
 
 import pytest
 

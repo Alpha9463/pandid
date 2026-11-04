@@ -52,9 +52,7 @@ def test_units_namespace_hides_internal_helpers():
     assert "Port" not in U.__all__
 
 
-# ---------------------------------------------------------------------------
 # The layer as API
-# ---------------------------------------------------------------------------
 
 
 def test_units_all_lists_every_public_unit_class():

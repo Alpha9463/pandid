@@ -362,9 +362,7 @@ def test_find_path_names_the_endpoint_it_cannot_search_from():
         find_path(graph, node, (0.0, float("inf")))
 
 
-# ---------------------------------------------------------------------------
 # Pricing drawn crossings.
-# ---------------------------------------------------------------------------
 
 
 def test_committed_segments_merges_a_straight_run_into_one_span():
