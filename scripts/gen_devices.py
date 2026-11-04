@@ -16,10 +16,7 @@ Three tables hold the mapping:
 
 Run:  python scripts/gen_devices.py
 """
-import functools
-import inspect
 import pathlib
-import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -581,64 +578,6 @@ def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
     return [*declared, *variant_ports]
 
 
-# (count keyword, port prefix, default count, highest typed arity).
-_Family = tuple[str, str, int, int]
-
-# A typed view in units.py, such as ``class Reactor3(Reactor, _Feed3): ...``.
-_VIEW_RE = re.compile(r"^    class (\w+?)(\d+)\(\1, _([A-Z][a-z]+)\d+\): \.\.\.$", re.M)
-
-
-@functools.cache
-def _arity_families() -> dict[str, tuple[str, int]]:
-    """Return each family base's nozzle prefix and highest typed arity.
-
-    Returns
-    -------
-    dict[str, tuple[str, int]]
-        Base name to the prefix its views declare and their count.
-    """
-    src = (HERE.parent / "pandid" / "units.py").read_text(encoding="utf-8")
-    return {base: (mixin.lower(), int(n)) for base, n, mixin in _VIEW_RE.findall(src)}
-
-
-def arity_family(base: type) -> "_Family | None":
-    """Return ``(keyword, member, default, max_n)`` for a family base.
-
-    Parameters
-    ----------
-    base : type
-        Base unit class.
-
-    Returns
-    -------
-    tuple[str, str, int, int] or None
-        The family, or ``None`` when ``base`` has no per-arity classes.
-
-    Raises
-    ------
-    SystemExit
-        If the family cannot be derived from the base.
-    """
-    family = _arity_families().get(base.__name__)
-    if family is None:
-        return None
-    member, max_n = family
-    # The class signature omits self.
-    params = list(inspect.signature(base).parameters.values())
-    if not params or params[0].name != "name":
-        raise SystemExit(f"{base.__name__}.__init__ does not take name first")
-    if len(params) < 2:
-        raise SystemExit(f"{base.__name__}.__init__ takes no count argument after name")
-    keyword = params[1].name
-    default = params[1].default
-    if not isinstance(default, int) or isinstance(default, bool):
-        raise SystemExit(
-            f"{base.__name__}.__init__'s {keyword}= has no integer default; "
-            f"cannot derive a fallback overload for it"
-        )
-    return keyword, member, default, max_n
-
-
 def claims() -> dict[tuple[str, str], str]:
     """Return each registered ``(kind, variant)`` and its claimant.
 
@@ -722,7 +661,7 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     Returns
     -------
     dict
-        Name, base, doc, variants, aliases, ports and family.
+        Name, base, doc, variants, aliases and ports.
 
     Raises
     ------
@@ -747,7 +686,6 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     return {
         "name": class_name, "base": base.__name__, "doc": doc,
         "variants": variants, "aliases": aliases, "ports": ports,
-        "family": arity_family(base),
     }
 
 
@@ -760,14 +698,10 @@ variants by default, so ``Cyclone("S-1")`` draws
 ``Separator("S-1", variant="cyclone")``.
 """
 
-from typing import TYPE_CHECKING, Any, Literal, overload
-
 from pandid.ports import Port
 from pandid.units import (
 {imports})
 
-if TYPE_CHECKING:
-{mixins}
 __all__ = [
 {exports}]
 '''
@@ -798,14 +732,8 @@ def render() -> str:
             "re-exports both: " + ", ".join(clashes)
         )
 
-    families = sorted({(s["family"][1].title(), s["family"][3]) for s in specs if s["family"]})
     lines = [HEADER.format(
         imports="".join(f"    {base},\n" for base in sorted({s["base"] for s in specs})),
-        mixins="".join(
-            "    from pandid.units import "
-            + ", ".join(f"_{member}{n}" for n in range(1, top + 1)) + "\n"
-            for member, top in families
-        ),
         exports="".join(f'    "{spec["name"]}",\n' for spec in specs),
     )]
     for spec in specs:
@@ -814,7 +742,7 @@ def render() -> str:
 
 
 def emit(spec: dict) -> str:
-    """Return one generated class, plus its arity classes, as source.
+    """Return one generated class as source.
 
     Parameters
     ----------
@@ -840,62 +768,7 @@ def emit(spec: dict) -> str:
     body.append("")
     body += [f"    {name}: Port" for name, _direction, _role in spec["ports"]]
     body.append("")
-    if spec["family"]:
-        body += _family_overload_lines(spec["name"], spec["family"])
-    out = "\n".join(body)
-    if spec["family"]:
-        # Two blank lines before the top-level block.
-        out += "\n\n\n" + _family_class_block(spec["name"], spec["family"])
-    return out
-
-
-def _family_overload_lines(name: str, family: "_Family") -> list[str]:
-    """Return ``__new__`` overloads giving a literal count its class.
-
-    Parameters
-    ----------
-    name : str
-        Generated class name.
-    family : tuple[str, str, int, int]
-        Output of :func:`arity_family`.
-
-    Returns
-    -------
-    list[str]
-        Source lines, indented for the class body.
-    """
-    keyword, member, default, max_n = family
-    head = "        def __new__(cls, name: str, {}: {}, *args: Any,"
-    tail = '                    **kwargs: Any) -> "{}": ...'
-    lines = [f"    # A literal {keyword} returns a view declaring {member}_1 to {member}_n.",
-             "    if TYPE_CHECKING:"]
-    for n in range(1, max_n + 1):
-        default_clause = f" = {default}" if n == default else ""
-        lines += ["        @overload", head.format(keyword, f"Literal[{n}]{default_clause}"),
-                  tail.format(f"{name}{n}")]
-    lines += ["        @overload", head.format(keyword, "int"), tail.format(name),
-              head.format(keyword, f"int = {default}"), tail.format(name)]
-    return lines
-
-
-def _family_class_block(name: str, family: "_Family") -> str:
-    """Return the ``if TYPE_CHECKING:`` block of per-arity classes.
-
-    Parameters
-    ----------
-    name : str
-        Generated class name.
-    family : tuple[str, str, int, int]
-        Output of :func:`arity_family`.
-
-    Returns
-    -------
-    str
-        Block declaring ``Name1`` to ``Name{max_n}``.
-    """
-    _keyword, member, _default, max_n = family
-    views = [f"    class {name}{n}({name}, _{member.title()}{n}): ..." for n in range(1, max_n + 1)]
-    return "\n".join(["if TYPE_CHECKING:", *views, ""])
+    return "\n".join(body)
 
 
 def _q(text: str) -> str:
