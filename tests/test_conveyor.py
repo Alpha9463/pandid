@@ -168,9 +168,14 @@ def test_a_diameter_with_no_circle_in_it_is_refused_in_the_machines_words(kwargs
 
 def test_belts_of_one_size_share_a_definition_and_others_do_not():
     """Check that belts share a definition exactly when run and roller match."""
-    _, root = _sheet([(240.0, 45.0), (240.0, 45.0), (240.0, None), (400.0, 45.0)])
+    _, root = _sheet([(240.0, 45.0), (240.0, 45.0), 240.0, 240.0, (400.0, 45.0), 300.0])
     ids = sorted(i for i in _defs(root) if i.startswith("sym_conveyor"))
-    assert ids == ["sym_conveyor_L240", "sym_conveyor_L240_D45", "sym_conveyor_L400_D45"]
+    assert ids == [
+        "sym_conveyor_L240",
+        "sym_conveyor_L240_D45",
+        "sym_conveyor_L300",
+        "sym_conveyor_L400_D45",
+    ]
 
 
 def test_a_conveyor_round_trips_through_a_spec_with_its_roller():
@@ -282,12 +287,6 @@ def test_a_turned_or_flipped_conveyor_still_meets_its_streams(pin):
     for name in ("feed", "discharge"):
         point = port_point(conveyor, conveyor.frame, name)
         assert _nearest_distance(point, segments) <= GEOM_TOL, name
-
-
-def test_conveyors_of_one_length_share_a_definition_and_others_do_not():
-    _, root = _sheet([160.0, 160.0, 300.0])
-    ids = sorted(i for i in _defs(root) if i.startswith("sym_conveyor"))
-    assert ids == ["sym_conveyor_L160", "sym_conveyor_L300"]
 
 
 # ---------------------------------------------------------------------------

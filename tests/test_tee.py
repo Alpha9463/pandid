@@ -98,18 +98,12 @@ def cv303():
 # ---------------------------------------------------------------------------
 
 
-def test_the_branch_takes_flow_off_the_run_by_default():
-    tee = units.Tee()
-    assert tee.branch.direction == "outlet"
+# By default the branch takes flow off the run; a returning tee takes it back on.
+@pytest.mark.parametrize(("kwargs", "branch"), [({}, "outlet"), ({"branch": "inlet"}, "inlet")])
+def test_the_branch_goes_the_way_it_is_asked_and_the_run_stays_the_run(kwargs, branch):
+    tee = units.Tee(**kwargs)
+    assert tee.branch.direction == branch
     assert tee.branch.role == "process"
-    assert tee.inlet.direction == "inlet"
-    assert tee.outlet.direction == "outlet"
-
-
-def test_a_returning_tee_takes_flow_back_onto_the_run():
-    tee = units.Tee(branch="inlet")
-    assert tee.branch.direction == "inlet"
-    # The run is the run whichever way the third connection goes.
     assert tee.inlet.direction == "inlet"
     assert tee.outlet.direction == "outlet"
 
