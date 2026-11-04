@@ -1345,7 +1345,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
         Shared default SVG and Draw.io outputs.
     """
     from pandid.render.drawio import _TEXT_INSET
-    from pandid.render.svg import quadrant_labels
+    from pandid.render.svg import quadrant_labels, sheet_connections
 
     written, counted = {}, {}
     for stem in INSTRUMENT_CODE_SHEETS:
@@ -1353,7 +1353,8 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
         svg = rendered_gallery[stem].svg
         cells = _gallery_cells(rendered_gallery, stem)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
-        codes = quadrant_labels(fs, "vertical")
+        joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
+        codes = quadrant_labels(fs, joints, "vertical")
         written[stem] = {item[5] for item in codes}
         counted[stem] = len(codes)
         for n, (lx, ly, anchor, _baseline, _lpos, text) in enumerate(codes):
@@ -1383,6 +1384,27 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported(
     assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
     assert written["04_control_loop"] == {"LAH", "LAL"}
     assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
+
+
+def test_a_letter_code_is_exported_clear_of_a_flange_mark():
+    """Export each letter code clear of the flange marks on its sheet."""
+    from test_halo_invariants import _flange_bars
+    from test_label_invariants import CORPUS
+
+    fs, kwargs = CORPUS["codes_beside_a_flange"]()
+    cells = _drawio_cells_from_document(fs.to_drawio(**kwargs))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+    faces = [fit.box(face.box) for face in _flange_bars(fs, kwargs)]
+    codes = [cell for cid, cell in cells.items() if re.fullmatch(r"q\d+", cid or "")]
+    hit = []
+    for cell in codes:
+        geometry = cell.find("mxGeometry")
+        assert geometry is not None
+        x, y = float(geometry.get("x", 0)), float(geometry.get("y", 0))
+        box = (x, y, x + float(geometry.get("width", 0)), y + float(geometry.get("height", 0)))
+        hit += [cell.get("value") for face in faces if overlaps(box, face)]
+    assert codes, "the sheet exports no letter code"
+    assert not hit, f"letter codes exported over a flange mark: {hit}"
 
 
 # ---------------------------------------------------------------------------

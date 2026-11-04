@@ -86,6 +86,7 @@ class Drawn(NamedTuple):
     fs: object
     halos: list
     bars: list
+    codes: list
 
 
 @pytest.fixture(scope="module")
@@ -100,7 +101,8 @@ def drawn(settled_gallery):
     Returns
     -------
     dict
-        Rendered flowsheets, label halos, and flange faces keyed by corpus name.
+        Rendered flowsheets, label halos, flange faces and letter-code halos
+        keyed by corpus name.
     """
     out = {}
     for name, build in CORPUS.items():
@@ -109,7 +111,7 @@ def drawn(settled_gallery):
         else:
             fs, kwargs = build()
         svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS})
-        out[name] = Drawn(fs, _halos(svg), _flange_bars(fs, kwargs))
+        out[name] = Drawn(fs, _halos(svg), _flange_bars(fs, kwargs), _code_boxes(fs, kwargs))
     return out
 
 
@@ -122,7 +124,7 @@ def _inked(box):
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_halo_lands_on_a_graphical_symbol(drawn, name):
     """Check that no halo lands on a graphical symbol."""
-    fs, halos, _bars = drawn[name]
+    fs, halos, _bars, _codes = drawn[name]
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     # A tag inside its own symbol has no halo, so every plate belongs outside one.
     broken = [
@@ -137,7 +139,7 @@ def test_no_halo_lands_on_a_graphical_symbol(drawn, name):
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_halo_is_written_hard_against_an_outline(drawn, name):
     """Check that no halo is written hard against an outline."""
-    fs, halos, _bars = drawn[name]
+    fs, halos, _bars, _codes = drawn[name]
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     crowded = [
         f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
@@ -153,7 +155,7 @@ def test_no_halo_is_written_hard_against_an_outline(drawn, name):
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_halo_lands_on_an_impulse_line(drawn, name):
     """Check that no halo lands on an impulse line."""
-    fs, halos, _bars = drawn[name]
+    fs, halos, _bars, _codes = drawn[name]
     taps = [line.box for line in _ink(fs, "vertical") if line.kind == "tap"]
     cut = [
         f"({box[0]:.0f}, {box[1]:.0f})-({box[2]:.0f}, {box[3]:.0f})"
@@ -168,7 +170,7 @@ def test_the_corpus_has_impulse_lines_to_check(drawn):
     """Check that the corpus has impulse lines to check."""
     counted = {
         name: sum(1 for line in _ink(fs, "vertical") if line.kind == "tap")
-        for name, (fs, _halos, _bars) in drawn.items()
+        for name, (fs, _halos, _bars, _codes) in drawn.items()
     }
     assert counted["11_ethanol_pid"] > 15, counted
     assert counted["14_tank_farm"] > 10, counted
@@ -176,7 +178,7 @@ def test_the_corpus_has_impulse_lines_to_check(drawn):
 
 def test_the_corpus_has_halos_to_check(drawn):
     """Check that the corpus has halos to check."""
-    counted = {name: len(halos) for name, (_fs, halos, _bars) in drawn.items()}
+    counted = {name: len(halos) for name, (_fs, halos, _bars, _codes) in drawn.items()}
     assert all(counted.values()), counted
     assert counted["11_ethanol_pid"] > 50, counted
 
@@ -187,7 +189,7 @@ def test_the_corpus_has_halos_to_check(drawn):
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_flange_mark_lands_on_a_symbol_it_is_not_the_joint_for(drawn, name):
     """Check that no flange mark lands on a symbol it is not the joint for."""
-    fs, _halos_, bars = drawn[name]
+    fs, _halos_, bars, _codes = drawn[name]
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     over = [
         f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
@@ -203,7 +205,7 @@ def test_a_flange_mark_is_drawn_on_the_outside_of_its_own_nozzle(drawn, name):
     """Check that a flange mark is drawn on the outside of its own nozzle."""
     from pandid.portgeom import port_point
 
-    fs, _halos_, bars = drawn[name]
+    fs, _halos_, bars, _codes = drawn[name]
     inward = []
     for face in bars:
         u = face.port.owner
@@ -220,7 +222,7 @@ def test_a_flange_mark_is_drawn_on_the_outside_of_its_own_nozzle(drawn, name):
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_flange_mark_lands_on_a_tag_or_a_line_number(drawn, name):
     """Check that no flange mark lands on a tag or a line number."""
-    fs, halos, bars = drawn[name]
+    fs, halos, bars, _codes = drawn[name]
     hit = [
         f"({face.box[0]:.0f}, {face.box[1]:.0f})"
         for face in bars
@@ -232,7 +234,7 @@ def test_no_flange_mark_lands_on_a_tag_or_a_line_number(drawn, name):
 
 def test_the_corpus_has_flange_marks_to_check(drawn):
     """Check that the corpus has flange marks to check."""
-    counted = {name: len(bars) for name, (_fs, _halos_, bars) in drawn.items()}
+    counted = {name: len(bars) for name, (_fs, _halos_, bars, _codes) in drawn.items()}
     # Two faces per mark on every nozzle and in-line body of the densest sheet.
     assert counted["11_ethanol_pid"] > 80, counted
     assert all(n % 2 == 0 for n in counted.values()), (
@@ -244,20 +246,22 @@ def test_the_corpus_has_flange_marks_to_check(drawn):
 # A letter code clears every line, pipe and signal alike, and the label passes dodge it.
 
 
-def _code_boxes(fs) -> "list[tuple[float, float, float, float]]":
+def _code_boxes(fs, kwargs) -> "list[tuple[float, float, float, float]]":
     """Return the halo of every letter code written outside a symbol on this sheet."""
-    from pandid.render.svg import _unit_label_box, quadrant_labels
+    from pandid.render.svg import _unit_label_box, quadrant_labels, sheet_connections
 
-    return [b for b in map(_unit_label_box, quadrant_labels(fs, "vertical")) if b is not None]
+    joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
+    codes = quadrant_labels(fs, joints, "vertical")
+    return [b for b in map(_unit_label_box, codes) if b is not None]
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_letter_code_lands_on_a_line(drawn, name):
     """Check that no letter code lands on a line."""
-    fs, _halos_, _bars = drawn[name]
+    fs, _halos_, _bars, codes = drawn[name]
     struck = [
         f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
-        for box in _code_boxes(fs)
+        for box in codes
         for line in _ink(fs, "vertical")
         if overlaps(box, line.box)
     ]
@@ -267,8 +271,7 @@ def test_no_letter_code_lands_on_a_line(drawn, name):
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_letter_code_lands_on_a_tag_or_a_line_number(drawn, name):
     """Check that no letter code lands on a tag or a line number."""
-    fs, halos, _bars = drawn[name]
-    codes = _code_boxes(fs)
+    _fs, halos, _bars, codes = drawn[name]
     others = [
         h
         for h in halos
@@ -284,7 +287,7 @@ def test_no_letter_code_lands_on_a_tag_or_a_line_number(drawn, name):
 
 def test_the_corpus_has_letter_codes_to_check(drawn):
     """Check that the corpus has letter codes to check."""
-    counted = {name: len(_code_boxes(fs)) for name, (fs, _h, _b) in drawn.items()}
+    counted = {name: len(codes) for name, (_fs, _h, _b, codes) in drawn.items()}
     assert counted["04_control_loop"] == 2, counted
     assert counted["11_ethanol_pid"] == 6, counted
     assert counted["14_tank_farm"] == 5, counted

@@ -361,13 +361,15 @@ _QUADRANT_PITCH = 15.0
 _QUADRANT_REACH = 60.0
 
 
-def quadrant_labels(fs, direction: str) -> list:
+def quadrant_labels(fs, joints: "str | None", direction: str) -> list:
     """Return every letter code written outside a symbol, placed.
 
     Parameters
     ----------
     fs : Flowsheet
         Laid-out and routed sheet.
+    joints : str or None
+        :func:`sheet_connections` result, whose flange marks the codes avoid.
     direction : str
         ``jump_direction``: ``"vertical"`` or ``"horizontal"``.
 
@@ -384,6 +386,7 @@ def quadrant_labels(fs, direction: str) -> list:
         return []
     ink = _ink(fs, direction)
     symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
 
     out: list = []
     for u in annotated:
@@ -1265,7 +1268,7 @@ def stream_numbers(fs, placed: list, joints: "str | None",
     ]
 
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
-    symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
+    symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, joints, direction))
                 if b is not None]
 
     # One number per run name, through inline valves and fittings.
@@ -3543,7 +3546,7 @@ class SvgRenderer:
         unit_labels: list = []
         balloons: list = []
         ink = _ink(fs, jump_direction)
-        quadrants = quadrant_labels(fs, jump_direction)
+        quadrants = quadrant_labels(fs, joints, jump_direction)
         drawing: list[str] = []
         # Opaque plates, collected for the debug overlay.
         plates: "list[tuple[float, float, float, float]] | None" = (

@@ -625,7 +625,7 @@ def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
     # Reserve the quadrant codes' boxes before placing tags.
-    codes = quadrant_labels(fs, direction)
+    codes = quadrant_labels(fs, joints, direction)
     symbols += [(None, b) for b in map(_unit_label_box, codes) if b is not None]
     at: dict = {}
     items: list = []
