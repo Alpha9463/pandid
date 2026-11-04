@@ -23,7 +23,7 @@ DEFAULT_SPACING = 50.0
 # Smallest accepted pitch.
 _MIN_SPACING = 5.0
 
-# Target pitch of numbered grid lines, in drawing units (_label_step).
+# Target pitch of numbered grid lines, in drawing units.
 _LABEL_PITCH = 100.0
 
 # Type and marker sizes in page units; divided by the fit scale.
@@ -99,22 +99,6 @@ def resolve_spacing(debug: "bool | float") -> "float | None":
     return spacing
 
 
-def _label_step(spacing: float) -> float:
-    """Return the numbered-line pitch, a multiple of ``spacing``.
-
-    Parameters
-    ----------
-    spacing : float
-        Grid pitch.
-
-    Returns
-    -------
-    float
-        Pitch of the numbered lines.
-    """
-    return spacing * max(1, math.ceil(_LABEL_PITCH / spacing - 1e-9))
-
-
 def _ticks(lo: float, hi: float, step: float) -> list[float]:
     """Return each multiple of ``step`` in ``[lo, hi]``.
 
@@ -125,15 +109,13 @@ def _ticks(lo: float, hi: float, step: float) -> list[float]:
     hi : float
         Upper bound.
     step : float
-        Pitch; a step that is not positive gives no multiples.
+        Pitch.
 
     Returns
     -------
     list[float]
         The multiples, in ascending order.
     """
-    if step <= 0:
-        return []
     # Include a bound that lies exactly on a multiple.
     eps = step * 1e-9
     first = math.ceil((lo - eps) / step)
@@ -198,22 +180,6 @@ def _rule(x1: float, y1: float, x2: float, y2: float, colour: str,
             f'stroke="{colour}" stroke-width="{width:.3f}" stroke-dasharray="{_DASH}" />')
 
 
-def _step(vec: "tuple[float, float]") -> float:
-    """Return the search step for an axis: a line pitch if vertical.
-
-    Parameters
-    ----------
-    vec : tuple[float, float]
-        Unit vector of the axis.
-
-    Returns
-    -------
-    float
-        Step in type sizes.
-    """
-    return _LINE if vec[1] else _SHIFT
-
-
 def _spots(out: "tuple[float, float]", across: "tuple[float, float]",
            reach: float, side: float) -> "list[tuple[float, float]]":
     """Return candidate label offsets in type sizes, nearest first.
@@ -234,7 +200,8 @@ def _spots(out: "tuple[float, float]", across: "tuple[float, float]",
     list[tuple[float, float]]
         Offsets ``(dx, dy)`` in type sizes.
     """
-    so, sa = _step(out), _step(across)
+    # A vertical axis steps a line pitch.
+    so, sa = (_LINE if out[1] else _SHIFT), (_LINE if across[1] else _SHIFT)
     span = int(_REACH / min(so, sa)) + 1
     grid = [(o, a) for o in range(span + 1) for a in range(-span, span + 1)
             if o * so + abs(a) * sa <= _REACH]
@@ -298,24 +265,6 @@ class _Label(NamedTuple):
     near: "tuple[list[tuple[float, float, float, float]], list[tuple[float, float, float, float]]]"
 
 
-def _window(lab: "_Label") -> "tuple[float, float, float, float]":
-    """Return the region a label's candidates can cover.
-
-    Parameters
-    ----------
-    lab : _Label
-        Label.
-
-    Returns
-    -------
-    tuple[float, float, float, float]
-        ``(x0, y0, x1, y1)``.
-    """
-    span = (lab.size * (max(max(abs(dx), abs(dy)) for dx, dy in lab.spots) + _ASC)
-            + text_width(lab.text, lab.size))
-    return (lab.px - span, lab.py - span, lab.px + span, lab.py + span)
-
-
 def _cost(lab: "_Label", dx: float, dy: float,
           placed: "Sequence[tuple[float, float, float, float]]",
           bounds: "tuple[float, float, float, float]",
@@ -367,49 +316,6 @@ def _cost(lab: "_Label", dx: float, dy: float,
 _CLEAR = (0, 0, 0, 0)
 
 
-def _options(lab: "_Label", bounds: "tuple[float, float, float, float]") -> int:
-    """Return how many of a label's spots are clear of the sheet.
-
-    Parameters
-    ----------
-    lab : _Label
-        Label.
-    bounds : tuple[float, float, float, float]
-        Sheet bounds.
-
-    Returns
-    -------
-    int
-        Number of clear spots.
-    """
-    clear = (_CLEAR[0], _CLEAR[1], _CLEAR[2])
-    return sum(_cost(lab, dx, dy, (), bounds, clear)[0] == _CLEAR
-               for dx, dy in lab.spots)
-
-
-def _tether(lab: "_Label", box: "tuple[float, float, float, float]") -> "str | None":
-    """Return a tether from marker to label, or ``None`` when close.
-
-    Parameters
-    ----------
-    lab : _Label
-        Label.
-    box : tuple[float, float, float, float]
-        Placed label box.
-
-    Returns
-    -------
-    str or None
-        SVG ``<line>``, or ``None``.
-    """
-    near = (min(max(lab.px, box[0]), box[2]), min(max(lab.py, box[1]), box[3]))
-    if math.hypot(near[0] - lab.px, near[1] - lab.py) <= _TETHER * lab.size:
-        return None
-    return (f'    <line x1="{fmt(lab.px, 1)}" y1="{fmt(lab.py, 1)}" x2="{fmt(near[0], 1)}" '
-            f'y2="{fmt(near[1], 1)}" stroke="{lab.colour}" '
-            f'stroke-width="{0.4 * lab.size / _MARK_SIZE:.3f}" />')
-
-
 def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
             ) -> "tuple[list[str], list[str]]":
     """Place every label clear of the sheet and of earlier labels.
@@ -429,7 +335,10 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
     placed: "list[tuple[float, float, float, float]]" = []
     words: "list[str]" = [""] * len(labels)
     leads: "list[str | None]" = [None] * len(labels)
-    for i, lab in sorted(enumerate(labels), key=lambda kv: (_options(kv[1], bounds), kv[0])):
+    # Place first the labels with the fewest clear spots.
+    for i, lab in sorted(enumerate(labels), key=lambda kv: (
+            sum(_cost(kv[1], dx, dy, (), bounds, _CLEAR[:3])[0] == _CLEAR
+                for dx, dy in kv[1].spots), kv[0])):
         best = damage = None
         for dx, dy in lab.spots:
             cost, spot, box = _cost(lab, dx, dy, placed, bounds,
@@ -442,7 +351,12 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
         (x, y, anchor), box = best
         placed.append(box)
         words[i] = _text(x, y, lab.text, lab.size, lab.colour, anchor)
-        leads[i] = _tether(lab, box)
+        # Tether a label placed far from its marker.
+        near = (min(max(lab.px, box[0]), box[2]), min(max(lab.py, box[1]), box[3]))
+        if math.hypot(near[0] - lab.px, near[1] - lab.py) > _TETHER * lab.size:
+            leads[i] = (f'    <line x1="{fmt(lab.px, 1)}" y1="{fmt(lab.py, 1)}" '
+                        f'x2="{fmt(near[0], 1)}" y2="{fmt(near[1], 1)}" stroke="{lab.colour}" '
+                        f'stroke-width="{0.4 * lab.size / _MARK_SIZE:.3f}" />')
     return [line for line in leads if line is not None], words
 
 
@@ -467,7 +381,7 @@ def _grid(bounds: "tuple[float, float, float, float]", spacing: float,
         SVG elements.
     """
     x0, y0, x1, y1 = bounds
-    step = _label_step(spacing)
+    step = spacing * max(1, math.ceil(_LABEL_PITCH / spacing - 1e-9))
     out: list[str] = []
 
     minor_w, major_w = 0.5 / scale, 0.9 / scale
@@ -509,29 +423,6 @@ _PORT_LABEL = {
 }
 
 
-def _pin_point(unit, frame) -> "tuple[float, float]":
-    """Return the point ``pin(x, y)`` sets on a unit.
-
-    Parameters
-    ----------
-    unit : Unit
-        Unit.
-    frame : Frame
-        The unit's frame.
-
-    Returns
-    -------
-    tuple[float, float]
-        Frame corner, or the nozzle of a boundary flag.
-    """
-    from pandid.portgeom import resolve_port
-    from pandid.units import _Boundary
-
-    if isinstance(unit, _Boundary):
-        return resolve_port(unit, frame, next(iter(unit.ports))).point
-    return frame.x, frame.y
-
-
 def _marks(fs: "Flowsheet", scale: float,
            bounds: "tuple[float, float, float, float]",
            plates: "list[tuple[float, float, float, float]]",
@@ -559,6 +450,7 @@ def _marks(fs: "Flowsheet", scale: float,
     """
     from pandid.portgeom import resolve_port, unit_box
     from pandid.layout.conflicts import boxes_overlap
+    from pandid.units import _Boundary
 
     geometry: list[str] = []
     jobs: list[_Label] = []
@@ -584,14 +476,18 @@ def _marks(fs: "Flowsheet", scale: float,
             Candidate offsets.
         """
         lab = _Label(text, px, py, size, colour, spots, ([], []))
-        seen = _window(lab)
+        span = (size * (max(max(abs(dx), abs(dy)) for dx, dy in spots) + _ASC)
+                + text_width(text, size))
+        seen = (px - span, py - span, px + span, py + span)
         jobs.append(lab._replace(near=([b for b in plates if boxes_overlap(b, seen)],
                                        [b for b in ink if boxes_overlap(b, seen)])))
 
     anchor_spots = _spots(*_ANCHOR_LABEL)
     for u, f in frames:
         bx0, by0, bx1, by1 = unit_box(u, f)
-        ax, ay = _pin_point(u, f)
+        # pin(x, y) sets the frame corner, or a boundary flag's nozzle.
+        ax, ay = (resolve_port(u, f, next(iter(u.ports))).point
+                  if isinstance(u, _Boundary) else (f.x, f.y))
         geometry.append(
             f'    <rect x="{fmt(bx0, 1)}" y="{fmt(by0, 1)}" width="{fmt(bx1 - bx0, 1)}" '
             f'height="{fmt(by1 - by0, 1)}" fill="none" stroke="{_BOX}" '
