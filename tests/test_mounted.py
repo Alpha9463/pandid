@@ -199,6 +199,87 @@ def test_a_control_valve_sits_on_its_pipe_without_a_jog(
     assert measure_final(fs).bends == 0
 
 
+@pytest.mark.parametrize(
+    ("upright", "at"),
+    [(False, 100.0), (False, 125.7), (False, 126.3), (False, 127.8), (True, -128.0)],
+)
+def test_a_valve_set_on_a_shifted_line_adds_no_bends(upright: bool, at: float) -> None:
+    """Check that a valve set on a line shifted across the sheet adds no bends.
+
+    Parameters
+    ----------
+    upright : bool
+        Run the line down the sheet between two turned valves, else across it
+        between flags.
+    at : float
+        Coordinate the line runs at.
+    """
+    fs = Flowsheet("Shifted")
+    if upright:
+        start = fs.add(Valve("A")).pin(orientation=90).pin(port="outlet", x=at, y=100)
+        end = fs.add(Valve("B")).pin(orientation=90).pin(port="inlet", x=at, y=500)
+        valve = ControlValve("CV", width=27.3, height=31.7).pin(orientation=90)
+    else:
+        start = fs.add(Feed("Feed")).pin(port="outlet", x=100, y=at)
+        end = fs.add(Product("Product")).pin(port="inlet", x=500, y=at)
+        valve = ControlValve("FV-101")
+    fs.add(valve, on=fs.connect(start.outlet, end.inlet))
+
+    fs.route()
+    assert measure_final(fs).bends == 0
+
+
+def test_a_line_between_two_devices_set_on_it_adds_no_bends() -> None:
+    """Check that the lines either side of a reducer set after a valve on one pipe draw straight."""
+    from pandid import Reducer
+    from pandid.route_geometry import stream_polyline
+    from pandid.routing.metrics import real_bends
+
+    fs = Flowsheet("Rounding")
+    start = fs.add(Valve("A")).pin(orientation=90).pin(port="outlet", x=100, y=100)
+    end = fs.add(Product("B")).pin(port="inlet", x=700, y=127.8)
+    line = fs.connect(start.outlet, end.inlet)
+    valve = fs.add(ControlValve("CV"), on=line, at=0.4)
+    reducer = fs.add(Reducer("R", height=27.8), on=line, at=0.7)
+
+    fs.route()
+    for stream in (valve.outlet.stream, reducer.outlet.stream):
+        assert stream is not None
+        assert real_bends(stream_polyline(stream)) == 0
+
+
+def test_a_valve_whose_nozzles_sit_apart_keeps_the_frame_that_fits_its_line() -> None:
+    """Check that a frame whose outlet misses the line is not chosen over one that fits.
+
+    The two nozzles of this drawing sit 1.0 apart across the line, so the frame
+    that lands the inlet exactly puts the outlet a full unit off.
+    """
+    from pandid.render.symbols import Symbol, default_registry
+
+    default_registry.register(
+        "valve",
+        Symbol(
+            svg='<g id="skew"><path d="M0 80.1 L50 81.1"/></g>',
+            width=50,
+            height=100,
+            ports={"inlet": (0, 80.1), "outlet": (50, 81.1)},
+        ),
+        variant="skew",
+    )
+    try:
+        fs = Flowsheet("Offset ports")
+        feed = fs.add(Feed("A")).pin(port="outlet", x=100, y=125.7)
+        prod = fs.add(Product("B")).pin(port="inlet", x=500, y=125.7)
+        valve = fs.add(
+            Valve("V", variant="skew").pin(orientation=0), on=fs.connect(feed.outlet, prod.inlet)
+        )
+        fs.route()
+        assert valve.frame is not None
+        assert port_point(valve, valve.frame, "inlet")[1] == pytest.approx(125.7)
+    finally:
+        default_registry._symbols.pop(("valve", "skew"), None)
+
+
 @pytest.mark.parametrize("mirrored", [None, True])
 def test_valves_on_an_upright_pipe_turn_and_get_room(mirrored: bool | None) -> None:
     """Check that valves between stacked units are turned onto the pipe and fit.

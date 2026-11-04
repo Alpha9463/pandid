@@ -123,6 +123,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A line no longer draws a hidden jog where its ends differ by a rounding
+  step (#611).** Coordinates within 1e-6 of the previous point's are drawn on
+  its track, so a valve set a rounding step off its pipe adds no bends.
 - **Hanging a controller off its actuator no longer takes a tap off its line
   (#636).** Where hanging leaves a balloon's tap off its line, `route()` places
   the sheet as if no controller could hang.
