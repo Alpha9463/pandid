@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from pandid._checks import suggest
 from pandid.layout.conflicts import _BODY_TOL, _SQUARE_TOL, boxes_overlap, segment_crosses_box
 from pandid.portgeom import COMPASS
+from pandid.routing.visibility import EDGE_TOL as _EDGE_TOL
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -22,9 +23,6 @@ _TOL = 1.0  # tolerance in px
 #: Distance in px a drawn coordinate may sit from its pin.
 _PIN_TOL = 0.05
 
-#: Distance in px within which a line lies on a box edge: one main-flow
-#: line width.
-_EDGE_TOL = 2.0
 
 #: ``(kind, variant)`` pairs whose nozzles step in height by design.
 OFFSET_BY_DESIGN = frozenset({

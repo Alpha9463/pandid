@@ -14,6 +14,13 @@ TAG_CLEAR = 3.0
 #: Least distance a route runs straight out of a nozzle.
 MIN_ESCAPE = 25.0
 
+#: Clearance of the lanes around a unit or tag obstacle.
+MARGIN = 15.0
+
+#: Distance in px within which a line lies on a box edge: one main-flow
+#: line width.
+EDGE_TOL = 2.0
+
 
 @dataclass
 class Rect:
@@ -45,17 +52,18 @@ class Rect:
         Returns
         -------
         bool
-            Whether it enters or runs along a side; False if diagonal.
+            Whether it enters or runs within :data:`EDGE_TOL` of a
+            side; False if diagonal.
         """
         if x1 == x2:
             return (
-                self.x_min <= x1 <= self.x_max
+                self.x_min - EDGE_TOL < x1 < self.x_max + EDGE_TOL
                 and max(y1, y2) > self.y_min
                 and min(y1, y2) < self.y_max
             )
         if y1 == y2:
             return (
-                self.y_min <= y1 <= self.y_max
+                self.y_min - EDGE_TOL < y1 < self.y_max + EDGE_TOL
                 and max(x1, x2) > self.x_min
                 and min(x1, x2) < self.x_max
             )
@@ -226,7 +234,7 @@ class VisibilityGraph:
         from pandid.layout.attach import is_attached
         from pandid.portgeom import COMPASS, port_anchor, unit_box
 
-        margin = 15.0  # clearance around unit and label obstacles
+        margin = MARGIN
 
         self.obstacles: List[Rect] = []
         self.body_obstacles: List[Tuple["Unit", Rect]] = []
@@ -346,12 +354,13 @@ class VisibilityGraph:
             for i in range(i0, i1):
                 blocked_on_col[i].update(inside_y)
 
+        # A lane within EDGE_TOL of an obstacle's edge is blocked along it.
         row_spans: List[List[Tuple[float, float]]] = [[] for _ in ys]
         col_spans: List[List[Tuple[float, float]]] = [[] for _ in xs]
         for o in self.obstacles:
-            for j in range(bisect_left(ys, o.y_min), bisect_right(ys, o.y_max)):
+            for j in range(bisect_right(ys, o.y_min - EDGE_TOL), bisect_left(ys, o.y_max + EDGE_TOL)):
                 row_spans[j].append((o.x_min, o.x_max))
-            for i in range(bisect_left(xs, o.x_min), bisect_right(xs, o.x_max)):
+            for i in range(bisect_right(xs, o.x_min - EDGE_TOL), bisect_left(xs, o.x_max + EDGE_TOL)):
                 col_spans[i].append((o.y_min, o.y_max))
 
         self.edges: Dict[Tuple[float, float], List[Tuple[float, float]]] = {}
