@@ -2654,3 +2654,36 @@ def test_a_hang_whose_taps_end_on_their_line_is_kept():
             min(ax, bx) <= tt.tap[0] <= max(ax, bx) and min(ay, by) <= tt.tap[1] <= max(ay, by)
             for (ax, ay), (bx, by) in zip(points, points[1:])
         ), (tt.name, tt.tap, points)
+
+
+def test_no_signal_line_leaves_a_balloon_into_a_unit():
+    """Draw each signal line of a valved pump bank clear of every unit.
+
+    Returns
+    -------
+    None
+        No signal line takes the fallback path or crosses a unit.
+    """
+    from pandid.devices import ControlValve
+
+    fs = Flowsheet("valved loops")
+    sp = fs.add(U.Splitter("SP", n_outlets=3))
+    mx = fs.add(U.Mixer("MX", n_inlets=3))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    fs.connect(mx.outlet, fs.add(U.Product("P")).inlet)
+    pairs = []
+    for i, (outlet, inlet) in enumerate(zip(sp.outlets, mx.inlets)):
+        pump = fs.add(U.Pump(f"P-{i}"))
+        line = fs.connect(outlet, pump.suction)
+        fs.connect(pump.discharge, inlet)
+        pairs.append((line, fs.add(ControlValve(f"FV-{200 + i}"), on=line, at=0.5)))
+    loops = [
+        fs.add_control_loop("F", 200 + i, measuring=line, acting_on=valve)
+        for i, (line, valve) in enumerate(pairs)
+    ]
+    fs.route()
+
+    signals = [s for loop in loops for s in (loop.measurement, loop.output)]
+    assert [s.name for s in signals if s.route is None or s.route.used_fallback] == []
+    crossed = [i.message for i in fs.validate() if i.code == "route-crosses-unit"]
+    assert [m for m in crossed for s in signals if m.startswith(f"stream {s.name} ")] == []
