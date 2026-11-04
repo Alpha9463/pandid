@@ -262,9 +262,6 @@ class VisibilityGraph:
         Lane intersections outside every obstacle's interior.
     edges : dict[tuple[float, float], list[tuple[float, float]]]
         Clear neighbours of each node.
-    hugging : dict[tuple[tuple[float, float], tuple[float, float]], set[int]]
-        ``id()`` of each unit an edge runs within :data:`EDGE_TOL`
-        outside a side of, by edge both ways.
 
     Raises
     ------
@@ -421,8 +418,6 @@ class VisibilityGraph:
                 if clear:
                     self.edges[col[k]].append(col[k + 1])
                     self.edges[col[k + 1]].append(col[k])
-
-        self.hugging = hugging_edges(self.edges, xs, ys, self.body_obstacles)
 
     def reachable_projection(
         self,

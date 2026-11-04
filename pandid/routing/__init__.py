@@ -305,16 +305,17 @@ class DefaultRouter:
         from pandid.portgeom import COMPASS, resolve_port
         from pandid.render.svg import tap_lines, tap_route
         from pandid.render.symbols import ARROWHEAD
-        from pandid.routing.visibility import VisibilityGraph, share_escape_room
+        from pandid.routing.visibility import VisibilityGraph, hugging_edges, share_escape_room
         from pandid.routing.astar import TOUCH_PENALTY, CrossingIndex, find_path
         from pandid.routing.separation import preview_separated_waypoints
 
         _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs)
-        # Price arrowheads and lanes beside units, except on the routes
-        # layout sets pipe furniture on, or where route() asks not to.
+        # Price arrowheads and lanes beside units where route() asks,
+        # but not on the routes layout sets pipe furniture on.
         priced = fs._priced and not fs._laying_out
-        hugging = graph.hugging if priced else {}
+        hugging = (hugging_edges(graph.edges, graph.xs, graph.ys, graph.body_obstacles)
+                   if priced else {})
         # The first arrowhead length of each line out of each nozzle,
         # but a balloon's, which moves with the routes.
         heads = CrossingIndex()
@@ -419,7 +420,7 @@ class DefaultRouter:
             if clear_stubs:
                 path = find_path(
                     graph, start_proj, goal_proj, start_dir, goal_dir,
-                    edge_penalties, is_recycle, crossing_index, heads,
+                    edge_penalties, is_recycle, crossing_index, heads if priced else None,
                 )
             for run in own:
                 edge_penalties[run] += TOUCH_PENALTY
